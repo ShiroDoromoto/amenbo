@@ -902,6 +902,21 @@ const REGISTRY: &[OpSpec] = &[
     // wording is the author's and they may change it any day, while where it is readable is amenbo's
     // and is the whole of what the split between a colleague's plugin and a stranger's decides.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "listed", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // The layer its author declared, said in words on the row where the plugin is managed. What one
+    // press of a gate consents to comes from that declaration and from nothing the reader sets, so the
+    // sentence is the whole of how they learn it: a plugin declared the machine's reads every project
+    // on the device. `scope` is which of the two the row has to be saying — `machine` for the sentence,
+    // `project` for the ordinary case, which says nothing because there is nothing out of the ordinary
+    // to say.
+    //
+    // GUI only, and not by omission: what a manifest declares is already readable from a terminal, and
+    // that read is exactly what a build which never drew the sentence would leave untouched — so the
+    // screen is the only witness that the declaration reached the person pressing the switch.
+    //
+    // A `Review`, for the reason `settings-in` is: the sentence is a word of the interface, in whatever
+    // language the app is in, and the plugin's own name is on the row either way — so neither state is
+    // one the presence of text can settle.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "layer", required: &["name", "scope"], refs: &[], strings: &["name", "scope"], binds: false },
     // One project a row names among those the plugin fires in — or, with `present: false`, one it does
     // not. The question is asked a project at a time because that is what a list can be wrong about: a
     // gate read as a single yes/no hides a plugin still firing where nobody is looking, and what has to
@@ -1095,6 +1110,10 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // already declared — the declaration is the world, and the answering is the road.
     (Domain::Plugin, "declare-setting"),
     (Domain::Plugin, "declare-choice"),
+    // And the layer it says it lives at, for that same reason one line further out: the layer is the
+    // author's word too, every plugin the official catalog serves declares none, and a screen road
+    // about reading the layer off a row has to find a row that already declares one.
+    (Domain::Plugin, "declare-scope"),
 ];
 
 /// Whether this op may stand a world up (see [`PREMISE_OPS`]).

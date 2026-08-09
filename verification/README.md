@@ -307,6 +307,9 @@ road is evidence rather than something taken on trust, and the assert after it c
 hand tidying the screen while the run is held. The screen roads are written that way: `link-a-folder`
 walks the arrival screen, the card, the picker and the board it lands on,
 `say-where-a-plugin-fires` walks one plugin's row through the four states one switch leaves it in,
+`learn-a-plugin-reads-more-than-this-project` walks two rows on that same screen for the one thing a
+declaration says and a switch cannot — a plugin declared the machine's says in words that it reads the
+whole device, and the plugin beside it that declared nothing says nothing —
 `put-a-plugin-to-work-from-the-project` walks the same crossing from the other face — the arrival, the
 picker that draws the row, and the switch inside it —
 `fill-in-what-a-plugin-cannot-fire-without` walks one row from the mark it wears through the refusal, the

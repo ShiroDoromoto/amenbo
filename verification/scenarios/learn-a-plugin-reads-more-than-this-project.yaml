@@ -1,0 +1,74 @@
+# How wide a plugin reads is not a switch, it is a sentence — and the screen is the only place a
+# reader meets it. A gate is opened once, and what that single press consents to comes from the layer
+# the author declared: a plugin that declares nothing fires for one project and reads that project,
+# and one that declares itself the machine's reads every project on the device. The same button, twice
+# the reach.
+#
+# Which is why this can only go wrong on screen. The declaration sits on the installed manifest and a
+# terminal reads it straight back, so a build that carried it faithfully everywhere and simply never
+# drew the sentence would leave every other reading green — and leave a reader pressing a device-wide
+# switch in the belief that it is one project's.
+#
+# Two rows, on one screen, for that reason. A plugin declaring the machine beside one declaring nothing
+# is the smallest world in which the sentence can be seen belonging to the row that earned it: a build
+# printing it over every row reads exactly like the right one for as long as only one row is looked at.
+#
+# The declaration is written onto the installed manifest by the driver, because no plugin the official
+# catalog serves carries one. Everything after it is amenbo's. The world is stood up before the app is;
+# what is left to the operator is where to start, which is the installed plugins screen.
+id: learn-a-plugin-reads-more-than-this-project
+title: A plugin its author declared the machine's says so on its own row, and the one beside it that declared nothing says nothing
+description: >
+  Two plugins on the machine, one of them declaring itself the device's. Read that one's row: it says in
+  words that it reads every project on this device, and says it as a sentence rather than as a second
+  switch — the declaration already settled what the one switch there means. Then read the row beside it,
+  whose author declared no layer at all: it carries no such sentence, which is what says the words belong
+  to the declaration and not to the screen.
+given:
+  # A project, because a device with none of them opens on the ways in rather than on a screen the
+  # installed plugins are reachable from.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+
+  # Two plugins, because one row cannot show a sentence belonging to it rather than to every row.
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: slack
+
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: worktree
+
+  # The layer, on one of the two. Nothing is enabled here: what the row says about how wide it reads is
+  # said while the gate is still shut, which is the whole point of saying it — a reader learns it before
+  # the press, not after.
+  - type: action
+    domain: plugin
+    op: declare-scope
+    with:
+      name: slack
+      scope: machine
+
+steps_gui:
+  - type: assert
+    domain: plugin
+    op: layer
+    with:
+      name: slack
+      scope: machine
+
+  # And the row that declared nothing, on the same standing screen. It is the half that makes the first
+  # one mean anything: a sentence drawn for everybody says nothing about anybody.
+  - type: assert
+    domain: plugin
+    op: layer
+    with:
+      name: worktree
+      scope: project

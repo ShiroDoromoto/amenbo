@@ -267,6 +267,11 @@ impl Instructor {
     /// reading that finds the name cannot say it came from the row, and one that fails to find it
     /// would be reading a screen the plugin's row is not even on.
     ///
+    /// `plugin layer` is a `Review` for the same reason once more, and on both of its states: the
+    /// sentence a declared row carries is a word of the interface, and the state beside it is a row
+    /// carrying no sentence — which is an absence, and a reading answers which words are on a shot and
+    /// never which are missing from the right part of it.
+    ///
     /// `project plugin-row` reads the same crossing from the other face and is a `Review` for a reason
     /// of its own: what separates a row just drawn from one turned on is the button standing in it, and
     /// a button's label is a word of the interface. Both states put the plugin's name on the shot, so
@@ -725,6 +730,22 @@ impl Instructor {
                 req(with, "source")?,
                 req(with, "declares")?
             ),
+            // The layer, read where a reader meets it: a sentence on the row, or no sentence at all. The
+            // two states are written as lines of their own rather than as one with a `not` in it, because
+            // what a build gets wrong here is drawing the sentence for everybody — and an eye sent to
+            // confirm an absence has to be told what the absence is an absence of.
+            (Domain::Plugin, "layer") => {
+                let name = req(with, "name")?;
+                match req(with, "scope")? {
+                    "machine" => format!(
+                        "Confirm the row for \"{name}\" among the installed plugins says, in so many words, that it reads every project on this device rather than one — said on that row as a sentence, with nothing beside it for anyone to set."
+                    ),
+                    "project" => format!(
+                        "Confirm the row for \"{name}\" among the same installed plugins says no such thing: nothing on it claims to read the device, this being the ordinary plugin whose reach is one project at a time."
+                    ),
+                    other => return Err(format!("assert `layer` does not know the layer `{other}`")),
+                }
+            }
             (Domain::Plugin, "fires-in") => {
                 let name = req(with, "name")?;
                 let project = req(with, "project")?;
@@ -1491,6 +1512,56 @@ steps_gui:
         for (i, st) in s.steps(Driver::Gui).iter().enumerate() {
             assert!(ins.expectation(st).is_none(), "step {i} turns on a button's label, which no reading settles");
         }
+    }
+
+    /// The layer read off the row: the declared one carries a sentence about the device, and the one
+    /// beside it carries none. The two lines have to be different sentences rather than one negated,
+    /// since the miss they stand against is a build drawing the sentence for every row — and both are a
+    /// `Review`, the words being the interface's own and the absence being nothing a reading gives back.
+    #[test]
+    fn the_layer_is_read_off_the_row_that_declared_it_and_off_the_one_that_did_not() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: plugin
+    op: layer
+    with: { name: slack, scope: machine }
+  - type: assert
+    domain: plugin
+    op: layer
+    with: { name: worktree, scope: project }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("reads every project on this device"), "got: {}", lines[0]);
+        assert!(lines[1].contains("says no such thing"), "got: {}", lines[1]);
+        assert!(!lines[1].contains("reads every project on this device"), "got: {}", lines[1]);
+
+        for (i, st) in s.steps(Driver::Gui).iter().enumerate() {
+            assert!(ins.expectation(st).is_none(), "step {i} reads a sentence of the interface's own");
+        }
+    }
+
+    /// A layer the manifest vocabulary does not hold is refused by name, rather than rendered as a line
+    /// telling an operator to confirm nothing.
+    #[test]
+    fn an_unknown_plugin_layer_is_refused() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: plugin
+    op: layer
+    with: { name: slack, scope: household }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let err = ins.render(&s.steps(Driver::Gui)[0]).expect_err("an unknown layer has no instruction");
+        assert!(err.contains("household"), "got: {err}");
     }
 
     /// A state the face does not have is refused by name rather than rendered as an empty line.

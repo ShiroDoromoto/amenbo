@@ -1115,3 +1115,54 @@ fn search_says_where_each_record_stands_before_the_excerpt() {
     assert_eq!(hit["standing"]["labels"][0]["axis"], "エリア");
     assert_eq!(hit["standing"]["labels"][0]["value"], "実装");
 }
+
+/// A creation the AI ends with nobody on it says so (`AMB-T-2875`). The step that files AI work already
+/// says to pass `--to me-ai`, and it gets read past — which leaves the one state no mailbox shows: a task
+/// that is finished, unassigned, and therefore never taken. It is said where the hand moved, as the next
+/// line to type (`AMB-D-558`), and it stops nothing.
+#[test]
+fn finishing_a_creation_with_nobody_on_it_names_the_next_line_to_type() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let id = id_str(&cli.json(&["task", "add", "--title", "誰も持っていない", "--actor", "ai", "--json"])["task"]["id"]);
+
+    // A `--json` reader gets it as a key on the task, and the call is still an ordinary success.
+    let done = cli.json(&["task", "finish-creating", &id, "--actor", "ai", "--json"]);
+    assert_eq!(done["ok"], true);
+    assert_eq!(done["task"]["draft"], false, "the creation ended: {done}");
+    let hint = done["task"]["hint"].as_str().expect("the unassigned task carries a hint");
+    assert!(hint.contains(&format!("AMB-T-{id}")), "the hint names the task to assign: {hint}");
+    assert!(hint.contains("--to me-ai"), "and the line to type: {hint}");
+
+    // Saying it again changes nothing and still says it: the state the hint reads is the task's, not this
+    // call's, so the no-op ending answers the same as the real one.
+    let again = cli.json(&["task", "finish-creating", &id, "--actor", "ai", "--json"]);
+    assert_eq!(again["noop"], true, "already finished: {again}");
+    assert_eq!(again["task"]["hint"], done["task"]["hint"], "the no-op says the same thing");
+
+    // A person reads it as the `hint:` line on stderr, with stdout left to the result.
+    let (stdout, stderr, code) = cli.run_both(&["task", "finish-creating", &id, "--actor", "ai"]);
+    assert_eq!(code, 0, "a hint stops nothing: {stderr}");
+    assert!(stderr.contains("hint: 担当者が未割当です"), "the line is on stderr: {stderr}");
+    assert!(!stdout.contains("hint:"), "and not on stdout: {stdout}");
+}
+
+/// And the three ways it stays quiet. A task somebody has is not the case it is for; a person filing work
+/// for whoever picks it up is doing an ordinary thing; and `task add` is too early to ask — the task is
+/// still being created there, so having no assignee yet is the middle of writing one (`AMB-D-554`).
+#[test]
+fn the_unassigned_hint_stays_quiet_where_it_would_be_noise() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+
+    let mine = id_str(&cli.json(&["task", "add", "--title", "自分で持つ", "--to", "me-ai", "--actor", "ai", "--json"])["task"]["id"]);
+    let taken = cli.json(&["task", "finish-creating", &mine, "--actor", "ai", "--json"]);
+    assert!(taken["task"]["hint"].is_null(), "somebody has this one: {taken}");
+
+    let theirs = id_str(&cli.json(&["task", "add", "--title", "誰かが取る", "--actor", "human", "--json"])["task"]["id"]);
+    let filed = cli.json(&["task", "finish-creating", &theirs, "--actor", "human", "--json"]);
+    assert!(filed["task"]["hint"].is_null(), "a person files unassigned work on purpose: {filed}");
+
+    let fresh = cli.json(&["task", "add", "--title", "書きかけ", "--actor", "ai", "--json"]);
+    assert!(fresh["task"]["hint"].is_null(), "a creation still open is not yet unassigned: {fresh}");
+}

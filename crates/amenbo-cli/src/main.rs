@@ -7043,12 +7043,15 @@ fn export(store: &Store, flags: &Flags, out: Option<String>) -> Result<i32, CliE
 }
 
 /// `sync` — the road out for a plugin that carries this store's data somewhere else (`AMB-D-581`), in the
-/// three faces a carrier actually uses: **ask the version**, take a **snapshot** only when it moved, and
-/// from the position that snapshot names, read on through **changes**.
+/// four faces a carrier actually uses: **ask the version**, take a **snapshot** only when it moved, from
+/// the position that snapshot names read on through **changes**, and read what those changes named back
+/// through **records**.
 ///
 /// The split is the point, not a convenience. A carrier has to ask often and send rarely, so the asking
 /// must not cost what the sending costs: `version` reads one row and never builds a snapshot
-/// (`AMB-D-582`), and `changes` re-reads only what moved rather than the window entire. All three answer
+/// (`AMB-D-582`), and `changes` re-reads only what moved rather than the window entire — which `records`
+/// is what makes possible, since the ledger carries no values and a carrier with nowhere to take the ids
+/// it was handed would be back to taking the whole window. All of them answer
 /// **through the reach this surface already holds** — a plugin's window (`AMB-D-406`), an AI's binding, or
 /// the whole device for a human — so none needs a door of its own, and none can be widened by an argument.
 ///
@@ -7057,8 +7060,9 @@ fn export(store: &Store, flags: &Flags, out: Option<String>) -> Result<i32, CliE
 /// required on the plugin face: they read and record nothing, so there is no actor for one to name
 /// (`stamps_facet`).
 ///
-/// **`snapshot`'s stdout is the document.** Anything else amenbo has to say goes to stderr, so the stream
-/// stays pipeable — the same rule `export`'s stream shape follows.
+/// **`snapshot`'s stdout is the document, and `records`' is too.** Anything else amenbo has to say goes to
+/// stderr, so the stream stays pipeable — the same rule `export`'s stream shape follows. Neither consults
+/// `--json`: the document is the answer either way, and there is no second shape to ask for.
 fn sync_cmd(store: &Store, flags: &Flags, sub: SyncCmd) -> Result<i32, CliError> {
     match sub {
         SyncCmd::Version => {
@@ -7073,6 +7077,20 @@ fn sync_cmd(store: &Store, flags: &Flags, sub: SyncCmd) -> Result<i32, CliError>
             }
         }
         SyncCmd::Changes { since } => return sync_changes(store, flags, since),
+        SyncCmd::Records { dataset, ids } => {
+            let stdout = std::io::stdout();
+            let mut w = stdout.lock();
+            // Refusals land before the first byte (`records_from`), so an error here never leaves half a
+            // document on a carrier's stdout. `sync_error` is the road's own code, as the snapshot's is.
+            amenbo_core::sync_snapshot::stream_records(store.reach(), &dataset, &ids, &mut w).map_err(
+                |e| CliError {
+                    code: CliErrorCode::SyncError.as_str(),
+                    message: e.to_string(),
+                    hint: None,
+                    exit: 1,
+                },
+            )?;
+        }
         SyncCmd::Snapshot => {
             let stdout = std::io::stdout();
             let mut w = stdout.lock();

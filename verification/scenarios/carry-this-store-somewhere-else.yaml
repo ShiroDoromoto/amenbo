@@ -15,8 +15,9 @@ description: >
   take the picture and read the written document back off disk, because that document is what the other
   side receives. Finally, file work in a second project and ask again from inside a plugin, where the
   window is real: the number the plugin is handed is its own project's, the picture it takes carries that
-  project's work and not the work next door, and reading on from the position that picture named hands it
-  what moved since — or says so plainly when the cursor is one the ledger cannot speak for.
+  project's work and not the work next door, reading on from the position that picture named hands it
+  what moved since — or says so plainly when the cursor is one the ledger cannot speak for — and the
+  records that page named read back as rows, its own and never the ones next door.
 steps_cli:
   - type: action
     domain: task
@@ -214,3 +215,38 @@ steps_cli:
     op: returned
     with:
       contains: sync_gap
+
+  # And the road the page leads to. What came back names records and never what they hold, so a carrier
+  # that could not read those rows back would be taking the whole window again to see one changed task —
+  # which is the reading-on it just did, undone. The rows come back in the picture's own shape, so the
+  # carrier holds one form of this store's data and not two.
+  - type: action
+    domain: plugin
+    op: run
+    with:
+      name: worktree
+      command: records
+      task: seed
+
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: carried out to somewhere else
+
+  # The window closes this road too, and it is the road where that is easiest to lose: the caller names
+  # the ids, so nothing but the narrowing stands between a guessed number and the row it names.
+  - type: action
+    domain: plugin
+    op: run
+    with:
+      name: worktree
+      command: records
+      task: unseen
+
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: filed where the carrier cannot see it
+      present: false

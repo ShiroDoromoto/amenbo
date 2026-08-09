@@ -807,6 +807,24 @@ pub enum SyncCmd {
         #[arg(long, value_name = "CURSOR")]
         since: i64,
     },
+
+    /// Read named records back, in the shape a `sync snapshot` carries them in.
+    ///
+    /// This is where `sync changes` leads: it names which records moved, never what they now hold, so the
+    /// rows are read back here rather than by taking the whole window again. The dataset is the name the
+    /// changes named it by, and the ids are that call's `record_id`s.
+    ///
+    /// An id this window does not reach, and an id that is no longer there, both simply come back absent
+    /// — a `delete` in the changes already said which is which. One read answers a page of changes at
+    /// most; past that, ask in pages.
+    Records {
+        /// which records — the dataset name `sync changes` gave (`task`, `dependency`, …)
+        #[arg(long, value_name = "NAME")]
+        dataset: String,
+        /// the record ids to read back, comma-separated (`--ids 12,15,31`)
+        #[arg(long, value_name = "IDS", required = true, value_delimiter = ',')]
+        ids: Vec<i64>,
+    },
 }
 
 #[derive(Subcommand, Debug)]

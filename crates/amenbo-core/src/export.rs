@@ -131,7 +131,8 @@ pub struct Scope {
 
 /// Stream one read-model table as a JSON array of `{column: value}` objects, **one row at a time**
 /// (O(1) memory). Every row is live, so the whole table streams — narrowed by `scope` when the caller
-/// carries one project rather than the device. Cancellation is polled every
+/// carries one project rather than the device, and by `pick` when the caller named the rows it wants
+/// ([`stream_picked_rows`]). Cancellation is polled every
 /// [`CANCEL_POLL_ROWS`] rows (cheap — a whole-table scan can't be cut mid-statement, but a huge table
 /// still yields often enough). The caller has already written the `"table":` key and expects this to
 /// emit the `[...]` value. With a `bundle`, the `attachment` table's rows also carry the blob out to disk
@@ -143,6 +144,7 @@ fn stream_table(
     conn: &Connection,
     dataset: &Dataset,
     scope: Option<&Scope>,
+    pick: Option<&[i64]>,
     w: &mut impl Write,
     bundle: Option<&mut AttachmentBundle>,
     progress: &mut impl FnMut(&Progress) -> ControlFlow<()>,
@@ -174,16 +176,33 @@ fn stream_table(
         std::iter::once("id").chain(dataset.all_columns().map(|c| c.name)).collect();
     let select_list = cols.iter().map(|c| format!("\"{c}\"")).collect::<Vec<_>>().join(", ");
     let table = dataset.table;
-    let sql = match narrowing {
+    // Both conditions are `AND`ed, and the narrowing is never the one dropped: a caller that names rows
+    // still gets only the ones its window may see, so an id guessed from outside comes back as nothing
+    // rather than as a row.
+    let mut conds: Vec<String> = Vec::new();
+    // The project a scoped stream is closed to is `?1`, so the predicates keep naming it that; the picked
+    // ids are bound after it.
+    let mut bound: Vec<i64> = Vec::new();
+    if let Some(scope) = scope {
+        bound.push(scope.project_id);
+    }
+    if let Some(predicate) = narrowing {
         // Parenthesised, so a predicate that is itself an `OR` chain (the polymorphic `attachment`
         // target) stays one condition however this clause is grown later.
-        Some(predicate) => format!("SELECT {select_list} FROM \"{table}\" WHERE ({predicate})"),
-        None => format!("SELECT {select_list} FROM \"{table}\""),
-    };
-    // The one parameter any predicate binds — the project a scoped stream is closed to.
-    let bound: &[i64] = match scope {
-        Some(scope) => std::slice::from_ref(&scope.project_id),
-        None => &[],
+        conds.push(format!("({predicate})"));
+    }
+    if let Some(ids) = pick {
+        // An empty pick is a caller asking for no rows, which is `[]` and not every row in the table —
+        // `IN ()` is not SQL, so the condition says it instead.
+        let places: Vec<String> =
+            (0..ids.len()).map(|i| format!("?{}", bound.len() + i + 1)).collect();
+        conds.push(if places.is_empty() { "0".to_string() } else { format!("\"id\" IN ({})", places.join(", ")) });
+        bound.extend_from_slice(ids);
+    }
+    let sql = if conds.is_empty() {
+        format!("SELECT {select_list} FROM \"{table}\"")
+    } else {
+        format!("SELECT {select_list} FROM \"{table}\" WHERE {}", conds.join(" AND "))
     };
 
     let fail = crate::error::sqlite_on(conn);
@@ -285,8 +304,33 @@ pub fn stream_store_tables(
         }
         write_json(w, &dataset.table)?;
         w.write_all(b":")?;
-        stream_table(conn, dataset, scope, w, bundle.as_deref_mut(), progress)?;
+        stream_table(conn, dataset, scope, None, w, bundle.as_deref_mut(), progress)?;
     }
+    w.write_all(b"}")?;
+    Ok(())
+}
+
+/// Stream **the named rows** of one table as the same `{"<table>": [rows]}` object a whole stream writes
+/// for it — the by-id read of [`crate::sync_snapshot::stream_records`], which is why it goes through
+/// [`stream_table`] rather than beside it: the columns, the cell mapping and above all the `scope`
+/// narrowing are the snapshot's own, so the two roads cannot come to disagree about what a window may
+/// see.
+///
+/// An id the window does not reach, and an id that is no longer there, are both simply absent — the
+/// caller learns which rows exist by which came back, and there is nothing in the answer that a row
+/// outside the window could be told from a row that was deleted. No progress sink and no attachment
+/// bundle: this is a machine-facing read of a bounded handful of rows.
+pub fn stream_picked_rows(
+    conn: &Connection,
+    dataset: &Dataset,
+    scope: Option<&Scope>,
+    ids: &[i64],
+    w: &mut impl Write,
+) -> Result<()> {
+    w.write_all(b"{")?;
+    write_json(w, &dataset.table)?;
+    w.write_all(b":")?;
+    stream_table(conn, dataset, scope, Some(ids), w, None, &mut crate::progress::ignore)?;
     w.write_all(b"}")?;
     Ok(())
 }

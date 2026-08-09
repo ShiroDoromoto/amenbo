@@ -36,6 +36,13 @@
 //! It is plaintext, and deliberately so: this store is plaintext at rest, and encrypting what is carried
 //! is the carrier's job, not amenbo's (`AMB-D-585`). Nothing reads a snapshot back in — the road out is
 //! one-way (`AMB-D-578`).
+//!
+//! **Beside the whole picture, the same rows by id** ([`records_from`]). A carrier reading the ledger is
+//! told which records moved and never what they now hold (`AMB-D-582`), so it has to read those rows back
+//! — and taking the whole window to see one changed task is the ledger's whole point undone. That read is
+//! here rather than in a module of its own because what makes it safe is what makes the snapshot safe:
+//! the same [`project_predicate`], so a row outside the window falls out of both alike, and the same
+//! `{table: [rows]}` shape, so a carrier holds one form of amenbo's data and not two.
 
 use std::io::Write;
 use std::path::Path;
@@ -57,27 +64,44 @@ const SNAPSHOT_VERSION: u32 = 1;
 /// tell it apart from an export, which is the same shape and a different promise.
 const SNAPSHOT_FORMAT: &str = "amenbo-sync-json";
 
-/// Header object of a snapshot (`amenbo_sync` key): what produced it, when, and how far it reaches.
+/// Layout version of the by-id read's envelope, kept apart from [`SNAPSHOT_VERSION`] because the two
+/// documents are versioned by what they promise, not by when they were written.
+const RECORDS_VERSION: u32 = 1;
+
+/// Format tag of the by-id read ([`stream_records`]). The document is the snapshot's shape with one table
+/// in it, so the tag is what says which of the two a reader is holding — the difference being the promise,
+/// not the layout: a snapshot is the whole window at one instant, this is the rows that were asked for.
+const RECORDS_FORMAT: &str = "amenbo-sync-records";
+
+/// Header object of a document off this road (`amenbo_sync` key): what produced it, when, and how far it
+/// reaches. One header for both roads — the snapshot and the by-id read — so a carrier parses one thing
+/// and reads `format` to know which it has.
 #[derive(Debug, Clone, Serialize)]
 struct SnapshotHeader {
-    /// Format tag ([`SNAPSHOT_FORMAT`]).
+    /// Format tag ([`SNAPSHOT_FORMAT`] / [`RECORDS_FORMAT`]).
     format: &'static str,
-    /// Envelope layout version ([`SNAPSHOT_VERSION`]).
+    /// Envelope layout version ([`SNAPSHOT_VERSION`] / [`RECORDS_VERSION`]).
     format_version: u32,
     /// Read-model schema version of the producing binary ([`crate::model::SCHEMA_VERSION`]).
     schema_version: &'static str,
     /// Producing binary's human-readable version.
     app_version: &'static str,
-    /// When the snapshot was taken (RFC3339).
+    /// When the document was produced (RFC3339).
     taken_at: String,
-    /// The project this snapshot is closed to, or `null` when it carries the whole device. Stated
+    /// The project this document is closed to, or `null` when it carries the whole device. Stated
     /// because a carrier holding two snapshots has no other way to tell what each one was allowed to
     /// see, and "everything I got" is not the same claim as "everything there is".
     project_id: Option<i64>,
     /// **Where in the ledger this snapshot stands** — the change-feed position to read on from, so the
     /// full picture and the stream of changes are one continuous thing rather than two that nearly meet
     /// ([`ledger_position`]).
-    cursor: i64,
+    ///
+    /// Absent on the by-id read, and deliberately: those rows are read at no defensible position — a row
+    /// may have moved again between the feed naming it and this reading it, and a carrier that took this
+    /// for a cursor would skip the changes in between. The position comes from the snapshot and from the
+    /// feed, and from nowhere else.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cursor: Option<i64>,
 }
 
 /// The change-feed position a snapshot names: **read the feed after this and you get exactly what
@@ -192,6 +216,25 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
     })
 }
 
+/// How a reach narrows what a road out carries: the [`Scope`] every table is read through, or `None` for
+/// an open reach (a human, the GUI), which takes the device.
+///
+/// The narrowing has to be **total** before a byte is written: a dataset in `datasets` that declares no
+/// way to reach a project would stream whole, past the window. Failing here means the caller gets an
+/// error instead of a half-document with one table too wide in it. Asked by both roads out of this module
+/// so the by-id read is closed exactly as far as the snapshot is.
+fn window_scope(reach: Reach, datasets: &[&'static Dataset]) -> Result<Option<Scope>> {
+    let Some(project_id) = reach.project() else { return Ok(None) };
+    if let Some(gap) = datasets.iter().find(|d| project_predicate(d).is_none()) {
+        return Err(Error::invalid(format!(
+            "cannot close this read to one project: the `{}` dataset does not declare how its table \
+             reaches one",
+            gap.name
+        )));
+    }
+    Ok(Some(Scope { project_id, predicate: project_predicate }))
+}
+
 /// Stream a sync snapshot of the database at `db_path` to `w`, closed to `reach`. Kept free of
 /// [`crate::config::Paths`] resolution — like [`crate::export::export_json_from`] — so it is testable
 /// against a hand-built store; the OS-glue entry point is [`stream`].
@@ -202,23 +245,7 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
 pub fn stream_from(db_path: &Path, reach: Reach, w: &mut impl Write) -> Result<()> {
     // The registry every road out walks: each dataset but the plugin secrets.
     let datasets = export::datasets_carried_out();
-
-    let scope = match reach.project() {
-        None => None,
-        Some(project_id) => {
-            // The narrowing has to be **total** before a byte is written: a dataset that declares no way
-            // to reach a project would stream whole, past the window. Failing here means the caller gets
-            // an error instead of a half-document with one table too wide in it.
-            if let Some(gap) = datasets.iter().find(|d| project_predicate(d).is_none()) {
-                return Err(Error::invalid(format!(
-                    "cannot take a snapshot of one project: the `{}` dataset does not declare how its \
-                     table reaches one",
-                    gap.name
-                )));
-            }
-            Some(Scope { project_id, predicate: project_predicate })
-        }
-    };
+    let scope = window_scope(reach, &datasets)?;
 
     let conn = export::open_source(db_path)?;
     // **One snapshot for every table** — the whole point of the word. Each statement would otherwise
@@ -238,7 +265,7 @@ pub fn stream_from(db_path: &Path, reach: Reach, w: &mut impl Write) -> Result<(
         app_version: export::APP_VERSION,
         taken_at: Timestamp::now().0.to_rfc3339(),
         project_id: reach.project(),
-        cursor,
+        cursor: Some(cursor),
     };
 
     w.write_all(b"{\"amenbo_sync\":")?;
@@ -268,6 +295,99 @@ pub fn stream(reach: Reach, w: &mut impl Write) -> Result<()> {
         return Err(Error::invalid("nothing to snapshot: this device holds no store"));
     }
     stream_from(&db_path, reach, w)
+}
+
+/// The most record ids one by-id read takes. It is the page a carrier is handed by the feed
+/// (`SYNC_CHANGES_PAGE`), because that is where the ids come from: a carrier that drained one page can
+/// always ask for everything in it, and one that cannot is being asked to keep a queue amenbo never
+/// bounded.
+///
+/// **Over it is refused, not truncated.** A short page of changes is unambiguous — the cursor says where
+/// it stopped — but the ids here are the caller's own list in the caller's own order, so a partial answer
+/// would leave it comparing what it asked for against what came back to find out which half it holds, and
+/// a caller that skipped that comparison would drop rows silently. Splitting the list is one line at the
+/// caller; guessing which rows it got is not.
+pub const RECORDS_PER_READ: usize = 500;
+
+/// Read named rows of **one** dataset back, as the same shape a snapshot carries them in — the road that
+/// makes the ledger usable (`AMB-D-582`). `sync changes` says *which* records moved and never what they
+/// now hold, so without this a carrier holding a handful of ids has nowhere to take them but a fresh
+/// snapshot of the whole window.
+///
+/// `dataset` is the stable key the feed names (`task`, `dependency`, …
+/// [`FeedRow::dataset`](crate::store_engine::read::FeedRow::dataset)), so what a carrier read off the
+/// ledger is what it passes here. A key no carried dataset answers to is refused rather than served
+/// empty: an empty answer would read as "those rows are gone" and a carrier would delete what it holds.
+/// The plugin secrets are refused by the same line, being on no road out at all
+/// ([`export::WITHHELD_ON_THE_WAY_OUT`]).
+///
+/// **The window is the snapshot's, drawn by the snapshot's own [`project_predicate`].** An id outside it
+/// comes back as nothing — the same answer a deleted id gets, and deliberately the same: telling the two
+/// apart would say that a row the carrier may not see exists.
+///
+/// What it writes is `{"amenbo_sync": <header>, "tables": {"<table>": [rows]}}` — the snapshot's document
+/// with one table in it, so a carrier that can read a snapshot can read this with the code it already has.
+/// The header carries no `cursor`: these rows are read at no position (see [`SnapshotHeader::cursor`]).
+pub fn records_from(
+    db_path: &Path,
+    reach: Reach,
+    dataset: &str,
+    ids: &[i64],
+    w: &mut impl Write,
+) -> Result<()> {
+    let carried = export::datasets_carried_out();
+    let Some(dataset) = carried.iter().find(|d| d.name == dataset).copied() else {
+        let mut known: Vec<&str> = carried.iter().map(|d| d.name).collect();
+        known.sort_unstable();
+        return Err(Error::invalid(format!(
+            "`{dataset}` is not a dataset this road carries — it reads back the records the ledger \
+             names, which are: {}",
+            known.join(", "),
+        )));
+    };
+    if ids.is_empty() {
+        return Err(Error::invalid("name the records to read back — this road answers ids, not tables"));
+    }
+    if ids.len() > RECORDS_PER_READ {
+        return Err(Error::invalid(format!(
+            "{} ids in one read is more than this road answers ({RECORDS_PER_READ}) — ask for them in \
+             pages of that size",
+            ids.len(),
+        )));
+    }
+    // Everything that can be refused is refused **before the first byte**: what a caller got wrong is an
+    // error it can act on, not a half-document on its stdout.
+    let scope = window_scope(reach, &carried)?;
+
+    let header = SnapshotHeader {
+        format: RECORDS_FORMAT,
+        format_version: RECORDS_VERSION,
+        schema_version: crate::model::SCHEMA_VERSION,
+        app_version: export::APP_VERSION,
+        taken_at: Timestamp::now().0.to_rfc3339(),
+        project_id: reach.project(),
+        cursor: None,
+    };
+
+    let conn = export::open_source(db_path)?;
+    w.write_all(b"{\"amenbo_sync\":")?;
+    serde_json::to_writer(&mut *w, &header).map_err(Error::from)?;
+    w.write_all(b",\"tables\":")?;
+    // One statement, so one instant, and no transaction to hold it in.
+    export::stream_picked_rows(&conn, dataset, scope.as_ref(), ids, &mut *w)?;
+    w.write_all(b"}")?;
+    Ok(())
+}
+
+/// Read named rows out of **this device's** store — thin OS-layout glue over [`records_from`], the
+/// sibling of [`stream`], and refusing on the same terms: with no store here there is nothing to read
+/// back, and answering with an empty table would say those records are gone.
+pub fn stream_records(reach: Reach, dataset: &str, ids: &[i64], w: &mut impl Write) -> Result<()> {
+    let db_path = crate::config::resolve_store_file(&crate::config::Paths::user_base());
+    if !db_path.is_file() {
+        return Err(Error::invalid("nothing to read back: this device holds no store"));
+    }
+    records_from(&db_path, reach, dataset, ids, w)
 }
 
 #[cfg(test)]
@@ -715,6 +835,237 @@ mod tests {
             ),
             "and so the carrier that reads on from it is not sent back for another snapshot",
         );
+    }
+
+    // ─────────────────── reading the named rows back ───────────────────
+
+    /// Fill **every dataset a road out carries** in one project, and the same shapes again next door.
+    /// Returns `(mine, theirs)`.
+    ///
+    /// The seed is deliberately exhaustive rather than representative: what the by-id read has to be is
+    /// total — a table the snapshot carries and this cannot read back is a record a carrier is told
+    /// changed and can never fetch — and the only way to hold that is to have a row in every one of them
+    /// ([`every_table_the_snapshot_carries_reads_back_the_same_rows`]).
+    fn seed_every_carried_dataset(dir: &Path) -> (i64, i64) {
+        use crate::model::{DimensionCardinality, DimensionRole};
+
+        let mut s = Store::open_at(Paths::at(dir.to_path_buf())).unwrap();
+        let fill = |s: &mut Store, name: &str| {
+            let project = seed_project(s, name);
+            let (task, comment) = seed_task(s, Some(project), &format!("{name}: a task"));
+            let (blocker, _) = seed_task(s, Some(project), &format!("{name}: a blocker"));
+            s.depend_task(task, blocker, Some(ActorKind::Ai)).unwrap();
+            s.add_task_commit(task, &"a1".repeat(20), Some(ActorKind::Ai)).unwrap();
+
+            let older = s
+                .add_decision(crate::ops::decision::NewDecision {
+                    title: format!("{name}: the older one"),
+                    body: "why".into(),
+                    project_id: project,
+                })
+                .unwrap()
+                .id;
+            let newer = s
+                .add_decision(crate::ops::decision::NewDecision {
+                    title: format!("{name}: the newer one"),
+                    body: "why, again".into(),
+                    project_id: project,
+                })
+                .unwrap()
+                .id;
+            s.decision_builds_on(newer, older).unwrap();
+            s.link_decision(newer, task).unwrap();
+            s.add_decision_comment(newer, ActorKind::Ai, "on the decision").unwrap();
+
+            let axis = s
+                .dimension_add(
+                    project,
+                    crate::ops::dimension::NewDimension {
+                        name: format!("{name}-axis"),
+                        notes: String::new(),
+                        cardinality: DimensionCardinality::Single,
+                        ordered: false,
+                        role: DimensionRole::None,
+                    },
+                )
+                .unwrap()
+                .id;
+            let value = s.dimension_value_add(axis, "a value", None).unwrap().id;
+            s.set_task_dimension_value(task, value).unwrap();
+
+            s.attach_url(AttachmentTarget::Task, task, "https://example.com/seed", None, ActorKind::Ai)
+                .unwrap();
+            // The two rows a plugin leaves in a project: what it was configured with, and whether its
+            // gate is open here. Neither is a secret — those are on no road out at all.
+            s.set_plugin_config_value(project, "carrier", "channel", Some(name)).unwrap();
+            s.set_plugin_enabled_in_project(project, "carrier", true).unwrap();
+            (project, comment)
+        };
+
+        let (mine, _) = fill(&mut s, "mine");
+        let (theirs, _) = fill(&mut s, "theirs");
+        (mine, theirs)
+    }
+
+    /// The rows of one table as the snapshot carries them, and their ids.
+    fn carried(doc: &serde_json::Value, table: &str) -> Vec<serde_json::Value> {
+        doc["tables"][table].as_array().unwrap_or(&Vec::new()).clone()
+    }
+
+    fn ids_of(rows: &[serde_json::Value]) -> Vec<i64> {
+        rows.iter().map(|r| r["id"].as_i64().unwrap()).collect()
+    }
+
+    fn read_back(db_path: &Path, reach: Reach, dataset: &str, ids: &[i64]) -> serde_json::Value {
+        let mut buf = Vec::new();
+        records_from(db_path, reach, dataset, ids, &mut buf).unwrap();
+        serde_json::from_slice(&buf).unwrap()
+    }
+
+    /// **The reason this road exists, held whole:** every table a snapshot carries can be read back by
+    /// id, and what comes back is the row the snapshot carries — same columns, same values. A carrier is
+    /// told by the ledger that a record moved and has nowhere else to take that id, so a table missing
+    /// here is a change it can never resolve, and a row that differed here would mean it holds two shapes
+    /// of the same record depending on which road it came down.
+    ///
+    /// The registry is walked rather than a list of tables written out: a dataset added later is carried
+    /// by the snapshot the moment it is declared, and this fails until it can be read back too.
+    #[test]
+    fn every_table_the_snapshot_carries_reads_back_the_same_rows() {
+        let dir = scratch("read-back");
+        std::fs::create_dir_all(&dir).unwrap();
+        let (mine, _) = seed_every_carried_dataset(&dir);
+        let db = store_file(&dir);
+
+        let doc = take(&db, Reach::window(mine));
+        for dataset in export::datasets_carried_out() {
+            let rows = carried(&doc, dataset.table);
+            assert!(
+                !rows.is_empty(),
+                "the seed leaves no row in `{}`, so this proves nothing about reading it back — fill it \
+                 in seed_every_carried_dataset",
+                dataset.name,
+            );
+            let read = read_back(&db, Reach::window(mine), dataset.name, &ids_of(&rows));
+            assert_eq!(
+                carried(&read, dataset.table),
+                rows,
+                "`{}` does not read back as the snapshot carries it",
+                dataset.name,
+            );
+            assert_eq!(read["amenbo_sync"]["format"], RECORDS_FORMAT);
+            assert_eq!(read["amenbo_sync"]["project_id"], mine);
+            assert!(
+                read["amenbo_sync"]["cursor"].is_null(),
+                "these rows stand at no position in the ledger, so the header names none",
+            );
+        }
+    }
+
+    /// **Not one row of the project next door, on any table.** The ids are that project's real ones, read
+    /// off its own snapshot, so this is the case a carrier could actually reach: it holds ids from the
+    /// ledger and asks for them. The same strictness `AMB-T-2789` / `AMB-T-2791` hold the read model to —
+    /// walked over the whole registry, because one table forgetting the window is the whole leak.
+    #[test]
+    fn no_id_from_outside_the_window_reads_back_a_row() {
+        let dir = scratch("read-back-window");
+        std::fs::create_dir_all(&dir).unwrap();
+        let (mine, theirs) = seed_every_carried_dataset(&dir);
+        let db = store_file(&dir);
+
+        let next_door = take(&db, Reach::window(theirs));
+        for dataset in export::datasets_carried_out() {
+            let ids = ids_of(&carried(&next_door, dataset.table));
+            assert!(!ids.is_empty(), "`{}` has nothing next door to ask for", dataset.name);
+            let read = read_back(&db, Reach::window(mine), dataset.name, &ids);
+            assert_eq!(
+                carried(&read, dataset.table),
+                Vec::<serde_json::Value>::new(),
+                "`{}` handed a window rows from the project next door",
+                dataset.name,
+            );
+        }
+    }
+
+    /// A deleted id is simply absent, and an id that never existed with it. Nothing marks the gap: a
+    /// carrier learns a record is gone from the `delete` in the feed, so an answer that had to
+    /// distinguish "deleted" from "not yours" would be saying that a row it may not see exists.
+    #[test]
+    fn an_id_that_is_no_longer_there_is_simply_absent() {
+        let dir = scratch("read-back-gone");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let (mine, kept, gone) = {
+            let mut s = Store::open_at(Paths::at(dir.clone())).unwrap();
+            let mine = seed_project(&mut s, "mine");
+            let (kept, _) = seed_task(&mut s, Some(mine), "still here");
+            let (gone, _) = seed_task(&mut s, Some(mine), "deleted after the feed named it");
+            s.delete_task(gone, ActorKind::Human).unwrap();
+            (mine, kept, gone)
+        };
+        let db = store_file(&dir);
+
+        let read = read_back(&db, Reach::window(mine), "task", &[kept, gone, 900_001]);
+        assert_eq!(ids_of(&carried(&read, "task")), vec![kept], "only what is still there comes back");
+    }
+
+    /// More ids than one read answers is **refused, not cut short**. A short page of changes is
+    /// unambiguous — the cursor says where it stopped — but these ids are the caller's own list, so a
+    /// partial answer would leave it working out which half it holds, and a caller that skipped that
+    /// would drop records silently. The cap itself is a page of changes, so a carrier that drained one
+    /// page can always ask for everything in it.
+    #[test]
+    fn more_ids_than_one_read_answers_is_refused_rather_than_cut_short() {
+        let dir = scratch("read-back-cap");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mine = {
+            let mut s = Store::open_at(Paths::at(dir.clone())).unwrap();
+            let mine = seed_project(&mut s, "mine");
+            seed_task(&mut s, Some(mine), "the one real row");
+            mine
+        };
+        let db = store_file(&dir);
+
+        let full: Vec<i64> = (1..=RECORDS_PER_READ as i64).collect();
+        let mut buf = Vec::new();
+        records_from(&db, Reach::window(mine), "task", &full, &mut buf).unwrap();
+
+        let mut over = full.clone();
+        over.push(RECORDS_PER_READ as i64 + 1);
+        let mut buf = Vec::new();
+        let err = records_from(&db, Reach::window(mine), "task", &over, &mut buf).unwrap_err();
+        assert!(err.to_string().contains(&RECORDS_PER_READ.to_string()), "it names the cap: {err}");
+        assert!(buf.is_empty(), "a refusal leaves no half-document on the caller's stdout");
+
+        // And nothing at all is not a question either: a road that answers ids cannot be asked for a
+        // table.
+        let mut buf = Vec::new();
+        assert!(records_from(&db, Reach::window(mine), "task", &[], &mut buf).is_err());
+    }
+
+    /// A dataset no road out carries is refused rather than answered empty — including the plugin
+    /// secrets, which are refused by being on no road out at all rather than by a second rule here. An
+    /// empty answer would read as "those records are gone", and a carrier that believed it would delete
+    /// what it holds.
+    #[test]
+    fn a_dataset_no_road_out_carries_is_refused() {
+        let dir = scratch("read-back-dataset");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mine = {
+            let mut s = Store::open_at(Paths::at(dir.clone())).unwrap();
+            seed_project(&mut s, "mine")
+        };
+        let db = store_file(&dir);
+
+        for name in ["plugin_secret", "change_feed", "not_a_dataset"] {
+            let mut buf = Vec::new();
+            let err = records_from(&db, Reach::window(mine), name, &[1], &mut buf).unwrap_err();
+            assert!(
+                err.to_string().contains("task"),
+                "the refusal says what it does read back, so a caller can correct it: {err}",
+            );
+            assert!(buf.is_empty(), "and nothing was written before the refusal");
+        }
     }
 
     /// A sink that runs `on` once, the moment what has been written contains `at` — a seam inside the

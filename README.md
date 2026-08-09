@@ -438,6 +438,7 @@ amenbo restore ./everything.amenbo-backup --yes # destructively restore this dev
 amenbo sync version                         # one number: has anything here changed? (no snapshot is built)
 amenbo sync snapshot > ./window.json        # one whole picture of it, from one instant (records only) — its header names the ledger position it stands at, to read on from
 amenbo sync changes --since 4821 --json     # ...and from there on, only what moved: which records, and the next cursor
+amenbo sync records --dataset task --ids 12,15 # ...and the rows those named, in the snapshot's own shape (an id outside the window, or gone, is simply absent)
 
 # Keep amenbo's refs out of what leaves the store — an id resolves only for
 # someone holding it, so `AMB-` refs are noise in a commit, a diff or a PR body.

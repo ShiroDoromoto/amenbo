@@ -373,7 +373,8 @@ fn a_carriers_road_is_open_to_the_window_the_whole_device_is_refused_to() {
     let bound = cli.bound_project();
     cli.json(&["task", "add", "--title", "observed", "--project", &bound, "--json"]);
     let other = id_str(&cli.json(&["project", "add", "--name", "Other", "--json"])["project"]["id"]);
-    cli.json(&["task", "add", "--title", "theirs", "--project", &other, "--json"]);
+    let next_door =
+        id_str(&cli.json(&["task", "add", "--title", "theirs", "--project", &other, "--json"])["task"]["id"]);
 
     // A plugin's process: the store and the window in the environment, and **no facet** — a read decides
     // nothing by one, and a carrier has none to declare.
@@ -461,6 +462,32 @@ fn a_carriers_road_is_open_to_the_window_the_whole_device_is_refused_to() {
         assert!(stderr.contains("sync snapshot"), "the way on is in the answer: {stderr}");
         assert!(stdout.is_empty(), "nothing on stdout for a carrier to mistake for a page: {stdout}");
     }
+
+    // The fourth road, and the one that makes the third worth walking: the page named records and never
+    // what they hold, so the carrier reads those rows back by id. Through the same window — an id from
+    // next door is one it could really be handed (a copy of its own state, a bug upstream), and what it
+    // gets is nothing rather than the row.
+    let mine_task = datasets_and_ids
+        .iter()
+        .find(|(dataset, _)| dataset == "task")
+        .map(|(_, id)| *id)
+        .expect("the page named a task of this window");
+    let (stdout, stderr, code) =
+        plugin(&["sync", "records", "--dataset", "task", "--ids", &mine_task.to_string()]);
+    assert_eq!(code, 0, "a window reads its own records back with no facet: {stderr}");
+    assert!(stdout.contains("observed"), "the row the page named comes back: {stdout}");
+
+    let (stdout, _, code) = plugin(&["sync", "records", "--dataset", "task", "--ids", &next_door]);
+    assert_eq!(code, 0, "an id outside the window is not an error — it is simply absent");
+    assert!(!stdout.contains("theirs"), "a window read back the project next door: {stdout}");
+
+    // And a dataset no road out carries is refused rather than answered empty: an empty answer reads as
+    // "those records are gone", and a carrier that believed it would delete what it holds.
+    let (stdout, stderr, code) =
+        plugin(&["sync", "records", "--dataset", "plugin_secret", "--ids", "1", "--json"]);
+    assert_ne!(code, 0, "the secrets are on no road out: {stdout}");
+    assert!(stderr.contains("sync_error"), "and it says so in a code: {stderr}");
+    assert!(stdout.is_empty(), "nothing on stdout for a carrier to mistake for an answer: {stdout}");
 }
 
 /// **An AI does not pick a project** — the binding does. `--project` and the `project:` filter are human

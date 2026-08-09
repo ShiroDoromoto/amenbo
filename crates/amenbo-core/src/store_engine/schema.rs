@@ -59,6 +59,7 @@
 //! |---|---|---|
 //! | a concept someone can point at | a comment, a dependency edge, a decision↔task link, a commit anchor, a classification value | `RESTRICT` (+ the delete op takes the children first) |
 //! | amenbo's own settings for a project | `plugin_config`, `plugin_secret`, `plugin_enable`, `hook_optout`, `harness_consent` | `CASCADE` |
+//! | the same settings, written at the **device** layer (`AMB-D-601`) | a `plugin_config` / `plugin_secret` / `plugin_enable` row whose `project_id` is NULL | the cascade never reaches them — no project holds them |
 //! | optional entity reference (keep the child, drop the reference) | none in the registry today | `SET NULL` |
 //!
 //! So `RESTRICT` is what holds the ops to the rule: leave a child behind and the parent's `DELETE` stops
@@ -705,24 +706,30 @@ datasets! {
         order_key: col(ORDER_KEY),
     }
 
-    // A plugin's **text (non-secret)** config value, for one project (`AMB-D-434` / `AMB-D-356`). One
-    // value per project and no tier under it: a plugin is a project's, so there is nothing left for a
-    // machine default to be the default *of*. A record table, carried by `export`/`backup` — text config
-    // is ordinary content of the project it belongs to. A `secret` field never reaches here; it lives in
-    // `plugin_secret` below. `plugin` is the plugin's manifest name (a string; plugins live on disk, not
-    // in the store, so there is no FK for it) and `field_key` the config field's key (spelled out because
-    // `key` is a SQLite keyword). The `(project_id, plugin, field_key)` triple is unique
-    // (`plugin_config_triple` below). CASCADE: the value is *about* the project, so deleting the project
-    // retires it.
+    // A plugin's **text (non-secret)** config value at one layer (`AMB-D-434` / `AMB-D-601` / `AMB-D-356`).
+    // One value per layer and no tier under it: the author's `scope` declaration picks the single layer the
+    // whole plugin lives at, so there is nothing left for a machine default to be the default *of*. A record
+    // table, carried by `export`/`backup` — text config is ordinary content. A `secret` field never reaches
+    // here; it lives in `plugin_secret` below. `plugin` is the plugin's manifest name (a string; plugins
+    // live on disk, not in the store, so there is no FK for it) and `field_key` the config field's key
+    // (spelled out because `key` is a SQLite keyword).
+    //
+    // **`project_id` is the layer**: a project's id for a `scope: project` plugin, and NULL for the device
+    // row a `scope: machine` one writes. The `(project_id, plugin, field_key)` triple is unique
+    // (`plugin_config_triple` below) — and because SQLite counts NULLs in an index as distinct, the device
+    // row's uniqueness is a partial index of its own (`plugin_config_device`). CASCADE: a project's value is
+    // *about* the project, so deleting the project retires it; the device row belongs to no project, so no
+    // cascade reaches it.
     plugin_config => plugin_config {
-        project_id: fk("project", "CASCADE"),
+        project_id: fk_opt("project", "CASCADE"),
         plugin: col(REQ),
         field_key: col(REQ),
         value: col(REQ),
     }
 
-    // A plugin's **secret** config value, for one project (`AMB-D-434`). Same address as `plugin_config`
-    // above — `(project_id, plugin, field_key)`, unique as `plugin_secret_triple` — and the same shape;
+    // A plugin's **secret** config value, at one layer (`AMB-D-434` / `AMB-D-601`). Same address as
+    // `plugin_config` above — `(project_id, plugin, field_key)`, unique as `plugin_secret_triple`, with the
+    // device row's own partial index (`plugin_secret_device`) — and the same shape;
     // what makes it a table of its own is where its rows may travel. `backup`/`restore` carry it (a
     // snapshot of the whole file), because that is the road back to one's own machine and dropping it
     // would mean typing every credential in again after a restore; an `export` must leave it, that being
@@ -733,24 +740,26 @@ datasets! {
     // config — and the next path added would be written by someone who did not know to ask. A table left
     // out of `export`'s walk is left out whether or not anyone remembers it exists.
     plugin_secret => plugin_secret {
-        project_id: fk("project", "CASCADE"),
+        project_id: fk_opt("project", "CASCADE"),
         plugin: col(REQ),
         field_key: col(REQ),
         value: col(REQ),
     }
 
-    // The projects a plugin is **enabled in** (`AMB-D-434`). A set, not a two-answer
-    // override: a plugin has one switch and it is a project's, with no tier under it to inherit or veto —
-    // a row means "on here" and no row means off. (That is `hook_optout`'s shape after all; the `enabled`
-    // column the two-answer version carried is gone with the tier it existed for.) A record table, so it is
-    // carried by `export`/`backup`: a restore that dropped it would silently switch a project's plugins
-    // off, and one that keeps it brings them back on where they were.
+    // Where a plugin is **enabled** (`AMB-D-434` / `AMB-D-601`). A set, not a two-answer
+    // override: a plugin has one switch and it sits at the layer its author declared, with no tier under it
+    // to inherit or veto — a row means "on here" and no row means off. (That is `hook_optout`'s shape after
+    // all; the `enabled` column the two-answer version carried is gone with the tier it existed for.) A
+    // record table, so it is carried by `export`/`backup`: a restore that dropped it would silently switch
+    // a project's plugins off, and one that keeps it brings them back on where they were.
     //
     // `plugin` is the manifest name (plugins live on disk, not in the store, so there is no FK for it);
-    // the `(project_id, plugin)` pair is unique (`plugin_enable_pair` below).
-    // CASCADE: the row is *about* the project.
+    // `project_id` is the layer — a project's id, or NULL for the one row a `scope: machine` plugin holds
+    // for the whole device. The `(project_id, plugin)` pair is unique (`plugin_enable_pair` below), and the
+    // device row's uniqueness is the partial `plugin_enable_device`. CASCADE: a project's row is *about*
+    // the project; the device row is about no project, so no cascade reaches it.
     plugin_enable => plugin_enable {
-        project_id: fk("project", "CASCADE"),
+        project_id: fk_opt("project", "CASCADE"),
         plugin: col(REQ),
     }
 }
@@ -1114,6 +1123,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS plugin_secret_triple ON plugin_secret(project_
 -- gate by finding this row rather than appending a second answer. The unique index *is* that constraint,
 -- and its leading column also serves a read that seeks one project's overrides.
 CREATE UNIQUE INDEX IF NOT EXISTS plugin_enable_pair ON plugin_enable(project_id, plugin);
+-- The **device layer**'s half of those three constraints (`AMB-D-601`). A `scope: machine` plugin writes its
+-- rows with `project_id` NULL, and SQLite counts every NULL in an index as distinct from every other — so
+-- the three indexes above, whose leading column is that key, would let a second device row in beside the
+-- first and leave the upsert appending. A partial index over the rest of the address, taken only where the
+-- key is NULL, is the same constraint restated where the general one cannot reach; being partial, it says
+-- nothing about the project rows, whose uniqueness stays with the indexes above.
+--
+-- They live here rather than in the step that made the column nullable because the genesis batch must apply
+-- to the oldest store this build opens, and it does: a partial index over `project_id IS NULL` is a legal
+-- index on a `NOT NULL` column too — one that simply holds no rows until the step lands.
+CREATE UNIQUE INDEX IF NOT EXISTS plugin_config_device ON plugin_config(plugin, field_key) WHERE project_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS plugin_secret_device ON plugin_secret(plugin, field_key) WHERE project_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS plugin_enable_device ON plugin_enable(plugin) WHERE project_id IS NULL;
 -- A plugin's queue, read the only way it is ever read: that plugin's own rows, oldest first. The pair is
 -- the whole query (`plugin` seeks, `id` orders), so the runner reads its head without scanning the rows
 -- queued for every other plugin, and the fan-out's "which plugins have work" seek stays on the index too.

@@ -8,6 +8,7 @@
 
 #![cfg(unix)]
 
+use amenbo_core::plugin_layer::Layer;
 use std::os::unix::fs::PermissionsExt;
 
 use amenbo_core::config::Paths;
@@ -91,7 +92,7 @@ fn an_enabled_plugin_returns_its_stdout_and_relays_its_stderr() {
         "worktree",
         "#!/bin/sh\ncat >/dev/null\nprintf 'cd /w/%s\\n' \"$2\"\nprintf 'task %s ready\\n' \"$2\" 1>&2\n",
     );
-    enable(&mut store, "worktree", project, &[], |_| true).unwrap();
+    enable(&mut store, "worktree", Layer::Project(project), &[], |_| true).unwrap();
 
     let outcome =
         plugin_invoke::call(&store, "worktree", &args(&["start", "123"]), Some(project)).unwrap();
@@ -109,7 +110,7 @@ fn an_enabled_plugin_returns_its_stdout_and_relays_its_stderr() {
 fn the_plugin_reads_the_version_marker_on_stdin() {
     let (mut store, project) =
         store_with_plugin("invoke-stdin", "echoer", "#!/bin/sh\ncat\nexit 0\n");
-    enable(&mut store, "echoer", project, &[], |_| true).unwrap();
+    enable(&mut store, "echoer", Layer::Project(project), &[], |_| true).unwrap();
 
     let outcome = plugin_invoke::call(&store, "echoer", &[], Some(project)).unwrap();
     assert_eq!(outcome.value(), Some(r#"{"v":1}"#), "the wire document leads with v");
@@ -124,7 +125,7 @@ fn a_failing_plugin_discards_its_return_value_and_lands_on_the_log() {
         "broken",
         "#!/bin/sh\ncat >/dev/null\nprintf 'half-written\\n'\nprintf 'boom\\n' 1>&2\nexit 3\n",
     );
-    enable(&mut store, "broken", project, &[], |_| true).unwrap();
+    enable(&mut store, "broken", Layer::Project(project), &[], |_| true).unwrap();
 
     let outcome = plugin_invoke::call(&store, "broken", &[], Some(project)).unwrap();
     assert_eq!(
@@ -151,7 +152,7 @@ fn a_called_plugin_reads_the_store_and_its_window_out_of_its_environment() {
         "reader",
         &format!("#!/bin/sh\ncat >/dev/null\nprintf '%s|%s\\n' \"${STORE_ENV}\" \"${REACH_ENV}\"\n"),
     );
-    enable(&mut store, "reader", project, &[], |_| true).unwrap();
+    enable(&mut store, "reader", Layer::Project(project), &[], |_| true).unwrap();
 
     let outcome = plugin_invoke::call(&store, "reader", &[], Some(project)).unwrap();
     let base = store.paths.base_dir.to_string_lossy();

@@ -8,9 +8,9 @@
 //! | what | where | how it goes |
 //! |---|---|---|
 //! | the events queued for it, and the lease of whoever is running them | the store's `plugin_queue` / `plugin_runner` rows | [`Store::drop_plugin_delivery`](crate::store::Store::drop_plugin_delivery) (`AMB-D-399`) |
-//! | secrets, every project | the store's `plugin_secret` rows | [`Store::forget_plugin_secrets`](crate::store::Store::forget_plugin_secrets) (**always**, `AMB-D-357`) |
-//! | settings, every project | the store's `plugin_config` rows | [`Store::forget_plugin_config`](crate::store::Store::forget_plugin_config) |
-//! | per-project gate answers, every project | the store's `plugin_enable` rows | [`Store::forget_plugin_enable`](crate::store::Store::forget_plugin_enable) |
+//! | secrets, every layer | the store's `plugin_secret` rows | [`Store::forget_plugin_secrets`](crate::store::Store::forget_plugin_secrets) (**always**, `AMB-D-357`) |
+//! | settings, every layer | the store's `plugin_config` rows | [`Store::forget_plugin_config`](crate::store::Store::forget_plugin_config) |
+//! | gate answers, every layer | the store's `plugin_enable` rows | [`Store::forget_plugin_enable`](crate::store::Store::forget_plugin_enable) |
 //! | the binary and its home | `<base>/plugins/<name>/` | the directory is removed |
 //! | the plugin's runs in the execution log | `<base>/plugin-runs.jsonl` | [`plugin_log::forget`](crate::plugin_log::forget) |
 //!
@@ -119,6 +119,7 @@ pub fn uninstall(store: &mut Store, plugin: &str) -> Result<Removed> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugin_layer::Layer;
     use crate::config::Paths;
     use crate::plugin_config;
     use crate::plugin_manifest::ConfigField;
@@ -151,10 +152,10 @@ mod tests {
             })
             .unwrap()
             .id;
-        plugin_config::set(store, &field("events", false), plugin, project, "merge").unwrap();
-        plugin_config::set(store, &field("token", true), plugin, project, "s3cret").unwrap();
+        plugin_config::set(store, &field("events", false), plugin, Layer::Project(project), "merge").unwrap();
+        plugin_config::set(store, &field("token", true), plugin, Layer::Project(project), "s3cret").unwrap();
         // ...and a project that has the plugin on, the gate's residue (`AMB-D-434`).
-        crate::plugin_trust::enable(store, plugin, project, &[], |_| true).unwrap();
+        crate::plugin_trust::enable(store, plugin, Layer::Project(project), &[], |_| true).unwrap();
         // ...and an event still waiting on its queue, which goes with the plugin (`AMB-D-399`).
         let tx = store.read_model().write().unwrap();
         tx.queue_event(&crate::store_engine::QueuedEvent {
@@ -214,16 +215,16 @@ mod tests {
         );
 
         assert_eq!(
-            store.plugin_config_value(project, "slack", "events").unwrap(),
+            store.plugin_config_value(Some(project), "slack", "events").unwrap(),
             None,
             "the project's setting is gone",
         );
         assert!(
-            !store.plugin_enabled_in_project(project, "slack").unwrap(),
+            !store.plugin_enabled_in_project(Some(project), "slack").unwrap(),
             "the project's gate row is gone",
         );
         assert_eq!(
-            plugin_config::get(&store, &field("token", true), "slack", project).unwrap(),
+            plugin_config::get(&store, &field("token", true), "slack", Layer::Project(project)).unwrap(),
             None,
             "the secret is purged",
         );
@@ -244,9 +245,9 @@ mod tests {
         uninstall(&mut store, "slack").unwrap();
 
         // The same name, installed again: no gate anywhere, no settings, no secret.
-        assert!(store.projects_with_plugin_enabled("slack").unwrap().is_empty());
-        assert_eq!(store.plugin_config_value(project, "slack", "events").unwrap(), None);
-        assert_eq!(store.plugin_secret_value(project, "slack", "token").unwrap(), None);
+        assert!(store.layers_with_plugin_enabled("slack").unwrap().is_empty());
+        assert_eq!(store.plugin_config_value(Some(project), "slack", "events").unwrap(), None);
+        assert_eq!(store.plugin_secret_value(Some(project), "slack", "token").unwrap(), None);
     }
 
     /// Uninstall works from the name alone — a half-broken install (a home with no manifest) is exactly
@@ -285,7 +286,7 @@ mod tests {
         uninstall(&mut store, "slack").unwrap();
 
         assert_eq!(
-            store.projects_with_plugin_enabled("worktree").unwrap().len(),
+            store.layers_with_plugin_enabled("worktree").unwrap().len(),
             1,
             "the neighbour keeps its gate",
         );
@@ -296,8 +297,8 @@ mod tests {
             "the neighbour keeps its execution-log runs",
         );
         // ...including its own setting and gate answer, which share the store with the erased ones.
-        assert!(store.plugin_config_value(project, "slack", "events").unwrap().is_none());
-        assert!(!store.plugin_enabled_in_project(project, "slack").unwrap());
+        assert!(store.plugin_config_value(Some(project), "slack", "events").unwrap().is_none());
+        assert!(!store.plugin_enabled_in_project(Some(project), "slack").unwrap());
     }
 
     /// The registry cache is not a plugin, so it cannot be uninstalled — the directory that holds the

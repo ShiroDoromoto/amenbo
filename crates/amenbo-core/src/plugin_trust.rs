@@ -4,11 +4,13 @@
 //! fires through. This module is the one door that moves that state, exactly as [`crate::plugin_config`] is
 //! the one door for a config *value* — so the fail-closed rule below lives in a single place.
 //!
-//! **One switch, and it is a project's** (`AMB-D-434`). Every plugin is enabled per project: the gate is a
-//! row in the store's `plugin_enable`, and the row **is** the answer — present means on in that project,
-//! absent means off. Nothing declares a level, so there is no second tier to inherit from or veto, and a
-//! user is never shown two switches for one plugin. A caller standing in no project has no gate to move
-//! ([`require_project`]) rather than a device-wide one to fall back on.
+//! **One switch, at the layer its author declared** (`AMB-D-434` / `AMB-D-601`). The gate is a row in the
+//! store's `plugin_enable`, and the row **is** the answer — present means on here, absent means off.
+//! *Which* "here" is [`Layer`]'s to say, derived from the manifest's `scope` and never from where the
+//! caller happens to stand: a `scope: project` plugin has one gate per project, and a `scope: machine`
+//! plugin one for the device. Either way there is a single tier, so a user is never shown two switches for
+//! one plugin, and a caller standing in no project has no *project* gate to move ([`require_project`])
+//! rather than a device-wide one to fall back on.
 //!
 //! **Enabling is the consent** (`AMB-D-434`). Running somebody else's code is what turning a plugin on
 //! means, so the act is the permission and amenbo keeps no separate answer beside it. That also makes the
@@ -26,6 +28,7 @@
 //! values; the state model and its gate are here so both drive them the same way.
 
 use crate::error::{Error, ErrorCode, Msg, Result};
+use crate::plugin_layer::Layer;
 use crate::plugin_manifest::ConfigField;
 use crate::store::Store;
 
@@ -39,9 +42,11 @@ pub struct Stopped {
 
 /// The project whose gate a face is moving, or the refusal when it is standing in none (`AMB-D-434`).
 ///
-/// Every plugin is a project's, so a context with no project has no answer to give — refused here rather
-/// than silently resolved device-wide, which is the layer this removed. One wording, shared by every face
-/// that has an `Option<i64>` and needs the gate.
+/// A `scope: project` plugin is a project's, so a context with no project has no answer to give — refused
+/// here rather than silently resolved device-wide, a fallback no declaration asked for. One wording, shared
+/// by every face that has an `Option<i64>` and needs the gate, and by
+/// [`Layer::of`](crate::plugin_layer::Layer::of), which is where the declaration decides whether the
+/// question is even asked.
 pub fn require_project(project: Option<i64>) -> Result<i64> {
     project.ok_or_else(|| {
         Error::Invalid(
@@ -73,20 +78,24 @@ pub fn missing_required(
         .collect()
 }
 
-/// Enable a plugin in one project: fail-closed on unsatisfied `required` settings (`AMB-D-351`), then open
-/// that project's gate. `has_value` reports whether one field currently holds a value — the caller resolves
+/// Enable a plugin at one layer: fail-closed on unsatisfied `required` settings (`AMB-D-351`), then open
+/// that layer's gate. `has_value` reports whether one field currently holds a value — the caller resolves
 /// that; this boundary does not touch storage for it.
 ///
-/// Idempotent: a plugin already on in that project ends where it started.
+/// **Opening the device gate is the consent to let the plugin read the whole machine** (`AMB-D-601`), so
+/// nothing asks a second time: a `scope: machine` plugin's [`Layer::Device`] is that answer, and there is no
+/// separate one stored beside it.
+///
+/// Idempotent: a plugin already on at that layer ends where it started.
 pub fn enable(
     store: &mut Store,
     plugin: &str,
-    project: i64,
+    layer: Layer,
     fields: &[ConfigField],
     has_value: impl Fn(&ConfigField) -> bool,
 ) -> Result<()> {
     refuse_missing_required(plugin, fields, has_value)?;
-    store.set_plugin_enabled_in_project(project, plugin, true)?;
+    store.set_plugin_enabled_in_project(layer.project_id(), plugin, true)?;
     Ok(())
 }
 
@@ -103,22 +112,23 @@ pub fn enable(
 /// for itself stays enabled and does nothing.
 ///
 /// Another project's queued rows stay: the switch that closed answers for one project only, so the runner
-/// is left to them.
+/// is left to them. Closing the **device** gate is the whole plugin stopping, so everything queued for it
+/// goes, whichever project the event came from (`AMB-D-601`) — there is no other gate left to carry it out.
 ///
 /// [`Stopped`] carries what that cost was on this call, so a face can say it out loud instead of leaving a
 /// silent discard.
-pub fn disable(store: &mut Store, plugin: &str, project: i64) -> Result<Stopped> {
-    store.set_plugin_enabled_in_project(project, plugin, false)?;
+pub fn disable(store: &mut Store, plugin: &str, layer: Layer) -> Result<Stopped> {
+    store.set_plugin_enabled_in_project(layer.project_id(), plugin, false)?;
     // The gate is closed first, so nothing is queued behind the drop: the fan-out asks this same gate
     // (`plugin_subscribe::EnabledSubscribers`) and a write racing this one either sees the gate still open
     // and queues what the drop then takes, or sees it shut and queues nothing.
-    let queued = store.drop_plugin_delivery(plugin, Some(project))?;
+    let queued = store.drop_plugin_delivery(plugin, layer.project_id())?;
     Ok(Stopped { queued })
 }
 
-/// Whether the plugin fires in `project` — the row, and nothing beside it (`AMB-D-434`).
-pub fn effective_enabled_in(store: &Store, plugin: &str, project: i64) -> Result<bool> {
-    store.plugin_enabled_in_project(project, plugin)
+/// Whether the plugin fires at `layer` — the row, and nothing beside it (`AMB-D-434` / `AMB-D-601`).
+pub fn effective_enabled_in(store: &Store, plugin: &str, layer: Layer) -> Result<bool> {
+    store.plugin_enabled_in_project(layer.project_id(), plugin)
 }
 
 /// The fail-closed `required` check both enable doors run (`AMB-D-351`), as the refusal they share.
@@ -169,7 +179,7 @@ mod tests {
             .id
     }
 
-    // ───────────────────────── the gate is a project's, and only one ──────────────────────────────
+    // ──────────────────── the gate sits at one declared layer, and only one ───────────────────────
 
     /// A context standing in no project is refused, not answered device-wide: there is no device-wide
     /// answer for it to fall back to (`AMB-D-434`).
@@ -185,7 +195,7 @@ mod tests {
     fn an_installed_but_never_enabled_plugin_is_absent() {
         let mut store = store_at("absent");
         let p = mk_project(&mut store, "p");
-        assert!(!effective_enabled_in(&store, "slack", p).unwrap());
+        assert!(!effective_enabled_in(&store, "slack", Layer::Project(p)).unwrap());
     }
 
     /// The gate end to end: this project fires, and no other is touched.
@@ -195,10 +205,10 @@ mod tests {
         let a = mk_project(&mut store, "a");
         let b = mk_project(&mut store, "b");
 
-        enable(&mut store, "slack", a, &[], |_| true).unwrap();
+        enable(&mut store, "slack", Layer::Project(a), &[], |_| true).unwrap();
 
-        assert!(effective_enabled_in(&store, "slack", a).unwrap());
-        assert!(!effective_enabled_in(&store, "slack", b).unwrap());
+        assert!(effective_enabled_in(&store, "slack", Layer::Project(a)).unwrap());
+        assert!(!effective_enabled_in(&store, "slack", Layer::Project(b)).unwrap());
     }
 
     /// Turning it off in one project leaves the others alone, and turning it back on asks nothing.
@@ -207,15 +217,15 @@ mod tests {
         let mut store = store_at("project-disable");
         let a = mk_project(&mut store, "a");
         let b = mk_project(&mut store, "b");
-        enable(&mut store, "slack", a, &[], |_| true).unwrap();
-        enable(&mut store, "slack", b, &[], |_| true).unwrap();
+        enable(&mut store, "slack", Layer::Project(a), &[], |_| true).unwrap();
+        enable(&mut store, "slack", Layer::Project(b), &[], |_| true).unwrap();
 
-        disable(&mut store, "slack", a).unwrap();
-        assert!(!effective_enabled_in(&store, "slack", a).unwrap());
-        assert!(effective_enabled_in(&store, "slack", b).unwrap(), "b is untouched");
+        disable(&mut store, "slack", Layer::Project(a)).unwrap();
+        assert!(!effective_enabled_in(&store, "slack", Layer::Project(a)).unwrap());
+        assert!(effective_enabled_in(&store, "slack", Layer::Project(b)).unwrap(), "b is untouched");
 
-        enable(&mut store, "slack", a, &[], |_| true).unwrap();
-        assert!(effective_enabled_in(&store, "slack", a).unwrap());
+        enable(&mut store, "slack", Layer::Project(a), &[], |_| true).unwrap();
+        assert!(effective_enabled_in(&store, "slack", Layer::Project(a)).unwrap());
     }
 
     /// A restored row fires where it lands (`AMB-D-434`): the state is all in the store, so a backup
@@ -225,8 +235,8 @@ mod tests {
         let mut store = store_at("carried-row");
         let p = mk_project(&mut store, "p");
         // The row as a restore would leave it: written straight to the store.
-        store.set_plugin_enabled_in_project(p, "slack", true).unwrap();
-        assert!(effective_enabled_in(&store, "slack", p).unwrap());
+        store.set_plugin_enabled_in_project(Some(p), "slack", true).unwrap();
+        assert!(effective_enabled_in(&store, "slack", Layer::Project(p)).unwrap());
     }
 
     // ───────────────────────── what a stop throws away (`AMB-D-399`) ──────────────────────────────
@@ -262,15 +272,15 @@ mod tests {
         let mut store = store_at("project-disable-queue");
         let a = mk_project(&mut store, "A");
         let b = mk_project(&mut store, "B");
-        enable(&mut store, "slack", a, &[], |_| true).unwrap();
-        enable(&mut store, "slack", b, &[], |_| true).unwrap();
+        enable(&mut store, "slack", Layer::Project(a), &[], |_| true).unwrap();
+        enable(&mut store, "slack", Layer::Project(b), &[], |_| true).unwrap();
         queue_for(&store, "slack", Some(a), 1);
         queue_for(&store, "slack", Some(b), 2);
         let tx = store.read_model().write().unwrap();
         tx.claim_runner("slack", "runner-1", "2999-01-01T00:00:00Z", "2026-07-25T09:00:00Z").unwrap();
         tx.commit().unwrap();
 
-        let stopped = disable(&mut store, "slack", a).unwrap();
+        let stopped = disable(&mut store, "slack", Layer::Project(a)).unwrap();
 
         assert_eq!(stopped.queued, 1, "only the project that was switched off loses its rows");
         assert_eq!(still_queued(&store, "slack"), 1);
@@ -285,13 +295,13 @@ mod tests {
     fn disabling_the_only_project_drops_the_queue_and_the_runners_lease() {
         let mut store = store_at("only-project-disable-queue");
         let p = mk_project(&mut store, "p");
-        enable(&mut store, "slack", p, &[], |_| true).unwrap();
+        enable(&mut store, "slack", Layer::Project(p), &[], |_| true).unwrap();
         queue_for(&store, "slack", Some(p), 1);
         let tx = store.read_model().write().unwrap();
         tx.claim_runner("slack", "runner-1", "2999-01-01T00:00:00Z", "2026-07-25T09:00:00Z").unwrap();
         tx.commit().unwrap();
 
-        let stopped = disable(&mut store, "slack", p).unwrap();
+        let stopped = disable(&mut store, "slack", Layer::Project(p)).unwrap();
 
         assert_eq!(stopped.queued, 1);
         assert_eq!(still_queued(&store, "slack"), 0);
@@ -311,9 +321,9 @@ mod tests {
         let mut store = store_at("required");
         let p = mk_project(&mut store, "p");
 
-        let err = enable(&mut store, "slack", p, &fields, |_| false).unwrap_err();
+        let err = enable(&mut store, "slack", Layer::Project(p), &fields, |_| false).unwrap_err();
         assert!(format!("{err:?}").contains("webhook_url"), "the empty field is named");
-        assert!(!effective_enabled_in(&store, "slack", p).unwrap());
+        assert!(!effective_enabled_in(&store, "slack", Layer::Project(p)).unwrap());
     }
 
     /// The same required field, now holding a value, no longer blocks enable.
@@ -322,8 +332,8 @@ mod tests {
         let mut store = store_at("satisfied");
         let p = mk_project(&mut store, "p");
         let fields = [field("webhook_url", true)];
-        enable(&mut store, "slack", p, &fields, |f| f.key == "webhook_url").unwrap();
-        assert!(effective_enabled_in(&store, "slack", p).unwrap());
+        enable(&mut store, "slack", Layer::Project(p), &fields, |f| f.key == "webhook_url").unwrap();
+        assert!(effective_enabled_in(&store, "slack", Layer::Project(p)).unwrap());
     }
 
     /// `missing_required` reports only the empty required fields — optional and satisfied ones are not
@@ -347,7 +357,7 @@ mod tests {
 
         let mut store = store_at("defaulted");
         let p = mk_project(&mut store, "p");
-        enable(&mut store, "slack", p, &fields[..1], |_| false).unwrap();
-        assert!(effective_enabled_in(&store, "slack", p).unwrap());
+        enable(&mut store, "slack", Layer::Project(p), &fields[..1], |_| false).unwrap();
+        assert!(effective_enabled_in(&store, "slack", Layer::Project(p)).unwrap());
     }
 }

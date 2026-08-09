@@ -11,9 +11,10 @@
 //! - **text** ⇒ a JSON object ([`Injection::text`]) the caller places on the child's **stdin**, under the
 //!   payload's config key.
 //!
-//! Both are read for the **project the run is for** and no other (`AMB-D-434`): a plugin is a project's,
-//! so there is one value per field per project and no tier to resolve on the way out. Every run has a
-//! project — an event that cannot name one fires nothing.
+//! Both are read at the **layer this plugin lives at** and no other (`AMB-D-434`/`AMB-D-601`): the run's
+//! project for a plugin declaring the project layer, the device for one declaring the machine layer. Either
+//! way there is one value per field per layer and no tier to resolve on the way out. Every run still
+//! happens inside a project — an event that cannot name one fires nothing.
 //!
 //! **Only this plugin's config is injected.** [`resolve`] is handed one plugin's schema and reads only that
 //! plugin's stored values, so a plugin never sees another's settings — the central-injection promise of
@@ -100,17 +101,18 @@ fn resolved(field: &ConfigField, held: Option<String>) -> Option<String> {
 ///
 /// `fields` is the plugin's manifest config schema; each field carries the author's `secret` flag, which
 /// decides both where the value was stored and how it is injected, and the `default` and candidates
-/// [`resolved`] reads. `project` is the run's project — the only one whose values this run may see. A field
-/// that resolves to nothing — unanswered, with no default behind it — contributes nothing.
+/// [`resolved`] reads. `layer` is where this plugin's values live — the run's project for a `scope: project`
+/// plugin, the device for a `scope: machine` one (`AMB-D-601`), and the only rows this run may see either
+/// way. A field that resolves to nothing — unanswered, with no default behind it — contributes nothing.
 pub fn resolve(
     store: &Store,
     plugin: &str,
     fields: &[ConfigField],
-    project: i64,
+    layer: crate::plugin_layer::Layer,
 ) -> Result<Injection> {
     let mut injection = Injection::default();
     for field in fields {
-        let Some(value) = resolved(field, plugin_config::get(store, field, plugin, project)?) else {
+        let Some(value) = resolved(field, plugin_config::get(store, field, plugin, layer)?) else {
             continue;
         };
         if field.secret {
@@ -126,6 +128,7 @@ pub fn resolve(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugin_layer::Layer;
     use crate::config::Paths;
     use crate::plugin_manifest::{ConfigField, ConfigOption, FieldType, NONE_SELECTED};
 
@@ -179,11 +182,11 @@ mod tests {
     fn a_secret_rides_env_and_text_rides_stdin() {
         let (mut store, _dir) = store_at("split");
         let p = new_project(&mut store, "proj");
-        plugin_config::set(&mut store, &secret_field("webhook_url"), "slack", p, "https://hooks/x").unwrap();
-        plugin_config::set(&mut store, &text_field("events"), "slack", p, "push,merge").unwrap();
+        plugin_config::set(&mut store, &secret_field("webhook_url"), "slack", Layer::Project(p), "https://hooks/x").unwrap();
+        plugin_config::set(&mut store, &text_field("events"), "slack", Layer::Project(p), "push,merge").unwrap();
 
         let fields = [secret_field("webhook_url"), text_field("events")];
-        let inj = resolve(&store, "slack", &fields, p).unwrap();
+        let inj = resolve(&store, "slack", &fields, Layer::Project(p)).unwrap();
 
         // Secret → env, never text.
         assert_eq!(inj.env, vec![("AMENBO_CONFIG_WEBHOOK_URL".to_string(), "https://hooks/x".to_string())]);
@@ -197,15 +200,15 @@ mod tests {
     fn a_field_reads_the_value_of_the_project_the_run_is_for() {
         let (mut store, _dir) = store_at("per-project");
         let (here, elsewhere) = (new_project(&mut store, "here"), new_project(&mut store, "elsewhere"));
-        plugin_config::set(&mut store, &text_field("events"), "slack", here, "for-here").unwrap();
-        plugin_config::set(&mut store, &text_field("events"), "slack", elsewhere, "for-elsewhere").unwrap();
+        plugin_config::set(&mut store, &text_field("events"), "slack", Layer::Project(here), "for-here").unwrap();
+        plugin_config::set(&mut store, &text_field("events"), "slack", Layer::Project(elsewhere), "for-elsewhere").unwrap();
 
-        let inj = resolve(&store, "slack", &[text_field("events")], here).unwrap();
+        let inj = resolve(&store, "slack", &[text_field("events")], Layer::Project(here)).unwrap();
         assert_eq!(inj.text.get("events"), Some(&Value::String("for-here".to_string())));
 
         // A project that set nothing is handed nothing — there is no tier under it to fall back to.
         let bare = new_project(&mut store, "bare");
-        let inj = resolve(&store, "slack", &[text_field("events")], bare).unwrap();
+        let inj = resolve(&store, "slack", &[text_field("events")], Layer::Project(bare)).unwrap();
         assert!(inj.text.is_empty());
     }
 
@@ -214,7 +217,7 @@ mod tests {
         let (mut store, _dir) = store_at("unset");
         let p = new_project(&mut store, "proj");
         let fields = [secret_field("webhook_url"), text_field("events")];
-        let inj = resolve(&store, "slack", &fields, p).unwrap();
+        let inj = resolve(&store, "slack", &fields, Layer::Project(p)).unwrap();
         assert!(inj.env.is_empty(), "an unset secret sets no env var");
         assert!(inj.text.is_empty(), "an unset text field adds no stdin key");
     }
@@ -228,17 +231,17 @@ mod tests {
         let events = multi_field("events", Some("task.done"));
         let token = ConfigField { default: Some("anonymous".into()), ..secret_field("token") };
 
-        let inj = resolve(&store, "slack", &[events.clone(), token], p).unwrap();
+        let inj = resolve(&store, "slack", &[events.clone(), token], Layer::Project(p)).unwrap();
         assert_eq!(inj.text.get("events"), Some(&Value::String("task.done".to_string())));
         assert_eq!(inj.env, vec![("AMENBO_CONFIG_TOKEN".to_string(), "anonymous".to_string())]);
 
         // An answer takes over from the default, and clearing it hands the default back.
-        plugin_config::set(&mut store, &events, "slack", p, "task.rejected").unwrap();
-        let inj = resolve(&store, "slack", std::slice::from_ref(&events), p).unwrap();
+        plugin_config::set(&mut store, &events, "slack", Layer::Project(p), "task.rejected").unwrap();
+        let inj = resolve(&store, "slack", std::slice::from_ref(&events), Layer::Project(p)).unwrap();
         assert_eq!(inj.text.get("events"), Some(&Value::String("task.rejected".to_string())));
 
-        plugin_config::set(&mut store, &events, "slack", p, "").unwrap();
-        let inj = resolve(&store, "slack", std::slice::from_ref(&events), p).unwrap();
+        plugin_config::set(&mut store, &events, "slack", Layer::Project(p), "").unwrap();
+        let inj = resolve(&store, "slack", std::slice::from_ref(&events), Layer::Project(p)).unwrap();
         assert_eq!(inj.text.get("events"), Some(&Value::String("task.done".to_string())));
     }
 
@@ -250,9 +253,9 @@ mod tests {
         let (mut store, _dir) = store_at("none");
         let p = new_project(&mut store, "proj");
         let events = multi_field("events", Some("task.done"));
-        plugin_config::set(&mut store, &events, "slack", p, NONE_SELECTED).unwrap();
+        plugin_config::set(&mut store, &events, "slack", Layer::Project(p), NONE_SELECTED).unwrap();
 
-        let inj = resolve(&store, "slack", std::slice::from_ref(&events), p).unwrap();
+        let inj = resolve(&store, "slack", std::slice::from_ref(&events), Layer::Project(p)).unwrap();
         assert_eq!(
             inj.text.get("events"),
             Some(&Value::String(String::new())),
@@ -265,9 +268,9 @@ mod tests {
     fn a_text_field_hands_over_the_reserved_word_as_a_line() {
         let (mut store, _dir) = store_at("word-as-line");
         let p = new_project(&mut store, "proj");
-        plugin_config::set(&mut store, &text_field("greeting"), "slack", p, NONE_SELECTED).unwrap();
+        plugin_config::set(&mut store, &text_field("greeting"), "slack", Layer::Project(p), NONE_SELECTED).unwrap();
 
-        let inj = resolve(&store, "slack", &[text_field("greeting")], p).unwrap();
+        let inj = resolve(&store, "slack", &[text_field("greeting")], Layer::Project(p)).unwrap();
         assert_eq!(inj.text.get("greeting"), Some(&Value::String(NONE_SELECTED.to_string())));
     }
 
@@ -276,10 +279,10 @@ mod tests {
         let (mut store, _dir) = store_at("scoped");
         let p = new_project(&mut store, "proj");
         // Another plugin's config must not leak into this one's injection.
-        plugin_config::set(&mut store, &secret_field("token"), "github", p, "gh-secret").unwrap();
-        plugin_config::set(&mut store, &text_field("events"), "slack", p, "push").unwrap();
+        plugin_config::set(&mut store, &secret_field("token"), "github", Layer::Project(p), "gh-secret").unwrap();
+        plugin_config::set(&mut store, &text_field("events"), "slack", Layer::Project(p), "push").unwrap();
 
-        let inj = resolve(&store, "slack", &[text_field("events")], p).unwrap();
+        let inj = resolve(&store, "slack", &[text_field("events")], Layer::Project(p)).unwrap();
         assert_eq!(inj.text.get("events"), Some(&Value::String("push".to_string())));
         assert!(inj.env.is_empty(), "the other plugin's secret is not injected here");
         assert!(inj.text.get("token").is_none());

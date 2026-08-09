@@ -1,8 +1,8 @@
-//! A plugin's **secret** config value in one project (`AMB-D-434`).
+//! A plugin's **secret** config value at one layer (`AMB-D-434` / `AMB-D-601`).
 //!
 //! The twin of the text sibling beside it ([`crate::ops::plugin_config`]) — same address, same
-//! upsert-and-clear shape, same `WriteTarget::Project` reach guard one level up. What makes it a layer of
-//! its own is the table underneath: a secret lives in `plugin_secret`, and a table is what
+//! upsert-and-clear shape, same reach guard one level up. What sets it apart is where its rows land: a
+//! secret lives in a table of its own, `plugin_secret`, and a table is what
 //! `export` can be told to walk past once and for all. A row-by-row "is this field secret" test would put
 //! the judgement on every path that reads config, including the ones written later by someone who did not
 //! know to ask.
@@ -21,12 +21,12 @@ use crate::ops::{emit_create, emit_update};
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
 
-/// Set (`Some`) or clear (`None`) one plugin secret field's value in one project, inside the caller's
+/// Set (`Some`) or clear (`None`) one plugin secret field's value at one layer, inside the caller's
 /// transaction. Idempotent upsert on the `(project_id, plugin, field_key)` triple, exactly as its text
 /// sibling is. Returns whether anything changed.
 pub fn set(
     tx: &WriteTx<'_>,
-    project_id: i64,
+    project_id: Option<i64>,
     plugin: &str,
     field_key: &str,
     value: Option<&str>,
@@ -108,9 +108,9 @@ mod tests {
     fn set_then_read_back_the_secret() {
         with_tx(|tx| {
             let p = mk_project(tx, "proj");
-            assert!(set(tx, p, "slack", "token", Some("s3cret")).unwrap());
+            assert!(set(tx, Some(p), "slack", "token", Some("s3cret")).unwrap());
             assert_eq!(
-                read::plugin_secret_value(tx.conn(), p, "slack", "token").unwrap().as_deref(),
+                read::plugin_secret_value(tx.conn(), Some(p), "slack", "token").unwrap().as_deref(),
                 Some("s3cret"),
             );
         });
@@ -122,15 +122,15 @@ mod tests {
     fn a_secret_and_a_text_value_under_the_same_key_do_not_collide() {
         with_tx(|tx| {
             let p = mk_project(tx, "proj");
-            crate::ops::plugin_config::set(tx, p, "slack", "token", Some("plain")).unwrap();
-            set(tx, p, "slack", "token", Some("s3cret")).unwrap();
+            crate::ops::plugin_config::set(tx, Some(p), "slack", "token", Some("plain")).unwrap();
+            set(tx, Some(p), "slack", "token", Some("s3cret")).unwrap();
 
             assert_eq!(
-                read::plugin_config_value(tx.conn(), p, "slack", "token").unwrap().as_deref(),
+                read::plugin_config_value(tx.conn(), Some(p), "slack", "token").unwrap().as_deref(),
                 Some("plain"),
             );
             assert_eq!(
-                read::plugin_secret_value(tx.conn(), p, "slack", "token").unwrap().as_deref(),
+                read::plugin_secret_value(tx.conn(), Some(p), "slack", "token").unwrap().as_deref(),
                 Some("s3cret"),
             );
         });
@@ -140,10 +140,10 @@ mod tests {
     fn clearing_deletes_the_row_and_leaves_the_field_unset() {
         with_tx(|tx| {
             let p = mk_project(tx, "proj");
-            set(tx, p, "slack", "token", Some("s3cret")).unwrap();
-            assert!(set(tx, p, "slack", "token", None).unwrap());
-            assert_eq!(read::plugin_secret_value(tx.conn(), p, "slack", "token").unwrap(), None);
-            assert!(!set(tx, p, "slack", "token", None).unwrap(), "clearing an absent secret is a no-op");
+            set(tx, Some(p), "slack", "token", Some("s3cret")).unwrap();
+            assert!(set(tx, Some(p), "slack", "token", None).unwrap());
+            assert_eq!(read::plugin_secret_value(tx.conn(), Some(p), "slack", "token").unwrap(), None);
+            assert!(!set(tx, Some(p), "slack", "token", None).unwrap(), "clearing an absent secret is a no-op");
         });
     }
 
@@ -151,8 +151,8 @@ mod tests {
     fn upsert_keeps_one_row_per_triple() {
         with_tx(|tx| {
             let p = mk_project(tx, "proj");
-            set(tx, p, "slack", "token", Some("a")).unwrap();
-            set(tx, p, "slack", "token", Some("b")).unwrap();
+            set(tx, Some(p), "slack", "token", Some("a")).unwrap();
+            set(tx, Some(p), "slack", "token", Some("b")).unwrap();
             let n: i64 = tx
                 .conn()
                 .query_row(
@@ -171,15 +171,15 @@ mod tests {
         with_tx(|tx| {
             let a = mk_project(tx, "a");
             let b = mk_project(tx, "b");
-            set(tx, a, "slack", "token", Some("for-a")).unwrap();
-            set(tx, b, "slack", "token", Some("for-b")).unwrap();
-            set(tx, b, "worktree", "token", Some("kept")).unwrap();
+            set(tx, Some(a), "slack", "token", Some("for-a")).unwrap();
+            set(tx, Some(b), "slack", "token", Some("for-b")).unwrap();
+            set(tx, Some(b), "worktree", "token", Some("kept")).unwrap();
 
             assert_eq!(forget_plugin(tx, "slack").unwrap(), 2);
-            assert_eq!(read::plugin_secret_value(tx.conn(), a, "slack", "token").unwrap(), None);
-            assert_eq!(read::plugin_secret_value(tx.conn(), b, "slack", "token").unwrap(), None);
+            assert_eq!(read::plugin_secret_value(tx.conn(), Some(a), "slack", "token").unwrap(), None);
+            assert_eq!(read::plugin_secret_value(tx.conn(), Some(b), "slack", "token").unwrap(), None);
             assert_eq!(
-                read::plugin_secret_value(tx.conn(), b, "worktree", "token").unwrap().as_deref(),
+                read::plugin_secret_value(tx.conn(), Some(b), "worktree", "token").unwrap().as_deref(),
                 Some("kept"),
                 "another plugin's secret is untouched",
             );
@@ -193,20 +193,20 @@ mod tests {
         with_tx(|tx| {
             let a = mk_project(tx, "a");
             let b = mk_project(tx, "b");
-            set(tx, a, "slack", "token", Some("for-a")).unwrap();
-            set(tx, a, "slack", "legacy", Some("dropped")).unwrap();
-            set(tx, b, "slack", "legacy", Some("dropped-too")).unwrap();
-            set(tx, b, "worktree", "legacy", Some("kept")).unwrap();
+            set(tx, Some(a), "slack", "token", Some("for-a")).unwrap();
+            set(tx, Some(a), "slack", "legacy", Some("dropped")).unwrap();
+            set(tx, Some(b), "slack", "legacy", Some("dropped-too")).unwrap();
+            set(tx, Some(b), "worktree", "legacy", Some("kept")).unwrap();
 
             assert_eq!(forget_undeclared(tx, "slack", &["token"]).unwrap(), 2);
             assert_eq!(
-                read::plugin_secret_value(tx.conn(), a, "slack", "token").unwrap().as_deref(),
+                read::plugin_secret_value(tx.conn(), Some(a), "slack", "token").unwrap().as_deref(),
                 Some("for-a"),
             );
-            assert_eq!(read::plugin_secret_value(tx.conn(), a, "slack", "legacy").unwrap(), None);
-            assert_eq!(read::plugin_secret_value(tx.conn(), b, "slack", "legacy").unwrap(), None);
+            assert_eq!(read::plugin_secret_value(tx.conn(), Some(a), "slack", "legacy").unwrap(), None);
+            assert_eq!(read::plugin_secret_value(tx.conn(), Some(b), "slack", "legacy").unwrap(), None);
             assert_eq!(
-                read::plugin_secret_value(tx.conn(), b, "worktree", "legacy").unwrap().as_deref(),
+                read::plugin_secret_value(tx.conn(), Some(b), "worktree", "legacy").unwrap().as_deref(),
                 Some("kept"),
                 "another plugin's key of the same name is not this plugin's residue",
             );
@@ -219,9 +219,48 @@ mod tests {
     fn a_declaration_that_names_nothing_leaves_nothing() {
         with_tx(|tx| {
             let p = mk_project(tx, "p");
-            set(tx, p, "slack", "token", Some("x")).unwrap();
+            set(tx, Some(p), "slack", "token", Some("x")).unwrap();
             assert_eq!(forget_undeclared(tx, "slack", &[]).unwrap(), 1);
-            assert_eq!(read::plugin_secret_value(tx.conn(), p, "slack", "token").unwrap(), None);
+            assert_eq!(read::plugin_secret_value(tx.conn(), Some(p), "slack", "token").unwrap(), None);
+        });
+    }
+
+    // ───────────────────────── the device layer (`AMB-D-601`) ─────────────────────────
+
+    /// A device secret and a project secret under the same key are two settings, and the device one is not
+    /// swept when the project goes — the reference the cascade follows is the one it does not hold.
+    #[test]
+    fn a_device_secret_stands_apart_from_a_projects_and_survives_it() {
+        with_tx(|tx| {
+            let p = mk_project(tx, "proj");
+            set(tx, None, "carrier", "token", Some("device-token")).unwrap();
+            set(tx, Some(p), "carrier", "token", Some("project-token")).unwrap();
+            assert_eq!(
+                read::plugin_secret_value(tx.conn(), None, "carrier", "token").unwrap().as_deref(),
+                Some("device-token"),
+            );
+
+            crate::ops::project::delete(tx, p).unwrap();
+
+            assert_eq!(read::plugin_secret_value(tx.conn(), Some(p), "carrier", "token").unwrap(), None);
+            assert_eq!(
+                read::plugin_secret_value(tx.conn(), None, "carrier", "token").unwrap().as_deref(),
+                Some("device-token"),
+            );
+        });
+    }
+
+    /// An uninstall's unconditional purge reaches the device row too (`AMB-D-357`): a secret is the one
+    /// thing that must never survive a removal, whichever layer it was written at.
+    #[test]
+    fn forgetting_a_plugin_takes_the_device_secret_too() {
+        with_tx(|tx| {
+            let p = mk_project(tx, "proj");
+            set(tx, None, "carrier", "token", Some("device-token")).unwrap();
+            set(tx, Some(p), "carrier", "token", Some("project-token")).unwrap();
+
+            assert_eq!(forget_plugin(tx, "carrier").unwrap(), 2);
+            assert_eq!(read::plugin_secret_value(tx.conn(), None, "carrier", "token").unwrap(), None);
         });
     }
 
@@ -229,7 +268,7 @@ mod tests {
     fn deleting_the_project_cascades_its_secrets() {
         with_tx(|tx| {
             let p = mk_project(tx, "proj");
-            set(tx, p, "slack", "token", Some("s3cret")).unwrap();
+            set(tx, Some(p), "slack", "token", Some("s3cret")).unwrap();
             crate::ops::project::delete(tx, p).unwrap();
             let n: i64 = tx
                 .conn()

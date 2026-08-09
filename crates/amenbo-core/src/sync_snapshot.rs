@@ -167,6 +167,9 @@ fn project_predicate(dataset: &Dataset) -> Option<&'static str> {
         "task" => "project_id = ?1",
         "decision" => "project_id = ?1",
         "dimension" => "project_id = ?1",
+        // A device-layer row's key is NULL (`AMB-D-601`), and `project_id = ?1` is never true of NULL — so
+        // it stays home, which is the right answer twice over: it is no project's content, and a window
+        // closed to one project is exactly the reader that must not learn what the whole device holds.
         "plugin_config" => "project_id = ?1",
         "plugin_enable" => "project_id = ?1",
 
@@ -897,8 +900,8 @@ mod tests {
                 .unwrap();
             // The two rows a plugin leaves in a project: what it was configured with, and whether its
             // gate is open here. Neither is a secret — those are on no road out at all.
-            s.set_plugin_config_value(project, "carrier", "channel", Some(name)).unwrap();
-            s.set_plugin_enabled_in_project(project, "carrier", true).unwrap();
+            s.set_plugin_config_value(Some(project), "carrier", "channel", Some(name)).unwrap();
+            s.set_plugin_enabled_in_project(Some(project), "carrier", true).unwrap();
             (project, comment)
         };
 

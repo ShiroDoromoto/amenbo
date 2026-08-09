@@ -619,17 +619,19 @@ impl Store {
         self.write_one(&[WriteTarget::Task(id)], |tx| crate::ops::commit::remove(tx, id, sha))
     }
 
-    /// Set (`Some`) or clear (`None`) one plugin text field's value in a project (one operation = one
+    /// Set (`Some`) or clear (`None`) one plugin text field's value at one layer (one operation = one
     /// transaction). Returns whether anything changed. The value is validated at the config write boundary
-    /// ([`crate::plugin_config::set`]) before it reaches here; reach is guarded by `WriteTarget::Project`.
+    /// ([`crate::plugin_config::set`]) before it reaches here, and the layer is derived from the author's
+    /// declaration there too ([`crate::plugin_layer::Layer`]); reach is guarded by
+    /// [`Self::plugin_layer_target`].
     pub fn set_plugin_config_value(
         &mut self,
-        project_id: i64,
+        project_id: Option<i64>,
         plugin: &str,
         field_key: &str,
         value: Option<&str>,
     ) -> Result<bool> {
-        self.write_one(&[WriteTarget::Project(project_id)], |tx| {
+        self.write_one(&Self::plugin_layer_target(project_id), |tx| {
             crate::ops::plugin_config::set(tx, project_id, plugin, field_key, value)
         })
     }
@@ -639,17 +641,25 @@ impl Store {
     /// boundary's call, made from the author's `secret` flag alone.
     pub fn set_plugin_secret(
         &mut self,
-        project_id: i64,
+        project_id: Option<i64>,
         plugin: &str,
         field_key: &str,
         value: Option<&str>,
     ) -> Result<bool> {
-        self.write_one(&[WriteTarget::Project(project_id)], |tx| {
+        self.write_one(&Self::plugin_layer_target(project_id), |tx| {
             crate::ops::plugin_secret::set(tx, project_id, plugin, field_key, value)
         })
     }
 
-    /// Erase every project's settings for one plugin, device-wide (one operation = one transaction) —
+    /// What a write at one plugin layer is guarded against (`AMB-D-601`). A project's row is that project's
+    /// content, so it is `WriteTarget::Project` and an AI outside its binding is refused. The device row is
+    /// no project's, so there is no project to hold it to — the containment left is that the row's whole
+    /// address is a plugin name and a field key, which names nothing a project owns.
+    fn plugin_layer_target(project_id: Option<i64>) -> Vec<WriteTarget> {
+        project_id.map(WriteTarget::Project).into_iter().collect()
+    }
+
+    /// Erase every layer's settings for one plugin, device-wide (one operation = one transaction) —
     /// the store half of `plugin uninstall` (`AMB-D-357`). Returns how many rows went.
     ///
     /// **Deliberately unguarded by project reach**, the only write here that is: what it deletes is one
@@ -666,7 +676,7 @@ impl Store {
         self.write_one(&[], |tx| crate::ops::plugin_secret::forget_plugin(tx, plugin))
     }
 
-    /// Erase every project's settings for one plugin under a key its manifest no longer declares (one
+    /// Erase every layer's settings for one plugin under a key its manifest no longer declares (one
     /// operation = one transaction) — the store half of `plugin update` (`AMB-D-456`). Returns how many
     /// rows went.
     ///
@@ -691,22 +701,23 @@ impl Store {
         self.write_one(&[], |tx| crate::ops::plugin_secret::forget_undeclared(tx, plugin, declared))
     }
 
-    /// Put a plugin's gate in this project into `on` (one operation = one transaction): `true` writes the
+    /// Put a plugin's gate at one layer into `on` (one operation = one transaction): `true` writes the
     /// row that says "enabled here", `false` deletes it (`AMB-D-434` — the row *is* the answer). Returns
     /// whether anything changed. Written through the trust boundary ([`crate::plugin_trust`]), which is
-    /// where the fail-closed `required` check lives; reach is guarded by `WriteTarget::Project`.
+    /// where the fail-closed `required` check lives and where the layer is derived from the author's
+    /// declaration; reach is guarded by [`Self::plugin_layer_target`].
     pub fn set_plugin_enabled_in_project(
         &mut self,
-        project_id: i64,
+        project_id: Option<i64>,
         plugin: &str,
         on: bool,
     ) -> Result<bool> {
-        self.write_one(&[WriteTarget::Project(project_id)], |tx| {
+        self.write_one(&Self::plugin_layer_target(project_id), |tx| {
             crate::ops::plugin_enable::set(tx, project_id, plugin, on)
         })
     }
 
-    /// Erase every per-project gate answer of one plugin, device-wide (one operation = one transaction) —
+    /// Erase every gate answer of one plugin, at every layer (one operation = one transaction) —
     /// the store half of `plugin uninstall` beside [`Self::forget_plugin_config`] (`AMB-D-357`). Returns
     /// how many rows went. **Deliberately unguarded by project reach**, for the reason its config twin is:
     /// what it deletes is one plugin's residue, not any project's content.

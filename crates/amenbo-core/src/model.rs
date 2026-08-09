@@ -359,17 +359,19 @@ pub struct TaskCommit {
     pub updated_at: Timestamp,
 }
 
-/// A **plugin's text (non-secret) config value in one project** (`AMB-D-434` / `AMB-D-356`). One row per
-/// `(project, plugin, field)`, and that row is the whole answer: a plugin is a project's, so there is no
-/// tier under this for the value to fall back to. A `secret` field is never one of these — it is a
+/// A **plugin's text (non-secret) config value at one layer** (`AMB-D-434` / `AMB-D-601` / `AMB-D-356`).
+/// One row per `(layer, plugin, field)`, and that row is the whole answer: the author's `scope` declaration
+/// picks the single layer the plugin lives at, so there is no tier under this for the value to fall back to.
+/// A `secret` field is never one of these — it is a
 /// [`PluginSecret`], the table an `export` must leave behind. `plugin` is the plugin's manifest name (plugins
 /// live on disk, not in the store, so there is no id for it) and `field_key` the config field's key.
 /// Unlike `hook_optout` this is a real record, carried by `export`/`backup`.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct PluginConfigValue {
     pub id: i64,
-    /// The project this value belongs to.
-    pub project_id: i64,
+    /// The project this value belongs to, or `None` for the device row a `scope: machine` plugin holds
+    /// (`AMB-D-601`).
+    pub project_id: Option<i64>,
     /// The plugin's manifest name.
     pub plugin: String,
     /// The config field's key (spelled out because `key` is a SQLite keyword).
@@ -380,7 +382,7 @@ pub struct PluginConfigValue {
     pub updated_at: Timestamp,
 }
 
-/// A **plugin's secret config value in one project** (`AMB-D-434`): the same shape and the same address as
+/// A **plugin's secret config value at one layer** (`AMB-D-434` / `AMB-D-601`): the same shape and address as
 /// [`PluginConfigValue`], in a table of its own because its rows may travel to fewer places. A backup
 /// carries it — the road back to one's own machine, where dropping the secrets would mean typing every
 /// credential in again — and an export must not, that being the one-way door out to another tool. The
@@ -392,8 +394,8 @@ pub struct PluginConfigValue {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct PluginSecret {
     pub id: i64,
-    /// The project this secret belongs to.
-    pub project_id: i64,
+    /// The project this secret belongs to, or `None` for the device row (`AMB-D-601`).
+    pub project_id: Option<i64>,
     /// The plugin's manifest name.
     pub plugin: String,
     /// The config field's key (spelled out because `key` is a SQLite keyword).
@@ -405,9 +407,10 @@ pub struct PluginSecret {
     pub updated_at: Timestamp,
 }
 
-/// A **plugin's enable gate in one project** (`AMB-D-434`). One row per `(project, plugin)`: this project
-/// has the plugin **on**. The row is the whole answer — there is no other tier to inherit from or veto, so
-/// absence is simply off, and turning it off deletes the row rather than storing a `false`.
+/// A **plugin's enable gate at one layer** (`AMB-D-434` / `AMB-D-601`). One row per `(layer, plugin)`: this
+/// project — or this device — has the plugin **on**. The row is the whole answer: there is no other tier to
+/// inherit from or veto, so absence is simply off, and turning it off deletes the row rather than storing a
+/// `false`.
 ///
 /// The row is also the whole of it: turning a plugin on is itself the permission to run its code
 /// (`AMB-D-434`), so nothing sits beside this to be carried separately. Like [`PluginConfigValue`] it
@@ -416,8 +419,9 @@ pub struct PluginSecret {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct PluginEnabledProject {
     pub id: i64,
-    /// The project the plugin is enabled in.
-    pub project_id: i64,
+    /// The project the plugin is enabled in, or `None` for the device gate a `scope: machine` plugin opens
+    /// once for the whole machine (`AMB-D-601`).
+    pub project_id: Option<i64>,
     /// The plugin's manifest name.
     pub plugin: String,
     pub created_at: Timestamp,

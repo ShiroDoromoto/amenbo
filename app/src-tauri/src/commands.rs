@@ -5248,17 +5248,17 @@ pub struct PluginInstallDto {
     config: Vec<PluginWantedSettingDto>,
 }
 
-/// Read one declared setting into its DTO, for the project the form is editing (`AMB-D-434`). The
-/// author's `secret` flag decides which of the two tables the value came from, and it is the only thing
-/// read here to route the probe (`AMB-D-356`). A secret's value never leaves core — only whether one is
-/// held.
+/// Read one declared setting into its DTO, at the layer this plugin's values live at
+/// (`AMB-D-434` / `AMB-D-601`). The author's `secret` flag decides which of the two tables the value came
+/// from, and it is the only thing read here to route the probe (`AMB-D-356`). A secret's value never leaves
+/// core — only whether one is held.
 fn config_field_row(
     store: &Store,
     plugin: &str,
     field: &amenbo_core::plugin_manifest::ConfigField,
-    project: i64,
+    layer: amenbo_core::plugin_layer::Layer,
 ) -> Result<PluginConfigFieldDto, CmdError> {
-    let held = amenbo_core::plugin_config::get(store, field, plugin, project)?;
+    let held = amenbo_core::plugin_config::get(store, field, plugin, layer)?;
     let state = amenbo_core::plugin_config::answer(field, held.as_deref());
     let (value, secret_set) = if field.secret { (None, held.is_some()) } else { (held, false) };
     Ok(PluginConfigFieldDto {
@@ -5332,14 +5332,16 @@ pub fn plugin_config_read(
 ) -> Result<Vec<PluginConfigFieldDto>, CmdError> {
     let store = open_store_read()?;
     let installed = amenbo_core::plugin_installed::read(&store.paths, &name)?;
-    // Refused rather than answered with blanks: "no project named" and "this project holds nothing" are
-    // different states, and a form that cannot tell them apart draws the second for the first.
-    let project = amenbo_core::plugin_trust::require_project(project_id)?;
+    // A `scope: project` plugin with no project named is refused rather than answered with blanks: "no
+    // project named" and "this project holds nothing" are different states, and a form that cannot tell them
+    // apart draws the second for the first. A `scope: machine` plugin has one answer wherever it is asked
+    // from (`AMB-D-601`), so the same call needs no project for it.
+    let layer = amenbo_core::plugin_layer::Layer::of(installed.manifest.scope, project_id)?;
     installed
         .manifest
         .config
         .iter()
-        .map(|f| config_field_row(&store, &name, f, project))
+        .map(|f| config_field_row(&store, &name, f, layer))
         .collect()
 }
 
@@ -5370,38 +5372,40 @@ pub async fn plugin_install(name: String) -> Result<PluginInstallDto, CmdError> 
 /// Move one installed plugin's gate — the GUI's `plugin enable` / `plugin disable`, through the one
 /// boundary that moves that state ([`amenbo_core::plugin_trust`]).
 ///
-/// There is one switch and it is a project's (`AMB-D-434`), so `project_id` does not choose a level: it
-/// says which project the caller is speaking for, and without one core refuses rather than answering
-/// device-wide. Enabling is fail-closed twice over, both in core: on the compatibility declarations
-/// (`AMB-D-359`) before anything is written, and on the author's `required` settings, probed in the
-/// project that gate is for ([`amenbo_core::plugin_config::satisfied_keys`], `AMB-D-356`).
+/// There is one switch, and *which* layer it sits at is the plugin author's declaration rather than this
+/// call's (`AMB-D-434` / `AMB-D-601`): `project_id` only says which project the caller is speaking for, and
+/// a `scope: project` plugin asked without one is refused rather than answered device-wide. Enabling is
+/// fail-closed twice over, both in core: on the compatibility declarations
+/// (`AMB-D-359`) before anything is written, and on the author's `required` settings, probed at the
+/// layer that gate is for ([`amenbo_core::plugin_config::satisfied_keys`], `AMB-D-356`).
 ///
 /// **Calling this to enable is the permission** (`AMB-D-434`) — turning a plugin on is what running
-/// somebody else's code means, so there is no second answer to record. Returns where the gate ended up,
-/// and what closing it threw away.
+/// somebody else's code means, so there is no second answer to record; for a `scope: machine` plugin that
+/// one act is also the consent to let it read the whole device (`AMB-D-601`). Returns where the gate ended
+/// up, and what closing it threw away.
 #[tauri::command]
 pub fn plugin_set_enabled(
     name: String,
     project_id: Option<i64>,
     enabled: bool,
 ) -> Result<PluginGateMovedDto, CmdError> {
-    use amenbo_core::plugin_trust::{disable, effective_enabled_in, enable, require_project};
+    use amenbo_core::plugin_trust::{disable, effective_enabled_in, enable};
     with_store_mut(|store| {
         let installed = amenbo_core::plugin_installed::read(&store.paths, &name)?;
-        let project = require_project(project_id)?;
+        let layer = amenbo_core::plugin_layer::Layer::of(installed.manifest.scope, project_id)?;
         let mut dropped_queued = 0;
         if enabled {
             amenbo_core::plugin_compat::check(&installed.manifest)
                 .map_err(|incompatible| CmdError::from(incompatible.into_error(&name)))?;
             let fields = installed.manifest.config.clone();
             let satisfied =
-                amenbo_core::plugin_config::satisfied_keys(store, &name, &fields, project)?;
-            enable(store, &name, project, &fields, |f| satisfied.iter().any(|k| k == &f.key))?;
+                amenbo_core::plugin_config::satisfied_keys(store, &name, &fields, layer)?;
+            enable(store, &name, layer, &fields, |f| satisfied.iter().any(|k| k == &f.key))?;
         } else {
-            dropped_queued = disable(store, &name, project)?.queued;
+            dropped_queued = disable(store, &name, layer)?.queued;
         }
         Ok(PluginGateMovedDto {
-            enabled: effective_enabled_in(store, &name, project)?,
+            enabled: effective_enabled_in(store, &name, layer)?,
             dropped_queued,
         })
     })
@@ -5434,8 +5438,9 @@ pub struct PluginGateMovedDto {
 /// secrecy here**; a key the manifest does not declare has no routing rule, so it is refused rather than
 /// guessed at.
 ///
-/// `project_id` names the project whose value this is, and is required: a plugin is a project's
-/// (`AMB-D-434`), so there is no tier to write to without one.
+/// `project_id` names the project whose value this is. It is required for a `scope: project` plugin — the
+/// layer is that project's row and there is no tier to write to without one — and unused for a
+/// `scope: machine` one, whose values are the device's (`AMB-D-434` / `AMB-D-601`).
 ///
 /// An **empty** `value` clears the setting, which is how the form's clear works — "not provided" is
 /// unset, the same reading `required` uses. Nothing is echoed back: the caller has the value it typed,
@@ -5457,8 +5462,8 @@ pub fn plugin_config_set(
                 format!("plugin '{name}' declares no setting '{key}' (it declares: {known})"),
             ))
         })?;
-        let project = amenbo_core::plugin_trust::require_project(project_id)?;
-        amenbo_core::plugin_config::set(store, &field, &name, project, &value)?;
+        let layer = amenbo_core::plugin_layer::Layer::of(installed.manifest.scope, project_id)?;
+        amenbo_core::plugin_config::set(store, &field, &name, layer, &value)?;
         Ok(())
     })
 }

@@ -259,6 +259,18 @@ pub(crate) fn id_str(v: &Value) -> String {
 /// Plant an installed plugin under the test's app-data: the manifest (the install marker) plus the
 /// executable named after it, which is the whole on-disk shape `plugin_installed::read` looks for.
 pub(crate) fn install_plugin(cli: &Cli, name: &str, config: serde_json::Value) {
+    install_plugin_at(cli, name, config, None);
+}
+
+/// The same install, with the author's layer declared (`AMB-D-601`): `scope` of `Some("machine")` is a
+/// plugin whose gate, settings and secrets are the device's. `None` writes no `scope` key at all — the
+/// undeclared manifest every plugin shipped before this, which must keep meaning `project`.
+pub(crate) fn install_plugin_at(
+    cli: &Cli,
+    name: &str,
+    config: serde_json::Value,
+    scope: Option<&str>,
+) {
     let dir = cli.home.join("plugins").join(name);
     std::fs::create_dir_all(&dir).unwrap();
     let manifest = serde_json::json!({
@@ -275,6 +287,10 @@ pub(crate) fn install_plugin(cli: &Cli, name: &str, config: serde_json::Value) {
         "detail_sum": format!("sha256:{}", "d".repeat(64)),
         "config": config,
     });
+    let mut manifest = manifest;
+    if let Some(scope) = scope {
+        manifest["scope"] = serde_json::json!(scope);
+    }
     std::fs::write(dir.join("manifest.json"), serde_json::to_vec(&manifest).unwrap()).unwrap();
     std::fs::write(dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX)), b"#!/bin/sh\n").unwrap();
 }

@@ -409,7 +409,7 @@ pub enum Command {
     /// under the app-data `plugins/` directory (`AMB-D-350`). `install` is the door those bytes come
     /// through; `list` / `enable` / `disable` are the machine-local face of what came through it: what is
     /// installed, and whose gate is open (`AMB-D-351` — installing a plugin never runs it; and each plugin
-    /// has exactly one gate, and it is a project's — `AMB-D-434`). `run` is the one command that
+    /// has exactly one gate, at the layer its author declared — `AMB-D-434`/`AMB-D-601`). `run` is the one command that
     /// actually *calls* a plugin on purpose: its command face, whose return value comes back to you
     /// (`AMB-D-353`). `validate` is
     /// the author's side — it runs the same rules amenbo enforces at
@@ -436,7 +436,9 @@ pub enum PluginCmd {
     /// List the plugins installed on this machine, and whether each one is enabled (`AMB-D-350`/`AMB-D-351`).
     /// Reads only what is on disk under the app-data `plugins/` directory plus this machine's enable
     /// state — no network, no catalog. A row names every project holding the plugin's switch open
-    /// (`AMB-D-434`/`AMB-D-412`) rather than answering yes/no from wherever the terminal happens to stand.
+    /// (`AMB-D-434`/`AMB-D-412`) rather than answering yes/no from wherever the terminal happens to stand —
+    /// or, for a plugin whose author declared the machine layer, whether its one device gate is open
+    /// (`AMB-D-601`).
     List,
 
     /// Install a plugin from the catalogs: resolve the name across the official catalog and every
@@ -460,7 +462,10 @@ pub enum PluginCmd {
     /// Open an installed plugin's gate and let it fire (`AMB-D-351` — `install ≠ enable`, so nothing runs
     /// until this; and doing it is itself the permission to run the plugin's code). The switch is the
     /// project's you are in (`AMB-D-434`), so it needs a bound folder, and turning it on elsewhere is a
-    /// separate act. There is no `--scope` — a plugin has one switch. Refused while a setting the author
+    /// separate act — unless the author declared the machine layer, where the one switch is the device's
+    /// and opening it is also the permission to read every project on this machine (`AMB-D-601`). There is
+    /// still no `--scope`: a plugin has one switch, and where it sits is the manifest's to say, not this
+    /// command's. Refused while a setting the author
     /// marked `required` is still empty; fill it with `plugin config set` first. Refused too when
     /// the plugin is not compatible with this build — a different payload contract, or a floor above the
     /// running version (`AMB-D-359`).
@@ -470,8 +475,9 @@ pub enum PluginCmd {
     },
 
     /// Close an enabled plugin's gate — the same one switch `enable` opens (`AMB-D-434`). The plugin stays
-    /// installed, so a later `enable` costs nothing (`disable ≠ uninstall`, `AMB-D-357`). Nothing here is
-    /// read off the manifest, so a plugin whose manifest cannot be read is stopped just the same.
+    /// installed, so a later `enable` costs nothing (`disable ≠ uninstall`, `AMB-D-357`). The manifest is
+    /// read for one thing only, which layer that switch is at (`AMB-D-601`); a manifest that cannot be read
+    /// falls back to the project layer, so a broken install is stopped just the same.
     Disable {
         /// the plugin's name
         name: String,

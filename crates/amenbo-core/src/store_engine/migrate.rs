@@ -382,6 +382,11 @@ pub const STEPS: &[Step] = &[
         name: "add change_feed.project, the window each change belongs to",
         apply: Apply::Custom(add_feed_project),
     },
+    Step {
+        to: 24,
+        name: "let a plugin's gate, settings and secrets sit at the device layer",
+        apply: Apply::Custom(open_the_plugin_layer_key),
+    },
 ];
 
 /// v23: give the change feed the window each instruction belongs to (`AMB-D-582`), so a reader closed to
@@ -856,6 +861,81 @@ fn restrict_the_concept_references(ctx: &Ctx<'_>) -> Result<()> {
     Ok(())
 }
 
+/// The `project_id` declaration a plugin's three settings tables carried up to v23 — a key every row had
+/// to hold — and the one v24 leaves them with, where NULL is admissible and means the device layer
+/// (`AMB-D-601`). Frozen text, like every step's, and the whole column line rather than the two words that
+/// move: `NOT NULL DEFAULT 0` appears on other columns too, and a rewrite has to land on this one alone.
+const PROJECT_KEY_REQUIRED: &str = "project_id BIGINT NOT NULL DEFAULT 0 REFERENCES project(id) \
+     ON DELETE CASCADE ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED";
+/// The same line, opened (`AMB-D-601`). The `DEFAULT 0` goes with the `NOT NULL` it existed for: `0` was
+/// the not-yet-written sentinel a deferred reference passes through, and it would now read as a silent
+/// dangling key on a table where the absent value is NULL and means something.
+const PROJECT_KEY_OPTIONAL: &str = "project_id BIGINT REFERENCES project(id) \
+     ON DELETE CASCADE ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED";
+
+/// The three tables v24 opens: everything a plugin's layer decides where to write (`AMB-D-601`).
+const LAYERED_TABLES: &[&str] = &["plugin_config", "plugin_secret", "plugin_enable"];
+
+/// v24: let a plugin's gate, settings and secrets be written at the **device** layer (`AMB-D-601`) — the
+/// row whose `project_id` is NULL, which a `scope: machine` plugin holds one of for the whole machine.
+///
+/// **Why this is a declaration rewrite.** Dropping a `NOT NULL` is not something `ALTER TABLE` can do, and
+/// the rebuild-and-swap SQLite's documentation prescribes is closed here for the reason
+/// [`restrict_the_concept_references`] gives: dropping a table that `project` references performs an
+/// implicit `DELETE` that fires the very cascades these tables are built on. So the tables stay where they
+/// are and only their stored declaration is rewritten — the same handle v9 and v10 used, on a third clause.
+///
+/// **Nothing is written to the rows.** Every row already holds a project's id, and every one of them still
+/// means what it did: the layer this opens is a place no row stands yet. The device rows' uniqueness comes
+/// from the partial indexes in the genesis batch, which a store reaching here already carries — they are
+/// legal (and empty) on the `NOT NULL` shape too, which is why they are not this step's to create.
+///
+/// Read everything before writing anything, and check the column list on the way out, both for the reasons
+/// [`restrict_the_concept_references`] states. A table already opened is passed over rather than refused.
+fn open_the_plugin_layer_key(ctx: &Ctx<'_>) -> Result<()> {
+    let mut rewrites = Vec::new();
+    for &table in LAYERED_TABLES {
+        let declared: String = ctx.tx.query_row(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?1",
+            [table],
+            |r| r.get(0),
+        )?;
+        if declared.contains(PROJECT_KEY_OPTIONAL) {
+            continue;
+        }
+        if declared.matches(PROJECT_KEY_REQUIRED).count() != 1 {
+            return Err(super::StoreEngineError::UnrecognisedDdl {
+                table,
+                expected: PROJECT_KEY_REQUIRED,
+            });
+        }
+        let opened = declared.replace(PROJECT_KEY_REQUIRED, PROJECT_KEY_OPTIONAL);
+        rewrites.push((table, opened, column_names(ctx.tx, table)?));
+    }
+
+    ctx.tx.execute_batch("PRAGMA writable_schema = ON;")?;
+    let wrote = rewrites.iter().try_for_each(|(table, sql, _)| {
+        ctx.tx
+            .execute(
+                "UPDATE sqlite_master SET sql = ?1 WHERE type = 'table' AND name = ?2",
+                rusqlite::params![sql, table],
+            )
+            .map(|_| ())
+    });
+    ctx.tx.execute_batch("PRAGMA writable_schema = RESET;")?;
+    wrote?;
+
+    for (table, _, before) in &rewrites {
+        if column_names(ctx.tx, table)? != *before {
+            return Err(super::StoreEngineError::UnrecognisedDdl {
+                table,
+                expected: PROJECT_KEY_REQUIRED,
+            });
+        }
+    }
+    Ok(())
+}
+
 /// The version a store ends at once the chain has run — the last step's, or the baseline if there is
 /// no step. **The chain defines the format version**, so a step cannot be added without the version
 /// moving with it, and the version cannot move without a step to carry a store there.
@@ -1211,6 +1291,88 @@ mod tests {
             }
             std::fs::remove_dir_all(&dir).ok();
         }
+    }
+
+    /// **v24 on every shape the chain starts from** (`AMB-D-601`). A store born at any frozen version comes
+    /// out declaring `project_id` the way today's registry emits it — admitting NULL, and still cascading,
+    /// since opening the key is not a change of what happens when a project goes.
+    ///
+    /// The rows are checked too: a store carrying a project's settings keeps them, untouched and still
+    /// pointing at their project. This step rewrites a declaration and nothing else, and a rewrite that
+    /// reached the rows would be a corrupted store rather than a migrated one.
+    #[test]
+    fn the_chain_opens_the_plugin_layer_key_and_leaves_the_rows_alone() {
+        for born in OLDEST_FROZEN_VERSION..=LATEST_VERSION {
+            let dir = scratch(&format!("layer-v{born}"));
+            let engine = store_at(&dir, born);
+            engine
+                .conn()
+                .execute_batch(
+                    "INSERT INTO project (id, name) VALUES (1, 'p');
+                     INSERT INTO plugin_enable (project_id, plugin) VALUES (1, 'slack');
+                     INSERT INTO plugin_config (project_id, plugin, field_key, value)
+                       VALUES (1, 'slack', 'channel', '#ops');
+                     INSERT INTO plugin_secret (project_id, plugin, field_key, value)
+                       VALUES (1, 'slack', 'token', 's3cret');",
+                )
+                .unwrap();
+
+            run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+            for table in LAYERED_TABLES {
+                let sql = declared_sql(&engine, table);
+                assert!(
+                    sql.contains(PROJECT_KEY_OPTIONAL),
+                    "a store born at v{born} leaves `{table}` unable to hold a device row:\n{sql}"
+                );
+                assert!(
+                    sql.contains(REFERENCE_CASCADES),
+                    "a store born at v{born} stopped cascading `{table}`, which is amenbo's own setting"
+                );
+                let held: i64 = engine
+                    .conn()
+                    .query_row(&format!("SELECT COUNT(*) FROM {table} WHERE project_id = 1"), [], |r| {
+                        r.get(0)
+                    })
+                    .unwrap();
+                assert_eq!(held, 1, "a store born at v{born} lost `{table}`'s existing row");
+            }
+            std::fs::remove_dir_all(&dir).ok();
+        }
+    }
+
+    /// A store whose plugin table does not declare what v24 expects is **refused**, and refused before
+    /// anything is written — the same posture v10 takes, and for the same reason.
+    #[test]
+    fn a_plugin_table_the_layer_step_does_not_recognise_stops_the_chain() {
+        let dir = scratch("layer-unrecognised");
+        let engine = store_at(&dir, 23);
+        // A `plugin_enable` whose key was never declared the way the step reads it. It is last in the list,
+        // so the tables ahead of it are what must be found untouched afterwards.
+        engine
+            .conn()
+            .execute_batch(
+                "PRAGMA writable_schema = ON;
+                 UPDATE sqlite_master SET sql = replace(sql, 'project_id BIGINT NOT NULL DEFAULT 0', 'project_id BIGINT NOT NULL DEFAULT 1')
+                  WHERE type = 'table' AND name = 'plugin_enable';
+                 PRAGMA writable_schema = RESET;",
+            )
+            .unwrap();
+
+        let err = run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap_err();
+        assert!(
+            matches!(
+                err,
+                super::super::StoreEngineError::UnrecognisedDdl { table: "plugin_enable", .. }
+            ),
+            "{err}"
+        );
+        assert!(
+            declared_sql(&engine, "plugin_config").contains(PROJECT_KEY_REQUIRED),
+            "the tables ahead of the one that stopped the step are untouched"
+        );
+        assert_eq!(engine.format_version().unwrap(), 23, "and the store is still where it was");
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// A store whose table does not declare what v10 expects is **refused**, and refused before anything is

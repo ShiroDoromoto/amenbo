@@ -385,6 +385,7 @@ const ui = {
   "plugins.noReadme": "No README",
   "plugins.factsNote": "Stars, downloads and the README are fetched from GitHub for this one open plugin (the catalog does not carry them). The figures are a sense of scale, and have no bearing on what can be installed.",
   "plugins.want.perProject": "Enabled per project",
+  "plugins.scope.machine": "Reads every project on this device, not just one",
   "plugins.want.events": "Woken for: {events}",
   "plugins.want.settings": "Settings it will ask for:", "plugins.want.secret": "secret",
   "plugins.install": "Install", "plugins.installing": "Installing…",

@@ -375,6 +375,7 @@ export const de: Translation = {
     "plugins.noReadme": "Keine README",
     "plugins.factsNote": "Sterne, Downloads und die README werden für dieses eine geöffnete Plug-in von GitHub geholt (der Katalog trägt sie nicht). Die Zahlen geben ein Gefühl für die Größenordnung und haben keinen Einfluss darauf, was installiert werden kann.",
     "plugins.want.perProject": "Je Projekt eingeschaltet",
+    "plugins.scope.machine": "Liest jedes Projekt auf diesem Gerät, nicht nur eines",
     "plugins.want.events": "Geweckt bei: {events}",
     "plugins.want.settings": "Einstellungen, nach denen es fragt:", "plugins.want.secret": "geheim",
     "plugins.install": "Installieren", "plugins.installing": "Wird installiert…",

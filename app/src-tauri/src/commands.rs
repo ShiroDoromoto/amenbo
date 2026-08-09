@@ -5052,6 +5052,7 @@ pub async fn plugin_detail(name: String) -> Result<Option<PluginDetailDto>, CmdE
         Ok(Some(PluginDetailDto {
             events: detail.events.iter().map(|e| e.event.clone()).collect(),
             config: detail.config.iter().map(wanted_setting).collect(),
+            scope: detail.scope,
             compatible: why.is_none(),
             incompatible_reason: why.map(|why| why.to_string()),
         }))
@@ -5180,6 +5181,12 @@ pub struct PluginDetailDto {
     events: Vec<String>,
     /// The settings it declares, in the author's order.
     config: Vec<PluginWantedSettingDto>,
+    /// **What layer its author declared it lives at** (`AMB-D-601`) — a project's, or the device's. It is
+    /// read here rather than off the list because the declaration rides in the detail document, and this
+    /// is the face that draws one: a device-wide plugin reads every project on this machine, which is the
+    /// thing worth knowing *before* it is taken on.
+    #[ts(type = "\"project\" | \"machine\"")]
+    scope: amenbo_core::plugin_manifest::Scope,
     /// Whether this build of amenbo can run it (`AMB-D-359`). Asked here so the answer arrives before an
     /// install rather than at the enable that would refuse.
     compatible: bool,
@@ -5222,6 +5229,12 @@ pub struct PluginInstallDto {
     /// answer; a truth value read from one project is not, because it hides the projects it is still
     /// firing in (`AMB-D-412`).
     projects: Vec<PluginProjectRowDto>,
+    /// **What layer its author declared it lives at** (`AMB-D-601`) — read off the manifest that was
+    /// installed, so it says what *this* build of the plugin declares rather than what the catalog now
+    /// carries. It is not a switch and there is nothing to set: the declaration is what makes
+    /// `plugin enable` mean one thing, and the face says so in words beside the gate it is about to open.
+    #[ts(type = "\"project\" | \"machine\"")]
+    scope: amenbo_core::plugin_manifest::Scope,
     /// Whether this build can speak to it at all (`AMB-D-359`). An open gate on an incompatible plugin
     /// fires nothing, and amenbo updates underneath an install, so this is not derivable from a gate.
     compatible: bool,
@@ -5280,6 +5293,7 @@ fn install_row(
     Ok(PluginInstallDto {
         name: plugin.name.clone(),
         projects,
+        scope: plugin.manifest.scope,
         compatible: why.is_none(),
         incompatible_reason: why.map(|why| why.to_string()),
         config,

@@ -206,6 +206,7 @@ function install(
       ...filledIn.map((project) => ({ project, enabled: false, hasValue: true, requiredUnset: false })),
     ],
     config: [],
+    scope: "project",
     ...over,
   };
 }
@@ -265,6 +266,21 @@ describe("this project's plugin crossings", () => {
     expect(section.textContent).toContain("notify");
     expect(section.textContent).toContain(t("plugins.cfg.filled"));
     expect(section.querySelector("select")).toBeNull();
+  });
+
+  // This face is one project's, so a device-wide plugin is the row that does not tell the whole story
+  // (`AMB-D-601`) — the declaration is said beside it, and only beside the rows it is true of.
+  it("says on a device-wide plugin's row that it reads every project", async () => {
+    hoisted.installs = [
+      install({ name: "carry", on: [1], scope: "machine" }),
+      install({ name: "notify", on: [1] }),
+    ];
+    await render([]);
+
+    const said = Array.from(pluginsSection().querySelectorAll("div")).filter((d) =>
+      d.textContent === t("plugins.scope.machine"),
+    );
+    expect(said).toHaveLength(1);
   });
 
   it("says so when this project crosses none, without hiding what is installed", async () => {

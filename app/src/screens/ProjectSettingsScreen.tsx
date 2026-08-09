@@ -455,6 +455,15 @@ function PluginsSection({ projectId }: { projectId: number }) {
         {shown.map((i) => (
           <div key={i.name}>
             <PluginCrossingRow install={i} project={projectId} name={i.name} />
+            {/* The layer its author declared (`AMB-D-601`), said on the row it is about. This face is one
+                project's, which is exactly why it is worth saying here: a device-wide plugin reads every
+                project on the machine, so what this row shows of it is not the whole of it. It is the
+                declaration and nothing to set, so it is stated rather than warned about. */}
+            {i.scope === "machine" && (
+              <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>
+                {t("plugins.scope.machine")}
+              </div>
+            )}
             {/* Said per row, unlike the plugin face where every row is the same plugin: here each row is
                 a different one, and only some of them are builds this amenbo cannot speak to. */}
             {!i.compatible && (

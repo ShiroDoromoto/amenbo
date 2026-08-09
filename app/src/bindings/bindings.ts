@@ -672,6 +672,13 @@ events: Array<string>,
  */
 config: Array<PluginWantedSettingDto>, 
 /**
+ * **What layer its author declared it lives at** (`AMB-D-601`) — a project's, or the device's. It is
+ * read here rather than off the list because the declaration rides in the detail document, and this
+ * is the face that draws one: a device-wide plugin reads every project on this machine, which is the
+ * thing worth knowing *before* it is taken on.
+ */
+scope: "project" | "machine", 
+/**
  * Whether this build of amenbo can run it (`AMB-D-359`). Asked here so the answer arrives before an
  * install rather than at the enable that would refuse.
  */
@@ -770,6 +777,13 @@ name: string,
  * firing in (`AMB-D-412`).
  */
 projects: Array<PluginProjectRowDto>, 
+/**
+ * **What layer its author declared it lives at** (`AMB-D-601`) — read off the manifest that was
+ * installed, so it says what *this* build of the plugin declares rather than what the catalog now
+ * carries. It is not a switch and there is nothing to set: the declaration is what makes
+ * `plugin enable` mean one thing, and the face says so in words beside the gate it is about to open.
+ */
+scope: "project" | "machine", 
 /**
  * Whether this build can speak to it at all (`AMB-D-359`). An open gate on an incompatible plugin
  * fires nothing, and amenbo updates underneath an install, so this is not derivable from a gate.

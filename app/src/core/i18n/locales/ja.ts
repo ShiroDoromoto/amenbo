@@ -375,6 +375,7 @@ export const ja: Translation = {
     "plugins.noReadme": "README はありません",
     "plugins.factsNote": "★・ダウンロード数・README は、開いたこの1件だけを GitHub から取得しています（カタログには入っていません）。数字は目安で、入れられるかどうかとは関係ありません。",
     "plugins.want.perProject": "プロジェクトごとに有効化",
+    "plugins.scope.machine": "この端末の全プロジェクトを読む",
     "plugins.want.events": "受け取る出来事: {events}",
     "plugins.want.settings": "入れたあとに設定するもの:", "plugins.want.secret": "秘密",
     "plugins.install": "インストール", "plugins.installing": "インストール中…",

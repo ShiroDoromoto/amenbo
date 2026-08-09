@@ -370,6 +370,7 @@ export const id: Translation = {
     "plugins.noReadme": "Tidak ada README",
     "plugins.factsNote": "Bintang, unduhan dan README diambil dari GitHub untuk satu plugin yang sedang dibuka ini (katalognya tidak memuatnya). Angka-angka itu sekadar gambaran skala, dan tidak menentukan apa yang bisa dipasang.",
     "plugins.want.perProject": "Dinyalakan per proyek",
+    "plugins.scope.machine": "Membaca semua proyek di perangkat ini, bukan hanya satu",
     "plugins.want.events": "Dibangunkan oleh: {events}",
     "plugins.want.settings": "Pengaturan yang akan dimintanya:", "plugins.want.secret": "rahasia",
     "plugins.install": "Pasang", "plugins.installing": "Memasang…",

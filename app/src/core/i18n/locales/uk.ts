@@ -387,6 +387,7 @@ export const uk: Translation = {
     "plugins.noReadme": "README немає",
     "plugins.factsNote": "Зірки, завантаження та README беруться з GitHub для цього одного відкритого плагіна (каталог їх не несе). Цифри дають відчуття масштабу й ніяк не впливають на те, що можна встановити.",
     "plugins.want.perProject": "Вмикається окремо для проєкту",
+    "plugins.scope.machine": "Читає всі проєкти на цьому пристрої, а не лише один",
     "plugins.want.events": "Будять його: {events}",
     "plugins.want.settings": "Налаштування, які він попросить:", "plugins.want.secret": "секрет",
     "plugins.install": "Встановити", "plugins.installing": "Встановлення…",

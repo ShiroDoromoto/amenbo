@@ -124,6 +124,7 @@ const row = ({ on = [], ...over }: Partial<PluginInstall> & { name: string; on?:
   compatible: true,
   projects: on.map((project) => at(project, { enabled: true })),
   config: [],
+  scope: "project",
   ...over,
 });
 
@@ -343,6 +344,29 @@ describe("a plugin this build cannot speak to", () => {
     hoisted.installs = [row({ name: "notify", on: [1] })];
     render();
     expect(chips()).toEqual([t("plugins.enabledChip"), "alpha", t("plugins.enabledChip")]);
+  });
+});
+
+// The layer is the author's (`AMB-D-601`), and this face reads it off the manifest that was installed. It
+// is drawn as a sentence and nothing else: the whole point of settling the layer by declaration is that
+// `plugin enable` means one thing, so a second switch here would undo it (`AMB-D-379`).
+describe("the layer a plugin declared", () => {
+  it("says a device-wide plugin reads every project, without adding anything to press", () => {
+    hoisted.projects = [{ id: 1, name: "alpha" }];
+    hoisted.installs = [row({ name: "carry", scope: "machine" })];
+    render();
+
+    expect(container.textContent).toContain(t("plugins.scope.machine"));
+    // Only the badges the row already wore: the declaration is prose, not a state of its own.
+    expect(chips()).toEqual([]);
+  });
+
+  it("says nothing for a project's plugin, which is every plugin that declared nothing", () => {
+    hoisted.projects = [{ id: 1, name: "alpha" }];
+    hoisted.installs = [row({ name: "notify", on: [1] })];
+    render();
+
+    expect(container.textContent).not.toContain(t("plugins.scope.machine"));
   });
 });
 

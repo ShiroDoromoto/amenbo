@@ -390,6 +390,7 @@ export const ru: Translation = {
     "plugins.noReadme": "README нет",
     "plugins.factsNote": "Звёзды, загрузки и README подтягиваются с GitHub только для этого открытого плагина (в каталоге их нет). Цифры дают представление о масштабе и никак не влияют на то, что можно установить.",
     "plugins.want.perProject": "Включается по проектам",
+    "plugins.scope.machine": "Читает все проекты на этом устройстве, а не только один",
     "plugins.want.events": "Будят события: {events}",
     "plugins.want.settings": "Настройки, которые он попросит:", "plugins.want.secret": "секрет",
     "plugins.install": "Установить", "plugins.installing": "Установка…",

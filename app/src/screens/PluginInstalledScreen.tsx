@@ -217,6 +217,13 @@ function InstalledRow({ install, update, projects, onRemoved }: {
             </>
           ) : null}
         </div>
+        {/* The layer its author declared, said in words above the gate it is about (`AMB-D-601`). Nothing
+            here is settable — the declaration is what makes an enable mean exactly one thing — so a
+            device-wide plugin gets a sentence and not a second switch, and a project's plugin gets
+            nothing, that being the ordinary case the rows below already read as. */}
+        {install.scope === "machine" && (
+          <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.scope.machine")}</div>
+        )}
         <PluginCrossings install={install} projects={projects} />
         {(update || moved) && (
           <div className="pluggate">

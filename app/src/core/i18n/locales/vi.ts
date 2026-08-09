@@ -370,6 +370,7 @@ export const vi: Translation = {
     "plugins.noReadme": "Không có README",
     "plugins.factsNote": "Sao, lượt tải và README được lấy từ GitHub cho riêng plugin đang mở này (danh mục không mang chúng). Các con số chỉ để hình dung quy mô, và không liên quan gì tới việc cài được hay không.",
     "plugins.want.perProject": "Bật riêng theo từng dự án",
+    "plugins.scope.machine": "Đọc mọi dự án trên thiết bị này, không chỉ một dự án",
     "plugins.want.events": "Được đánh thức bởi: {events}",
     "plugins.want.settings": "Những cài đặt nó sẽ hỏi:", "plugins.want.secret": "bí mật",
     "plugins.install": "Cài", "plugins.installing": "Đang cài…",

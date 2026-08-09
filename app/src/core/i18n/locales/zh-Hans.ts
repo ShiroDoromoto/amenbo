@@ -368,6 +368,7 @@ export const zhHans: Translation = {
     "plugins.noReadme": "没有 README",
     "plugins.factsNote": "星标、下载数和 README 是为当前打开的这一个插件从 GitHub 取来的（目录里并不带这些）。这些数字只是给你一个量级感，与能不能安装无关。",
     "plugins.want.perProject": "按项目分别启用",
+    "plugins.scope.machine": "读取本设备上的所有项目，而不只是一个",
     "plugins.want.events": "会被唤醒于：{events}",
     "plugins.want.settings": "它会要求的设置：", "plugins.want.secret": "机密",
     "plugins.install": "安装", "plugins.installing": "正在安装…",

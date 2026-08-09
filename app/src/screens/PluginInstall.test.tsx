@@ -85,6 +85,7 @@ const row = ({ on = [], ...over }: Partial<PluginInstall> & { name: string; on?:
   compatible: true,
   projects: on.map((project) => ({ project, enabled: true, hasValue: false, requiredUnset: false })),
   config: [],
+  scope: "project",
   ...over,
 });
 
@@ -180,6 +181,7 @@ describe("what the opened entry says installing it would mean", () => {
   const doc = (over: Partial<PluginDetail> = {}): PluginDetail => ({
     events: [],
     config: [],
+    scope: "project",
     compatible: true,
     ...over,
   });
@@ -203,6 +205,33 @@ describe("what the opened entry says installing it would mean", () => {
     // A secret is the line worth seeing before installing: it means handing over a credential.
     expect(detail()!.textContent).toContain(t("plugins.want.secret"));
     expect(detail()!.textContent).toContain(t("plugins.cfg.required"));
+  });
+
+  // The layer is the author's declaration, and the face it matters on is this one: after the install the
+  // gate *is* the consent, so a device-wide plugin has to be readable as such before it is taken on
+  // (`AMB-D-601`). It replaces the per-project line rather than joining it — the two cannot both be true,
+  // and a reader shown both would be reading a switch that does not exist.
+  it("says a device-wide plugin reads every project, in place of the per-project line", () => {
+    hoisted.detail = doc({ scope: "machine" });
+    render();
+    open(0);
+
+    expect(detail()!.textContent).toContain(t("plugins.scope.machine"));
+    expect(detail()!.textContent).not.toContain(t("plugins.want.perProject"));
+    // Said, not offered: nothing was added for a reader to set, and the install stays the one act here.
+    expect(detail()!.querySelector("input")).toBeNull();
+    expect(button(t("plugins.install"))!.disabled).toBe(false);
+  });
+
+  // The default, and the one the three plugins already published rely on: an author who wrote no `scope`
+  // gets the face they always had.
+  it("leaves the ordinary plugin's line alone", () => {
+    hoisted.detail = doc();
+    render();
+    open(0);
+
+    expect(detail()!.textContent).toContain(t("plugins.want.perProject"));
+    expect(detail()!.textContent).not.toContain(t("plugins.scope.machine"));
   });
 
   // Compatibility is enforced at the gate that fires the plugin, so this warns and leaves the choice.

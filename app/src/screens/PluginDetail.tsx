@@ -117,10 +117,15 @@ export function PluginDetail({ entry, install, onOpenInstalled, onClose }: {
 /**
  * What installing this plugin would mean, from the catalog's detail document (`AMB-D-385`).
  *
- * Everything here is the author's declaration, read **before** anything is installed: what it will be
- * woken for, and what it will want to be told — a secret among those is the line worth seeing in advance,
- * since it means handing over a credential. The one judgement is amenbo's own:
+ * Everything here is the author's declaration, read **before** anything is installed: what layer it lives
+ * at, what it will be woken for, and what it will want to be told — a secret among those is the line worth
+ * seeing in advance, since it means handing over a credential. The one judgement is amenbo's own:
  * a build this version cannot speak to says so here rather than at the enable that would refuse it.
+ *
+ * The layer is **said, not offered** (`AMB-D-601`). It is the author's declaration and there is nothing for
+ * a reader to set, so it takes the place of the ordinary "enabled per project" line rather than arriving as
+ * a second switch beside it: a device-wide plugin reads every project on this machine, and this is the face
+ * where that is still worth knowing — after the install, the gate is the consent itself.
  *
  * It does not block the install button. Compatibility is enforced at the gate that fires the plugin
  * (`AMB-D-359`), and installing an inert plugin breaks nothing — so this warns and leaves the choice.
@@ -129,7 +134,11 @@ function WhatItWants({ detail }: { detail: PluginDetailDoc }) {
   return (
     <div className="plugdet__wants">
       <div className="plugdet__meta faint">
-        <span>{t("plugins.want.perProject")}</span>
+        <span>
+          {detail.scope === "machine"
+            ? t("plugins.scope.machine")
+            : t("plugins.want.perProject")}
+        </span>
         {detail.events.length > 0 && (
           <>
             <span>·</span>

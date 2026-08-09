@@ -367,6 +367,7 @@ export const hi: Translation = {
     "plugins.noReadme": "कोई README नहीं",
     "plugins.factsNote": "तारे, डाउनलोड और README इस एक खुले प्लगिन के लिए GitHub से लाए जाते हैं (कैटलॉग उन्हें नहीं रखता)। ये आँकड़े सिर्फ़ पैमाने का अंदाज़ा हैं, और इनसे यह तय नहीं होता कि क्या संस्थापित हो सकता है।",
     "plugins.want.perProject": "हर प्रोजेक्ट के लिए अलग चालू",
+    "plugins.scope.machine": "इस डिवाइस के हर प्रोजेक्ट को पढ़ता है, सिर्फ़ एक को नहीं",
     "plugins.want.events": "इन पर जागता है: {events}",
     "plugins.want.settings": "जो सेटिंग यह माँगेगा:", "plugins.want.secret": "गुप्त",
     "plugins.install": "संस्थापित करें", "plugins.installing": "संस्थापित हो रहा है…",

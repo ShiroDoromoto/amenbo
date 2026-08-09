@@ -387,6 +387,7 @@ export const pl: Translation = {
     "plugins.noReadme": "Brak README",
     "plugins.factsNote": "Gwiazdki, pobrania i README są pobierane z GitHuba dla tej jednej otwartej wtyczki (katalog ich nie niesie). Liczby dają wyczucie skali i nie mają wpływu na to, co da się zainstalować.",
     "plugins.want.perProject": "Włączana osobno dla projektu",
+    "plugins.scope.machine": "Czyta wszystkie projekty na tym urządzeniu, nie tylko jeden",
     "plugins.want.events": "Budzą ją: {events}",
     "plugins.want.settings": "Ustawienia, o które poprosi:", "plugins.want.secret": "sekret",
     "plugins.install": "Zainstaluj", "plugins.installing": "Instalowanie…",

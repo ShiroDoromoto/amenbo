@@ -384,6 +384,7 @@ export const fr: Translation = {
     "plugins.noReadme": "Pas de README",
     "plugins.factsNote": "Les étoiles, les téléchargements et le README sont récupérés sur GitHub pour la seule extension ouverte (le catalogue ne les porte pas). Ces chiffres donnent un ordre de grandeur et n'ont aucune incidence sur ce qui peut être installé.",
     "plugins.want.perProject": "Activée par projet",
+    "plugins.scope.machine": "Lit tous les projets de cet appareil, pas seulement un",
     "plugins.want.events": "Réveillée par : {events}",
     "plugins.want.settings": "Réglages qu'elle demandera :", "plugins.want.secret": "secret",
     "plugins.install": "Installer", "plugins.installing": "Installation…",

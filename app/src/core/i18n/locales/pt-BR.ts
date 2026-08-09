@@ -385,6 +385,7 @@ export const ptBR: Translation = {
     "plugins.noReadme": "Sem README",
     "plugins.factsNote": "Estrelas, downloads e o README são buscados no GitHub só para este plugin aberto (o catálogo não os carrega). Os números dão noção de escala e não influenciam no que pode ser instalado.",
     "plugins.want.perProject": "Ativado por projeto",
+    "plugins.scope.machine": "Lê todos os projetos deste dispositivo, não apenas um",
     "plugins.want.events": "Acordado por: {events}",
     "plugins.want.settings": "Configurações que ele vai pedir:", "plugins.want.secret": "segredo",
     "plugins.install": "Instalar", "plugins.installing": "Instalando…",

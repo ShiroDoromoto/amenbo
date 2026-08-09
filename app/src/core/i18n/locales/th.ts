@@ -370,6 +370,7 @@ export const th: Translation = {
     "plugins.noReadme": "ไม่มี README",
     "plugins.factsNote": "ดาว ยอดดาวน์โหลด และ README ถูกดึงจาก GitHub เฉพาะปลั๊กอินที่เปิดอยู่ตัวนี้ (แคตตาล็อกไม่ได้ถือไว้) ตัวเลขพวกนี้ให้พอเห็นขนาด และไม่มีผลต่อว่าอะไรติดตั้งได้",
     "plugins.want.perProject": "เปิดแยกรายโปรเจกต์",
+    "plugins.scope.machine": "อ่านทุกโปรเจกต์บนอุปกรณ์นี้ ไม่ใช่แค่โปรเจกต์เดียว",
     "plugins.want.events": "ถูกปลุกโดย: {events}",
     "plugins.want.settings": "ค่าที่มันจะขอ:", "plugins.want.secret": "ความลับ",
     "plugins.install": "ติดตั้ง", "plugins.installing": "กำลังติดตั้ง…",

@@ -368,6 +368,7 @@ export const zhHant: Translation = {
     "plugins.noReadme": "沒有 README",
     "plugins.factsNote": "星號、下載數與 README 是為目前開啟的這一個外掛從 GitHub 取來的（目錄裡並沒有這些）。這些數字只是給你一個規模感，與能不能安裝無關。",
     "plugins.want.perProject": "依專案分別啟用",
+    "plugins.scope.machine": "讀取本裝置上的所有專案，而不只是一個",
     "plugins.want.events": "會被喚醒於：{events}",
     "plugins.want.settings": "它會要求的設定：", "plugins.want.secret": "機密",
     "plugins.install": "安裝", "plugins.installing": "安裝中…",

@@ -1076,8 +1076,9 @@ pub enum TaskCmd {
     Add {
         #[arg(long)]
         title: String,
-        /// owning project (name or ID). Required — a project-less task is refused;
-        /// omitting it lists existing projects to pick from.
+        /// owning project (name or ID). A human names one, or omits it to list the
+        /// projects to pick from; an AI omits it — the binding fills the slot, and
+        /// naming a project is refused.
         #[arg(long)]
         project: Option<String>,
         #[arg(long)]

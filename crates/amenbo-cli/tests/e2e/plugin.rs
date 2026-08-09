@@ -122,6 +122,83 @@ fn a_plugins_secret_rides_a_backup_and_never_an_export() {
     assert_eq!(back["set"], true, "the secret rode the archive home");
 }
 
+/// A plugin declaring `scope: machine` keeps its gate, its settings and its secrets at the **device**
+/// layer (`AMB-D-601`), and none of it mixes with a project's.
+///
+/// Still one switch: the layer is the author's declaration, not a level the face picks, so nothing here
+/// names one. What is checked is that the two layers are two sets of rows — a device value is not the
+/// bound project's, the project's own plugin does not read it, and the device rows survive a road out and
+/// back (an export leaves every secret behind whichever layer wrote it; a backup brings them home).
+#[test]
+fn a_machine_scoped_plugins_rows_are_the_devices_and_never_a_projects() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let fields = serde_json::json!([
+        { "key": "server", "label": "サーバ" },
+        { "key": "token", "label": "トークン", "secret": true },
+    ]);
+    install_plugin_at(&cli, "carrier", fields.clone(), Some("machine"));
+    install_plugin(&cli, "slack", fields);
+
+    // The gate is the device's: the write names no project, and the listing has no project row to draw.
+    let on = cli.json(&["plugin", "enable", "carrier", "--json"]);
+    assert_eq!(on["enabled"], true);
+    assert!(on["project"].is_null(), "a device gate belongs to no project: {on}");
+    assert_eq!(on["scope"], "machine");
+    assert!(on.get("level").is_none(), "no tier is named, because there is none: {on}");
+    let listed = cli.json(&["plugin", "list", "--json"]);
+    let carrier = listed["plugins"].as_array().unwrap().iter().find(|p| p["name"] == "carrier").unwrap();
+    assert_eq!(
+        carrier["enabled_projects"].as_array().unwrap().len(),
+        0,
+        "the one device gate is not any project's: {carrier}",
+    );
+    assert_eq!(carrier["scope"], "machine");
+    assert_eq!(carrier["enabled_on_device"], true, "and the listing says where it is on: {carrier}");
+
+    // The settings are the device's too, and the project's own plugin cannot see them.
+    let set = cli.json(&["plugin", "config", "set", "carrier", "server", "wss://here", "--json"]);
+    assert!(set["project"].is_null(), "the write says it was for no project: {set}");
+    cli.json_stdin(
+        &["plugin", "config", "set", "carrier", "token", "-", "--json"],
+        "DEVICE-53CR3T\n",
+    );
+    cli.json(&["plugin", "config", "set", "slack", "server", "wss://theirs", "--json"]);
+    assert_eq!(cli.json(&["plugin", "config", "get", "carrier", "server", "--json"])["value"], "wss://here");
+    assert_eq!(
+        cli.json(&["plugin", "config", "get", "slack", "server", "--json"])["value"],
+        "wss://theirs",
+        "one layer's value is not the other's",
+    );
+
+    // Out: the device's text value travels, and no secret does — the exclusion is the whole table, so the
+    // layer it was written at never had to be asked (`AMB-D-434`).
+    let (dump, code) = cli.run(&["export"]);
+    assert_eq!(code, 0, "{dump}");
+    assert!(!dump.contains("DEVICE-53CR3T"), "the device secret left in the export: {dump}");
+    let doc: Value = serde_json::from_str(&dump).unwrap();
+    assert!(doc["tables"].get("plugin_secret").is_none(), "the whole table stays home: {dump}");
+    let device_rows: Vec<&Value> = doc["tables"]["plugin_config"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|r| r["plugin"] == "carrier")
+        .collect();
+    assert_eq!(device_rows.len(), 1, "the device's own setting travels: {dump}");
+    assert!(device_rows[0]["project_id"].is_null(), "and travels as the device's: {dump}");
+
+    // And back: a backup carries the whole file, so the device gate and its secret come home together.
+    let archive = cli.home.join("backup.amenbo-backup");
+    cli.json(&["backup", archive.to_str().unwrap(), "--json"]);
+    cli.json(&["plugin", "disable", "carrier", "--json"]);
+    cli.json(&["plugin", "config", "set", "carrier", "token", "", "--json"]);
+    cli.json(&["restore", archive.to_str().unwrap(), "--yes", "--json"]);
+    assert_eq!(cli.json(&["plugin", "config", "get", "carrier", "token", "--json"])["set"], true);
+    let after = cli.json(&["plugin", "list", "--json"]);
+    let carrier = after["plugins"].as_array().unwrap().iter().find(|p| p["name"] == "carrier").unwrap();
+    assert_eq!(carrier["enabled_on_device"], true, "the device gate rode the archive home: {carrier}");
+}
+
 /// One plugin, one switch, and it is the bound project's (`AMB-D-434`): it turns on for the project you
 /// are in and nowhere else, and the faces never ask which level, because there is no other.
 #[test]

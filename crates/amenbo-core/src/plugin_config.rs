@@ -12,8 +12,9 @@
 //! - **text** ⇒ the store's `plugin_config` table ([`crate::ops::plugin_config`]), an ordinary record.
 //!   Injected on stdin as JSON.
 //!
-//! **There is no tier under either.** A plugin is a project's, so a value is a project's; nothing is left
-//! for a machine-wide default to be the default *of*, and a read answers with the row or with nothing.
+//! **There is no tier under either.** A plugin lives at one layer and its author picks which
+//! ([`Layer`], `AMB-D-601`), so a value is that layer's; nothing is left for a machine-wide default to be
+//! the default *of*, and a read answers with the row or with nothing.
 //!
 //! Both the CLI (`plugin config set/get`) and the GUI form submit go through [`set`] / [`get`] so the
 //! routing rule, and the safe floor below, live in exactly one place (`AMB-D-356`). The **secret flag
@@ -38,6 +39,7 @@
 //! spelling amenbo picked.
 
 use crate::error::{Error, ErrorCode, Msg, Result};
+use crate::plugin_layer::Layer;
 use crate::plugin_manifest::{ConfigField, FieldType, NONE_SELECTED};
 use crate::store::Store;
 
@@ -119,17 +121,19 @@ fn check_ident(kind: &str, s: &str) -> Result<()> {
 
 /// Write one plugin config value through the boundary (`AMB-D-356`). Routes by `field.secret` — a secret
 /// to `plugin_secret`, everything else to `plugin_config` — enforcing the safe floor first, and always
-/// into `project`'s own row (`AMB-D-434`). An **empty** `value` clears the setting rather than storing a
-/// blank — "not provided" is unset. Persists as it goes: either road commits its own transaction.
+/// into `layer`'s own row (`AMB-D-434` / `AMB-D-601`). An **empty** `value` clears the setting rather than
+/// storing a blank — "not provided" is unset. Persists as it goes: either road commits its own transaction.
 ///
 /// `field` carries the author's `secret` flag and the `key` — the caller loads it from the plugin's
 /// manifest; this function never decides secrecy for itself. It carries the candidates too, which is what
-/// lets a field that offers a choice refuse an answer outside it ([`check_choice`], `AMB-D-415`).
+/// lets a field that offers a choice refuse an answer outside it ([`check_choice`], `AMB-D-415`). The layer
+/// comes from the same manifest, through [`Layer::of`] — the two roads below are the author's `secret`
+/// flag's call, and *which* row either writes is the author's `scope`'s.
 pub fn set(
     store: &mut Store,
     field: &ConfigField,
     plugin: &str,
-    project: i64,
+    layer: Layer,
     value: &str,
 ) -> Result<()> {
     check_ident("plugin name", plugin)?;
@@ -144,9 +148,9 @@ pub fn set(
     };
 
     if field.secret {
-        store.set_plugin_secret(project, plugin, &field.key, stored)?;
+        store.set_plugin_secret(layer.project_id(), plugin, &field.key, stored)?;
     } else {
-        store.set_plugin_config_value(project, plugin, &field.key, stored)?;
+        store.set_plugin_config_value(layer.project_id(), plugin, &field.key, stored)?;
     }
     Ok(())
 }
@@ -232,8 +236,8 @@ pub fn answer(field: &ConfigField, held: Option<&str>) -> Answer {
     }
 }
 
-/// Read back one plugin config value in `project`, exactly as [`set`] wrote it (`AMB-D-434`) — the same
-/// two roads, taken by the same flag. Returns `None` when the setting is unset there.
+/// Read back one plugin config value at `layer`, exactly as [`set`] wrote it (`AMB-D-434` / `AMB-D-601`) —
+/// the same two roads, taken by the same flag. Returns `None` when the setting is unset there.
 ///
 /// The value is returned raw; a secret is not masked here — the CLI face masks it on the way to the
 /// terminal (`plugin config get` never echoes a secret), while injection reads it whole.
@@ -241,16 +245,16 @@ pub fn get(
     store: &Store,
     field: &ConfigField,
     plugin: &str,
-    project: i64,
+    layer: Layer,
 ) -> Result<Option<String>> {
     if field.secret {
-        store.plugin_secret_value(project, plugin, &field.key)
+        store.plugin_secret_value(layer.project_id(), plugin, &field.key)
     } else {
-        store.plugin_config_value(project, plugin, &field.key)
+        store.plugin_config_value(layer.project_id(), plugin, &field.key)
     }
 }
 
-/// Which of the author's declared `fields` this project currently holds a value for (`AMB-D-434`). This is
+/// Which of the author's declared `fields` this layer currently holds a value for (`AMB-D-434`). This is
 /// the `has_value` probe [`plugin_trust::enable`](crate::plugin_trust::enable) asks its caller for — that
 /// boundary judges `required` and deliberately does not read storage, so the resolution lives here with
 /// the rest of the value routing, and both faces (CLI `plugin enable`, the GUI's) run the same one.
@@ -261,11 +265,11 @@ pub fn satisfied_keys(
     store: &Store,
     plugin: &str,
     fields: &[ConfigField],
-    project: i64,
+    layer: Layer,
 ) -> Result<Vec<String>> {
     let mut satisfied = Vec::new();
     for field in fields {
-        if get(store, field, plugin, project)?.is_some() {
+        if get(store, field, plugin, layer)?.is_some() {
             satisfied.push(field.key.clone());
         }
     }
@@ -300,12 +304,17 @@ pub struct Intersection {
 /// A project whose only rows are for keys the author no longer declares is not one of these: there is
 /// nothing on the schema to draw for it, and a row that offered nothing to fill in would be a project the
 /// user cannot get rid of.
+///
+/// **Project crossings only.** A `scope: machine` plugin's one gate and its settings are the device's, and
+/// no project crosses it (`AMB-D-601`), so this answers empty for one — rightly, since there is no project
+/// row to draw. Showing the device layer instead of a project list is the faces' work (`AMB-T-2874`).
 pub fn intersections(
     store: &Store,
     plugin: &str,
     fields: &[ConfigField],
 ) -> Result<Vec<Intersection>> {
-    let enabled = store.projects_with_plugin_enabled(plugin)?;
+    let enabled: Vec<i64> =
+        store.layers_with_plugin_enabled(plugin)?.into_iter().filter_map(Layer::project_id).collect();
     let mut projects = enabled.clone();
     projects.extend(store.projects_with_plugin_values(plugin)?);
     projects.sort_unstable();
@@ -313,7 +322,7 @@ pub fn intersections(
 
     let mut rows = Vec::new();
     for project in projects {
-        let satisfied = satisfied_keys(store, plugin, fields, project)?;
+        let satisfied = satisfied_keys(store, plugin, fields, Layer::Project(project))?;
         let on = enabled.contains(&project);
         if !on && satisfied.is_empty() {
             continue;
@@ -341,11 +350,13 @@ pub fn intersections(
 /// on how they say so. Empty means nothing is in the way.
 ///
 /// **Where the caller happens to be standing is not part of the judgement.** A plugin has one gate per
-/// project (`AMB-D-434`), and an update replaces the build for all of them at once, so asking only about
-/// the project on screen would let a schema through that leaves some *other* project's enabled plugin
-/// without a value its author marked `required` — and the GUI can be asked from screens that are in no
-/// project at all. A field counts as held only when every enabled gate holds it; the keys come back in the
-/// author's declared order, once each, whichever gates want them.
+/// layer it can be enabled at (`AMB-D-434` / `AMB-D-601`), and an update replaces the build for all of them
+/// at once, so asking only about the project on screen would let a schema through that leaves some *other*
+/// gate's enabled plugin without a value its author marked `required` — and the GUI can be asked from
+/// screens that are in no project at all. The device gate is judged with the project ones for the same
+/// reason: it is a gate the plugin fires through, and a list of projects would have left it out. A field
+/// counts as held only when every enabled gate holds it; the keys come back in the author's declared order,
+/// once each, whichever gates want them.
 ///
 /// It answers empty, letting the update through, in every case where there is nothing to break: a build this
 /// amenbo cannot run anyway (the write path refuses it with its own wording), a plugin that is not installed,
@@ -364,14 +375,14 @@ pub fn required_unset_for_update(
     if crate::plugin_installed::read(&store.paths, name).is_err() {
         return Ok(Vec::new());
     }
-    // One satisfied set per project that actually fires: each project holds its own values, so two of
+    // One satisfied set per gate that actually fires: each layer holds its own values, so two of
     // them can hold different halves of the same schema.
     let mut per_gate = Vec::new();
-    for project in store.projects_with_plugin_enabled(name)? {
-        if !crate::plugin_trust::effective_enabled_in(store, name, project)? {
+    for layer in store.layers_with_plugin_enabled(name)? {
+        if !crate::plugin_trust::effective_enabled_in(store, name, layer)? {
             continue;
         }
-        per_gate.push(satisfied_keys(store, name, &available.config, project)?);
+        per_gate.push(satisfied_keys(store, name, &available.config, layer)?);
     }
     if per_gate.is_empty() {
         return Ok(Vec::new());
@@ -420,14 +431,14 @@ mod tests {
     fn a_text_value_lands_in_the_projects_row_and_reads_back() {
         let (mut store, _dir) = store_at("text");
         let p = mk_project(&mut store, "proj");
-        set(&mut store, &text_field("events"), "slack", p, "push,merge").unwrap();
+        set(&mut store, &text_field("events"), "slack", Layer::Project(p), "push,merge").unwrap();
 
         assert_eq!(
-            get(&store, &text_field("events"), "slack", p).unwrap().as_deref(),
+            get(&store, &text_field("events"), "slack", Layer::Project(p)).unwrap().as_deref(),
             Some("push,merge"),
         );
         assert_eq!(
-            store.plugin_config_value(p, "slack", "events").unwrap().as_deref(),
+            store.plugin_config_value(Some(p), "slack", "events").unwrap().as_deref(),
             Some("push,merge"),
             "the text road is the `plugin_config` table",
         );
@@ -439,18 +450,18 @@ mod tests {
     fn a_secret_lands_in_the_secret_table_and_not_the_text_one() {
         let (mut store, _dir) = store_at("secret");
         let p = mk_project(&mut store, "proj");
-        set(&mut store, &secret_field("webhook_url"), "slack", p, "https://hooks/x").unwrap();
+        set(&mut store, &secret_field("webhook_url"), "slack", Layer::Project(p), "https://hooks/x").unwrap();
 
         assert_eq!(
-            get(&store, &secret_field("webhook_url"), "slack", p).unwrap().as_deref(),
+            get(&store, &secret_field("webhook_url"), "slack", Layer::Project(p)).unwrap().as_deref(),
             Some("https://hooks/x"),
         );
         assert_eq!(
-            store.plugin_secret_value(p, "slack", "webhook_url").unwrap().as_deref(),
+            store.plugin_secret_value(Some(p), "slack", "webhook_url").unwrap().as_deref(),
             Some("https://hooks/x"),
         );
         assert_eq!(
-            store.plugin_config_value(p, "slack", "webhook_url").unwrap(),
+            store.plugin_config_value(Some(p), "slack", "webhook_url").unwrap(),
             None,
             "a secret never reaches the text table",
         );
@@ -461,13 +472,13 @@ mod tests {
         let (mut store, _dir) = store_at("clear");
         let p = mk_project(&mut store, "proj");
         // text
-        set(&mut store, &text_field("k"), "plug", p, "v").unwrap();
-        set(&mut store, &text_field("k"), "plug", p, "").unwrap();
-        assert_eq!(get(&store, &text_field("k"), "plug", p).unwrap(), None);
+        set(&mut store, &text_field("k"), "plug", Layer::Project(p), "v").unwrap();
+        set(&mut store, &text_field("k"), "plug", Layer::Project(p), "").unwrap();
+        assert_eq!(get(&store, &text_field("k"), "plug", Layer::Project(p)).unwrap(), None);
         // secret
-        set(&mut store, &secret_field("s"), "plug", p, "v").unwrap();
-        set(&mut store, &secret_field("s"), "plug", p, "").unwrap();
-        assert_eq!(get(&store, &secret_field("s"), "plug", p).unwrap(), None);
+        set(&mut store, &secret_field("s"), "plug", Layer::Project(p), "v").unwrap();
+        set(&mut store, &secret_field("s"), "plug", Layer::Project(p), "").unwrap();
+        assert_eq!(get(&store, &secret_field("s"), "plug", Layer::Project(p)).unwrap(), None);
     }
 
     /// A value is one project's and reaches no other — there is no tier under it that both would see
@@ -477,10 +488,10 @@ mod tests {
         let (mut store, _dir) = store_at("project");
         let (a, b) = (mk_project(&mut store, "a"), mk_project(&mut store, "b"));
 
-        set(&mut store, &text_field("events"), "slack", a, "for-a").unwrap();
+        set(&mut store, &text_field("events"), "slack", Layer::Project(a), "for-a").unwrap();
 
-        assert_eq!(get(&store, &text_field("events"), "slack", a).unwrap().as_deref(), Some("for-a"));
-        assert_eq!(get(&store, &text_field("events"), "slack", b).unwrap(), None);
+        assert_eq!(get(&store, &text_field("events"), "slack", Layer::Project(a)).unwrap().as_deref(), Some("for-a"));
+        assert_eq!(get(&store, &text_field("events"), "slack", Layer::Project(b)).unwrap(), None);
     }
 
     /// The three answers a choice can carry, each stored as itself (`AMB-D-415`): the chosen candidates
@@ -492,21 +503,21 @@ mod tests {
         let p = mk_project(&mut store, "proj");
         let events = multi_field("events");
 
-        set(&mut store, &events, "slack", p, "task.done,task.rejected").unwrap();
+        set(&mut store, &events, "slack", Layer::Project(p), "task.done,task.rejected").unwrap();
         assert_eq!(
-            get(&store, &events, "slack", p).unwrap().as_deref(),
+            get(&store, &events, "slack", Layer::Project(p)).unwrap().as_deref(),
             Some("task.done,task.rejected"),
         );
 
-        set(&mut store, &events, "slack", p, NONE_SELECTED).unwrap();
+        set(&mut store, &events, "slack", Layer::Project(p), NONE_SELECTED).unwrap();
         assert_eq!(
-            get(&store, &events, "slack", p).unwrap().as_deref(),
+            get(&store, &events, "slack", Layer::Project(p)).unwrap().as_deref(),
             Some(NONE_SELECTED),
             "wanting none of them is an answer, and it is stored",
         );
 
-        set(&mut store, &events, "slack", p, "").unwrap();
-        assert_eq!(get(&store, &events, "slack", p).unwrap(), None, "empty is still the clear path");
+        set(&mut store, &events, "slack", Layer::Project(p), "").unwrap();
+        assert_eq!(get(&store, &events, "slack", Layer::Project(p)).unwrap(), None, "empty is still the clear path");
     }
 
     /// An answer a choice does not offer never lands — the whole point of the author declaring candidates
@@ -525,9 +536,9 @@ mod tests {
             "task.done,task.done",         // the same one twice
             "task.done,none",              // the reserved word is not a candidate to mix in
         ] {
-            assert!(set(&mut store, &events, "slack", p, bad).is_err(), "'{bad}' must not be stored");
+            assert!(set(&mut store, &events, "slack", Layer::Project(p), bad).is_err(), "'{bad}' must not be stored");
         }
-        assert_eq!(get(&store, &events, "slack", p).unwrap(), None, "nothing landed from the refusals");
+        assert_eq!(get(&store, &events, "slack", Layer::Project(p)).unwrap(), None, "nothing landed from the refusals");
     }
 
     /// The state each answer reads as (`AMB-D-415`) — one naming, for every face that has to say which of
@@ -551,9 +562,9 @@ mod tests {
     fn a_text_field_takes_the_reserved_word_as_a_line() {
         let (mut store, _dir) = store_at("word-as-line");
         let p = mk_project(&mut store, "proj");
-        set(&mut store, &text_field("greeting"), "plug", p, NONE_SELECTED).unwrap();
+        set(&mut store, &text_field("greeting"), "plug", Layer::Project(p), NONE_SELECTED).unwrap();
         assert_eq!(
-            get(&store, &text_field("greeting"), "plug", p).unwrap().as_deref(),
+            get(&store, &text_field("greeting"), "plug", Layer::Project(p)).unwrap().as_deref(),
             Some(NONE_SELECTED),
         );
     }
@@ -620,7 +631,7 @@ mod tests {
         let (mut store, _dir) = store_at("update-required");
         let p = mk_project(&mut store, "p");
         install_plugin(&store.paths.clone(), "slack", Vec::new());
-        crate::plugin_trust::enable(&mut store, "slack", p, &[], |_| true).unwrap();
+        crate::plugin_trust::enable(&mut store, "slack", Layer::Project(p), &[], |_| true).unwrap();
         let available =
             install_plugin(&store.paths.clone(), "slack", vec![required_field("webhook_url")]);
 
@@ -630,7 +641,7 @@ mod tests {
         );
 
         // Set it, and the same build goes through: presence is all this judges (`AMB-D-356`).
-        set(&mut store, &required_field("webhook_url"), "slack", p, "https://hooks/x").unwrap();
+        set(&mut store, &required_field("webhook_url"), "slack", Layer::Project(p), "https://hooks/x").unwrap();
         assert!(required_unset_for_update(&store, &available).unwrap().is_empty());
     }
 
@@ -668,11 +679,11 @@ mod tests {
 
         install_plugin(&store.paths.clone(), "slack", Vec::new());
         for id in [set_up, short] {
-            crate::plugin_trust::enable(&mut store, "slack", id, &[], |_| true).unwrap();
+            crate::plugin_trust::enable(&mut store, "slack", Layer::Project(id), &[], |_| true).unwrap();
         }
         let available =
             install_plugin(&store.paths.clone(), "slack", vec![required_field("webhook_url")]);
-        set(&mut store, &required_field("webhook_url"), "slack", set_up, "https://hooks/x").unwrap();
+        set(&mut store, &required_field("webhook_url"), "slack", Layer::Project(set_up), "https://hooks/x").unwrap();
 
         assert_eq!(
             required_unset_for_update(&store, &available).unwrap(),
@@ -681,7 +692,7 @@ mod tests {
         );
 
         // The last gate that wanted it is satisfied, so the same build goes through.
-        set(&mut store, &required_field("webhook_url"), "slack", short, "https://hooks/y").unwrap();
+        set(&mut store, &required_field("webhook_url"), "slack", Layer::Project(short), "https://hooks/y").unwrap();
         assert!(required_unset_for_update(&store, &available).unwrap().is_empty());
     }
 
@@ -695,8 +706,8 @@ mod tests {
         mk_project(&mut store, "untouched");
         let fields = vec![text_field("channel")];
 
-        crate::plugin_trust::enable(&mut store, "slack", firing, &fields, |_| true).unwrap();
-        set(&mut store, &text_field("channel"), "slack", off_with_value, "#general").unwrap();
+        crate::plugin_trust::enable(&mut store, "slack", Layer::Project(firing), &fields, |_| true).unwrap();
+        set(&mut store, &text_field("channel"), "slack", Layer::Project(off_with_value), "#general").unwrap();
 
         assert_eq!(
             intersections(&store, "slack", &fields).unwrap(),
@@ -726,8 +737,8 @@ mod tests {
         let filled = mk_project(&mut store, "filled");
         let fields = vec![required_field("webhook_url")];
 
-        crate::plugin_trust::enable(&mut store, "slack", short, &fields, |_| true).unwrap();
-        set(&mut store, &required_field("webhook_url"), "slack", filled, "https://hooks/x").unwrap();
+        crate::plugin_trust::enable(&mut store, "slack", Layer::Project(short), &fields, |_| true).unwrap();
+        set(&mut store, &required_field("webhook_url"), "slack", Layer::Project(filled), "https://hooks/x").unwrap();
 
         let rows = intersections(&store, "slack", &fields).unwrap();
         assert_eq!(rows.len(), 2);
@@ -742,7 +753,7 @@ mod tests {
         let (mut store, _dir) = store_at("intersections-secret");
         let p = mk_project(&mut store, "p");
         let fields = vec![secret_field("webhook_url")];
-        set(&mut store, &secret_field("webhook_url"), "slack", p, "https://hooks/x").unwrap();
+        set(&mut store, &secret_field("webhook_url"), "slack", Layer::Project(p), "https://hooks/x").unwrap();
 
         assert_eq!(
             intersections(&store, "slack", &fields).unwrap(),
@@ -761,7 +772,7 @@ mod tests {
     fn a_value_for_an_undeclared_key_draws_no_row() {
         let (mut store, _dir) = store_at("intersections-undeclared");
         let p = mk_project(&mut store, "p");
-        set(&mut store, &text_field("dropped"), "slack", p, "x").unwrap();
+        set(&mut store, &text_field("dropped"), "slack", Layer::Project(p), "x").unwrap();
 
         assert!(intersections(&store, "slack", &[text_field("channel")]).unwrap().is_empty());
     }
@@ -773,12 +784,12 @@ mod tests {
         let (mut store, _dir) = store_at("purge-dropped");
         let a = mk_project(&mut store, "a");
         let b = mk_project(&mut store, "b");
-        set(&mut store, &text_field("channel"), "slack", a, "#a").unwrap();
-        set(&mut store, &text_field("webhook"), "slack", a, "https://a.invalid").unwrap();
-        set(&mut store, &text_field("webhook"), "slack", b, "https://b.invalid").unwrap();
-        set(&mut store, &secret_field("token"), "slack", a, "s3cret").unwrap();
+        set(&mut store, &text_field("channel"), "slack", Layer::Project(a), "#a").unwrap();
+        set(&mut store, &text_field("webhook"), "slack", Layer::Project(a), "https://a.invalid").unwrap();
+        set(&mut store, &text_field("webhook"), "slack", Layer::Project(b), "https://b.invalid").unwrap();
+        set(&mut store, &secret_field("token"), "slack", Layer::Project(a), "s3cret").unwrap();
         // Another plugin, holding a key of the same name — the purge is one plugin's.
-        set(&mut store, &text_field("webhook"), "worktree", a, "kept").unwrap();
+        set(&mut store, &text_field("webhook"), "worktree", Layer::Project(a), "kept").unwrap();
 
         let now = [text_field("channel"), secret_field("token")];
         assert_eq!(
@@ -786,12 +797,12 @@ mod tests {
             Purged { settings: 2, secrets: 0 },
         );
 
-        assert_eq!(get(&store, &text_field("webhook"), "slack", a).unwrap(), None);
-        assert_eq!(get(&store, &text_field("webhook"), "slack", b).unwrap(), None, "every project");
-        assert_eq!(get(&store, &text_field("channel"), "slack", a).unwrap().as_deref(), Some("#a"));
-        assert_eq!(get(&store, &secret_field("token"), "slack", a).unwrap().as_deref(), Some("s3cret"));
+        assert_eq!(get(&store, &text_field("webhook"), "slack", Layer::Project(a)).unwrap(), None);
+        assert_eq!(get(&store, &text_field("webhook"), "slack", Layer::Project(b)).unwrap(), None, "every project");
+        assert_eq!(get(&store, &text_field("channel"), "slack", Layer::Project(a)).unwrap().as_deref(), Some("#a"));
+        assert_eq!(get(&store, &secret_field("token"), "slack", Layer::Project(a)).unwrap().as_deref(), Some("s3cret"));
         assert_eq!(
-            get(&store, &text_field("webhook"), "worktree", a).unwrap().as_deref(),
+            get(&store, &text_field("webhook"), "worktree", Layer::Project(a)).unwrap().as_deref(),
             Some("kept"),
             "another plugin's key of the same name is not this plugin's residue",
         );
@@ -803,14 +814,14 @@ mod tests {
     fn a_schema_that_still_declares_everything_purges_nothing() {
         let (mut store, _dir) = store_at("purge-nothing");
         let p = mk_project(&mut store, "p");
-        set(&mut store, &text_field("channel"), "slack", p, "#a").unwrap();
-        set(&mut store, &secret_field("token"), "slack", p, "s3cret").unwrap();
+        set(&mut store, &text_field("channel"), "slack", Layer::Project(p), "#a").unwrap();
+        set(&mut store, &secret_field("token"), "slack", Layer::Project(p), "s3cret").unwrap();
 
         let grown = [text_field("channel"), secret_field("token"), text_field("added")];
         assert_eq!(purge_undeclared(&mut store, "slack", &grown).unwrap(), Purged::default());
         assert!(!purge_undeclared(&mut store, "slack", &grown).unwrap().anything());
-        assert_eq!(get(&store, &text_field("channel"), "slack", p).unwrap().as_deref(), Some("#a"));
-        assert_eq!(get(&store, &secret_field("token"), "slack", p).unwrap().as_deref(), Some("s3cret"));
+        assert_eq!(get(&store, &text_field("channel"), "slack", Layer::Project(p)).unwrap().as_deref(), Some("#a"));
+        assert_eq!(get(&store, &secret_field("token"), "slack", Layer::Project(p)).unwrap().as_deref(), Some("s3cret"));
     }
 
     /// A key that stayed but stopped being a secret leaves the secret table: the new declaration is not
@@ -820,15 +831,15 @@ mod tests {
     fn a_key_that_stopped_being_a_secret_leaves_the_secret_table() {
         let (mut store, _dir) = store_at("purge-flip");
         let p = mk_project(&mut store, "p");
-        set(&mut store, &secret_field("token"), "slack", p, "s3cret").unwrap();
+        set(&mut store, &secret_field("token"), "slack", Layer::Project(p), "s3cret").unwrap();
 
         let now = [text_field("token")];
         assert_eq!(
             purge_undeclared(&mut store, "slack", &now).unwrap(),
             Purged { settings: 0, secrets: 1 },
         );
-        assert_eq!(get(&store, &secret_field("token"), "slack", p).unwrap(), None);
-        assert_eq!(get(&store, &text_field("token"), "slack", p).unwrap(), None, "and nothing moved");
+        assert_eq!(get(&store, &secret_field("token"), "slack", Layer::Project(p)).unwrap(), None);
+        assert_eq!(get(&store, &text_field("token"), "slack", Layer::Project(p)).unwrap(), None, "and nothing moved");
     }
 
     #[test]
@@ -836,9 +847,9 @@ mod tests {
         let (mut store, _dir) = store_at("floor");
         let p = mk_project(&mut store, "proj");
         let big = "x".repeat(MAX_CONFIG_VALUE_BYTES + 1);
-        assert!(set(&mut store, &text_field("k"), "plug", p, &big).is_err());
-        assert!(set(&mut store, &text_field("k"), "plug", p, "a\u{0}b").is_err());
+        assert!(set(&mut store, &text_field("k"), "plug", Layer::Project(p), &big).is_err());
+        assert!(set(&mut store, &text_field("k"), "plug", Layer::Project(p), "a\u{0}b").is_err());
         // Nothing landed from the rejected writes.
-        assert_eq!(get(&store, &text_field("k"), "plug", p).unwrap(), None);
+        assert_eq!(get(&store, &text_field("k"), "plug", Layer::Project(p)).unwrap(), None);
     }
 }

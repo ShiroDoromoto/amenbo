@@ -7,11 +7,13 @@
 //!
 //! **Four inputs, joined at the seam.** A plugin fires for an event only when all four hold:
 //!
-//! - it is **enabled** — the gate of the project the **event happened in** is open (`AMB-D-351`/`AMB-D-434`;
-//!   `install ≠ enable`, so an installed-but-not-enabled plugin never fires). The dispatcher resolves that
-//!   project from the row it drained and hands it over. An event whose project cannot be named — a deleted
-//!   task takes its project with it — fires nothing at all, which is the fail-safe side: the alternative is
-//!   opening a gate in a project the user never opened one in;
+//! - it is **enabled** — its gate is open at the layer its author declared (`AMB-D-351`/`AMB-D-434`/
+//!   `AMB-D-601`; `install ≠ enable`, so an installed-but-not-enabled plugin never fires). For the project
+//!   layer that is the gate of the project the **event happened in**, which the dispatcher resolves from
+//!   the row it drained and hands over; for the machine layer it is the one device gate, whichever project
+//!   the event came from. An event whose project cannot be named — a deleted task takes its project with it
+//!   — fires nothing at all, which is the fail-safe side: the alternative is opening a gate in a project
+//!   the user never opened one in;
 //! - it **subscribes** — the event's name is in its manifest [`events`](crate::plugin_manifest::Manifest::events);
 //! - it is **compatible** — this amenbo speaks the payload contract it reads and clears the version floor
 //!   it declares ([`plugin_compat::check`](crate::plugin_compat::check), `AMB-D-359`);
@@ -33,9 +35,11 @@
 //! once per drive.
 //!
 //! **The project is the event's own, not the caller's.** The dispatcher resolves each drained row back to
-//! the project of the record it names and hands it here, so both project-keyed reads — the gate
-//! (`AMB-D-434`) and a text setting's override (`AMB-D-356`) — are answered where the event happened rather
-//! than wherever the drive was standing. An event whose project cannot be named fires nothing (above).
+//! the project of the record it names and hands it here, so a project-layer plugin's two reads — the gate
+//! (`AMB-D-434`) and its settings (`AMB-D-356`) — are answered where the event happened rather than
+//! wherever the drive was standing. A machine-layer plugin answers both from the device instead
+//! (`AMB-D-601`), which is the same rule: the layer is the declaration's, never the caller's location. An
+//! event whose project cannot be named fires nothing (above).
 //!
 //! **A config read that errors drops that one plugin, not the event.** Delivery is best-effort
 //! (`AMB-D-352`): if a plugin's config cannot be read, the resolver warns and omits it, and the event still
@@ -90,17 +94,22 @@ impl<'a> EnabledSubscribers<'a> {
 
 impl Subscribers for EnabledSubscribers<'_> {
     fn resolve(&self, event: &str, project: Option<i64>, face: Face) -> Vec<Subscriber> {
-        // Every gate is a project's (`AMB-D-434`), so an event that names none has no switch to measure any
-        // plugin against and fires nothing — rather than being answered by a device-wide gate that no
-        // longer exists.
+        // An observation event always belongs to a project — all eleven of them are a task, a decision or a
+        // comment — so one that names none is a caller with nothing to fan out, and fires nothing. It is not
+        // the layer question: which *gate* a plugin is measured against is its author's declaration
+        // (`AMB-D-601`), asked per plugin below.
         let Some(project) = project else {
             return Vec::new();
         };
         let mut subscribers = Vec::new();
         for plugin in self.installed {
-            // Enabled in the project the event happened in (`AMB-D-351`/`AMB-D-434`) and subscribed (the
-            // event is in its manifest). A gate that cannot be read drops this plugin only (`AMB-D-352`).
-            match plugin_trust::effective_enabled_in(self.store, &plugin.name, project) {
+            let Ok(layer) = crate::plugin_layer::Layer::of(plugin.manifest.scope, Some(project)) else {
+                continue;
+            };
+            // Enabled at that gate (`AMB-D-351`/`AMB-D-434`/`AMB-D-601`) — the project the event happened in,
+            // or the device for a `scope: machine` plugin — and subscribed (the event is in its manifest). A
+            // gate that cannot be read drops this plugin only (`AMB-D-352`).
+            match plugin_trust::effective_enabled_in(self.store, &plugin.name, layer) {
                 Ok(true) => {}
                 Ok(false) => continue,
                 Err(error) => {
@@ -139,13 +148,13 @@ impl Subscribers for EnabledSubscribers<'_> {
             }
             // Resolve this plugin's own config: secret → env, text → the payload's `config` key. A read
             // that errors drops this plugin only — the event still fires for the rest (`AMB-D-352`).
-            // The values are that project's own, so what the plugin is handed here is what was set
-            // where the event happened (`AMB-D-434`).
+            // Read at the same layer the gate was (`AMB-D-434`/`AMB-D-601`), so what the plugin is handed
+            // is what was set where its switch is: that project's values, or the device's.
             let injection = match plugin_inject::resolve(
                 self.store,
                 &plugin.name,
                 &plugin.manifest.config,
-                project,
+                layer,
             ) {
                 Ok(injection) => injection,
                 Err(error) => {
@@ -184,6 +193,7 @@ impl Subscribers for EnabledSubscribers<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugin_layer::Layer;
     use crate::config::Paths;
     use crate::plugin_config;
     use crate::plugin_manifest::{ConfigField, EventSubscription, Manifest, Os};
@@ -194,7 +204,7 @@ mod tests {
         (Store::open_at(Paths::at(dir.clone())).unwrap(), dir)
     }
 
-    /// A store with one project to hang events on — the ordinary setup, since every gate is a project's
+    /// A store with one project to hang events on — the ordinary setup, since every event is a project's
     /// (`AMB-D-434`) and an event with no project fires nothing.
     fn store_in_a_project(tag: &str) -> (Store, std::path::PathBuf, i64) {
         let (mut store, dir) = store_at(tag);
@@ -204,7 +214,7 @@ mod tests {
 
     /// Open a plugin's gate in one project — what an enable does.
     fn enable_in(store: &mut Store, plugin: &str, project: i64) {
-        plugin_trust::enable(store, plugin, project, &[], |_| true).unwrap();
+        plugin_trust::enable(store, plugin, Layer::Project(project), &[], |_| true).unwrap();
     }
 
     /// A project to hang an event on.
@@ -358,8 +368,8 @@ mod tests {
     #[test]
     fn a_subscribers_own_config_is_injected_split_by_secret() {
         let (mut store, _dir, p) = store_in_a_project("inject");
-        plugin_config::set(&mut store, &secret_field("webhook_url"), "slack", p, "https://hooks/x").unwrap();
-        plugin_config::set(&mut store, &text_field("channel"), "slack", p, "#ops").unwrap();
+        plugin_config::set(&mut store, &secret_field("webhook_url"), "slack", Layer::Project(p), "https://hooks/x").unwrap();
+        plugin_config::set(&mut store, &text_field("channel"), "slack", Layer::Project(p), "#ops").unwrap();
 
         enable_in(&mut store, "slack", p);
         let plugins = [installed(

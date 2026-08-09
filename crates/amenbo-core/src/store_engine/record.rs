@@ -193,7 +193,7 @@ pub fn plugin_config(c: &PluginConfigValue) -> Record {
         c.id,
         with_audit(
             vec![
-                ("project_id", kv(c.project_id)),
+                ("project_id", kv_opt(&c.project_id)),
                 ("plugin", tv(&c.plugin)),
                 ("field_key", tv(&c.field_key)),
                 ("value", tv(&c.value)),
@@ -210,7 +210,7 @@ pub fn plugin_secret(s: &PluginSecret) -> Record {
         s.id,
         with_audit(
             vec![
-                ("project_id", kv(s.project_id)),
+                ("project_id", kv_opt(&s.project_id)),
                 ("plugin", tv(&s.plugin)),
                 ("field_key", tv(&s.field_key)),
                 ("value", tv(&s.value)),
@@ -227,7 +227,7 @@ pub fn plugin_enable(g: &PluginEnabledProject) -> Record {
         g.id,
         with_audit(
             vec![
-                ("project_id", kv(g.project_id)),
+                ("project_id", kv_opt(&g.project_id)),
                 ("plugin", tv(&g.plugin)),
             ],
             &g.created_at,

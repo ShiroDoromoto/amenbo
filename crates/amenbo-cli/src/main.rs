@@ -683,9 +683,10 @@ fn bound_dir_is_under_git() -> bool {
 /// the lines to hang on the steps their authors named (`AMB-D-571`).
 ///
 /// The filter is the callable set, and it is the same set an actual call passes
-/// ([`plugin_invoke::prepare`](amenbo_core::plugin_invoke::prepare)): installed, **enabled in the project
-/// this folder is bound to** (`AMB-D-434` — the gate is a project's, so a plugin open elsewhere is not open
-/// here), and able to run against this build (`AMB-D-359`). Naming one the call would refuse is worse than
+/// ([`plugin_invoke::prepare`](amenbo_core::plugin_invoke::prepare)): installed, **enabled at the layer its
+/// author declared** (`AMB-D-434`/`AMB-D-601` — the gate of the project this folder is bound to, so a
+/// project's plugin open elsewhere is not open here; a device plugin's one gate is open here as soon as it
+/// is open at all), and able to run against this build (`AMB-D-359`). Naming one the call would refuse is worse than
 /// leaving it out, since the AI spends a turn learning what amenbo already knew.
 ///
 /// `project` is the effective context — the folder's binding, or a human's `--project` ([`bound_project`])
@@ -728,7 +729,12 @@ fn plugins_for_agent(store: &Store, project: Option<i64>) -> PluginsAtEntry {
     let callable: Vec<_> = compatible
         .into_iter()
         .filter(|p| {
-            match amenbo_core::plugin_trust::effective_enabled_in(store, &p.name, project) {
+            // Each plugin's gate is asked at the layer its author declared (`AMB-D-601`) — this project's,
+            // or the device's for a `scope: machine` plugin, which is on here as soon as it is on at all.
+            let Ok(layer) = amenbo_core::plugin_layer::Layer::of(p.manifest.scope, Some(project)) else {
+                return false;
+            };
+            match amenbo_core::plugin_trust::effective_enabled_in(store, &p.name, layer) {
                 Ok(on) => on,
                 Err(_) => {
                     unreadable_gate = true;
@@ -1390,11 +1396,19 @@ fn plugin_catalog_remove_cmd(store: &Store, flags: &Flags, url: &str) -> Result<
     Ok(0)
 }
 
-/// The project a plugin setting belongs to (`AMB-D-434`) — never named on the command line, because it is
-/// the effective context ([`bound_project`]): the binding, or a human's `--project`. An AI cannot name one,
-/// so for it the binding is the only answer, which is exactly the reach the store enforces.
-fn plugin_config_project(store: &Store) -> Result<i64, CliError> {
-    bound_project(store).ok_or_else(|| project_required(store))
+/// The layer a plugin's settings and gate belong to (`AMB-D-434` / `AMB-D-601`) — never named on the
+/// command line. The author's `scope` picks it, and the only thing this face supplies is where it is
+/// standing: the effective context ([`bound_project`]) — the binding, or a human's `--project`. An AI cannot
+/// name one, so for it the binding is the only answer, which is exactly the reach the store enforces.
+///
+/// So there is no `--scope` here either, for the reason `plugin enable` has none: the layer is a fact about
+/// the plugin, not a choice at the call.
+fn plugin_layer(
+    store: &Store,
+    manifest: &amenbo_core::plugin_manifest::Manifest,
+) -> Result<amenbo_core::plugin_layer::Layer, CliError> {
+    amenbo_core::plugin_layer::Layer::of(manifest.scope, bound_project(store))
+        .map_err(|_| project_required(store))
 }
 
 /// The declared field this key names, or a refusal that lists the keys the author *did* declare. The
@@ -1455,10 +1469,10 @@ fn plugin_config_set_cmd(
 ) -> Result<i32, CliError> {
     let plugin = amenbo_core::plugin_installed::read(&store.paths, name).map_err(CliError::from)?;
     let field = plugin_config_field(&plugin, key)?;
-    let project = plugin_config_project(store)?;
+    let layer = plugin_layer(store, &plugin.manifest)?;
     let value = plugin_config_value(value)?;
     let cleared = value.is_empty();
-    amenbo_core::plugin_config::set(store, &field, name, project, &value).map_err(|e| {
+    amenbo_core::plugin_config::set(store, &field, name, layer, &value).map_err(|e| {
         // The boundary names the answer it turned away; a terminal is where the list of admissible ones
         // has to come with it, because there is no form here showing them (`AMB-D-415`).
         let mut refusal = CliError::from(e);
@@ -1475,7 +1489,7 @@ fn plugin_config_set_cmd(
     if flags.json {
         print_json(&json!({
             "ok": true, "action": "plugin.config.set", "plugin": name, "key": key,
-            "secret": field.secret, "project": project, "cleared": cleared,
+            "secret": field.secret, "project": layer.project_id(), "cleared": cleared,
         }));
     }
     Ok(0)
@@ -1536,9 +1550,9 @@ fn plugin_config_get_cmd(
 
     let plugin = amenbo_core::plugin_installed::read(&store.paths, name).map_err(CliError::from)?;
     let field = plugin_config_field(&plugin, key)?;
-    let project = plugin_config_project(store)?;
+    let layer = plugin_layer(store, &plugin.manifest)?;
     let value =
-        amenbo_core::plugin_config::get(store, &field, name, project).map_err(CliError::from)?;
+        amenbo_core::plugin_config::get(store, &field, name, layer).map_err(CliError::from)?;
 
     let set = value.is_some();
     let state = amenbo_core::plugin_config::answer(&field, value.as_deref());
@@ -1562,7 +1576,7 @@ fn plugin_config_get_cmd(
     if flags.json {
         let mut out = json!({
             "ok": true, "action": "plugin.config.get", "plugin": name, "key": key,
-            "secret": field.secret, "project": project, "set": set, "state": state.as_str(),
+            "secret": field.secret, "project": layer.project_id(), "set": set, "state": state.as_str(),
         });
         // A secret's value never leaves through this door, --json included: a machine reader wants to know
         // whether the setting is filled, and injection is the only thing that needs the value itself. The
@@ -1626,11 +1640,15 @@ fn plugin_install_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i32, C
 /// The two facts side by side, because `install ≠ enable` (`AMB-D-351`) is the thing a reader most often
 /// gets wrong: an installed plugin that never fires is the *normal* state, not a fault.
 ///
-/// Each plugin has exactly one switch and it is a project's (`AMB-D-434`), so **the row names every
-/// project holding that switch open** (`AMB-D-412`) rather than answering yes/no from wherever the terminal
-/// happens to stand. A truth value read from one project is not an answer: it hides the projects the plugin
-/// is still firing in, and it leaves a reader outside any project with nothing at all. An empty list *is*
-/// an answer — off everywhere.
+/// Each plugin has exactly one switch, at the layer its author declared (`AMB-D-434`/`AMB-D-601`). For the
+/// project layer **the row names every project holding that switch open** (`AMB-D-412`) rather than
+/// answering yes/no from wherever the terminal happens to stand. A truth value read from one project is not
+/// an answer: it hides the projects the plugin is still firing in, and it leaves a reader outside any
+/// project with nothing at all. An empty list *is* an answer — off everywhere.
+///
+/// A plugin declaring the machine layer has no project row to name, so its line says the device instead.
+/// Naming projects for it would be naming the wrong thing twice over — its one gate covers all of them, and
+/// none of them can turn it off.
 ///
 /// The names come through [`Store::project_list`], so the reach is folded in exactly as it is for
 /// `project list`: an AI sees its own project and never learns the others exist, and the wording says as
@@ -1662,10 +1680,23 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
     // The projects a row may name, in the order the sidebar shows them — archived ones included, since a
     // gate an archived project holds open still fires. Reach-narrowed by `project_list` itself.
     let visible = store.project_list(true).map_err(CliError::from)?.projects;
+    // The projects a plugin is on in. A `scope: machine` plugin holds no project gate (`AMB-D-601`), so it
+    // names none here — its one gate is read by `on_device` below, and the two are never both open, since
+    // the layer is settled by the declaration.
     let enabled_in = |name: &str| -> Result<Vec<&amenbo_core::query::ProjectListItem>, CliError> {
-        let open: std::collections::HashSet<i64> =
-            store.projects_with_plugin_enabled(name).map_err(CliError::from)?.into_iter().collect();
+        let open: std::collections::HashSet<i64> = store
+            .layers_with_plugin_enabled(name)
+            .map_err(CliError::from)?
+            .into_iter()
+            .filter_map(amenbo_core::plugin_layer::Layer::project_id)
+            .collect();
         Ok(visible.iter().filter(|p| open.contains(&p.id)).collect())
+    };
+    // The device gate, for the plugins that have one. Read whatever the manifest says, so a declaration
+    // that moved between installs still shows the row that is actually there rather than the one the
+    // current manifest would write.
+    let on_device = |name: &str| -> Result<bool, CliError> {
+        store.plugin_enabled_in_project(None, name).map_err(CliError::from)
     };
     // Under a narrowed reach the listing has been shown one project, so "off everywhere" is a claim it
     // cannot make; it names the project it *was* answered for instead.
@@ -1695,6 +1726,8 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
                 "author": p.manifest.author,
                 "official": p.manifest.official,
                 "enabled_projects": on,
+                "scope": p.manifest.scope.as_str(),
+                "enabled_on_device": on_device(&p.name)?,
                 "compatible": why.is_none(),
                 "incompatible_reason": why.map(|why| why.to_string()),
                 "update_available": updatable.contains(&p.name),
@@ -1712,10 +1745,15 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
     } else {
         for p in &installed {
             let on = enabled_in(&p.name)?;
-            let gate = match (on.as_slice(), only) {
-                ([], Some(here)) => format!("off in {here}"),
-                ([], None) => "off everywhere".to_string(),
-                (projects, _) => format!(
+            let device = on_device(&p.name)?;
+            // A device plugin's line says the device, because naming projects for it would be naming the
+            // wrong thing — its one gate covers every project on this machine (`AMB-D-601`).
+            let gate = match (p.manifest.scope, on.as_slice(), only) {
+                (Scope::Machine, _, _) if device => "on: this device".to_string(),
+                (Scope::Machine, _, _) => "off on this device".to_string(),
+                (_, [], Some(here)) => format!("off in {here}"),
+                (_, [], None) => "off everywhere".to_string(),
+                (_, projects, _) => format!(
                     "on: {}",
                     projects.iter().map(|p| p.name.as_str()).collect::<Vec<_>>().join(", ")
                 ),
@@ -1728,7 +1766,7 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
             if let Err(why) = plugin_compat::check(&p.manifest) {
                 // The consequence, not just the verdict: an open gate reads as "this one is working"
                 // until the line says otherwise, and that gap is the whole point of showing this here.
-                let effect = if on.is_empty() {
+                let effect = if on.is_empty() && !device {
                     "cannot run against this amenbo"
                 } else {
                     "enabled, but nothing fires"
@@ -2342,16 +2380,14 @@ fn plugin_rollback_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i32, 
     Ok(0)
 }
 
-/// The project whose gate this command is moving — the bound one (`AMB-D-434`). The refusal for a command
-/// standing in no project comes from the boundary itself, so the CLI does not restate the rule.
-fn plugin_gate(store: &Store) -> Result<i64, CliError> {
-    amenbo_core::plugin_trust::require_project(bound_project(store)).map_err(CliError::from)
-}
-
-/// Name the project a gate was moved in. Every switch is one project's (`AMB-D-434`), so the confirmation
+/// Name the layer a gate was moved at. A project switch is one project's (`AMB-D-434`), so the confirmation
 /// says which — "this project" is not the same sentence when `--project` named a folder you are not in.
-/// A project that will not read back is named by its ref rather than left unsaid.
-fn gate_project(store: &Store, project: i64) -> Result<String, CliError> {
+/// A project that will not read back is named by its ref rather than left unsaid. The device gate is one
+/// switch for the machine (`AMB-D-601`), and says so.
+fn gate_where(store: &Store, layer: amenbo_core::plugin_layer::Layer) -> Result<String, CliError> {
+    let Some(project) = layer.project_id() else {
+        return Ok("this device".to_string());
+    };
     Ok(project_name(store, Some(project))?
         .unwrap_or_else(|| amenbo_core::idref::project(project)))
 }
@@ -2388,50 +2424,61 @@ fn refuse_update_leaving_required_unset(
     ))
 }
 
-/// `plugin enable <name>` — open the bound project's gate, through the one boundary that moves that state
-/// ([`amenbo_core::plugin_trust`]). There is no `--scope`: every plugin has one switch and it is a
-/// project's (`AMB-D-434`), so this command always means one thing. Fail-closed twice over: on the
+/// `plugin enable <name>` — open the gate at the layer the plugin declares, through the one boundary that
+/// moves that state ([`amenbo_core::plugin_trust`]). There is still no `--scope`: a plugin has one switch,
+/// and *where* it sits is its author's declaration rather than a choice at the call
+/// (`AMB-D-434` / `AMB-D-601`), so this command always means one thing. Fail-closed twice over: on the
 /// plugin's compatibility declarations ([`amenbo_core::plugin_compat`], `AMB-D-359` — a plugin this amenbo
 /// cannot speak to is refused before anything is written), and on the author's `required` settings, probed
-/// in the project that gate is for.
+/// at the layer that gate is for.
+///
+/// For a `scope: machine` plugin this one act is also the consent to let it read the whole device
+/// (`AMB-D-601`) — there is no second answer to give, which is why nothing here asks for one.
 fn plugin_enable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i32, CliError> {
     let plugin = amenbo_core::plugin_installed::read(&store.paths, name).map_err(CliError::from)?;
     amenbo_core::plugin_compat::check(&plugin.manifest)
         .map_err(|incompatible| CliError::from(incompatible.into_error(name)))?;
-    let project = plugin_gate(store)?;
+    let layer = plugin_layer(store, &plugin.manifest)?;
     let fields = plugin.manifest.config.clone();
-    let satisfied = amenbo_core::plugin_config::satisfied_keys(store, name, &fields, project)
+    let satisfied = amenbo_core::plugin_config::satisfied_keys(store, name, &fields, layer)
         .map_err(CliError::from)?;
     let has_value = |f: &amenbo_core::plugin_manifest::ConfigField| {
         satisfied.iter().any(|k| k == &f.key)
     };
 
-    amenbo_core::plugin_trust::enable(store, name, project, &fields, has_value)
+    amenbo_core::plugin_trust::enable(store, name, layer, &fields, has_value)
         .map_err(CliError::from)?;
 
-    human(flags, format!("Enabled plugin: {name} ({})", gate_project(store, project)?));
+    human(flags, format!("Enabled plugin: {name} ({})", gate_where(store, layer)?));
     if flags.json {
         print_json(&json!({
             "ok": true, "action": "plugin.enable", "plugin": name,
-            "enabled": true, "project": project,
+            "enabled": true, "project": layer.project_id(),
+            "scope": plugin.manifest.scope.as_str(),
         }));
     }
     Ok(0)
 }
 
-/// `plugin disable <name>` — close this project's gate (`disable ≠ uninstall`, `AMB-D-357`).
+/// `plugin disable <name>` — close the gate at the layer this plugin sits at (`disable ≠ uninstall`,
+/// `AMB-D-357`).
 ///
 /// Deliberately does **not** require the plugin to still read as installed: this is the way to stop a
-/// plugin firing, and a broken install is exactly when that is most needed. Nothing here is read off a
-/// manifest, so a file that will not parse cannot leave a gate open.
+/// plugin firing, and a broken install is exactly when that is most needed. The manifest is read only for
+/// the one thing that cannot be guessed — which layer the gate is at — and a file that will not parse falls
+/// back to the project layer, where every plugin's gate was before `scope` came back (`AMB-D-601`). So a
+/// manifest nobody can read still cannot hold a gate open.
 fn plugin_disable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i32, CliError> {
     use amenbo_core::plugin_trust::{disable, effective_enabled_in};
 
-    let project = plugin_gate(store)?;
-    let was_enabled = effective_enabled_in(store, name, project).map_err(CliError::from)?;
-    let stopped = disable(store, name, project).map_err(CliError::from)?;
+    let scope = amenbo_core::plugin_installed::read(&store.paths, name)
+        .map_or(Scope::Project, |p| p.manifest.scope);
+    let layer = amenbo_core::plugin_layer::Layer::of(scope, bound_project(store))
+        .map_err(|_| project_required(store))?;
+    let was_enabled = effective_enabled_in(store, name, layer).map_err(CliError::from)?;
+    let stopped = disable(store, name, layer).map_err(CliError::from)?;
 
-    let where_ = gate_project(store, project)?;
+    let where_ = gate_where(store, layer)?;
     human(
         flags,
         if was_enabled {
@@ -2444,7 +2491,7 @@ fn plugin_disable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i3
     if flags.json {
         print_json(&json!({
             "ok": true, "action": "plugin.disable", "plugin": name,
-            "enabled": false, "project": project, "noop": !was_enabled,
+            "enabled": false, "project": layer.project_id(), "noop": !was_enabled,
             "dropped_queued": stopped.queued,
         }));
     }
@@ -7720,6 +7767,7 @@ fn render_discover(d: &query::DiscoverResult) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use amenbo_core::plugin_layer::Layer;
     use clap::CommandFactory;
     use std::collections::HashSet;
 
@@ -7868,7 +7916,8 @@ mod tests {
         assert!(why(&store, Some(project)).contains("no plugin is enabled"));
 
         // Switched on here: the list is the answer, and there is nothing to explain.
-        amenbo_core::plugin_trust::enable(&mut store, "notes", project, &[], |_| true).unwrap();
+        amenbo_core::plugin_trust::enable(&mut store, "notes", Layer::Project(project), &[], |_| true)
+            .unwrap();
         let at_entry = plugins_for_agent(&store, Some(project));
         assert_eq!(at_entry.list[0]["name"], "notes");
         assert_eq!(at_entry.empty_because, None, "a list in hand needs no sentence about empty ones");
@@ -7929,7 +7978,8 @@ mod tests {
         )
         .unwrap();
         let token = field("token", true);
-        amenbo_core::plugin_config::set(&mut store, &token, "watcher", project, "abc").unwrap();
+        amenbo_core::plugin_config::set(&mut store, &token, "watcher", Layer::Project(project), "abc")
+            .unwrap();
 
         // A build whose new schema keeps the same required set is satisfied — nothing to fill.
         let same = manifest(serde_json::json!([{ "key": "token", "label": "T", "required": true }]));
@@ -7944,7 +7994,8 @@ mod tests {
 
         // Enable it, then the two builds diverge: the satisfied one passes, the one that grew a required
         // field is held back and names it.
-        plugin_trust::enable(&mut store, "watcher", project, &installed.config, |_| true).unwrap();
+        plugin_trust::enable(&mut store, "watcher", Layer::Project(project), &installed.config, |_| true)
+            .unwrap();
         assert!(refuse_update_leaving_required_unset(&store, &same).is_ok());
         let held = refuse_update_leaving_required_unset(&store, &grew).unwrap_err();
         assert_eq!(held.code(), "invalid_value");

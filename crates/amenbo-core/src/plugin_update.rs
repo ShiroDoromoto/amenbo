@@ -680,6 +680,7 @@ pub fn rollback(paths: &Paths, name: &str) -> Result<RolledBack> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugin_layer::Layer;
     use crate::plugin_manifest::{Arch, Asset, Os};
 
     /// An arch-agnostic platform key (`<os>`).
@@ -1102,7 +1103,7 @@ mod tests {
         install_on_disk(&store.paths.clone(), manifest, b"old");
         for f in &manifest.config {
             let value = if f.secret { "s3cret" } else { "main" };
-            plugin_config::set(store, f, &manifest.name, project, value).unwrap();
+            plugin_config::set(store, f, &manifest.name, Layer::Project(project), value).unwrap();
         }
     }
 
@@ -1253,14 +1254,14 @@ mod tests {
 
         assert_eq!(replaced.purged, Purged { settings: 0, secrets: 1 });
         assert_eq!(
-            plugin_config::get(&store, &field("base", false), "worktree", project)
+            plugin_config::get(&store, &field("base", false), "worktree", Layer::Project(project))
                 .unwrap()
                 .as_deref(),
             Some("main"),
             "what the new build still declares keeps its value",
         );
         assert_eq!(
-            plugin_config::get(&store, &field("token", true), "worktree", project).unwrap(),
+            plugin_config::get(&store, &field("token", true), "worktree", Layer::Project(project)).unwrap(),
             None,
         );
     }
@@ -1282,7 +1283,7 @@ mod tests {
             retain_and_place(&paths, &update_of(before, after), b"new", &Origin::Official).unwrap();
         assert_eq!(purge_dropped(&mut store, &replaced.to), Purged::default());
         assert_eq!(
-            plugin_config::get(&store, &field("token", true), "worktree", project)
+            plugin_config::get(&store, &field("token", true), "worktree", Layer::Project(project))
                 .unwrap()
                 .as_deref(),
             Some("s3cret"),
@@ -1405,7 +1406,7 @@ mod tests {
             "the build that declared it is running again",
         );
         assert_eq!(
-            plugin_config::get(&store, &field("base", false), "worktree", project).unwrap(),
+            plugin_config::get(&store, &field("base", false), "worktree", Layer::Project(project)).unwrap(),
             None,
             "and the value it asked for does not come back with it",
         );

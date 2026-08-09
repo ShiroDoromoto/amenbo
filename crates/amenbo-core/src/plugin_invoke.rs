@@ -95,8 +95,10 @@ pub fn prepare(
     let plugin = plugin_installed::read(&store.paths, name)?;
     crate::plugin_compat::check(&plugin.manifest).map_err(|why| why.into_error(name))?;
 
-    let project = require_project(project)?;
-    if !effective_enabled_in(store, name, project)? {
+    // The gate and the settings are read at the layer the author declared, not at the folder this ran in
+    // (`AMB-D-601`); for the ordinary `scope: project` plugin the two are the same thing.
+    let layer = crate::plugin_layer::Layer::of(plugin.manifest.scope, project)?;
+    if !effective_enabled_in(store, name, layer)? {
         let cmd = crate::config::Paths::command_name();
         return Err(crate::error::Error::invalid(
             format!(
@@ -105,7 +107,7 @@ pub fn prepare(
         ));
     }
 
-    let injection = plugin_inject::resolve(store, name, &plugin.manifest.config, project)?;
+    let injection = plugin_inject::resolve(store, name, &plugin.manifest.config, layer)?;
     let mut invocation =
         PluginInvocation::new(plugin.program).stdin_json(command_stdin(injection.text));
     for arg in args {
@@ -115,7 +117,10 @@ pub fn prepare(
         invocation = invocation.env(key, value);
     }
     // The read-back path (`AMB-D-406`): the store to call into, and the window to read it through — which is
-    // the gate this run just passed, since what a plugin may observe is what it may read.
+    // the gate this run just passed, since what a plugin may observe is what it may read. Still one
+    // project's window whatever the plugin's layer: opening it for a `scope: machine` plugin is
+    // `AMB-T-2869`'s, and until then such a plugin is asked for a project here like any other.
+    let project = require_project(project)?;
     for (key, value) in plugin_callback::env(&store.paths.base_dir, plugin_callback::reach_of(project)) {
         invocation = invocation.env(key, value);
     }

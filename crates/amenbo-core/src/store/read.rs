@@ -382,10 +382,10 @@ impl Store {
         Ok(crate::store_engine::read::task_commits(self.engine.conn(), task_id)?)
     }
 
-    /// One plugin text field's value in this project, or `None` when it is unset (`AMB-D-434`).
+    /// One plugin text field's value at this layer, or `None` when it is unset (`AMB-D-434` / `AMB-D-601`).
     pub fn plugin_config_value(
         &self,
-        project_id: i64,
+        project_id: Option<i64>,
         plugin: &str,
         field_key: &str,
     ) -> Result<Option<String>> {
@@ -397,12 +397,12 @@ impl Store {
         )?)
     }
 
-    /// One plugin secret field's value in this project, or `None` when it is unset (`AMB-D-434`) — read
+    /// One plugin secret field's value at this layer, or `None` when it is unset (`AMB-D-434`) — read
     /// from the table an `export` must leave. The only caller that wants the value itself is the run-time
     /// injection ([`crate::plugin_inject`]); a face asks whether it is set and stops there.
     pub fn plugin_secret_value(
         &self,
-        project_id: i64,
+        project_id: Option<i64>,
         plugin: &str,
         field_key: &str,
     ) -> Result<Option<String>> {
@@ -414,9 +414,9 @@ impl Store {
         )?)
     }
 
-    /// Whether this project holds a plugin's gate open (`AMB-D-434`) — the row's presence, which is the
-    /// whole answer ([`crate::plugin_trust::effective_enabled_in`] is the boundary's name for it).
-    pub fn plugin_enabled_in_project(&self, project_id: i64, plugin: &str) -> Result<bool> {
+    /// Whether this layer holds a plugin's gate open (`AMB-D-434` / `AMB-D-601`) — the row's presence, which
+    /// is the whole answer ([`crate::plugin_trust::effective_enabled_in`] is the boundary's name for it).
+    pub fn plugin_enabled_in_project(&self, project_id: Option<i64>, plugin: &str) -> Result<bool> {
         Ok(crate::store_engine::read::plugin_enabled_in_project(
             self.engine.conn(),
             project_id,
@@ -424,38 +424,46 @@ impl Store {
         )?)
     }
 
-    /// Every project holding a plugin's gate open (`AMB-D-434`), whether or not the caller is standing in
-    /// one of them — the twin of [`Self::plugin_enabled_in_project`] for the judgements that are about the
-    /// plugin rather than about a screen, such as the `required` re-check an update runs
+    /// Every **layer** holding a plugin's gate open (`AMB-D-434` / `AMB-D-601`), whether or not the caller
+    /// is standing in one of them — the twin of [`Self::plugin_enabled_in_project`] for the judgements that
+    /// are about the plugin rather than about a screen, such as the `required` re-check an update runs
     /// ([`crate::plugin_config::required_unset_for_update`]).
-    pub fn projects_with_plugin_enabled(&self, plugin: &str) -> Result<Vec<i64>> {
+    ///
+    /// Layers rather than projects, because a `scope: machine` plugin's one gate is nobody's project and a
+    /// list of project ids would leave it out — silently, and exactly where an update is deciding whether a
+    /// running plugin would be left without a value its author marked `required`.
+    pub fn layers_with_plugin_enabled(&self, plugin: &str) -> Result<Vec<crate::plugin_layer::Layer>> {
+        use crate::plugin_layer::Layer;
         let conn = self.engine.conn();
-        let mut projects = Vec::new();
+        let mut layers = Vec::new();
         for id in crate::store_engine::read::plugin_enable_row_ids(conn, plugin)? {
             if let Some(row) = crate::store_engine::read::plugin_enable_row_by_id(conn, id)? {
-                projects.push(row.project_id);
+                layers.push(row.project_id.map_or(Layer::Device, Layer::Project));
             }
         }
-        Ok(projects)
+        Ok(layers)
     }
 
     /// Every project holding a value for one plugin — either road, since a setting is a setting whichever
     /// table the author's `secret` flag sent it to (`AMB-D-356`). Ascending, each project once.
     ///
-    /// The value-side twin of [`Self::projects_with_plugin_enabled`], and asked for the same reason: a
+    /// The value-side twin of [`Self::layers_with_plugin_enabled`], and asked for the same reason: a
     /// project that filled a plugin in and then turned it off still has settings there
     /// ([`crate::plugin_config::intersections`] draws it a row), and no gate would name it.
+    ///
+    /// Projects only: this answers a face that lists **project** crossings, and the device layer is not one
+    /// of them (`AMB-D-601`). A device row is skipped rather than folded into some project's.
     pub fn projects_with_plugin_values(&self, plugin: &str) -> Result<Vec<i64>> {
         let conn = self.engine.conn();
         let mut projects = Vec::new();
         for id in crate::store_engine::read::plugin_config_row_ids(conn, plugin)? {
             if let Some(row) = crate::store_engine::read::plugin_config_row_by_id(conn, id)? {
-                projects.push(row.project_id);
+                projects.extend(row.project_id);
             }
         }
         for id in crate::store_engine::read::plugin_secret_row_ids(conn, plugin)? {
             if let Some(row) = crate::store_engine::read::plugin_secret_row_by_id(conn, id)? {
-                projects.push(row.project_id);
+                projects.extend(row.project_id);
             }
         }
         projects.sort_unstable();

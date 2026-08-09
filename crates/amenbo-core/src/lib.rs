@@ -51,6 +51,7 @@ pub mod plugin_inject;
 pub mod plugin_install;
 pub mod plugin_installed;
 pub mod plugin_invoke;
+pub mod plugin_layer;
 pub mod plugin_log;
 pub mod plugin_manifest;
 pub mod plugin_payload;

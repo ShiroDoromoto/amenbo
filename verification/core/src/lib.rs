@@ -512,6 +512,13 @@ const REGISTRY: &[OpSpec] = &[
     // way an author writes them. It is the author's word too, and no published plugin writes one yet, so
     // the road to a step carrying a tool is only walkable once a block here declares it.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-agent", required: &["name", "when"], refs: &[], strings: &["name", "when", "cmd", "does", "steps"], binds: false },
+    // An installed plugin declaring the layer it lives at — one project's rows, or the device's.
+    // Same reason as the declarations above it: the layer is the author's word, a manifest
+    // saying nothing means `project`, and **every plugin the official catalog serves says nothing** — so
+    // the device layer is a state no install reaches, and the road a machine-wide plugin walks is only
+    // walkable once this writes the declaration onto the installed manifest. Everything after it is
+    // amenbo's own: which rows the enable opens, and how wide a window the run is handed.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-scope", required: &["name", "scope"], refs: &[], strings: &["name", "scope"], binds: false },
     // An installed plugin that is nobody's but its author's. The badge is the catalog's to grant and no
     // author can write it onto themselves, which is what makes it the one thing amenbo can safely split
     // a stranger from a colleague by — and it is also why a road cannot reach a stranger by installing

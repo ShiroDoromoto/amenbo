@@ -373,6 +373,37 @@ impl Driver<'_> {
                 };
                 Ok(Outcome::action(format!("`{name}` now says for itself: {when}{hung}")))
             }
+            // The layer an author declared, written onto the installed manifest — a project's rows, or
+            // the device's. It arrives here for the same reason a declared setting does:
+            // the layer is the author's word, a manifest saying nothing means `project`, and no plugin
+            // the official catalog serves says anything — so there is no install that reaches a
+            // machine-wide plugin. What follows is amenbo's own doing: which rows the enable opens, and
+            // how wide a window a launched run is handed.
+            "declare-scope" => {
+                let name = req_str(with, "name")?;
+                let scope = req_str(with, "scope")?;
+                // The vocabulary is closed, and a word outside it would be written onto the manifest
+                // and read back as a manifest amenbo cannot parse — a failure two steps from the typo.
+                if !matches!(scope, "project" | "machine") {
+                    return Err(format!(
+                        "`{scope}` is not a layer a manifest declares — it is `project` or `machine`"
+                    ));
+                }
+                let path = self.session.home.join("plugins").join(name).join("manifest.json");
+                let raw = std::fs::read_to_string(&path)
+                    .map_err(|e| format!("could not read {}: {e}", path.display()))?;
+                let mut manifest: serde_json::Value = serde_json::from_str(&raw)
+                    .map_err(|e| format!("{} is not the manifest it should be: {e}", path.display()))?;
+                manifest["scope"] = serde_json::Value::String(scope.to_string());
+                std::fs::write(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?)
+                    .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+                Ok(Outcome::action(match scope {
+                    "machine" => format!(
+                        "`{name}` is installed as the machine's now — its gate, settings and secrets sit at the device"
+                    ),
+                    _ => format!("`{name}` is installed as one project's now"),
+                }))
+            }
             // The badge off, so what is installed is a stranger's. Nothing a road does with amenbo can
             // reach this state: the badge is the catalog's to grant, every plugin the official catalog
             // serves arrives with it, and an author who could write it onto themselves would be the

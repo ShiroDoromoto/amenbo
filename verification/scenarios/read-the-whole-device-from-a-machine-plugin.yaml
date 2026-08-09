@@ -1,0 +1,145 @@
+# The other window a plugin can be handed, and the one the road out for a carrier depends on. A window
+# is the gate read back, and which gate that is comes from the layer the author declared: a plugin that
+# says nothing fires for one project and reads that project, which is what the scenario beside this one
+# walks. One that declares `scope: machine` fires at the device, so the device is what it reads.
+#
+# It matters because of what a carrier is. Something keeping a copy of this store elsewhere holds the
+# backlog of the machine, not of one project at a time — thirteen projects would otherwise mean thirteen
+# servers, thirteen keys and thirteen pairings, which is the whole reason the machine layer exists at
+# all. So the thing to prove is not that a wider window exists but that it really is wider: the work of
+# a project the plugin was never launched in comes back through it.
+#
+# The declaration is written onto the installed manifest by the driver, because no plugin the official
+# catalog serves declares one (see the op's own note) — everything after it is amenbo's.
+id: read-the-whole-device-from-a-machine-plugin
+title: A plugin its author declared the machine's is handed the device as its window, and reads the work of a project it was never launched in
+description: >
+  Install a plugin, leave it declaring itself the machine's, and enable it — that enable is the whole of
+  the consent, and it opens the device's gate rather than a project's. File work here and more of it in a
+  second project, then ask from inside the launched plugin, where a window is what it will be in the wild:
+  the number it is handed names no project, because the device is not one; the picture it takes carries
+  the work of both projects, including the one it was never launched in; and reading on from a cursor
+  names that same whole-device window back.
+steps_cli:
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: worktree
+
+  # The layer, before the gate. An enable writes the rows the declaration picks, so a plugin enabled
+  # first would have opened a project's gate and be holding the wrong one.
+  - type: action
+    domain: plugin
+    op: declare-scope
+    with:
+      name: worktree
+      scope: machine
+
+  # One enable, and no second question. Opening the gate of a plugin that says it is the machine's *is*
+  # the consent to let it read the machine — there is no switch beside it to answer as well.
+  - type: action
+    domain: plugin
+    op: enable
+    with:
+      name: worktree
+
+  - type: action
+    domain: plugin
+    op: read-back-program
+    with:
+      name: worktree
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — filed where the plugin was launched
+    as: here
+
+  # And work in a project this plugin was never launched in. For a plugin at the project layer this is
+  # where "outside" lives; for one at the device layer there is no outside, and that is what is under
+  # test.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: scenario-other
+    as: other
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — filed in the project next door
+    as: next_door
+
+  - type: action
+    domain: task
+    op: move
+    with:
+      target: next_door
+      project: other
+
+  # The cheap question first, as a carrier really asks it. What comes back names the window it answered
+  # for, and for this one that name is nothing — the device is not a project, so a number said to belong
+  # to one would be a carrier watching a corner of what it holds.
+  - type: action
+    domain: plugin
+    op: run
+    with:
+      name: worktree
+      command: version
+
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: '"project_id": null'
+
+  # The picture. Its own project's work is in it, as it is for a plugin at the project layer.
+  - type: action
+    domain: plugin
+    op: run
+    with:
+      name: worktree
+      command: carry
+
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: filed where the plugin was launched
+
+  # And the line this whole road exists for: the project next door travelled too. A device-wide plugin
+  # that came back holding one project's work would be a carrier quietly copying a fraction of the
+  # backlog its user thinks it has.
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: filed in the project next door
+
+  # Reading on from the picture, which is the call a carrier makes on every pass after the first. It
+  # names the same whole-device window back, so a carrier holding cursors from two windows can still
+  # tell which one this page is of.
+  - type: action
+    domain: plugin
+    op: run
+    with:
+      name: worktree
+      command: changes
+      args:
+        - --since=0
+
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: '"cursor"'
+
+  - type: assert
+    domain: plugin
+    op: returned
+    with:
+      contains: '"project_id": null'

@@ -213,6 +213,47 @@ impl<'de> Deserialize<'de> for Platform {
     }
 }
 
+/// **What layer this plugin lives at** (`AMB-D-601`) — declared by the author, because only the author
+/// knows which one is meaningful for their plugin.
+///
+/// A user is never shown two switches for the same plugin (`AMB-D-379`): the layer is settled by this
+/// declaration, so `plugin enable <name>` always means exactly one thing. A notifier is answered per
+/// project ("do I want this here"), while a plugin that carries the whole device's backlog out has nothing
+/// a project could usefully say about it — one server, one pairing, one answer, not one per project.
+///
+/// The layer decides two things, each its own work: **where the enable, the settings and the secrets are
+/// written** (a project's rows, or the device's — `AMB-T-2868`), and **what reach the runner hands the
+/// plugin** (that project, or the whole device — `AMB-T-2869`). Both stay in the store either way: a
+/// device-wide plugin is not a return to `config.json`, so it rides backups and comes back on a restore
+/// (`AMB-D-434`'s three surviving grounds).
+///
+/// **There is no second scope beside it.** The tier a config *value* was written at is gone (`AMB-D-434`),
+/// and it is not coming back: settings do not gain a machine default a project overrides. This declaration
+/// picks the one layer the whole plugin — gate, settings, secrets, reach — lives at.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Scope {
+    /// A project's plugin — the default, and what most plugins want. A project that has not enabled it
+    /// does not run it, and it sees that project and nothing else.
+    #[default]
+    Project,
+    /// The device's plugin. Enabled once for the machine and reading every project on it, because its work
+    /// is the machine's rather than any one project's — a per-project answer would be a switch that looks
+    /// like it does something and does not. Enabling one *is* the consent to let it read the whole device
+    /// (`AMB-D-601`), so nothing asks a second time.
+    Machine,
+}
+
+impl Scope {
+    /// The wire token.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Scope::Project => "project",
+            Scope::Machine => "machine",
+        }
+    }
+}
+
 /// **Which face fires a hook** (`AMB-D-383`) — the short-lived CLI a person or their AI drives, or the
 /// long-lived GUI.
 ///
@@ -434,6 +475,18 @@ pub struct Manifest {
     /// on the way out, because the digest is over bytes that do not exist until the catalog publishes them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detail_sum: Option<String>,
+    /// **What layer this plugin lives at** — a project's, or the device's ([`Scope`], `AMB-D-601`).
+    /// Absent means [`Scope::Project`], which is both the answer that fits most plugins and the safe one:
+    /// a plugin that declares nothing sees the one project that turned it on. Declaring `machine` is the
+    /// author saying their plugin's work is the machine's, and the faces then say so where a user takes it
+    /// on — it reads every project on the device.
+    ///
+    /// The default is what keeps the entries already published working unchanged: none of them writes this
+    /// key, and none of them has to be republished to keep passing the door. A value outside the two is
+    /// refused where every other shape error is (`AMB-D-354`): the manifest does not parse, so it never
+    /// reaches the rules or the catalog.
+    #[serde(default)]
+    pub scope: Scope,
     /// The event-payload contract version this plugin reads (`AMB-D-349` — a single integer `v` for the
     /// whole contract, evolving additively). It lets amenbo notice when its own `v` has moved past what a
     /// plugin understands and warn or refuse rather than silently feed it a payload it cannot parse
@@ -775,6 +828,7 @@ mod tests {
             "url": "https://example.com/worktree-v1.tar.gz",
             "checksum": "sha256:deadbeef",
             "official": true,
+            "scope": "project",
             "payload_v": 1,
             "min_amenbo": "1.8.0"
         })
@@ -802,21 +856,33 @@ mod tests {
         assert_eq!(Os::parse("bsd"), None);
     }
 
-    /// A plugin is enabled per project and nothing declares that (`AMB-D-434`), so a manifest written
-    /// while `scope` still existed is read as one that never had it: the key is dropped in silence,
-    /// whatever it says. Refusing it would strand every already-published entry on a door it passed
-    /// yesterday, and honouring it would keep the layer this removed.
+    /// The layer is the author's declaration (`AMB-D-601`): absent means a project's plugin — the safe
+    /// answer, since it then sees only what turned it on — and a value outside the two is a manifest that
+    /// does not parse, which is where every other shape error is caught. The default is what lets the
+    /// three entries already published keep passing the door without being republished.
     #[test]
-    fn a_scope_left_over_from_an_older_manifest_is_dropped_in_silence() {
-        for leftover in ["project", "machine", "global", ""] {
+    fn the_layer_defaults_to_project_and_rejects_anything_else() {
+        let mut v = full_json();
+        v.as_object_mut().unwrap().remove("scope");
+        let m: Manifest = serde_json::from_value(v).unwrap();
+        assert_eq!(m.scope, Scope::Project, "an undeclared layer is the project's");
+
+        let mut machine = full_json();
+        machine["scope"] = serde_json::json!("machine");
+        let m: Manifest = serde_json::from_value(machine).unwrap();
+        assert_eq!(m.scope, Scope::Machine);
+        assert_eq!(serde_json::to_value(&m).unwrap()["scope"], serde_json::json!("machine"));
+
+        for bad in ["global", "workspace", "device", "Project", ""] {
             let mut v = full_json();
-            v["scope"] = serde_json::json!(leftover);
-            let m: Manifest =
-                serde_json::from_value(v).unwrap_or_else(|e| panic!("'{leftover}' must parse: {e}"));
-            let out = serde_json::to_value(&m).unwrap();
-            assert_eq!(out.get("scope"), None, "and it is not carried back out");
-            assert_eq!(out, full_json(), "the rest of the document is what it was");
+            v["scope"] = serde_json::json!(bad);
+            assert!(
+                serde_json::from_value::<Manifest>(v).is_err(),
+                "a layer outside the vocabulary must not parse: {bad}"
+            );
         }
+        assert_eq!(Scope::Project.as_str(), "project");
+        assert_eq!(Scope::Machine.as_str(), "machine");
     }
 
     #[test]

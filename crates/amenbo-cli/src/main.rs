@@ -24,6 +24,7 @@ use amenbo_core::model::{ActorKind, Attachment, AttachmentTarget, Priority, Task
 use amenbo_core::ops::Position;
 use amenbo_core::plugin_drive::Face;
 use amenbo_core::plugin_installed;
+use amenbo_core::plugin_manifest::Scope;
 use amenbo_core::plugin_runner::Waiting;
 use amenbo_core::plugin_subscribe::EnabledSubscribers;
 use amenbo_core::reach::Reach;
@@ -1591,6 +1592,18 @@ fn plugin_install_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i32, C
         amenbo_core::plugin_install::install(&store.paths, name).map_err(CliError::from)?;
 
     human(flags, format!("Installed plugin: {name} — {}", installed.manifest.desc));
+    // What the author declared about the layer, said in words rather than as one more flag to read
+    // (`AMB-D-601`). A device-wide plugin is the one a person has to know about *before* they open its
+    // gate, because opening it is itself the consent to let it read every project on this machine — so it
+    // is said here, where the plugin is taken on, and the sentence is derived from the declaration rather
+    // than being a second switch beside it. A project's plugin says nothing: that is the ordinary case,
+    // and the line below already tells the reader whose gate is about to open.
+    if installed.manifest.scope == Scope::Machine {
+        human(
+            flags,
+            "It declares `scope: machine`: enabling it lets it read every project on this device, not just this one.",
+        );
+    }
     human(flags, format!("It is not enabled yet: `{} plugin enable {name}` opens its gate.", Paths::command_name()));
     if flags.json {
         print_json(&json!({
@@ -1598,6 +1611,7 @@ fn plugin_install_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i32, C
             "desc": installed.manifest.desc,
             "author": installed.manifest.author,
             "official": installed.manifest.official,
+            "scope": installed.manifest.scope.as_str(),
             "events": installed.manifest.events,
             "home": installed.home.display().to_string(),
             "program": installed.program.display().to_string(),

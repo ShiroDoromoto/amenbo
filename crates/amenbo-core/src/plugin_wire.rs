@@ -29,7 +29,9 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::plugin_manifest::{AgentGuide, Asset, ConfigField, EventSubscription, Manifest, Os, Platform};
+use crate::plugin_manifest::{
+    AgentGuide, Asset, ConfigField, EventSubscription, Manifest, Os, Platform, Scope,
+};
 
 /// **What a browse view draws** — the half of a manifest that rides in `catalog.json`, which everyone
 /// fetches whole (`AMB-D-385`). Nothing an install needs is here, and that is the point: the signature
@@ -78,8 +80,8 @@ pub struct ListEntry {
 /// **What an install needs** — the half of a manifest that rides in `plugins/<name>.json`, fetched for one
 /// plugin at a time (`AMB-D-385`). The signature and checksums live here because they are needed *before*
 /// the asset is downloaded and so can never travel inside it, and the rest is what the plugin has to be run
-/// correctly: what it subscribes to, what it can be configured with, and which contract versions it
-/// speaks.
+/// correctly: what layer it lives at, what it subscribes to, what it can be configured with, and which
+/// contract versions it speaks.
 ///
 /// Every field is optional or defaulted, exactly as on [`Manifest`], so a detail document round-trips what
 /// the author wrote rather than spelling out defaults they omitted.
@@ -102,6 +104,11 @@ pub struct Detail {
     /// One distributable per platform, for a plugin built per platform (`AMB-D-381`).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub assets: BTreeMap<Platform, Asset>,
+    /// What layer the plugin lives at — a project's, or the device's (`AMB-D-601`). It rides in the detail
+    /// rather than the list because it is read where a plugin is taken on and run, not where a browse view
+    /// draws a row.
+    #[serde(default)]
+    pub scope: Scope,
     /// The payload contract version the plugin reads (`AMB-D-349`).
     pub payload_v: u32,
     /// The minimum amenbo version the plugin needs (`AMB-D-359`).
@@ -151,6 +158,7 @@ pub fn split(manifest: &Manifest) -> (ListEntry, Detail) {
         checksum: manifest.checksum.clone(),
         signature: manifest.signature.clone(),
         assets: manifest.assets.clone(),
+        scope: manifest.scope,
         payload_v: manifest.payload_v,
         min_amenbo: manifest.min_amenbo.clone(),
         config: manifest.config.clone(),
@@ -187,6 +195,7 @@ pub fn join(entry: &ListEntry, detail: &Detail) -> Manifest {
         checksum: detail.checksum.clone(),
         signature: detail.signature.clone(),
         assets: detail.assets.clone(),
+        scope: detail.scope,
         payload_v: detail.payload_v,
         min_amenbo: detail.min_amenbo.clone(),
         config: detail.config.clone(),
@@ -222,6 +231,7 @@ mod tests {
             },
             "official": true,
             "detail_sum": format!("sha256:{}", "3".repeat(64)),
+            "scope": "machine",
             "payload_v": 1,
             "min_amenbo": "1.8.0",
             "config": [{ "key": "base", "label": "Base branch", "secret": false, "required": false }],
@@ -291,6 +301,7 @@ mod tests {
         assert_eq!(detail.checksum, "sha256:".to_string() + &"0".repeat(64));
         assert!(detail.signature.is_some());
         assert_eq!(detail.assets.len(), 1);
+        assert_eq!(detail.scope, Scope::Machine, "the layer installs, and is not a row a list draws");
         assert_eq!(detail.payload_v, 1);
         assert_eq!(detail.min_amenbo.as_deref(), Some("1.8.0"));
         assert_eq!(detail.config.len(), 1);
@@ -311,6 +322,41 @@ mod tests {
         let (entry, detail) = split(&manifest);
 
         assert_eq!(join(&entry, &detail), Manifest { detail_sum: None, ..manifest });
+    }
+
+    /// **The door and the author's tool answer the same about the layer** (`AMB-D-601`). They meet the
+    /// declaration in different documents — an install reads a [`Detail`] off the catalog, `plugin validate`
+    /// reads a whole [`Manifest`] off the author's disk — but both read it through the one `Scope` type, so
+    /// there is no second vocabulary to drift. An author whose manifest passes therefore knows an install
+    /// will not refuse it over this, and a token outside the two is refused on both roads before any rule
+    /// is ever asked.
+    #[test]
+    fn the_two_roads_in_read_the_layer_the_same_way() {
+        for (written, expected) in [("project", Scope::Project), ("machine", Scope::Machine)] {
+            let mut m = serde_json::to_value(full()).unwrap();
+            m["scope"] = serde_json::json!(written);
+            let manifest: Manifest = serde_json::from_value(m).expect("the author's road");
+            let (_, detail) = split(&manifest);
+            let detail: Detail =
+                serde_json::from_value(serde_json::to_value(&detail).unwrap()).expect("the door's");
+            assert_eq!((manifest.scope, detail.scope), (expected, expected));
+        }
+
+        for unknown in ["global", "workspace", "device", ""] {
+            let mut m = serde_json::to_value(full()).unwrap();
+            m["scope"] = serde_json::json!(unknown);
+            assert!(
+                serde_json::from_value::<Manifest>(m).is_err(),
+                "`plugin validate` refuses '{unknown}'"
+            );
+
+            let mut d = serde_json::to_value(split(&full()).1).unwrap();
+            d["scope"] = serde_json::json!(unknown);
+            assert!(
+                serde_json::from_value::<Detail>(d).is_err(),
+                "and the door refuses '{unknown}' too, for the same reason"
+            );
+        }
     }
 
     /// The digest the catalog put on the entry is what the joined manifest records, which is what makes an
@@ -346,6 +392,7 @@ mod tests {
         for absent in ["signature", "assets", "min_amenbo", "config", "events", "agent"] {
             assert!(detail_json.get(absent).is_none(), "{absent} was not written, so it is not emitted");
         }
+        assert_eq!(detail_json["scope"], "project", "the default the author relied on is still stated");
         assert_eq!(detail_json["payload_v"], 1);
 
         let entry_json = serde_json::to_value(&entry).unwrap();

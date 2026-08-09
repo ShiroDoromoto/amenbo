@@ -1003,6 +1003,7 @@ mod tests {
             events: Vec::new(),
             official: true,
             detail_sum: None,
+            scope: crate::plugin_manifest::Scope::Project,
             payload_v: 1,
             min_amenbo: Some("1.8.0".into()),
             config: vec![

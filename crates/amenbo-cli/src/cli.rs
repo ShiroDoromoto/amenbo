@@ -435,8 +435,8 @@ pub enum PluginCmd {
 
     /// List the plugins installed on this machine, and whether each one is enabled (`AMB-D-350`/`AMB-D-351`).
     /// Reads only what is on disk under the app-data `plugins/` directory plus this machine's enable
-    /// state — no network, no catalog. In a bound folder the gate shown is the effective one: this
-    /// project's override where it declares one, the machine answer otherwise.
+    /// state — no network, no catalog. A row names every project holding the plugin's switch open
+    /// (`AMB-D-434`/`AMB-D-412`) rather than answering yes/no from wherever the terminal happens to stand.
     List,
 
     /// Install a plugin from the catalogs: resolve the name across the official catalog and every
@@ -447,6 +447,11 @@ pub enum PluginCmd {
     /// which catalog it came from, which is where `plugin update` will go back to. **Installing never
     /// enables**: the plugin lands inert and `plugin enable` is the separate act. A name already installed
     /// is refused rather than overwritten (`AMB-D-360`).
+    ///
+    /// What the author declared about the plugin's layer is said here, in words (`AMB-D-601`): a plugin
+    /// that declares `scope: machine` is the device's, so enabling it lets it read every project on this
+    /// machine, and that is worth knowing before the gate is opened rather than after. A plugin that
+    /// declares nothing is a project's and says nothing extra.
     Install {
         /// the plugin's name, as the catalog lists it
         name: String,

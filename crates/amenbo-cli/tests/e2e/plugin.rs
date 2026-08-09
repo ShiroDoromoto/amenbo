@@ -542,6 +542,64 @@ fn plugin_validate_json_splits_the_manifest_into_the_two_documents_the_catalog_s
     assert!(detail.get("assets").is_none(), "an absent optional field stays absent here too");
 }
 
+/// **What an author learns about the layer before they open a catalog PR** (`AMB-D-601`). `scope` is the
+/// author's declaration of whether their plugin is a project's or the device's, and `plugin validate` is
+/// the one place they can find out what amenbo will make of it: a declaration amenbo does not know is
+/// refused here exactly as it would be at the install door, and one it does know comes back inside the
+/// detail document the catalog will publish. Absent is the answer that matters most — the entries already
+/// in the catalog write no `scope` at all, and they must keep passing unchanged.
+#[test]
+fn plugin_validate_reads_the_layer_an_author_declared_and_refuses_one_it_does_not_know() {
+    let cli = Cli::new();
+
+    let manifest = |scope: Option<&str>| {
+        let mut m = serde_json::json!({
+            "name": "carrier",
+            "desc": "Carry this device's backlog out to a phone",
+            "author": "alice",
+            "repo": "alice/amenbo-plugin-carrier",
+            "os": ["macos"],
+            "category": "workflow",
+            "url": "https://example.com/carrier-v1.tar.gz",
+            "checksum": format!("sha256:{}", "a".repeat(64)),
+        });
+        if let Some(s) = scope {
+            m["scope"] = serde_json::json!(s);
+        }
+        m
+    };
+    let validate = |value: &Value| {
+        let path = cli.home.join("carrier.json");
+        std::fs::write(&path, serde_json::to_vec(value).unwrap()).unwrap();
+        cli.run(&["plugin", "validate", path.to_str().unwrap(), "--json"])
+    };
+
+    // Declaring nothing is a project's plugin — the safe answer, and the one every published entry relies
+    // on, so the detail the catalog would publish states it rather than leaving the reader to guess.
+    let (stdout, code) = validate(&manifest(None));
+    assert_eq!(code, 0, "a manifest that declares no layer still passes");
+    let out: Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(out["detail"]["scope"], "project", "and it is read as the project's");
+
+    // Declaring the device is the author saying their plugin's work is the machine's.
+    let (stdout, code) = validate(&manifest(Some("machine")));
+    assert_eq!(code, 0);
+    let out: Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(out["detail"]["scope"], "machine", "the declaration rides to the install");
+    assert!(out["entry"].get("scope").is_none(), "and not into the row a browse view draws");
+
+    // A third layer is not a rule the validator weighs but a document it cannot read at all, which is the
+    // same wall an install meets — so the author is told now, not after the PR is merged.
+    for unknown in ["global", "workspace", "device"] {
+        let (stdout, code) = validate(&manifest(Some(unknown)));
+        assert_eq!(code, 1, "'{unknown}' is not a layer amenbo knows");
+        let out: Value = serde_json::from_str(&stdout).unwrap();
+        assert_eq!(out["ok"], false);
+        assert!(out["parse_error"].is_string(), "refused at the shape, before any rule is asked");
+        assert!(out.get("detail").is_none(), "so there is no document to publish");
+    }
+}
+
 /// `plugin catalog add/list/remove` registers third-party catalogs for the browsing view (`AMB-T-1980`):
 /// the merged listing is the official catalog plus each registered source, and registration is idempotent
 /// and reversible. A dead loopback URL registers, is marked unreachable, and does not cost the official

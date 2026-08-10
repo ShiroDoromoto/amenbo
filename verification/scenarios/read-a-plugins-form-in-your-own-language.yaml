@@ -1,0 +1,210 @@
+# The other half of a plugin's translated words, and the half that is read after the network is done
+# with. A row's line is fetched for the reader's language a document at a time; a form's labels are not
+# fetched at all. They came down inside the plugin's own detail document when it was installed — every
+# language at once — and they sit beside the binary from then on. So a form drawn in the reader's
+# language is a form drawn out of what is already on the machine.
+#
+# That is what this road can say and a listing's cannot. The words it looks for exist nowhere but this
+# device: what is installed is the official `worktree` plugin, no plugin the official catalog serves
+# declares a setting at all, and so nothing it publishes carries a label in any language. The
+# declaration and its translation are put onto the machine by the premise, the way every road about a
+# plugin's settings has to put them there. A build that went back to a catalog for these words would
+# come back with nothing and draw the author's base wording — which is the failure this road reads.
+#
+# Three fields, because a form has three things to get right at once and one field can only show one of
+# them. `base` is translated, and is the line the whole delivery is for. `remote` is not, and has to
+# stay in the author's base wording — the fallback is per field, not per plugin, and it draws no mark of
+# its own. `events` is a choice, whose answers carry words of their own: a candidate is stored under a
+# value that never changes and drawn under words that do, and translating the two together is the
+# mistake that would send an answer nobody chose to a plugin.
+#
+# The language is changed on amenbo's own settings screen, which is not the screen the form is on — so
+# the way back is walked as steps rather than assumed. What is under test is the words the form comes
+# back drawn in, not whether it repainted without anyone moving.
+#
+# Like every line that installs a plugin, the premise goes to the catalog over the network on purpose
+# (see `put-a-plugin-on-the-machine.yaml`): a form is a face of a plugin that is really there.
+#
+# German is the second language for the reason it is in `read-a-plugin-in-your-own-language`: a scenario
+# file carries no source of its own, so every word in it is read as prose, and prose here is English.
+# Nothing in the road turns on which of the nineteen it is.
+id: read-a-plugins-form-in-your-own-language
+title: An installed plugin's settings form asks in the reader's language, out of what the install left on the machine
+description: >
+  Open an installed plugin's settings from the row where it crosses a project, read the form in English,
+  then change the interface language and come back to it. The field whose author wrote the other
+  language is asked for in that language; the field beside it, which they did not, keeps the author's
+  base wording with nothing marking it; and the choice below both draws its answer under the words the
+  author gave it while still storing the value it always stored. None of these words is published by any
+  catalog, so none of them can have been fetched.
+given:
+  # The project the crossing is walked on. A crossing is a plugin and a project, and the project is not
+  # one a road on screen can raise on its way past.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Riverside
+
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: worktree
+
+  # The field the road is about, and the words its author wrote it under elsewhere. Both halves are the
+  # author's word, and no plugin in the official catalog declares a setting at all — so neither is
+  # reachable except by writing it here (see the op's own note).
+  - type: action
+    domain: plugin
+    op: declare-setting
+    with:
+      name: worktree
+      key: base
+      label: Base branch
+      translated:
+        de:
+          label: Basis-Branch
+
+  # The field beside it, left as its author wrote it once. A form where every field is translated cannot
+  # show what happens to the one that is not.
+  - type: action
+    domain: plugin
+    op: declare-setting
+    with:
+      name: worktree
+      key: remote
+      label: Remote name
+
+  # And a setting whose answers the author listed. A candidate is two things at once — the value it
+  # stores and the words it is drawn under — and only the second is the author's to translate.
+  - type: action
+    domain: plugin
+    op: declare-choice
+    with:
+      name: worktree
+      key: events
+      label: Events to be told about
+      options: task.done,task.rejected
+      translated:
+        de:
+          label: Ereignisse
+          options:
+            task.done: Aufgabe erledigt
+
+steps_gui:
+  # Where the road starts is said out loud rather than assumed: the store was made a moment ago and
+  # somebody answered the first-run screen, so which language the interface is in is that hand's and not
+  # the road's until a step says it.
+  - type: action
+    domain: store
+    op: set-language
+    with:
+      language: en
+
+  - type: action
+    domain: project
+    op: open-settings
+    with:
+      project: Riverside
+
+  - type: action
+    domain: plugin
+    op: draw-crossing
+    with:
+      name: worktree
+      project: Riverside
+
+  - type: action
+    domain: plugin
+    op: open-config-in-row
+    with:
+      name: worktree
+      project: Riverside
+
+  - type: assert
+    domain: plugin
+    op: asks
+    with:
+      name: worktree
+      key: base
+      label: Base branch
+
+  - type: action
+    domain: store
+    op: set-language
+    with:
+      language: de
+
+  # Back to the form the language was changed away from. The row is drawn again because the way back is
+  # the way in: what the screen kept while the reader was elsewhere is not what this road is about.
+  - type: action
+    domain: project
+    op: open-settings
+    with:
+      project: Riverside
+
+  - type: action
+    domain: plugin
+    op: draw-crossing
+    with:
+      name: worktree
+      project: Riverside
+
+  - type: action
+    domain: plugin
+    op: open-config-in-row
+    with:
+      name: worktree
+      project: Riverside
+
+  # The line the road is for. These words were never published anywhere, so the form did not fetch them:
+  # it read what the machine already held.
+  - type: assert
+    domain: plugin
+    op: asks
+    with:
+      name: worktree
+      key: base
+      label: Basis-Branch
+
+  # And the field its author left in one language, on the same form and in the same breath. It keeps the
+  # base wording, with nothing on the screen saying why — which is what makes it worth a step.
+  - type: assert
+    domain: plugin
+    op: asks
+    with:
+      name: worktree
+      key: remote
+      label: Remote name
+
+  # One level down, where a mistranslation would not be a wrong word but a wrong answer: the candidate
+  # is named here by the value it stores, and read for the words it is drawn under.
+  - type: assert
+    domain: plugin
+    op: asks
+    with:
+      name: worktree
+      key: events
+      candidate: task.done
+      label: Aufgabe erledigt
+
+  # The answer that value stands for still travels as the value. What a reader picks is words; what a
+  # plugin is handed is the value under them, and a form that translated both would send a plugin an
+  # answer nobody offered it.
+  - type: action
+    domain: plugin
+    op: config-choose
+    with:
+      name: worktree
+      key: events
+      options: task.done
+
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: events
+      state: chosen
+      equals: task.done

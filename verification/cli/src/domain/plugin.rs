@@ -1355,8 +1355,64 @@ impl Driver<'_> {
         }
         fields.push(field);
         std::fs::write(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?)
+            .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+        self.translate_field(name, key, with)
+    }
+
+    /// And the words that field carries in the author's other languages, if the step named any.
+    ///
+    /// They go beside the manifest rather than in it, in the file an install writes what a catalog
+    /// published into — which is what the faces that draw a form read, and what lets one follow a
+    /// reader changing language with nothing fetched. The file holds every language at once, keyed by
+    /// code, so a second declaration translated in another language joins the first rather than
+    /// replacing it.
+    fn translate_field(&self, name: &str, key: &str, with: &Args) -> Result<(), String> {
+        if with.get("translated").and_then(|v| v.as_mapping()).is_none() {
+            return Ok(());
+        }
+        let path = self.session.home.join("plugins").join(name).join("i18n.json");
+        // Absent is a plugin nobody translated, which is where every install off the official catalog
+        // stands: there is nothing to read back, and the layer starts here.
+        let held: serde_json::Value = match std::fs::read_to_string(&path) {
+            Ok(raw) => serde_json::from_str(&raw)
+                .map_err(|e| format!("{} is not the record it should be: {e}", path.display()))?,
+            Err(_) => serde_json::json!({}),
+        };
+        let all = translated_into(held, key, with);
+        std::fs::write(&path, serde_json::to_string_pretty(&all).map_err(|e| e.to_string())?)
             .map_err(|e| format!("could not write {}: {e}", path.display()))
     }
+}
+
+/// What one field's translations leave behind in the record beside the manifest: whatever was already
+/// held, with this field's words written into each language the step named.
+///
+/// The shape is the one an install writes — language, then the fields keyed by the key each is declared
+/// under, then the words. Keys rather than positions all the way down, both here and among a choice's
+/// candidates, so a form reordered by its author does not silently re-label every language.
+fn translated_into(mut held: serde_json::Value, key: &str, with: &Args) -> serde_json::Value {
+    let Some(langs) = with.get("translated").and_then(|v| v.as_mapping()) else { return held };
+    for (lang, words) in langs {
+        let (Some(lang), Some(words)) = (lang.as_str(), words.as_mapping()) else { continue };
+        let mut field = serde_json::json!({});
+        if let Some(label) = words.get("label").and_then(|v| v.as_str()) {
+            field["label"] = serde_json::json!(label);
+        }
+        if let Some(options) = words.get("options").and_then(|v| v.as_mapping()) {
+            let shown: serde_json::Map<String, serde_json::Value> = options
+                .iter()
+                .filter_map(|(value, shown)| {
+                    Some((value.as_str()?.to_string(), serde_json::json!(shown.as_str()?)))
+                })
+                .collect();
+            field["options"] = serde_json::Value::Object(shown);
+        }
+        if held[lang].is_null() {
+            held[lang] = serde_json::json!({ "config": {} });
+        }
+        held[lang]["config"][key] = field;
+    }
+    held
 }
 
 /// Give the file at `path` the exec bit, so what was just written there can be run as a program.
@@ -1606,6 +1662,48 @@ mod tests {
             docs.iter().map(|(p, _)| p).collect::<Vec<_>>(),
         );
         assert_eq!(served(&docs, "/plugins/standup.json")["i18n"]["de"]["config"]["channel"]["label"], "Webhook des Kanals");
+    }
+
+    /// A declared field's words in another language land in the record an install writes, under the key
+    /// the field is declared by — and a second field translated afterwards joins the first rather than
+    /// taking its place, since the record holds a plugin's whole form and not one field of it.
+    #[test]
+    fn a_declared_fields_words_join_what_the_record_already_holds() {
+        let held = translated_into(
+            serde_json::json!({}),
+            "base",
+            &args("translated:\n  de:\n    label: Basis-Branch\n"),
+        );
+        assert_eq!(held["de"]["config"]["base"]["label"], "Basis-Branch");
+
+        let held = translated_into(held, "remote", &args("translated:\n  de:\n    label: Name der Gegenstelle\n"));
+        assert_eq!(held["de"]["config"]["base"]["label"], "Basis-Branch", "the field written first is still there");
+        assert_eq!(held["de"]["config"]["remote"]["label"], "Name der Gegenstelle");
+    }
+
+    /// A choice's candidates are translated under the value each one stores, never under its position:
+    /// an author reordering the list would otherwise move every language's words onto another answer.
+    #[test]
+    fn a_choices_candidates_are_translated_by_the_value_they_store() {
+        let held = translated_into(
+            serde_json::json!({}),
+            "events",
+            &args("translated:\n  de:\n    label: Ereignisse\n    options:\n      task.done: Aufgabe erledigt\n"),
+        );
+        assert_eq!(held["de"]["config"]["events"]["label"], "Ereignisse");
+        assert_eq!(held["de"]["config"]["events"]["options"]["task.done"], "Aufgabe erledigt");
+        assert!(
+            held["de"]["config"]["events"]["options"]["task.rejected"].is_null(),
+            "a candidate nobody translated carries the words its author gave it"
+        );
+    }
+
+    /// A step that named no other language leaves the record exactly as it was — which is what keeps
+    /// every road that declares a setting without translating it writing no record at all.
+    #[test]
+    fn a_declaration_in_one_language_writes_no_layer() {
+        let held = translated_into(serde_json::json!({}), "base", &args("label: Base branch\n"));
+        assert_eq!(held, serde_json::json!({}));
     }
 
     /// One document per language, holding every row that drew a line in it — which is the shape the

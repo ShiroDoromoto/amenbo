@@ -335,8 +335,11 @@ premise a reader settles where it is reported — the card drawn while its creat
 the button inside it that ends the creation, `read-a-plugin-in-your-own-language` walks a listing
 across a language change — the line one author wrote in the reader's language, the row beside it whose
 author wrote none, the shelf that published no document for that language at all, and the panel whose
-label came down with every language inside it — and `be-offered-a-start-at-login` walks the one thing
-on screen nobody went and asked for — an offer that comes up on its own once the app has been come
+label came down with every language inside it — `read-a-plugins-form-in-your-own-language` walks the
+same change on the other side of an install, where the words were never published anywhere and so
+cannot have been fetched: the field translated, the field beside it that is not, and the candidate drawn
+under one set of words while storing the value it always stored — and `be-offered-a-start-at-login`
+walks the one thing on screen nobody went and asked for — an offer that comes up on its own once the app has been come
 back to, and the answer that takes it away.
 
 Everything the wait prints — the step about to be taken, and the prompt — goes to stderr, so `--json`
@@ -422,7 +425,13 @@ would go unwalked until one does. `declare-setting` writes the plain kind, the l
 reads back; `declare-secret` writes the flag that sends a value down the other road, which fails
 silently and in plain text; `declare-choice` writes a setting whose answers the author listed, and the
 default that stands until someone gives one, which is what keeps a choice made, a choice declined and a
-question nobody has answered apart. Any of the three takes `required: true`, the flag that says the
+question nobody has answered apart. Any of the three also takes `translated:` — the words that field
+carries in the author's other languages, keyed by language code: the `label` a form draws it under, and
+for a choice the `options` its candidates are, keyed by the value each one stores. They land where an
+install puts what a catalog published, beside the manifest rather than in it, which is what a form reads
+and why one follows a reader changing language with nothing fetched. No published plugin declares a
+setting, so none has one translated either — both halves are out of reach for the one reason, and are
+written by the one door. Any of the three takes `required: true`, the flag that says the
 plugin cannot work without an answer — the fail-closed enable is refused while the crossing holds none,
 and no published plugin declares that either. `plugin declare-scope` writes the layer the author
 declared — one project's rows, or the device's — which is the same kind of word and unreachable for the
@@ -625,11 +634,13 @@ the button takes while there is no answer left to clear. Both are read off how t
 off what it does when used: one shut in the build and painted like a live one is one a reader still
 reaches for.
 
-Changing the language the interface is read in, and reading the line drawn under a plugin's name
-(`store set-language` / `plugin line`), are one road's for a different reason: the setting is reachable
-from a terminal, but nothing a terminal prints is drawn in it. What the CLI answers is English whatever
-the setting says, so a road that changed it there would be moving a value nothing it could then read
-depends on — and the sentence this is about is drawn in one place.
+Changing the language the interface is read in, and reading the words a plugin's own text reaches a
+reader as (`store set-language` / `plugin line` / `plugin asks`), are one road's for a different reason:
+the setting is reachable from a terminal, but nothing a terminal prints is drawn in it. What the CLI
+answers is English whatever the setting says, so a road that changed it there would be moving a value
+nothing it could then read depends on — and the sentences this is about are drawn in one place. `line`
+is the one under a market row's name, `asks` the one a settings form draws a field, or one of a choice's
+answers, under.
 
 One road's alone is sometimes an *argument* rather than a whole op, and then it is the driver that
 cannot answer it which says so. A search hit is the case: what the row **calls** the place it points

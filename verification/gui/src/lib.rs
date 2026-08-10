@@ -250,6 +250,9 @@ impl Instructor {
     /// the sentence itself and not on "is this translated", since the fallback draws no mark of its
     /// own — a row in English says nothing about why it is in English.
     ///
+    /// `asks` is that pair's third: the words a settings form draws a field, or one of a choice's
+    /// answers, under. Author's words again, read the same way and for the same reason.
+    ///
     /// `first-loop` too: what it expects is the command the handed-over request tells the reader's
     /// AI to run, which is the same words in any language the app is in. Its sibling `first-loop-order`
     /// names an order instead, and an order is not something a reading settles — which words are on a
@@ -344,6 +347,9 @@ impl Instructor {
             }
             (Domain::Plugin, "line") => {
                 Some(Expectation { text: arg_str(with, "desc")?.to_string(), present: true })
+            }
+            (Domain::Plugin, "asks") => {
+                Some(Expectation { text: arg_str(with, "label")?.to_string(), present: true })
             }
             (Domain::Plugin, "detail") => {
                 Some(Expectation { text: arg_str(with, "declares")?.to_string(), present: true })
@@ -772,6 +778,22 @@ impl Instructor {
                 req(with, "name")?,
                 req(with, "desc")?
             ),
+            // The words a form draws a field under, and — one level down — the words one of a choice's
+            // answers is drawn under. The candidate is named by the value it stores rather than by what
+            // it says, since what it says is the very thing under test.
+            (Domain::Plugin, "asks") => {
+                let name = req(with, "name")?;
+                let key = req(with, "key")?;
+                let label = req(with, "label")?;
+                match arg_str(with, "candidate") {
+                    Some(value) => format!(
+                        "Confirm the settings form for \"{name}\" draws the answer stored as \"{value}\", under the setting \"{key}\", with the words \"{label}\"."
+                    ),
+                    None => format!(
+                        "Confirm the settings form for \"{name}\" asks for the setting \"{key}\" under the words \"{label}\"."
+                    ),
+                }
+            }
             (Domain::Plugin, "detail") => format!(
                 "Confirm the panel open under \"{}\" — the row the catalog \"{}\" served — says installing it would mean \"{}\".",
                 req(with, "name")?,

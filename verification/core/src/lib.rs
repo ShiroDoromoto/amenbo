@@ -495,6 +495,13 @@ const REGISTRY: &[OpSpec] = &[
     // an enable at a crossing holding no value for it is refused over. It is a word on this declaration
     // rather than an op of its own: the field written is the same field, and what the flag changes is
     // what amenbo then does about an empty one.
+    //
+    // `translated` writes the words the author put on that same field in other languages, keyed by
+    // language code — the `label` a form draws it under, and for a choice the `options` its candidates
+    // are drawn under, keyed by the value each one stores. It goes where an install puts what a catalog
+    // published, beside the manifest rather than in it, so a form reads it the way it reads a real one.
+    // No published plugin declares a setting at all, so no published plugin has one translated either:
+    // both halves are unreachable for the same reason and are written by the same door.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-setting", required: &["name", "key"], refs: &[], strings: &["name", "key", "label"], binds: false },
     // An installed plugin declaring a setting its author marked secret. Which settings a plugin takes
     // is the author's word and amenbo never invents one, so the only honest way to reach this state is
@@ -510,7 +517,8 @@ const REGISTRY: &[OpSpec] = &[
     // `plugin config` that keeps three answers apart (a choice made, none of them chosen, nobody asked
     // yet) would go unwalked until one does. `options` is the candidates as their stored values, joined
     // by commas the way an answer is; `default` is a subset of them, and leaving it out is the other
-    // shape a choice comes in.
+    // shape a choice comes in. `translated` is the same word it is on `declare-setting`, and this is
+    // where its `options` half has anything to translate.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-choice", required: &["name", "key", "options"], refs: &[], strings: &["name", "key", "label", "options", "default"], binds: false },
     // An installed plugin saying, in its author's words, when to reach for it and what to type. What a
     // plugin says for itself is written in its manifest and amenbo invents none of it, so this is the
@@ -1014,6 +1022,20 @@ const REGISTRY: &[OpSpec] = &[
     // says it is holding — so `state` is what a road there is written on, with `equals` naming the
     // candidates a chosen one leaves ticked.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "config", required: &["name", "key"], refs: &[], strings: &["name", "key", "state"], binds: false },
+    // The other half of that same form, asked apart from it the way a row's line is asked apart from
+    // its badge: not what the field holds, but the words it is drawn under. `label` is those words,
+    // written out — the author's, in whichever language they wrote them and the reader is in — and
+    // `candidate` moves the reading one level down, to the words one of a choice's answers is drawn
+    // under, named by the value it stores rather than by what it says.
+    //
+    // Quoted whole rather than asked about, for the reason the row's line is: what a reader is shown
+    // when their language is untranslated is the author's base wording, unmarked, so the only thing
+    // that tells the two apart is which of them is standing there.
+    //
+    // A screen road alone, and not by omission. A form is a screen; `plugin config` in a terminal
+    // answers with values and never draws a label, and what it does print is English whatever the
+    // reader's language says.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "asks", required: &["name", "key", "label"], refs: &[], strings: &["name", "key", "label", "candidate"], binds: false },
     // What a crossing's row says about the settings kept there, which is a reading of the row and not of
     // one field: the mark a crossing wears while it owes a value, the form standing open inside the row,
     // and the row saying a value is held. Whether the plugin fires there is the other reading of the same
@@ -1233,6 +1255,54 @@ fn offers_problems(value: &serde_yaml::Value) -> Vec<String> {
             problems.push(at_row("`label` names a `setting`, so one has to be declared".into()));
         }
         problems.extend(translated_problems(row).into_iter().map(at_row));
+    }
+    problems
+}
+
+/// What is wrong with a declaration's `translated` block — the words a form's field carries in the
+/// author's other languages.
+///
+/// It is keyed by language code, and each language holds the `label` the field is drawn under and the
+/// `options` its candidates are, keyed by the value each candidate stores. Keying the candidates by
+/// value rather than by position is the same rule the published form obeys: an author reordering their
+/// list would otherwise silently move every language's words onto the wrong answer.
+fn declared_translations_problems(block: &serde_yaml::Value) -> Vec<String> {
+    let Some(langs) = block.as_mapping() else {
+        return vec!["`translated` must be a mapping of language code to the words in it".to_string()];
+    };
+    let mut problems = Vec::new();
+    for (lang, words) in langs {
+        let Some(lang) = lang.as_str() else {
+            problems.push("`translated` is keyed by language code, which is a string".to_string());
+            continue;
+        };
+        let Some(words) = words.as_mapping() else {
+            problems.push(format!("`translated.{lang}` must be a mapping of the words written in it"));
+            continue;
+        };
+        if words.get("label").is_some_and(|v| v.as_str().is_none()) {
+            problems.push(format!("`translated.{lang}.label` must be a string"));
+        }
+        match words.get("options") {
+            None => {}
+            Some(o) => match o.as_mapping() {
+                None => problems.push(format!(
+                    "`translated.{lang}.options` must be a mapping of a candidate's stored value to the words it is drawn under"
+                )),
+                Some(candidates) => {
+                    for (value, shown) in candidates {
+                        if value.as_str().is_none() || shown.as_str().is_none() {
+                            problems.push(format!(
+                                "`translated.{lang}.options` maps a candidate's stored value to its words, and both are strings"
+                            ));
+                        }
+                    }
+                }
+            },
+        }
+        if words.get("label").is_none() && words.get("options").is_none() {
+            problems.push(format!("`translated.{lang}` translates nothing — name a `label`, some `options`, or both"));
+        }
     }
     problems
 }
@@ -1495,6 +1565,19 @@ impl Scenario {
             if let Some(v) = step.with().get("offers") {
                 for problem in offers_problems(v) {
                     errs.push(at(i, problem));
+                }
+            }
+
+            // The words a declaration carries in the author's other languages — the same kind of
+            // arg one tier in, and read here for the same reason: what it holds is a form's fields,
+            // not amenbo's arguments, so `strings` has no shape to hold it to. A row's `offers`
+            // carries its own copy of this, checked against the row it sits on; here there is no row
+            // to check against, so the shape is the whole of what can be said.
+            if let Some(v) = step.with().get("translated") {
+                if step.domain() == Domain::Plugin && step.op().starts_with("declare-") {
+                    for problem in declared_translations_problems(v) {
+                        errs.push(at(i, problem));
+                    }
                 }
             }
 
@@ -2157,6 +2240,50 @@ steps_cli:
                 "        - { name: standup, desc: d, setting: channel, label: L, translated: { de: { desc: Beschreibung, label: Beschriftung } } }"
             )
             .is_ok()
+        );
+    }
+
+    /// The words a declared field carries in another language are held to their own shape, for the
+    /// reason a shelf's rows are: they are a form's fields rather than amenbo's arguments, so nothing
+    /// else would catch a typo before it reached a screen as a blank.
+    #[test]
+    fn a_declarations_other_languages_are_held_to_the_shape_a_form_reads() {
+        let declare = |translated: &str| {
+            let yaml = format!(
+                r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: plugin
+    op: declare-setting
+    with:
+      name: worktree
+      key: base
+      label: Base branch
+{translated}
+"#
+            );
+            load_str(&yaml).unwrap().validate()
+        };
+
+        let errs = declare("      translated: de").unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("`translated` must be a mapping")), "{errs:?}");
+
+        let errs = declare("      translated: { de: { label: 12 } }").unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("`translated.de.label` must be a string")), "{errs:?}");
+
+        // A candidate's words are keyed by the value it stores, so a list has nowhere to say which is which.
+        let errs = declare("      translated: { de: { options: [Aufgabe erledigt] } }").unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("`translated.de.options` must be a mapping")), "{errs:?}");
+
+        let errs = declare("      translated: { de: {} }").unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("`translated.de` translates nothing")), "{errs:?}");
+
+        assert!(declare("      translated: { de: { label: Basis-Branch } }").is_ok());
+        assert!(
+            declare("      translated: { de: { label: Ereignisse, options: { task.done: Aufgabe erledigt } } }")
+                .is_ok()
         );
     }
 

@@ -95,7 +95,7 @@ use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::plugin_catalog::{self, DiscoveredEntry, Discovery};
 use crate::plugin_installed::Origin;
 use crate::plugin_config::Purged;
-use crate::plugin_manifest::{Manifest, Platform};
+use crate::plugin_manifest::{Manifest, Platform, Translations};
 use crate::plugin_subscribe::InstalledPlugin;
 use crate::plugin_wire::ListEntry;
 use crate::store::Store;
@@ -114,6 +114,11 @@ pub struct Update {
     pub installed: Manifest,
     /// The manifest the catalog holds for that name.
     pub available: Manifest,
+    /// What the catalog says about that build in other languages (`AMB-D-622`) — read off the same
+    /// documents [`available`](Update::available) was joined from, and put beside the plugin when the
+    /// build is. Carried here rather than re-read at the write, so an apply replaces the pair the
+    /// catalog published together.
+    pub available_i18n: Translations,
 }
 
 /// One installed plugin the catalog's **list** already says something has moved about — an update, before
@@ -179,11 +184,12 @@ pub fn compare(installed: &[InstalledPlugin], view: &Discovery) -> Vec<Candidate
 /// The detail goes through the install door's own validation ([`plugin_install::catalog_manifest`]), so an
 /// update is judged against exactly the manifest an install would have been.
 fn confirm(paths: &Paths, candidate: &Candidate) -> Result<Update> {
-    let available = plugin_install::catalog_manifest(paths, &candidate.found)?;
+    let (available, available_i18n) = plugin_install::catalog_manifest(paths, &candidate.found)?;
     Ok(Update {
         name: candidate.name.clone(),
         installed: candidate.installed.clone(),
         available,
+        available_i18n,
     })
 }
 
@@ -347,6 +353,20 @@ pub fn backup_path(paths: &Paths, name: &str) -> PathBuf {
 #[must_use]
 pub fn backup_manifest_path(paths: &Paths, name: &str) -> PathBuf {
     let mut p = plugin_installed::manifest_path(paths, name).into_os_string();
+    p.push(".bak");
+    PathBuf::from(p)
+}
+
+/// The translations retained beside the previous build (`AMB-D-622`), for the reason the manifest is:
+/// what a form is labelled in is part of the build it describes, and a layer left over from the build a
+/// rollback undid would label the restored one in another version's words.
+///
+/// **Absent is a state, not a gap.** A build nobody translated has no such file, so a rollback to it
+/// removes whatever the newer build left rather than putting something back
+/// ([`plugin_installed::record_translations`] does both through the same call).
+#[must_use]
+pub fn backup_translations_path(paths: &Paths, name: &str) -> PathBuf {
+    let mut p = plugin_installed::translations_path(paths, name).into_os_string();
     p.push(".bak");
     PathBuf::from(p)
 }
@@ -581,8 +601,10 @@ fn retain_and_place(
     let name = &update.name;
     std::fs::copy(plugin_installed::program_path(paths, name), backup_path(paths, name))?;
     std::fs::copy(plugin_installed::manifest_path(paths, name), backup_manifest_path(paths, name))?;
+    retain_translations(paths, name)?;
 
     plugin_installed::record_origin(paths, name, origin)?;
+    plugin_installed::record_translations(paths, name, &update.available_i18n)?;
     let placed = plugin_install::place(paths, &update.available, program)?;
     Ok(Replaced {
         name: name.clone(),
@@ -595,6 +617,26 @@ fn retain_and_place(
         // purge_dropped, which runs after this has put the manifest in place.
         purged: Purged::default(),
     })
+}
+
+/// Retain the translations of the build being replaced, in the state they are in — the file copied
+/// aside when there is one, and any stale `.bak` cleared when there is not.
+///
+/// The clearing is the whole of why this is not a plain [`std::fs::copy`]: an install with no
+/// translations would otherwise leave the *previous* update's `.bak` standing, and a rollback would put
+/// back a layer two builds old as though it were the retained one.
+fn retain_translations(paths: &Paths, name: &str) -> Result<()> {
+    let from = plugin_installed::translations_path(paths, name);
+    let backup = backup_translations_path(paths, name);
+    if !from.exists() {
+        match std::fs::remove_file(&backup) {
+            Ok(()) => return Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => return Err(Error::from(e)),
+        }
+    }
+    std::fs::copy(from, backup)?;
+    Ok(())
 }
 
 /// What one rollback restored — the receipt a caller reports from.
@@ -668,11 +710,20 @@ pub fn rollback(paths: &Paths, name: &str) -> Result<RolledBack> {
         )
     })?;
 
+    // What the retained build was translated as, back with it — and removed when it had none, which is
+    // what `record_translations` does with an empty map. Before the marker, as an install writes it.
+    let retained_i18n = std::fs::read_to_string(backup_translations_path(paths, name))
+        .ok()
+        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .unwrap_or_default();
+    plugin_installed::record_translations(paths, name, &retained_i18n)?;
+
     let placed = plugin_install::place(paths, &manifest, &program)?;
-    // The retained pair is now the running build — there is nothing further back to go. Clear both so a
+    // The retained set is now the running build — there is nothing further back to go. Clear it so a
     // stale `.bak` cannot later masquerade as a fresh one (same close-out as self-update, `AMB-D-341`).
     let _ = std::fs::remove_file(&backup_program);
     let _ = std::fs::remove_file(&backup_manifest);
+    let _ = std::fs::remove_file(backup_translations_path(paths, name));
 
     Ok(RolledBack { name: name.to_string(), restored: placed.manifest, program: placed.program })
 }
@@ -1120,7 +1171,16 @@ mod tests {
     }
 
     fn update_of(installed: Manifest, available: Manifest) -> Update {
-        Update { name: installed.name.clone(), installed, available }
+        update_of_translated(installed, available, Translations::new())
+    }
+
+    /// The same, for a build the catalog publishes translations for — the layer that travels with it.
+    fn update_of_translated(
+        installed: Manifest,
+        available: Manifest,
+        available_i18n: Translations,
+    ) -> Update {
+        Update { name: installed.name.clone(), installed, available, available_i18n }
     }
 
     /// The shape of the retained pair — a sibling of the executable, and of the manifest.
@@ -1359,6 +1419,74 @@ mod tests {
         assert!(!backup_path(&paths, "worktree").exists(), "the retained binary is gone");
         assert!(!backup_manifest_path(&paths, "worktree").exists(), "and its manifest with it");
         assert_eq!(rollback(&paths, "worktree").unwrap_err().code(), "not_found_plugin_rollback_build");
+    }
+
+    /// One language's overlay, as the catalog published it.
+    fn translated(desc: &str) -> Translations {
+        Translations::from([(
+            "ja".to_string(),
+            crate::plugin_manifest::ManifestOverlay {
+                desc: Some(desc.to_string()),
+                ..Default::default()
+            },
+        )])
+    }
+
+    /// **An update replaces the pair the catalog published together** (`AMB-D-622`): the build, and what
+    /// it says in other languages. A layer left over from the build before would label the new one in the
+    /// old one's words — and, being a layer, would never look wrong on screen.
+    #[test]
+    fn applying_replaces_the_translations_with_the_build() {
+        let paths = paths_at("apply-i18n");
+        let before = manifest("worktree", "aa");
+        install_on_disk(&paths, &before, b"old");
+        plugin_installed::record_translations(&paths, "worktree", &translated("古い一行")).unwrap();
+
+        retain_and_place(
+            &paths,
+            &update_of_translated(before, manifest("worktree", "bb"), translated("新しい一行")),
+            b"new",
+            &Origin::Official,
+        )
+        .unwrap();
+
+        assert_eq!(plugin_installed::translations(&paths, "worktree"), translated("新しい一行"));
+        assert_eq!(
+            std::fs::read_to_string(backup_translations_path(&paths, "worktree"))
+                .map(|raw| serde_json::from_str::<Translations>(&raw).unwrap())
+                .unwrap(),
+            translated("古い一行"),
+            "and the layer that went with the retained build is retained with it",
+        );
+    }
+
+    /// **A rollback restores the whole trio**, so the layer never outlives the build it describes — and
+    /// a build nobody translated comes back untranslated rather than wearing its successor's words.
+    #[test]
+    fn rolling_back_restores_the_translations_the_update_replaced() {
+        let paths = paths_at("rollback-i18n");
+        let untranslated = manifest("worktree", "aa");
+        install_on_disk(&paths, &untranslated, b"old");
+        retain_and_place(
+            &paths,
+            &update_of_translated(
+                untranslated,
+                manifest("worktree", "bb"),
+                translated("新しい一行"),
+            ),
+            b"new",
+            &Origin::Official,
+        )
+        .unwrap();
+        assert_eq!(plugin_installed::translations(&paths, "worktree"), translated("新しい一行"));
+
+        rollback(&paths, "worktree").unwrap();
+
+        assert!(
+            plugin_installed::translations(&paths, "worktree").is_empty(),
+            "the build that came back was never translated, so neither is what is on screen",
+        );
+        assert!(!backup_translations_path(&paths, "worktree").exists(), "and the retained set is gone");
     }
 
     /// A plugin that was never updated has no retained build: the rollback says so and changes nothing.

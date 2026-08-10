@@ -374,9 +374,19 @@ fn detail_path(name: &str) -> String {
 /// from the catalog URL rather than configured separately, so an override that points amenbo at a test
 /// catalog (`AMENBO_PLUGIN_CATALOG_URL`) moves both documents together — one address, one publisher.
 fn detail_url(catalog_url: &str, name: &str) -> String {
+    beside(catalog_url, &detail_path(name))
+}
+
+/// A document published beside a catalog — the catalog's own URL with its last segment replaced.
+///
+/// The one rule everything a catalog serves is addressed by, so a registered catalog (`AMB-D-389`) and
+/// an override pointing at a test one both carry their whole shelf with them: the detail documents and
+/// the translated lists are wherever their `catalog.json` is, never at an address configured apart from
+/// it.
+fn beside(catalog_url: &str, path: &str) -> String {
     match catalog_url.rsplit_once('/') {
-        Some((base, _file)) => format!("{base}/{}", detail_path(name)),
-        None => detail_path(name),
+        Some((base, _file)) => format!("{base}/{path}"),
+        None => path.to_string(),
     }
 }
 
@@ -1159,6 +1169,151 @@ fn merge(paths: &Paths, read: impl Fn(&str, &std::path::Path) -> Read) -> Discov
     Discovery { entries, shadowed, sources: sources_meta, dropped }
 }
 
+// ---- the translated lines a browse draws, one document per language (`AMB-D-622`) ----
+//
+// The third document a catalog serves, and the only one fetched per language: `catalog.<lang>.json`
+// beside `catalog.json`, holding the one line a browse row draws for each plugin whose author wrote it
+// in that language. The list half of the translations rides apart from the list itself because everyone
+// fetches `catalog.json` whole — carrying nineteen languages in it would charge every reader for the
+// eighteen they cannot read. The detail half needs none of this: it rides inside the detail document,
+// every language at once, because that document is fetched one plugin at a time and then read offline
+// (`plugin_wire`).
+//
+// **Nothing here fails.** A language nobody has translated has no document, and the 404 is the answer
+// rather than an error: an untranslated line and an unfetched one are the same thing to a reader, and
+// both fall back to the base line (`AMB-D-623`). So every road out of this section returns what it has,
+// and a reader who was going to see English sees English.
+
+/// One language's translated lines, as a catalog serves them: the plugins that language has a line for,
+/// keyed by plugin name (`AMB-D-622`). A plugin absent from it is one nobody translated — the base line.
+pub type ListTranslations = std::collections::BTreeMap<String, crate::plugin_wire::ListEntryOverlay>;
+
+/// The directory-relative name of one language's translated lines, beside `catalog.json`.
+fn list_overlay_path(lang: &str) -> String {
+    format!("catalog.{lang}.json")
+}
+
+/// Where one language's translated lines are cached: `overlay-<lang>.json` for the official catalog, and
+/// `overlay-<tag>-<lang>.json` for a registered one — named after both the catalog and the language, so
+/// two catalogs' translations of the same plugin never overwrite each other's (the shape
+/// [`source_detail_cache_file`] takes for the same reason).
+fn list_overlay_cache_file(paths: &Paths, source: &str, official: bool, lang: &str) -> PathBuf {
+    match official {
+        true => paths.registry_dir().join(format!("overlay-{lang}.json")),
+        false => paths.registry_dir().join(format!("overlay-{}-{lang}.json", url_tag(source))),
+    }
+}
+
+/// One `catalog.<lang>.json`, checked on the way in the way every catalog document is (`AMB-D-354`).
+///
+/// An entry that does not parse, or whose line breaks the rule the base line obeys
+/// ([`crate::plugin_validate::validate_list_overlay`]), is dropped and the rest of the document stands —
+/// the same posture the list's own intake takes, and for the same reason: one bad line is not a reason
+/// to draw a whole catalog in the wrong language. A document that does not parse at all is no
+/// translations, which is where a reader of an untranslated language already stands.
+fn read_list_overlay(json: &str, lang: &str) -> ListTranslations {
+    let Ok(raw) = serde_json::from_str::<std::collections::BTreeMap<String, serde_json::Value>>(json)
+    else {
+        tracing::warn!(language = %lang, "ignoring an unreadable catalog translation document");
+        return ListTranslations::new();
+    };
+    raw.into_iter()
+        .filter_map(|(name, value)| {
+            let overlay = serde_json::from_value(value).ok()?;
+            let problems = crate::plugin_validate::validate_list_overlay(lang, &overlay);
+            if let Some(first) = problems.first() {
+                tracing::warn!(
+                    plugin = %name,
+                    language = %lang,
+                    problem = %first.message.en(),
+                    "dropping a translated catalog line that does not pass the rules the base line does",
+                );
+                return None;
+            }
+            Some((name, overlay))
+        })
+        .collect()
+}
+
+/// One catalog's translated lines for one language, read the incidental way — a cache inside the
+/// freshness window answers with no request at all, exactly as a browse's own read does ([`fresh_to`]).
+///
+/// Cheapness is the point: this is fetched again every time the reader changes language, so a language
+/// they have already looked at costs nothing to go back to.
+fn list_overlay_to(url: &str, cache_file: &std::path::Path, lang: &str) -> ListTranslations {
+    let cached = || std::fs::read_to_string(cache_file).ok().map(|json| read_list_overlay(&json, lang));
+    if cache_age_at(cache_file).is_some_and(|age| age < FRESH_FOR) {
+        if let Some(translations) = cached() {
+            return translations;
+        }
+    }
+    match fetch(url) {
+        Ok(json) => {
+            let translations = read_list_overlay(&json, lang);
+            let _ = write_cache_at(cache_file, &json);
+            translations
+        }
+        // No document, or no network — see the section note. Whatever is cached still answers, and
+        // having nothing cached is the base lines.
+        Err(_) => cached().unwrap_or_default(),
+    }
+}
+
+/// The merged view's translated lines, in one language (`AMB-D-622`) — keyed by plugin name, which is
+/// what a browse draws each row from.
+///
+/// Each catalog is asked for its own document, and each entry takes the answer from **the catalog that
+/// served it**: a translated line is published beside the `catalog.json` it belongs to, so asking the
+/// official catalog for a registered one's translations would be asking the wrong publisher — the same
+/// join a detail document is fetched by ([`detail_of`]). A catalog whose entries are all shadowed is
+/// never asked at all: the merged list draws one row per name, and that row is the winner's.
+///
+/// Selecting between this and the base line is the caller's, never this (`AMB-D-623`): what comes back
+/// is what the catalog published, and a name absent from it is a name to draw in English.
+#[must_use]
+pub fn list_translations(paths: &Paths, view: &Discovery, lang: &str) -> ListTranslations {
+    let mut per_catalog: std::collections::BTreeMap<&str, ListTranslations> = Default::default();
+    let mut translations = ListTranslations::new();
+    for found in &view.entries {
+        let served = per_catalog.entry(found.source.as_str()).or_insert_with(|| {
+            list_overlay_to(
+                &beside(&found.source, &list_overlay_path(lang)),
+                &list_overlay_cache_file(paths, &found.source, found.listed, lang),
+                lang,
+            )
+        });
+        if let Some(overlay) = served.get(&found.entry.name) {
+            translations.insert(found.entry.name.clone(), overlay.clone());
+        }
+    }
+    translations
+}
+
+/// Every language's translated line for **one** plugin that is already on disk — no request, whatever
+/// the age.
+///
+/// This is what an install keeps beside a plugin ([`crate::plugin_install`]). The detail document it has
+/// just fetched carries every language's form labels, and the line a browse row draws is in the language
+/// documents a browse already paid for, so the two halves together are what this machine can say about
+/// the plugin without going back to the network. Fetching nineteen more here would be paying for
+/// eighteen languages nobody on this machine reads, at the one moment amenbo is already downloading a
+/// binary — and a language the reader never browsed in is one whose line they were seeing in English
+/// anyway.
+pub(crate) fn cached_list_overlays(
+    paths: &Paths,
+    found: &DiscoveredEntry,
+) -> std::collections::BTreeMap<String, crate::plugin_wire::ListEntryOverlay> {
+    crate::config::LANGUAGES
+        .iter()
+        .filter_map(|lang| {
+            let cache = list_overlay_cache_file(paths, &found.source, found.listed, lang);
+            let json = std::fs::read_to_string(cache).ok()?;
+            let overlay = read_list_overlay(&json, lang).remove(&found.entry.name)?;
+            Some(((*lang).to_string(), overlay))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1928,5 +2083,191 @@ mod tests {
         assert_eq!(discovery.entries.len(), 1, "the official catalog still answers");
         let dead = discovery.sources.iter().find(|s| s.url == UNREACHABLE).expect("listed");
         assert!(!dead.reachable && dead.offered == 0, "the dead source contributes nothing");
+    }
+
+    // ---- the translated lines, one document per language (`AMB-D-622`) ----
+
+    /// One language's document as the CI publishes it: the translated line for each plugin that has
+    /// one, keyed by plugin name and holding nothing else (`AMB-D-622`).
+    fn overlay_json(lines: &[(&str, &str)]) -> String {
+        let map: serde_json::Map<String, serde_json::Value> = lines
+            .iter()
+            .map(|(name, desc)| ((*name).to_string(), serde_json::json!({ "desc": desc })))
+            .collect();
+        serde_json::Value::Object(map).to_string()
+    }
+
+    /// The third document rides at the same address as the other two, so a registered catalog serves
+    /// its own translations and an override moves them with everything else.
+    #[test]
+    fn a_translated_list_sits_beside_the_catalog_it_translates() {
+        assert_eq!(
+            beside("https://example.invalid/amenbo-plugins/catalog.json", &list_overlay_path("ja")),
+            "https://example.invalid/amenbo-plugins/catalog.ja.json",
+        );
+        assert_eq!(
+            beside(OFFICIAL_CATALOG_URL, &list_overlay_path("zh-Hans")),
+            "https://shirodoromoto.github.io/amenbo-plugins/catalog.zh-Hans.json",
+        );
+    }
+
+    /// Each catalog's translations are cached under their own name, per language — so two catalogs
+    /// translating the same plugin never overwrite each other, and no language's document lands on
+    /// another's or on any other file in the registry.
+    #[test]
+    fn a_translation_cache_file_is_distinct_from_every_other_file_in_the_registry() {
+        let paths = paths_at("overlay-cache-names");
+        let src = "https://example.invalid/third/catalog.json";
+        let files = [
+            list_overlay_cache_file(&paths, OFFICIAL_CATALOG_URL, true, "ja"),
+            list_overlay_cache_file(&paths, OFFICIAL_CATALOG_URL, true, "de"),
+            list_overlay_cache_file(&paths, src, false, "ja"),
+            list_overlay_cache_file(&paths, src, false, "de"),
+            detail_cache_file(&paths, "worktree"),
+            source_detail_cache_file(&paths, src, "worktree"),
+            cache_file(&paths),
+            source_cache_file(&paths, src),
+            sources_file(&paths),
+        ];
+        for (i, one) in files.iter().enumerate() {
+            for other in &files[i + 1..] {
+                assert_ne!(one, other, "two registry files share a name");
+            }
+        }
+    }
+
+    /// The document is read the way the list itself is (`AMB-D-354`): a line that breaks the rule the
+    /// base line obeys is dropped on its own, and the rest of the document still draws.
+    #[test]
+    fn a_translated_line_that_breaks_the_rules_is_dropped_and_the_rest_stands() {
+        let json = overlay_json(&[
+            ("worktree", "タスクごとに git worktree を切り分ける"),
+            ("shouty", &"あ".repeat(crate::plugin_validate::MAX_DESC_LEN + 1)),
+            ("citing", "AMB-T-1 のためのプラグイン"),
+            ("empty", ""),
+        ]);
+
+        let translations = read_list_overlay(&json, "ja");
+
+        assert_eq!(translations.keys().collect::<Vec<_>>(), ["worktree"], "one line passed");
+        assert_eq!(
+            translations["worktree"].desc.as_deref(),
+            Some("タスクごとに git worktree を切り分ける"),
+        );
+    }
+
+    /// A language amenbo is not read in is a document nothing would ever fetch, so nothing in one is
+    /// drawn — and a document that will not parse at all is simply no translations.
+    #[test]
+    fn a_document_in_a_language_amenbo_does_not_read_draws_nothing() {
+        let json = overlay_json(&[("worktree", "eine Zeile")]);
+        assert!(read_list_overlay(&json, "xx").is_empty(), "'xx' is not one of the nineteen");
+        assert!(!read_list_overlay(&json, "de").is_empty(), "'de' is");
+        assert!(read_list_overlay("half a file", "ja").is_empty(), "and unreadable is untranslated");
+    }
+
+    /// **A language nobody translated is not a failure** (`AMB-D-622`): the document is not there, the
+    /// fetch answers 404, and what comes back is no translations — the base lines, which is where a
+    /// reader of an untranslated language already stands (`AMB-D-623`).
+    #[test]
+    fn a_language_with_no_document_reads_as_no_translations() {
+        let paths = paths_at("overlay-absent");
+        let cache = list_overlay_cache_file(&paths, OFFICIAL_CATALOG_URL, true, "ja");
+
+        assert!(list_overlay_to(UNREACHABLE, &cache, "ja").is_empty());
+        assert!(!cache.exists(), "and nothing was cached to answer for it later");
+    }
+
+    /// The cached document answers, and inside the freshness window it answers without a request at all
+    /// — which is what makes going back to a language already looked at cost nothing.
+    #[test]
+    fn the_cached_translations_answer_without_a_request() {
+        let paths = paths_at("overlay-cached");
+        let cache = list_overlay_cache_file(&paths, OFFICIAL_CATALOG_URL, true, "ja");
+        write_cache_at(&cache, &overlay_json(&[("worktree", "切り分ける")])).unwrap();
+
+        let translations = list_overlay_to(UNREACHABLE, &cache, "ja");
+        assert_eq!(translations["worktree"].desc.as_deref(), Some("切り分ける"));
+    }
+
+    /// **Each entry's line comes from the catalog that served the entry** — a translation is published
+    /// beside its own `catalog.json`, so the official catalog is never asked what a registered one's
+    /// plugin is called in Japanese.
+    #[test]
+    fn each_entry_is_translated_by_the_catalog_that_served_it() {
+        let paths = paths_at("translations-per-catalog");
+        let src = "https://example.invalid/third/catalog.json";
+        register(&paths, src, Some(KEY_A), None);
+        write_cache_at(&cache_file(&paths), &catalog_json(vec![entry_json("worktree")])).unwrap();
+        write_cache_at(&source_cache_file(&paths, src), &catalog_json(vec![entry_json("extra")]))
+            .unwrap();
+        write_cache_at(
+            &list_overlay_cache_file(&paths, OFFICIAL_CATALOG_URL, true, "ja"),
+            // The impostor line is what the official document says about a plugin it does not carry.
+            &overlay_json(&[("worktree", "公式の一行"), ("extra", "他所のプラグインの一行")]),
+        )
+        .unwrap();
+        write_cache_at(
+            &list_overlay_cache_file(&paths, src, false, "ja"),
+            &overlay_json(&[("extra", "登録したカタログの一行")]),
+        )
+        .unwrap();
+
+        let translations = list_translations(&paths, &cached_view(&paths), "ja");
+
+        assert_eq!(translations["worktree"].desc.as_deref(), Some("公式の一行"));
+        assert_eq!(
+            translations["extra"].desc.as_deref(),
+            Some("登録したカタログの一行"),
+            "the entry's own publisher answered for it, not the one that merely named it",
+        );
+    }
+
+    /// A plugin the language has no line for is absent from the answer rather than present and empty:
+    /// selecting between the translated line and the base one is the reader's face's, and absence is
+    /// what it falls back from (`AMB-D-623`).
+    #[test]
+    fn a_plugin_nobody_translated_is_absent_rather_than_blank() {
+        let paths = paths_at("translations-partial");
+        write_cache_at(
+            &cache_file(&paths),
+            &catalog_json(vec![entry_json("worktree"), entry_json("slack")]),
+        )
+        .unwrap();
+        write_cache_at(
+            &list_overlay_cache_file(&paths, OFFICIAL_CATALOG_URL, true, "ja"),
+            &overlay_json(&[("worktree", "一行")]),
+        )
+        .unwrap();
+
+        let translations = list_translations(&paths, &cached_view(&paths), "ja");
+        assert_eq!(translations.keys().collect::<Vec<_>>(), ["worktree"]);
+    }
+
+    /// **What an install takes with it is what browsing already paid for** — every language on this
+    /// machine, read off the cache, and no request for the eighteen nobody here reads.
+    #[test]
+    fn an_install_takes_the_translations_already_on_disk_and_fetches_none() {
+        let paths = paths_at("translations-for-install");
+        write_cache_at(&cache_file(&paths), &catalog_json(vec![entry_json("worktree")])).unwrap();
+        for (lang, line) in [("ja", "一行"), ("de", "eine Zeile")] {
+            write_cache_at(
+                &list_overlay_cache_file(&paths, OFFICIAL_CATALOG_URL, true, lang),
+                &overlay_json(&[("worktree", line)]),
+            )
+            .unwrap();
+        }
+        let view = cached_view(&paths);
+        let found = view.find("worktree").expect("resolvable");
+
+        let overlays = cached_list_overlays(&paths, found);
+
+        assert_eq!(overlays.keys().collect::<Vec<_>>(), ["de", "ja"]);
+        assert_eq!(overlays["ja"].desc.as_deref(), Some("一行"));
+        assert!(
+            cached_list_overlays(&paths, &DiscoveredEntry { listed: false, ..found.clone() })
+                .is_empty(),
+            "a catalog's translations are its own — another shelf's cache is not read for it",
+        );
     }
 }

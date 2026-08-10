@@ -6,7 +6,7 @@
 //! lifecycle's. This module is that half — the one place that knows the on-disk shape of an installed
 //! plugin, so the dispatch mount, the CLI faces and `uninstall` all read the same layout.
 //!
-//! **One plugin's home is `<base>/plugins/<name>/`**, holding exactly three things this layer knows about:
+//! **One plugin's home is `<base>/plugins/<name>/`**, holding exactly four things this layer knows about:
 //!
 //! - `manifest.json` — the catalog entry the plugin was installed from ([`Manifest`]), kept beside the
 //!   binary so the subscription list and config schema are readable with no network and no catalog. It is
@@ -18,6 +18,9 @@
 //! - `source.json` — which catalog it came from ([`Origin`], `AMB-D-389`). A separate file because the
 //!   manifest is the *catalog's* document and this is amenbo's note about it; written before the manifest,
 //!   so anything that reads as installed has it.
+//! - `i18n.json` — what the catalog said about it in other languages ([`translations`], `AMB-D-622`).
+//!   Separate for the same reason, and here rather than fetched because the face that reads it — the
+//!   settings form — opens with no network and has to follow the reader when they change language.
 //!
 //! **The directory name is the identity.** `Config::plugin_enabled`, the config storage key and the secret
 //! file all key off the plugin's name, so a manifest whose `name` disagrees with the directory it sits in
@@ -40,7 +43,7 @@ use std::path::PathBuf;
 
 use crate::config::{is_reserved_plugin_name, Paths};
 use crate::error::{Error, ErrorCode, Msg, Result};
-use crate::plugin_manifest::Manifest;
+use crate::plugin_manifest::{Manifest, Translations};
 use crate::plugin_subscribe::InstalledPlugin;
 
 /// The file in a plugin's home holding the catalog entry it was installed from, and the marker that the
@@ -49,6 +52,10 @@ pub const MANIFEST_FILE_NAME: &str = "manifest.json";
 
 /// The file in a plugin's home recording which catalog it was installed from (see [`Origin`]).
 pub const SOURCE_FILE_NAME: &str = "source.json";
+
+/// The file in a plugin's home holding what the catalog said about it in other languages (see
+/// [`translations`]).
+pub const TRANSLATIONS_FILE_NAME: &str = "i18n.json";
 
 /// Which catalog a plugin was installed from — the shelf an update goes back to.
 ///
@@ -130,6 +137,65 @@ pub(crate) fn record_origin(paths: &Paths, name: &str, origin: &Origin) -> Resul
         std::fs::create_dir_all(parent)?;
     }
     let json = serde_json::to_string_pretty(&SourceFile { source: origin.as_stored().to_string() })
+        .map_err(|e| Error::Io(std::io::Error::other(e)))?;
+    std::fs::write(dest, json)?;
+    Ok(())
+}
+
+/// Where one installed plugin's translations sit: `<base>/plugins/<name>/i18n.json`.
+pub fn translations_path(paths: &Paths, name: &str) -> PathBuf {
+    paths.plugin_dir(name).join(TRANSLATIONS_FILE_NAME)
+}
+
+/// What the catalog said about this plugin in languages other than the one its author wrote it in
+/// (`AMB-D-622`) — the `desc` a row draws and the labels a settings form shows, keyed by language code.
+///
+/// A separate file for the same reason `source.json` is one: `manifest.json` is the *catalog's*
+/// document, kept as it was published, and the translations are a layer beside it rather than fields
+/// inside it (`AMB-D-623` — the `Manifest` type does not change). Kept on disk at all because the faces
+/// that read it open with no network: a settings form is drawn from what is beside the binary, and it
+/// has to follow the reader when they change language rather than send them back to the catalog.
+///
+/// **Nothing here is an error.** Absent is a plugin nobody translated, and a file that will not parse
+/// reads the same way — what such a plugin loses is the layer, and the base values are what a reader
+/// sees, which is where an untranslated plugin already stands. Selecting between the two is the GUI's
+/// (`AMB-D-623`), so this hands over both languages and lines exactly as they were published.
+pub fn translations(paths: &Paths, name: &str) -> Translations {
+    let Ok(raw) = std::fs::read_to_string(translations_path(paths, name)) else {
+        return Translations::new();
+    };
+    serde_json::from_str(&raw).unwrap_or_else(|_| {
+        tracing::warn!(plugin = %name, "ignoring an unreadable plugin translation record");
+        Translations::new()
+    })
+}
+
+/// Write what the catalog said about a plugin in other languages, in its home.
+///
+/// Called before the manifest, like [`record_origin`] and for the same reason: the manifest is the
+/// install marker, so anything that reads as installed has the record beside it rather than acquiring it
+/// one write later.
+///
+/// **No translations removes the file** rather than writing an empty one. This is the path an update
+/// takes too, and a build whose author withdrew a language must not keep answering in it — a stale layer
+/// over a new manifest is the one way this file could say something the catalog does not.
+pub(crate) fn record_translations(
+    paths: &Paths,
+    name: &str,
+    translations: &Translations,
+) -> Result<()> {
+    let dest = translations_path(paths, name);
+    if translations.is_empty() {
+        match std::fs::remove_file(&dest) {
+            Ok(()) => return Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => return Err(Error::from(e)),
+        }
+    }
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let json = serde_json::to_string_pretty(translations)
         .map_err(|e| Error::Io(std::io::Error::other(e)))?;
     std::fs::write(dest, json)?;
     Ok(())
@@ -420,5 +486,64 @@ mod tests {
 
         let names: Vec<_> = installed(&paths).unwrap().into_iter().map(|p| p.name).collect();
         assert_eq!(names, vec!["slack", "worktree"]);
+    }
+
+    /// One language's overlay, as the catalog published it.
+    fn translated(lang: &str, desc: &str) -> Translations {
+        Translations::from([(
+            lang.to_string(),
+            crate::plugin_manifest::ManifestOverlay {
+                desc: Some(desc.to_string()),
+                ..Default::default()
+            },
+        )])
+    }
+
+    /// **The translations round-trip beside the binary** (`AMB-D-622`) — every language as it was
+    /// published, so a settings form opened with no network has the labels and a reader who changes
+    /// language is followed without going back to the catalog.
+    #[test]
+    fn the_translations_round_trip_beside_the_plugin() {
+        let (paths, _dir) = paths_at("i18n-round-trip");
+        install(&paths, "worktree", "worktree");
+
+        let published = translated("ja", "タスクごとに git worktree を切り分ける");
+        record_translations(&paths, "worktree", &published).unwrap();
+
+        assert_eq!(translations(&paths, "worktree"), published);
+        assert_eq!(
+            translations_path(&paths, "worktree"),
+            paths.plugin_dir("worktree").join("i18n.json"),
+        );
+    }
+
+    /// **No translations removes the file.** This is the path an update takes, and a layer left over
+    /// from the build before it would label the new one in the old one's words — the one way this file
+    /// could say something the catalog does not.
+    #[test]
+    fn recording_no_translations_clears_what_was_there() {
+        let (paths, _dir) = paths_at("i18n-cleared");
+        install(&paths, "worktree", "worktree");
+        record_translations(&paths, "worktree", &translated("ja", "一行")).unwrap();
+
+        record_translations(&paths, "worktree", &Translations::new()).unwrap();
+
+        assert!(!translations_path(&paths, "worktree").exists());
+        assert!(translations(&paths, "worktree").is_empty());
+        // And doing it again, with nothing there, is not a failure.
+        record_translations(&paths, "worktree", &Translations::new()).unwrap();
+    }
+
+    /// Absent and unreadable both read as untranslated, never as an error: what such a plugin loses is
+    /// the layer, and the base values are what a reader falls back to anyway (`AMB-D-623`).
+    #[test]
+    fn a_plugin_with_no_readable_translations_is_simply_untranslated() {
+        let (paths, _dir) = paths_at("i18n-broken");
+        install(&paths, "worktree", "worktree");
+
+        assert!(translations(&paths, "worktree").is_empty(), "nothing written yet");
+        std::fs::write(translations_path(&paths, "worktree"), b"{ not json").unwrap();
+        assert!(translations(&paths, "worktree").is_empty());
+        assert!(read(&paths, "worktree").is_ok(), "the install itself is fine");
     }
 }

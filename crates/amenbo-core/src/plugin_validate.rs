@@ -38,7 +38,7 @@ use crate::plugin_manifest::{
     ConfigField, ConfigFieldOverlay, Face, FieldType, Manifest, ManifestOverlay, Os, Translations,
     NONE_SELECTED,
 };
-use crate::plugin_wire::ListEntry;
+use crate::plugin_wire::{ListEntry, ListEntryOverlay};
 
 /// The shortest a plugin id (`name`) may be (`AMB-D-360`).
 pub const NAME_MIN_LEN: usize = 2;
@@ -319,22 +319,51 @@ pub fn validate_manifest(m: &Manifest) -> Vec<Problem> {
 ///   one would.
 ///
 /// **Who runs it.** The author's tool does (`plugin validate`), which is where an overlay is a file that
-/// can still be fixed. The install door validates the manifest it joined ([`validate_manifest`]) and does
-/// not yet reach for this: the translations it would judge are the ones amenbo itself published, and the
-/// document that carries them is not fetched by a road that exists today (`AMB-T-2943`).
+/// can still be fixed — and the install door does too, over the translations it joined off the catalog
+/// ([`crate::plugin_install`]). The door's answer is not the author's: a language that does not line up
+/// is dropped there and the install goes on, because what it costs a reader is the base line they would
+/// have seen anyway (`AMB-D-623`).
 pub fn validate_overlays(m: &Manifest, translations: &Translations) -> Vec<Problem> {
     let mut problems = Vec::new();
     for (lang, overlay) in translations {
-        if !crate::config::LANGUAGES.contains(&lang.as_str()) {
-            problems.push(Problem::new(
-                format!("i18n[{lang}]"),
-                ProblemCode::UnknownLanguage,
-                format!("'{lang}' is not a language amenbo is read in"),
-            ));
-        }
+        check_language(&mut problems, lang);
         check_overlay(&mut problems, m, lang, overlay);
     }
     problems
+}
+
+/// Validate the **list half** of one language's translations — one entry of a `catalog.<lang>.json`, as
+/// it arrives off the network (`AMB-D-622`). Empty ⇒ valid, as above.
+///
+/// The same relation to [`validate_overlays`] that [`validate_list_entry`] has to [`validate_manifest`]:
+/// the rules that can be asked of the half in hand. The lining-up rules cannot be — which config keys
+/// exist and which candidates a field offers are the detail's, a document this reader has not fetched
+/// and will not fetch to draw a row. What is left is the whole of what a list document carries: a
+/// language amenbo is read in, and a line held to the rule its base line is held to.
+pub fn validate_list_overlay(lang: &str, o: &ListEntryOverlay) -> Vec<Problem> {
+    let mut problems = Vec::new();
+    check_language(&mut problems, lang);
+    if let Some(desc) = &o.desc {
+        let at = format!("i18n[{lang}].desc");
+        check_line(&mut problems, &at, desc, MAX_DESC_LEN);
+        // Drawn where the base line is drawn, so it borrows this store's authority the same way
+        // (`AMB-D-572`) — see the same pair in `check_overlay`.
+        check_no_record_ref(&mut problems, &at, desc);
+    }
+    problems
+}
+
+/// The language an overlay is written in is one amenbo is read in (`AMB-D-394`). Asked once per
+/// language, above whichever face's fields follow, because the code names the file the author wrote and
+/// the document it is published as at the same time: one outside the list is a document nothing fetches.
+fn check_language(problems: &mut Vec<Problem>, lang: &str) {
+    if !crate::config::LANGUAGES.contains(&lang) {
+        problems.push(Problem::new(
+            format!("i18n[{lang}]"),
+            ProblemCode::UnknownLanguage,
+            format!("'{lang}' is not a language amenbo is read in"),
+        ));
+    }
 }
 
 /// One language's overlay against the manifest it translates — the body of [`validate_overlays`], split
@@ -2026,6 +2055,33 @@ mod tests {
             codes(&problems),
             vec![ProblemCode::NotInBase, ProblemCode::UnknownLanguage, ProblemCode::TooLong],
             "de's missing field, xx's language and xx's line — all of it, in language order",
+        );
+    }
+
+    /// **The list half is held to the rules its base line is held to** (`AMB-D-622`) — the same cap, the
+    /// same one-line shape, the same refusal to cite a record — because it is drawn exactly where the
+    /// base line is drawn. What it is *not* asked is anything that needs the manifest: a list document
+    /// is all a browse fetches, so a rule it cannot answer would drop every translated line there is.
+    #[test]
+    fn a_translated_line_obeys_the_rule_the_base_line_obeys() {
+        let line = |desc: &str| ListEntryOverlay { desc: Some(desc.to_string()) };
+
+        assert!(validate_list_overlay("ja", &line("タスクごとに git worktree を切り分ける")).is_empty());
+        assert!(
+            validate_list_overlay("ja", &ListEntryOverlay::default()).is_empty(),
+            "a language present with nothing translated is the base line, not a problem",
+        );
+
+        assert_eq!(codes(&validate_list_overlay("xx", &line("a line"))), [ProblemCode::UnknownLanguage]);
+        assert_eq!(codes(&validate_list_overlay("ja", &line(""))), [ProblemCode::Empty]);
+        assert_eq!(
+            codes(&validate_list_overlay("ja", &line(&"あ".repeat(MAX_DESC_LEN + 1)))),
+            [ProblemCode::TooLong],
+        );
+        assert_eq!(
+            codes(&validate_list_overlay("ja", &line("AMB-T-1 のためのプラグイン"))),
+            [ProblemCode::RecordRef],
+            "a translated line borrows this store's authority the same way an untranslated one would",
         );
     }
 

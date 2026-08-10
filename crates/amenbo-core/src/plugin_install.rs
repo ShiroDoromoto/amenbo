@@ -17,6 +17,8 @@
 //!    plugin ([`crate::plugin_catalog::detail`]) and joined with the entry ([`crate::plugin_wire::join`]).
 //!    The join is untrusted delivery like everything else on this path, so it goes through the validator
 //!    before a byte is fetched — that is where the rules a list entry could not answer for are answered.
+//!    The translations ride along the same join (`AMB-D-622`) and meet their own door, which drops a
+//!    language rather than refusing the plugin ([`catalog_manifest`]).
 //! 4. **Refuse a platform the manifest does not claim**, and resolve this one's distributable
 //!    (`AMB-D-381`): a per-OS `assets` entry, or the single `url` of an entry that is one file everywhere.
 //!    An OS outside the declared set is a binary that was never built to run here.
@@ -57,7 +59,7 @@ use crate::config::{is_reserved_plugin_name, Paths};
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::plugin_catalog::{self, DiscoveredEntry, Discovery, Dropped};
 use crate::plugin_installed;
-use crate::plugin_manifest::{Manifest, Platform};
+use crate::plugin_manifest::{Manifest, Platform, Translations};
 use crate::plugin_provenance;
 use crate::plugin_validate::validate_manifest;
 
@@ -103,11 +105,14 @@ pub fn install(paths: &Paths, name: &str) -> Result<Installed> {
     let found = resolve(&view, name)?;
     // Before the second fetch, so a name this machine already holds costs no request at all.
     refuse_an_overwrite(paths, &found.entry.name)?;
-    let manifest = catalog_manifest(paths, found)?;
+    let (manifest, translations) = catalog_manifest(paths, found)?;
     let program = fetch_verified_program(&manifest, &found.trust_root()?)?;
     // Which shelf this came off, before the marker that says it is installed at all: an update reads it
     // to go back to the same one (see `plugin_installed::Origin`).
     plugin_installed::record_origin(paths, &manifest.name, &found.origin())?;
+    // And what the catalog said about it in other languages, beside it for the same reason: the faces
+    // that read it open with no network (`AMB-D-622`).
+    plugin_installed::record_translations(paths, &manifest.name, &translations)?;
     place(paths, &manifest, &program)
 }
 
@@ -122,13 +127,23 @@ pub fn install(paths: &Paths, name: &str) -> Result<Installed> {
 /// Validating the join is what keeps the split from loosening anything: a list entry cannot be asked for a
 /// checksum it does not carry, so the rules that live on the detail's fields are checked here, with both
 /// halves in hand, before a byte of the asset is fetched.
-pub(crate) fn catalog_manifest(paths: &Paths, found: &DiscoveredEntry) -> Result<Manifest> {
+///
+/// **The translations come back with it** (`AMB-D-622`), joined from both halves: the form labels the
+/// detail document just carried, and the lines whichever `catalog.<lang>.json` documents are already on
+/// this machine carried ([`plugin_catalog::cached_list_overlays`]). They go through their own door on the
+/// way out ([`sound_languages`]), which — unlike the manifest's — drops a language rather than refusing
+/// the plugin.
+pub(crate) fn catalog_manifest(
+    paths: &Paths,
+    found: &DiscoveredEntry,
+) -> Result<(Manifest, Translations)> {
     let entry = &found.entry;
     let detail = plugin_catalog::detail_of(paths, found)?;
-    // The translations the detail carried are dropped here rather than kept: the road that fetches the
-    // list half of them and writes them beside the binary is not built yet (`AMB-T-2943`), and a value
-    // half-delivered is worse than one delivered later. What installs is the manifest, as before.
-    let (manifest, _translations) = crate::plugin_wire::join(entry, &Default::default(), &detail);
+    let (manifest, translations) = crate::plugin_wire::join(
+        entry,
+        &plugin_catalog::cached_list_overlays(paths, found),
+        &detail,
+    );
     let problems = validate_manifest(&manifest);
     if let Some(first) = problems.first() {
         let first = format!("{}: {}", first.location, first.message.en());
@@ -139,7 +154,40 @@ pub(crate) fn catalog_manifest(paths: &Paths, found: &DiscoveredEntry) -> Result
                 .with("problem", &first),
         ));
     }
-    Ok(manifest)
+    let translations = sound_languages(&manifest, translations);
+    Ok((manifest, translations))
+}
+
+/// The languages that line up with the manifest they translate —
+/// [`validate_overlays`](crate::plugin_validate::validate_overlays) asked one language at a time,
+/// because the answer here is per language (`AMB-D-621`).
+///
+/// **A language that does not line up is dropped, and the install goes on.** The delivery path is not
+/// trusted (`AMB-D-354`), so what arrives is checked like everything else on it; but a translation is a
+/// layer over values that are already there, and what dropping one costs a reader is the base line they
+/// would have seen had nobody translated it (`AMB-D-623`). Refusing the install instead would be
+/// refusing a plugin whose binary, checksum and signature are all sound over a label — and would hand
+/// whoever publishes the catalog a way to make a plugin uninstallable by mistranslating it.
+///
+/// Dropped languages are warned about rather than swallowed, for the same reason a dropped catalog entry
+/// is: a catalog quietly shedding its translations should be visible somewhere.
+fn sound_languages(m: &Manifest, translations: Translations) -> Translations {
+    translations
+        .into_iter()
+        .filter(|(lang, overlay)| {
+            let one = Translations::from([(lang.clone(), overlay.clone())]);
+            let problems = crate::plugin_validate::validate_overlays(m, &one);
+            if let Some(first) = problems.first() {
+                tracing::warn!(
+                    plugin = %m.name,
+                    language = %lang,
+                    problem = %format!("{}: {}", first.location, first.message.en()),
+                    "dropping a plugin translation that does not line up with the manifest it translates",
+                );
+            }
+            problems.is_empty()
+        })
+        .collect()
 }
 
 /// The plugin's executable, off the network and through the trust gates — the *only* way bytes named by a
@@ -900,5 +948,72 @@ mod tests {
         let err = place(&paths, &manifest(Paths::REGISTRY_DIR_NAME), b"x").unwrap_err();
         assert_eq!(err.code(), "invalid_value");
         assert!(!paths.registry_dir().exists(), "and nothing was written");
+    }
+
+    /// A manifest with a form to translate, for the door below.
+    fn manifest_with_a_form(name: &str) -> Manifest {
+        Manifest {
+            config: vec![serde_json::from_value(serde_json::json!({
+                "key": "base",
+                "label": "Base branch",
+            }))
+            .expect("a config field")],
+            ..manifest(name)
+        }
+    }
+
+    /// One language's overlay of that form.
+    fn overlay(desc: Option<&str>, label: Option<&str>) -> crate::plugin_manifest::ManifestOverlay {
+        crate::plugin_manifest::ManifestOverlay {
+            desc: desc.map(str::to_string),
+            config: label
+                .map(|label| {
+                    std::collections::BTreeMap::from([(
+                        "base".to_string(),
+                        crate::plugin_manifest::ConfigFieldOverlay {
+                            label: Some(label.to_string()),
+                            ..Default::default()
+                        },
+                    )])
+                })
+                .unwrap_or_default(),
+            ..Default::default()
+        }
+    }
+
+    /// **The translations meet the same door the manifest does** (`AMB-D-354`) — the delivery path is
+    /// not trusted, so a language that does not line up with what it translates is not shown.
+    #[test]
+    fn a_translation_that_does_not_line_up_is_dropped() {
+        let m = manifest_with_a_form("worktree");
+        let published = Translations::from([
+            ("ja".to_string(), overlay(Some("一行"), Some("基点にするブランチ"))),
+            // A language amenbo is not read in — a document nothing would ever fetch.
+            ("xx".to_string(), overlay(Some("a line"), None)),
+            // A form field this manifest does not declare: text nobody would ever see.
+            ("de".to_string(), {
+                let mut o = overlay(Some("eine Zeile"), None);
+                o.config.insert("nothing".into(), Default::default());
+                o
+            }),
+        ]);
+
+        let kept = sound_languages(&m, published);
+
+        assert_eq!(kept.keys().collect::<Vec<_>>(), ["ja"]);
+        assert_eq!(kept["ja"].config["base"].label.as_deref(), Some("基点にするブランチ"));
+    }
+
+    /// **And the plugin still installs** (`AMB-D-623`). What a dropped language costs a reader is the
+    /// base line they would have seen had nobody translated it — refusing over it would refuse a plugin
+    /// whose binary, checksum and signature are all sound, and hand a catalog a way to make one
+    /// uninstallable by mistranslating it.
+    #[test]
+    fn a_plugin_whose_every_translation_is_refused_is_still_a_plugin() {
+        let m = manifest_with_a_form("worktree");
+        let published = Translations::from([("xx".to_string(), overlay(Some("a line"), None))]);
+
+        assert!(sound_languages(&m, published).is_empty());
+        assert!(validate_manifest(&m).is_empty(), "and the manifest itself was never in question");
     }
 }

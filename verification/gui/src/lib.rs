@@ -245,6 +245,11 @@ impl Instructor {
     /// `detail` follows that same line: what it expects is the declaration the step named, which the
     /// catalog's document carries in the author's own words — an event id, or a setting's label.
     ///
+    /// `line` is the same again, one row earlier: the sentence drawn under a plugin's name is the
+    /// author's, in whichever language the catalog published it and the reader is in. It is judged on
+    /// the sentence itself and not on "is this translated", since the fallback draws no mark of its
+    /// own — a row in English says nothing about why it is in English.
+    ///
     /// `first-loop` too: what it expects is the command the handed-over request tells the reader's
     /// AI to run, which is the same words in any language the app is in. Its sibling `first-loop-order`
     /// names an order instead, and an order is not something a reading settles — which words are on a
@@ -336,6 +341,9 @@ impl Instructor {
             }
             (Domain::Plugin, "browsed") if !official(with) => {
                 Some(Expectation { text: arg_str(with, "source")?.to_string(), present: true })
+            }
+            (Domain::Plugin, "line") => {
+                Some(Expectation { text: arg_str(with, "desc")?.to_string(), present: true })
             }
             (Domain::Plugin, "detail") => {
                 Some(Expectation { text: arg_str(with, "declares")?.to_string(), present: true })
@@ -489,6 +497,17 @@ impl Instructor {
                     return Err(format!("action `nudge-answer` does not know the answer `{other}`"))
                 }
             },
+            // The language the interface is read in, changed where a reader changes it. The step names
+            // the code the store keeps rather than the word standing in the list, which is each
+            // language's own name for itself — a table the harness would then hold a second copy of,
+            // and be wrong about the day one of the nineteen is renamed.
+            //
+            // Coming back is part of the step and not a note beside it: the setting is on a screen of
+            // its own, and the assert after this one is about a listing somewhere else.
+            (Domain::Store, "set-language") => format!(
+                "In amenbo's own settings, set the language the interface is read in to the one whose code is \"{}\", then return to the screen the road was on.",
+                req(with, "language")?
+            ),
             (Domain::Plugin, "open-entry") => format!(
                 "Open the row for \"{}\", the one served by the catalog \"{}\".",
                 req(with, "name")?,
@@ -744,6 +763,15 @@ impl Instructor {
                     ),
                 }
             }
+            // The line under a row, and which language it came out in. The sentence is quoted whole
+            // rather than described, because what is being read is one of two sentences a build could
+            // have drawn there and nothing on the screen says which — the fallback to the base line
+            // is silent by design.
+            (Domain::Plugin, "line") => format!(
+                "Confirm the market's row for \"{}\" draws the line \"{}\" under it.",
+                req(with, "name")?,
+                req(with, "desc")?
+            ),
             (Domain::Plugin, "detail") => format!(
                 "Confirm the panel open under \"{}\" — the row the catalog \"{}\" served — says installing it would mean \"{}\".",
                 req(with, "name")?,

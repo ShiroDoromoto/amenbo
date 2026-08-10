@@ -339,6 +339,17 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "hard-erase", required: &["target", "body"], refs: &["target"], strings: &["body"], binds: false },
     // The store's own settings, changed the one way a user can change them.
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "config-set", required: &["key", "value"], refs: &[], strings: &["key", "value"], binds: false },
+    // The one of those settings a road walks rather than declares: the language the interface is
+    // read in. It is written as a move and not as a premise because what turns on it is what the
+    // screen does **when it changes** — a listing drawn in one language and redrawn in another is
+    // the whole of what a translated catalog line has to survive, and a store that opened in the
+    // second language proves nothing about the first.
+    //
+    // A screen road alone. The setting is reachable from a terminal (`config-set`), but nothing there
+    // is drawn in it: what the CLI prints is English whatever this says, so a road that set it in a
+    // terminal would be changing a value nothing it could then read depends on. `language` is the code
+    // the store keeps, and the instruction says it in full.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "set-language", required: &["language"], refs: &[], strings: &["language"], binds: false },
     // The other face of the integrity check: the one that puts right what the reading face reports.
     // It is an action and not an assert precisely because it writes — what it swept is read back by
     // asking the reading face again.
@@ -575,6 +586,11 @@ const REGISTRY: &[OpSpec] = &[
     // badge it is not entitled to, and the one `setting` its author declares, under the `label` a
     // form shows). Naming none is an empty shelf, which is what a road about the trust root alone
     // wants. It is the only arg written as a list of rows, and the loader checks it as one.
+    // A row may also carry `translated` — the same `desc` and `label` as its author wrote them in
+    // other languages, keyed by language code. The two halves are then published the way a real
+    // catalog publishes them: the lines beside the list as one document per language, the labels
+    // inside the row's own detail document, every language at once. A language no row translates
+    // gets no document, which is the 404 a reader of an untranslated language meets.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "catalog-stand", required: &["publishes_key"], refs: &[], strings: &[], binds: true },
     // The same catalog, publishing a different key than the one pinned on it — a publisher rotating
     // their key, which is the event the pin exists to meet.
@@ -1030,6 +1046,22 @@ const REGISTRY: &[OpSpec] = &[
     // catalog, `plugin list` per installed manifest, and an entry's own claim reaches a person only
     // through the market screen. That is why the scenario carrying this is written for the screen.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "browsed", required: &["name", "source", "official"], refs: &[], strings: &["name", "source"], binds: false },
+    // The other question about that same row, asked apart from it: the one line drawn under the
+    // name, and which language it is in. The badge says which shelf served the row; this says
+    // whether what the shelf published in the reader's language is what reached them. One word
+    // could not carry both, and a row badged right in the wrong language is exactly the state a
+    // build breaks into.
+    //
+    // `desc` is the line the step expects, written out. It is the author's own sentence — not a
+    // phrase of the interface — so a reading can be held to it, and holding it to the sentence
+    // rather than to "is it translated" is the point: the fallback to the base line is silent by
+    // design, so nothing on the screen distinguishes a line drawn in English because the author wrote
+    // none from one drawn in English because the fetch never happened. What tells them apart is which
+    // of the two sentences is standing there.
+    //
+    // A screen road alone, and not by omission: what a terminal prints is English whatever the
+    // reader's language says, so the line this is about is drawn in one place.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "line", required: &["name", "desc"], refs: &[], strings: &["name", "desc"], binds: false },
     // One row opened, and what the catalog's own detail document says installing it would mean. A
     // catalog is served as two documents, and the detail is fetched only when someone opens a row —
     // from whichever catalog served that row, which is the reach a merged view has to get right and
@@ -1164,6 +1196,11 @@ fn may_stand(domain: Domain, op: &str) -> bool {
 /// under it. The rest is optional, and each is held to its own shape — a `claims_official` that
 /// arrived as the word "true" would be a badge nobody claimed, and a `label` that arrived as a
 /// number would reach a form as one.
+///
+/// `translated` is the same row in the author's other languages, keyed by language code, and it is
+/// checked against the base row rather than on its own: translating a `label` on an entry that
+/// declares no `setting` publishes a label for a field nobody will see, which is the same mistake
+/// one language along.
 fn offers_problems(value: &serde_yaml::Value) -> Vec<String> {
     let Some(rows) = value.as_sequence() else {
         return vec!["`offers` must be a list of the entries this catalog serves".to_string()];
@@ -1194,6 +1231,46 @@ fn offers_problems(value: &serde_yaml::Value) -> Vec<String> {
         // setting is declared under, and naming only its display text declares nothing.
         if row.get("label").is_some() && row.get("setting").is_none() {
             problems.push(at_row("`label` names a `setting`, so one has to be declared".into()));
+        }
+        problems.extend(translated_problems(row).into_iter().map(at_row));
+    }
+    problems
+}
+
+/// What is wrong with one row's `translated` block — the same row in the author's other languages.
+///
+/// It is a mapping keyed by language code, and each language holds the two words a translation is
+/// made of: the `desc` a row draws, and the `label` its one setting is shown under. Naming neither
+/// is a language that translates nothing, which is a document published for no reason — so it is
+/// caught here rather than serving an empty answer to a reader who then sees English and cannot
+/// tell why.
+fn translated_problems(row: &serde_yaml::Value) -> Vec<String> {
+    let Some(block) = row.get("translated") else { return Vec::new() };
+    let Some(langs) = block.as_mapping() else {
+        return vec!["`translated` must be a mapping of language code to the words in it".to_string()];
+    };
+    let mut problems = Vec::new();
+    for (lang, words) in langs {
+        let Some(lang) = lang.as_str() else {
+            problems.push("`translated` is keyed by language code, which is a string".to_string());
+            continue;
+        };
+        let Some(_) = words.as_mapping() else {
+            problems.push(format!("`translated.{lang}` must be a mapping of the words written in it"));
+            continue;
+        };
+        for key in ["desc", "label"] {
+            if words.get(key).is_some_and(|v| v.as_str().is_none()) {
+                problems.push(format!("`translated.{lang}.{key}` must be a string"));
+            }
+        }
+        if words.get("label").is_some() && row.get("setting").is_none() {
+            problems.push(format!(
+                "`translated.{lang}.label` names a `setting`, so one has to be declared"
+            ));
+        }
+        if words.get("desc").is_none() && words.get("label").is_none() {
+            problems.push(format!("`translated.{lang}` translates nothing — name a `desc`, a `label`, or both"));
         }
     }
     problems
@@ -2059,6 +2136,28 @@ steps_cli:
         assert!(errs.iter().any(|e| e.message.contains("`label` names a `setting`")), "{errs:?}");
 
         assert!(stand("        - { name: standup, desc: d, setting: channel, label: Channel webhook }").is_ok());
+
+        // The same row in another language is held to the same shape, and to the base row beside it:
+        // a label translated onto an entry declaring no setting is a label no form will ever show.
+        let errs = stand("        - { name: standup, desc: d, translated: { de: { label: Beschriftung } } }").unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("`translated.de.label` names a `setting`")), "{errs:?}");
+
+        let errs = stand("        - { name: standup, desc: d, translated: { de: { desc: 12 } } }").unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("`translated.de.desc` must be a string")), "{errs:?}");
+
+        // A language that translates neither word is a document published with nothing in it.
+        let errs = stand("        - { name: standup, desc: d, translated: { de: {} } }").unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("`translated.de` translates nothing")), "{errs:?}");
+
+        let errs = stand("        - { name: standup, desc: d, translated: de }").unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("`translated` must be a mapping")), "{errs:?}");
+
+        assert!(
+            stand(
+                "        - { name: standup, desc: d, setting: channel, label: L, translated: { de: { desc: Beschreibung, label: Beschriftung } } }"
+            )
+            .is_ok()
+        );
     }
 
     /// A shelf is a list of rows. Written as one word it would reach the driver as a catalog offering

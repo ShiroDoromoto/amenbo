@@ -22,6 +22,14 @@ fn detail_path(name: &str) -> String {
     format!("/plugins/{name}.json")
 }
 
+/// And where one language's translated lines are published — the third document a catalog serves,
+/// beside the other two and resolved the same way. A language no row was written in is a path nobody
+/// published, and the host answers those with a 404, which is exactly the answer a real catalog gives
+/// for a language nobody has translated.
+fn list_overlay_path(lang: &str) -> String {
+    format!("/catalog.{lang}.json")
+}
+
 /// When this catalog says it was generated. A published catalog carries the moment its CI ran; one a
 /// run stands up has no such moment, so it carries a fixed one and the bytes stay the same from run
 /// to run.
@@ -55,6 +63,20 @@ struct Offer {
     /// beside it. The panel under an opened row is the only place a detail document reaches the
     /// screen, so a shelf whose entries declare nothing puts nothing on that panel that came from it.
     setting: Option<(String, String)>,
+    /// The same two words as the author wrote them elsewhere, keyed by language code. They leave by
+    /// different doors — the line beside the list, the label inside the detail — which is the split
+    /// the delivery is built on, so they are held together here and parted at the moment of
+    /// publishing.
+    translated: std::collections::BTreeMap<String, Words>,
+}
+
+/// One language's half of a row: whichever of the two words its author wrote in it. Both are
+/// optional and each travels on its own document, so a language holding one of them is an ordinary
+/// state and not a half-written one.
+#[derive(Default)]
+struct Words {
+    desc: Option<String>,
+    label: Option<String>,
 }
 
 impl Offer {
@@ -88,6 +110,22 @@ impl Offer {
         if let Some((key, label)) = &self.setting {
             doc["config"] = serde_json::json!([{ "key": key, "label": label }]);
         }
+        // Every language at once, since this document is fetched one plugin at a time and then read
+        // offline — which is what lets a form follow a language change with no request behind it.
+        // Only the languages that translated the label are in it; the line beside the list left by
+        // the other door.
+        let i18n: serde_json::Map<String, serde_json::Value> = self
+            .translated
+            .iter()
+            .filter_map(|(lang, words)| {
+                let (key, _) = self.setting.as_ref()?;
+                let label = words.label.as_ref()?;
+                Some((lang.clone(), serde_json::json!({ "config": { key: { "label": label } } })))
+            })
+            .collect();
+        if !i18n.is_empty() {
+            doc["i18n"] = serde_json::Value::Object(i18n);
+        }
         doc.to_string()
     }
 }
@@ -115,13 +153,34 @@ fn offers(with: &Args) -> Result<Vec<Offer>, String> {
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false),
                 setting,
+                translated: translated(row),
             })
         })
         .collect()
 }
 
-/// Every document a stood catalog publishes, keyed by the path it answers at: the list, and one
-/// detail beside it per entry.
+/// The languages one row was also written in. The shape is the loader's to judge — a row that
+/// reached here has been through [`amenbo_scenario`]'s check — so anything that is not a language's
+/// mapping of words is simply not one of them.
+fn translated(row: &serde_yaml::Value) -> std::collections::BTreeMap<String, Words> {
+    let Some(langs) = row.get("translated").and_then(|v| v.as_mapping()) else { return Default::default() };
+    langs
+        .iter()
+        .filter_map(|(lang, words)| {
+            let lang = lang.as_str()?.to_string();
+            let word = |key: &str| words.get(key).and_then(|v| v.as_str()).map(str::to_string);
+            Some((lang, Words { desc: word("desc"), label: word("label") }))
+        })
+        .collect()
+}
+
+/// Every document a stood catalog publishes, keyed by the path it answers at: the list, one detail
+/// beside it per entry, and one document per language any row drew a line in.
+///
+/// The last of those is published only where there is a line to put in it. A language whose rows
+/// translated the form label alone leaves no document — the labels went out inside the details — so
+/// a browse in that language draws the base lines and meets a 404 on the way, which is the answer a
+/// real catalog gives and not a failure.
 fn catalog_docs(offers: &[Offer]) -> Vec<(String, String)> {
     let mut docs: Vec<(String, String)> =
         offers.iter().map(|o| (detail_path(&o.name), o.detail())).collect();
@@ -131,6 +190,21 @@ fn catalog_docs(offers: &[Offer]) -> Vec<(String, String)> {
         "plugins": offers.iter().map(Offer::entry).collect::<Vec<_>>(),
     });
     docs.push((CATALOG_PATH.to_string(), list.to_string()));
+
+    let mut lines: std::collections::BTreeMap<&str, serde_json::Map<String, serde_json::Value>> =
+        Default::default();
+    for offer in offers {
+        for (lang, words) in &offer.translated {
+            let Some(desc) = &words.desc else { continue };
+            lines
+                .entry(lang.as_str())
+                .or_default()
+                .insert(offer.name.clone(), serde_json::json!({ "desc": desc }));
+        }
+    }
+    for (lang, entries) in lines {
+        docs.push((list_overlay_path(lang), serde_json::Value::Object(entries).to_string()));
+    }
     docs
 }
 
@@ -1488,5 +1562,64 @@ mod tests {
         assert!(offers(&args("offers:\n  - desc: no name here\n")).is_err());
         assert!(offers(&args("offers:\n  - name: nameless\n")).is_err());
         assert!(offers(&args("offers: standup")).is_err(), "a shelf is a list of rows, not one word");
+    }
+
+    /// The two halves of a translation leave by different doors, which is the whole of the split:
+    /// the line beside the list, one document per language, and the label inside the row's own
+    /// detail, every language at once.
+    #[test]
+    fn a_translated_row_leaves_by_both_doors() {
+        let docs = catalog_docs(
+            &offers(&args(
+                "offers:\n  - name: standup\n    desc: Post the day's finished tasks\n    setting: channel\n    label: Channel webhook\n    translated:\n      ja:\n        desc: Erledigte Aufgaben des Tages posten\n        label: Webhook des Kanals\n",
+            ))
+            .expect("one row to read"),
+        );
+
+        let ja = served(&docs, "/catalog.ja.json");
+        assert_eq!(ja["standup"]["desc"], "Erledigte Aufgaben des Tages posten");
+        assert_eq!(
+            served(&docs, CATALOG_PATH)["plugins"][0]["desc"],
+            "Post the day's finished tasks",
+            "the list itself stays in the language its author wrote the base row in",
+        );
+
+        let detail = served(&docs, "/plugins/standup.json");
+        assert_eq!(detail["i18n"]["ja"]["config"]["channel"]["label"], "Webhook des Kanals");
+        assert_eq!(detail["config"][0]["label"], "Channel webhook", "the base label is where it was");
+    }
+
+    /// A language nobody wrote a line in gets no document of its own, and the 404 that answers for it
+    /// is what a reader of an untranslated language already meets. A label alone is not a line: it
+    /// went out inside the detail, so it raises no document here.
+    #[test]
+    fn a_language_with_no_line_publishes_no_document() {
+        let docs = catalog_docs(
+            &offers(&args(
+                "offers:\n  - name: standup\n    desc: Post the day's finished tasks\n    setting: channel\n    label: Channel webhook\n    translated:\n      de:\n        label: Webhook des Kanals\n",
+            ))
+            .expect("one row to read"),
+        );
+        assert!(
+            !docs.iter().any(|(path, _)| path.starts_with("/catalog.") && path != CATALOG_PATH),
+            "no language document was called for: {:?}",
+            docs.iter().map(|(p, _)| p).collect::<Vec<_>>(),
+        );
+        assert_eq!(served(&docs, "/plugins/standup.json")["i18n"]["de"]["config"]["channel"]["label"], "Webhook des Kanals");
+    }
+
+    /// One document per language, holding every row that drew a line in it — which is the shape the
+    /// CI publishes, and the shape a browse reads one fetch of.
+    #[test]
+    fn one_language_document_holds_every_row_that_drew_a_line_in_it() {
+        let docs = catalog_docs(
+            &offers(&args(
+                "offers:\n  - name: standup\n    desc: Post the day's finished tasks\n    translated:\n      ja:\n        desc: Erledigte Aufgaben des Tages posten\n  - name: burndown\n    desc: Chart what is left\n    translated:\n      ja:\n        desc: Den Rest als Diagramm zeigen\n",
+            ))
+            .expect("two rows to read"),
+        );
+        let ja = served(&docs, "/catalog.ja.json");
+        assert_eq!(ja["standup"]["desc"], "Erledigte Aufgaben des Tages posten");
+        assert_eq!(ja["burndown"]["desc"], "Den Rest als Diagramm zeigen");
     }
 }

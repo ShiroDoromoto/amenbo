@@ -1,0 +1,161 @@
+# The words a plugin's author wrote, reaching a reader who does not read English.
+#
+# A plugin's own text is the author's, and amenbo relays it rather than writing it. Two of those words
+# — the line a row draws, and the label a settings form shows — may be supplied a second time, by the
+# author, in whatever other languages they wrote. They are delivered by different doors, which is the
+# part a screen has to be watched for: the lines ride beside the list as one document per language, so
+# a reader pays for their own and nobody else's, while the labels ride inside the row's own detail
+# document, every language at once, so a form already fetched follows a language change with no
+# request behind it.
+#
+# Nothing in the CLI is drawn in any of this — a terminal answers in English whatever the reader's
+# language says — and nothing in the store records which language a row came out in. So the screen is
+# the only witness, and this is a road for it alone.
+#
+# What makes the road worth walking is that the fallback is silent. A reader whose
+# language has no line sees English, with no mark saying so — which is the right screen, and is also
+# exactly the screen a build draws when the fetch never happened, when the document was fetched for the
+# wrong language, or when the selection is happening in the wrong layer. Nothing distinguishes them but
+# which sentence is standing there, so every step here quotes the sentence it expects whole.
+#
+# Two shelves, because the fallback has two shapes and one shelf can only be in one of them. The
+# in-house catalog publishes a German document holding a line for one of its two rows: the row with a
+# line drawn in German, the row beside it in English — the reader's language reached the catalog and
+# this author wrote nothing in it. The other catalog publishes no German document at all, so the fetch
+# that goes looking for one is answered 404, and everything it serves stays in English. Both are
+# ordinary answers, and a build that treated either as a failure would show it here first.
+#
+# German rather than the language this repository is discussed in, and not by preference: a scenario
+# file carries no source of its own, so every word in it is read as prose, and prose here is English.
+# Nothing in the road turns on which of the nineteen it is — what is under test is that the reader's
+# is the one reaching them.
+#
+# The road opens in English on purpose. What is under test is the change — a listing drawn in one
+# language and redrawn in another — and a store that opened in the second would prove nothing about
+# the first drawing. Stand on the market screen when the run hands its first step over.
+id: read-a-plugin-in-your-own-language
+title: A plugin's line and its settings label reach a reader in their own language, and fall back to English unmarked
+description: >
+  Browse the market in English, switch the interface to German, and look again. The row whose author
+  wrote a German line is redrawn in German; the row beside it, off the same shelf, stays in English
+  because its author wrote none; and every row off the shelf that publishes no German document at all
+  stays in English too. Open the translated row, and the panel under it says in German what the form
+  will ask for — the label rode inside the detail document, all nineteen languages at once.
+given:
+  # The shelf whose author wrote in another language. Two rows, translated apart: `standup` carries
+  # both words — the line and the form's label — and `burndown` carries neither, which is the reader's
+  # language reaching a catalog that has nothing in it for this row.
+  - type: action
+    domain: plugin
+    op: catalog-stand
+    as: in-house
+    with:
+      publishes_key: true
+      offers:
+        - name: standup
+          desc: Post the day's finished tasks to the team channel
+          setting: channel
+          label: Channel webhook
+          translated:
+            de:
+              desc: Erledigte Aufgaben des Tages im Team-Kanal posten
+              label: Webhook des Kanals
+        - name: burndown
+          desc: Chart what is left in the current milestone
+
+  # And the shelf whose author wrote in one language only. It publishes no document for any other, so
+  # the fetch for one is answered 404 — the other shape of the same fallback, and the one that leaves
+  # every row on the shelf in English rather than one of them.
+  - type: action
+    domain: plugin
+    op: catalog-stand
+    as: english-only
+    with:
+      publishes_key: true
+      offers:
+        - name: retros
+          desc: Collect what the team wants to change this cycle
+
+  - type: action
+    domain: plugin
+    op: catalog-add
+    with:
+      target: in-house
+      name: In-house catalog
+
+  - type: action
+    domain: plugin
+    op: catalog-add
+    with:
+      target: english-only
+      name: English-only catalog
+
+steps_gui:
+  # Where the road starts is said out loud rather than assumed: the store was made a moment ago and
+  # somebody answered the first-run screen, so which language the interface is in is that hand's and
+  # not the road's until a step says it.
+  - type: action
+    domain: store
+    op: set-language
+    with:
+      language: en
+
+  - type: assert
+    domain: plugin
+    op: line
+    with:
+      name: standup
+      desc: Post the day's finished tasks to the team channel
+
+  - type: action
+    domain: store
+    op: set-language
+    with:
+      language: de
+
+  # The listing followed. This is the one line the whole delivery is for: the reader changed language
+  # and the row was redrawn from a document fetched for the language they changed to.
+  - type: assert
+    domain: plugin
+    op: line
+    with:
+      name: standup
+      desc: Erledigte Aufgaben des Tages im Team-Kanal posten
+
+  # Its neighbour on the same shelf did not, and is right not to. The document that carried the line
+  # above holds nothing for this row, so what stands here is the base line — unmarked, which is what
+  # makes it worth a step of its own.
+  - type: assert
+    domain: plugin
+    op: line
+    with:
+      name: burndown
+      desc: Chart what is left in the current milestone
+
+  # And the shelf that publishes no German document at all reads the same way. The difference between
+  # this row and the one above is where the answer came from — an entry missing from a document, and a
+  # document that is not there — and a screen shows neither, which is why both are walked.
+  - type: assert
+    domain: plugin
+    op: line
+    with:
+      name: retros
+      desc: Collect what the team wants to change this cycle
+
+  - type: action
+    domain: plugin
+    op: open-entry
+    with:
+      name: standup
+      source: In-house catalog
+
+  # The other half of the delivery, and the other document. The label was never fetched for a language:
+  # it came down inside this row's detail with every language beside it, which is what lets an installed
+  # plugin's form follow a language change offline.
+  - type: assert
+    domain: plugin
+    op: detail
+    with:
+      name: standup
+      source: In-house catalog
+      declares: Webhook des Kanals

@@ -120,6 +120,18 @@ is nothing a road can read a row's provenance back by. Nothing on such a shelf i
 carry no asset, and an install is walked against the real catalog, whose signature is the layer no
 fixture can stand in for.
 
+A row may also carry `translated:` — the same `desc` and `label` as its author wrote them in other
+languages, keyed by language code — and what the shelf then publishes is the shape a real catalog
+publishes, which is two shapes rather than one. The lines go beside the list, one `catalog.<lang>.json`
+per language, so a reader fetches their own and nobody pays for the other eighteen; the labels go
+inside each row's own detail document, every language at once, so a form already fetched follows a
+language change with no request behind it. That split is the reason to write a row this way rather
+than to stand a shelf per language: what a screen road has to be able to see is a listing redrawn from
+a document fetched for the new language, and a form redrawn from one nobody fetched again. A language
+no row drew a line in gets no document, and the 404 the fetch meets is the answer a reader of an
+untranslated language already gets — so the fallback is walked by leaving a row, or a whole shelf,
+untranslated rather than by breaking anything.
+
 Each op the driver maps is an arm in its domain's module under `cli/src/domain/` — `task depend` in
 `task.rs`, `plugin install` in `plugin.rs` — and an op that is in the scenario registry but not yet
 mapped fails loudly rather than passing silently. `cli/src/lib.rs` keeps only what every arm stands
@@ -320,9 +332,12 @@ settings opened inside it and the press that then goes through,
 `choose-from-what-a-plugin-offers` walks a settings form through the three answers a choice holds and
 the button back to the author's default, `finish-writing-a-task-before-anyone-takes-it` walks the one
 premise a reader settles where it is reported — the card drawn while its creation is still open, and
-the button inside it that ends the creation — and `be-offered-a-start-at-login` walks the one thing on
-screen nobody went and asked for — an offer that comes up on its own once the app has been come back
-to, and the answer that takes it away.
+the button inside it that ends the creation, `read-a-plugin-in-your-own-language` walks a listing
+across a language change — the line one author wrote in the reader's language, the row beside it whose
+author wrote none, the shelf that published no document for that language at all, and the panel whose
+label came down with every language inside it — and `be-offered-a-start-at-login` walks the one thing
+on screen nobody went and asked for — an offer that comes up on its own once the app has been come
+back to, and the answer that takes it away.
 
 Everything the wait prints — the step about to be taken, and the prompt — goes to stderr, so `--json`
 still leaves one machine-readable line on stdout. A driver that is not a person keeps its side open
@@ -609,6 +624,12 @@ shape the box takes while no side is chosen and there is no grammar to read the 
 the button takes while there is no answer left to clear. Both are read off how the control is drawn, not
 off what it does when used: one shut in the build and painted like a live one is one a reader still
 reaches for.
+
+Changing the language the interface is read in, and reading the line drawn under a plugin's name
+(`store set-language` / `plugin line`), are one road's for a different reason: the setting is reachable
+from a terminal, but nothing a terminal prints is drawn in it. What the CLI answers is English whatever
+the setting says, so a road that changed it there would be moving a value nothing it could then read
+depends on — and the sentence this is about is drawn in one place.
 
 One road's alone is sometimes an *argument* rather than a whole op, and then it is the driver that
 cannot answer it which says so. A search hit is the case: what the row **calls** the place it points

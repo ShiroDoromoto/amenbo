@@ -650,7 +650,13 @@ state: "chosen" | "none" | "unanswered", };
  * author wants beside its checkbox. Two audiences, so two strings — the plugin reads `value`, the user
  * reads `label`.
  */
-export type PluginConfigOptionDto = { value: string, label: string, };
+export type PluginConfigOptionDto = { value: string, label: string, 
+/**
+ * The candidate's label in the reader's language, when its author wrote one (`AMB-D-621`). Beside
+ * the base label, never over it (`AMB-D-623`). The `value` has no counterpart here: it is what
+ * travels to the plugin, so it is the same in every language.
+ */
+labelI18n?: string, };
 
 /**
  * What the catalog's **detail document** says about one plugin — the half of its entry that is fetched
@@ -719,7 +725,14 @@ export type PluginEntryDto = {
 /**
  * The plugin's name, which is its identity in the catalog.
  */
-name: string, desc: string, author: string, 
+name: string, desc: string, 
+/**
+ * The same line in the reader's language, when the catalog published one for this plugin
+ * (`AMB-D-622`). It rides **beside** the base line rather than replacing it: choosing between the
+ * two is the front end's (`AMB-D-623`), and absent is the ordinary case — a plugin nobody
+ * translated, a language nobody published, or a reader reading the base language itself.
+ */
+descI18n?: string, author: string, 
 /**
  * `owner/name` — the GitHub coordinates a detail view reads stars and README from, lazily.
  */
@@ -931,6 +944,12 @@ name: string,
  */
 desc: string, 
 /**
+ * That line in the reader's language, when the offered build carries one (`AMB-D-622`) — beside the
+ * base line, for the face to pick from (`AMB-D-623`). It comes off the same documents the offer was
+ * read from, so it describes the build being offered and not the one installed.
+ */
+descI18n?: string, 
+/**
  * The offered entry's identity — the digest of the detail document it was published as, which is the
  * same thing detection compared (`AMB-D-438`). A face keys a dismissal by it, so a catalog that moves
  * the entry again mints a new one and the offer returns. It has to be this and not the asset's digest:
@@ -1006,6 +1025,11 @@ key: string,
  * The author's label for it, which is what the form will caption.
  */
 label: string, 
+/**
+ * That caption in the reader's language, when its author wrote one (`AMB-D-621`). Beside the base
+ * label rather than over it, like every other translated field here (`AMB-D-623`).
+ */
+labelI18n?: string, 
 /**
  * Whether it is a secret — worth knowing before installing, since it means a credential will have
  * to be handed over for the plugin to do anything.

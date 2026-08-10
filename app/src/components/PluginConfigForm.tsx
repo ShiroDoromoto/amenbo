@@ -10,6 +10,7 @@ import {
   type PluginInstall,
   type PluginLayer,
 } from "../core/pluginInstalls";
+import { optionLabel, settingLabel } from "../core/pluginText";
 
 /**
  * The settings of one installed plugin, drawn from the schema its author declared (`AMB-D-356`).
@@ -137,7 +138,7 @@ export function PluginConfigForm({ install, layer, onWrote }: {
             className="plugcfg__label"
             htmlFor={f.fieldType === "multi" ? undefined : `cfg-${install.name}-${f.key}`}
           >
-            {f.label}
+            {settingLabel(f)}
             {f.required && <span className="chip">{t("plugins.cfg.required")}</span>}
             {/* Which of the three answers this field is giving (`AMB-D-415`). "Nobody answered" is drawn
                 as the default where the author wrote one — the value a run receives is not missing — and
@@ -214,7 +215,7 @@ export function PluginConfigForm({ install, layer, onWrote }: {
                       }));
                     }}
                   />
-                  {o.label}
+                  {optionLabel(o)}
                 </label>
               ))}
             </div>

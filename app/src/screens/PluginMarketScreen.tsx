@@ -7,6 +7,7 @@ import {
   type PluginCatalog, type PluginCatalogProbe, type PluginEntry, type PluginLayer, type PluginSort,
 } from "../core/pluginCatalog";
 import { firesAnywhere, installOf, usePluginInstalls, type PluginInstall } from "../core/pluginInstalls";
+import { pluginDesc } from "../core/pluginText";
 import { refreshPluginUpdates } from "../core/pluginUpdates";
 import { PluginDetail } from "./PluginDetail";
 import { asTyped } from "../core/keys";
@@ -439,7 +440,9 @@ function PluginCard({ entry, install, onOpen }: {
             <span className="faint" style={{ fontSize: "var(--fs-xs)" }}> {tf("plugins.added", { date: entry.addedAt.slice(0, 10) })}</span>
           )}
         </div>
-        <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{entry.desc}</div>
+        {/* The author's line in the reader's language where the catalog published one (`AMB-D-623`),
+            and the author's own where it did not — with nothing on the row to say which it is. */}
+        <div className="muted" style={{ fontSize: "var(--fs-sm)" }}>{pluginDesc(entry)}</div>
         <div className="faint" style={{ fontSize: "var(--fs-xs)", display: "flex", gap: "var(--s-2)", flexWrap: "wrap", marginTop: 2 }}>
           <span>{entry.author}</span>
           <span>·</span>

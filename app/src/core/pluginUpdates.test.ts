@@ -37,23 +37,23 @@ describe("refreshPluginUpdates", () => {
   it("asks for a refetch, and lets an automatic trigger be answered from the cache", async () => {
     refreshPluginUpdates("incidental");
     expect(invalidated).toHaveBeenCalledOnce();
-    await fetchPluginUpdates();
-    expect(invoked).toEqual([{ reach: "incidental" }]);
+    await fetchPluginUpdates("en");
+    expect(invoked).toEqual([{ reach: "incidental", lang: "en" }]);
   });
 
   it("sends what a person pressed to the catalog", async () => {
     refreshPluginUpdates("now");
-    await fetchPluginUpdates();
-    expect(invoked).toEqual([{ reach: "now" }]);
+    await fetchPluginUpdates("en");
+    expect(invoked).toEqual([{ reach: "now", lang: "en" }]);
   });
 
   // Otherwise one press would reach past the window forever: every later focus return would go to the network
   // too, which is the cost the freshness boundary exists to avoid.
   it("spends the press on one read, and is back to the cheap one after it", async () => {
     refreshPluginUpdates("now");
-    await fetchPluginUpdates();
-    await fetchPluginUpdates();
-    expect(invoked).toEqual([{ reach: "now" }, { reach: "incidental" }]);
+    await fetchPluginUpdates("en");
+    await fetchPluginUpdates("en");
+    expect(invoked).toEqual([{ reach: "now", lang: "en" }, { reach: "incidental", lang: "en" }]);
   });
 
   // A focus return can land between the press and the read it started. It must not take the reach with it:
@@ -61,8 +61,8 @@ describe("refreshPluginUpdates", () => {
   it("keeps the press when an automatic trigger arrives before the read", async () => {
     refreshPluginUpdates("now");
     refreshPluginUpdates("incidental");
-    await fetchPluginUpdates();
-    expect(invoked).toEqual([{ reach: "now" }]);
+    await fetchPluginUpdates("en");
+    expect(invoked).toEqual([{ reach: "now", lang: "en" }]);
   });
 });
 

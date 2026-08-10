@@ -17,6 +17,7 @@ import {
   usePluginUpdates,
   type PluginUpdate,
 } from "../core/pluginUpdates";
+import { pluginDesc } from "../core/pluginText";
 import { getSnapshot, subscribe } from "../core/snapshot";
 
 // What this machine holds — the "manage what you have" half of the plugin section (`AMB-D-356`), beside
@@ -244,7 +245,7 @@ function InstalledRow({ install, update, projects, onRemoved }: {
               update && (
                 <>
                   <span className="chip">{t("plugins.updates.waiting")}</span>
-                  <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{update.desc}</span>
+                  <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{pluginDesc(update)}</span>
                   <button className="btn" disabled={busy} onClick={() => void onUpdate()}>
                     {busy ? t("plugins.updates.applying") : t("plugins.updates.apply")}
                   </button>

@@ -9,8 +9,10 @@
 // **Install is not enable** (`AMB-D-351`), so nothing here folds the two: `installPlugin` lands a plugin
 // inert, and `setPluginEnabled` is the separate act that lets it run — which is itself the permission to
 // run somebody else's code (`AMB-D-434`), so there is no second answer kept beside it.
+import { useSyncExternalStore } from "react";
+import { currentLang } from "./i18n";
 import { invoke } from "./ipc";
-import { inTauri } from "./snapshot";
+import { inTauri, subscribe } from "./snapshot";
 import { invalidateQueries, useQuery } from "./query";
 import type {
   PluginConfigFieldDto,
@@ -65,22 +67,31 @@ export const NONE_SELECTED = "none";
  * crossing arrives whole — on or off, whether it holds a value, whether a `required` one is empty — so a
  * face draws its rows from this one read instead of asking again per project.
  *
+ * `lang` is what the declared settings come back captioned in (`AMB-D-623`). It reaches no catalog: an
+ * install keeps the translations it was published with beside the binary (`AMB-D-622`), so this stays the
+ * one cheap local read it has always been.
+ *
  * Outside Tauri — `npm run dev` in a browser — there is no plugins directory to read, so the mock says
  * nothing is installed rather than inventing state.
  */
-export async function fetchPluginInstalls(): Promise<PluginInstall[]> {
-  if (inTauri()) return invoke<PluginInstall[]>("plugin_installs");
+export async function fetchPluginInstalls(lang: string): Promise<PluginInstall[]> {
+  if (inTauri()) return invoke<PluginInstall[]>("plugin_installs", { lang });
   return NONE;
 }
 
-/** The installs, for the market to draw over the catalog. Local and cheap: no network, no catalog fetch. */
+/**
+ * The installs, for the market to draw over the catalog. Local and cheap: no network, no catalog fetch —
+ * which is also why the language is in the key rather than resolved once at mount: re-reading the rows
+ * when the reader changes language costs a directory read.
+ */
 export function usePluginInstalls(): {
   installs: PluginInstall[];
   loading: boolean;
   error: unknown;
 } {
-  const { data, loading, error } = useQuery<PluginInstall[]>(["plugin-installs"], () =>
-    fetchPluginInstalls(),
+  const lang = useSyncExternalStore(subscribe, currentLang);
+  const { data, loading, error } = useQuery<PluginInstall[]>(["plugin-installs", lang], () =>
+    fetchPluginInstalls(lang),
   );
   return { installs: data ?? NONE, loading, error };
 }
@@ -135,7 +146,9 @@ function reloadConfig(): void {
  */
 export async function installPlugin(name: string): Promise<PluginInstall | null> {
   if (!inTauri()) return null;
-  const row = await invoke<PluginInstall>("plugin_install", { name });
+  // The reader's language, for the row that comes back — the same one every other plugin read is drawn
+  // in, so the plugin that just landed is not the one row captioned in English.
+  const row = await invoke<PluginInstall>("plugin_install", { name, lang: currentLang() });
   reloadInstalls();
   return row;
 }

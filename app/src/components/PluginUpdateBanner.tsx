@@ -10,6 +10,7 @@ import {
   subscribeDismissedPluginUpdates,
   usePluginUpdates,
 } from "../core/pluginUpdates";
+import { pluginDesc } from "../core/pluginText";
 import { subscribeOutsideStore } from "../core/snapshot";
 
 /**
@@ -95,7 +96,7 @@ export function PluginUpdateBanner({ onOpenInstalled }: {
         {pending.length > 0 && (
           <div className="healthbanner__hint">
             {pending.length === 1 && pending[0]
-              ? `${pending[0].name} — ${pending[0].desc}`
+              ? `${pending[0].name} — ${pluginDesc(pending[0])}`
               : pending.map((u) => u.name).join(", ")}
           </div>
         )}

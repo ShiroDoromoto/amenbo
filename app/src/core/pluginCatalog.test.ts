@@ -47,6 +47,14 @@ describe("filterPlugins", () => {
     expect(filterPlugins(entries, { q: "   " })).toHaveLength(3);
   });
 
+  // Both lines, because both are real to the reader: the translated one is what is on their screen, and
+  // the base one is what they may remember from the repository or a colleague (`AMB-D-623`).
+  it("searches the translated line as well as the one its author wrote", () => {
+    const translated = [entry({ descI18n: "タスクごとに git worktree を切る" }), entries[1]!];
+    expect(filterPlugins(translated, { q: "タスクごと" }).map((e) => e.name)).toEqual(["worktree"]);
+    expect(filterPlugins(translated, { q: "cut a git" }).map((e) => e.name)).toEqual(["worktree"]);
+  });
+
   it("narrows by category and by OS support", () => {
     expect(filterPlugins(entries, { category: "notify" }).map((e) => e.name)).toEqual(["slack"]);
     expect(filterPlugins(entries, { os: "windows" }).map((e) => e.name)).toEqual(["worktree", "winonly"]);

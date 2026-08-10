@@ -13,6 +13,7 @@ import {
   type PluginEntry,
 } from "../core/pluginCatalog";
 import { installPlugin, type PluginInstall } from "../core/pluginInstalls";
+import { pluginDesc, settingLabel } from "../core/pluginText";
 
 // The one plugin a user opened (`AMB-D-347`).
 //
@@ -64,7 +65,7 @@ export function PluginDetail({ entry, install, onOpenInstalled, onClose }: {
 
         <PluginActions entry={entry} install={install} onOpenInstalled={onOpenInstalled} />
 
-        <div className="plugdet__desc">{entry.desc}</div>
+        <div className="plugdet__desc">{pluginDesc(entry)}</div>
         <div className="plugdet__meta faint">
           <span>{entry.author}</span>
           <span>·</span>
@@ -154,7 +155,7 @@ function WhatItWants({ detail }: { detail: PluginDetailDoc }) {
           {detail.config.map((f, i) => (
             <span key={f.key}>
               {i > 0 && <span className="faint">· </span>}
-              {f.label}
+              {settingLabel(f)}
               {f.required && ` (${t("plugins.cfg.required")})`}
               {f.secret && ` (${t("plugins.want.secret")})`}
             </span>

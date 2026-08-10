@@ -4712,6 +4712,13 @@ pub struct PluginEntryDto {
     /// The plugin's name, which is its identity in the catalog.
     name: String,
     desc: String,
+    /// The same line in the reader's language, when the catalog published one for this plugin
+    /// (`AMB-D-622`). It rides **beside** the base line rather than replacing it: choosing between the
+    /// two is the front end's (`AMB-D-623`), and absent is the ordinary case — a plugin nobody
+    /// translated, a language nobody published, or a reader reading the base language itself.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    desc_i18n: Option<String>,
     author: String,
     /// `owner/name` — the GitHub coordinates a detail view reads stars and README from, lazily.
     repo: String,
@@ -4777,6 +4784,27 @@ pub struct PluginCatalogDto {
     dropped: usize,
 }
 
+/// The reader's own lines for the merged list, or nothing at all when they read the base language
+/// (`AMB-D-394`).
+///
+/// English is where every untranslated line already falls back to, so no catalog publishes a
+/// `catalog.en.json` for it — asking would be a request that 404s on every browse, and nothing is
+/// cached from a miss. So the base language is answered here rather than at the catalog.
+fn list_lines(
+    paths: &amenbo_core::config::Paths,
+    view: &amenbo_core::plugin_catalog::Discovery,
+    lang: &str,
+) -> amenbo_core::plugin_catalog::ListTranslations {
+    if lang == BASE_LANGUAGE {
+        return Default::default();
+    }
+    amenbo_core::plugin_catalog::list_translations(paths, view, lang)
+}
+
+/// The language every translated field falls back to (`AMB-D-394`) — the one the author wrote the
+/// manifest in, and the one amenbo's own catalog documents are published in.
+const BASE_LANGUAGE: &str = amenbo_core::config::LANGUAGES[0];
+
 /// Hand the GUI the merged plugin catalog for browsing (`AMB-D-347`): the official catalog plus every
 /// registered third-party one, folded into one de-duplicated list by
 /// [`amenbo_core::plugin_catalog::discover`].
@@ -4788,16 +4816,24 @@ pub struct PluginCatalogDto {
 /// costs nothing, and a source that cannot be reached is reported as unreachable rather than failing
 /// the view. The fetch goes off the main thread via `spawn_blocking`, because a dead source is only
 /// found out by waiting for its timeout.
+///
+/// `lang` is the language the reader is reading amenbo in, and it is the caller's to say
+/// (`AMB-D-623`): the list half of a translation is a document per language (`AMB-D-622`), so the one
+/// being asked for has to travel with the ask. It rides on the row beside the base line rather than
+/// over it — a plugin this language has no line for is drawn in English, and the row says nothing
+/// about having fallen back.
 #[tauri::command]
-pub async fn plugin_catalog_browse() -> Result<PluginCatalogDto, CmdError> {
-    tauri::async_runtime::spawn_blocking(|| -> Result<PluginCatalogDto, CmdError> {
+pub async fn plugin_catalog_browse(lang: String) -> Result<PluginCatalogDto, CmdError> {
+    tauri::async_runtime::spawn_blocking(move || -> Result<PluginCatalogDto, CmdError> {
         let paths = amenbo_core::config::Paths::resolve()?;
         let discovery = amenbo_core::plugin_catalog::discover(&paths);
+        let lines = list_lines(&paths, &discovery, &lang);
         Ok(PluginCatalogDto {
             entries: discovery
                 .entries
                 .into_iter()
                 .map(|e| PluginEntryDto {
+                    desc_i18n: lines.get(&e.entry.name).and_then(|o| o.desc.clone()),
                     name: e.entry.name,
                     desc: e.entry.desc,
                     author: e.entry.author,
@@ -5034,10 +5070,18 @@ pub async fn plugin_repo_facts(repo: String) -> Result<PluginRepoFactsDto, CmdEr
 /// A name no catalog carries comes back as `null` — an answer, not a failure — so the market draws what
 /// it has instead of an error.
 ///
+/// `lang` is the reader's language, for the form labels this answers with (`AMB-D-623`). Nothing is
+/// fetched for it: the detail document carries **every** language at once (`AMB-D-622`), so the one
+/// asked for is picked out of what has already arrived, and a language its author did not write leaves
+/// the labels as they are.
+///
 /// Off the main thread: it may fetch (core answers from its cache within the freshness window, and falls
 /// back to it when the network does not answer).
 #[tauri::command]
-pub async fn plugin_detail(name: String) -> Result<Option<PluginDetailDto>, CmdError> {
+pub async fn plugin_detail(
+    name: String,
+    lang: String,
+) -> Result<Option<PluginDetailDto>, CmdError> {
     tauri::async_runtime::spawn_blocking(move || -> Result<Option<PluginDetailDto>, CmdError> {
         let paths = amenbo_core::config::Paths::resolve()?;
         let discovery = amenbo_core::plugin_catalog::discover(&paths);
@@ -5046,15 +5090,15 @@ pub async fn plugin_detail(name: String) -> Result<Option<PluginDetailDto>, CmdE
         };
         let detail = amenbo_core::plugin_catalog::detail_of(&paths, found)?;
         // The compatibility gate reads a whole manifest, so the two halves are put back together once
-        // here rather than teaching the gate to read a document at a time. The translations the detail
-        // carried are dropped here: this DTO carries no field they would land in, and putting the
-        // reader's language on these faces is `AMB-T-2934` (`AMB-D-623` — the GUI is what selects).
+        // here rather than teaching the gate to read a document at a time. The translations ride in the
+        // detail already, keyed by language, so they are read off it rather than out of the join: this
+        // face wants one language's labels, and the join's answer is every language's of both halves.
         let (manifest, _translations) =
             amenbo_core::plugin_wire::join(&found.entry, &Default::default(), &detail);
         let why = amenbo_core::plugin_compat::check(&manifest).err();
         Ok(Some(PluginDetailDto {
             events: detail.events.iter().map(|e| e.event.clone()).collect(),
-            config: detail.config.iter().map(wanted_setting).collect(),
+            config: wanted_settings(&detail.config, detail.i18n.get(&lang).map(|o| &o.config)),
             scope: detail.scope,
             compatible: why.is_none(),
             incompatible_reason: why.map(|why| why.to_string()),
@@ -5115,6 +5159,12 @@ pub struct PluginConfigFieldDto {
 pub struct PluginConfigOptionDto {
     value: String,
     label: String,
+    /// The candidate's label in the reader's language, when its author wrote one (`AMB-D-621`). Beside
+    /// the base label, never over it (`AMB-D-623`). The `value` has no counterpart here: it is what
+    /// travels to the plugin, so it is the same in every language.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    label_i18n: Option<String>,
 }
 
 /// One setting a plugin will ask for, as its author declared it — and nothing a store holds for it.
@@ -5130,6 +5180,11 @@ pub struct PluginWantedSettingDto {
     key: String,
     /// The author's label for it, which is what the form will caption.
     label: String,
+    /// That caption in the reader's language, when its author wrote one (`AMB-D-621`). Beside the base
+    /// label rather than over it, like every other translated field here (`AMB-D-623`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    label_i18n: Option<String>,
     /// Whether it is a secret — worth knowing before installing, since it means a credential will have
     /// to be handed over for the plugin to do anything.
     secret: bool,
@@ -5151,21 +5206,46 @@ pub struct PluginWantedSettingDto {
 }
 
 /// One declared setting as its own DTO — the author's words, wherever a face asks what a plugin wants
-/// without standing in a project.
-fn wanted_setting(field: &amenbo_core::plugin_manifest::ConfigField) -> PluginWantedSettingDto {
+/// without standing in a project, and whatever they wrote of them in the reader's language beside them.
+///
+/// `overlay` is this **one field's** translated half, already looked up by the field's key
+/// (`AMB-D-621`): a translation carries no order of its own, so the pairing is by key at every step,
+/// candidates included. Nothing is resolved here — both halves travel, and the face picks
+/// (`AMB-D-623`).
+fn wanted_setting(
+    field: &amenbo_core::plugin_manifest::ConfigField,
+    overlay: Option<&amenbo_core::plugin_manifest::ConfigFieldOverlay>,
+) -> PluginWantedSettingDto {
     PluginWantedSettingDto {
         key: field.key.clone(),
         label: field.label.clone(),
+        label_i18n: overlay.and_then(|o| o.label.clone()),
         secret: field.secret,
         required: field.required,
         field_type: field.field_type,
         options: field
             .options
             .iter()
-            .map(|o| PluginConfigOptionDto { value: o.value.clone(), label: o.label.clone() })
+            .map(|o| PluginConfigOptionDto {
+                label_i18n: overlay.and_then(|f| f.options.get(&o.value).cloned()),
+                value: o.value.clone(),
+                label: o.label.clone(),
+            })
             .collect(),
         default_value: field.default.clone(),
     }
+}
+
+/// The whole declared form, each field carrying the reader's language beside the author's
+/// (`AMB-D-621`) — the shape every face that draws settings asks for.
+///
+/// `overlay` is the language's own half of the translations, keyed by field key; `None` is a plugin
+/// nobody translated, or a reader on the base language, and both mean the form draws as it always did.
+fn wanted_settings(
+    config: &[amenbo_core::plugin_manifest::ConfigField],
+    overlay: Option<&std::collections::BTreeMap<String, amenbo_core::plugin_manifest::ConfigFieldOverlay>>,
+) -> Vec<PluginWantedSettingDto> {
+    config.iter().map(|f| wanted_setting(f, overlay.and_then(|o| o.get(&f.key)))).collect()
 }
 
 /// What the catalog's **detail document** says about one plugin — the half of its entry that is fetched
@@ -5307,13 +5387,18 @@ fn config_field_row(
 ///
 /// Which of the two is read comes from the declaration and not from a count: a machine-wide plugin crosses
 /// no project, so asking the project list would answer "nowhere" for something that may well be firing.
+///
+/// `overlay` is what the catalog said about this plugin in the reader's language, kept beside the binary
+/// at install time (`AMB-D-622`) — so the form follows a language change with no network at all. `None`
+/// is a plugin nobody translated, or a reader on the base language.
 fn install_row(
     store: &Store,
     plugin: &amenbo_core::plugin_subscribe::InstalledPlugin,
+    overlay: Option<&amenbo_core::plugin_manifest::ManifestOverlay>,
 ) -> Result<PluginInstallDto, CmdError> {
     use amenbo_core::plugin_layer::Layer;
     let why = amenbo_core::plugin_compat::check(&plugin.manifest).err();
-    let config = plugin.manifest.config.iter().map(wanted_setting).collect();
+    let config = wanted_settings(&plugin.manifest.config, overlay.map(|o| &o.config));
     let projects =
         amenbo_core::plugin_config::intersections(store, &plugin.name, &plugin.manifest.config)?
             .into_iter()
@@ -5366,12 +5451,19 @@ fn install_row(
 ///
 /// Reads the app-data `plugins/` directory and this store, and nothing else — no network, no catalog
 /// fetch — so it answers the same offline, and a directory that will not read as an install is skipped
-/// rather than allowed to hide the rest.
+/// rather than allowed to hide the rest. **A language change is one of those reads** (`AMB-D-622`): the
+/// translations an install kept are beside the binary, so re-asking in another language costs no request.
 #[tauri::command]
-pub fn plugin_installs() -> Result<Vec<PluginInstallDto>, CmdError> {
+pub fn plugin_installs(lang: String) -> Result<Vec<PluginInstallDto>, CmdError> {
     let store = open_store_read()?;
     let installed = amenbo_core::plugin_installed::installed(&store.paths)?;
-    installed.iter().map(|p| install_row(&store, p)).collect()
+    installed
+        .iter()
+        .map(|p| {
+            let translations = amenbo_core::plugin_installed::translations(&store.paths, &p.name);
+            install_row(&store, p, translations.get(&lang))
+        })
+        .collect()
 }
 
 /// What one project holds for a plugin's declared settings (`AMB-D-434`) — the form's own read, made
@@ -5410,15 +5502,20 @@ pub fn plugin_config_read(
 /// **Installing never enables.** The plugin lands inert and [`plugin_set_enabled`] is the separate,
 /// explicit act that lets it run — which is why this returns the fresh row rather than an enabled one,
 /// and why no project is named here: installing is not aimed at one (`AMB-D-412`).
+///
+/// `lang` is the reader's, for the row this hands back — the same language every other plugin read takes,
+/// so a freshly installed plugin's form is captioned like the ones beside it rather than in English until
+/// the next refetch.
 /// Off the main thread: it downloads.
 #[tauri::command]
-pub async fn plugin_install(name: String) -> Result<PluginInstallDto, CmdError> {
+pub async fn plugin_install(name: String, lang: String) -> Result<PluginInstallDto, CmdError> {
     tauri::async_runtime::spawn_blocking(move || -> Result<PluginInstallDto, CmdError> {
         let paths = amenbo_core::config::Paths::resolve()?;
         amenbo_core::plugin_install::install(&paths, &name)?;
         let store = open_store_read()?;
         let installed = amenbo_core::plugin_installed::read(&store.paths, &name)?;
-        install_row(&store, &installed)
+        let translations = amenbo_core::plugin_installed::translations(&store.paths, &name);
+        install_row(&store, &installed, translations.get(&lang))
     })
     .await
     .map_err(|e| -> CmdError { format!("installing the plugin did not finish: {e}").into() })?
@@ -5583,6 +5680,12 @@ pub struct PluginUpdateDto {
     name: String,
     /// What the **new** build says it is, for a line the user can recognise it by.
     desc: String,
+    /// That line in the reader's language, when the offered build carries one (`AMB-D-622`) — beside the
+    /// base line, for the face to pick from (`AMB-D-623`). It comes off the same documents the offer was
+    /// read from, so it describes the build being offered and not the one installed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    desc_i18n: Option<String>,
     /// The offered entry's identity — the digest of the detail document it was published as, which is the
     /// same thing detection compared (`AMB-D-438`). A face keys a dismissal by it, so a catalog that moves
     /// the entry again mints a new one and the offer returns. It has to be this and not the asset's digest:
@@ -5719,10 +5822,16 @@ impl From<PluginUpdateReachDto> for amenbo_core::plugin_update::Reach {
 ///
 /// The `settings` judgment takes no project: a plugin has a gate per project (`AMB-D-434`)
 /// and an update replaces the build for all of them, so every gate it is enabled at is judged. That is what
-/// lets the banner be answered the same way from the screens that are in no project at all. Off the main
+/// lets the banner be answered the same way from the screens that are in no project at all.
+///
+/// `lang` is the reader's, for the one line each offer carries. It costs no request either: the
+/// translations came with the detail document the offer was read from (`AMB-D-622`). Off the main
 /// thread, because past the boundary this fetches.
 #[tauri::command]
-pub async fn plugin_updates(reach: PluginUpdateReachDto) -> Result<PluginUpdatesDto, CmdError> {
+pub async fn plugin_updates(
+    reach: PluginUpdateReachDto,
+    lang: String,
+) -> Result<PluginUpdatesDto, CmdError> {
     tauri::async_runtime::spawn_blocking(move || -> Result<PluginUpdatesDto, CmdError> {
         let paths = amenbo_core::config::Paths::resolve()?;
         let checked = amenbo_core::plugin_update::check(&paths, reach.into())?;
@@ -5746,6 +5855,7 @@ pub async fn plugin_updates(reach: PluginUpdateReachDto) -> Result<PluginUpdates
                     ((!missing.is_empty()).then(|| "settings".to_string()), missing)
                 };
                 Ok(PluginUpdateDto {
+                    desc_i18n: u.available_i18n.get(&lang).and_then(|o| o.desc.clone()),
                     name: u.name,
                     available_detail_sum: u.available.detail_sum,
                     desc: u.available.desc,
@@ -6019,11 +6129,11 @@ mod tests {
         plant_plugin(&tmp, "notify");
 
         // Installed is not enabled: the row is here, and it names no project at all.
-        let rows = plugin_installs().unwrap();
+        let rows = plugin_installs("en".into()).unwrap();
         assert_eq!(rows.len(), 1, "the plant reads as installed");
         assert!(rows[0].projects.is_empty(), "off everywhere is an empty list, not a false");
 
-        let row = || plugin_installs().unwrap().into_iter().find(|r| r.name == "notify").unwrap();
+        let row = || plugin_installs("en".into()).unwrap().into_iter().find(|r| r.name == "notify").unwrap();
         let firing = || -> Vec<i64> {
             row().projects.iter().filter(|p| p.enabled).map(|p| p.project).collect()
         };
@@ -6084,7 +6194,7 @@ mod tests {
                 {"key": "events", "label": "通知するイベント", "secret": false, "required": false},
             ]),
         );
-        let rows = || plugin_installs().unwrap().into_iter().find(|r| r.name == "notify").unwrap().projects;
+        let rows = || plugin_installs("en".into()).unwrap().into_iter().find(|r| r.name == "notify").unwrap().projects;
 
         // Nobody has touched it anywhere: there is no crossing to draw, which is itself the answer.
         assert!(rows().is_empty(), "installed alone puts no project on the list");
@@ -6103,6 +6213,104 @@ mod tests {
         assert!(plugin_set_enabled("notify".into(), Some(short), true).is_err());
         assert!(plugin_set_enabled("notify".into(), Some(filled), true).unwrap().enabled);
         assert!(rows()[0].enabled, "the gate opened where nothing was in the way");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// The translations an install keeps beside its manifest (`AMB-D-622`), as the catalog published them.
+    fn plant_translations(home: &std::path::Path, name: &str, translations: serde_json::Value) {
+        let dir = home.join("plugins").join(name);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("i18n.json"), serde_json::to_vec(&translations).unwrap()).unwrap();
+    }
+
+    /// The translated half is paired to the base by **key**, never by position (`AMB-D-621`), and it
+    /// arrives beside the author's words rather than over them (`AMB-D-623`) — so a field the author did
+    /// not translate is not a hole in the form, it is the line they wrote.
+    #[test]
+    fn a_translated_form_pairs_by_key_and_leaves_the_untranslated_fields_alone() {
+        use amenbo_core::plugin_manifest::{
+            ConfigField, ConfigFieldOverlay, ConfigOption, FieldType,
+        };
+        let field = |key: &str, label: &str, options: Vec<ConfigOption>| ConfigField {
+            key: key.into(),
+            label: label.into(),
+            secret: false,
+            required: false,
+            field_type: if options.is_empty() { FieldType::Text } else { FieldType::Multi },
+            options,
+            default: None,
+        };
+        let config = vec![
+            field("endpoint", "Endpoint", Vec::new()),
+            field(
+                "events",
+                "Events",
+                vec![
+                    ConfigOption { value: "task.done".into(), label: "Task finished".into() },
+                    ConfigOption { value: "task.created".into(), label: "Task filed".into() },
+                ],
+            ),
+        ];
+        // Only the second field, and only one of its two candidates — the ordinary shape of a
+        // translation in progress, and the one that would break if the two lists were zipped.
+        let overlay = std::collections::BTreeMap::from([(
+            "events".to_string(),
+            ConfigFieldOverlay {
+                label: Some("通知するできごと".into()),
+                options: std::collections::BTreeMap::from([(
+                    "task.done".to_string(),
+                    "タスクが終わったとき".to_string(),
+                )]),
+                extra: Default::default(),
+            },
+        )]);
+
+        let drawn = wanted_settings(&config, Some(&overlay));
+        assert_eq!(drawn[0].label, "Endpoint");
+        assert_eq!(drawn[0].label_i18n, None, "an untranslated field carries no second line");
+        assert_eq!(drawn[1].label, "Events", "the author's own line is never overwritten");
+        assert_eq!(drawn[1].label_i18n.as_deref(), Some("通知するできごと"));
+        assert_eq!(drawn[1].options[0].value, "task.done", "the wire value is not translated");
+        assert_eq!(drawn[1].options[0].label_i18n.as_deref(), Some("タスクが終わったとき"));
+        assert_eq!(drawn[1].options[1].label_i18n, None);
+
+        // No layer at all is the same answer as a layer that says nothing: the form as its author wrote it.
+        let bare = wanted_settings(&config, None);
+        assert!(bare.iter().all(|f| f.label_i18n.is_none()));
+    }
+
+    /// The installed face draws its form in the reader's language off what the install kept beside the
+    /// binary (`AMB-D-622`) — no catalog, no network — and a language nobody published leaves the author's
+    /// words standing (`AMB-D-623`).
+    #[test]
+    fn an_installed_plugins_form_is_captioned_in_the_language_it_is_asked_in() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("plugin-installs-language");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        plant_plugin_with(
+            &tmp,
+            "notify",
+            serde_json::json!([{"key": "endpoint", "label": "Endpoint", "secret": false, "required": true}]),
+        );
+        plant_translations(
+            &tmp,
+            "notify",
+            serde_json::json!({ "ja": { "config": { "endpoint": { "label": "送り先" } } } }),
+        );
+        let label = |lang: &str| {
+            let row = plugin_installs(lang.into())
+                .unwrap()
+                .into_iter()
+                .find(|r| r.name == "notify")
+                .unwrap();
+            (row.config[0].label.clone(), row.config[0].label_i18n.clone())
+        };
+
+        assert_eq!(label("ja"), ("Endpoint".into(), Some("送り先".into())));
+        // A language the author wrote nothing in is the base language's own answer, and neither says so.
+        assert_eq!(label("de"), ("Endpoint".to_string(), None));
+        assert_eq!(label("en"), ("Endpoint".to_string(), None));
 
         let _ = std::fs::remove_dir_all(&tmp);
     }
@@ -6136,7 +6344,7 @@ mod tests {
                 {"key": "endpoint", "label": "送り先", "secret": false, "required": true},
             ]),
         );
-        let row = || plugin_installs().unwrap().into_iter().find(|r| r.name == "carry").unwrap();
+        let row = || plugin_installs("en".into()).unwrap().into_iter().find(|r| r.name == "carry").unwrap();
 
         // Off, holding nothing, and short of what the author requires — the mark said before the switch
         // is pressed, exactly as a crossing wears it.
@@ -6258,7 +6466,7 @@ mod tests {
 
         // The install row carries the author's schema and nothing a project holds — that is this read's
         // to answer (`AMB-D-412`).
-        let declared = plugin_installs().unwrap().into_iter().find(|r| r.name == "notify").unwrap();
+        let declared = plugin_installs("en".into()).unwrap().into_iter().find(|r| r.name == "notify").unwrap();
         assert_eq!(
             declared.config.iter().map(|f| f.key.as_str()).collect::<Vec<_>>(),
             vec!["events", "token"],
@@ -6334,7 +6542,7 @@ mod tests {
                 "default": "task.done",
             }]),
         );
-        let declared = plugin_installs().unwrap().into_iter().find(|r| r.name == "notify").unwrap();
+        let declared = plugin_installs("en".into()).unwrap().into_iter().find(|r| r.name == "notify").unwrap();
         let events = &declared.config[0];
         assert_eq!(events.field_type, amenbo_core::plugin_manifest::FieldType::Multi);
         assert_eq!(
@@ -6422,7 +6630,7 @@ mod tests {
         };
 
         write_detail(amenbo_core::plugin_payload::VERSION);
-        let detail = tauri::async_runtime::block_on(plugin_detail("notify".into())).unwrap().unwrap();
+        let detail = tauri::async_runtime::block_on(plugin_detail("notify".into(), "en".into())).unwrap().unwrap();
         assert_eq!(detail.events, vec!["task.created".to_string(), "task.completed".to_string()]);
         assert_eq!(detail.config.len(), 1);
         assert!(detail.config[0].secret && detail.config[0].required);
@@ -6431,12 +6639,12 @@ mod tests {
 
         // A build speaking another payload contract is answered before an install, not at the enable.
         write_detail(amenbo_core::plugin_payload::VERSION + 1);
-        let other = tauri::async_runtime::block_on(plugin_detail("notify".into())).unwrap().unwrap();
+        let other = tauri::async_runtime::block_on(plugin_detail("notify".into(), "en".into())).unwrap().unwrap();
         assert!(!other.compatible);
         assert!(other.incompatible_reason.is_some(), "core's own sentence, not a made-up one");
 
         // A name no catalog carries has no detail here — an answer, not a failure.
-        assert!(tauri::async_runtime::block_on(plugin_detail("elsewhere".into())).unwrap().is_none());
+        assert!(tauri::async_runtime::block_on(plugin_detail("elsewhere".into(), "en".into())).unwrap().is_none());
 
         std::env::remove_var("AMENBO_PLUGIN_CATALOG_URL");
         let _ = std::fs::remove_dir_all(&tmp);
@@ -6501,7 +6709,7 @@ mod tests {
         .unwrap();
 
         let detail =
-            tauri::async_runtime::block_on(plugin_detail("inhouse".into())).unwrap().unwrap();
+            tauri::async_runtime::block_on(plugin_detail("inhouse".into(), "en".into())).unwrap().unwrap();
         assert_eq!(
             detail.events,
             vec!["task.created".to_string()],

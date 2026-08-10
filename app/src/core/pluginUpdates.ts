@@ -16,9 +16,10 @@
 // The dismissal is keyed by the **build** offered, not by the plugin, which is what makes a quiet banner stay
 // quiet without going silent: dismissing the offer of one build says nothing about the next one, and a plugin
 // whose catalog entry moves again surfaces on its own.
-import { agoSecondsLabel, t, tf } from "./i18n";
+import { useSyncExternalStore } from "react";
+import { agoSecondsLabel, currentLang, t, tf } from "./i18n";
 import { invoke } from "./ipc";
-import { inTauri } from "./snapshot";
+import { inTauri, subscribe } from "./snapshot";
 import { invalidateQueries, useQuery } from "./query";
 import type {
   PluginCatalogReadDto,
@@ -61,19 +62,23 @@ let reachNow = false;
  * same read: an empty list is the ordinary answer and it means two different things, so the frame travels
  * with it rather than being asked for separately.
  *
+ * `lang` is what each offer's one line comes back in (`AMB-D-623`), off the documents the offer was read
+ * from — so it adds no request of its own.
+ *
  * Outside Tauri — `npm run dev` in a browser — there is no plugins directory and no catalog cache, so the
  * mock says nothing is waiting rather than inventing an offer.
  */
-export async function fetchPluginUpdates(): Promise<PluginUpdatesAnswer> {
+export async function fetchPluginUpdates(lang: string): Promise<PluginUpdatesAnswer> {
   const reach: PluginUpdateReach = reachNow ? "now" : "incidental";
   reachNow = false;
   if (!inTauri()) return NONE;
-  return invoke<PluginUpdatesAnswer>("plugin_updates", { reach });
+  return invoke<PluginUpdatesAnswer>("plugin_updates", { reach, lang });
 }
 
 /**
  * The updates waiting and how current they are. One live query for the whole app: the banner is mounted
- * once, and every trigger is an invalidation of this key rather than a second reader.
+ * once, and every trigger is an invalidation of this key rather than a second reader — the language being
+ * the one part of the key, so an offer left on screen is re-read rather than left in the old language.
  */
 export function usePluginUpdates(): {
   updates: PluginUpdate[];
@@ -81,9 +86,9 @@ export function usePluginUpdates(): {
   loading: boolean;
   error: unknown;
 } {
-  const { data, loading, error } = useQuery<PluginUpdatesAnswer>(
-    ["plugin-updates"],
-    fetchPluginUpdates,
+  const lang = useSyncExternalStore(subscribe, currentLang);
+  const { data, loading, error } = useQuery<PluginUpdatesAnswer>(["plugin-updates", lang], () =>
+    fetchPluginUpdates(lang),
   );
   const answer = data ?? NONE;
   return { updates: answer.updates, catalog: answer.catalog, loading, error };

@@ -5,9 +5,11 @@
 // network per keystroke, and nothing asks GitHub about an entry that is merely listed (stars,
 // README and download counts are the detail view's, lazily, for the one entry a user opened).
 // So the filtering below is deliberately plain client-side work over an array, not a query.
-import { t } from "./i18n";
+import { useSyncExternalStore } from "react";
+import { currentLang, t } from "./i18n";
 import { invoke } from "./ipc";
-import { inTauri } from "./snapshot";
+import { inTauri, subscribe } from "./snapshot";
+import { pluginDesc } from "./pluginText";
 import { invalidateQueries, useQuery } from "./query";
 import type {
   PluginCatalogDto,
@@ -27,22 +29,32 @@ export type PluginCatalog = PluginCatalogDto;
 const EMPTY_CATALOG: PluginCatalog = { entries: [], sources: [], dropped: 0 };
 
 /**
- * Fetch the merged catalog (Tauri: `plugin_catalog_browse`). Outside Tauri — `npm run dev` in a
- * browser — there is nothing to merge: the catalogs are read through core, from this machine's
- * registry cache, so the browser mock has no honest answer and returns an empty one. The same call
- * the command reference makes.
+ * Fetch the merged catalog in one language (Tauri: `plugin_catalog_browse`). The language travels with
+ * the ask because the translated lines are a document per language (`AMB-D-622`), and what comes back
+ * carries both halves for the front end to pick from (`AMB-D-623`).
+ *
+ * Outside Tauri — `npm run dev` in a browser — there is nothing to merge: the catalogs are read through
+ * core, from this machine's registry cache, so the browser mock has no honest answer and returns an
+ * empty one. The same call the command reference makes.
  */
-export async function fetchPluginCatalog(): Promise<PluginCatalog> {
-  if (inTauri()) return invoke<PluginCatalog>("plugin_catalog_browse");
+export async function fetchPluginCatalog(lang: string): Promise<PluginCatalog> {
+  if (inTauri()) return invoke<PluginCatalog>("plugin_catalog_browse", { lang });
   return EMPTY_CATALOG;
 }
 
 /**
  * Read the merged catalog for the market screen. Core answers a re-open inside the freshness window
  * from its cache, so remounting the screen is not another fetch.
+ *
+ * **The language is part of the key**, so changing it re-reads the list in the new one rather than
+ * leaving the rows in the language they were drawn in. Core reads each language's document the same
+ * incidental way, so going back to one already looked at costs no request.
  */
 export function usePluginCatalog(): { catalog: PluginCatalog; loading: boolean; error: unknown } {
-  const { data, loading, error } = useQuery<PluginCatalog>(["plugin-catalog"], fetchPluginCatalog);
+  const lang = useSyncExternalStore(subscribe, currentLang);
+  const { data, loading, error } = useQuery<PluginCatalog>(["plugin-catalog", lang], () =>
+    fetchPluginCatalog(lang),
+  );
   return { catalog: data ?? EMPTY_CATALOG, loading, error };
 }
 
@@ -74,7 +86,12 @@ export function pluginLayerLabel(e: PluginEntry): string {
 
 /** What the market list is narrowed by. Every field is optional; an unset one narrows nothing. */
 export interface PluginFilter {
-  /** Free text, matched case-insensitively against the name, the description and the author. */
+  /**
+   * Free text, matched case-insensitively against the name, the author and **both** descriptions — the
+   * line the reader is being shown and the one the author wrote (`AMB-D-623`). Searching only the shown
+   * one would lose an English word someone remembers from the repository; searching only the base one
+   * would lose the words actually on their screen.
+   */
   q?: string;
   /** Exactly one category, or "" for every category. */
   category?: string;
@@ -114,6 +131,7 @@ export function filterPlugins(entries: PluginEntry[], f: PluginFilter): PluginEn
     return (
       e.name.toLowerCase().includes(q) ||
       e.desc.toLowerCase().includes(q) ||
+      pluginDesc(e).toLowerCase().includes(q) ||
       e.author.toLowerCase().includes(q)
     );
   });
@@ -292,21 +310,30 @@ export function usePluginRepoFacts(
  * what installing it would mean before it is installed — the same merged view the list drew. `null` is an
  * answer, not a failure: a name no catalog carries has no detail to read. Outside Tauri there is no
  * catalog at all, so the browser mock says the same.
+ *
+ * `lang` is what the form labels come back in (`AMB-D-623`). It costs nothing to ask for: the detail
+ * document carries every language at once (`AMB-D-622`), so the language is picked out of one fetch.
  */
-export async function fetchPluginDetail(name: string): Promise<PluginDetail | null> {
-  if (inTauri()) return invoke<PluginDetail | null>("plugin_detail", { name });
+export async function fetchPluginDetail(
+  name: string,
+  lang: string,
+): Promise<PluginDetail | null> {
+  if (inTauri()) return invoke<PluginDetail | null>("plugin_detail", { name, lang });
   return null;
 }
 
 /**
  * The opened entry's detail. Mounted by the detail view alone — the same rule the figures above follow,
- * and the whole reason browsing a catalog of thousands stays one static file.
+ * and the whole reason browsing a catalog of thousands stays one static file. Keyed by language too, so a
+ * reader who changes it while a detail is open sees the form it describes follow them.
  */
 export function usePluginDetail(
   name: string,
 ): { detail: PluginDetail | null | undefined; loading: boolean; error: unknown } {
-  const { data, loading, error } = useQuery<PluginDetail | null>(["plugin-detail", name], () =>
-    fetchPluginDetail(name),
+  const lang = useSyncExternalStore(subscribe, currentLang);
+  const { data, loading, error } = useQuery<PluginDetail | null>(
+    ["plugin-detail", name, lang],
+    () => fetchPluginDetail(name, lang),
   );
   return { detail: data, loading, error };
 }

@@ -722,7 +722,7 @@ mod tests {
     /// a real publication would, and one whose description moves does not.
     fn published(mut manifest: Manifest) -> Manifest {
         use sha2::{Digest, Sha256};
-        let (_, detail) = crate::plugin_wire::split(&manifest);
+        let (_, _, detail) = crate::plugin_wire::split(&manifest, &Default::default());
         let bytes = serde_json::to_vec(&detail).expect("a detail serializes");
         let hex: String = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
         manifest.detail_sum = Some(format!("sha256:{hex}"));
@@ -764,7 +764,7 @@ mod tests {
 
     /// One manifest's list entry, digest included — what the catalog serves for it.
     fn listed(manifest: &Manifest) -> ListEntry {
-        let (mut entry, _) = crate::plugin_wire::split(manifest);
+        let (mut entry, _, _) = crate::plugin_wire::split(manifest, &Default::default());
         entry.detail_sum = manifest.detail_sum.clone();
         entry
     }

@@ -677,6 +677,97 @@ fn plugin_validate_reads_the_layer_an_author_declared_and_refuses_one_it_does_no
     }
 }
 
+/// **What an author learns about their translations before they open a catalog PR** (`AMB-D-621`). The
+/// overlays sit beside the manifest as `<name>.<lang>.yaml`, and `plugin validate` is where the pair is
+/// read together: every language is picked up off the directory, checked against the base it translates,
+/// and — when the whole thing passes — handed back split across the faces the catalog publishes
+/// (`AMB-D-622`), the list halves as one document per language and the detail halves bundled inside the
+/// detail. This is also the one road that reads them as YAML, which is the form an author writes.
+#[test]
+fn plugin_validate_reads_the_translations_beside_a_manifest_and_publishes_them_by_face() {
+    let cli = Cli::new();
+    let dir = cli.home.join("plugins");
+    std::fs::create_dir_all(&dir).unwrap();
+    let manifest = dir.join("mail.yaml");
+    std::fs::write(
+        &manifest,
+        format!(
+            "name: mail\n\
+             desc: Report what your AI did by email\n\
+             author: alice\n\
+             repo: alice/amenbo-plugin-mail\n\
+             os: [macos]\n\
+             category: workflow\n\
+             url: https://example.com/mail-v1.tar.gz\n\
+             checksum: sha256:{}\n\
+             config:\n\
+             \x20 - key: events\n\
+             \x20   label: What to report\n\
+             \x20   type: multi\n\
+             \x20   options:\n\
+             \x20     - value: task.done\n\
+             \x20       label: Task done\n",
+            "a".repeat(64)
+        ),
+    )
+    .unwrap();
+    let write = |name: &str, body: &str| std::fs::write(dir.join(name), body).unwrap();
+    let validate = || cli.run(&["plugin", "validate", manifest.to_str().unwrap(), "--json"]);
+
+    // Nothing beside it yet: a manifest nobody translated passes, and publishes no language document.
+    let (stdout, code) = validate();
+    assert_eq!(code, 0);
+    let out: Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(out["entry_i18n"], serde_json::json!({}), "no author wrote one, so none is published");
+    assert!(out["detail"].get("i18n").is_none());
+
+    // One language translating both faces, one translating only the form.
+    write(
+        "mail.ja.yaml",
+        "desc: AI がやったことをメールで報告する\n\
+         config:\n\
+         \x20 events:\n\
+         \x20   label: 何を報告するか\n\
+         \x20   options:\n\
+         \x20     task.done: タスクが完了した\n",
+    );
+    write("mail.de.yaml", "config:\n  events:\n    label: Was gemeldet wird\n");
+
+    let (stdout, code) = validate();
+    assert_eq!(code, 0, "overlays that line up with the base pass: {stdout}");
+    let out: Value = serde_json::from_str(&stdout).unwrap();
+    assert_eq!(
+        out["entry_i18n"],
+        serde_json::json!({ "ja": { "desc": "AI がやったことをメールで報告する" } }),
+        "the list half is one document per language, and de translated nothing there",
+    );
+    assert_eq!(out["detail"]["i18n"]["ja"]["config"]["events"]["label"], "何を報告するか");
+    assert_eq!(out["detail"]["i18n"]["ja"]["config"]["events"]["options"]["task.done"], "タスクが完了した");
+    assert_eq!(
+        out["detail"]["i18n"]["de"]["config"]["events"]["label"], "Was gemeldet wird",
+        "the detail half carries every language at once, since it is fetched one plugin at a time",
+    );
+    assert_eq!(out["entry"]["desc"], "Report what your AI did by email", "the base line is untouched");
+
+    // A language amenbo is not read in, and an overlay naming what the base does not have: both are the
+    // author's to fix here, and both are named at once rather than one per run.
+    write("mail.xx.yaml", "desc: kein Wort\n");
+    write("mail.fr.yaml", "author: Alice\nconfig:\n  smtp_host:\n    label: Serveur SMTP\n");
+    let (stdout, code) = validate();
+    assert_eq!(code, 1, "and the manifest does not pass while its translations do not");
+    let out: Value = serde_json::from_str(&stdout).unwrap();
+    let problems: Vec<(&str, &str)> = out["problems"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| (p["location"].as_str().unwrap(), p["code"].as_str().unwrap()))
+        .collect();
+    assert!(problems.contains(&("i18n[xx]", "unknown_language")), "{problems:?}");
+    assert!(problems.contains(&("i18n[fr].author", "not_in_base")), "{problems:?}");
+    assert!(problems.contains(&("i18n[fr].config[smtp_host]", "not_in_base")), "{problems:?}");
+    assert!(out.get("entry_i18n").is_none(), "nothing is published while anything is refused");
+}
+
 /// `plugin catalog add/list/remove` registers third-party catalogs for the browsing view (`AMB-T-1980`):
 /// the merged listing is the official catalog plus each registered source, and registration is idempotent
 /// and reversible. A dead loopback URL registers, is marked unreachable, and does not cost the official

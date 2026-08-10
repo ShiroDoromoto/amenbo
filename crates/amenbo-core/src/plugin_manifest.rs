@@ -803,6 +803,103 @@ impl AgentCommand {
     }
 }
 
+/// **What one manifest says in one other language**, keyed by the language code it is written in
+/// (`AMB-D-621`) — `ja`, `zh-Hans`, one of [`crate::config::LANGUAGES`].
+///
+/// The author writes each language as a file beside the manifest (`plugins/mail.ja.yaml`); amenbo
+/// publishes them split across the two catalog documents (`AMB-D-622`, [`crate::plugin_wire::split`]).
+/// Which languages exist is therefore a map, never a field on [`Manifest`]: the manifest is what the
+/// author wrote, and this is what someone else wrote it as.
+pub type Translations = BTreeMap<String, ManifestOverlay>;
+
+/// **The translated layer of one manifest, in one language** (`AMB-D-621`).
+///
+/// It mirrors the manifest's shape and carries only the fields a person reads on a GUI face
+/// (`AMB-D-620`): the one-line `desc`, and the labels of the configuration form. Everything else — the
+/// author's name, the category vocabulary, what the plugin says at the AI's entry point — stays the one
+/// language it was written in, so there is no key here to write it in another.
+///
+/// **Every field is optional**, because a translation is a layer and not a replacement: what an author
+/// did not translate is not missing, it is the base value (`AMB-D-623`), and amenbo never fills a gap on
+/// their behalf. Selecting between the two is the GUI's, which is why nothing here resolves anything.
+///
+/// **Unknown keys are kept rather than ignored**, unlike [`Manifest`]'s. A manifest ignores what it does
+/// not know so a newer document still parses on an older amenbo; an overlay's unknown key is the
+/// opposite situation — an author translating something amenbo will never show, whose whole symptom is
+/// silence. So the key is carried in [`extra`](ManifestOverlay::extra) and named back to the author by
+/// the validator ([`crate::plugin_validate::validate_overlays`]), while the document still parses, which
+/// is what lets one run report every mistake in it at once.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ManifestOverlay {
+    /// The one-line description, in this language. Absent means the base line is what a reader sees.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub desc: Option<String>,
+    /// The configuration form's labels, in this language — **keyed by the field's
+    /// [`key`](ConfigField::key)**, where the manifest declares an ordered list (`AMB-D-621`). A
+    /// translation carries no order of its own, so pairing the two by position would mean an author
+    /// re-ordering their form silently re-labels every language.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub config: BTreeMap<String, ConfigFieldOverlay>,
+    /// What this overlay named that amenbo does not translate — kept only so the key can be named back
+    /// to its author, never read for what it held.
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, Ignored>,
+}
+
+/// **One configuration field's labels, in one language** (`AMB-D-621`) — the translated half of a
+/// [`ConfigField`]. The field's `key`, its type, and what it stores are the plugin's wire vocabulary and
+/// are not translated; what a person reads on the form is.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConfigFieldOverlay {
+    /// The label shown beside the field, in this language. Absent means the base label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    /// The candidates' labels, in this language — **keyed by the candidate's stored
+    /// [`value`](ConfigOption::value)**, for the same reason the fields are keyed rather than ordered.
+    /// The value itself is what travels to the plugin, so it is never translated.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub options: BTreeMap<String, String>,
+    /// What this overlay named that amenbo does not translate, as on [`ManifestOverlay`].
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, Ignored>,
+}
+
+/// **Which language an overlay file beside a manifest is written in** (`AMB-D-621`) — the naming rule
+/// `plugins/<name>.<lang>.yaml`, held here rather than at whichever road walks the directory.
+///
+/// `manifest_file` and `file` are file names, not paths; the answer is the token between the manifest's
+/// own stem and its extension, and `None` for anything that is not an overlay of *that* manifest — the
+/// manifest itself included, since its name has no token between the two.
+///
+/// **The token is not checked against the languages amenbo reads.** A file named in a code from outside
+/// them is still an overlay someone wrote, and the useful answer to it is the validator naming the code
+/// ([`crate::plugin_validate::validate_overlays`]) — not this quietly declining to see the file, which is
+/// the same silence as never having written it.
+pub fn overlay_language<'a>(manifest_file: &str, file: &'a str) -> Option<&'a str> {
+    let (stem, ext) = manifest_file.rsplit_once('.')?;
+    let rest = file.strip_prefix(stem)?.strip_prefix('.')?;
+    let lang = rest.strip_suffix(ext)?.strip_suffix('.')?;
+    (!lang.is_empty()).then_some(lang)
+}
+
+/// A value amenbo did not read, standing in for whatever an overlay wrote under a key it does not know.
+/// The key is the whole of what anyone needs — it is what the validator names back to the author — so
+/// the value is discarded on the way in rather than carried around untyped.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Ignored;
+
+impl<'de> Deserialize<'de> for Ignored {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        serde::de::IgnoredAny::deserialize(d).map(|_| Ignored)
+    }
+}
+
+impl Serialize for Ignored {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_none()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1341,5 +1438,65 @@ mod tests {
         let m: Manifest = serde_json::from_value(v).unwrap();
         let out = serde_json::to_value(&m).unwrap();
         assert!(out.get("min_amenbo").is_none(), "no floor ⇒ no min_amenbo key on the way out");
+    }
+
+    /// An overlay reads as the layer it is: the fields the author translated, keyed the way a
+    /// translation has to be keyed, and nothing said about the ones they did not (`AMB-D-621`).
+    #[test]
+    fn an_overlay_carries_what_was_translated_and_says_nothing_of_the_rest() {
+        let o: ManifestOverlay = serde_json::from_value(serde_json::json!({
+            "desc": "タスクごとに git worktree を切り分ける",
+            "config": {
+                "events": { "label": "何を報告するか", "options": { "task.done": "タスクが完了した" } },
+                "base": { "label": "基点にするブランチ" },
+            },
+        }))
+        .unwrap();
+
+        assert_eq!(o.desc.as_deref(), Some("タスクごとに git worktree を切り分ける"));
+        assert_eq!(o.config["base"].label.as_deref(), Some("基点にするブランチ"));
+        assert_eq!(o.config["events"].options["task.done"], "タスクが完了した");
+        assert!(o.config["base"].options.is_empty(), "a field with no candidates translates none");
+        assert!(o.extra.is_empty(), "everything it wrote is something amenbo translates");
+
+        // What was not translated re-emits as absent, never as an empty string standing in for a line
+        // the author never wrote.
+        let bare: ManifestOverlay = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert_eq!(serde_json::to_value(&bare).unwrap(), serde_json::json!({}));
+    }
+
+    /// **A key amenbo does not translate is kept, not dropped.** The overlay still parses — so one run
+    /// can report every mistake in it — and the key is there for the validator to name back to its
+    /// author (`AMB-D-621`), which is the whole difference from a manifest's ignored unknowns.
+    #[test]
+    fn an_overlay_keeps_the_keys_amenbo_does_not_translate() {
+        let o: ManifestOverlay = serde_json::from_value(serde_json::json!({
+            "desc": "説明",
+            "author": "書いた人",
+            "config": { "base": { "label": "ラベル", "default": "main" } },
+        }))
+        .unwrap();
+
+        assert_eq!(o.extra.keys().collect::<Vec<_>>(), ["author"]);
+        assert_eq!(o.config["base"].extra.keys().collect::<Vec<_>>(), ["default"]);
+    }
+
+    /// The overlay's file name is what says which language it is, and which manifest it is beside
+    /// (`AMB-D-621`).
+    #[test]
+    fn an_overlay_file_names_the_language_it_translates_into() {
+        assert_eq!(overlay_language("mail.yaml", "mail.ja.yaml"), Some("ja"));
+        assert_eq!(overlay_language("mail.yaml", "mail.zh-Hans.yaml"), Some("zh-Hans"));
+        assert_eq!(overlay_language("mail.json", "mail.pt-BR.json"), Some("pt-BR"));
+        // A code amenbo does not read is still read off the name — the validator is what says so.
+        assert_eq!(overlay_language("mail.yaml", "mail.xx.yaml"), Some("xx"));
+
+        // The manifest is not an overlay of itself, and neither is another plugin's anything.
+        assert_eq!(overlay_language("mail.yaml", "mail.yaml"), None);
+        assert_eq!(overlay_language("mail.yaml", "mailbox.ja.yaml"), None);
+        assert_eq!(overlay_language("mail.yaml", "worktree.ja.yaml"), None);
+        // The form the manifest was written in is the form its translations are written in.
+        assert_eq!(overlay_language("mail.yaml", "mail.ja.json"), None);
+        assert_eq!(overlay_language("mail.yaml", "mail.ja.md"), None);
     }
 }

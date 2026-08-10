@@ -514,6 +514,25 @@ pub fn default_project_name(lang: Option<&str>) -> String {
     if is_japanese(lang) { "プロジェクト" } else { "Project" }.to_string()
 }
 
+/// **The languages amenbo is read in** (`AMB-D-394`) — Tier 2 and up, spelled the way every document
+/// keyed by one spells it. `en` leads because it is where everything falls back to: an unset setting,
+/// a code from outside this list, and a value nobody translated all end there.
+///
+/// The list is data rather than a match arm because two roads ask it a question a `match` cannot
+/// answer: which codes exist at all. A plugin's translation overlay is named by its code
+/// (`plugins/<name>.<lang>.yaml`, `AMB-D-621`) and refused when the code is not one of these
+/// ([`crate::plugin_validate::validate_overlays`]), and the GUI carries the same list as `LANGS`
+/// (`app/src/core/i18n/lang.ts`) — a code amenbo accepted that the GUI cannot read would be a
+/// translation nobody ever sees.
+///
+/// Chinese and Portuguese are carried by script and region rather than by language alone: Simplified
+/// and Traditional are separate writing systems and Brazilian Portuguese a separate vocabulary, so
+/// each is its own code rather than one narrowed later.
+pub const LANGUAGES: [&str; 19] = [
+    "en", "ja", "zh-Hans", "zh-Hant", "ko", "es", "pt-BR", "fr", "de", "it", "ru", "hi", "id", "vi",
+    "th", "tr", "pl", "nl", "uk",
+];
+
 /// Turn a language code (`ja`, …) into its English name, for both AI and human readers; an unknown
 /// code is returned as-is. Used when embedding the language into AGENTS.md.
 ///
@@ -782,18 +801,24 @@ mod tests {
     /// — the label is the whole instruction an AI gets about which language to write in.
     #[test]
     fn every_supported_language_code_has_a_name() {
-        let supported = [
-            "ja", "en", "zh-Hans", "zh-Hant", "ko", "es", "pt-BR", "fr", "de", "it", "ru", "hi", "id", "vi", "th",
-            "tr", "pl", "nl", "uk",
-        ];
-        assert_eq!(supported.len(), 19);
-
         let mut names = std::collections::HashSet::new();
-        for code in supported {
+        for code in LANGUAGES {
             let label = language_label(code);
             assert_ne!(label, code, "{code} must resolve to a name, not fall through");
             assert!(names.insert(label.clone()), "{code} shares the name {label} with another code");
         }
+    }
+
+    /// The list is what other roads key documents by — a plugin's overlay file, the GUI's dictionaries
+    /// — so a code written twice, or an `en` that stopped leading the fallback, is a fault here rather
+    /// than a puzzle wherever it is read.
+    #[test]
+    fn the_supported_languages_are_distinct_and_fall_back_to_english() {
+        let mut seen = std::collections::HashSet::new();
+        for code in LANGUAGES {
+            assert!(seen.insert(code), "{code} is listed twice");
+        }
+        assert_eq!(LANGUAGES[0], "en", "everything falls back to English, so it leads the list");
     }
 
     /// The two codes that carry a script or region subtag name it, because the label is what picks

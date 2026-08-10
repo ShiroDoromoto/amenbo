@@ -125,7 +125,10 @@ pub fn install(paths: &Paths, name: &str) -> Result<Installed> {
 pub(crate) fn catalog_manifest(paths: &Paths, found: &DiscoveredEntry) -> Result<Manifest> {
     let entry = &found.entry;
     let detail = plugin_catalog::detail_of(paths, found)?;
-    let manifest = crate::plugin_wire::join(entry, &detail);
+    // The translations the detail carried are dropped here rather than kept: the road that fetches the
+    // list half of them and writes them beside the binary is not built yet (`AMB-T-2943`), and a value
+    // half-delivered is worse than one delivered later. What installs is the manifest, as before.
+    let (manifest, _translations) = crate::plugin_wire::join(entry, &Default::default(), &detail);
     let problems = validate_manifest(&manifest);
     if let Some(first) = problems.first() {
         let first = format!("{}: {}", first.location, first.message.en());

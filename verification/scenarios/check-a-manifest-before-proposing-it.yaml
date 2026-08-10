@@ -11,7 +11,10 @@ description: >
   among the choices it offers, an agent block that names no occasion, a call written as a sentence, a line
   citing a record of this store, a layer amenbo has no name for, and a file that does not even parse — and
   read back not just that it failed but which rule it failed on. A check that says "invalid" for the wrong
-  reason is a check an author cannot act on.
+  reason is a check an author cannot act on. Then write the same manifest in another language, in the file
+  beside it that is how a translation is supplied, and see that it is read with the manifest: one that lines
+  up passes, one naming a setting the manifest does not declare is turned down, and one written in a
+  language amenbo is not read in is turned down too.
 steps_cli:
   - type: action
     domain: repo
@@ -307,3 +310,90 @@ steps_cli:
     with:
       path: half-written.yaml
       ok: false
+
+  # A plugin's words in another language are the author's too, supplied as a file beside the manifest and
+  # named by the language it is written in. The self-check reads the pair together, because the only way a
+  # translation can be wrong is against the manifest it translates.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      path: translated.yaml
+      content: |
+        name: scenario-plugin
+        desc: SCENARIO — a manifest whose author also wrote it in another language
+        author: amenbo
+        repo: ShiroDoromoto/amenbo-plugin-worktree
+        os:
+          - macos
+        category: workflow
+        url: https://example.com/scenario-plugin-v1.tar.gz
+        checksum: sha256:a6c1027eb54606d4f5e67176faeefefff3b64161b03fd76faff5908e093bf07c
+        payload_v: 1
+        config:
+          - key: events
+            label: Events to report
+            type: multi
+            default: task.done
+            options:
+              - value: task.done
+                label: Finished
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      path: translated.de.yaml
+      content: |
+        desc: SCENARIO — dasselbe Manifest, in einer anderen Sprache
+        config:
+          events:
+            label: Was gemeldet wird
+            options:
+              task.done: Aufgabe erledigt
+
+  - type: assert
+    domain: plugin
+    op: validated
+    with:
+      path: translated.yaml
+      ok: true
+
+  # A translation lines up with the base or it reaches nobody: what it names has to be there. A setting the
+  # manifest does not declare is a label that would never be drawn, and the author is told which key it is
+  # while the file is still theirs — the one mistake whose whole symptom is otherwise silence.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      path: translated.fr.yaml
+      content: |
+        config:
+          smtp_host:
+            label: Serveur SMTP
+
+  - type: assert
+    domain: plugin
+    op: validated
+    with:
+      path: translated.yaml
+      ok: false
+      problem: not_in_base
+
+  # The language code names the file and the document it will be published as at once, so one amenbo is not
+  # read in is a document nothing would ever fetch.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      path: translated.xx.yaml
+      content: |
+        desc: SCENARIO — written in a language amenbo is not read in
+
+  - type: assert
+    domain: plugin
+    op: validated
+    with:
+      path: translated.yaml
+      ok: false
+      problem: unknown_language

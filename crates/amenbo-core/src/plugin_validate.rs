@@ -34,7 +34,10 @@ use serde::{Serialize, Serializer};
 use crate::config::is_reserved_plugin_name;
 use crate::error::Msg;
 use crate::plugin_config::MAX_CONFIG_IDENT_BYTES;
-use crate::plugin_manifest::{ConfigField, Face, FieldType, Manifest, Os, NONE_SELECTED};
+use crate::plugin_manifest::{
+    ConfigField, ConfigFieldOverlay, Face, FieldType, Manifest, ManifestOverlay, Os, Translations,
+    NONE_SELECTED,
+};
 use crate::plugin_wire::ListEntry;
 
 /// The shortest a plugin id (`name`) may be (`AMB-D-360`).
@@ -172,6 +175,14 @@ pub enum ProblemCode {
     /// (`AMB-D-572`). A manifest is not written from inside this store, so a ref in one points at nothing
     /// it can vouch for.
     RecordRef,
+    /// A translation overlay names something the manifest does not have, or something amenbo does not
+    /// translate (`AMB-D-621`): a field, a config key, a candidate. Whatever was written under it would
+    /// reach no reader, and silence is the one thing an author cannot debug.
+    NotInBase,
+    /// A translation is offered in a language amenbo is not read in (`AMB-D-394`). The code names the
+    /// file it was written in and the document it would be published as, so one outside the list is a
+    /// document nothing ever fetches.
+    UnknownLanguage,
 }
 
 impl ProblemCode {
@@ -203,6 +214,8 @@ impl ProblemCode {
         Self::BadCmd,
         Self::BadStepRef,
         Self::RecordRef,
+        Self::NotInBase,
+        Self::UnknownLanguage,
     ];
 
     /// The one place a code string is written; `Serialize` goes through here too.
@@ -234,6 +247,8 @@ impl ProblemCode {
             Self::BadCmd => "bad_cmd",
             Self::BadStepRef => "bad_step_ref",
             Self::RecordRef => "record_ref",
+            Self::NotInBase => "not_in_base",
+            Self::UnknownLanguage => "unknown_language",
         }
     }
 }
@@ -284,6 +299,116 @@ pub fn validate_manifest(m: &Manifest) -> Vec<Problem> {
     check_agent(&mut problems, m);
 
     problems
+}
+
+/// Validate the **translations** an author supplied beside a manifest (`AMB-D-621`), against the manifest
+/// they translate. Empty ⇒ valid, and every problem is collected, as above.
+///
+/// A translation is not judged as text — amenbo does not read the languages it publishes, and never asks
+/// whether a line means what the base line means. What it checks is that the overlay *lines up with the
+/// base*, which is the whole of what a machine can know here:
+///
+/// - **the language is one amenbo is read in** ([`crate::config::LANGUAGES`], `AMB-D-394`). The code
+///   names the file the author wrote and the document it is published as, so one outside the list is a
+///   document nothing fetches.
+/// - **everything it names exists in the base** — the field, the config key, the candidate. An overlay
+///   is a layer over what the manifest declares; a key that lines up with nothing is a translation whose
+///   only symptom is that it never appears.
+/// - **the translated text obeys the rule its base field obeys** — the same cap, the same one-line
+///   shape. A `desc` translated into a paragraph breaks the row it is drawn in exactly as an untranslated
+///   one would.
+///
+/// **Who runs it.** The author's tool does (`plugin validate`), which is where an overlay is a file that
+/// can still be fixed. The install door validates the manifest it joined ([`validate_manifest`]) and does
+/// not yet reach for this: the translations it would judge are the ones amenbo itself published, and the
+/// document that carries them is not fetched by a road that exists today (`AMB-T-2943`).
+pub fn validate_overlays(m: &Manifest, translations: &Translations) -> Vec<Problem> {
+    let mut problems = Vec::new();
+    for (lang, overlay) in translations {
+        if !crate::config::LANGUAGES.contains(&lang.as_str()) {
+            problems.push(Problem::new(
+                format!("i18n[{lang}]"),
+                ProblemCode::UnknownLanguage,
+                format!("'{lang}' is not a language amenbo is read in"),
+            ));
+        }
+        check_overlay(&mut problems, m, lang, overlay);
+    }
+    problems
+}
+
+/// One language's overlay against the manifest it translates — the body of [`validate_overlays`], split
+/// out so the language itself is judged once, above, and everything below is about the lining up.
+fn check_overlay(problems: &mut Vec<Problem>, m: &Manifest, lang: &str, o: &ManifestOverlay) {
+    let at = |what: &str| format!("i18n[{lang}].{what}");
+
+    for key in o.extra.keys() {
+        problems.push(Problem::new(
+            at(key),
+            ProblemCode::NotInBase,
+            format!("'{key}' is not something amenbo shows a reader in their own language"),
+        ));
+    }
+
+    if let Some(desc) = &o.desc {
+        check_line(problems, &at("desc"), desc, MAX_DESC_LEN);
+        // The translated line is drawn where the base line is drawn, so it borrows this store's
+        // authority the same way a ref in the base would (`AMB-D-572`).
+        check_no_record_ref(problems, &at("desc"), desc);
+    }
+
+    // The same total the base schema is held to (`AMB-D-356`), per language: the form is drawn from one
+    // language at a time, so what bounds it there is what bounds it here.
+    let total: usize = o.config.iter().map(|(key, f)| key.len() + overlay_schema_bytes(f)).sum();
+    if total > MAX_CONFIG_SCHEMA_BYTES {
+        problems.push(Problem::new(
+            at("config"),
+            ProblemCode::SchemaTooLarge,
+            format!("the translated config schema is too large ({total} bytes; max {MAX_CONFIG_SCHEMA_BYTES})"),
+        ));
+    }
+
+    for (key, field) in &o.config {
+        let loc = at(&format!("config[{key}]"));
+        let Some(base) = m.config.iter().find(|f| &f.key == key) else {
+            problems.push(Problem::new(
+                loc,
+                ProblemCode::NotInBase,
+                format!("the manifest declares no config field '{key}'"),
+            ));
+            continue;
+        };
+        for extra in field.extra.keys() {
+            problems.push(Problem::new(
+                format!("{loc}.{extra}"),
+                ProblemCode::NotInBase,
+                format!("'{extra}' is not something amenbo shows a reader in their own language"),
+            ));
+        }
+        if let Some(label) = &field.label {
+            check_line(problems, &format!("{loc}.label"), label, MAX_LABEL_LEN);
+        }
+        for (value, label) in &field.options {
+            let at_option = format!("{loc}.options[{value}]");
+            if !base.options.iter().any(|o| &o.value == value) {
+                problems.push(Problem::new(
+                    at_option,
+                    ProblemCode::NotInBase,
+                    format!("config field '{key}' offers no candidate '{value}'"),
+                ));
+                continue;
+            }
+            check_line(problems, &at_option, label, MAX_LABEL_LEN);
+        }
+    }
+}
+
+/// What one translated field's text weighs, counted the way [`schema_bytes`] counts the base's: the
+/// display text and nothing structural, since the key and the candidates' values are the base's and are
+/// not written again here.
+fn overlay_schema_bytes(f: &ConfigFieldOverlay) -> usize {
+    f.label.as_deref().map_or(0, str::len)
+        + f.options.iter().map(|(value, label)| value.len() + label.len()).sum::<usize>()
 }
 
 /// Validate one **list** entry — the half of a catalog entry that rides in `catalog.json` (`AMB-D-385`),
@@ -961,7 +1086,7 @@ mod tests {
     use super::*;
     use crate::plugin_manifest::{
         AgentCommand, AgentGuide, Arch, Asset, ConfigField, ConfigOption, EventSubscription, Face,
-        Manifest, Os, Platform,
+        Ignored, Manifest, Os, Platform,
     };
 
     /// An arch-agnostic platform key (`<os>`).
@@ -1689,7 +1814,7 @@ mod tests {
     #[test]
     fn a_record_reference_in_a_list_entry_is_refused() {
         let m = valid();
-        let (mut entry, _) = crate::plugin_wire::split(&m);
+        let (mut entry, _, _) = crate::plugin_wire::split(&m, &Translations::new());
         assert!(validate_list_entry(&entry).is_empty(), "{:?}", validate_list_entry(&entry));
         entry.desc = "Endorsed by AMB-D-411".into();
         assert!(codes(&validate_list_entry(&entry)).contains(&ProblemCode::RecordRef));
@@ -1736,6 +1861,172 @@ mod tests {
             m.min_amenbo = Some(min.into());
             assert!(validate_manifest(&m).is_empty(), "'{min}' compares fine, so it passes");
         }
+    }
+
+    /// A manifest whose `events` field is a choice, so an overlay has candidates to translate and to
+    /// get wrong.
+    fn valid_with_candidates() -> Manifest {
+        let mut m = valid();
+        m.config[1] = ConfigField {
+            field_type: FieldType::Multi,
+            options: vec![
+                ConfigOption { value: "task.done".into(), label: "Task done".into() },
+                ConfigOption { value: "task.created".into(), label: "Task created".into() },
+            ],
+            ..ConfigField::new("events", "Events")
+        };
+        m
+    }
+
+    /// One language's overlay, translating the line and one field's label.
+    fn overlay(lang: &str) -> Translations {
+        Translations::from([(
+            lang.to_string(),
+            ManifestOverlay {
+                desc: Some("タスクごとに git worktree を切り分ける".into()),
+                config: std::collections::BTreeMap::from([(
+                    "events".to_string(),
+                    ConfigFieldOverlay {
+                        label: Some("何を報告するか".into()),
+                        options: std::collections::BTreeMap::from([(
+                            "task.done".to_string(),
+                            "タスクが完了した".to_string(),
+                        )]),
+                        ..ConfigFieldOverlay::default()
+                    },
+                )]),
+                ..ManifestOverlay::default()
+            },
+        )])
+    }
+
+    #[test]
+    fn an_overlay_that_lines_up_with_the_base_has_no_problems() {
+        let m = valid_with_candidates();
+        assert!(validate_overlays(&m, &overlay("ja")).is_empty(), "{:?}", validate_overlays(&m, &overlay("ja")));
+        assert!(
+            validate_overlays(&m, &Translations::new()).is_empty(),
+            "a manifest nobody translated is not a manifest with a problem",
+        );
+    }
+
+    /// The language is the file's name and the published document's name at once (`AMB-D-394`), so one
+    /// amenbo is not read in is a document nothing would ever fetch.
+    #[test]
+    fn a_language_amenbo_is_not_read_in_is_refused() {
+        let m = valid_with_candidates();
+        for lang in ["xx", "ja-JP", "JA", "zh", "pt"] {
+            assert!(
+                codes(&validate_overlays(&m, &overlay(lang))).contains(&ProblemCode::UnknownLanguage),
+                "'{lang}' is not one of the nineteen, spelled as they are spelled",
+            );
+        }
+        for lang in crate::config::LANGUAGES {
+            assert!(validate_overlays(&m, &overlay(lang)).is_empty(), "'{lang}' is one of them");
+        }
+    }
+
+    /// **Everything an overlay names has to exist in the base** (`AMB-D-621`) — a field amenbo does not
+    /// translate, a config key the manifest does not declare, a candidate the field does not offer.
+    /// Each would otherwise be text nobody ever sees, which is the one failure an author cannot spot.
+    #[test]
+    fn an_overlay_naming_what_the_base_does_not_have_is_refused() {
+        let m = valid_with_candidates();
+
+        let mut untranslatable = overlay("ja");
+        untranslatable.get_mut("ja").unwrap().extra.insert("author".into(), Ignored);
+        let problems = validate_overlays(&m, &untranslatable);
+        assert_eq!(codes(&problems), vec![ProblemCode::NotInBase]);
+        assert_eq!(problems[0].location, "i18n[ja].author", "the author is told which key");
+
+        let mut no_such_field = overlay("ja");
+        let overlay_config = &mut no_such_field.get_mut("ja").unwrap().config;
+        overlay_config.insert("smtp_host".into(), ConfigFieldOverlay::default());
+        assert_eq!(codes(&validate_overlays(&m, &no_such_field)), vec![ProblemCode::NotInBase]);
+
+        let mut no_such_candidate = overlay("ja");
+        no_such_candidate.get_mut("ja").unwrap().config.get_mut("events").unwrap().options
+            .insert("task.deleted".into(), "タスクが消えた".into());
+        let problems = validate_overlays(&m, &no_such_candidate);
+        assert_eq!(codes(&problems), vec![ProblemCode::NotInBase]);
+        assert_eq!(problems[0].location, "i18n[ja].config[events].options[task.deleted]");
+
+        let mut untranslatable_field_key = overlay("ja");
+        untranslatable_field_key.get_mut("ja").unwrap().config.get_mut("events").unwrap().extra
+            .insert("default".into(), Ignored);
+        assert_eq!(
+            codes(&validate_overlays(&m, &untranslatable_field_key)),
+            vec![ProblemCode::NotInBase],
+            "what a field stores is the plugin's vocabulary, not something a reader is shown",
+        );
+    }
+
+    /// **A translation obeys the rule its base field obeys** (`AMB-D-621`). The row a `desc` is drawn in
+    /// is the same row whichever language fills it, so the cap, the one-line shape and the no-citing rule
+    /// travel with the field rather than with the language it was written in.
+    #[test]
+    fn a_translation_is_held_to_its_base_field_rules() {
+        let m = valid_with_candidates();
+
+        let long_desc = |text: String| {
+            let mut t = overlay("ja");
+            t.get_mut("ja").unwrap().desc = Some(text);
+            validate_overlays(&m, &t)
+        };
+        assert!(codes(&long_desc("あ".repeat(MAX_DESC_LEN + 1))).contains(&ProblemCode::TooLong));
+        assert!(codes(&long_desc("一行目\n二行目".into())).contains(&ProblemCode::ControlChar));
+        assert!(codes(&long_desc(String::new())).contains(&ProblemCode::Empty));
+        assert!(
+            codes(&long_desc("AMB-D-411 が要求している".into())).contains(&ProblemCode::RecordRef),
+            "a ref borrows this store's authority in any language",
+        );
+
+        let mut long_label = overlay("ja");
+        long_label.get_mut("ja").unwrap().config.get_mut("events").unwrap().label =
+            Some("ラ".repeat(MAX_LABEL_LEN + 1));
+        assert!(codes(&validate_overlays(&m, &long_label)).contains(&ProblemCode::TooLong));
+
+        let mut long_option = overlay("ja");
+        long_option.get_mut("ja").unwrap().config.get_mut("events").unwrap().options
+            .insert("task.done".into(), "ラ".repeat(MAX_LABEL_LEN + 1));
+        assert!(codes(&validate_overlays(&m, &long_option)).contains(&ProblemCode::TooLong));
+
+        let mut huge = overlay("ja");
+        huge.get_mut("ja").unwrap().config.get_mut("events").unwrap().label =
+            Some("ラ".repeat(MAX_CONFIG_SCHEMA_BYTES));
+        assert!(
+            codes(&validate_overlays(&m, &huge)).contains(&ProblemCode::SchemaTooLarge),
+            "the form is drawn one language at a time, so each language is bounded like the base",
+        );
+    }
+
+    /// Every language is judged, and every problem in it collected — an author fixing their overlays
+    /// sees the whole list, exactly as they do for the manifest itself (`AMB-D-354`).
+    #[test]
+    fn every_language_is_read_and_every_problem_collected() {
+        let m = valid_with_candidates();
+        let mut translations = overlay("ja");
+        translations.insert(
+            "xx".to_string(),
+            ManifestOverlay { desc: Some("x".repeat(MAX_DESC_LEN + 1)), ..ManifestOverlay::default() },
+        );
+        translations.insert(
+            "de".to_string(),
+            ManifestOverlay {
+                config: std::collections::BTreeMap::from([(
+                    "nope".to_string(),
+                    ConfigFieldOverlay::default(),
+                )]),
+                ..ManifestOverlay::default()
+            },
+        );
+
+        let problems = validate_overlays(&m, &translations);
+        assert_eq!(
+            codes(&problems),
+            vec![ProblemCode::NotInBase, ProblemCode::UnknownLanguage, ProblemCode::TooLong],
+            "de's missing field, xx's language and xx's line — all of it, in language order",
+        );
     }
 
     #[test]

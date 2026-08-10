@@ -5046,8 +5046,11 @@ pub async fn plugin_detail(name: String) -> Result<Option<PluginDetailDto>, CmdE
         };
         let detail = amenbo_core::plugin_catalog::detail_of(&paths, found)?;
         // The compatibility gate reads a whole manifest, so the two halves are put back together once
-        // here rather than teaching the gate to read a document at a time.
-        let manifest = amenbo_core::plugin_wire::join(&found.entry, &detail);
+        // here rather than teaching the gate to read a document at a time. The translations the detail
+        // carried are dropped for now: no list-half document is fetched yet, and what the screen does
+        // with the pair is `AMB-T-2943`/`AMB-T-2934`.
+        let (manifest, _translations) =
+            amenbo_core::plugin_wire::join(&found.entry, &Default::default(), &detail);
         let why = amenbo_core::plugin_compat::check(&manifest).err();
         Ok(Some(PluginDetailDto {
             events: detail.events.iter().map(|e| e.event.clone()).collect(),

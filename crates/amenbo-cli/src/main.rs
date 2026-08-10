@@ -1157,38 +1157,54 @@ const STDIN_LABEL: &str = "<stdin>";
 /// required field is the shape half of the door — so it is reported as a problem, not surfaced as a crash.
 /// Exits non-zero when the manifest is invalid, dropping cleanly into a pre-submit check.
 ///
-/// On `--json` a passing manifest also carries what amenbo read, as the two documents the catalog serves
-/// (`AMB-D-385`): the `entry` everyone fetches to draw the list, and the `detail` fetched for one plugin at
-/// a time. The catalog aggregator publishes what amenbo hands it rather than keeping its own list of fields
-/// to copy, which silently drops a field amenbo later adds. Both ride back only when the manifest passes: a
-/// parse error read nothing, and a rule-breaking manifest is refused at the door.
+/// **The translations beside it are read with it** (`AMB-D-621`): every sibling file named
+/// `<name>.<lang>.<ext>` is an overlay of this manifest, and the pair is checked together — a language
+/// amenbo is not read in, a key the base does not declare, and text past the cap its base field obeys are
+/// all things an author can only be told here, while the file is still theirs to fix.
+///
+/// On `--json` a passing manifest also carries what amenbo read, as the documents the catalog serves
+/// (`AMB-D-385`): the `entry` everyone fetches to draw the list, the `detail` fetched for one plugin at a
+/// time, and `entry_i18n` — the list half of the translations, one per language, for the CI to key by
+/// plugin name into `catalog.<lang>.json` (`AMB-D-622`). The detail half rides inside `detail` already,
+/// every language at once, so there is no third key for it. The catalog aggregator publishes what amenbo
+/// hands it rather than keeping its own list of fields to copy, which silently drops a field amenbo later
+/// adds. All of it rides back only when the manifest passes: a parse error read nothing, and a
+/// rule-breaking manifest is refused at the door.
 fn plugin_validate_cmd(flags: &Flags, path: String) -> Result<i32, CliError> {
-    let text = std::fs::read_to_string(&path).map_err(|e| CliError {
-        code: "io_error",
-        message: format!("Cannot read {path}: {e}"),
-        hint: None,
-        exit: 1,
-    })?;
     let is_json =
         std::path::Path::new(&path).extension().is_some_and(|e| e.eq_ignore_ascii_case("json"));
-    let parsed: Result<amenbo_core::plugin_manifest::Manifest, String> = if is_json {
-        serde_json::from_str(&text).map_err(|e| e.to_string())
-    } else {
-        serde_norway::from_str(&text).map_err(|e| e.to_string())
+    let read = |path: &str| {
+        std::fs::read_to_string(path).map_err(|e| CliError {
+            code: "io_error",
+            message: format!("Cannot read {path}: {e}"),
+            hint: None,
+            exit: 1,
+        })
     };
-    let manifest = match parsed {
-        Ok(m) => m,
-        Err(e) => {
-            if flags.json {
-                print_json(&json!({ "ok": false, "path": path, "parse_error": e, "problems": [] }));
-            } else {
-                human(flags, format!("✗ {path}: not a valid manifest — {e}"));
-            }
-            return Ok(1);
+    let refuse = |path: &str, what: &str, e: String| {
+        if flags.json {
+            print_json(&json!({ "ok": false, "path": path, "parse_error": e, "problems": [] }));
+        } else {
+            human(flags, format!("✗ {path}: not a valid {what} — {e}"));
         }
+        Ok(1)
     };
 
-    let problems = amenbo_core::plugin_validate::validate_manifest(&manifest);
+    let manifest = match parse_catalog_document(&read(&path)?, is_json) {
+        Ok(m) => m,
+        Err(e) => return refuse(&path, "manifest", e),
+    };
+
+    let mut translations = amenbo_core::plugin_manifest::Translations::new();
+    for (lang, file) in overlays_beside(&path)? {
+        match parse_catalog_document(&read(&file)?, is_json) {
+            Ok(overlay) => translations.insert(lang, overlay),
+            Err(e) => return refuse(&file, "translation", e),
+        };
+    }
+
+    let mut problems = amenbo_core::plugin_validate::validate_manifest(&manifest);
+    problems.extend(amenbo_core::plugin_validate::validate_overlays(&manifest, &translations));
     if flags.json {
         let arr: Vec<_> = problems
             .iter()
@@ -1211,16 +1227,27 @@ fn plugin_validate_cmd(flags: &Flags, path: String) -> Result<i32, CliError> {
         // round-trips what the author wrote. `entry` carries `added_at`, `detail_sum` and `featured` as empty
         // slots the catalog CI fills; none of them is knowable from a manifest alone.
         //
+        // The translations ride the same way, each half following its base fields (`AMB-D-622`):
+        // `entry_i18n` is the list half, one document per language for the CI to key by plugin name into
+        // `catalog.<lang>.json`, and the detail half is already inside `detail`. A language that
+        // translated nothing on a face is absent from that face rather than present and empty.
+        //
         // Present exactly when `ok`: a parse error leaves nothing to read, and a manifest that broke a rule
         // is refused at the door.
         if problems.is_empty() {
-            let (entry, detail) = amenbo_core::plugin_wire::split(&manifest);
+            let (entry, entry_i18n, detail) =
+                amenbo_core::plugin_wire::split(&manifest, &translations);
             out["entry"] = serde_json::to_value(&entry).unwrap();
+            out["entry_i18n"] = serde_json::to_value(&entry_i18n).unwrap();
             out["detail"] = serde_json::to_value(&detail).unwrap();
         }
         print_json(&out);
     } else if problems.is_empty() {
         human(flags, format!("plugin validate: ok — {path} is a valid manifest."));
+        if !translations.is_empty() {
+            let langs: Vec<_> = translations.keys().map(String::as_str).collect();
+            human(flags, format!("  translated beside it: {}", langs.join(", ")));
+        }
     } else {
         for p in &problems {
             human(flags, format!("{}: {}", p.location, p.message.en()));
@@ -1228,6 +1255,52 @@ fn plugin_validate_cmd(flags: &Flags, path: String) -> Result<i32, CliError> {
         human(flags, format!("✗ plugin validate: {} problem(s) in {path}.", problems.len()));
     }
     Ok(if problems.is_empty() { 0 } else { 1 })
+}
+
+/// Read one catalog document — a manifest, or a translation of one — in whichever of the two forms the
+/// catalog repository writes: JSON for the aggregated shape, YAML for what an author submits. Both are
+/// deserialized into the same type, so the road in never depends on which form the file was written in.
+fn parse_catalog_document<T: serde::de::DeserializeOwned>(
+    text: &str,
+    is_json: bool,
+) -> Result<T, String> {
+    if is_json {
+        serde_json::from_str(text).map_err(|e| e.to_string())
+    } else {
+        serde_norway::from_str(text).map_err(|e| e.to_string())
+    }
+}
+
+/// The translation overlays sitting beside a manifest file (`AMB-D-621`), as `(language, path)` in
+/// language order — `plugins/mail.yaml` finding `plugins/mail.ja.yaml` and its siblings.
+///
+/// Which name is an overlay of which manifest is [`overlay_language`](amenbo_core::plugin_manifest::overlay_language)'s
+/// to answer; walking the directory is this. A file whose language token is not one amenbo reads is
+/// returned all the same, so the validator can name the code rather than the file silently going unread.
+fn overlays_beside(manifest: &str) -> Result<Vec<(String, String)>, CliError> {
+    let path = std::path::Path::new(manifest);
+    let (Some(dir), Some(file)) = (path.parent(), path.file_name().and_then(|n| n.to_str())) else {
+        return Ok(Vec::new());
+    };
+    // A bare `mail.yaml` names the current directory, which `read_dir` still answers for.
+    let dir = if dir.as_os_str().is_empty() { std::path::Path::new(".") } else { dir };
+    let entries = std::fs::read_dir(dir).map_err(|e| CliError {
+        code: "io_error",
+        message: format!("Cannot read {}: {e}", dir.display()),
+        hint: None,
+        exit: 1,
+    })?;
+
+    let mut found = Vec::new();
+    for entry in entries.flatten() {
+        let Some(name) = entry.file_name().to_str().map(str::to_string) else { continue };
+        let Some(lang) = amenbo_core::plugin_manifest::overlay_language(file, &name) else {
+            continue;
+        };
+        found.push((lang.to_string(), dir.join(&name).to_string_lossy().into_owned()));
+    }
+    found.sort();
+    Ok(found)
 }
 
 /// The store-opening half of the `plugin` group: this machine's installed plugins and their gates

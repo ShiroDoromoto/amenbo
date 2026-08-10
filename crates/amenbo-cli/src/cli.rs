@@ -428,6 +428,11 @@ pub enum PluginCmd {
     /// (`AMB-D-354`). The path may be `.yaml` (the form authored in the catalog repo) or `.json` (the
     /// aggregated `catalog.json` form) — the format is read from the extension, defaulting to YAML.
     /// Exits non-zero if the manifest is invalid, so it drops into a pre-submit check.
+    ///
+    /// The translations beside it are read with it (`AMB-D-621`): every sibling
+    /// `<name>.<lang>.<ext>` is checked against the manifest it translates — the language is one amenbo
+    /// is read in, everything it names exists in the base, and the text obeys the cap its base field
+    /// obeys.
     Validate {
         /// path to the manifest file (`plugins/<name>.yaml` or a `.json` manifest)
         path: String,

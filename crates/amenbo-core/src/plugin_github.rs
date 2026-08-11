@@ -96,12 +96,40 @@ pub enum Readme {
     Skip,
 }
 
+/// One repository's facts as they are written to the cache: the answer, and whether the README was
+/// among the questions actually put.
+///
+/// `readme: None` says two different things — GitHub has none to give, and nobody has ever asked —
+/// and only the second is a reason to ask again inside [`FRESH_FOR`]. Before `AMB-D-638` there was
+/// only the first, every caller having asked; a copy written with the question skipped is what makes
+/// the distinction load-bearing.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct CachedFacts {
+    /// The answer itself, written flat so a cache from an earlier build still reads back as one.
+    #[serde(flatten)]
+    facts: RepoFacts,
+    /// Whether the README was asked for in the exchange this was written from. A cache written
+    /// before the field existed has it absent, and reads as "not asked" — one request more, once,
+    /// rather than six hours of a `None` nobody ever went looking for.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    readme_asked: bool,
+}
+
+impl CachedFacts {
+    /// Whether this copy answers what is being asked. Fresh is not enough on its own: a copy written
+    /// without the README question having been put has nothing to say to a caller that draws one.
+    fn answers(&self, readme: Readme) -> bool {
+        readme == Readme::Skip || self.readme_asked
+    }
+}
+
 /// The facts for one `owner/name` repository, cached per repository (`AMB-D-347`).
 ///
-/// A cache inside [`FRESH_FOR`] answers with no request. Past it, GitHub is asked and a partial
-/// answer is still an answer — a README that did not come back leaves the stars in place. What fails
-/// entirely falls back to the cached copy, however old; only a repository we have never reached, and
-/// cannot reach now, is an error.
+/// A cache inside [`FRESH_FOR`] answers with no request, so long as it holds what is being asked
+/// for — one written by a caller that skipped the README has nothing to say to one that draws it.
+/// Past it, GitHub is asked and a partial answer is still an answer — a README that did not come
+/// back leaves the stars in place. What fails entirely falls back to the cached copy, however old;
+/// only a repository we have never reached, and cannot reach now, is an error.
 ///
 /// `repo` comes from a catalog entry, and the delivery path is not trusted (`AMB-D-354`), so the
 /// shape is checked here before it is ever pasted into a URL or a file name.
@@ -127,17 +155,20 @@ fn facts_at(
     let cache = cache_file(paths, &repo);
     let on_disk = cached(&cache);
     if cache_age(&cache).is_some_and(|age| age < fresh_for) {
-        if let Some(cached) = on_disk.clone() {
-            return Ok(as_asked(cached, readme));
+        if let Some(cached) = on_disk.clone().filter(|c| c.answers(readme)) {
+            return Ok(as_asked(cached.facts, readme));
         }
     }
     let fetched = fetch_facts(api, &repo, readme);
     if !fetched.is_empty() {
-        // Not asking for the README is not learning that it is gone, so a copy already cached stays:
-        // the next reader who *would* draw one gets it without a request of their own.
-        let mut to_cache = fetched.clone();
-        if readme == Readme::Skip {
-            to_cache.readme = on_disk.and_then(|c| c.readme);
+        // Not asking for the README is not learning that it is gone, so a copy already cached stays,
+        // and so does the record of whether anyone has asked: the next reader who *would* draw one
+        // gets it without a request of their own, or goes for it because nobody has yet.
+        let mut to_cache =
+            CachedFacts { facts: fetched.clone(), readme_asked: readme == Readme::Fetch };
+        if let (Readme::Skip, Some(prev)) = (readme, on_disk.clone()) {
+            to_cache.facts.readme = prev.facts.readme;
+            to_cache.readme_asked = prev.readme_asked;
         }
         // Best-effort: failing to cache costs a request next time, never the answer in hand.
         let _ = write_cache(&cache, &to_cache);
@@ -147,7 +178,7 @@ fn facts_at(
     // own, and saying "too many requests" over yesterday's numbers is more honest than silence.
     match on_disk {
         Some(stale) => {
-            Ok(RepoFacts { rate_limited: fetched.rate_limited, ..as_asked(stale, readme) })
+            Ok(RepoFacts { rate_limited: fetched.rate_limited, ..as_asked(stale.facts, readme) })
         }
         None if fetched.rate_limited => Ok(fetched),
         None => Err(Error::Io(std::io::Error::other(format!(
@@ -202,7 +233,7 @@ fn cache_file(paths: &Paths, repo: &str) -> PathBuf {
 
 /// The cached facts, or `None` when there are none — absent, unreadable, or written in a shape this
 /// build no longer reads. Never an error: the answer to it is to fetch.
-fn cached(cache_file: &Path) -> Option<RepoFacts> {
+fn cached(cache_file: &Path) -> Option<CachedFacts> {
     let json = std::fs::read_to_string(cache_file).ok()?;
     serde_json::from_str(&json).ok()
 }
@@ -215,7 +246,7 @@ fn cache_age(cache_file: &Path) -> Option<Duration> {
 
 /// Replace the cached facts, atomically — written beside the target and renamed over it, so a crash
 /// mid-write cannot leave half a file to be read back as facts.
-fn write_cache(cache_file: &Path, facts: &RepoFacts) -> Result<()> {
+fn write_cache(cache_file: &Path, facts: &CachedFacts) -> Result<()> {
     if let Some(parent) = cache_file.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -322,6 +353,12 @@ mod tests {
     /// An address nothing answers on — what being offline looks like from inside a fetch.
     const UNREACHABLE: &str = "http://127.0.0.1:1";
 
+    /// A cache as a caller that asked about the README leaves it — the only shape there was before
+    /// `AMB-D-638` let one skip the question.
+    fn asked_for(facts: &RepoFacts) -> CachedFacts {
+        CachedFacts { facts: facts.clone(), readme_asked: true }
+    }
+
     #[test]
     fn a_repo_reference_must_be_owner_slash_name() {
         assert_eq!(checked_repo(" ShiroDoromoto/amenbo ").unwrap(), "ShiroDoromoto/amenbo");
@@ -366,8 +403,15 @@ mod tests {
             readme: Some("# hi".to_string()),
             rate_limited: false,
         };
-        write_cache(&file, &facts).unwrap();
-        assert_eq!(cached(&file).unwrap(), facts);
+        write_cache(&file, &asked_for(&facts)).unwrap();
+        assert_eq!(cached(&file).unwrap(), asked_for(&facts));
+
+        // A cache from a build that wrote no such field: it reads back, as a copy nobody asked
+        // about the README for.
+        std::fs::write(&file, r##"{"stars": 42, "downloads": 7, "readme": "# hi"}"##).unwrap();
+        let old = cached(&file).unwrap();
+        assert_eq!(old.facts, facts, "the figures an earlier build wrote");
+        assert!(!old.readme_asked, "and nothing saying the README was ever asked for");
 
         std::fs::write(&file, "half a file").unwrap();
         assert!(cached(&file).is_none(), "unreadable is 'fetch again', not an error to show");
@@ -380,7 +424,7 @@ mod tests {
     fn a_fresh_cache_answers_without_the_network() {
         let paths = paths_at("fresh");
         let on_disk = RepoFacts { stars: Some(1234), ..RepoFacts::default() };
-        write_cache(&cache_file(&paths, "owner/name"), &on_disk).unwrap();
+        write_cache(&cache_file(&paths, "owner/name"), &asked_for(&on_disk)).unwrap();
 
         // The API base is one nothing answers on: reaching it at all would fail the assertion.
         assert_eq!(
@@ -397,11 +441,11 @@ mod tests {
         let paths = paths_at("stale");
         let file = cache_file(&paths, "owner/name");
         let on_disk = RepoFacts { stars: Some(9), ..RepoFacts::default() };
-        write_cache(&file, &on_disk).unwrap();
+        write_cache(&file, &asked_for(&on_disk)).unwrap();
 
         let got = facts_at(&paths, UNREACHABLE, "owner/name", Duration::ZERO, Readme::Fetch).unwrap();
         assert_eq!(got, on_disk, "the stale copy answered");
-        assert_eq!(cached(&file).unwrap(), on_disk, "and the failed fetch left it alone");
+        assert_eq!(cached(&file).unwrap(), asked_for(&on_disk), "and the failed fetch left it alone");
     }
 
     #[test]
@@ -426,11 +470,33 @@ mod tests {
         assert_eq!(skipped.stars, Some(12), "the figures are read either way");
         assert!(skipped.readme.is_none(), "and the README is not");
 
-        // The same repository, asked for by someone who *would* draw one: nothing about the first
-        // answer taught this build that there is no README.
-        let paths = paths_at("skip-readme-then-fetch");
+        // The same repository, in the same store, asked for by someone who *would* draw one. The
+        // cache the first reader left is fresh and holds no README — but it holds no answer about
+        // one either, so it is not the fresh cache's to give.
         let fetched = facts_at(&paths, &api, "owner/name", FRESH_FOR, Readme::Fetch).unwrap();
         assert_eq!(fetched.readme.as_deref(), Some("# the readme nobody asked for"));
+
+        // And now it is: the question has been put, so the next reader is answered off the disk.
+        let again = facts_at(&paths, UNREACHABLE, "owner/name", FRESH_FOR, Readme::Fetch).unwrap();
+        assert_eq!(again.readme.as_deref(), Some("# the readme nobody asked for"), "no request");
+    }
+
+    /// A repository that really has no README is asked about once, not once per reader: the cache
+    /// records that the question was put, and `None` is the answer to it (`AMB-D-347`'s whole point
+    /// being that GitHub's limit is spent one open at a time).
+    #[test]
+    fn a_repo_with_no_readme_is_not_asked_again_inside_the_window() {
+        let paths = paths_at("no-readme");
+        let host = amenbo_static_host::StaticHost::serve([(
+            "/repos/owner/name",
+            r#"{"stargazers_count": 12}"#,
+        )]);
+
+        let first = facts_at(&paths, &host.url(""), "owner/name", FRESH_FOR, Readme::Fetch).unwrap();
+        assert!(first.readme.is_none(), "the host serves none");
+
+        let second = facts_at(&paths, UNREACHABLE, "owner/name", FRESH_FOR, Readme::Fetch).unwrap();
+        assert_eq!(second.stars, Some(12), "answered off the disk, with no request of its own");
     }
 
     /// The cache is a shared thing — one file per repository, whoever wrote it — so a run that did not
@@ -444,13 +510,13 @@ mod tests {
             readme: Some("# from an earlier reader".to_string()),
             ..RepoFacts::default()
         };
-        write_cache(&file, &on_disk).unwrap();
+        write_cache(&file, &asked_for(&on_disk)).unwrap();
 
         // Fresh cache, so nothing is fetched: the README is cut from the answer, not from the file.
         let got = facts_at(&paths, UNREACHABLE, "owner/name", FRESH_FOR, Readme::Skip).unwrap();
         assert_eq!(got.stars, Some(3));
         assert!(got.readme.is_none(), "not handed to a caller that declared it draws none");
-        assert_eq!(cached(&file).unwrap(), on_disk, "and still there for one that does");
+        assert_eq!(cached(&file).unwrap(), asked_for(&on_disk), "and still there for one that does");
 
         // Past the window, a fetch that answers with the figures alone must not overwrite it either.
         let host = amenbo_static_host::StaticHost::serve([(
@@ -459,11 +525,9 @@ mod tests {
         )]);
         let got = facts_at(&paths, &host.url(""), "owner/name", Duration::ZERO, Readme::Skip).unwrap();
         assert_eq!(got.stars, Some(99), "the fresh figure");
-        assert_eq!(
-            cached(&file).unwrap().readme,
-            on_disk.readme,
-            "the README nobody asked about survived the write"
-        );
+        let after = cached(&file).unwrap();
+        assert_eq!(after.facts.readme, on_disk.readme, "the README nobody asked about survived");
+        assert!(after.readme_asked, "and so did the fact that someone once asked");
     }
 
     #[test]

@@ -49,6 +49,16 @@ pub const NAME_MAX_LEN: usize = 64;
 /// The longest the one-line `desc` may be (characters). A list-view line, not a body — bounded so a
 /// runaway value cannot break the catalog display.
 pub const MAX_DESC_LEN: usize = 200;
+/// The most the description text may weigh, **per language, in UTF-8 bytes** (`AMB-D-640`) — the base
+/// text and each translation of it held to the same cap.
+///
+/// Bytes rather than characters because what the cap bounds is a document: the detail half carries every
+/// language at once (`AMB-D-622`), so nineteen of these at 2KB is about 38KB — a document still worth
+/// fetching for one plugin. At 4KB it would be 76KB, which is the size that reopens the question of
+/// carrying every language at all. The trade is that a text written in Japanese or Chinese reaches the
+/// cap sooner than the same text in English; 2KB is around a thousand Japanese characters, and what does
+/// not fit belongs in the README the text may link to.
+pub const MAX_ABOUT_BYTES: usize = 2 * 1024;
 /// The longest the `author` display string may be (characters).
 pub const MAX_AUTHOR_LEN: usize = 100;
 /// The longest the `category` label may be (characters).
@@ -288,6 +298,9 @@ pub fn validate_manifest(m: &Manifest) -> Vec<Problem> {
     // `desc` is the one line of author prose every plugin puts at the AI's entry point, agent block or no
     // (`crate::plugin_agent`), so it is held to the same no-citing rule the block's own lines are.
     check_no_record_ref(&mut problems, "desc", &m.desc);
+    if let Some(about) = &m.about {
+        check_about(&mut problems, "about", about);
+    }
     check_line(&mut problems, "author", &m.author, MAX_AUTHOR_LEN);
     check_line(&mut problems, "category", &m.category, MAX_CATEGORY_LEN);
     check_repo(&mut problems, &m.repo);
@@ -384,6 +397,20 @@ fn check_overlay(problems: &mut Vec<Problem>, m: &Manifest, lang: &str, o: &Mani
         // The translated line is drawn where the base line is drawn, so it borrows this store's
         // authority the same way a ref in the base would (`AMB-D-572`).
         check_no_record_ref(problems, &at("desc"), desc);
+    }
+
+    if let Some(about) = &o.about {
+        // A layer over a field the manifest does not have reaches no reader at all — the same answer a
+        // config key with no base gets, below.
+        if m.about.is_none() {
+            problems.push(Problem::new(
+                at("about"),
+                ProblemCode::NotInBase,
+                "the manifest declares no about to translate",
+            ));
+        } else {
+            check_about(problems, &at("about"), about);
+        }
     }
 
     // The same total the base schema is held to (`AMB-D-356`), per language: the form is drawn from one
@@ -599,6 +626,100 @@ fn check_no_record_ref(problems: &mut Vec<Problem>, field: &str, value: &str) {
             format!("{field} must not cite an amenbo record ('{found}')"),
         ));
     }
+}
+
+/// Check the description text an author wrote (`AMB-D-638`) — the base one, or one language's. Unlike
+/// [`check_line`] this is a body, so a newline is text and not a control character, and there is no floor:
+/// a plugin that says nothing here says nothing, and absent never reaches this at all.
+///
+/// Two rules, both of them things a machine settles with certainty (`AMB-D-572`):
+///
+/// - **it fits in [`MAX_ABOUT_BYTES`]**, per language, because the detail document carries every language
+///   at once (`AMB-D-640`).
+/// - **every link and image it points at is an absolute `https://` URL** (`AMB-D-639`). The text is
+///   written beside the manifest in the catalog and not inside the plugin's repository, so a relative
+///   path has no base to be resolved against — there is nowhere it could mean anything. Holding it to
+///   `https` rather than merely to *absolute* is the same line [`check_url`] draws everywhere else a
+///   manifest names an address, and it keeps `file:` and `javascript:` out in the same stroke.
+///
+/// The no-citing rule comes with it (`AMB-D-572`): this is author prose drawn inside amenbo's own
+/// window, where `AMB-D-411 makes this required` borrows this store's authority exactly as it would in
+/// `desc` — and the number need not exist for that to work.
+fn check_about(problems: &mut Vec<Problem>, at: &str, about: &str) {
+    if about.len() > MAX_ABOUT_BYTES {
+        problems.push(Problem::new(
+            at,
+            ProblemCode::TooLong,
+            format!("{at} is too long ({} bytes; max {MAX_ABOUT_BYTES})", about.len()),
+        ));
+    }
+    check_no_record_ref(problems, at, about);
+    for dest in markdown_destinations(about) {
+        if !dest.starts_with("https://") || dest.len() <= "https://".len() {
+            problems.push(Problem::new(
+                at,
+                ProblemCode::BadUrl,
+                format!("{at} points at '{dest}' — a link must be an absolute https:// URL"),
+            ));
+        }
+    }
+}
+
+/// What one Markdown text points at: every inline link or image (`](dest)`), and every link reference
+/// definition (`[label]: dest`).
+///
+/// **A scan, deliberately, and not a parser.** What it owes is never missing a link that is there, which
+/// reading the delimiters literally gives; what it must not do is find one that is not, since the door is
+/// fail-closed and an author cannot argue with it. So the two places the syntax appears without being a
+/// link — a fenced block and an inline code span — are stepped over rather than read. An autolink
+/// (`<https://…>`) carries its scheme by definition and needs no rule of its own.
+fn markdown_destinations(text: &str) -> Vec<&str> {
+    let mut found = Vec::new();
+    let mut fenced = false;
+    for line in text.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+            fenced = !fenced;
+            continue;
+        }
+        if fenced {
+            continue;
+        }
+        // A link reference definition is the whole line, so it is read as one rather than scanned for.
+        if let Some((_, dest)) = trimmed.strip_prefix('[').and_then(|r| r.split_once("]:")) {
+            found.extend(destination(dest));
+            continue;
+        }
+        let bytes = line.as_bytes();
+        let (mut i, mut in_code) = (0, false);
+        while i < bytes.len() {
+            // Only ASCII is ever matched, so stepping a byte at a time never lands inside a character:
+            // every byte of a multi-byte one is >= 0x80 and matches none of these.
+            if bytes[i] == b'`' {
+                in_code = !in_code;
+            } else if !in_code && bytes[i] == b']' && bytes.get(i + 1) == Some(&b'(') {
+                let start = i + 2;
+                // An unclosed `](` closes nothing on this line, so it points at nothing.
+                let Some(end) = line[start..].find(')') else { break };
+                found.extend(destination(&line[start..start + end]));
+                i = start + end;
+            }
+            i += 1;
+        }
+    }
+    found
+}
+
+/// The address out of what a link wrote between its delimiters: the `<…>` form unwrapped, a title after
+/// it dropped, and the surrounding space trimmed. `None` for a link that wrote no address at all — it
+/// points nowhere, which is not the same as pointing somewhere relative.
+fn destination(raw: &str) -> Option<&str> {
+    let raw = raw.trim();
+    let dest = match raw.strip_prefix('<') {
+        Some(inner) => inner.split_once('>').map_or(inner, |(d, _)| d),
+        None => raw.split_whitespace().next().unwrap_or(""),
+    };
+    (!dest.is_empty()).then_some(dest)
 }
 
 /// Check `repo` is `owner/name`: exactly one `/`, both halves non-empty and made of GitHub-safe characters.
@@ -2084,6 +2205,124 @@ mod tests {
             [ProblemCode::RecordRef],
             "a translated line borrows this store's authority the same way an untranslated one would",
         );
+    }
+
+    /// A manifest whose author wrote the description text, so the rules below have something to hold.
+    fn with_about(about: &str) -> Manifest {
+        Manifest { about: Some(about.into()), ..valid() }
+    }
+
+    /// One language's translation of that text, and nothing else.
+    fn about_in(lang: &str, about: &str) -> Translations {
+        Translations::from([(
+            lang.to_string(),
+            ManifestOverlay { about: Some(about.into()), ..ManifestOverlay::default() },
+        )])
+    }
+
+    /// **A body, not a line** (`AMB-D-638`): the text an author writes is Markdown over several lines,
+    /// so the newline `desc` is refused for is ordinary here — and a plugin that writes none is not a
+    /// plugin with a problem.
+    #[test]
+    fn the_description_text_an_author_wrote_passes() {
+        let written = "## What it does\n\nCuts a worktree per task, and folds it once the work is\nmerged.\n\nSee the [handbook](https://example.com/worktree) for the whole cycle.\n";
+        assert!(validate_manifest(&with_about(written)).is_empty(), "{:?}", validate_manifest(&with_about(written)));
+        assert!(validate_manifest(&valid()).is_empty(), "and one that wrote no text at all");
+    }
+
+    /// **The cap is bytes, per language** (`AMB-D-640`) — the detail document carries every language at
+    /// once, so what bounds it is what each of them weighs there. A text in Japanese therefore reaches
+    /// the cap at about a third of the characters an English one does, which is the trade the decision
+    /// took knowingly.
+    #[test]
+    fn a_description_text_over_the_cap_is_refused() {
+        assert!(validate_manifest(&with_about(&"a".repeat(MAX_ABOUT_BYTES))).is_empty(), "the cap itself fits");
+        assert!(codes(&validate_manifest(&with_about(&"a".repeat(MAX_ABOUT_BYTES + 1)))).contains(&ProblemCode::TooLong));
+
+        let ja = "あ".repeat(MAX_ABOUT_BYTES / 3 + 1);
+        assert!(ja.chars().count() < MAX_ABOUT_BYTES, "under the number a character count would allow");
+        assert!(codes(&validate_manifest(&with_about(&ja))).contains(&ProblemCode::TooLong), "and over what it weighs");
+    }
+
+    /// **A link that needs a base to resolve is refused** (`AMB-D-639`). The text lives in the catalog
+    /// beside the manifest, not in the plugin's repository, so a relative path has nothing to be
+    /// resolved against — and holding it to `https` rather than merely to *absolute* keeps `file:` and
+    /// `javascript:` out with the one rule.
+    #[test]
+    fn a_link_that_needs_a_base_to_resolve_is_refused() {
+        for written in [
+            "[the handbook](docs/handbook.md)",
+            "[up](../README.md)",
+            "[this page](#usage)",
+            "![a screenshot](images/shot.png)",
+            "[plaintext](http://example.com/x)",
+            "[local](file:///etc/passwd)",
+            "[script](javascript:alert(1))",
+            "[handbook]: docs/handbook.md",
+        ] {
+            assert!(
+                codes(&validate_manifest(&with_about(written))).contains(&ProblemCode::BadUrl),
+                "{written} points at something only a base could resolve",
+            );
+        }
+
+        for written in [
+            "[the handbook](https://example.com/handbook)",
+            "![a screenshot](https://example.com/shot.png)",
+            "[titled](https://example.com/x \"The handbook\")",
+            "[angled](<https://example.com/x>)",
+            "[handbook]: https://example.com/handbook",
+            "an autolink <https://example.com/x> carries its own scheme",
+            "no links at all",
+        ] {
+            assert!(validate_manifest(&with_about(written)).is_empty(), "{written} resolves on its own");
+        }
+    }
+
+    /// **Syntax shown as an example is not a link.** The door is fail-closed, so finding one that is not
+    /// there costs an author a refusal they cannot argue with — and a plugin whose whole subject is
+    /// Markdown would be unpublishable. A real link after the block is still one.
+    #[test]
+    fn a_link_written_out_as_an_example_is_not_read_as_one() {
+        let fenced = "Write it like this:\n\n```md\n[the handbook](docs/handbook.md)\n```\n";
+        assert!(validate_manifest(&with_about(fenced)).is_empty(), "a fenced block is a snippet");
+
+        let span = "Write `[the handbook](docs/handbook.md)` to link it.";
+        assert!(validate_manifest(&with_about(span)).is_empty(), "and so is a code span");
+
+        let both = "```\n[shown](docs/x.md)\n```\n\n[meant](docs/x.md)\n";
+        assert!(codes(&validate_manifest(&with_about(both))).contains(&ProblemCode::BadUrl));
+    }
+
+    /// **The text cites no amenbo record** (`AMB-D-572`) — it is author prose drawn inside amenbo's own
+    /// window, where a ref borrows this store's authority exactly as one in `desc` would.
+    #[test]
+    fn a_description_text_citing_an_amenbo_record_is_refused() {
+        let m = with_about("AMB-D-411 makes this required.");
+        assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::RecordRef));
+    }
+
+    /// **A translated text is held to the rules its base text is held to** (`AMB-D-621`), the cap
+    /// included — it is the one the language's own bytes are measured against (`AMB-D-640`).
+    #[test]
+    fn a_translated_description_text_is_held_to_the_same_rules() {
+        let m = with_about("Cuts a worktree per task.");
+
+        assert!(validate_overlays(&m, &about_in("ja", "タスクごとに worktree を切る。")).is_empty());
+        assert!(codes(&validate_overlays(&m, &about_in("ja", &"あ".repeat(MAX_ABOUT_BYTES / 3 + 1))))
+            .contains(&ProblemCode::TooLong));
+        let problems = validate_overlays(&m, &about_in("ja", "[手引き](docs/handbook.md)"));
+        assert_eq!(codes(&problems), [ProblemCode::BadUrl]);
+        assert_eq!(problems[0].location, "i18n[ja].about");
+    }
+
+    /// **Translating a text the manifest never wrote reaches no reader** (`AMB-D-621`) — the same answer
+    /// a config key with no base gets, and for the same reason: its only symptom would be silence.
+    #[test]
+    fn translating_a_description_text_the_manifest_does_not_have_is_refused() {
+        let problems = validate_overlays(&valid(), &about_in("ja", "タスクごとに worktree を切る。"));
+        assert_eq!(codes(&problems), [ProblemCode::NotInBase]);
+        assert_eq!(problems[0].location, "i18n[ja].about");
     }
 
     #[test]

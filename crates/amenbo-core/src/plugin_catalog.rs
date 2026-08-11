@@ -269,7 +269,7 @@ pub fn load(paths: &Paths) -> Result<Catalog> {
 /// The distinction is the point: an install wants the newest index it can get, while a check wants to be
 /// cheap enough that it can be offered often.
 pub fn fresh(paths: &Paths) -> Result<Catalog> {
-    fresh_to(&catalog_url(), &cache_file(paths)).map(|(catalog, _)| catalog)
+    fresh_to(&catalog_url(), &cache_file(paths), FRESH_FOR).map(|(catalog, _)| catalog)
 }
 
 // ---- the catalog fetch/cache mechanism, keyed on a named cache file ----
@@ -319,9 +319,14 @@ fn load_to(url: &str, cache_file: &std::path::Path) -> Read {
     }
 }
 
-/// [`fresh`] against a named URL and cache file.
-fn fresh_to(url: &str, cache_file: &std::path::Path) -> Read {
-    if cache_age_at(cache_file).is_some_and(|age| age < FRESH_FOR) {
+/// [`fresh`] against a named URL, cache file and freshness window.
+///
+/// The window is an argument rather than [`FRESH_FOR`] read from here so that a test can close it: a
+/// test can only write a cache it has just written, so a boundary it cannot move is one whose far side
+/// nothing ever walks — and the far side is where the fetch is made and a failed one falls back
+/// ([`plugin_github`](crate::plugin_github)'s own seam takes it for the same reason).
+fn fresh_to(url: &str, cache_file: &std::path::Path, fresh_for: Duration) -> Read {
+    if cache_age_at(cache_file).is_some_and(|age| age < fresh_for) {
         if let Some(read) = cached_at(cache_file) {
             return Ok(read);
         }
@@ -1038,7 +1043,7 @@ impl Discovery {
 /// third-party entry here, once, rather than left for each face to remember: what a face reads is already
 /// the answer.
 pub fn discover(paths: &Paths) -> Discovery {
-    merge(paths, fresh_to)
+    merge(paths, |url, cache| fresh_to(url, cache, FRESH_FOR))
 }
 
 /// The same merged view, with the network asked first — what somebody who said "go and look" gets.
@@ -1240,9 +1245,18 @@ fn read_list_overlay(json: &str, lang: &str) -> ListTranslations {
 ///
 /// Cheapness is the point: this is fetched again every time the reader changes language, so a language
 /// they have already looked at costs nothing to go back to.
-fn list_overlay_to(url: &str, cache_file: &std::path::Path, lang: &str) -> ListTranslations {
+///
+/// `fresh_for` is the window, taken as an argument for the reason [`fresh_to`] takes one: past the
+/// boundary is where the document is fetched and where a fetch that fails falls back to whatever is
+/// cached, and a test that cannot move the boundary never reaches either.
+fn list_overlay_to(
+    url: &str,
+    cache_file: &std::path::Path,
+    lang: &str,
+    fresh_for: Duration,
+) -> ListTranslations {
     let cached = || std::fs::read_to_string(cache_file).ok().map(|json| read_list_overlay(&json, lang));
-    if cache_age_at(cache_file).is_some_and(|age| age < FRESH_FOR) {
+    if cache_age_at(cache_file).is_some_and(|age| age < fresh_for) {
         if let Some(translations) = cached() {
             return translations;
         }
@@ -1280,6 +1294,7 @@ pub fn list_translations(paths: &Paths, view: &Discovery, lang: &str) -> ListTra
                 &beside(&found.source, &list_overlay_path(lang)),
                 &list_overlay_cache_file(paths, &found.source, found.listed, lang),
                 lang,
+                FRESH_FOR,
             )
         });
         if let Some(overlay) = served.get(&found.entry.name) {
@@ -1554,6 +1569,26 @@ mod tests {
         assert_eq!(names, vec!["only-on-disk"]);
     }
 
+    /// **Past the boundary the read is a [`load`], failed fetch and all.** Inside the window no request
+    /// is made, so this is the only road on which an incidental read reaches the network — and a check
+    /// offered alongside a listing must not start failing an hour after the last one succeeded, just
+    /// because the machine went offline in between.
+    #[test]
+    fn past_the_freshness_boundary_a_failed_fetch_still_answers_from_the_cache() {
+        let paths = paths_at("stale");
+        write_cache_at(&cache_file(&paths), &catalog_json(vec![entry_json("only-on-disk")])).unwrap();
+
+        let (catalog, freshness) = fresh_to(UNREACHABLE, &cache_file(&paths), Duration::ZERO)
+            .expect("the cache answers past the boundary too");
+
+        let names: Vec<_> = catalog.entries.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names, vec!["only-on-disk"]);
+        assert!(
+            matches!(freshness, Freshness::Offline { .. }),
+            "and the read says the network was asked and did not answer: {freshness:?}",
+        );
+    }
+
     /// With no cache at all there is no age to read, so the boundary cannot vouch for anything and the
     /// read falls through to a fetch.
     #[test]
@@ -1569,7 +1604,8 @@ mod tests {
         let paths = paths_at("freshness");
         write_cache_at(&cache_file(&paths), &catalog_json(vec![entry_json("worktree")])).unwrap();
 
-        let (_, inside) = fresh_to(UNREACHABLE, &cache_file(&paths)).expect("the cache answers");
+        let (_, inside) =
+            fresh_to(UNREACHABLE, &cache_file(&paths), FRESH_FOR).expect("the cache answers");
         assert!(
             matches!(inside, Freshness::Cached { .. }),
             "inside the window no request is made, and the read says so: {inside:?}",
@@ -2174,7 +2210,7 @@ mod tests {
         let paths = paths_at("overlay-absent");
         let cache = list_overlay_cache_file(&paths, OFFICIAL_CATALOG_URL, true, "ja");
 
-        assert!(list_overlay_to(UNREACHABLE, &cache, "ja").is_empty());
+        assert!(list_overlay_to(UNREACHABLE, &cache, "ja", FRESH_FOR).is_empty());
         assert!(!cache.exists(), "and nothing was cached to answer for it later");
     }
 
@@ -2186,8 +2222,28 @@ mod tests {
         let cache = list_overlay_cache_file(&paths, OFFICIAL_CATALOG_URL, true, "ja");
         write_cache_at(&cache, &overlay_json(&[("worktree", "切り分ける")])).unwrap();
 
-        let translations = list_overlay_to(UNREACHABLE, &cache, "ja");
+        let translations = list_overlay_to(UNREACHABLE, &cache, "ja", FRESH_FOR);
         assert_eq!(translations["worktree"].desc.as_deref(), Some("切り分ける"));
+    }
+
+    /// **Past the window, a document that cannot be fetched leaves the cached translations answering.**
+    /// Inside the window nothing is asked for at all, so this is the only road on which the fetch is
+    /// made and fails — and falling back to the base lines there would draw a reader English while
+    /// their own language sits on disk, indistinguishable from the untranslated case `AMB-D-623`
+    /// describes.
+    #[test]
+    fn past_the_window_a_failed_fetch_leaves_the_cached_translations_answering() {
+        let paths = paths_at("overlay-stale");
+        let cache = list_overlay_cache_file(&paths, OFFICIAL_CATALOG_URL, true, "ja");
+        write_cache_at(&cache, &overlay_json(&[("worktree", "切り分ける")])).unwrap();
+
+        let translations = list_overlay_to(UNREACHABLE, &cache, "ja", Duration::ZERO);
+
+        assert_eq!(
+            translations["worktree"].desc.as_deref(),
+            Some("切り分ける"),
+            "the copy on disk answers, however old it is",
+        );
     }
 
     /// **Each entry's line comes from the catalog that served the entry** — a translation is published

@@ -367,6 +367,7 @@ export const ko: Translation = {
     "plugins.rateLimited": "GitHub가 이 주소의 요청을 제한하고 있습니다. 수치는 잠시 뒤에 돌아옵니다.",
     "plugins.noReadme": "README 없음",
     "plugins.factsNote": "별, 내려받기 수, README는 지금 열어 둔 이 플러그인 하나에 대해 GitHub에서 가져옵니다(카탈로그에는 없습니다). 이 수치는 규모를 가늠하는 값일 뿐, 설치 가능 여부와는 상관이 없습니다.",
+    "plugins.figuresNote": "별과 내려받기 수는 지금 열어 둔 이 플러그인 하나에 대해 GitHub에서 가져옵니다(카탈로그에는 없습니다). 이 수치는 규모를 가늠하는 값일 뿐, 설치 가능 여부와는 상관이 없습니다.",
     "plugins.want.perProject": "프로젝트마다 켬",
     "plugins.scope.machine": "이 기기의 모든 프로젝트를 읽음 (한 프로젝트만이 아님)",
     "plugins.want.events": "깨어나는 때: {events}",

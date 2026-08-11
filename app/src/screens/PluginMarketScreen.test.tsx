@@ -5,7 +5,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { PluginCatalog } from "../core/pluginCatalog";
+import type { PluginCatalog, PluginDetail } from "../core/pluginCatalog";
 
 const hoisted = vi.hoisted(() => ({
   catalog: { entries: [], sources: [], dropped: 0 } as PluginCatalog,
@@ -19,8 +19,13 @@ const hoisted = vi.hoisted(() => ({
   // Which repositories the screen asked GitHub about, in order — the proof that a listed entry costs
   // nothing and only an opened one does (`AMB-D-347`).
   asked: [] as string[],
+  // Whether each of those asks included the README (`AMB-D-638`) — `"unknown"` while the catalog's
+  // detail has not answered yet, which is the screen waiting rather than asking.
+  askedReadme: [] as (boolean | "unknown")[],
   facts: undefined as { stars?: number; downloads?: number; readme?: string; rateLimited: boolean } | undefined,
   factsError: undefined as unknown,
+  /** What the catalog's detail document says about the opened plugin, or `null` for one it does not carry. */
+  detail: null as PluginDetail | null | undefined,
 }));
 
 // Replace only the data seam: the filtering, the paging and the rendering all run for real.
@@ -48,10 +53,12 @@ vi.mock("../core/pluginCatalog", async (importOriginal) => {
       hoisted.removed.push(url);
       return Promise.resolve(true);
     },
-    usePluginRepoFacts: (repo: string) => {
+    usePluginRepoFacts: (repo: string, readme: boolean | "unknown") => {
       hoisted.asked.push(repo);
+      hoisted.askedReadme.push(readme);
       return { facts: hoisted.facts, loading: false, error: hoisted.factsError };
     },
+    usePluginDetail: () => ({ detail: hoisted.detail, loading: false, error: undefined }),
   };
 });
 
@@ -107,8 +114,10 @@ beforeEach(() => {
   hoisted.removed = [];
   hoisted.probeFails = false;
   hoisted.asked = [];
+  hoisted.askedReadme = [];
   hoisted.facts = { stars: 512, downloads: 1234, readme: "# a plugin\n\nwhat it does", rateLimited: false };
   hoisted.factsError = undefined;
+  hoisted.detail = null;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -243,6 +252,16 @@ describe("PluginMarketScreen", () => {
 describe("PluginMarketScreen — the one entry it opens", () => {
   const open = (i: number) => act(() => (rows()[i] as HTMLElement).click());
   const detail = () => container.querySelector(".plugdet");
+  /** What the last ask of GitHub said about the README — the flag, not the repository. */
+  const lastAsk = () => hoisted.askedReadme[hoisted.askedReadme.length - 1];
+  /** A detail document carrying only what these tests are about: the words its author wrote. */
+  const describedAs = (words: Partial<PluginDetail>): PluginDetail => ({
+    events: [],
+    config: [],
+    scope: "project",
+    compatible: true,
+    ...words,
+  });
 
   // The load-bearing half of `AMB-D-347`: a list of any size asks GitHub nothing, and opening one entry
   // asks about that entry only.
@@ -265,6 +284,49 @@ describe("PluginMarketScreen — the one entry it opens", () => {
     expect(text).toContain("512");
     expect(text).toContain("1,234");
     expect(text).toContain("what it does");
+    // Nothing else describes this plugin, so the README is still what the body is drawn from.
+    expect(lastAsk()).toBe(true);
+  });
+
+  // `AMB-D-638`: where the author wrote a description, that is the body — and the README is not fetched
+  // at all, so the two never say the same thing twice in two languages.
+  it("draws the author's own words instead of the README, and stops asking GitHub for one", () => {
+    hoisted.catalog = catalogOf(3);
+    hoisted.detail = describedAs({ about: "## what it is for\n\nin the author's own words" });
+    render();
+    open(0);
+    const text = detail()!.textContent!;
+    expect(text).toContain("in the author's own words");
+    expect(text).not.toContain("what it does");
+    expect(text).not.toContain(t("plugins.noReadme"));
+    expect(lastAsk()).toBe(false);
+    // And the note under it says what was actually fetched, rather than promising a README.
+    expect(text).toContain(t("plugins.figuresNote"));
+    expect(text).not.toContain(t("plugins.factsNote"));
+    // The figures are read either way: they are not what the description stood in for.
+    expect(hoisted.asked).toEqual(["owner/plugin-0"]);
+    expect(text).toContain("512");
+  });
+
+  // The same rule the one-line description follows (`AMB-D-623`): the reader's language, else the
+  // author's own, and a fallback is never announced.
+  it("draws the description in the reader's language where the author wrote one", () => {
+    hoisted.catalog = catalogOf(3);
+    hoisted.detail = describedAs({ about: "in English", aboutI18n: "作者の言葉で" });
+    render();
+    open(0);
+    expect(detail()!.textContent).toContain("作者の言葉で");
+    expect(detail()!.textContent).not.toContain("in English");
+  });
+
+  // Nothing is asked of GitHub until the catalog has answered, and the wait reads as loading: a screen
+  // that said "no README" in between would be reporting a fetch that had not happened.
+  it("waits for the catalog's answer before asking GitHub anything", () => {
+    hoisted.catalog = catalogOf(3);
+    hoisted.detail = undefined;
+    render();
+    open(0);
+    expect(lastAsk()).toBe("unknown");
   });
 
   // The catalog fields must stand on their own: a repository that answered nothing still has a name, a

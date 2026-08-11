@@ -385,6 +385,7 @@ export const ptBR: Translation = {
     "plugins.rateLimited": "O GitHub está limitando as requisições deste endereço; os números voltam depois de um tempo.",
     "plugins.noReadme": "Sem README",
     "plugins.factsNote": "Estrelas, downloads e o README são buscados no GitHub só para este plugin aberto (o catálogo não os carrega). Os números dão noção de escala e não influenciam no que pode ser instalado.",
+    "plugins.figuresNote": "Estrelas e downloads são buscados no GitHub só para este plugin aberto (o catálogo não os carrega). Os números dão noção de escala e não influenciam no que pode ser instalado.",
     "plugins.want.perProject": "Ativado por projeto",
     "plugins.scope.machine": "Lê todos os projetos deste dispositivo, não apenas um",
     "plugins.want.events": "Acordado por: {events}",

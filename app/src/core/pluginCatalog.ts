@@ -281,9 +281,15 @@ export function repoLinkBase(repo: string): string {
  * past the hour, because GitHub's unauthenticated rate limit — not freshness — is what bounds this.
  * Outside Tauri there is no core to ask, so the browser mock reports nothing rather than inventing a
  * star count.
+ *
+ * `readme` is the caller saying whether it would draw one (`AMB-D-638`): a plugin that describes itself
+ * costs a request fewer, and what is not asked for is absent from the answer.
  */
-export async function fetchPluginRepoFacts(repo: string): Promise<PluginRepoFacts> {
-  if (inTauri()) return invoke<PluginRepoFacts>("plugin_repo_facts", { repo });
+export async function fetchPluginRepoFacts(
+  repo: string,
+  readme: boolean,
+): Promise<PluginRepoFacts> {
+  if (inTauri()) return invoke<PluginRepoFacts>("plugin_repo_facts", { repo, readme });
   return { rateLimited: false };
 }
 
@@ -291,13 +297,22 @@ export async function fetchPluginRepoFacts(repo: string): Promise<PluginRepoFact
  * The opened entry's GitHub figures. Call it only from a detail that is actually open: a hook fetches
  * when it mounts, so what keeps this request tied to opening one entry is that nothing on the list
  * side mounts it.
+ *
+ * `readme` is `"unknown"` while the caller cannot say yet — the catalog's detail document is what
+ * answers whether this plugin describes itself, and it arrives on its own schedule. Nothing is asked of
+ * GitHub until it does, and the wait reads as loading rather than as an answer: a detail that drew "no
+ * README" for the moment before would be reporting a fetch that had not happened.
  */
 export function usePluginRepoFacts(
   repo: string,
+  readme: boolean | "unknown",
 ): { facts: PluginRepoFacts | undefined; loading: boolean; error: unknown } {
-  const { data, loading, error } = useQuery<PluginRepoFacts>(["plugin-repo-facts", repo], () =>
-    fetchPluginRepoFacts(repo),
+  const waiting = readme === "unknown";
+  const { data, loading, error } = useQuery<PluginRepoFacts>(
+    ["plugin-repo-facts", repo, String(readme)],
+    () => (waiting ? Promise.resolve({ rateLimited: false }) : fetchPluginRepoFacts(repo, readme)),
   );
+  if (waiting) return { facts: undefined, loading: true, error: undefined };
   return { facts: data, loading, error };
 }
 

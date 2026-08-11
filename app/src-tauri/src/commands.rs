@@ -5037,11 +5037,17 @@ pub struct PluginRepoFactsDto {
 /// has. An error here means nothing about the repository could be read at all, which the front end
 /// shows as a note beside a detail that is otherwise complete from the catalog. Off the main thread,
 /// because up to three requests run in sequence behind it.
+///
+/// `readme` is the caller saying whether it would draw one (`AMB-D-638`). A plugin whose author wrote
+/// a description of it draws that instead, so the README is neither shown nor fetched — the front end
+/// is what knows which of the two it is about to draw, so the ask is where the drawing is decided.
 #[tauri::command]
-pub async fn plugin_repo_facts(repo: String) -> Result<PluginRepoFactsDto, CmdError> {
+pub async fn plugin_repo_facts(repo: String, readme: bool) -> Result<PluginRepoFactsDto, CmdError> {
     tauri::async_runtime::spawn_blocking(move || -> Result<PluginRepoFactsDto, CmdError> {
+        use amenbo_core::plugin_github::Readme;
         let paths = amenbo_core::config::Paths::resolve()?;
-        let facts = amenbo_core::plugin_github::facts(&paths, &repo)?;
+        let wanted = if readme { Readme::Fetch } else { Readme::Skip };
+        let facts = amenbo_core::plugin_github::facts(&paths, &repo, wanted)?;
         Ok(PluginRepoFactsDto {
             stars: facts.stars,
             downloads: facts.downloads,
@@ -5070,10 +5076,10 @@ pub async fn plugin_repo_facts(repo: String) -> Result<PluginRepoFactsDto, CmdEr
 /// A name no catalog carries comes back as `null` — an answer, not a failure — so the market draws what
 /// it has instead of an error.
 ///
-/// `lang` is the reader's language, for the form labels this answers with (`AMB-D-623`). Nothing is
-/// fetched for it: the detail document carries **every** language at once (`AMB-D-622`), so the one
-/// asked for is picked out of what has already arrived, and a language its author did not write leaves
-/// the labels as they are.
+/// `lang` is the reader's language, for the description text and the form labels this answers with
+/// (`AMB-D-623`). Nothing is fetched for it: the detail document carries **every** language at once
+/// (`AMB-D-622`), so the one asked for is picked out of what has already arrived, and a language its
+/// author did not write leaves both as they are.
 ///
 /// Off the main thread: it may fetch (core answers from its cache within the freshness window, and falls
 /// back to it when the network does not answer).
@@ -5099,6 +5105,8 @@ pub async fn plugin_detail(
         Ok(Some(PluginDetailDto {
             events: detail.events.iter().map(|e| e.event.clone()).collect(),
             config: wanted_settings(&detail.config, detail.i18n.get(&lang).map(|o| &o.config)),
+            about: detail.about.clone(),
+            about_i18n: detail.i18n.get(&lang).and_then(|o| o.about.clone()),
             scope: detail.scope,
             compatible: why.is_none(),
             incompatible_reason: why.map(|why| why.to_string()),
@@ -5264,6 +5272,17 @@ pub struct PluginDetailDto {
     events: Vec<String>,
     /// The settings it declares, in the author's order.
     config: Vec<PluginWantedSettingDto>,
+    /// **What the plugin is, in its author's own words** (`AMB-D-638`) — the Markdown the detail draws
+    /// as its body. Absent is a plugin whose author wrote none, and the face falls back to the
+    /// repository's README there; where this is present the README is neither drawn nor fetched.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    about: Option<String>,
+    /// The same text in the reader's language, when its author wrote one (`AMB-D-621`). Beside the base
+    /// text, never over it: choosing between the two is the front end's (`AMB-D-623`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    about_i18n: Option<String>,
     /// **What layer its author declared it lives at** (`AMB-D-601`) — a project's, or the device's. It is
     /// read here rather than off the list because the declaration rides in the detail document, and this
     /// is the face that draws one: a device-wide plugin reads every project on this machine, which is the
@@ -6623,6 +6642,8 @@ mod tests {
                         {"key": "webhook", "label": "Webhook URL", "secret": true, "required": true},
                     ],
                     "events": ["task.created", "task.completed"],
+                    "about": "## what it is for\n\nin the author's own words",
+                    "i18n": {"ja": {"about": "作者の言葉で"}},
                 })
                 .to_string(),
             )
@@ -6636,6 +6657,14 @@ mod tests {
         assert!(detail.config[0].secret && detail.config[0].required);
         assert_eq!(detail.config[0].label, "Webhook URL");
         assert!(detail.compatible && detail.incompatible_reason.is_none());
+
+        // The author's description (`AMB-D-638`), and their own text beside the reader's language rather
+        // than under it (`AMB-D-623`) — the face is what picks between the two.
+        assert!(detail.about.as_deref().unwrap().contains("in the author's own words"));
+        assert_eq!(detail.about_i18n, None, "nothing was published for the language asked for");
+        let ja = tauri::async_runtime::block_on(plugin_detail("notify".into(), "ja".into())).unwrap().unwrap();
+        assert_eq!(ja.about_i18n.as_deref(), Some("作者の言葉で"));
+        assert_eq!(ja.about, detail.about, "the base text travels whatever is asked for");
 
         // A build speaking another payload contract is answered before an install, not at the enable.
         write_detail(amenbo_core::plugin_payload::VERSION + 1);

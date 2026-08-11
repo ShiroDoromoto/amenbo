@@ -10,10 +10,12 @@
 //! **Nothing here is trusted, and nothing here decides anything.** These are display figures: an
 //! install is gated by the asset's signature against amenbo's own key (`AMB-D-371`), never by a star
 //! count. The README arrives as Markdown text and is rendered by the front end, which allows no raw
-//! HTML.
+//! HTML. It is asked for only where it would be drawn ([`Readme`]): a plugin whose author wrote a
+//! description of it has that on its detail face instead, so nothing goes and gets the README
+//! (`AMB-D-638`).
 //!
 //! **The rate limit is what shapes the caching.** GitHub's API answers an unauthenticated client
-//! about 60 times an hour per IP, and one opened plugin costs three requests, so a naive
+//! about 60 times an hour per IP, and one opened plugin costs up to three requests, so a naive
 //! fetch-on-every-open would run a browsing user into a wall in twenty clicks. Facts are therefore
 //! cached per repository, on disk, and a cache inside [`FRESH_FOR`] answers with no request at all —
 //! the same discipline as the catalog cache, with a window sized to the limit rather than to
@@ -81,6 +83,19 @@ impl RepoFacts {
     }
 }
 
+/// **Whether the README is part of what is being asked for** (`AMB-D-638`).
+///
+/// A plugin whose author wrote a description of it has that on its detail face, and the README is not
+/// drawn there at all — so it is not fetched either. It is a third of what one opened plugin spends
+/// against GitHub's limit, and the caller that would draw nothing with it is the one that says so.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Readme {
+    /// Ask for it: nothing else describes this plugin, so the README is what its detail draws.
+    Fetch,
+    /// Leave it: the plugin describes itself, and a README nobody draws is a request nobody needs.
+    Skip,
+}
+
 /// The facts for one `owner/name` repository, cached per repository (`AMB-D-347`).
 ///
 /// A cache inside [`FRESH_FOR`] answers with no request. Past it, GitHub is asked and a partial
@@ -90,35 +105,63 @@ impl RepoFacts {
 ///
 /// `repo` comes from a catalog entry, and the delivery path is not trusted (`AMB-D-354`), so the
 /// shape is checked here before it is ever pasted into a URL or a file name.
-pub fn facts(paths: &Paths, repo: &str) -> Result<RepoFacts> {
-    facts_at(paths, &api_url(), repo, FRESH_FOR)
+///
+/// `readme` is the caller saying whether it would draw one ([`Readme`]). What is not asked for is
+/// absent from the answer however it was reached — a fetch that skipped it, or a cache written when
+/// someone else did want it — so a caller never draws what it declared it had no place for.
+pub fn facts(paths: &Paths, repo: &str, readme: Readme) -> Result<RepoFacts> {
+    facts_at(paths, &api_url(), repo, FRESH_FOR, readme)
 }
 
 /// [`facts`] against a named API base and freshness window — the seam the tests drive, so nothing in
 /// this module's test run reaches api.github.com, and the window can be closed to prove what happens
 /// past it.
-fn facts_at(paths: &Paths, api: &str, repo: &str, fresh_for: Duration) -> Result<RepoFacts> {
+fn facts_at(
+    paths: &Paths,
+    api: &str,
+    repo: &str,
+    fresh_for: Duration,
+    readme: Readme,
+) -> Result<RepoFacts> {
     let repo = checked_repo(repo)?;
     let cache = cache_file(paths, &repo);
+    let on_disk = cached(&cache);
     if cache_age(&cache).is_some_and(|age| age < fresh_for) {
-        if let Some(cached) = cached(&cache) {
-            return Ok(cached);
+        if let Some(cached) = on_disk.clone() {
+            return Ok(as_asked(cached, readme));
         }
     }
-    let fetched = fetch_facts(api, &repo);
+    let fetched = fetch_facts(api, &repo, readme);
     if !fetched.is_empty() {
+        // Not asking for the README is not learning that it is gone, so a copy already cached stays:
+        // the next reader who *would* draw one gets it without a request of their own.
+        let mut to_cache = fetched.clone();
+        if readme == Readme::Skip {
+            to_cache.readme = on_disk.and_then(|c| c.readme);
+        }
         // Best-effort: failing to cache costs a request next time, never the answer in hand.
-        let _ = write_cache(&cache, &fetched);
+        let _ = write_cache(&cache, &to_cache);
         return Ok(fetched);
     }
     // Nothing came back. A stale copy is a better answer than none — but a rate limit is news of its
     // own, and saying "too many requests" over yesterday's numbers is more honest than silence.
-    match cached(&cache) {
-        Some(stale) => Ok(RepoFacts { rate_limited: fetched.rate_limited, ..stale }),
+    match on_disk {
+        Some(stale) => {
+            Ok(RepoFacts { rate_limited: fetched.rate_limited, ..as_asked(stale, readme) })
+        }
         None if fetched.rate_limited => Ok(fetched),
         None => Err(Error::Io(std::io::Error::other(format!(
             "could not read anything about {repo} from GitHub"
         )))),
+    }
+}
+
+/// Cut from an answer what the caller did not ask for. Only the README is optional in that sense: the
+/// figures are what every caller opens a detail for.
+fn as_asked(facts: RepoFacts, readme: Readme) -> RepoFacts {
+    match readme {
+        Readme::Fetch => facts,
+        Readme::Skip => RepoFacts { readme: None, ..facts },
     }
 }
 
@@ -183,10 +226,13 @@ fn write_cache(cache_file: &Path, facts: &RepoFacts) -> Result<()> {
     Ok(())
 }
 
-/// Ask GitHub the three questions, each on its own. There is no transaction here: what answers is
-/// kept and what does not is left `None`, because a missing README is not a reason to throw away a
-/// star count that arrived.
-fn fetch_facts(api: &str, repo: &str) -> RepoFacts {
+/// Ask GitHub the questions, each on its own. There is no transaction here: what answers is kept and
+/// what does not is left `None`, because a missing README is not a reason to throw away a star count
+/// that arrived.
+///
+/// It is three questions, or two: a caller that would not draw a README does not pay for one
+/// (`AMB-D-638`).
+fn fetch_facts(api: &str, repo: &str, readme: Readme) -> RepoFacts {
     let mut facts = RepoFacts::default();
 
     match get(&format!("{api}/repos/{repo}"), "application/vnd.github+json") {
@@ -199,9 +245,11 @@ fn fetch_facts(api: &str, repo: &str) -> RepoFacts {
     }
     // The `raw` media type asks for the README's bytes rather than a JSON envelope carrying them
     // base64-encoded, so what comes back is the Markdown itself.
-    match get(&format!("{api}/repos/{repo}/readme"), "application/vnd.github.raw") {
-        Ok(body) => facts.readme = Some(truncate_readme(body)),
-        Err(e) => facts.rate_limited |= e.rate_limited,
+    if readme == Readme::Fetch {
+        match get(&format!("{api}/repos/{repo}/readme"), "application/vnd.github.raw") {
+            Ok(body) => facts.readme = Some(truncate_readme(body)),
+            Err(e) => facts.rate_limited |= e.rate_limited,
+        }
     }
     facts
 }
@@ -335,7 +383,10 @@ mod tests {
         write_cache(&cache_file(&paths, "owner/name"), &on_disk).unwrap();
 
         // The API base is one nothing answers on: reaching it at all would fail the assertion.
-        assert_eq!(facts_at(&paths, UNREACHABLE, "owner/name", FRESH_FOR).unwrap(), on_disk);
+        assert_eq!(
+            facts_at(&paths, UNREACHABLE, "owner/name", FRESH_FOR, Readme::Fetch).unwrap(),
+            on_disk
+        );
     }
 
     /// Past the window the fetch is tried, and a stale copy is what stands in when it fails — being
@@ -348,7 +399,7 @@ mod tests {
         let on_disk = RepoFacts { stars: Some(9), ..RepoFacts::default() };
         write_cache(&file, &on_disk).unwrap();
 
-        let got = facts_at(&paths, UNREACHABLE, "owner/name", Duration::ZERO).unwrap();
+        let got = facts_at(&paths, UNREACHABLE, "owner/name", Duration::ZERO, Readme::Fetch).unwrap();
         assert_eq!(got, on_disk, "the stale copy answered");
         assert_eq!(cached(&file).unwrap(), on_disk, "and the failed fetch left it alone");
     }
@@ -356,7 +407,63 @@ mod tests {
     #[test]
     fn a_repo_we_have_never_reached_and_cannot_reach_is_an_error() {
         let paths = paths_at("nothing");
-        assert!(facts_at(&paths, UNREACHABLE, "owner/name", FRESH_FOR).is_err());
+        assert!(facts_at(&paths, UNREACHABLE, "owner/name", FRESH_FOR, Readme::Fetch).is_err());
+    }
+
+    /// **A plugin that describes itself costs GitHub one request fewer** (`AMB-D-638`). The README is
+    /// served here and still does not come back: what proves the request was never made is that the
+    /// body sitting on the host is not in the answer.
+    #[test]
+    fn a_caller_that_would_not_draw_a_readme_is_not_served_one() {
+        let paths = paths_at("skip-readme");
+        let host = amenbo_static_host::StaticHost::serve([
+            ("/repos/owner/name", r#"{"stargazers_count": 12}"#),
+            ("/repos/owner/name/readme", "# the readme nobody asked for"),
+        ]);
+        let api = host.url("");
+
+        let skipped = facts_at(&paths, &api, "owner/name", FRESH_FOR, Readme::Skip).unwrap();
+        assert_eq!(skipped.stars, Some(12), "the figures are read either way");
+        assert!(skipped.readme.is_none(), "and the README is not");
+
+        // The same repository, asked for by someone who *would* draw one: nothing about the first
+        // answer taught this build that there is no README.
+        let paths = paths_at("skip-readme-then-fetch");
+        let fetched = facts_at(&paths, &api, "owner/name", FRESH_FOR, Readme::Fetch).unwrap();
+        assert_eq!(fetched.readme.as_deref(), Some("# the readme nobody asked for"));
+    }
+
+    /// The cache is a shared thing — one file per repository, whoever wrote it — so a run that did not
+    /// ask about the README neither hands one out nor throws the cached one away.
+    #[test]
+    fn skipping_the_readme_hides_the_cached_one_without_erasing_it() {
+        let paths = paths_at("skip-cached");
+        let file = cache_file(&paths, "owner/name");
+        let on_disk = RepoFacts {
+            stars: Some(3),
+            readme: Some("# from an earlier reader".to_string()),
+            ..RepoFacts::default()
+        };
+        write_cache(&file, &on_disk).unwrap();
+
+        // Fresh cache, so nothing is fetched: the README is cut from the answer, not from the file.
+        let got = facts_at(&paths, UNREACHABLE, "owner/name", FRESH_FOR, Readme::Skip).unwrap();
+        assert_eq!(got.stars, Some(3));
+        assert!(got.readme.is_none(), "not handed to a caller that declared it draws none");
+        assert_eq!(cached(&file).unwrap(), on_disk, "and still there for one that does");
+
+        // Past the window, a fetch that answers with the figures alone must not overwrite it either.
+        let host = amenbo_static_host::StaticHost::serve([(
+            "/repos/owner/name",
+            r#"{"stargazers_count": 99}"#,
+        )]);
+        let got = facts_at(&paths, &host.url(""), "owner/name", Duration::ZERO, Readme::Skip).unwrap();
+        assert_eq!(got.stars, Some(99), "the fresh figure");
+        assert_eq!(
+            cached(&file).unwrap().readme,
+            on_disk.readme,
+            "the README nobody asked about survived the write"
+        );
     }
 
     #[test]
@@ -390,7 +497,7 @@ mod tests {
     #[ignore = "reaches api.github.com over the network"]
     fn the_live_api_answers_for_amenbos_own_repository() {
         let paths = paths_at("live");
-        let got = facts(&paths, "ShiroDoromoto/amenbo").expect("GitHub answers");
+        let got = facts(&paths, "ShiroDoromoto/amenbo", Readme::Fetch).expect("GitHub answers");
         assert!(got.stars.is_some(), "a public repository has a star count: {got:?}");
         assert!(got.readme.is_some(), "and a README");
         assert!(cached(&cache_file(&paths, "ShiroDoromoto/amenbo")).is_some(), "cached for next time");

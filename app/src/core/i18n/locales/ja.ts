@@ -375,6 +375,7 @@ export const ja: Translation = {
     "plugins.rateLimited": "GitHub の回数制限に達しました。しばらく待つと取得できます。",
     "plugins.noReadme": "README はありません",
     "plugins.factsNote": "★・ダウンロード数・README は、開いたこの1件だけを GitHub から取得しています（カタログには入っていません）。数字は目安で、入れられるかどうかとは関係ありません。",
+    "plugins.figuresNote": "★・ダウンロード数は、開いたこの1件だけを GitHub から取得しています（カタログには入っていません）。数字は目安で、入れられるかどうかとは関係ありません。",
     "plugins.want.perProject": "プロジェクトごとに有効化",
     "plugins.scope.machine": "この端末の全プロジェクトを読む",
     "plugins.want.events": "受け取る出来事: {events}",

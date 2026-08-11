@@ -367,6 +367,7 @@ export const tr: Translation = {
     "plugins.rateLimited": "GitHub bu adrese hız sınırı uyguluyor; sayılar bir süre sonra geri gelir.",
     "plugins.noReadme": "README yok",
     "plugins.factsNote": "Yıldızlar, indirmeler ve README yalnızca açık olan bu eklenti için GitHub'dan çekilir (katalog bunları taşımaz). Sayılar ölçek fikri verir, neyin kurulabileceğiyle ilgisi yoktur.",
+    "plugins.figuresNote": "Yıldızlar ve indirmeler yalnızca açık olan bu eklenti için GitHub'dan çekilir (katalog bunları taşımaz). Sayılar ölçek fikri verir, neyin kurulabileceğiyle ilgisi yoktur.",
     "plugins.want.perProject": "Proje başına açılır",
     "plugins.scope.machine": "Bu cihazdaki her projeyi okur, yalnızca birini değil",
     "plugins.want.events": "Şunlarla uyanır: {events}",

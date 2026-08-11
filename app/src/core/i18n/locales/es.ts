@@ -384,6 +384,7 @@ export const es: Translation = {
     "plugins.rateLimited": "GitHub está limitando las peticiones de esta dirección; las cifras vuelven al cabo de un rato.",
     "plugins.noReadme": "Sin README",
     "plugins.factsNote": "Las estrellas, las descargas y el README se traen de GitHub solo para el complemento abierto (el catálogo no los lleva). Las cifras dan una idea de escala y no influyen en lo que se puede instalar.",
+    "plugins.figuresNote": "Las estrellas y las descargas se traen de GitHub solo para el complemento abierto (el catálogo no las lleva). Las cifras dan una idea de escala y no influyen en lo que se puede instalar.",
     "plugins.want.perProject": "Se activa por proyecto",
     "plugins.scope.machine": "Lee todos los proyectos de este dispositivo, no solo uno",
     "plugins.want.events": "Se despierta con: {events}",

@@ -4,7 +4,7 @@
 // one is the ordinary state, and it has to read as one line of prose either way.
 import { describe, expect, it } from "vitest";
 import type { PluginConfigOptionDto, PluginWantedSettingDto } from "../bindings/bindings";
-import { optionLabel, pluginDesc, settingLabel } from "./pluginText";
+import { optionLabel, pluginAbout, pluginDesc, settingLabel } from "./pluginText";
 
 const setting = (over: Partial<PluginWantedSettingDto>): PluginWantedSettingDto => ({
   key: "channel",
@@ -33,6 +33,20 @@ describe("pluginDesc", () => {
   it("falls back to the author's own line, and treats null as absent", () => {
     expect(pluginDesc({ desc: "post to a channel" })).toBe("post to a channel");
     expect(pluginDesc({ desc: "post to a channel", descI18n: null })).toBe("post to a channel");
+  });
+});
+
+describe("pluginAbout", () => {
+  it("draws the reader's language where the author wrote one", () => {
+    expect(pluginAbout({ about: "what it does", aboutI18n: "何をするか" })).toBe("何をするか");
+    expect(pluginAbout({ about: "what it does" })).toBe("what it does");
+  });
+
+  // The one way it differs from the one-line description (`AMB-D-638`): a plugin may have no
+  // description at all, and that absence is what sends the detail back to the repository's README.
+  it("says nothing for a plugin whose author wrote none", () => {
+    expect(pluginAbout({})).toBeUndefined();
+    expect(pluginAbout({ about: null, aboutI18n: null })).toBeUndefined();
   });
 });
 

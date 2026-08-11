@@ -109,6 +109,10 @@ libc = "0.2"
 
 [dev-dependencies]
 amenbo-scratch.workspace = true
+# A port to answer on, for the one route core takes to a third party it does not publish: GitHub's API
+# (`src/plugin_github.rs`). What is being tested there is which requests go out, and a file on disk
+# cannot stand in for a request that was or was not made.
+amenbo-static-host.workspace = true
 serde_json.workspace = true
 chrono.workspace = true
 # Property/fuzz testing of the hand-rolled parsers, where the input is whatever a user hands us and

@@ -269,7 +269,8 @@ set off yourself (`amenbo update`, or `amenbo update --apply` for the standalone
 
 **Looking for a plugin** reads the plugin catalog — one static file, fetched once and
 cached, whatever the catalog's size — and, for a plugin whose detail you open, that one
-repository's stars, downloads and README from GitHub's public API. Both carry no task
+repository's stars and downloads from GitHub's public API, plus its README where the
+plugin's author wrote no description of their own. Both carry no task
 data, and neither happens unless you go looking: nothing is fetched for a plugin you only
 see in the list. That same cached catalog is also what says an installed plugin has a
 newer build: noticing rides the one fetch — inside its freshness window nothing is asked

@@ -678,6 +678,17 @@ events: Array<string>,
  */
 config: Array<PluginWantedSettingDto>, 
 /**
+ * **What the plugin is, in its author's own words** (`AMB-D-638`) — the Markdown the detail draws
+ * as its body. Absent is a plugin whose author wrote none, and the face falls back to the
+ * repository's README there; where this is present the README is neither drawn nor fetched.
+ */
+about?: string, 
+/**
+ * The same text in the reader's language, when its author wrote one (`AMB-D-621`). Beside the base
+ * text, never over it: choosing between the two is the front end's (`AMB-D-623`).
+ */
+aboutI18n?: string, 
+/**
  * **What layer its author declared it lives at** (`AMB-D-601`) — a project's, or the device's. It is
  * read here rather than off the list because the declaration rides in the detail document, and this
  * is the face that draws one: a device-wide plugin reads every project on this machine, which is the

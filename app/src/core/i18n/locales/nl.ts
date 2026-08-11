@@ -367,6 +367,7 @@ export const nl: Translation = {
     "plugins.rateLimited": "GitHub beperkt de snelheid voor dit adres; de cijfers komen na een tijdje terug.",
     "plugins.noReadme": "Geen README",
     "plugins.factsNote": "Sterren, downloads en de README worden bij GitHub opgehaald voor deze ene geopende plug-in (de catalogus draagt ze niet). De cijfers geven een gevoel voor schaal en zeggen niets over wat je kunt installeren.",
+    "plugins.figuresNote": "Sterren en downloads worden bij GitHub opgehaald voor deze ene geopende plug-in (de catalogus draagt ze niet). De cijfers geven een gevoel voor schaal en zeggen niets over wat je kunt installeren.",
     "plugins.want.perProject": "Per project aangezet",
     "plugins.scope.machine": "Leest elk project op dit apparaat, niet slechts één",
     "plugins.want.events": "Wordt gewekt door: {events}",

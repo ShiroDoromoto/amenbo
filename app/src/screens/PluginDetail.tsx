@@ -13,7 +13,7 @@ import {
   type PluginEntry,
 } from "../core/pluginCatalog";
 import { installPlugin, type PluginInstall } from "../core/pluginInstalls";
-import { pluginDesc, settingLabel } from "../core/pluginText";
+import { pluginAbout, pluginDesc, settingLabel } from "../core/pluginText";
 
 // The one plugin a user opened (`AMB-D-347`).
 //
@@ -22,6 +22,13 @@ import { pluginDesc, settingLabel } from "../core/pluginText";
 // catalog's own detail document is per-plugin (`AMB-D-385`), so all of it is fetched when this opens and
 // for this entry only. That asymmetry is the whole discovery design — browsing a catalog of thousands
 // stays one static file, and a plugin is asked about only when someone actually wants to look at it.
+//
+// **The body is the author's own words where there are any** (`AMB-D-638`), in the reader's language
+// (`AMB-D-623`). The README stood in for a description nobody could write anywhere else, and it is still
+// what a plugin with no description of its own is drawn from — but where both exist they say the same
+// thing twice, in two languages, so only one of them is on screen. Which one settles the GitHub request
+// too: the README is not fetched where it would not be drawn, so the catalog's answer is waited for
+// before the repository is asked anything.
 //
 // The figures never gate anything. What may be installed is decided by the asset's signature against
 // amenbo's own key (`AMB-D-371`); a star count is a display figure, and a download count includes
@@ -35,8 +42,14 @@ export function PluginDetail({ entry, install, onOpenInstalled, onClose }: {
   onOpenInstalled: () => void;
   onClose: () => void;
 }) {
-  const { facts, loading, error } = usePluginRepoFacts(entry.repo);
   const { detail } = usePluginDetail(entry.name);
+  // `undefined` is the detail still on its way, and it is the one state that is not an answer: a
+  // plugin the catalog does not carry (`null`) has no description, same as one whose author wrote none.
+  const about = detail === undefined ? undefined : pluginAbout(detail ?? {});
+  const { facts, loading, error } = usePluginRepoFacts(
+    entry.repo,
+    detail === undefined ? "unknown" : about === undefined,
+  );
   const layer = pluginLayer(entry);
 
   // Escape closes it, like every other modal here — the detail is a look, and looking must be cheap to
@@ -99,17 +112,25 @@ export function PluginDetail({ entry, install, onOpenInstalled, onClose }: {
         {facts?.rateLimited && <div className="plugdet__note">{t("plugins.rateLimited")}</div>}
         {error != null && !facts && <div className="plugdet__note">{t("plugins.factsError")}</div>}
 
-        {/* The README is the one body here that came from somewhere: its relative paths name files in
-            the repository it was read from, so that repository is what they are resolved against. */}
+        {/* Two bodies, and never both. The author's own text is published in the catalog, so a relative
+            link in it names nothing this app could resolve and stays inert. The README is the one body
+            here that came from somewhere: its relative paths name files in the repository it was read
+            from, so that repository is what they are resolved against. */}
         <div className="plugdet__readme markdown">
-          {facts?.readme ? (
+          {about !== undefined ? (
+            <Markdown>{about}</Markdown>
+          ) : facts?.readme ? (
             <Markdown linkBase={repoLinkBase(entry.repo)}>{facts.readme}</Markdown>
           ) : (
             !loading && <span className="faint">{t("plugins.noReadme")}</span>
           )}
         </div>
 
-        <div className="plugdet__foot faint">{t("plugins.factsNote")}</div>
+        {/* The note names what was actually fetched, so it does not promise a README nothing went and
+            got. */}
+        <div className="plugdet__foot faint">
+          {t(about !== undefined ? "plugins.figuresNote" : "plugins.factsNote")}
+        </div>
       </div>
     </div>
   );

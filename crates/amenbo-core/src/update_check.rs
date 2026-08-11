@@ -371,16 +371,33 @@ pub fn check_fresh(enabled: bool) -> Option<LatestRelease> {
     check_inner(enabled, true)
 }
 
-/// The body behind [`check`] and [`check_fresh`]. When `force_fresh` is set, the early return on a
-/// fresh cache entry is skipped and upstream is always queried — updating the cache on success, and
-/// falling back to the stale entry on failure.
+/// The body behind [`check`] and [`check_fresh`]: the disable knob, and then the read itself against
+/// this machine's endpoint, cache file and clock.
 fn check_inner(enabled: bool, force_fresh: bool) -> Option<LatestRelease> {
     if is_disabled(enabled) {
         return None;
     }
-    let now = now_unix();
-    let path = cache_path();
-    let cached = path.as_deref().and_then(read_cache);
+    check_at(&latest_json_url(), cache_path().as_deref(), now_unix(), force_fresh)
+}
+
+/// The read, against a named URL, cache file and instant — the seam the tests drive, so nothing in
+/// this module's test run reaches the real manifest, and the TTL can be crossed without waiting a day
+/// (the shape [`crate::plugin_github::facts`] and [`crate::plugin_catalog::load`] take for the same
+/// reason).
+///
+/// When `force_fresh` is set, the early return on a fresh cache entry is skipped and upstream is
+/// always queried — updating the cache on success, and falling back to the stale entry on failure.
+///
+/// `cache_file` is `None` where the machine has no cache directory to offer ([`cache_path`]): the
+/// query then happens every time and nothing is written, which costs the TTL's benefit and no
+/// function.
+fn check_at(
+    url: &str,
+    cache_file: Option<&std::path::Path>,
+    now: i64,
+    force_fresh: bool,
+) -> Option<LatestRelease> {
+    let cached = cache_file.and_then(read_cache);
     if !force_fresh {
         if let Some(env) = &cached {
             if is_fresh(env.fetched_at, now) {
@@ -388,9 +405,9 @@ fn check_inner(enabled: bool, force_fresh: bool) -> Option<LatestRelease> {
             }
         }
     }
-    match fetch(&latest_json_url()) {
+    match fetch(url) {
         Some(release) => {
-            if let Some(path) = &path {
+            if let Some(path) = cache_file {
                 write_cache(path, &CacheEnvelope { fetched_at: now, release: release.clone() });
             }
             Some(release)
@@ -637,5 +654,107 @@ mod tests {
         assert_eq!(back.fetched_at, 42);
         assert_eq!(back.release.version, "1.2.3");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ---- the read itself: the window, the check somebody typed, and being offline ----
+
+    /// An address nothing answers on — what being offline looks like from inside the query.
+    const UNREACHABLE: &str = "http://127.0.0.1:1/latest.json";
+
+    /// A fixed instant to hang the tests off, so the TTL is crossed by arithmetic rather than by
+    /// waiting a day.
+    const NOW: i64 = 1_700_000_000;
+
+    /// A cache file of this test's own, never the machine's ([`cache_path`]).
+    fn cache_at(tag: &str) -> PathBuf {
+        amenbo_scratch::scratch(&format!("update-check-{tag}")).join("update_check.json")
+    }
+
+    /// The smallest manifest that parses: a version, and the optional metadata left out.
+    fn manifest(version: &str) -> String {
+        format!(r#"{{"version": "{version}"}}"#)
+    }
+
+    /// An entry naming `version`, written `fetched_at`.
+    fn entry(path: &std::path::Path, version: &str, fetched_at: i64) {
+        let release =
+            LatestRelease { version: version.into(), notes_url: None, assets: Default::default() };
+        write_cache(path, &CacheEnvelope { fetched_at, release });
+    }
+
+    /// Inside the TTL the entry answers and **no request is made at all** — which is what keeps the
+    /// readings that ride along with real work off the network (`AMB-D-520`). The proof is the address:
+    /// nothing answers on it, so a query would have come back with nothing.
+    #[test]
+    fn an_entry_inside_the_ttl_answers_without_the_network() {
+        let path = cache_at("inside-the-ttl");
+        entry(&path, "1.0.0", NOW - 60);
+
+        let got = check_at(UNREACHABLE, Some(&path), NOW, false).expect("the entry answers");
+        assert_eq!(got.version, "1.0.0");
+    }
+
+    /// **A check somebody typed or clicked goes past a fresh entry** (`AMB-D-463`): what is being asked
+    /// for is the state now, and answering it out of a copy up to a day old is declining the question.
+    /// The answer replaces the entry, so the readings that ride along afterwards see the new version too.
+    #[test]
+    fn a_check_somebody_asked_for_goes_past_a_fresh_entry() {
+        let path = cache_at("asked-for");
+        entry(&path, "1.0.0", NOW - 60);
+        let host = amenbo_static_host::StaticHost::serve([("/latest.json", manifest("2.0.0"))]);
+        let url = host.url("/latest.json");
+
+        let riding_along = check_at(&url, Some(&path), NOW, false).expect("the entry answers");
+        assert_eq!(riding_along.version, "1.0.0", "a reading that came along with something else");
+
+        let asked_for = check_at(&url, Some(&path), NOW, true).expect("upstream answers");
+        assert_eq!(asked_for.version, "2.0.0", "and one somebody actually asked for");
+        assert_eq!(read_cache(&path).unwrap().release.version, "2.0.0", "which is the entry now");
+    }
+
+    /// Past the TTL the query happens, and what comes back is written down — so the next reading inside
+    /// the window is answered from it rather than from upstream again.
+    #[test]
+    fn a_stale_entry_is_replaced_by_what_the_query_brings_back() {
+        let path = cache_at("stale-then-queried");
+        entry(&path, "1.0.0", NOW - CACHE_TTL_SECS - 1);
+        let host = amenbo_static_host::StaticHost::serve([("/latest.json", manifest("2.0.0"))]);
+
+        let got = check_at(&host.url("/latest.json"), Some(&path), NOW, false).expect("upstream");
+        assert_eq!(got.version, "2.0.0", "the window had closed, so the query happened");
+        assert_eq!(
+            check_at(UNREACHABLE, Some(&path), NOW, false).unwrap().version,
+            "2.0.0",
+            "and the fresh entry answers the next reading with no request",
+        );
+    }
+
+    /// A query that fails answers with the entry it has, however old: being offline costs freshness,
+    /// never the awareness we last had. It holds for the check somebody asked for as well — crossing the
+    /// TTL is asking upstream, not requiring it — and with nothing on either side there is simply no
+    /// answer to give.
+    #[test]
+    fn a_failed_query_falls_back_to_the_entry_it_has() {
+        let path = cache_at("offline");
+        entry(&path, "1.0.0", NOW - CACHE_TTL_SECS - 1);
+
+        assert_eq!(check_at(UNREACHABLE, Some(&path), NOW, false).unwrap().version, "1.0.0");
+        assert_eq!(check_at(UNREACHABLE, Some(&path), NOW, true).unwrap().version, "1.0.0");
+        assert_eq!(read_cache(&path).unwrap().release.version, "1.0.0", "and never cleared it");
+
+        assert!(
+            check_at(UNREACHABLE, Some(&cache_at("nothing-either")), NOW, false).is_none(),
+            "nothing fetched and nothing cached is the one reading with no answer",
+        );
+    }
+
+    /// With nowhere to write — a machine whose cache directory cannot be worked out ([`cache_path`]) —
+    /// every reading queries and nothing is kept. What is lost is the window, not the answer.
+    #[test]
+    fn with_nowhere_to_cache_the_query_still_answers() {
+        let host = amenbo_static_host::StaticHost::serve([("/latest.json", manifest("3.0.0"))]);
+
+        let got = check_at(&host.url("/latest.json"), None, NOW, false).expect("upstream answers");
+        assert_eq!(got.version, "3.0.0");
     }
 }

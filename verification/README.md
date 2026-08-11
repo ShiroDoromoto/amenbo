@@ -120,17 +120,21 @@ is nothing a road can read a row's provenance back by. Nothing on such a shelf i
 carry no asset, and an install is walked against the real catalog, whose signature is the layer no
 fixture can stand in for.
 
-A row may also carry `translated:` — the same `desc` and `label` as its author wrote them in other
-languages, keyed by language code — and what the shelf then publishes is the shape a real catalog
-publishes, which is two shapes rather than one. The lines go beside the list, one `catalog.<lang>.json`
-per language, so a reader fetches their own and nobody pays for the other eighteen; the labels go
-inside each row's own detail document, every language at once, so a form already fetched follows a
-language change with no request behind it. That split is the reason to write a row this way rather
-than to stand a shelf per language: what a screen road has to be able to see is a listing redrawn from
-a document fetched for the new language, and a form redrawn from one nobody fetched again. A language
-no row drew a line in gets no document, and the 404 the fetch meets is the answer a reader of an
-untranslated language already gets — so the fallback is walked by leaving a row, or a whole shelf,
-untranslated rather than by breaking anything.
+A row may also carry `about:` — what its author wrote about the plugin at length, which is the body an
+opened panel is read by — and `translated:`, the same `desc`, `about` and `label` as its author wrote
+them in other languages, keyed by language code. What the shelf then publishes is the shape a real
+catalog publishes, which is two shapes rather than one. The lines go beside the list, one
+`catalog.<lang>.json` per language, so a reader fetches their own and nobody pays for the other
+eighteen; the description text and the labels go inside each row's own detail document, every language
+at once, so a panel and a form already fetched follow a language change with no request behind it. That
+split is the reason to write a row this way rather than to stand a shelf per language: what a screen
+road has to be able to see is a listing redrawn from a document fetched for the new language, and a
+panel redrawn from one nobody fetched again. A language no row drew a *line* in gets no document, and
+the 404 the fetch meets is the answer a reader of an untranslated language already gets — so the
+fallback is walked by leaving a row, or a whole shelf, untranslated rather than by breaking anything.
+A row that carries no `about:` at all is the other fallback, one layer up: its panel is drawn from the
+README of the repository every stood row names, which is where a plugin's description came from before
+authors had anywhere else to write one.
 
 Each op the driver maps is an arm in its domain's module under `cli/src/domain/` — `task depend` in
 `task.rs`, `plugin install` in `plugin.rs` — and an op that is in the scenario registry but not yet
@@ -338,7 +342,11 @@ author wrote none, the shelf that published no document for that language at all
 label came down with every language inside it — `read-a-plugins-form-in-your-own-language` walks the
 same change on the other side of an install, where the words were never published anywhere and so
 cannot have been fetched: the field translated, the field beside it that is not, and the candidate drawn
-under one set of words while storing the value it always stored — and `be-offered-a-start-at-login`
+under one set of words while storing the value it always stored — `learn-what-a-plugin-does-before-installing-it`
+walks the third of those doors, the panel an opened row is read by: the author's own description standing
+there with no README beside it, the same description again after a language change, the row whose author
+wrote one language keeping it unmarked, and the row nobody described at all falling back to the
+repository's README — and `be-offered-a-start-at-login`
 walks the one thing on screen nobody went and asked for — an offer that comes up on its own once the app has been come
 back to, and the answer that takes it away.
 

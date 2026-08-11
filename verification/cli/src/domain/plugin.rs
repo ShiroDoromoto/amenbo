@@ -55,6 +55,11 @@ struct Offer {
     name: String,
     /// The one line a row draws under the name.
     desc: String,
+    /// What its author wrote about it at length, which is the body an opened panel is read by. It
+    /// rides in the detail document rather than in the list, so a row that has one costs a browse
+    /// nothing — and a row that has none is the plugin whose panel goes to the repository for a
+    /// README instead.
+    about: Option<String>,
     /// The badge this catalog's *document* claims. It is not an entry's to grant: a shelf anyone may
     /// publish into holds no review, so the merge clears it on everything a registered catalog
     /// serves. Claiming it is therefore the only way a road can see that clearing happen at all.
@@ -63,19 +68,20 @@ struct Offer {
     /// beside it. The panel under an opened row is the only place a detail document reaches the
     /// screen, so a shelf whose entries declare nothing puts nothing on that panel that came from it.
     setting: Option<(String, String)>,
-    /// The same two words as the author wrote them elsewhere, keyed by language code. They leave by
-    /// different doors — the line beside the list, the label inside the detail — which is the split
-    /// the delivery is built on, so they are held together here and parted at the moment of
-    /// publishing.
+    /// The same words as the author wrote them elsewhere, keyed by language code. They leave by
+    /// different doors — the line beside the list, the description text and the label inside the
+    /// detail — which is the split the delivery is built on, so they are held together here and
+    /// parted at the moment of publishing.
     translated: std::collections::BTreeMap<String, Words>,
 }
 
-/// One language's half of a row: whichever of the two words its author wrote in it. Both are
-/// optional and each travels on its own document, so a language holding one of them is an ordinary
+/// One language's half of a row: whichever of the words its author wrote in it. All are
+/// optional and they travel on two documents, so a language holding one of them is an ordinary
 /// state and not a half-written one.
 #[derive(Default)]
 struct Words {
     desc: Option<String>,
+    about: Option<String>,
     label: Option<String>,
 }
 
@@ -110,17 +116,26 @@ impl Offer {
         if let Some((key, label)) = &self.setting {
             doc["config"] = serde_json::json!([{ "key": key, "label": label }]);
         }
+        if let Some(about) = &self.about {
+            doc["about"] = serde_json::json!(about);
+        }
         // Every language at once, since this document is fetched one plugin at a time and then read
-        // offline — which is what lets a form follow a language change with no request behind it.
-        // Only the languages that translated the label are in it; the line beside the list left by
-        // the other door.
+        // offline — which is what lets a panel and a form follow a language change with no request
+        // behind it. Only what travels this way is in it — the description text and the label — the
+        // line beside the list having left by the other door.
         let i18n: serde_json::Map<String, serde_json::Value> = self
             .translated
             .iter()
             .filter_map(|(lang, words)| {
-                let (key, _) = self.setting.as_ref()?;
-                let label = words.label.as_ref()?;
-                Some((lang.clone(), serde_json::json!({ "config": { key: { "label": label } } })))
+                let mut overlay = serde_json::Map::new();
+                if let Some(about) = &words.about {
+                    overlay.insert("about".into(), serde_json::json!(about));
+                }
+                if let (Some((key, _)), Some(label)) = (self.setting.as_ref(), words.label.as_ref()) {
+                    overlay.insert("config".into(), serde_json::json!({ key: { "label": label } }));
+                }
+                (!overlay.is_empty())
+                    .then(|| (lang.clone(), serde_json::Value::Object(overlay)))
             })
             .collect();
         if !i18n.is_empty() {
@@ -148,6 +163,7 @@ fn offers(with: &Args) -> Result<Vec<Offer>, String> {
             Ok(Offer {
                 name,
                 desc,
+                about: word("about"),
                 claims_official: row
                     .get("claims_official")
                     .and_then(|v| v.as_bool())
@@ -169,7 +185,7 @@ fn translated(row: &serde_yaml::Value) -> std::collections::BTreeMap<String, Wor
         .filter_map(|(lang, words)| {
             let lang = lang.as_str()?.to_string();
             let word = |key: &str| words.get(key).and_then(|v| v.as_str()).map(str::to_string);
-            Some((lang, Words { desc: word("desc"), label: word("label") }))
+            Some((lang, Words { desc: word("desc"), about: word("about"), label: word("label") }))
         })
         .collect()
 }
@@ -178,9 +194,9 @@ fn translated(row: &serde_yaml::Value) -> std::collections::BTreeMap<String, Wor
 /// beside it per entry, and one document per language any row drew a line in.
 ///
 /// The last of those is published only where there is a line to put in it. A language whose rows
-/// translated the form label alone leaves no document — the labels went out inside the details — so
-/// a browse in that language draws the base lines and meets a 404 on the way, which is the answer a
-/// real catalog gives and not a failure.
+/// translated the description text or the form label alone leaves no document — both of those went
+/// out inside the details — so a browse in that language draws the base lines and meets a 404 on the
+/// way, which is the answer a real catalog gives and not a failure.
 fn catalog_docs(offers: &[Offer]) -> Vec<(String, String)> {
     let mut docs: Vec<(String, String)> =
         offers.iter().map(|o| (detail_path(&o.name), o.detail())).collect();
@@ -1645,14 +1661,35 @@ mod tests {
         assert_eq!(detail["config"][0]["label"], "Channel webhook", "the base label is where it was");
     }
 
+    /// The description an opened panel is read by travels inside the detail, every language at once —
+    /// the same door the form's labels take, and for the same reason: a panel already fetched follows
+    /// a reader changing language with nothing fetched again.
+    #[test]
+    fn a_described_row_carries_every_language_in_its_detail() {
+        let docs = catalog_docs(
+            &offers(&args(
+                "offers:\n  - name: standup\n    desc: Post the day's finished tasks\n    about: What standup posts, and when.\n    translated:\n      de:\n        about: Was standup postet, und wann.\n",
+            ))
+            .expect("one row to read"),
+        );
+
+        let detail = served(&docs, "/plugins/standup.json");
+        assert_eq!(detail["about"], "What standup posts, and when.");
+        assert_eq!(detail["i18n"]["de"]["about"], "Was standup postet, und wann.");
+        assert!(
+            served(&docs, CATALOG_PATH)["plugins"][0]["about"].is_null(),
+            "and none of it is in the list, which every reader fetches whole",
+        );
+    }
+
     /// A language nobody wrote a line in gets no document of its own, and the 404 that answers for it
-    /// is what a reader of an untranslated language already meets. A label alone is not a line: it
-    /// went out inside the detail, so it raises no document here.
+    /// is what a reader of an untranslated language already meets. Neither a label nor a description
+    /// is a line: both went out inside the detail, so neither raises a document here.
     #[test]
     fn a_language_with_no_line_publishes_no_document() {
         let docs = catalog_docs(
             &offers(&args(
-                "offers:\n  - name: standup\n    desc: Post the day's finished tasks\n    setting: channel\n    label: Channel webhook\n    translated:\n      de:\n        label: Webhook des Kanals\n",
+                "offers:\n  - name: standup\n    desc: Post the day's finished tasks\n    about: What standup posts, and when.\n    setting: channel\n    label: Channel webhook\n    translated:\n      de:\n        about: Was standup postet, und wann.\n        label: Webhook des Kanals\n",
             ))
             .expect("one row to read"),
         );
@@ -1661,7 +1698,9 @@ mod tests {
             "no language document was called for: {:?}",
             docs.iter().map(|(p, _)| p).collect::<Vec<_>>(),
         );
-        assert_eq!(served(&docs, "/plugins/standup.json")["i18n"]["de"]["config"]["channel"]["label"], "Webhook des Kanals");
+        let detail = served(&docs, "/plugins/standup.json");
+        assert_eq!(detail["i18n"]["de"]["config"]["channel"]["label"], "Webhook des Kanals");
+        assert_eq!(detail["i18n"]["de"]["about"], "Was standup postet, und wann.");
     }
 
     /// A declared field's words in another language land in the record an install writes, under the key

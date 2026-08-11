@@ -1,0 +1,171 @@
+# What a reader opens a plugin to find out, and where the answer comes from.
+#
+# A row's one line says what a plugin is for; it does not say what installing it would be like. That is
+# what the panel under an opened row is read for, and the words in it are the author's own, published in
+# the catalog's detail document. Where an author wrote none, the panel is drawn from the repository's
+# README instead — which is what stood there for every plugin before authors had anywhere else to write.
+#
+# The two never share the panel. They would otherwise say the same thing twice, and the README's half in
+# English whoever is reading — so a plugin that describes itself is drawn from its own words and the
+# repository is not asked for a README at all.
+#
+# That is the whole of what a screen can be read for here, and it is why every step quotes the sentence
+# it expects whole. Nothing on the panel says which of the two bodies it drew, and nothing marks a
+# description that came out in English because its author wrote no other. A build that fetched the wrong
+# language, that never fetched at all, or that went back to drawing README over the author's words, draws
+# a panel that looks exactly like the right one — and differs only in the sentence standing in it.
+#
+# One shelf, three rows, because the answer has three shapes and one row can only be in one of them:
+# `digest` describes itself in both languages, `roadmap` in one, and `timesheet` in neither. Every row a
+# stood shelf publishes names this project's own plugin repository, since a panel reads stars and a
+# README off it and one nobody publishes would draw a 404 into the screen the road is photographed on —
+# so the README the third row falls back to is that repository's, and the words quoted for it are its
+# opening line. Rewriting that line is rewriting this step with it, which is the price of reading a body
+# that comes from outside the run.
+#
+# German for the reason the other two language roads use it: a scenario file carries no source of its
+# own, so every word in it is read as prose, and prose here is English. Nothing in the road turns on
+# which of the nineteen it is.
+#
+# The road opens in English on purpose. What is under test is the change — a panel drawn in one language
+# and drawn again in another — and a store that opened in the second would prove nothing about the first.
+id: learn-what-a-plugin-does-before-installing-it
+title: An opened plugin says what it does in its author's own words, in the reader's language, and is drawn from the README only where the author wrote none
+description: >
+  Open a plugin in the market and read the panel under it. The author's own description is what is
+  standing there, and the repository's README is not beside it. Change the interface to German and open
+  it again: the description follows, out of a document that came down with every language in it. The row
+  beside it, whose author wrote in one language only, keeps that one — unmarked. And the row whose author
+  described it nowhere is drawn from the README, the way every plugin was before.
+given:
+  # The shelf. Three rows, described apart: what separates them is not what they do but how far their
+  # authors wrote about them, which is the one thing this panel is read for.
+  - type: action
+    domain: plugin
+    op: catalog-stand
+    as: in-house
+    with:
+      publishes_key: true
+      offers:
+        - name: digest
+          desc: Send the day's finished work to the team channel
+          about: Digest gathers the day's finished tasks and posts them to one channel each evening.
+          translated:
+            de:
+              desc: Die am Tag erledigte Arbeit in den Team-Kanal schicken
+              about: Digest sammelt die am Tag erledigten Aufgaben und schickt sie jeden Abend in einen Kanal.
+
+        # Described once, in the language its author writes in. A shelf where every row is translated
+        # cannot show what a reader of the other language is left with.
+        - name: roadmap
+          desc: Chart what is left in the current milestone
+          about: Roadmap draws what the milestone has left, and draws it again as tasks close.
+
+        # And the row whose author described it nowhere, which is every plugin published before there
+        # was anywhere to write one.
+        - name: timesheet
+          desc: Keep a record of how long each task stayed open
+
+  - type: action
+    domain: plugin
+    op: catalog-add
+    with:
+      target: in-house
+      name: In-house catalog
+
+steps_gui:
+  # Where the road starts is said out loud rather than assumed: the store was made a moment ago and
+  # somebody answered the first-run screen, so which language the interface is in is that hand's and not
+  # the road's until a step says it.
+  - type: action
+    domain: store
+    op: set-language
+    with:
+      language: en
+
+  - type: action
+    domain: plugin
+    op: open-entry
+    with:
+      name: digest
+      source: In-house catalog
+
+  - type: assert
+    domain: plugin
+    op: body
+    with:
+      name: digest
+      source: In-house catalog
+      text: Digest gathers the day's finished tasks and posts them to one channel each evening.
+
+  # And the README is not under it. This row's repository publishes one — the third row below is drawn
+  # from it — so an absence here is a build that did not go for it, rather than a repository with
+  # nothing to give.
+  - type: assert
+    domain: plugin
+    op: body
+    with:
+      name: digest
+      source: In-house catalog
+      text: amenbo's official per-task git worktree plugin
+      present: false
+
+  - type: action
+    domain: store
+    op: set-language
+    with:
+      language: de
+
+  # The way back is the way in: what the screen kept while the reader was on the settings screen is not
+  # what this road is about.
+  - type: action
+    domain: plugin
+    op: open-entry
+    with:
+      name: digest
+      source: In-house catalog
+
+  # The line the road is for. The description came down inside this row's own detail document with every
+  # language in it, so the reader's language is picked out of what was already fetched.
+  - type: assert
+    domain: plugin
+    op: body
+    with:
+      name: digest
+      source: In-house catalog
+      text: Digest sammelt die am Tag erledigten Aufgaben und schickt sie jeden Abend in einen Kanal.
+
+  - type: action
+    domain: plugin
+    op: open-entry
+    with:
+      name: roadmap
+      source: In-house catalog
+
+  # Its neighbour on the same shelf, read in the same German interface. Its author wrote one language, so
+  # that is what is standing here — with nothing on the panel saying why, which is what makes it worth a
+  # step of its own.
+  - type: assert
+    domain: plugin
+    op: body
+    with:
+      name: roadmap
+      source: In-house catalog
+      text: Roadmap draws what the milestone has left, and draws it again as tasks close.
+
+  - type: action
+    domain: plugin
+    op: open-entry
+    with:
+      name: timesheet
+      source: In-house catalog
+
+  # And the row nobody described. The panel goes to the repository, and what it draws is the README's own
+  # opening line — the road every plugin took before, still there for the plugins that need it.
+  - type: assert
+    domain: plugin
+    op: body
+    with:
+      name: timesheet
+      source: In-house catalog
+      text: amenbo's official per-task git worktree plugin

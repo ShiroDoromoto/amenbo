@@ -591,14 +591,16 @@ const REGISTRY: &[OpSpec] = &[
     // `publishes_key` is the trust half: a catalog that publishes none is the other side of the rule,
     // browsable and uninstallable. `offers` is the shelf — the rows this catalog's own document
     // carries, each written as the words that document holds (`name`, `desc`, the `claims_official`
-    // badge it is not entitled to, and the one `setting` its author declares, under the `label` a
-    // form shows). Naming none is an empty shelf, which is what a road about the trust root alone
-    // wants. It is the only arg written as a list of rows, and the loader checks it as one.
-    // A row may also carry `translated` — the same `desc` and `label` as its author wrote them in
-    // other languages, keyed by language code. The two halves are then published the way a real
-    // catalog publishes them: the lines beside the list as one document per language, the labels
-    // inside the row's own detail document, every language at once. A language no row translates
-    // gets no document, which is the 404 a reader of an untranslated language meets.
+    // badge it is not entitled to, the `about` its author describes it at length in, and the one
+    // `setting` its author declares, under the `label` a form shows). Naming none is an empty shelf,
+    // which is what a road about the trust root alone wants. It is the only arg written as a list of
+    // rows, and the loader checks it as one.
+    // A row may also carry `translated` — the same `desc`, `about` and `label` as its author wrote
+    // them in other languages, keyed by language code. The three are then published the way a real
+    // catalog publishes them: the lines beside the list as one document per language, the description
+    // text and the labels inside the row's own detail document, every language at once. A language no
+    // row drew a *line* in gets no document, which is the 404 a reader of an untranslated language
+    // meets — a row translated at length alone leaves none, since that half never travelled that way.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "catalog-stand", required: &["publishes_key"], refs: &[], strings: &[], binds: true },
     // The same catalog, publishing a different key than the one pinned on it — a publisher rotating
     // their key, which is the event the pin exists to meet.
@@ -1098,6 +1100,20 @@ const REGISTRY: &[OpSpec] = &[
     // list` answers per installed manifest, and installing off a registered catalog needs a signed
     // asset — so before an install, the panel is where the declaration is.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "detail", required: &["name", "source", "declares"], refs: &[], strings: &["name", "source", "declares"], binds: false },
+    // The body of that same panel — the one block of prose a reader actually reads the plugin by. It
+    // is one of two things and never both: the description its author wrote, in the reader's language
+    // where they wrote one, or — for a plugin that describes itself nowhere — the README off the
+    // repository, which is English whoever is reading.
+    //
+    // `text` is the words the step expects to find there, and `present: false` is how it says which of
+    // the two is *not* standing. Both are needed, because the panel names neither: nothing above the
+    // prose says whether it came from the catalog or from GitHub, and nothing marks a description drawn
+    // in English because its author wrote no other. What tells all of that apart is which words are
+    // there — so a road quotes them, and quotes the words it must not find beside them.
+    //
+    // GUI only, for the reason `detail` is: no CLI draws a catalog's detail document, and none fetches
+    // a README at all.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "body", required: &["name", "source", "text"], refs: &[], strings: &["name", "source", "text"], binds: false },
     // What an AI is told about this plugin where it reads how to work in this folder — the `plugins` key
     // of the entry point. `present` is whether the plugin is offered there at all, which is the gate's
     // answer and not the install's: an installed plugin nobody switched on is one a call would refuse,
@@ -1221,8 +1237,9 @@ fn may_stand(domain: Domain, op: &str) -> bool {
 ///
 /// `translated` is the same row in the author's other languages, keyed by language code, and it is
 /// checked against the base row rather than on its own: translating a `label` on an entry that
-/// declares no `setting` publishes a label for a field nobody will see, which is the same mistake
-/// one language along.
+/// declares no `setting` publishes a label for a field nobody will see, and translating an `about`
+/// on an entry that describes itself nowhere is the text amenbo's own manifest check refuses — both
+/// being the same mistake one language along.
 fn offers_problems(value: &serde_yaml::Value) -> Vec<String> {
     let Some(rows) = value.as_sequence() else {
         return vec!["`offers` must be a list of the entries this catalog serves".to_string()];
@@ -1241,7 +1258,7 @@ fn offers_problems(value: &serde_yaml::Value) -> Vec<String> {
                 None => problems.push(at_row(format!("missing required field `{key}`"))),
             }
         }
-        for key in ["setting", "label"] {
+        for key in ["about", "setting", "label"] {
             if row.get(key).is_some_and(|v| v.as_str().is_none()) {
                 problems.push(at_row(format!("`{key}` must be a string")));
             }
@@ -1309,11 +1326,11 @@ fn declared_translations_problems(block: &serde_yaml::Value) -> Vec<String> {
 
 /// What is wrong with one row's `translated` block — the same row in the author's other languages.
 ///
-/// It is a mapping keyed by language code, and each language holds the two words a translation is
-/// made of: the `desc` a row draws, and the `label` its one setting is shown under. Naming neither
-/// is a language that translates nothing, which is a document published for no reason — so it is
-/// caught here rather than serving an empty answer to a reader who then sees English and cannot
-/// tell why.
+/// It is a mapping keyed by language code, and each language holds the words a translation is made
+/// of: the `desc` a row draws, the `about` an opened panel is read by, and the `label` its one
+/// setting is shown under. Naming none of them is a language that translates nothing, which is a
+/// document published for no reason — so it is caught here rather than serving an empty answer to a
+/// reader who then sees English and cannot tell why.
 fn translated_problems(row: &serde_yaml::Value) -> Vec<String> {
     let Some(block) = row.get("translated") else { return Vec::new() };
     let Some(langs) = block.as_mapping() else {
@@ -1329,7 +1346,7 @@ fn translated_problems(row: &serde_yaml::Value) -> Vec<String> {
             problems.push(format!("`translated.{lang}` must be a mapping of the words written in it"));
             continue;
         };
-        for key in ["desc", "label"] {
+        for key in ["desc", "about", "label"] {
             if words.get(key).is_some_and(|v| v.as_str().is_none()) {
                 problems.push(format!("`translated.{lang}.{key}` must be a string"));
             }
@@ -1339,8 +1356,17 @@ fn translated_problems(row: &serde_yaml::Value) -> Vec<String> {
                 "`translated.{lang}.label` names a `setting`, so one has to be declared"
             ));
         }
-        if words.get("desc").is_none() && words.get("label").is_none() {
-            problems.push(format!("`translated.{lang}` translates nothing — name a `desc`, a `label`, or both"));
+        // The same rule amenbo holds a real manifest to: there is nothing to translate where the
+        // author described the plugin in no language at all.
+        if words.get("about").is_some() && row.get("about").is_none() {
+            problems.push(format!(
+                "`translated.{lang}.about` translates an `about`, so one has to be written"
+            ));
+        }
+        if ["desc", "about", "label"].iter().all(|key| words.get(key).is_none()) {
+            problems.push(format!(
+                "`translated.{lang}` translates nothing — name a `desc`, an `about`, a `label`, or any of them"
+            ));
         }
     }
     problems
@@ -2228,7 +2254,17 @@ steps_cli:
         let errs = stand("        - { name: standup, desc: d, translated: { de: { desc: 12 } } }").unwrap_err();
         assert!(errs.iter().any(|e| e.message.contains("`translated.de.desc` must be a string")), "{errs:?}");
 
-        // A language that translates neither word is a document published with nothing in it.
+        // And the text an opened panel is read by, held the same way its line is — including to the
+        // base row, which is where amenbo's own manifest check holds it too.
+        let errs = stand("        - { name: standup, desc: d, about: 12 }").unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("`about` must be a string")), "{errs:?}");
+
+        let errs = stand("        - { name: standup, desc: d, translated: { de: { about: Beschreibung } } }").unwrap_err();
+        assert!(errs.iter().any(|e| e.message.contains("`translated.de.about` translates an `about`")), "{errs:?}");
+
+        assert!(stand("        - { name: standup, desc: d, about: What it does, translated: { de: { about: Was es tut } } }").is_ok());
+
+        // A language that translates none of the words is a document published with nothing in it.
         let errs = stand("        - { name: standup, desc: d, translated: { de: {} } }").unwrap_err();
         assert!(errs.iter().any(|e| e.message.contains("`translated.de` translates nothing")), "{errs:?}");
 

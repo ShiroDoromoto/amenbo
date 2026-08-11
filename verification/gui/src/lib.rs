@@ -253,6 +253,12 @@ impl Instructor {
     /// `asks` is that pair's third: the words a settings form draws a field, or one of a choice's
     /// answers, under. Author's words again, read the same way and for the same reason.
     ///
+    /// `body` is the fourth, and the one read in both directions. What an opened panel is read by is
+    /// prose somebody wrote — the author's description, or the README off the repository — so a
+    /// reading can be held to it either way: found, for the one that should be standing there, and
+    /// not found, for the one that must not be standing beside it. It is the whole of what that step
+    /// can say, since the panel names neither of them.
+    ///
     /// `first-loop` too: what it expects is the command the handed-over request tells the reader's
     /// AI to run, which is the same words in any language the app is in. Its sibling `first-loop-order`
     /// names an order instead, and an order is not something a reading settles — which words are on a
@@ -353,6 +359,9 @@ impl Instructor {
             }
             (Domain::Plugin, "detail") => {
                 Some(Expectation { text: arg_str(with, "declares")?.to_string(), present: true })
+            }
+            (Domain::Plugin, "body") => {
+                Some(Expectation { text: arg_str(with, "text")?.to_string(), present: present(with) })
             }
             (Domain::Folder, "first-loop") => {
                 Some(Expectation { text: arg_str(with, "hands_over")?.to_string(), present: true })
@@ -800,6 +809,25 @@ impl Instructor {
                 req(with, "source")?,
                 req(with, "declares")?
             ),
+            // The prose that panel is read by, which is the author's description or the repository's
+            // README and never both. The words are quoted whole for the reason a row's line is: the
+            // panel says nowhere which of the two it drew, nor which language it drew it in, so the
+            // only thing that tells them apart is which sentence is standing there. An absence is
+            // written as a line of its own, since an eye sent to confirm one has to be told what it
+            // would have been looking at.
+            (Domain::Plugin, "body") => {
+                let name = req(with, "name")?;
+                let source = req(with, "source")?;
+                let text = req(with, "text")?;
+                match present(with) {
+                    true => format!(
+                        "Confirm the panel open under \"{name}\" — the row the catalog \"{source}\" served — is read by the words \"{text}\"."
+                    ),
+                    false => format!(
+                        "Confirm the panel open under \"{name}\" — the row the catalog \"{source}\" served — does not carry the words \"{text}\" anywhere in what it is read by."
+                    ),
+                }
+            }
             // The layer, read where a reader meets it: a sentence on the row, or no sentence at all. The
             // two states are written as lines of their own rather than as one with a `not` in it, because
             // what a build gets wrong here is drawing the sentence for everybody — and an eye sent to

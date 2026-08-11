@@ -322,6 +322,7 @@ mod tests {
         Manifest {
             name: name.to_string(),
             desc: "a test plugin".to_string(),
+            about: None,
             author: "amenbo".to_string(),
             repo: "ShiroDoromoto/amenbo".to_string(),
             os: vec![Os::Macos, Os::Linux, Os::Windows],

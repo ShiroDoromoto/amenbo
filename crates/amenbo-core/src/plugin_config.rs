@@ -618,6 +618,7 @@ mod tests {
         let manifest = crate::plugin_manifest::Manifest {
             name: name.to_string(),
             desc: "a test plugin".to_string(),
+            about: None,
             author: "amenbo".to_string(),
             repo: "ShiroDoromoto/amenbo".to_string(),
             os: vec![crate::plugin_manifest::Os::Macos, crate::plugin_manifest::Os::Linux, crate::plugin_manifest::Os::Windows],

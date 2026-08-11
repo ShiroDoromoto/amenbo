@@ -184,6 +184,7 @@ mod tests {
         Manifest {
             name: "slack".into(),
             desc: String::new(),
+            about: None,
             author: String::new(),
             repo: String::new(),
             os: vec![Os::Linux],

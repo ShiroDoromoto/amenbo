@@ -1141,6 +1141,7 @@ mod tests {
         Manifest {
             name: "worktree".into(),
             desc: "Isolate each task in its own git worktree".into(),
+            about: None,
             author: "amenbo".into(),
             repo: "ShiroDoromoto/amenbo-plugin-worktree".into(),
             os: vec![Os::Macos, Os::Linux],

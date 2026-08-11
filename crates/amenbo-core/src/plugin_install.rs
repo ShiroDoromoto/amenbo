@@ -533,6 +533,7 @@ mod tests {
         Manifest {
             name: name.to_string(),
             desc: "a test plugin".to_string(),
+            about: None,
             author: "amenbo".to_string(),
             repo: "ShiroDoromoto/amenbo".to_string(),
             os: vec![Os::Macos, Os::Linux, Os::Windows],
@@ -1015,5 +1016,39 @@ mod tests {
 
         assert!(sound_languages(&m, published).is_empty());
         assert!(validate_manifest(&m).is_empty(), "and the manifest itself was never in question");
+    }
+
+    /// **What the install leaves behind carries the author's own words, in every language**
+    /// (`AMB-D-638`, `AMB-D-640`) — the base text inside `manifest.json`, the translations beside it in
+    /// `i18n.json`, written by the same two calls an install ends with and in the same order.
+    ///
+    /// The detail view is drawn from what is on disk, with no network and no catalog, and it follows a
+    /// reader who changes language without going back for anything. A text that did not land here is
+    /// one nobody ever reads.
+    #[test]
+    fn the_install_leaves_the_description_text_behind_in_every_language() {
+        let paths = paths_at("about");
+        let m = Manifest {
+            about: Some("Cuts a worktree per task, and folds it once the work is merged.".into()),
+            ..manifest("worktree")
+        };
+        let published = Translations::from([(
+            "ja".to_string(),
+            crate::plugin_manifest::ManifestOverlay {
+                about: Some("タスクごとに worktree を切り、マージが済んだら畳む。".into()),
+                ..Default::default()
+            },
+        )]);
+
+        plugin_installed::record_translations(&paths, &m.name, &published).unwrap();
+        place(&paths, &m, b"#!/bin/sh\n").unwrap();
+
+        let kept = plugin_installed::read(&paths, "worktree").unwrap();
+        assert_eq!(kept.manifest.about, m.about, "the base text is inside the manifest kept on disk");
+        assert_eq!(
+            plugin_installed::translations(&paths, "worktree")["ja"].about.as_deref(),
+            Some("タスクごとに worktree を切り、マージが済んだら畳む。"),
+            "and every language the catalog published is beside it",
+        );
     }
 }

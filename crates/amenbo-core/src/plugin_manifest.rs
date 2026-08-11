@@ -402,6 +402,20 @@ pub struct Manifest {
     pub name: String,
     /// A one-line description, for the list view.
     pub desc: String,
+    /// **What the plugin is, in the author's own words** (`AMB-D-638`) — the Markdown a detail view
+    /// draws, where `desc`'s one line only says which plugin this is. Absent means the author wrote
+    /// none, and the detail view falls back to the repository's README as it always did.
+    ///
+    /// It is written beside the manifest in the catalog rather than fetched from the plugin's own
+    /// repository (`AMB-D-639`): the language-by-language files, the PR check and the delivery are all
+    /// already on the catalog road, and GitHub has no language negotiation to fetch a `README.<lang>.md`
+    /// over. It rides in the detail document with every language at once (`AMB-D-640`), never in the
+    /// list, so a browse view pays for none of it.
+    ///
+    /// Its length bound and the rule that its links resolve without a base — 2KB per language, absolute
+    /// URLs only (`AMB-D-640`) — are the validator's, like every other rule (`AMB-T-2984`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub about: Option<String>,
     /// Who wrote the plugin. For an official plugin this is the amenbo team; it is display text, not the
     /// authority on the official badge (that is `official`, set by the catalog).
     pub author: String,
@@ -815,9 +829,10 @@ pub type Translations = BTreeMap<String, ManifestOverlay>;
 /// **The translated layer of one manifest, in one language** (`AMB-D-621`).
 ///
 /// It mirrors the manifest's shape and carries only the fields a person reads on a GUI face
-/// (`AMB-D-620`): the one-line `desc`, and the labels of the configuration form. Everything else — the
-/// author's name, the category vocabulary, what the plugin says at the AI's entry point — stays the one
-/// language it was written in, so there is no key here to write it in another.
+/// (`AMB-D-620`, `AMB-D-638`): the one-line `desc`, the description text a detail view draws, and the
+/// labels of the configuration form. Everything else — the author's name, the category vocabulary, what
+/// the plugin says at the AI's entry point — stays the one language it was written in, so there is no
+/// key here to write it in another.
 ///
 /// **Every field is optional**, because a translation is a layer and not a replacement: what an author
 /// did not translate is not missing, it is the base value (`AMB-D-623`), and amenbo never fills a gap on
@@ -834,6 +849,10 @@ pub struct ManifestOverlay {
     /// The one-line description, in this language. Absent means the base line is what a reader sees.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub desc: Option<String>,
+    /// The description text a detail view draws, in this language (`AMB-D-638`). Absent means the base
+    /// text is what a reader sees — the same field-by-field fallback the rest of the overlay takes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub about: Option<String>,
     /// The configuration form's labels, in this language — **keyed by the field's
     /// [`key`](ConfigField::key)**, where the manifest declares an ordered list (`AMB-D-621`). A
     /// translation carries no order of its own, so pairing the two by position would mean an author

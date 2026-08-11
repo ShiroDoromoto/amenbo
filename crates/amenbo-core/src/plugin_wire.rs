@@ -139,13 +139,22 @@ pub struct Detail {
     /// on a fetch that only draws names.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent: Option<AgentGuide>,
-    /// **What this plugin's form says in every language its author wrote** (`AMB-D-622`), keyed by
-    /// language code — the detail half of the translations, which is the configuration labels.
+    /// What the plugin is, in the author's own words (`AMB-D-638`) — the Markdown a detail view draws.
+    ///
+    /// It rides here rather than in the list for the reason everything else here does: it is read on
+    /// the one plugin someone opened, while a browse view draws `desc`. Charging every reader for every
+    /// plugin's paragraphs on the fetch that only draws names is what `AMB-D-385` split the two
+    /// documents to avoid.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub about: Option<String>,
+    /// **What this plugin says in every language its author wrote** (`AMB-D-622`), keyed by language
+    /// code — the detail half of the translations, which is the description text and the configuration
+    /// labels.
     ///
     /// All of them ride here rather than one per document because this document is fetched for one
-    /// plugin at a time and then kept beside the binary: a settings form opened offline, or read after
-    /// the user changed language, has the labels already. Absent means the author wrote none, which is
-    /// what a manifest with no overlay beside it splits into.
+    /// plugin at a time and then kept beside the binary: a settings form opened offline, or a detail
+    /// view read after the user changed language, has the words already. Absent means the author wrote
+    /// none, which is what a manifest with no overlay beside it splits into.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub i18n: BTreeMap<String, DetailOverlay>,
 }
@@ -164,10 +173,14 @@ pub struct ListEntryOverlay {
     pub desc: Option<String>,
 }
 
-/// **The detail half of one language's overlay** — what a settings form reads, translated
-/// (`AMB-D-622`). It rides inside [`Detail::i18n`], one entry per language.
+/// **The detail half of one language's overlay** — what a detail view and a settings form read,
+/// translated (`AMB-D-622`). It rides inside [`Detail::i18n`], one entry per language.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DetailOverlay {
+    /// The description text in this language (`AMB-D-638`). Optional for the same reason the line is:
+    /// what is not translated falls back to the base text (`AMB-D-623`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub about: Option<String>,
     /// The configuration form's labels in this language, keyed by field key as the author wrote them
     /// (`AMB-D-621`).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -220,10 +233,13 @@ pub fn split(
         config: manifest.config.clone(),
         events: manifest.events.clone(),
         agent: manifest.agent.clone(),
+        about: manifest.about.clone(),
         i18n: translations
             .iter()
-            .filter(|(_, o)| !o.config.is_empty())
-            .map(|(lang, o)| (lang.clone(), DetailOverlay { config: o.config.clone() }))
+            .filter(|(_, o)| o.about.is_some() || !o.config.is_empty())
+            .map(|(lang, o)| {
+                (lang.clone(), DetailOverlay { about: o.about.clone(), config: o.config.clone() })
+            })
             .collect(),
     };
     let entries = translations
@@ -264,11 +280,14 @@ pub fn join(
         translations.entry(lang.clone()).or_default().desc = o.desc.clone();
     }
     for (lang, o) in &detail.i18n {
-        translations.entry(lang.clone()).or_default().config = o.config.clone();
+        let overlay = translations.entry(lang.clone()).or_default();
+        overlay.about = o.about.clone();
+        overlay.config = o.config.clone();
     }
     let manifest = Manifest {
         name: entry.name.clone(),
         desc: entry.desc.clone(),
+        about: detail.about.clone(),
         author: entry.author.clone(),
         repo: entry.repo.clone(),
         os: entry.os.clone(),
@@ -301,6 +320,7 @@ mod tests {
         serde_json::from_value(serde_json::json!({
             "name": "worktree",
             "desc": "Isolate each task in its own git worktree",
+            "about": "Cuts a worktree per task, and folds it once the work is merged.",
             "author": "amenbo",
             "repo": "alice/amenbo-plugin-worktree",
             "os": ["macos", "linux"],
@@ -330,12 +350,13 @@ mod tests {
     }
 
     /// What that manifest's author wrote it as elsewhere, exercising both faces at once: a language that
-    /// translates the line a browse view draws, and the labels a settings form shows.
+    /// translates the line a browse view draws, and the text and labels a detail view shows.
     fn translated() -> Translations {
         Translations::from([(
             "ja".to_string(),
             ManifestOverlay {
                 desc: Some("タスクごとに git worktree を切り分ける".into()),
+                about: Some("タスクごとに worktree を切り、マージが済んだら畳む。".into()),
                 config: BTreeMap::from([(
                     "base".to_string(),
                     ConfigFieldOverlay {
@@ -454,6 +475,11 @@ mod tests {
         );
 
         assert_eq!(detail.name, "worktree", "the join back to the entry that named it");
+        assert_eq!(
+            detail.about.as_deref(),
+            Some("Cuts a worktree per task, and folds it once the work is merged."),
+            "the author's own words are read on the one plugin someone opened, not while browsing",
+        );
         assert_eq!(detail.checksum, "sha256:".to_string() + &"0".repeat(64));
         assert!(detail.signature.is_some());
         assert_eq!(detail.assets.len(), 1);
@@ -491,7 +517,7 @@ mod tests {
     /// not fetched: an overlay is optional field by field, so an untranslated line and an unfetched one
     /// look the same and both fall back to the base (`AMB-D-623`).
     #[test]
-    fn a_language_nobody_fetched_the_list_half_of_still_carries_its_form_labels() {
+    fn a_language_nobody_fetched_the_list_half_of_still_carries_what_the_detail_held() {
         let (entry, _, detail) = split(&full(), &translated());
 
         let (_, translations) = join(&entry, &BTreeMap::new(), &detail);
@@ -499,9 +525,14 @@ mod tests {
         let ja = &translations["ja"];
         assert_eq!(ja.desc, None, "the list document for ja was never fetched, so its line is the base's");
         assert_eq!(
+            ja.about.as_deref(),
+            Some("タスクごとに worktree を切り、マージが済んだら畳む。"),
+            "the description text rode in the detail, which an install always has",
+        );
+        assert_eq!(
             ja.config["base"].label.as_deref(),
             Some("基点にするブランチ"),
-            "the form labels rode in the detail, which an install always has",
+            "and the form labels rode there with it",
         );
     }
 
@@ -571,7 +602,7 @@ mod tests {
 
         assert!(entries.is_empty(), "nobody translated it, so there is no language document to publish");
         let detail_json = serde_json::to_value(&detail).unwrap();
-        for absent in ["signature", "assets", "min_amenbo", "config", "events", "agent", "i18n"] {
+        for absent in ["signature", "assets", "min_amenbo", "config", "events", "agent", "about", "i18n"] {
             assert!(detail_json.get(absent).is_none(), "{absent} was not written, so it is not emitted");
         }
         assert_eq!(detail_json["scope"], "project", "the default the author relied on is still stated");
@@ -599,9 +630,10 @@ mod tests {
     }
 
     /// **A language is published on a face only when it has something to say there** (`AMB-D-622`). An
-    /// author who translated the one line a browse view draws and left the settings form alone gets a
+    /// author who translated the one line a browse view draws and left the detail alone gets a
     /// `catalog.<lang>.json` entry and no detail entry, and one who did the reverse gets the reverse —
-    /// so no reader fetches a document that turns out to hold an empty object.
+    /// so no reader fetches a document that turns out to hold an empty object. The detail face has two
+    /// translatable fields, and either one alone is something to say there.
     #[test]
     fn a_language_reaches_only_the_faces_it_translates() {
         let translations = Translations::from([
@@ -622,11 +654,19 @@ mod tests {
                     ..ManifestOverlay::default()
                 },
             ),
+            (
+                "fr".to_string(),
+                ManifestOverlay { about: Some("Quelques mots.".into()), ..ManifestOverlay::default() },
+            ),
         ]);
 
         let (_, entries, detail) = split(&full(), &translations);
 
         assert_eq!(entries.keys().collect::<Vec<_>>(), ["ja"], "only ja translated the line");
-        assert_eq!(detail.i18n.keys().collect::<Vec<_>>(), ["de"], "only de translated the form");
+        assert_eq!(
+            detail.i18n.keys().collect::<Vec<_>>(),
+            ["de", "fr"],
+            "de translated the form and fr the text — each is the detail face on its own",
+        );
     }
 }

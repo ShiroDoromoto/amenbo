@@ -499,6 +499,49 @@ mod tests {
         assert_eq!(second.stars, Some(12), "answered off the disk, with no request of its own");
     }
 
+    /// A reader that draws no README is answered by the copy **another one of its kind** left, rather
+    /// than going back for the two figures already on the disk. That copy records that nobody asked about
+    /// the README, and a caller that would not draw one is not who that record is kept for: paying a
+    /// request for it on every open is exactly the cost `AMB-D-638` took the question away to avoid.
+    #[test]
+    fn a_cache_written_with_the_readme_skipped_answers_the_next_reader_that_skips_it() {
+        let paths = paths_at("skip-then-skip");
+        let host = amenbo_static_host::StaticHost::serve([(
+            "/repos/owner/name",
+            r#"{"stargazers_count": 12}"#,
+        )]);
+
+        let first = facts_at(&paths, &host.url(""), "owner/name", FRESH_FOR, Readme::Skip).unwrap();
+        assert_eq!(first.stars, Some(12), "fetched, and cached with the question never put");
+
+        // What the host serves moves on. Inside the window the cache answers, so the new figure is the
+        // one thing a second request would bring back — and what comes back is the old one.
+        host.set("/repos/owner/name", r#"{"stargazers_count": 99}"#);
+        let again = facts_at(&paths, &host.url(""), "owner/name", FRESH_FOR, Readme::Skip).unwrap();
+        assert_eq!(again.stars, Some(12), "answered off the disk, with no request of its own");
+    }
+
+    /// The stale copy that stands in for a failed fetch is cut to what was asked for, exactly as a fresh
+    /// one is: **what is not asked for is absent from the answer however it was reached**. A caller that
+    /// declared it draws no README has nowhere to put one, whichever road the figures came down.
+    #[test]
+    fn a_stale_cache_standing_in_is_still_cut_to_what_was_asked_for() {
+        let paths = paths_at("skip-stale");
+        let file = cache_file(&paths, "owner/name");
+        let on_disk = RepoFacts {
+            stars: Some(3),
+            readme: Some("# from a reader that draws one".to_string()),
+            ..RepoFacts::default()
+        };
+        write_cache(&file, &asked_for(&on_disk)).unwrap();
+
+        // Past the window, and nothing answers: the copy on disk is all there is to answer with.
+        let got = facts_at(&paths, UNREACHABLE, "owner/name", Duration::ZERO, Readme::Skip).unwrap();
+        assert_eq!(got.stars, Some(3), "the stale copy answered");
+        assert!(got.readme.is_none(), "and not with a README the caller would draw nowhere");
+        assert_eq!(cached(&file).unwrap(), asked_for(&on_disk), "still there for one that would");
+    }
+
     /// The cache is a shared thing — one file per repository, whoever wrote it — so a run that did not
     /// ask about the README neither hands one out nor throws the cached one away.
     #[test]

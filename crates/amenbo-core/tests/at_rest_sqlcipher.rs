@@ -39,6 +39,7 @@ fn new_task(title: &str) -> NewTask {
         priority: None,
         notes: String::new(),
         created_by_kind: None,
+        at_binding_id: None,
     }
 }
 

@@ -451,6 +451,32 @@ impl Store {
         self.write_one(&[WriteTarget::Task(id)], |tx| crate::ops::task::update(tx, id, patch))
     }
 
+    /// Take the folder off every task of `project_id` whose folder **is not bound any more**
+    /// (`AMB-D-648`) — what an `unbind` leaves behind. Returns how many tasks lost their place.
+    ///
+    /// One task at a time, through the ordinary update, so each is a write anything watching the store
+    /// learns about: the place is a task's own field, and a bulk `UPDATE` behind the ops layer would move
+    /// it where the change feed and the plugins could not see it.
+    ///
+    /// **Called where a folder is unbound, and nowhere else.** A project *deleted* takes its tasks with it,
+    /// so there is nothing left there to clear; and a task that had already moved to another project is not
+    /// this project's to write — the read is what stops such a task from pointing outside
+    /// ([`crate::store_engine::read::tasks_with_a_gone_folder`] says why).
+    pub fn forget_gone_task_folders(&mut self, project_id: i64) -> Result<usize> {
+        let stale =
+            crate::store_engine::read::tasks_with_a_gone_folder(self.engine.conn(), project_id)?;
+        for id in &stale {
+            self.write_one(&[WriteTarget::Task(*id)], |tx| {
+                crate::ops::task::update(
+                    tx,
+                    *id,
+                    crate::ops::task::TaskPatch { clear_at: true, ..Default::default() },
+                )
+            })?;
+        }
+        Ok(stale.len())
+    }
+
     /// Assign or unassign a task's assignee (one operation = one transaction). `actor` is who performed
     /// the assignment (the process facet), stamped onto the `task.assigned` observation event; the
     /// assignee that lands is `kind`, a separate thing.

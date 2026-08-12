@@ -2853,6 +2853,35 @@ fn placement_of(conn: &Connection, task_id: i64) -> Result<Option<PlacementRow>>
     Ok(rows.into_iter().next())
 }
 
+/// The tasks of one project that name a **folder that is not there any more** (`AMB-D-648`): their
+/// `at_binding_id` answers to no binding row at all, which is what unbinding the folder leaves behind.
+/// Ascending, and empty when every named folder still exists.
+///
+/// The question is deliberately about the row's *existence* and not about which project owns it. A task
+/// whose folder was unbound has a place that cannot come back — the id is retired, so re-binding the same
+/// path issues a new one — and clearing it is honest. A task whose id belongs to another project's folder
+/// (a `task move` left it behind) is a different case: nothing was destroyed, so the read reports the task
+/// as naming no folder ([`crate::query::task_detail`]) and the column is left alone.
+pub fn tasks_with_a_gone_folder(conn: &Connection, project_id: i64) -> Result<Vec<i64>> {
+    const T: col::task::Cols = col::task::of("t");
+    const B: col::binding_project_dir::Cols = col::binding_project_dir::of("b");
+    let mut sel = Select::new();
+    let id = sel.col(T.id);
+    let still_bound = Exists::over(B.table).filter(same(B.id, T.at_binding_id)).pred();
+    let pred = Pred::eq(T.project_id, project_id)
+        .and(Pred::is_not_null(T.at_binding_id))
+        .and(!still_bound);
+    let mut sql = Sql::from(&sel, T.table);
+    sql.push_where(Some(&pred)).order_by([Sort::by(T.id)]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| id.get(r))
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<i64>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(rows)
+}
+
 /// Open blockers: live dependency → a blocker that has not ended, in dependency-`id` order, with title. `ready` is
 /// this being empty (and no unsettled premise) — the same predicate the `ready:` filter applies.
 fn open_blockers(conn: &Connection, task_id: i64) -> Result<Vec<(i64, String)>> {
@@ -3051,6 +3080,10 @@ pub struct TaskDetailRow {
     /// Whether the creation is still unfinished — the fourth premise of `ready` (`AMB-D-553`), read
     /// straight off the row like `status`.
     pub draft: bool,
+    /// The binding row this task names as the folder it is worked in (`AMB-D-648`), read straight off the
+    /// row. It is an id and nothing more here — which folder it answers to is the query layer's to resolve
+    /// (`crate::query::task_detail`), against the folders the task's own project offers.
+    pub at_binding_id: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
     pub placement: Option<PlacementRow>,
@@ -3073,7 +3106,7 @@ pub fn task_detail(conn: &Connection, task_id: i64) -> Result<Option<TaskDetailR
     let (subtype, status, completed_at) = (sel.col(T.subtype), sel.col(T.status), sel.col(T.completed_at));
     let (created_by_kind, assignee_kind) = (sel.col(T.created_by_kind), sel.col(T.assignee_kind));
     let (start_on, due_on, priority) = (sel.col(T.start_on), sel.col(T.due_on), sel.col(T.priority));
-    let draft = sel.col(T.draft);
+    let (draft, at_binding_id) = (sel.col(T.draft), sel.col(T.at_binding_id));
     let (created_at, updated_at) = (sel.col(T.created_at), sel.col(T.updated_at));
     let mut sql = Sql::from(&sel, T.table);
     sql.push_where(Some(&Pred::eq(T.id, task_id)));
@@ -3092,6 +3125,7 @@ pub fn task_detail(conn: &Connection, task_id: i64) -> Result<Option<TaskDetailR
                 due_on: due_on.get(r)?,
                 priority: priority.get(r)?,
                 draft: draft.get(r)?,
+                at_binding_id: at_binding_id.get(r)?,
                 created_at: created_at.get(r)?,
                 updated_at: updated_at.get(r)?,
                 placement: None,

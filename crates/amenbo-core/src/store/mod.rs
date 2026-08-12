@@ -171,8 +171,16 @@ impl Store {
         crate::overview::load_bindings(self.engine.conn())
     }
 
-    /// Write the folder-binding registry back atomically (a full rewrite of the index in a single
-    /// transaction), so a whole-file rewrite can never tear.
+    /// The folders bound to one project, each with the id that names it
+    /// ([`crate::overview::bound_folders`]) — the shape for pointing at **one** folder, where
+    /// [`Self::bindings`] answers which folders a project has.
+    pub fn bound_folders(&self, project_id: i64) -> Vec<crate::overview::BoundFolder> {
+        crate::overview::bound_folders(self.engine.conn(), project_id)
+    }
+
+    /// Write the folder-binding registry back in a single transaction, so a save can never tear: the
+    /// pairs the registry has dropped go, the pairs it has gained arrive, and a folder that is still
+    /// bound keeps the row — and the id — it already had ([`crate::overview::write_bindings`]).
     pub fn save_bindings(&self, reg: &crate::binding::Registry) -> Result<()> {
         let tx = self.engine.transaction()?;
         crate::overview::write_bindings(&tx, reg)?;

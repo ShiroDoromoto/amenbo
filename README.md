@@ -312,6 +312,10 @@ amenbo task add --title "Pick colors" --project "Website refresh"
 amenbo task finish-creating <n>            # each one, once it is written (<n> is what add handed back)
 # Every id is the number amenbo shows you: task AMB-T-<n> is `<n>`, decision AMB-D-<n> is `<n>`
 amenbo task depend <n> --on <m>            # <n> waits on <m> (dependency, not a subtask)
+# A project may have several folders linked to it. Say which one a task is worked in
+# (`--at` on add or update, `--clear-at` to take it back) — only what you name lands,
+# and it refuses nothing: nothing is stopped for being worked somewhere else
+amenbo task add --title "Fix the mail face" --project "Website refresh" --at website-mailer
 amenbo task done <n>
 # A task ends one of two ways. Work you decided against ends here, not at `done`
 # (a history that claims what never happened) or `delete` (the reasoning gone with

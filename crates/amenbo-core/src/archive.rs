@@ -1210,6 +1210,7 @@ mod tests {
                 priority: None,
                 notes: String::new(),
                 created_by_kind: None,
+                at_binding_id: None,
             })
             .unwrap();
         }

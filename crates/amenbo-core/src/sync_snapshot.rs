@@ -461,6 +461,7 @@ mod tests {
                 priority: None,
                 notes: String::new(),
                 created_by_kind: None,
+                at_binding_id: None,
             })
             .unwrap();
         let c = s.add_task_comment(t.id, ActorKind::Ai, &format!("on {title}")).unwrap();

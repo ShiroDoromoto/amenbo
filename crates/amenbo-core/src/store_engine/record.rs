@@ -147,6 +147,7 @@ pub fn task(t: &Task) -> Record {
                 ("priority", t.priority.map(|p| tv(p.as_str())).unwrap_or(Value::Null)),
                 ("project_id", kv_opt(&t.project_id)),
                 ("order_key", ov(&t.order_key)),
+                ("at_binding_id", kv_opt(&t.at_binding_id)),
             ],
             &t.created_at,
             &t.updated_at,

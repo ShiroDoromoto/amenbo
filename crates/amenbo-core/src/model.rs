@@ -305,6 +305,13 @@ pub struct Task {
     /// Where it sits within its project. `None` when unfiled — the inbox has no ordering.
     #[serde(default)]
     pub order_key: Option<String>,
+    /// Which of the project's bound folders this task is worked in (`AMB-D-648`), as the id of the
+    /// binding row — never a path, so the folder can be moved or renamed under it. `None` is a task that
+    /// names no folder, which is every task unless someone said otherwise: nothing infers a place from
+    /// where the task was filed. Having one refuses nothing on its own — no reservation and no worktree
+    /// is stopped for it here; it is expressiveness the surfaces around amenbo may act on.
+    #[serde(default)]
+    pub at_binding_id: Option<i64>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

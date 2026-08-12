@@ -188,6 +188,15 @@ pub struct PlacementView {
     pub order_key: String,
 }
 
+/// The bound folder a task is worked in (`AMB-D-648`): the binding row's id, and the path it records.
+/// Both, because the two answer different readers — a person reads the path, and whatever re-points or
+/// re-reads the folder later needs the id, the path being the half that changes.
+#[derive(Clone, Debug, Serialize)]
+pub struct FolderView {
+    pub binding_id: i64,
+    pub dir: String,
+}
+
 /// One axis a task is classified on, and the value it holds there (`AMB-D-101`) — both by name, because
 /// this is what a reader is shown. There is nothing else to carry: an axis is single-select, so one axis
 /// is one value.
@@ -221,6 +230,11 @@ pub struct TaskDetail {
     pub r#ref: String,
     /// Where the task sits; absent when it is unplaced (inbox).
     pub placement: Option<PlacementView>,
+    /// The bound folder this task is worked in (`AMB-D-648`), or `null` for a task that names none —
+    /// which is every task unless somebody said so. It is resolved against the folders the task's **own
+    /// project** offers, so a task carrying an id that project no longer has (its folder unbound, or the
+    /// task moved to another project) reads as naming no folder rather than pointing outside.
+    pub at: Option<FolderView>,
     /// What the task is classified as, axis by axis (`AMB-D-101`) — the words, not the ids, since this is
     /// the shape a face shows. An axis the task holds no value on is not in the list, so an empty one
     /// means unclassified rather than "no axes exist".

@@ -53,6 +53,7 @@ fn build() -> (Store, i64, i64, i64) {
         priority: None,
         notes: String::new(),
         created_by_kind: Some(ActorKind::Ai),
+        at_binding_id: None,
     })
     .unwrap()
     .id;

@@ -43,6 +43,7 @@ fn fresh_store_reads_as_content_empty_then_not_after_a_task() {
                 priority: Some(Priority::High),
                 notes: String::new(),
                 created_by_kind: None,
+                at_binding_id: None,
             })
             .unwrap();
     }

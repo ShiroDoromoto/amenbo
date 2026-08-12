@@ -1110,6 +1110,12 @@ pub enum TaskCmd {
         /// so naming one twice is refused. What you name here wins over the time-axis default.
         #[arg(long = "dim", value_name = "AXIS=VALUE")]
         dim: Vec<String>,
+        /// the bound folder this task is to be worked in — one of the project's own linked folders,
+        /// named by its path or just its folder name (`--at amenbo-plugin-mail`). Only what you name
+        /// here lands: the folder the create was typed in is never taken as the default. Having one
+        /// refuses nothing — no reservation and no worktree is stopped for it
+        #[arg(long, value_name = "FOLDER")]
+        at: Option<String>,
     },
     /// Finish creating a task — the second stage of every create. `task add` leaves the task still
     /// being created: it is on the board and in every listing, but held out of the mailbox and refused
@@ -1157,6 +1163,13 @@ pub enum TaskCmd {
         clear_start: bool,
         #[arg(long)]
         clear_priority: bool,
+        /// the bound folder this task is to be worked in — one of the project's own linked folders,
+        /// named by its path or just its folder name (`--at amenbo-plugin-mail`)
+        #[arg(long, value_name = "FOLDER")]
+        at: Option<String>,
+        /// forget the folder this task named (it goes back to naming none)
+        #[arg(long)]
+        clear_at: bool,
     },
     /// Mark a task done
     Done { id: String },

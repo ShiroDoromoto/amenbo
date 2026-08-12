@@ -1166,3 +1166,65 @@ fn the_unassigned_hint_stays_quiet_where_it_would_be_noise() {
     let fresh = cli.json(&["task", "add", "--title", "書きかけ", "--actor", "ai", "--json"]);
     assert!(fresh["task"]["hint"].is_null(), "a creation still open is not yet unassigned: {fresh}");
 }
+
+/// A task can say **which of its project's linked folders it is worked in** (`AMB-D-648`). The road is
+/// `--at`, and what it takes is a folder that project has: named by its own name, since that is how the
+/// folders of one project usually differ. Only what is named lands — the folder the create was typed in is
+/// never taken as a default — and the place is read back as the path, with the binding's id beside it for
+/// whatever re-points or re-reads the folder later.
+///
+/// The two ways a place ends are here too: taken off by hand (`--clear-at`), and taken away by the folder
+/// being unbound, which is the one nobody asks for.
+#[test]
+fn a_task_names_one_of_its_projects_linked_folders() {
+    let cli = Cli::new();
+    // Bindings are many-to-one, so the project gets a second folder beside the one it was raised with —
+    // which is what makes naming one of them a question at all.
+    let second = amenbo_scratch::scratch("task-at-folder");
+    std::fs::create_dir_all(&second).unwrap();
+    let second_path = second.to_string_lossy().to_string();
+    let second_name = second.file_name().unwrap().to_string_lossy().to_string();
+    let p = cli.json(&["project", "add", "--name", "場所を持つPJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+    cli.json(&["bind", "--project", &pid, "--dir", &second_path, "--json"]);
+
+    // Named by the folder's own name, at the create.
+    let t = cli.json(&[
+        "task", "add", "--title", "メールの面を直す", "--project", &pid, "--at", &second_name, "--json",
+    ]);
+    let tid = id_str(&t["task"]["id"]);
+    let at = &t["task"]["at"];
+    assert!(
+        at["dir"].as_str().unwrap().ends_with(&second_name),
+        "the place read back is the folder's path: {at}"
+    );
+    assert!(at["binding_id"].as_i64().unwrap() > 0, "with the binding's id beside it: {at}");
+
+    // A task that names none says nothing about a folder — the create's own folder is not a default.
+    let plain = cli.json(&["task", "add", "--title", "場所なし", "--project", &pid, "--json"]);
+    assert!(plain["task"]["at"].is_null(), "a place is stated or it is absent");
+
+    // The text page prints the path, and only when there is one.
+    let (shown, code) = cli.run(&["task", "show", &tid]);
+    assert_eq!(code, 0);
+    assert!(shown.contains(&format!("folder: {}", at["dir"].as_str().unwrap())), "{shown}");
+    let (bare, _) = cli.run(&["task", "show", &id_str(&plain["task"]["id"])]);
+    assert!(!bare.contains("folder:"), "no folder, no line: {bare}");
+
+    // A folder the project does not have is refused, with the folders it does have named.
+    let (err, code) = cli.run_err(&["task", "update", &tid, "--at", "どこでもない", "--json"]);
+    assert_ne!(code, 0);
+    assert!(err.contains("どこでもない") && err.contains(&second_name), "{err}");
+
+    // Taken off by hand.
+    let cleared = cli.json(&["task", "update", &tid, "--clear-at", "--json"]);
+    assert!(cleared["task"]["at"].is_null());
+    assert!(cleared["changed"].as_array().unwrap().iter().any(|c| c == "at_binding_id"));
+
+    // Taken away: the folder is unbound, so no task can be worked in it any more.
+    let again = cli.json(&["task", "update", &tid, "--at", &second_path, "--json"]);
+    assert!(!again["task"]["at"].is_null(), "the path spelling works as well as the name");
+    cli.json(&["unbind", "--dir", &second_path, "--yes", "--json"]);
+    let after = cli.json(&["task", "show", &tid, "--json"]);
+    assert!(after["at"].is_null(), "an unbound folder is nobody's place: {}", after["at"]);
+}

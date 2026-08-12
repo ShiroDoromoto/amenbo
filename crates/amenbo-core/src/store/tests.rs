@@ -38,6 +38,7 @@ fn hydrated(s: &Store) -> Database {
                 priority: None,
                 notes: String::new(),
                 created_by_kind: None,
+                at_binding_id: None,
             },
         );
 
@@ -63,6 +64,7 @@ fn hydrated(s: &Store) -> Database {
                 priority: None,
                 notes: "n".to_string(),
                 created_by_kind: None,
+                at_binding_id: None,
             })
             .unwrap();
             s.add_task_comment(t.id, crate::model::ActorKind::Human, "hi").unwrap();
@@ -100,6 +102,7 @@ fn hydrated(s: &Store) -> Database {
                 priority: None,
                 notes: String::new(),
                 created_by_kind: None,
+                at_binding_id: None,
             })
             .unwrap();
             t.id
@@ -135,6 +138,7 @@ fn hydrated(s: &Store) -> Database {
                     priority,
                     notes: String::new(),
                     created_by_kind: None,
+                    at_binding_id: None,
                 })
                 .unwrap()
                 .id
@@ -199,6 +203,7 @@ fn hydrated(s: &Store) -> Database {
             priority: Some(Priority::High),
             notes: String::new(),
             created_by_kind: None,
+            at_binding_id: None,
         });
         s.set_task_status(t.id, TaskStatus::InProgress, crate::model::ActorKind::Human).unwrap();
         s.add_task_comment(t.id, crate::model::ActorKind::Human, "コメント").unwrap();
@@ -249,6 +254,7 @@ fn hydrated(s: &Store) -> Database {
                     priority: None,
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Human),
+                    at_binding_id: None,
                 })
                 .unwrap();
             }
@@ -360,6 +366,7 @@ fn task(title: &str, project_id: Option<i64>) -> NewTask {
         priority: None,
         notes: String::new(),
         created_by_kind: None,
+        at_binding_id: None,
     }
 }
 
@@ -1168,6 +1175,79 @@ fn deleting_a_decision_names_it_in_the_decision_key() {
     assert_eq!(lines[0]["decision"].as_i64(), Some(d.id));
     assert_eq!(lines[0]["project"].as_i64(), Some(pid), "a decision belongs to a project (filtering works)");
     assert_eq!(lines[0]["task"], serde_json::Value::Null);
+
+    fs::remove_dir_all(&dir).ok();
+}
+
+// ───────────────────────── the folder a task is worked in ─────────────────────────
+
+/// A task carries the bound folder it is worked in as the **binding row's id** (`AMB-D-648`), and what a
+/// reader is shown is resolved against the folders that task's **own project** offers. Three answers come
+/// out of that one rule, and only the first is what the column literally says:
+///
+/// - the folder its project offers → the path, with the id beside it;
+/// - a folder that has been **unbound** → nothing, and the sweep an unbind runs clears the column;
+/// - a folder of **another project** (the task moved out from under it) → nothing, and the column is left
+///   alone, since nothing was destroyed and a move can be undone.
+#[test]
+fn a_tasks_folder_is_read_from_what_its_own_project_offers() {
+    let (mut s, dir) = fresh_store("task-folder");
+    let mine = s.project_add(project("こちら")).unwrap().id;
+    let theirs = s.project_add(project("あちら")).unwrap().id;
+
+    // Two folders, one bound to each project — written straight into the registry, which is what `bind`
+    // does with the folder it is standing in.
+    let mut reg = s.bindings();
+    reg.record_project_ref(mine, "/work/mine");
+    reg.record_project_ref(theirs, "/work/theirs");
+    s.save_bindings(&reg).unwrap();
+    let ours = s.bound_folders(mine);
+    let theirs_folder = s.bound_folders(theirs);
+    assert_eq!(ours.len(), 1, "each project offers the one folder bound to it");
+    assert_eq!(theirs_folder.len(), 1);
+
+    let t = filed(&mut s, NewTask { at_binding_id: Some(ours[0].id), ..task("移行を書く", Some(mine)) });
+    let at = s.task_detail(t.id).unwrap().at.expect("the folder its project offers is read back");
+    assert_eq!(at.dir, "/work/mine");
+    assert_eq!(at.binding_id, ours[0].id, "the id rides beside the path, for whatever re-points it");
+
+    // Another project's folder: the id is live, and still not this task's place.
+    s.update_task(
+        t.id,
+        crate::ops::task::TaskPatch {
+            at_binding_id: Some(theirs_folder[0].id),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert!(
+        s.task_detail(t.id).unwrap().at.is_none(),
+        "a folder its project does not offer is no place of this task's"
+    );
+    assert_eq!(
+        s.forget_gone_task_folders(mine).unwrap(),
+        0,
+        "and the column is left standing — the folder is still bound, just not here"
+    );
+
+    // Back to its own folder, and then that folder is unbound: the place is gone for good (the id is
+    // retired, so re-binding the same path would not bring it back), and the sweep says so on the row.
+    s.update_task(
+        t.id,
+        crate::ops::task::TaskPatch { at_binding_id: Some(ours[0].id), ..Default::default() },
+    )
+    .unwrap();
+    let mut reg = s.bindings();
+    assert!(reg.forget_project_ref(mine, "/work/mine"));
+    s.save_bindings(&reg).unwrap();
+    assert!(s.task_detail(t.id).unwrap().at.is_none(), "an unbound folder is nobody's place");
+    assert_eq!(s.forget_gone_task_folders(mine).unwrap(), 1, "and the task loses what it named");
+    assert_eq!(
+        crate::store_engine::read::task(s.engine.conn(), t.id).unwrap().unwrap().at_binding_id,
+        None,
+        "cleared on the row itself, not merely hidden by the read"
+    );
+    assert_eq!(s.forget_gone_task_folders(mine).unwrap(), 0, "nothing left to clear");
 
     fs::remove_dir_all(&dir).ok();
 }

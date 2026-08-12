@@ -1847,6 +1847,21 @@ pub fn task_detail(
         order_key: m.order_key,
     });
 
+    // The folder the task names, resolved against the folders its **own project** offers (`AMB-D-648`).
+    // Read this way rather than by fetching the binding row itself: the id is unconstrained (the bindings
+    // are device-local, so no `REFERENCES` holds it), and an id belonging to another project's folder —
+    // left behind by a `task move`, or arriving with a restore from another machine — would otherwise be
+    // rendered as this task's place, and shown to a reader closed to this project alone. What the project
+    // does not offer, the task does not name.
+    let at = row.at_binding_id.zip(placement.as_ref().map(|p| p.project.id)).and_then(
+        |(binding_id, project_id)| {
+            crate::overview::bound_folders(conn, project_id)
+                .into_iter()
+                .find(|f| f.id == binding_id)
+                .map(|f| crate::view::FolderView { binding_id: f.id, dir: f.dir })
+        },
+    );
+
     let blocked_by: Vec<crate::view::TaskRef> =
         row.blocked_by.into_iter().map(|(id, name)| crate::view::TaskRef { id, name }).collect();
     let blocked_by_decisions: Vec<DecisionRef> =
@@ -1889,6 +1904,7 @@ pub fn task_detail(
         due_on: parse_date(&row.due_on),
         priority: row.priority.as_deref().and_then(Priority::parse),
         placement,
+        at,
         dimensions,
         blocked_by,
         blocked_by_decisions,
@@ -2932,6 +2948,7 @@ mod filter_tests {
                 start_on: None,
                 priority: None,
                 created_by_kind: None,
+                at_binding_id: None,
             },
         )
         .expect("add task")
@@ -3013,6 +3030,7 @@ mod filter_tests {
                 start_on: None,
                 priority: Some(crate::model::Priority::High),
                 created_by_kind: None,
+                at_binding_id: None,
             },
         )
         .expect("add task")

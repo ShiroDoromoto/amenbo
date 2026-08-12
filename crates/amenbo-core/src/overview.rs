@@ -97,6 +97,36 @@ pub fn write_bindings(tx: &Transaction<'_>, reg: &Registry) -> Result<()> {
     Ok(())
 }
 
+/// One bound folder as something else can point at it: the binding row's `id` and the path it records
+/// (`AMB-D-648`). [`Registry`] is the shape for asking *which folders* a project has and stays free of
+/// ids; this is the shape for naming **one** of them — what a task carries, and what `bind --rebind`
+/// re-points.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BoundFolder {
+    /// The binding row's id — stable across a move or a rename of the folder, and retired when the
+    /// folder is unbound (the id is never handed to the next folder bound).
+    pub id: i64,
+    /// The path recorded for it, as it was canonicalised at bind time.
+    pub dir: String,
+}
+
+/// The folders bound to `project_id`, each with the id that names it, in path order (the set's own —
+/// there is no main folder to lead with, `AMB-D-531`). Empty when the project has none.
+pub fn bound_folders(conn: &Connection, project_id: i64) -> Vec<BoundFolder> {
+    let mut sel = Select::new();
+    let (id, dir) = (sel.col(BPD.id), sel.col(BPD.dir));
+    let mut sql = Sql::from(&sel, BPD.table);
+    sql.push_where(Some(&Pred::eq(BPD.project_id, project_id)));
+    sql.order_by([Sort::by(BPD.dir)]);
+    let Ok(mut stmt) = conn.prepare(sql.text()) else { return Vec::new() };
+    let Ok(rows) = stmt.query_map(rusqlite::params_from_iter(sql.params()), |r| {
+        Ok(BoundFolder { id: id.get(r)?, dir: dir.get(r)? })
+    }) else {
+        return Vec::new();
+    };
+    rows.flatten().collect()
+}
+
 /// Every binding row as `(id, (project_id, dir))` — what [`write_bindings`] compares the registry against.
 /// The pair is the row's identity (`UNIQUE (project_id, dir)`), so it is what says whether a row the
 /// registry holds is a row the store already has.

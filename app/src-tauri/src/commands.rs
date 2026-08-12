@@ -2237,6 +2237,7 @@ pub fn task_add(
             priority: None,
             notes: notes.unwrap_or_default(),
             created_by_kind: Some(ActorKind::Human),
+            at_binding_id: None,
         })?;
         emit(store, t.id, amenbo_core::activity_log::event::task_created(&t.title));
         Ok(t.id)
@@ -3362,8 +3363,11 @@ pub fn project_unbind_folder(dir: String) -> Result<WriteAck, CmdError> {
             .map_err(|e| CmdError::from(format!("cannot remove {}: {e}", marker.display())))?;
     }
     let _ = amenbo_core::agents::remove_from_dir(&target);
-    let store = open_store()?;
+    let mut store = open_store()?;
     let mut registry = store.bindings();
+    // Read before the forgetting: these are the projects that are about to lose the folder, and after it
+    // the registry can no longer say who held it.
+    let owners = registry.projects_for_dir(&dir);
     let mut forgot = registry.forget_dir(&dir);
     if let Ok(canon) = std::fs::canonicalize(&target) {
         let canon_str = canon.to_string_lossy().to_string();
@@ -3373,6 +3377,11 @@ pub fn project_unbind_folder(dir: String) -> Result<WriteAck, CmdError> {
     }
     if forgot > 0 {
         store.save_bindings(&registry)?;
+        // The folder is gone, so the tasks that named it lose their place (`AMB-D-648`) — the same move
+        // the CLI's `unbind` makes, and best-effort for the same reason.
+        for project_id in owners {
+            let _ = store.forget_gone_task_folders(project_id);
+        }
     }
     Ok(WriteAck::new(&[]))
 }
@@ -6790,6 +6799,7 @@ mod tests {
                     priority: None,
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Ai),
+                    at_binding_id: None,
                 })
                 .unwrap();
         }
@@ -6840,6 +6850,7 @@ mod tests {
                     priority: None,
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Ai),
+                    at_binding_id: None,
                 })
                 .unwrap();
         }
@@ -6862,6 +6873,7 @@ mod tests {
                 priority: None,
                 notes: String::new(),
                 created_by_kind: Some(ActorKind::Human),
+                at_binding_id: None,
             })
             .expect("a write still lands after the sidecars were cleared");
 
@@ -6976,6 +6988,7 @@ mod tests {
                     priority: None,
                     notes: notes.into(),
                     created_by_kind: Some(ActorKind::Ai),
+                    at_binding_id: None,
                 })
                 .unwrap()
                 .id
@@ -7032,6 +7045,7 @@ mod tests {
                     priority: None,
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Ai),
+                    at_binding_id: None,
                 })
                 .unwrap()
                 .id;
@@ -8383,6 +8397,7 @@ mod tests {
                     priority: None,
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Human),
+                    at_binding_id: None,
                 })
                 .unwrap();
                 if i == 4 {
@@ -8450,6 +8465,7 @@ mod tests {
                     priority: None,
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Human),
+                    at_binding_id: None,
                 })
                 .unwrap();
                 ids.push(t.id);
@@ -8490,6 +8506,7 @@ mod tests {
                     priority: None,
                     notes: String::new(),
                     created_by_kind: Some(ActorKind::Human),
+                    at_binding_id: None,
                 })
                 .unwrap()
                 .id
@@ -8687,6 +8704,7 @@ mod tests {
                         priority: Some(amenbo_core::model::Priority::High),
                         notes: "本文".into(),
                         created_by_kind: Some(ActorKind::Human),
+                        at_binding_id: None,
                     })
                     .unwrap()
                     .id;

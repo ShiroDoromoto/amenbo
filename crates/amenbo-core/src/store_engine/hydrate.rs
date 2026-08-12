@@ -157,6 +157,7 @@ pub(super) fn task_row(r: &Row) -> rusqlite::Result<Task> {
         priority: enum_opt(r, C.priority, Priority::parse)?,
         project_id: get(r, C.project_id)?,
         order_key: get(r, C.order_key)?,
+        at_binding_id: get(r, C.at_binding_id)?,
         created_at,
         updated_at,
     })
@@ -492,6 +493,9 @@ mod tests {
                 priority: Some(Priority::High),
                 project_id: Some(1),
                 order_key: Some("a0".to_string()),
+                // Set for the same reason `draft` is: `None` is the default, so a column that failed to
+                // round-trip would read as the value this field is meant to be testing.
+                at_binding_id: Some(7),
                 created_at: now,
                 updated_at: now,
             }],

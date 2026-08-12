@@ -67,7 +67,7 @@ const JA_PHRASEBOOK: &[(&str, &str)] = &[
     ("Register a task — filed in one command, then finished in another once it is fully written", "タスクを登録する ── 1 つのコマンドで起こし、書き切ったところで別のコマンドで締める"),
     ("Find and filter tasks (see filterGrammar)", "タスクを検索・絞り込む（filterGrammar 参照）"),
     ("See a task's details, project, classification, blockers and dependents", "タスクの詳細・プロジェクト・分類・ブロッカー・被依存を見る"),
-    ("Edit a task's fields (title / notes / due / start / priority)", "タスクのフィールドを編集する（タイトル / メモ / 期日 / 開始日 / 優先度）"),
+    ("Edit a task's fields (title / notes / due / start / priority / the folder it is worked in)", "タスクのフィールドを編集する（タイトル / メモ / 期日 / 開始日 / 優先度 / 消化するフォルダ）"),
     ("Track progress and reserve a task by moving it to in_progress (todo / in_progress / done / blocked / rejected), and end it either way — carried out, or decided against", "進捗を管理し、in_progress にしてタスクを予約する（未着手 / 進行中 / 完了 / ブロック / 却下）。終わり方は2つ ── やり遂げた、やらないと決めた"),
     ("Split larger work into separate tasks and link blockers (there are no subtasks)", "大きな作業を別タスクに分割しブロッカーを結ぶ（サブタスクは無い）"),
     ("Anchor a task to the git commits that implemented it — record / list / forget SHAs (the chain from history back to a task)", "タスクを、それを実装した git コミットに結び付ける ── SHA を記録／一覧／削除する（履歴からタスクへ戻る鎖）"),
@@ -1421,7 +1421,10 @@ fn capabilities() -> Value {
         cap("Register a task — filed in one command, then finished in another once it is fully written", &["task add", "task finish-creating"]),
         cap("Find and filter tasks (see filterGrammar)", &["task list"]),
         cap("See a task's details, project, classification, blockers and dependents", &["task show"]),
-        cap("Edit a task's fields (title / notes / due / start / priority)", &["task update"]),
+        cap(
+            "Edit a task's fields (title / notes / due / start / priority / the folder it is worked in)",
+            &["task update"],
+        ),
         cap(
             "Track progress and reserve a task by moving it to in_progress (todo / in_progress / done / blocked / rejected), and end it either way — carried out, or decided against",
             &["task status", "task done", "task reject", "task reopen", "task block"],

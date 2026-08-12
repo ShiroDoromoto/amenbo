@@ -652,6 +652,7 @@ mod export_tests {
                 priority: None,
                 notes: String::new(),
                 created_by_kind: None,
+                at_binding_id: None,
             })
             .unwrap();
         }
@@ -707,6 +708,7 @@ mod export_tests {
                 priority: None,
                 notes: String::new(),
                 created_by_kind: None,
+                at_binding_id: None,
             })
             .unwrap();
             ids.push(t.id);
@@ -838,6 +840,7 @@ mod export_tests {
                     priority: None,
                     notes: String::new(),
                     created_by_kind: None,
+                    at_binding_id: None,
                 })
                 .unwrap();
             // Two attachments — the second must never be copied once the first tick asks to stop.
@@ -895,6 +898,7 @@ mod export_tests {
                     priority: None,
                     notes: String::new(),
                     created_by_kind: None,
+                    at_binding_id: None,
                 })
                 .unwrap();
             // Two attachments: the rows poll every tick, so the panic lands with `export.json` part-written.
@@ -960,6 +964,7 @@ mod export_tests {
                     priority: None,
                     notes: String::new(),
                     created_by_kind: None,
+                    at_binding_id: None,
                 })
                 .unwrap();
             let blob = s.blobs().ingest_bytes(b"the bytes").unwrap();
@@ -1040,6 +1045,7 @@ mod export_tests {
                         priority: None,
                         notes: String::new(),
                         created_by_kind: None,
+                        at_binding_id: None,
                     })
                     .unwrap();
                 let blob = s.blobs().ingest_bytes(format!("bytes {i}").as_bytes()).unwrap();

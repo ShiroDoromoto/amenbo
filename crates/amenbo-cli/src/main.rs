@@ -4739,7 +4739,7 @@ fn unbind_cmd(flags: &Flags, dir: Option<String>) -> Result<i32, CliError> {
     let mut folders_left: Option<usize> = None;
     let paths = Paths::resolve().map_err(CliError::from)?;
     if amenbo_core::store_engine::probe_is_populated(&paths.store_file) {
-        let store = Store::open_at(paths).map_err(CliError::from)?;
+        let mut store = Store::open_at(paths).map_err(CliError::from)?;
         let mut registry = store.bindings();
         forgot = registry.forget_dir(&dir_str);
         // The CWD is already canonical, but a non-canonical path passed to `--dir` can disagree with the
@@ -4752,6 +4752,12 @@ fn unbind_cmd(flags: &Flags, dir: Option<String>) -> Result<i32, CliError> {
         }
         if forgot > 0 {
             store.save_bindings(&registry).map_err(CliError::from)?;
+            // The folder is gone, so no task can be worked in it any more: whichever of this project's
+            // tasks named it lose their place (`AMB-D-648`). Best-effort — the unbind itself has landed,
+            // and a task still naming a folder nothing answers for already reads as naming none.
+            if let Some(pid) = project_id {
+                let _ = store.forget_gone_task_folders(pid);
+            }
         }
         // Counted after the forgetting, so it is what is left rather than what there was.
         folders_left = project_id.map(|pid| registry.dirs_for_project(pid).len());
@@ -5300,6 +5306,53 @@ fn project_required(store: &Store) -> CliError {
     ))
 }
 
+/// Resolve `--at <folder>` to one of `project_id`'s bound folders (`AMB-D-648`), as the binding id a task
+/// carries. The candidates are that project's folders and no others: a task's folder is one of its own
+/// project's, which is what keeps a place from pointing outside the project the task lives in — and, for an
+/// AI, outside its reach.
+///
+/// Three spellings are accepted, in order, because all three are what a person has in hand: the path as the
+/// registry recorded it, the path as this machine canonicalises what was typed (so `.` and a relative path
+/// work), and the folder's own name (`--at amenbo-plugin-mail`, which is how the folders of one project
+/// usually differ). A name that lands on several is refused with them listed rather than one being picked;
+/// a name that lands on none is refused with the project's folders listed, since that is the answer.
+fn resolve_bound_folder(store: &Store, project_id: i64, token: &str) -> Result<i64, CliError> {
+    let folders = store.bound_folders(project_id);
+    let listed = || folders.iter().map(|f| f.dir.as_str()).collect::<Vec<_>>().join(", ");
+    if folders.is_empty() {
+        return Err(CliError::from(amenbo_core::Error::invalid(format!(
+            "--at names one of the project's linked folders, and this project has none. Link one first (`{} bind --project <name or ID>`)",
+            Paths::command_name()
+        ))));
+    }
+    let canonical = std::fs::canonicalize(token).map(|p| p.to_string_lossy().to_string());
+    let mut hits: Vec<&amenbo_core::overview::BoundFolder> =
+        folders.iter().filter(|f| f.dir == token).collect();
+    if hits.is_empty() {
+        if let Ok(ref canon) = canonical {
+            hits = folders.iter().filter(|f| &f.dir == canon).collect();
+        }
+    }
+    if hits.is_empty() {
+        hits = folders
+            .iter()
+            .filter(|f| std::path::Path::new(&f.dir).file_name().is_some_and(|n| n == token))
+            .collect();
+    }
+    match hits.as_slice() {
+        [one] => Ok(one.id),
+        [] => Err(CliError::from(amenbo_core::Error::invalid(format!(
+            "--at `{token}` is not one of this project's linked folders: {}",
+            listed()
+        )))),
+        several => Err(CliError::from(amenbo_core::Error::invalid(format!(
+            "--at `{token}` names {} of this project's linked folders ({}) — say which by its path",
+            several.len(),
+            several.iter().map(|f| f.dir.as_str()).collect::<Vec<_>>().join(", ")
+        )))),
+    }
+}
+
 /// Resolve `--dim <axis>=<value>` pairs into the value ids to file a new task under, in the order given.
 /// The axis is looked up **inside the task's own project** — axes are per-project, so a name two projects
 /// share must not resolve to the neighbour's — and the value inside that axis, the same rules `dimension
@@ -5482,7 +5535,7 @@ fn resolve_task(store: &Store, id: &str) -> amenbo_core::Result<i64> {
 
 fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError> {
     match sub {
-        TaskCmd::Add { title, project, due, start, priority, notes, to, ai, dim } => {
+        TaskCmd::Add { title, project, due, start, priority, notes, to, ai, dim, at } => {
             if ai && to.is_none() {
                 return Err(CliError::from(amenbo_core::Error::invalid("--ai requires --to")));
             }
@@ -5514,9 +5567,15 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             // Resolved before the create, like `--to` above: a misspelled axis or value is an error with
             // no task left behind to go and classify by hand.
             let dimension_values = resolve_dim_pairs(store, project_id, &dim)?;
+            // Resolved before the create for the same reason `--to` and `--dim` are: a folder name that
+            // answers to nothing is an error with no task left behind to go and correct.
+            let at_binding_id = match at {
+                Some(ref folder) => Some(resolve_bound_folder(store, project_id, folder)?),
+                None => None,
+            };
             let t = store.add_task_with_dimensions(ops::task::NewTask {
                 title, project_id: Some(project_id), due_on, start_on, priority, notes,
-                created_by_kind: Some(flags.facet()?),
+                created_by_kind: Some(flags.facet()?), at_binding_id,
             }, &dimension_values).map_err(CliError::from)?;
             emit_event(store, flags, t.id, activity_log::event::task_created(&t.title));
             // With `--to`, hand it over here as well, folding create→assign into one command. They are two
@@ -5642,6 +5701,15 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
                     None => human(flags, "project: (none)"),
                     Some(p) => human(flags, format!("project: {}", p.project.name)),
                 }
+                // The folder this task is worked in (`AMB-D-648`). It folds away when there is none, the way
+                // `dimensions` does and unlike the premise lines below: naming a folder is something a
+                // person opts into, and a task that names none is held back by nothing — so a
+                // `folder: (none)` on every task in every store that never uses one would say nothing at
+                // all. The path is what is printed, since that is what a reader reads; `--json` carries the
+                // binding's id beside it for whatever re-points or re-reads the folder later.
+                if let Some(at) = &detail.at {
+                    human(flags, format!("folder: {}", at.dir));
+                }
                 // What the task is classified as (`AMB-D-101`). Unlike the lines around it this one folds
                 // away when there is nothing to say: an axis is something a store opts into, so a
                 // `dimensions: (none)` would be printed forever in every store that classifies nothing,
@@ -5740,7 +5808,7 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
                 }
             }
         }
-        TaskCmd::Update { id, title, notes, due, start, priority, clear_due, clear_start, clear_priority } => {
+        TaskCmd::Update { id, title, notes, due, start, priority, clear_due, clear_start, clear_priority, at, clear_at } => {
             let notes = body_arg_opt(notes)?;
             let tid = resolve_task(store, &id).map_err(CliError::from)?;
             let mut changed = Vec::new();
@@ -5749,11 +5817,26 @@ fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32, CliError>
             if due.is_some() || clear_due { changed.push("due_on".to_string()); }
             if start.is_some() || clear_start { changed.push("start_on".to_string()); }
             if priority.is_some() || clear_priority { changed.push("priority".to_string()); }
+            if at.is_some() || clear_at { changed.push("at_binding_id".to_string()); }
             let due_on = parse_date_opt(&due)?;
             let start_on = parse_date_opt(&start)?;
             let priority = match priority { Some(p) => Some(parse_priority(&p)?), None => None };
+            // The folder is named among the task's **own project's** — which is where a task's folder comes
+            // from, so an unplaced task has none to name and is refused rather than pointed anywhere.
+            let at_binding_id = match at {
+                Some(ref folder) => {
+                    let project_id = store.task_detail(tid).map_err(CliError::from)?
+                        .placement.map(|p| p.project.id)
+                        .ok_or_else(|| CliError::from(amenbo_core::Error::invalid(
+                            "--at names one of the project's linked folders, and this task is in no project",
+                        )))?;
+                    Some(resolve_bound_folder(store, project_id, folder)?)
+                }
+                None => None,
+            };
             let t = store.update_task(tid, ops::task::TaskPatch {
                 title, notes, due_on, start_on, priority, clear_due, clear_priority, clear_start,
+                at_binding_id, clear_at,
             }).map_err(CliError::from)?;
             let detail = store.task_detail(t.id).map_err(CliError::from)?;
             // Hint only when notes were actually written — an update that touches just the title should not

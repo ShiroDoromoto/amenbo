@@ -72,6 +72,10 @@ pub struct NewTask {
     pub notes: String,
     /// The creator's facet. Left unset, the creator is unknown (and treated as "not authored by the AI").
     pub created_by_kind: Option<ActorKind>,
+    /// The bound folder this task is worked in, already resolved to a binding id (`AMB-D-648`). Left
+    /// unset, the task names no folder — the place is stated or it is absent, never taken from where the
+    /// create was typed.
+    pub at_binding_id: Option<i64>,
 }
 
 /// Create a task. **There are two read-then-writes here** — the conversational sequence number
@@ -123,6 +127,7 @@ pub fn add(tx: &WriteTx<'_>, input: NewTask) -> Result<Task> {
         priority: input.priority,
         project_id,
         order_key,
+        at_binding_id: input.at_binding_id,
         created_at: now,
         updated_at: now,
     };
@@ -160,6 +165,9 @@ pub struct TaskPatch {
     pub clear_due: bool,
     pub clear_priority: bool,
     pub clear_start: bool,
+    /// The bound folder to work this task in, already resolved to a binding id (`AMB-D-648`).
+    pub at_binding_id: Option<i64>,
+    pub clear_at: bool,
 }
 
 /// Read a task's `before` snapshot **from this transaction**. not_found if it does not exist (every mutation
@@ -194,6 +202,11 @@ pub fn update(tx: &WriteTx<'_>, id: i64, patch: TaskPatch) -> Result<Task> {
         t.priority = None;
     } else if let Some(p) = patch.priority {
         t.priority = Some(p);
+    }
+    if patch.clear_at {
+        t.at_binding_id = None;
+    } else if let Some(binding_id) = patch.at_binding_id {
+        t.at_binding_id = Some(binding_id);
     }
     t.updated_at = Timestamp::now();
     emit_update(tx, record::task(&before), record::task(&t))?;
@@ -503,6 +516,7 @@ mod tests {
                     priority: None,
                     notes: String::new(),
                     created_by_kind: None,
+                    at_binding_id: None,
                 },
             )
             .unwrap();
@@ -1081,6 +1095,7 @@ mod tests {
                         priority: None,
                         notes: String::new(),
                         created_by_kind: None,
+                        at_binding_id: None,
                     },
                 )
                 .unwrap()
@@ -1145,6 +1160,7 @@ mod tests {
                         priority: None,
                         notes: String::new(),
                         created_by_kind: None,
+                        at_binding_id: None,
                     },
                 )
                 .unwrap()

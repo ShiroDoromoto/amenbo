@@ -123,6 +123,7 @@ mod tests {
                 priority: None,
                 notes: String::new(),
                 created_by_kind: Some(ActorKind::Human),
+                at_binding_id: None,
             })
             .unwrap()
             .id;

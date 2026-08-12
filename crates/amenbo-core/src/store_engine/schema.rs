@@ -554,6 +554,17 @@ datasets! {
         // including `order_key`.
         project_id: fk_opt("project", "RESTRICT"),
         order_key: col(ORDER_KEY_OPT),
+        // Which of the project's bound folders this task is worked in (`AMB-D-648`) — a
+        // `binding_project_dir` row by its `id`, so moving or renaming the folder leaves the pointer
+        // standing where a path string would break. NULL is a task that names no folder, which is every
+        // task unless someone said otherwise: the place is never inferred from where a task was filed.
+        //
+        // No `REFERENCES binding_project_dir(id)`, unlike every other key here. The bindings are
+        // device-local and `export` leaves them behind, while a task travels — so a constraint would make
+        // this column mean "a folder *this machine* has", and a restore elsewhere would have to either
+        // fail or drop the value. Instead the id is read for what the task's own project still offers
+        // (`crate::view::task_detail`), and an id that answers to nothing reads as no folder at all.
+        at_binding_id: col(INT_OPT),
     }
 
     decision => decision {

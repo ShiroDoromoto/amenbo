@@ -392,6 +392,22 @@ pub const STEPS: &[Step] = &[
         name: "give a bound folder an id something else can point at",
         apply: Apply::Custom(key_the_bindings_by_id),
     },
+    Step {
+        to: 26,
+        name: "add task.at_binding_id, the bound folder a task is worked in",
+        // `AMB-D-648`. A task may name one of its project's bound folders, and it names it by the id v25
+        // gave that row.
+        //
+        // **Unseeded, and NULL is the only honest seed.** The place is never inferred — not from where a
+        // task was filed, not from its title, not from its classification (the decision says so in as
+        // many words) — so there is nothing in an existing store to read one off. NULL is what every task
+        // written before this means, and what it will go on meaning until somebody says otherwise.
+        //
+        // The column is spelled out here in frozen text, as every step's is, and carries no `REFERENCES`:
+        // the bindings are device-local and `export` leaves them behind, so a constraint would keep a
+        // task from travelling (see the registry's note on the column).
+        apply: Apply::Sql("ALTER TABLE task ADD COLUMN at_binding_id BIGINT;"),
+    },
 ];
 
 /// v23: give the change feed the window each instruction belongs to (`AMB-D-582`), so a reader closed to

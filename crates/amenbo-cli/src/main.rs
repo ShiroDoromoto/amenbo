@@ -4979,9 +4979,9 @@ fn project(store: &mut Store, flags: &Flags, sub: ProjectCmd) -> Result<i32, Cli
                 return Ok(0);
             }
             store.project_delete(pid, flags.facet()?).map_err(CliError::from)?;
-            // Delete is destructive (the same shape as the GUI's `project_delete`). Release this project's
-            // folder bindings: the `.amenbo` pointers, the managed blocks, the registry rows. The teardown is
-            // best-effort — a failure there does not fail the delete.
+            // Delete is destructive (the same shape as the GUI's `project_delete`). Release the bindings of
+            // the folders that still point at this project: their `.amenbo` pointers, managed blocks and
+            // registry rows. The teardown is best-effort — a failure there does not fail the delete.
             let _ = amenbo_core::project_teardown::teardown_deleted_project(store, pid);
             write_envelope(flags, "project.delete", "project", json!({ "id": pid, "deleted": true }), None, false, format!("✓ Deleted project: {pid}"));
         }

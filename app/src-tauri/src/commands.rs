@@ -3249,7 +3249,8 @@ pub fn project_set_archived(project_id: i64, archived: bool) -> Result<WriteAck,
 /// Delete a project **destructively** (same shape as the CLI's `project delete`). Its tasks, decisions
 /// and dimensions are physically deleted with it — the op walks the subtree child-first, the schema
 /// refusing to let a project go out from under a surviving child — and the `.amenbo`, the managed block
-/// and the bindings entry of every folder bound to it are released. Keeping it around but out of sight
+/// and the bindings entry of every folder **still pointing at it** are released (a folder re-pointed at
+/// another project is that project's, and keeps all three). Keeping it around but out of sight
 /// is archiving's job
 /// ([`project_set_archived`]).
 #[tauri::command]

@@ -388,6 +388,19 @@ impl Registry {
         removed
     }
 
+    /// Forget the **one `(project_id, dir)` record** — the pair the binding table is keyed by. Returns
+    /// whether one was there, so the call is idempotent. Unlike [`Self::forget_dir`], the records *other*
+    /// projects hold for the same folder are left alone: a folder re-pointed at another project
+    /// (`bind` records the new pair without retracting the old one) is still that project's.
+    pub fn forget_project_ref(&mut self, project_id: i64, dir: &str) -> bool {
+        let Some(set) = self.project_dirs.get_mut(&project_id) else { return false };
+        let removed = set.remove(dir);
+        if set.is_empty() {
+            self.project_dirs.remove(&project_id);
+        }
+        removed
+    }
+
     /// **The path→project reverse lookup.** Returns the project ids recorded as pointing at the given
     /// folder (ascending, deduped, empty if none), normalizing each recorded path through
     /// [`normalize_dir_for_match`]. Pointer recovery uses it to work out, best-effort, which project a
@@ -896,6 +909,27 @@ mod tests {
 
         // Idempotent: forgetting it again removes nothing.
         assert_eq!(reg.forget_dir("/work/a"), 0);
+    }
+
+    /// The pair-sized counterpart: one project stops holding one folder, and whoever else holds that
+    /// folder goes on holding it. This is what a deleted project's teardown may do — `forget_dir` would
+    /// take the folder away from the project that is still there.
+    #[test]
+    fn registry_forget_project_ref_removes_only_that_pair() {
+        let mut reg = Registry::default();
+        reg.record_project_ref(1, "/work/a");
+        reg.record_project_ref(2, "/work/a");
+        reg.record_project_ref(2, "/work/b");
+
+        assert!(reg.forget_project_ref(1, "/work/a"));
+        assert!(reg.dirs_for_project(1).is_empty(), "the pair is gone");
+        assert_eq!(reg.projects_for_dir("/work/a"), vec![2], "the other project still holds the folder");
+        assert_eq!(reg.dirs_for_project(2), vec!["/work/a", "/work/b"], "and keeps its own folders");
+
+        // Idempotent, and a pair that was never there removes nothing.
+        assert!(!reg.forget_project_ref(1, "/work/a"));
+        assert!(!reg.forget_project_ref(9, "/work/b"));
+        assert_eq!(reg.dirs_for_project(2), vec!["/work/a", "/work/b"]);
     }
 
     #[test]

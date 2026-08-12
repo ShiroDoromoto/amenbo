@@ -758,3 +758,42 @@ fn unbinding_the_last_folder_goes_through_and_says_the_project_has_none_left() {
     assert!(out.contains("no folder"), "it says the project has none left: {out}");
     assert!(out.contains("bind --project"), "and names the way back: {out}");
 }
+
+/// Re-pointing a folder at another project and **then** deleting the project it came from leaves the
+/// folder alone. `bind` records the new pair without retracting the old one, so the doomed project goes
+/// on listing the folder; the pointer on disk, which names one project and one only, is what says whose
+/// the folder is. Re-pointing first and deleting after is the order a consolidation is done in, so the
+/// delete may take its own record of the folder and nothing else.
+#[test]
+fn deleting_a_project_leaves_a_folder_that_was_re_pointed_at_another_one_alone() {
+    let cli = Cli::new();
+    let moved = amenbo_scratch::scratch("repoint-moved");
+    let moved_str = moved.to_string_lossy().to_string();
+    let doomed =
+        id_str(&cli.json(&["project", "add", "--name", "畳むPJ", "--dir", &moved_str, "--json"])["project"]["id"]);
+    let keeper = id_str(&cli.json(&["project", "add", "--name", "引き継ぐPJ", "--json"])["project"]["id"]);
+
+    // The move: the folder now names the keeper, while the doomed project still records it.
+    cli.run(&["bind", "--project", &keeper, "--dir", &moved_str]);
+    let before = cli.json(&["project", "show", &doomed, "--json"]);
+    assert!(
+        before["bound_folders"].as_array().is_some_and(|f| !f.is_empty()),
+        "the folder is still on the doomed project's books — that is what makes this the trap: {before}",
+    );
+
+    let (out, code) = cli.run(&["project", "delete", &doomed, "--yes"]);
+    assert_eq!(code, 0, "the delete goes through: {out}");
+
+    // The pointer, the managed block and the keeper's own record of the folder all survive it.
+    assert!(moved.join(".amenbo").is_file(), "the folder keeps the pointer it now holds");
+    assert!(moved.join("CLAUDE.md").is_file(), "and its managed block");
+    let shown = cli.json(&["project", "show", &keeper, "--json"]);
+    let folders = shown["bound_folders"].as_array().unwrap_or_else(|| panic!("the keeper lists its folders: {shown}"));
+    assert!(
+        folders.iter().any(|f| f["path"].as_str().is_some_and(|s| s.contains(&moved_str))),
+        "the keeper still holds the folder: {shown}",
+    );
+    // And the folder still reaches that project from where it stands.
+    let listed = cli.json_from(&moved, &["project", "list", "--json"]);
+    assert!(listed["count"].as_i64().is_some_and(|n| n >= 1), "the folder still resolves: {listed}");
+}

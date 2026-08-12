@@ -1,15 +1,19 @@
 # The other end of a project's life. Archiving is the one move that takes a project out of the
 # everyday listing without destroying it, so both listings have to be asked to see that it moved
-# between them. Deleting is final, and it reaches outside the store: every folder pointing at the
-# project is released in the same breath, which is what keeps an AI launched in one of them from
-# being sent to a project that is no longer there.
+# between them. Deleting is final, and it reaches outside the store: every folder still pointing at
+# the project is released in the same breath, which is what keeps an AI launched in one of them from
+# being sent to a project that is no longer there. "Still pointing" is the whole of it — a folder
+# moved to another project before the delete is that project's, and both folders are here to tell
+# the two apart.
 id: retire-a-project
-title: A project is archived out of the everyday listing and brought back, and deleting it releases the folder that pointed at it
+title: A project is archived out of the everyday listing and brought back, and deleting it releases the folder still pointing at it
 description: >
   Archive a project and ask both listings — the everyday one, which must no longer carry it, and the
   one that carries the archived, which must — then bring it back, since archiving is the reversible
   end. Bind a folder to it and delete it: the row leaves both listings, the folder is loose again,
   and the store is asked for the absence of the debris a delete that skipped a folder would leave.
+  A second folder is moved to another project before that delete — the order a consolidation goes in
+  — and is asked afterwards whether it still names the project that took it over.
 steps_cli:
   - type: action
     domain: project
@@ -95,6 +99,38 @@ steps_cli:
       dir: doomed
       project: pj
 
+  # A second folder, moved out before the delete: bound to the doomed project, then re-pointed at one
+  # that stays. This is the order projects are consolidated in — send the folders somewhere, then
+  # delete what is left — and the folder is the live binding of the project it now names, so the
+  # delete has no business touching it.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: SCENARIO PROJECT — the one taking the folder over
+    as: keeper
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: moved
+      project: pj
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: moved
+      project: keeper
+
+  - type: assert
+    domain: folder
+    op: bound
+    with:
+      dir: moved
+      project: keeper
+
   # Deleted: gone from both listings, the everyday one and the one that carries the archived — which
   # is the difference from archiving, where the row is still somewhere.
   - type: action
@@ -126,6 +162,15 @@ steps_cli:
     with:
       dir: doomed
       present: false
+
+  # The folder that moved out keeps everything, though: it names the project that is still there, and
+  # a delete that released it by folder rather than by pointer would have unbound a live project here.
+  - type: assert
+    domain: folder
+    op: bound
+    with:
+      dir: moved
+      project: keeper
 
   # And the store is left clean. `orphan_binding` is what `doctor` raises for a folder row no live
   # project claims — the debris a delete would leave if the teardown skipped a folder — so asking for

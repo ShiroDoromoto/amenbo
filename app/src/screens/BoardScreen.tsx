@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState, type DragEvent } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { createPortal } from "react-dom";
 import { dataAdapter } from "../mock/adapter";
 import { useStore } from "../store/store";
@@ -21,11 +21,16 @@ import { CalendarView } from "./CalendarView";
 import { TimelineView } from "./TimelineView";
 import { errText, statusLabel, t, tf, viewLabel } from "../core/i18n";
 import type { ComposeTarget } from "../shell/AppShell";
-import { filterDimensions, parseRefQuery, passesFilters, selectionKey, type FilterSelection } from "../core/filters";
+import {
+  filterDimensions, parseRefQuery, passesFilters, selectionKey,
+  type DimAssignments, type FilterSelection,
+} from "../core/filters";
 import { fetchProjectDimensionAssignments } from "../core/mutations";
+import { useQuery } from "../core/query";
 import { DimensionManager } from "./DimensionManager";
 import { BOARD_FLIP, useBoardFlip } from "./boardFlip";
 import { BOARD_COLUMN_CAP } from "./boardLayout";
+import { cardChips, type CardChip } from "./cardChips";
 
 type View = "list" | "board" | "calendar" | "timeline";
 const VIEWS: View[] = ["list", "board", "calendar", "timeline"];
@@ -33,6 +38,10 @@ const VIEWS: View[] = ["list", "board", "calendar", "timeline"];
 // What the board's columns group by: `"status"` (a first-class field — the columns fall out of it), or the id
 // of one of the project's dimensions, which splits the board into one column per value of that dimension.
 const STATUS_GROUP = "status";
+
+// Stable empty map for the instant before the assignment read comes back (and in the browser mock, where it
+// stays empty). A fresh `{}` per render would re-render every card for nothing.
+const NO_ASSIGNMENTS: DimAssignments = {};
 
 // Order of the closed column: most recently completed first (RFC3339 sorts lexicographically = chronologically).
 // Tasks with no completion time sink to the bottom — which is where the rejected land, having none by definition.
@@ -96,9 +105,6 @@ export function BoardScreen({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [dimMgrOpen, setDimMgrOpen] = useState(false);
   const [dimAssign, setDimAssign] = useState<Record<string, number>>({});
-  // For filtering: task assignments across every user-defined dimension (taskId→dimId→valueId). `dimAssign`
-  // above holds only the one axis being grouped by, but filters must reach every dimension — hence all of them.
-  const [filterDimAssign, setFilterDimAssign] = useState<Record<string, Record<number, number>>>({});
   // Free-word search, run by core over every face the word index carries (see the doc comment above).
   // Incremental, and ANDs with the filter chips.
   const [search, setSearch] = useState("");
@@ -156,27 +162,36 @@ export function BoardScreen({
     }).catch(() => {});
     return () => { alive = false; };
   }, [groupingDimId, projectId]);
-  // Pull the assignments of every user-defined dimension, for filtering (independent of grouping; refetched when
-  // the set of axes changes).
-  useEffect(() => {
-    if (dimIdsKey === "") { setFilterDimAssign({}); return; }
-    let alive = true;
-    Promise.all(
-      projectDims.map((d) =>
-        fetchProjectDimensionAssignments(projectId, d.id).then((rows) => ({ dimId: d.id, rows })),
-      ),
-    ).then((results) => {
-      if (!alive) return;
-      const m: Record<string, Record<number, number>> = {};
+  // The assignments of every user-defined dimension (taskId→dimId→valueId), read for the whole board in one
+  // go: `dimAssign` above holds only the axis being grouped by, while the filter chips and the cards' own
+  // chips reach every axis. It goes through the query cache rather than a bare effect because a value
+  // assigned elsewhere — the detail pane's selects, the CLI — acks with the "tasks" scope, and that is what
+  // brings the answer back; an effect keyed on the set of axes would never hear about it, leaving the cards
+  // drawing the classification the board had at mount.
+  const filterDimAssign = useQuery<DimAssignments>(
+    ["dimAssign", projectId, dimIdsKey],
+    async () => {
+      const results = await Promise.all(
+        projectDims.map((d) =>
+          fetchProjectDimensionAssignments(projectId, d.id).then((rows) => ({ dimId: d.id, rows })),
+        ),
+      );
+      const m: DimAssignments = {};
       for (const { dimId, rows } of results) {
         for (const r of rows) (m[r.taskId] ??= {})[dimId] = r.valueId;
       }
-      setFilterDimAssign(m);
-    }).catch(() => {});
-    return () => { alive = false; };
-  }, [projectId, dimIdsKey]);
+      return m;
+    },
+  ).data ?? NO_ASSIGNMENTS;
   // The dimension whose values split the columns (when group names one). Null for "status" or a deleted id.
   const groupingDim = groupingDimId ? projectDims.find((d) => d.id === groupingDimId) ?? null : null;
+  // What each card draws of its classification (the rule itself is `cardChips`). Memoised, and keyed on
+  // identities that only a write moves, so the cards' own memo holds: a fresh array per card per render
+  // would re-render every sibling card on a change of selection.
+  const chips = useMemo(
+    () => cardChips(projectDims, filterDimAssign, groupingDimId),
+    [projectDims, filterDimAssign, groupingDimId],
+  );
 
   const dims = filterDimensions(projectDims, filterDimAssign);
   // How many axes are actually narrowing, counted over the axes that exist: a selection left behind by a
@@ -392,6 +407,7 @@ export function BoardScreen({
                 key={st}
                 name={statusLabel(st)}
                 cards={cards}
+                chips={chips}
                 count={isDone ? colTasks.length - rejected : undefined}
                 note={rejected > 0 ? tf("board.rejectedCount", { n: rejected }) : undefined}
                 overflow={overflow}
@@ -425,6 +441,7 @@ export function BoardScreen({
               key={v.id}
               name={v.name}
               cards={tasks.filter((tk) => dimAssign[tk.id] === v.id)}
+              chips={chips}
               selectedTaskId={selectedTaskId}
               onSelectTask={onSelectTask}
               onStatus={store.setStatus}
@@ -443,6 +460,7 @@ export function BoardScreen({
           <Column
             name={t("board.noDimensionValue")}
             cards={tasks.filter((tk) => !dimAssign[tk.id])}
+            chips={chips}
             selectedTaskId={selectedTaskId}
             onSelectTask={onSelectTask}
             onStatus={store.setStatus}
@@ -551,11 +569,16 @@ function AddDimensionValue({ onAdd }: { onAdd: (name: string) => void }) {
 // the cards whose props are unchanged. The column itself usually does re-render (the card array and the drop
 // handlers are fresh each render); what matters is that a change of selection stops before the sibling cards.
 const Column = memo(function Column({
-  name, cards, count, note, overflow, onSeeAllList, selectedTaskId, onSelectTask, onStatus, onAdd,
+  name, cards, chips, count, note, overflow, onSeeAllList, selectedTaskId, onSelectTask, onStatus, onAdd,
   droppable, draggingId, onDropTask, onCardDragStart, onCardDragEnd,
 }: {
   name: string;
   cards: TaskCard[];
+  /**
+   * The classification each card draws, by task id (see `cardChips`). One map for the whole board, so the
+   * per-card arrays keep their identity and the cards' memo survives a re-render of the column.
+   */
+  chips: Record<string, CardChip[]>;
   /**
    * What the head counts, where that is not simply what the column holds. The closed column needs it:
    * it holds both terminals, and the figure under a "done" heading must count only the done.
@@ -614,6 +637,7 @@ const Column = memo(function Column({
         <TaskCardView
           key={t.id}
           task={t}
+          chips={chips[t.id]}
           selected={t.id === selectedTaskId}
           draggable={!!onCardDragStart}
           dragging={t.id === draggingId}
@@ -641,9 +665,11 @@ const Column = memo(function Column({
 // onEndDrag=the stable clearDragging) and the id is bound inside the card from task.id. The status select in the
 // footer must stop mousedown to suppress the card's drag start, or selecting and dragging cannot both work.
 const TaskCardView = memo(function TaskCardView({
-  task, selected, draggable, dragging, onBeginDrag, onEndDrag, onSelect, onStatus,
+  task, chips, selected, draggable, dragging, onBeginDrag, onEndDrag, onSelect, onStatus,
 }: {
   task: TaskCard;
+  /** The values this task carries on the axes flagged for the card. Undefined when it carries none. */
+  chips?: CardChip[];
   selected: boolean;
   draggable?: boolean;
   dragging?: boolean;
@@ -692,6 +718,19 @@ const TaskCardView = memo(function TaskCardView({
         <BlockedChips task={task} />
         <PremiseChangedChip task={task} />
       </div>
+
+      {/* Its own row rather than more chips on the one above: what the task *is* reads apart from what is
+          wrong with it. Drawn only when there is something to draw, so a card on a board with no flagged
+          axis keeps exactly the shape it had. The axis is named in the tooltip — on the card the value
+          alone is the fact, and spelling out "axis: value" on every chip spends the density `AMB-D-40`
+          set out to protect. */}
+      {chips && chips.length > 0 && (
+        <div className="card__row">
+          {chips.map((c) => (
+            <span key={c.dimId} className="chip chip--dim" title={`${c.axis}: ${c.value}`}>{c.value}</span>
+          ))}
+        </div>
+      )}
 
       <div className="card__footer">
         {task.comments > 0 && <span>💬 {task.comments}</span>}

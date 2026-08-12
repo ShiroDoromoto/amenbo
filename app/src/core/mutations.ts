@@ -71,6 +71,10 @@ function applyAck(ack: WriteAck): Promise<void> {
       case "decision": return decisions.has(key[1] as number);
       case "taskPage":
       case "smartView": return scopes.has("tasks");
+      // The board's dimension assignments (which task sits on which value of which axis). Assigning one,
+      // and every edit to the axes themselves, acks with the "tasks" scope — which is what keeps the
+      // filter chips and the classification drawn on the cards from answering with a stale map.
+      case "dimAssign": return scopes.has("tasks");
       case "archivedProjects": return scopes.has("tasks");
       case "decisions": return scopes.has("decisions");
       case "decisionComments": return decisions.has(key[1] as number);

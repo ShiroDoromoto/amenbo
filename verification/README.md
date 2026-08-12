@@ -529,9 +529,15 @@ nobody has answered both hold no chosen value, and only the second follows the a
 A `listed` assert asks whether the task is in the listing; give it
 `position: first` / `last` instead of `present:` when what is under test is the order the store
 keeps, which is the only place a reorder is visible. Its neighbour `narrowed` asks the question a
-screen puts instead: which of the cards drawn a moment ago the words typed over them left standing.
-It names no filter because there is none to name — the words travel as words, and they are matched
-over the whole record, including faces a card does not show.
+screen puts instead: which of the cards drawn a moment ago are drawn still. It names no filter because
+there is none to name — the narrowing is the screen's own, and what did it belongs to the move in
+front of the assert. That is either of the two narrowings a board has, and one assert answers for
+both: `narrow` types words over the columns, which travel as words and are matched over the whole
+record including faces a card does not show, and `open-filters` / `choose-filter` / `close-filters`
+walk the values on its axes — each press adding to the set that axis is narrowed to, each pair
+written as the CLI writes it, since the chips carrying them are in the reader's own language.
+`filters-folded` reads what the fold leaves: the values off the screen, and the count of narrowing
+axes on the control they folded into.
 
 ### `given:` — the world a road starts from
 

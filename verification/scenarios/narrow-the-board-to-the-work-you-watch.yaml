@@ -1,0 +1,224 @@
+# Narrowing the board by what the cards are, rather than by the words on them. The reader opens the
+# values, composes the set they want to watch on one axis, adds a second axis, and folds the whole
+# thing away again — which is what the values being a view of their own is for: folded, the tasks have
+# their room back, and the control they folded into is what says any narrowing is still on.
+#
+# The set is the half that has to be walked value by value. One state is chosen and a card falls; the
+# neighbouring state is chosen and the same card comes back, with the first one still standing beside
+# it. That order is the whole proof — an axis that took one value at a time would draw the same board
+# at every step but the one in the middle.
+#
+# What this wants in front of it is a project's own board with four cards on it, each one differing
+# from the others in exactly the way an axis reads. Filing them is not what is under test, so they are
+# the world rather than the road; an untouched store has no project for a board to be opened on
+# either. The states and the assignment are part of that world for the same reason: moving a task
+# through them is another road's subject, and this one wants them already moved.
+id: narrow-the-board-to-the-work-you-watch
+title: The values chosen on a board's axes narrow it to a set, and folding them away keeps the narrowing while giving back the room
+description: >
+  Put four cards on a board — two in the states the reader is watching, one past them, and one held by
+  nobody — then open the values, choose two states on one axis and an assignee on another, and fold
+  them away. What is under test is the set and the fold: an axis that narrowed to the last value
+  pressed takes the first state's card away, two axes that ORed rather than ANDed leave the card
+  nobody holds standing, and a fold that dropped the narrowing with the values puts every card back.
+given:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO — still to be taken
+    as: waiting
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: waiting
+
+  - type: action
+    domain: task
+    op: assign
+    with:
+      target: waiting
+      assignee: me-ai
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO — being worked on
+    as: doing
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: doing
+
+  - type: action
+    domain: task
+    op: assign
+    with:
+      target: doing
+      assignee: me-ai
+
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: doing
+      status: in_progress
+
+  # The card past the states being watched. It is what says the axis narrows at all: with nothing
+  # chosen on it, every one of these four is drawn.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO — work is over
+    as: finished
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: finished
+
+  - type: action
+    domain: task
+    op: assign
+    with:
+      target: finished
+      assignee: me-ai
+
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: finished
+      status: done
+
+  # And the card the second axis is for: in one of the watched states, so the first axis keeps it, and
+  # held by nobody, so only the second one can take it away.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO — nobody holds it
+    as: nobodys
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: nobodys
+
+steps_gui:
+  - type: action
+    domain: task
+    op: open-filters
+
+  # Read with nothing chosen yet, which is the one reading that makes every "gone" below mean anything:
+  # a card the board never drew would be absent from every shot of this road, and each of those steps
+  # would pass on a board that had lost it before the narrowing began.
+  - type: assert
+    domain: task
+    op: narrowed
+    with:
+      target: finished
+      present: true
+
+  - type: action
+    domain: task
+    op: choose-filter
+    with:
+      axis: status
+      value: todo
+
+  # One value in, and the card in the neighbouring state is gone. This is the shot the set is proved
+  # against: it has to be taken before the second value goes in, or nothing tells a set from an axis
+  # that simply kept the last press.
+  - type: assert
+    domain: task
+    op: narrowed
+    with:
+      target: doing
+      present: false
+
+  - type: action
+    domain: task
+    op: choose-filter
+    with:
+      axis: status
+      value: in_progress
+
+  - type: assert
+    domain: task
+    op: narrowed
+    with:
+      target: waiting
+      present: true
+
+  - type: assert
+    domain: task
+    op: narrowed
+    with:
+      target: doing
+      present: true
+
+  - type: assert
+    domain: task
+    op: narrowed
+    with:
+      target: finished
+      present: false
+
+  # The second axis, which the first one cannot stand in for: the card it takes away is in a state the
+  # first axis chose, so it is standing until this press and gone after it. Both halves are read, or
+  # what the press is credited with is a card the state axis had already taken.
+  - type: assert
+    domain: task
+    op: narrowed
+    with:
+      target: nobodys
+      present: true
+
+  - type: action
+    domain: task
+    op: choose-filter
+    with:
+      axis: assignee
+      value: me-ai
+
+  - type: assert
+    domain: task
+    op: narrowed
+    with:
+      target: nobodys
+      present: false
+
+  - type: action
+    domain: task
+    op: close-filters
+
+  - type: assert
+    domain: task
+    op: filters-folded
+    with:
+      axes: 2
+
+  # And the narrowing outlives the values it was composed in. Both halves are read, because a fold that
+  # dropped the selection and one that kept it look alike on the card that was standing anyway.
+  - type: assert
+    domain: task
+    op: narrowed
+    with:
+      target: doing
+      present: true
+
+  - type: assert
+    domain: task
+    op: narrowed
+    with:
+      target: finished
+      present: false

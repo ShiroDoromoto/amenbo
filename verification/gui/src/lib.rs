@@ -219,9 +219,10 @@ impl Instructor {
     /// reliably, so it returns `None` and the step is left for a visual `Review`.
     ///
     /// `narrowed` is judged the same way and on the same text, since the card is what the reading is
-    /// about either way. The words the reader typed stand in the box on that very shot, so the
-    /// expectation is the whole title rather than any word of it: a card that went carries none of its
-    /// title, and the half of the query still on screen cannot read as the card that left.
+    /// about either way. What did the narrowing is still standing on that very shot — the words in the
+    /// box, or the values chosen on the axes — so the expectation is the whole title rather than any
+    /// word of it: a card that went carries none of its title, and neither the half of a query nor the
+    /// name of a value can read as the card that left.
     ///
     /// `found` is judged on the same text again — every hit row leads with the ref and the title of the
     /// record it belongs to, whichever face the words were written on. What that settles is that the
@@ -330,6 +331,11 @@ impl Instructor {
     /// leaves no text on a shot either way — and what tells a box shut from a box merely empty is the
     /// words standing in it in place of an example, which are the interface's own and would hold this
     /// gate to whichever language the run was set up in.
+    ///
+    /// `filters-folded` is a `Review` on both of the things it reads. That the values are gone is an
+    /// absence, and a reading answers which words are on a shot and never which are missing from the
+    /// right part of it; the count beside them is a bare number, and a board draws bare numbers all over
+    /// itself — one on every column head — so a reading of it would pass wherever the run was pointed.
     ///
     /// `nudge` is a `Review`, and the sentence it names is why: an offer is put in the interface's own
     /// words, so a reading of it would hold this gate to the one language the run happened to be set up
@@ -449,6 +455,28 @@ impl Instructor {
             (Domain::Task, "narrow") => format!(
                 "On the board, type \"{}\" into the search box over the columns.",
                 req(with, "words")?
+            ),
+            // The other narrowing on that board, opened and folded from the one control it has. The line
+            // names that control by what it does rather than by its wording, the way every button here is
+            // named: it is the only thing above the board that speaks about narrowing, and while the
+            // values are folded away it is also the only thing that says any narrowing is on.
+            (Domain::Task, "open-filters") => {
+                "On the board, open the values to narrow by, from the control above the columns that says how many axes are narrowing."
+                    .to_string()
+            }
+            (Domain::Task, "close-filters") => {
+                "Fold the values away again from that same control, so the tasks have back the room they were taking."
+                    .to_string()
+            }
+            // One press on one axis. The pair is named as the CLI writes it and not as the chips read,
+            // because the chips read in whichever language the app was started in — the grammar is the
+            // one name the screen and the terminal share, and an operator standing in front of the axis
+            // can see which value it names. What is already chosen there is said out loud: each value is
+            // a switch, so a press that cleared its neighbours would be a different move.
+            (Domain::Task, "choose-filter") => format!(
+                "In the values now open, press the one the CLI writes as `{}:{}`, and leave whatever is already chosen on that axis chosen.",
+                req(with, "axis")?,
+                req(with, "value")?
             ),
             // Onto the face that searches across the records, and through the hit standing on it. The
             // asking is part of the move rather than a step of its own: a hit cannot be pressed before
@@ -676,9 +704,17 @@ impl Instructor {
                 req(with, "filter")?
             ),
             (Domain::Task, "narrowed") => format!(
-                "Confirm the card \"{}\" is {} the board the search left.",
+                "Confirm the card \"{}\" is {} the board the narrowing left.",
                 self.target_label(with),
                 if present(with) { "still on" } else { "gone from" }
+            ),
+            // The fold, read for both of the things it does. Neither half is a reading's to close, so the
+            // line says out loud what an eye on the shot is looking for.
+            (Domain::Task, "filters-folded") => format!(
+                "Confirm the values are off the screen — the tasks have their room back — and that the control they folded into says {} axes are narrowing.",
+                with.get("axes")
+                    .map(show)
+                    .ok_or_else(|| "arg `axes` must say how many axes are narrowing".to_string())?
             ),
             // Which record the press opened. Both halves name the phrase rather than the record's title:
             // the title is standing on the hit row as well, so a line read on it would pass over a press
@@ -1843,6 +1879,81 @@ steps_gui:
         assert!(line.contains("cannot be typed into"), "got: {line}");
         assert!(line.contains("choose a side first"), "got: {line}");
         assert!(ins.expectation(step).is_none(), "the shut box is closed by an eye, not by a reading");
+    }
+
+    /// The other narrowing that board has. A press is named by the pair the CLI writes, since the chips
+    /// carrying it are in the reader's own language, and it says the values already chosen stay chosen —
+    /// an axis takes a set, so a line a reader could satisfy by clearing its neighbours would be walking
+    /// a different road. What the fold leaves is read by an eye on both of its halves.
+    #[test]
+    fn the_values_are_opened_pressed_by_the_pair_the_cli_writes_and_folded_away() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: task
+    op: open-filters
+  - type: action
+    domain: task
+    op: choose-filter
+    with: { axis: status, value: in_progress }
+  - type: action
+    domain: task
+    op: close-filters
+  - type: assert
+    domain: task
+    op: filters-folded
+    with: { axes: 2 }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        let lines: Vec<String> = steps.iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("how many axes are narrowing"), "got: {}", lines[0]);
+        assert!(lines[1].contains("`status:in_progress`"), "got: {}", lines[1]);
+        assert!(lines[1].contains("already chosen on that axis chosen"), "got: {}", lines[1]);
+        assert!(lines[2].contains("room they were taking"), "got: {}", lines[2]);
+        assert!(lines[3].contains("says 2 axes are narrowing"), "got: {}", lines[3]);
+        assert!(
+            ins.expectation(&steps[3]).is_none(),
+            "an absence and a bare number are closed by an eye, not by a reading"
+        );
+    }
+
+    /// The card the narrowing left, read the same way whichever narrowing left it — the line names none,
+    /// because the move in front of it is what did the narrowing and saying it twice is what would let
+    /// the two disagree.
+    #[test]
+    fn a_card_is_read_against_the_board_the_narrowing_left() {
+        let yaml = r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: task
+    op: create
+    with: { title: SCENARIO — still to be taken }
+    as: waiting
+steps_gui:
+  - type: action
+    domain: task
+    op: choose-filter
+    with: { axis: assignee, value: me-ai }
+  - type: assert
+    domain: task
+    op: narrowed
+    with: { target: waiting, present: false }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        ins.learn(&s.given);
+        let steps = s.steps(Driver::Gui);
+        let line = ins.render(&steps[1]).unwrap();
+        assert!(line.contains("the board the narrowing left"), "got: {line}");
+        assert!(!line.contains("search"), "got: {line}");
+        let e = ins.expectation(&steps[1]).expect("a card that went is read off the shot");
+        assert_eq!(e, Expectation { text: "SCENARIO — still to be taken".into(), present: false });
     }
 
     #[test]

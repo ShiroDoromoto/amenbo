@@ -95,6 +95,14 @@ impl Driver<'_> {
                         args.push(v.to_string());
                     }
                 }
+                // `at` is the one field whose word is not the value: it names one of the folders the
+                // task's project offers, and where a folder sits is the driver's to know — the same
+                // reason a `folder` step names a folder rather than pointing at one.
+                if with.contains_key("at") {
+                    let dir = self.folder_named(req_str(with, "at")?)?;
+                    args.push("--at".into());
+                    args.push(dir.to_string_lossy().into_owned());
+                }
                 if args.len() == 3 {
                     return Err("`update` names no field to set".to_string());
                 }
@@ -200,6 +208,45 @@ impl Driver<'_> {
                 let target = self.resolve(with)?;
                 let v = self.run_json(&["task", "show", &target.to_string(), "--json"])?;
                 judge_field(&format!("task {target}"), with, &v)
+            }
+            // Which folder the task says it is worked in. Read as a folder and not as a value: what
+            // the task holds is a binding, and what the read answers with is the path that binding
+            // points at — the canonical spelling, which is what the store recorded when the folder
+            // was bound. A task holding none answers with nothing at all, which is `present: false`.
+            "worked-in" => {
+                let target = self.resolve(with)?;
+                let present = opt_bool(with, "present").unwrap_or(true);
+                let want = match with.get("dir") {
+                    Some(_) => {
+                        let dir = self.folder(with)?;
+                        Some(std::fs::canonicalize(&dir).unwrap_or(dir))
+                    }
+                    None => None,
+                };
+                let v = self.run_json(&["task", "show", &target.to_string(), "--json"])?;
+                let at = v["at"]["dir"].as_str().map(std::path::PathBuf::from);
+                let found = match (&at, &want) {
+                    (Some(dir), Some(named)) => dir == named,
+                    (Some(_), None) => true,
+                    (None, _) => false,
+                };
+                let pass = found == present;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "task {target} {} (expected {}, {})",
+                        match &at {
+                            Some(dir) => format!("is worked in {}", dir.display()),
+                            None => "names no folder".to_string(),
+                        },
+                        match (present, &want) {
+                            (true, Some(named)) => named.display().to_string(),
+                            (true, None) => "a folder".to_string(),
+                            (false, _) => "no folder".to_string(),
+                        },
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
             }
             "commit" => {
                 let target = self.resolve(with)?;

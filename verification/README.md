@@ -394,8 +394,10 @@ pointer search would otherwise walk up into. One kind of folder name is answered
 placed: a folder a road **moved** is named again afterwards — `folder rebind`'s `moved:`, `folder
 vanished`'s `gone:`, `folder repointed`'s `previously:` — to say which binding is meant, and placing
 it would put back the very path the move took away, which is the whole state those steps are about.
-Those names are answered from what the run moved instead. A **plugin** is named the way the catalog
-names it (`name: worktree`), which is what every one of its commands takes.
+Those names are answered from what the run moved instead. A folder name also travels outside the
+`folder` domain: `task update`'s `at:` and `task worked-in`'s `dir:` name which of a project's folders
+a task is worked in, and are placed and read the same way the `folder` steps' are. A **plugin** is
+named the way the catalog names it (`name: worktree`), which is what every one of its commands takes.
 
 `plugin run` is the one place where a step's arguments are not amenbo's. Everything after the
 plugin's name belongs to the plugin, so `command:` is the word its own face takes, `task:` hands it

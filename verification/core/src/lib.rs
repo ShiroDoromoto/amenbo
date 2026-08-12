@@ -240,7 +240,12 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "reopen", required: &["target"], refs: &["target"], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "block", required: &["target", "reason"], refs: &["target"], strings: &["reason"], binds: false },
     // Editing a task's own fields: `update` sets the ones it names, `clear` takes one back.
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "update", required: &["target"], refs: &["target"], strings: &["title", "notes", "due", "start", "priority"], binds: false },
+    //
+    // `at` is the odd one among them. It is written like the others — a word under its own key — but
+    // what the word names is a **folder**, one of the folders the task's own project offers, so the
+    // driver hands over the path it placed that folder at rather than the word itself. It is also the
+    // only field here that another road can take away: unbinding the folder empties it.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "update", required: &["target"], refs: &["target"], strings: &["title", "notes", "due", "start", "priority", "at"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "clear", required: &["target", "field"], refs: &["target"], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "move", required: &["target"], refs: &["target", "project"], strings: &["position"], binds: false },
     // Narrowing a listing that is already drawn, by the words a reader types over it. The words travel
@@ -740,6 +745,12 @@ const REGISTRY: &[OpSpec] = &[
     // record that was not the one pressed.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "opened", required: &["target", "shows"], refs: &["target"], strings: &["shows"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
+    // Which folder the task says it is worked in — read as a folder rather than as a value, which is
+    // why it is not a `field` path: what the task holds is a binding, and what it answers with is the
+    // path that binding points at, a path no road can write down (the driver is the one that places
+    // its folders). `dir` names the folder the way every `folder` step does; `present: false` is the
+    // other half and needs no name, since a task holding none has nothing to name.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "worked-in", required: &["target"], refs: &["target"], strings: &["dir"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "listed", required: &["filter"], refs: &["target"], strings: &["filter", "position"], binds: false },
     // Whether one decision points at another, named by the side the edge is read from (`supersedes`

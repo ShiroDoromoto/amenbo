@@ -131,6 +131,27 @@ steps_cli:
       dir: moved
       project: keeper
 
+  # And the move is a move: the folder leaves the books of the project it came from. Read on the
+  # project rather than on the folder, because this is the half the pointer cannot answer — the one
+  # place a person is offered a way into a folder is the list its project's settings draw, and a
+  # doomed project going on offering a folder that now leads elsewhere is a lie the delete then acts
+  # on. It also decides what the delete below has to release: a project that never held the folder
+  # has nothing here to take.
+  - type: assert
+    domain: folder
+    op: listed
+    with:
+      dir: moved
+      project: pj
+      present: false
+
+  - type: assert
+    domain: folder
+    op: listed
+    with:
+      dir: moved
+      project: keeper
+
   # Deleted: gone from both listings, the everyday one and the one that carries the archived — which
   # is the difference from archiving, where the row is still somewhere.
   - type: action
@@ -168,6 +189,13 @@ steps_cli:
   - type: assert
     domain: folder
     op: bound
+    with:
+      dir: moved
+      project: keeper
+
+  - type: assert
+    domain: folder
+    op: listed
     with:
       dir: moved
       project: keeper

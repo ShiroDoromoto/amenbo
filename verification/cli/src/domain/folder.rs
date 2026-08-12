@@ -123,6 +123,31 @@ impl Driver<'_> {
                     ),
                 ))
             }
+            // Asked of the project rather than of the folder: the list its settings screen is built
+            // from. A folder re-pointed elsewhere has to leave this list — the pointer it now holds
+            // names one project, so a second one going on offering the folder is a way in that leads
+            // somewhere else.
+            "listed" => {
+                let dir = self.folder(with)?;
+                let pid = self.resolve_key(with, "project")?;
+                let present = opt_bool(with, "present").unwrap_or(true);
+                // The store records the folder canonicalized (symlinks resolved), which is the spelling
+                // that comes back here; the run's own path may still carry the symlinked parent.
+                let want = std::fs::canonicalize(&dir).unwrap_or_else(|_| dir.clone());
+                let v = self.run_json(&["project", "show", &pid.to_string(), "--json"])?;
+                let listed = lists_folder(&v, &want);
+                let pass = listed == present;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "project {pid} {} {} (expected {}, {})",
+                        if listed { "lists" } else { "does not list" },
+                        want.display(),
+                        if present { "listed" } else { "not listed" },
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
             "resynced" => {
                 let dir = self.folder(with)?;
                 let path = dir.to_string_lossy().into_owned();
@@ -144,5 +169,44 @@ impl Driver<'_> {
             }
             _ => Err(unmapped(Domain::Folder, op)),
         }
+    }
+}
+
+/// Does what `project show` answered list this folder? The rows carry the path as a string, so the
+/// comparison is made on `Path` rather than on the text: two spellings of one folder are one folder,
+/// and a road that asked about a folder it made would otherwise read a miss as an answer.
+fn lists_folder(shown: &serde_json::Value, want: &std::path::Path) -> bool {
+    shown["bound_folders"].as_array().is_some_and(|folders| {
+        folders.iter().any(|f| f["path"].as_str().is_some_and(|p| std::path::Path::new(p) == want))
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    /// The reading `listed` is taken on: a project's own answer about its folders, matched as a path.
+    /// A project that lists other folders is a miss and not an error — that is the very state
+    /// `present: false` asks for, and the two have to be told apart.
+    #[test]
+    fn a_projects_folder_list_is_read_as_paths_and_a_project_holding_none_is_a_miss() {
+        let shown = serde_json::json!({
+            "bound_folders": [
+                { "path": "/work/one", "exists": true },
+                { "path": "/work/two/", "exists": true },
+            ]
+        });
+        assert!(lists_folder(&shown, Path::new("/work/one")));
+        // A trailing slash is the same folder: `Path` compares component by component.
+        assert!(lists_folder(&shown, Path::new("/work/two")));
+        assert!(!lists_folder(&shown, Path::new("/work/three")));
+        // A folder that only prefixes a listed one is not listed.
+        assert!(!lists_folder(&shown, Path::new("/work/on")));
+
+        // A project with no folder at all answers with an empty list, and one whose answer carries no
+        // list at all is read the same way rather than blowing up mid-road.
+        assert!(!lists_folder(&serde_json::json!({ "bound_folders": [] }), Path::new("/work/one")));
+        assert!(!lists_folder(&serde_json::json!({}), Path::new("/work/one")));
     }
 }

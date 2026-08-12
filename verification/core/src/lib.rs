@@ -883,6 +883,13 @@ const REGISTRY: &[OpSpec] = &[
     // which is answered by a resync finding nothing left to write.
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "bound", required: &["dir"], refs: &["project"], strings: &["dir"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "resynced", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
+    // The other side of the same relation: not what the folder says, but what a **project** says about
+    // its folders — the list its own settings offer, which is where a person goes to open one. The two
+    // readings are worth keeping apart, because a folder re-pointed at another project is the one case
+    // where they can disagree: the pointer names the new project the moment it is written, while the
+    // list is an index that has to be kept up with it. `present: false` is that half — the project the
+    // folder left no longer offering a way into it.
+    OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "listed", required: &["dir", "project"], refs: &["project"], strings: &["dir"], binds: false },
     // How many folders the project the last `unbind` was taken from has left. Taking the last one off
     // goes through like any other — re-homing folders means taking them all off before putting them
     // back, so a count that refused would force an order rather than protect anything — and what

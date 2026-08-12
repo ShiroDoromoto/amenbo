@@ -112,6 +112,13 @@ pub enum Command {
         /// directory (which must exist) rather than CWD. Lets you link a folder from outside it (git -C style)
         #[arg(long)]
         dir: Option<String>,
+        /// re-point the binding with this id at the folder being bound, instead of recording a new one.
+        /// The binding keeps its id, so whatever points at it — a task filed at that folder — follows the
+        /// folder to its new path rather than being left naming nothing. This is the way to answer a
+        /// folder that moved, was renamed, or was restored somewhere else. The ids are in the answer
+        /// `bind` gives when it finds a folder gone
+        #[arg(long, value_name = "BINDING-ID", requires = "project")]
+        rebind: Option<i64>,
         /// bind even when this folder is already inside an amenbo-managed tree (a parent has a
         /// `.amenbo`). Off by default so a stray bind in a source subdirectory cannot shadow the
         /// root pointer (and scatter `.amenbo`/AGENTS.md/CLAUDE.md there). It does not reach a git

@@ -180,6 +180,28 @@ impl Store {
         Ok(())
     }
 
+    /// The bindings as rows, **id included** ([`crate::binding::BoundFolder`]) — what
+    /// [`Self::bindings`] drops. A surface that has to name one binding rather than list a project's
+    /// folders reads this one.
+    pub fn bound_folders(&self) -> Result<Vec<crate::binding::BoundFolder>> {
+        crate::overview::bound_folders(self.engine.conn())
+    }
+
+    /// Re-point one binding at another folder, keeping its id
+    /// ([`crate::overview::repoint_binding`] carries the whole of what that means). `None` when no
+    /// binding has that id.
+    pub fn repoint_binding(
+        &self,
+        id: i64,
+        project_id: i64,
+        dir: &str,
+    ) -> Result<Option<crate::binding::Repoint>> {
+        let tx = self.engine.transaction()?;
+        let done = crate::overview::repoint_binding(&tx, id, project_id, dir)?;
+        tx.commit().map_err(crate::store_engine::StoreEngineError::from)?;
+        Ok(done)
+    }
+
     // ── Machine-local overview state (read receipts, inbox archive) ────────────────
     //
     // Device state that is never synced, keyed by task_id (a task's primary key). Read and written

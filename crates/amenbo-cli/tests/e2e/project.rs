@@ -838,3 +838,96 @@ fn deleting_a_project_leaves_a_folder_that_was_re_pointed_at_another_one_alone()
     let listed = cli.json_from(&moved, &["project", "list", "--json"]);
     assert!(listed["count"].as_i64().is_some_and(|n| n >= 1), "the folder still resolves: {listed}");
 }
+
+/// A folder that moved is answered by re-pointing the binding it already had, not by binding it again.
+/// The two are indistinguishable from the folder's side — a pointer lands either way — and they differ
+/// entirely in the registry: a second bind records a new row, so anything that points at a bound folder
+/// by id (`AMB-D-648`) is left naming a row nobody points at, while `--rebind` moves the row the folder
+/// always had. The id is the thing being kept, so the walk reads it off the answer that offers it and
+/// hands the same number back.
+///
+/// That answer is the other half. An id nobody has seen is not an id anyone can pass, so `bind` — the
+/// command that refuses to work in a folder that is gone — lines the vanished bindings up by id and
+/// names the command that re-points them. Without it the flag is unreachable from the outside.
+#[test]
+fn a_moved_folder_is_re_pointed_by_id_and_the_binding_that_vanished_is_listed_with_it() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let run_args_in = |dir: &std::path::Path, args: &[&str]| {
+        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+            .env("AMENBO_HOME", &cli.home)
+            .env("AMENBO_UPDATE_CHECK", "0")
+            .current_dir(dir)
+            .args(with_defaults(args, "human"))
+            .output()
+            .expect("failed to run the binary");
+        (exit_code(&out), String::from_utf8_lossy(&out.stdout).to_string(), String::from_utf8_lossy(&out.stderr).to_string())
+    };
+
+    // Two folders on one project: the one that stays is where the reader stands when the other goes.
+    let staying = amenbo_scratch::scratch("repoint-staying");
+    let moving = amenbo_scratch::scratch("repoint-moving");
+    // `--dir` records the canonical spelling, which is the one the answers come back in.
+    let moving_str = std::fs::canonicalize(&moving).unwrap().to_string_lossy().to_string();
+    let pid = id_str(
+        &cli.json(&["project", "add", "--name", "引っ越すPJ", "--dir", &staying.to_string_lossy(), "--json"])["project"]["id"],
+    );
+    cli.run(&["bind", "--project", &pid, "--dir", &moving_str]);
+
+    // The folder is moved out from under the binding — renamed, restored elsewhere, it is the same
+    // thing to the registry: the path it holds no longer leads anywhere.
+    let new_home = amenbo_scratch::scratch("repoint-new-home");
+    let new_home_str = std::fs::canonicalize(&new_home).unwrap().to_string_lossy().to_string();
+    std::fs::rename(moving.join(".amenbo"), new_home.join(".amenbo")).unwrap();
+    std::fs::remove_dir_all(&moving).unwrap();
+
+    // amenbo does not quietly go and work somewhere else: from the folder that is still there, the
+    // read stops — and what it hands back is the vanished binding's id and the command that moves it.
+    let (code, _, stderr) = run_args_in(&staying, &["bind"]);
+    assert_eq!(code, 1, "a folder that is gone stops the read: {stderr}");
+    assert!(stderr.contains("--rebind"), "the answer names the command that re-points it: {stderr}");
+    let listed_id: i64 = stderr
+        .split("--rebind ")
+        .nth(1)
+        .and_then(|rest| rest.split_whitespace().next())
+        .and_then(|n| n.parse().ok())
+        .unwrap_or_else(|| panic!("the vanished binding is listed by id: {stderr}"));
+
+    // A number nobody bound is a typo, and nothing is written for it — the answer lines up the ids
+    // there are instead of recording a binding under a number the human never chose.
+    let (code, _, stderr) = run_args_in(&new_home, &["bind", "--project", &pid, "--rebind", "99999", "--json"]);
+    assert_eq!(code, 1, "an id nobody bound is refused: {stderr}");
+    let v: Value = serde_json::from_str(stderr.trim()).unwrap_or_else(|_| panic!("error JSON: {stderr}"));
+    assert_eq!(v["error"]["code"], "not_found", "and refused as a thing that is not there: {stderr}");
+    assert!(
+        v["error"]["hint"].as_str().is_some_and(|h| h.contains(&format!("--rebind {listed_id}"))),
+        "the ids there are to re-point are in the answer: {stderr}",
+    );
+    assert_eq!(
+        cli.json(&["project", "show", &pid, "--json"])["bound_folders"].as_array().map(Vec::len),
+        Some(2),
+        "and the refusal left the registry exactly as it was",
+    );
+
+    // The re-point itself, run from the folder's new home. The binding keeps the id it was listed under.
+    let done = cli.json_from(&new_home, &["bind", "--project", &pid, "--rebind", &listed_id.to_string(), "--json"]);
+    assert_eq!(done["binding"]["binding_id"].as_i64(), Some(listed_id), "the id is the one that moved: {done}");
+    assert_eq!(done["binding"]["dir"].as_str(), Some(new_home_str.as_str()), "it names the new folder: {done}");
+    assert_eq!(done["binding"]["previous_dir"].as_str(), Some(moving_str.as_str()), "and says where it pointed before: {done}");
+
+    // The project still has two folders, not three: the row moved rather than a new one being added.
+    let folders = cli.json(&["project", "show", &pid, "--json"])["bound_folders"].as_array().cloned().unwrap_or_default();
+    assert_eq!(folders.len(), 2, "the binding moved, so nothing was added: {folders:?}");
+    assert!(
+        folders.iter().any(|f| f["path"].as_str() == Some(new_home_str.as_str())),
+        "the folder on its books is where the folder is now: {folders:?}",
+    );
+    assert!(
+        !folders.iter().any(|f| f["path"].as_str() == Some(moving_str.as_str())),
+        "and the path that leads nowhere is off them: {folders:?}",
+    );
+
+    // Nothing is stale any more, so the folder that stayed can be worked in again.
+    let (code, _, stderr) = run_args_in(&staying, &["bind"]);
+    assert_eq!(code, 0, "with every folder where the registry says, the read goes through: {stderr}");
+}

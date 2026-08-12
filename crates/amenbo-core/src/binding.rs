@@ -446,16 +446,49 @@ impl Registry {
             .collect()
     }
 
-    /// The folders recorded for `project_id` whose path has **vanished** — the material for
-    /// `binding_stale`. Ascending, and empty when every recorded folder is still there (or when none is
-    /// recorded at all). Reporting a folder that is gone is what keeps amenbo from **silently operating
-    /// somewhere else**; with no main folder to single out, the question is asked of each of them.
-    pub fn stale_dirs(&self, project_id: i64) -> Vec<&str> {
-        self.dirs_for_project(project_id)
-            .into_iter()
-            .filter(|dir| !Path::new(dir).is_dir())
-            .collect()
+}
+
+/// One recorded binding **with the id its row is keyed by** — what [`Registry`] deliberately does not
+/// carry. The registry is a value type indexed by project, and a folder there is a path inside a set;
+/// a task points at a bound folder by row id instead (`AMB-D-648`), because a path is exactly what
+/// stops being true. So the id-carrying view is a separate read ([`crate::overview::bound_folders`]),
+/// used by the two surfaces that have to name one binding rather than list a project's folders: the
+/// re-point that keeps a moved folder's id ([`crate::overview::repoint_binding`]), and the answer that
+/// shows a human which ids there are to re-point.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BoundFolder {
+    /// The row's id — stable across a re-point, retired when the folder is unbound.
+    pub id: i64,
+    /// The project this folder names.
+    pub project_id: i64,
+    /// The absolute path recorded for it — which may no longer lead anywhere ([`Self::exists`]).
+    pub dir: String,
+}
+
+impl BoundFolder {
+    /// Whether the folder is still where the binding says. Asking is what keeps amenbo from **silently
+    /// operating somewhere else**: a path recorded here is absolute, so moving, renaming or restoring
+    /// the folder elsewhere leaves the row naming nothing. With no main folder to single out, the
+    /// question is asked of each of them — and a `false` is a binding to re-point, not a row to drop.
+    pub fn exists(&self) -> bool {
+        Path::new(&self.dir).is_dir()
     }
+}
+
+/// What re-pointing one binding did ([`crate::overview::repoint_binding`]): the row that moved, where
+/// it pointed before, and the rows dropped for naming the same folder.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Repoint {
+    /// The binding that was re-pointed — the same id it had, which is the whole point of the operation.
+    pub id: i64,
+    /// The project it named before (equal to the new one unless the re-point moved it between projects).
+    pub previous_project_id: i64,
+    /// The folder it named before — gone, moved or renamed, which is why it was re-pointed.
+    pub previous_dir: String,
+    /// The other bindings dropped because they named the folder this one now names. A folder's
+    /// `.amenbo` names one project ([`Registry::claim_project_ref`] holds the same line for a plain
+    /// bind), and the row that survives is the one the caller named.
+    pub retracted: Vec<BoundFolder>,
 }
 
 /// Bring a folder-path string into a comparable normal form. The reverse lookup is keyed by id and
@@ -465,7 +498,7 @@ impl Registry {
 /// which compares component by component and so absorbs a trailing slash. Recording always writes an
 /// absolute path (via `current_dir()` / `canonicalize`), so there is no need to prefix relative paths:
 /// this stays best-effort.
-fn normalize_dir_for_match(dir: &str) -> PathBuf {
+pub(crate) fn normalize_dir_for_match(dir: &str) -> PathBuf {
     let p = PathBuf::from(dir);
     std::fs::canonicalize(&p).unwrap_or(p)
 }
@@ -1025,24 +1058,25 @@ mod tests {
         assert_eq!(reg.projects_for_dir("/work/a"), vec![1]);
     }
 
+    /// A binding says where its folder is, and the folder is what answers for that — so the question is
+    /// asked of the path itself, one binding at a time. A project holding a live folder does not excuse
+    /// a vanished one: no folder outranks another, and the one that is gone is a binding to re-point.
     #[test]
-    fn stale_dirs_names_every_recorded_folder_that_has_vanished() {
+    fn a_binding_says_whether_the_folder_it_names_is_still_there() {
         let home = tmp("reg");
         let (kept, gone) = (home.join("kept"), home.join("gone"));
         std::fs::create_dir_all(&kept).unwrap();
         std::fs::create_dir_all(&gone).unwrap();
-        let mut reg = Registry::default();
-        reg.record_project_ref(1, kept.to_string_lossy().to_string());
-        reg.record_project_ref(1, gone.to_string_lossy().to_string());
-        // Every folder is there: nothing to report.
-        assert!(reg.stale_dirs(1).is_empty());
+        let row = |id: i64, dir: &Path| BoundFolder {
+            id,
+            project_id: 1,
+            dir: dir.to_string_lossy().to_string(),
+        };
+        assert!(row(1, &kept).exists());
+        assert!(row(2, &gone).exists(), "both are there to begin with");
 
-        // One of them vanishes — and it is reported even though the project still has a live folder,
-        // because no folder outranks another.
         std::fs::remove_dir_all(&gone).unwrap();
-        assert_eq!(reg.stale_dirs(1), vec![gone.to_string_lossy()]);
-
-        // A project with no folder recorded has nothing to be stale.
-        assert!(reg.stale_dirs(99).is_empty());
+        assert!(row(1, &kept).exists(), "the folder that stayed is unaffected");
+        assert!(!row(2, &gone).exists(), "and the one that went is reported gone");
     }
 }

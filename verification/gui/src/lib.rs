@@ -25,7 +25,7 @@
 //! into per-step evidence with a verdict — is separated from the side effects (running the tool)
 //! so the walk is testable with injected capture, reading and step-boundary wait.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -153,11 +153,19 @@ pub struct Expectation {
 /// back by `target:` reads — and is judged — by name, not by id.
 struct Instructor {
     labels: HashMap<String, String>,
+    /// The bindings whose task has **ended** — done or rejected — as of the step being rendered.
+    /// The app draws such a title with a line through it wherever it draws it (`card--closed`,
+    /// `row__title--closed`), and that line is what takes the title out of OCR's reach, so this is
+    /// the whole of what says a step is an eye's to close rather than a reading's.
+    ///
+    /// It is a state that moves, not a flag that is set once: a world may take a task into a terminal
+    /// state and back out again, and the steps on either side of that are judged differently.
+    ended: HashSet<String>,
 }
 
 impl Instructor {
     fn new() -> Instructor {
-        Instructor { labels: HashMap::new() }
+        Instructor { labels: HashMap::new(), ended: HashSet::new() }
     }
 
     /// Learn what the world a road starts from left standing, without rendering a word of it. The
@@ -169,11 +177,62 @@ impl Instructor {
     /// ops that never reach the screen, and this harness maps the screen's.
     fn learn(&mut self, steps: &[Step]) {
         for step in steps {
-            if let Step::Action { with, bind: Some(name), .. } = step {
-                if let Some(label) = label(with) {
-                    self.labels.insert(name.clone(), label.to_string());
+            if let Step::Action { domain, op, with, bind } = step {
+                if let Some(name) = bind {
+                    if let Some(label) = label(with) {
+                        self.labels.insert(name.clone(), label.to_string());
+                    }
                 }
+                self.note_end(*domain, op, with);
             }
+        }
+    }
+
+    /// Follow a task into and out of its terminal states, which is what decides whether the title a
+    /// later step names is drawn with a line through it.
+    ///
+    /// The four ops here are every one the registry has for moving a task across that line, and the
+    /// world is where all of it happens today: a premise takes `status` and none of the other three,
+    /// and a screen road can end nothing at all, since this harness maps no op that would. It is
+    /// walked on the road as well anyway — the rule is that an action noted is an action walked, so
+    /// mapping one of them later needs nothing remembered here.
+    fn note_end(&mut self, domain: Domain, op: &str, with: &Args) {
+        if domain != Domain::Task {
+            return;
+        }
+        let Some(target) = with.get("target").and_then(|v| v.as_str()) else { return };
+        let ended = match op {
+            "done" | "reject" => true,
+            "reopen" => false,
+            // The one op that moves either way, so the state is read off the value rather than off
+            // the op: `blocked` and `in_progress` are as much a way back out as `reopen` is.
+            "status" => {
+                matches!(with.get("status").and_then(|v| v.as_str()), Some("done") | Some("rejected"))
+            }
+            _ => return,
+        };
+        if ended {
+            self.ended.insert(target.to_string());
+        } else {
+            self.ended.remove(target);
+        }
+    }
+
+    /// Whether the title this step names is on screen with a line through it.
+    fn struck_through(&self, with: &Args) -> bool {
+        with.get("target").and_then(|v| v.as_str()).is_some_and(|name| self.ended.contains(name))
+    }
+
+    /// The sentence a step whose title is struck through carries, and nothing at all for the rest.
+    /// A `Review` says on the run's roll-up that an eye is owed, but not why one is — and "read this
+    /// yourself" without the reason reads as the harness having given up.
+    fn struck_note(&self, with: &Args) -> &'static str {
+        if self.struck_through(with) {
+            " This task has ended, so its title is drawn with a line through it. Vision reads the \
+             glyphs under that line as other letters, and no folding of the two sides puts them back \
+             together — so this one is closed by an eye on the shot rather than by the reading."
+        } else {
+            ""
         }
     }
 
@@ -208,6 +267,7 @@ impl Instructor {
                         self.labels.insert(name.clone(), label.to_string());
                     }
                 }
+                self.note_end(*domain, op, with);
                 Ok(text)
             }
             Step::Assert { domain, op, with } => self.assert(*domain, op, with),
@@ -223,6 +283,14 @@ impl Instructor {
     /// box, or the values chosen on the axes — so the expectation is the whole title rather than any
     /// word of it: a card that went carries none of its title, and neither the half of a query nor the
     /// name of a value can read as the card that left.
+    ///
+    /// Both of them stop being OCR's the moment the task has **ended**. A done or rejected title is
+    /// drawn with a line through it, and Vision reads the glyphs under that line as other letters —
+    /// `SCENARIO — work is over` came back as `SCENARIOwotk is eveF` — so the two sides never meet
+    /// however they are folded. What is worth saying is that the `present: false` half is the more
+    /// dangerous one: a reading that cannot find a title it is looking at passes an absence step, so
+    /// such a line reads green while proving nothing. Both halves go to a `Review`, which is the same
+    /// answer this harness gives every assert OCR cannot judge.
     ///
     /// `found` is judged on the same text again — every hit row leads with the ref and the title of the
     /// record it belongs to, whichever face the words were written on. What that settles is that the
@@ -350,6 +418,12 @@ impl Instructor {
     fn expectation(&self, step: &Step) -> Option<Expectation> {
         let Step::Assert { domain, op, with } = step else { return None };
         match (*domain, op.as_str()) {
+            // The two that read a task's own title off a card or a row, where a title that has ended
+            // is drawn through. Nothing derived from it can be matched, in either direction: a reading
+            // of a struck title misses the words that are there, and the same miss on a `present:
+            // false` step is a pass nobody earned. A hit row is not one of these — a search draws its
+            // titles plain, ended or not — so `found` keeps its expectation.
+            (Domain::Task, "listed") | (Domain::Task, "narrowed") if self.struck_through(with) => None,
             (Domain::Task, "listed")
             | (Domain::Task, "narrowed")
             | (Domain::Task, "found")
@@ -719,15 +793,17 @@ impl Instructor {
                 ),
             },
             (Domain::Task, "listed") => format!(
-                "Confirm the task \"{}\" is {} the listing filtered by `{}`.",
+                "Confirm the task \"{}\" is {} the listing filtered by `{}`.{}",
                 self.target_label(with),
                 if present(with) { "present in" } else { "absent from" },
-                req(with, "filter")?
+                req(with, "filter")?,
+                self.struck_note(with)
             ),
             (Domain::Task, "narrowed") => format!(
-                "Confirm the card \"{}\" is {} the board the narrowing left.",
+                "Confirm the card \"{}\" is {} the board the narrowing left.{}",
                 self.target_label(with),
-                if present(with) { "still on" } else { "gone from" }
+                if present(with) { "still on" } else { "gone from" },
+                self.struck_note(with)
             ),
             // Read on the board with nothing opened, which is the whole claim: the classification is
             // legible where the work is. The axis is named as well as the value, since what is under
@@ -1512,6 +1588,103 @@ steps_gui:
         }
         let exp = ins.expectation(&s.steps(Driver::Gui)[2]).expect("listed has an expectation");
         assert_eq!(exp, Expectation { text: "SEED".to_string(), present: true });
+    }
+
+    /// A card past the states a road is watching is a card that has ended, and its title is on screen
+    /// with a line through it. Both halves are checked, since the absent one is the half that would
+    /// otherwise read green off a reading that found nothing because it could read nothing.
+    #[test]
+    fn a_step_naming_an_ended_task_is_left_for_review() {
+        let yaml = r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: task
+    op: create
+    with: { title: SCENARIO — work is over }
+    as: finished
+  - type: action
+    domain: task
+    op: status
+    with: { target: finished, status: done }
+  - type: action
+    domain: task
+    op: create
+    with: { title: SCENARIO — still to be taken }
+    as: waiting
+steps_gui:
+  - type: assert
+    domain: task
+    op: narrowed
+    with: { target: finished, present: true }
+  - type: assert
+    domain: task
+    op: narrowed
+    with: { target: finished, present: false }
+  - type: assert
+    domain: task
+    op: narrowed
+    with: { target: waiting, present: true }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        ins.learn(&s.given);
+        let steps = s.steps(Driver::Gui);
+        let lines: Vec<String> = steps.iter().map(|st| ins.render(st).unwrap()).collect();
+
+        assert!(ins.expectation(&steps[0]).is_none(), "a struck title is not OCR's to read");
+        assert!(ins.expectation(&steps[1]).is_none(), "and its absent half is not either");
+        assert!(lines[0].contains("line through it"), "the line says why an eye is owed: {}", lines[0]);
+
+        // The card beside it is untouched: this is about the one state that draws the line, not about
+        // every card on a board that happens to hold one.
+        assert_eq!(
+            ins.expectation(&steps[2]).expect("a task still open is read as ever"),
+            Expectation { text: "SCENARIO — still to be taken".to_string(), present: true }
+        );
+        assert!(!lines[2].contains("line through it"));
+    }
+
+    /// The state moves rather than being set once: a world that took a task through a terminal state
+    /// and back out leaves a title an eye is not owed. Written as a premise because that is where it
+    /// can be written — the harness maps no op that ends a task onto the screen, so a road has no way
+    /// to walk one.
+    #[test]
+    fn a_task_taken_back_out_of_a_terminal_state_is_readable_again() {
+        let yaml = r#"
+id: x
+title: y
+given:
+  - type: action
+    domain: task
+    op: create
+    with: { title: SEED }
+    as: seed
+  - type: action
+    domain: task
+    op: status
+    with: { target: seed, status: done }
+  - type: action
+    domain: task
+    op: status
+    with: { target: seed, status: in_progress }
+steps_gui:
+  - type: assert
+    domain: task
+    op: listed
+    with: { filter: "status:in_progress", target: seed, present: true }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        ins.learn(&s.given);
+        let steps = s.steps(Driver::Gui);
+        let line = ins.render(&steps[0]).unwrap();
+        assert_eq!(
+            ins.expectation(&steps[0]).expect("no line is drawn through it any more"),
+            Expectation { text: "SEED".to_string(), present: true }
+        );
+        assert!(!line.contains("line through it"));
     }
 
     #[test]

@@ -218,7 +218,14 @@ what it read and hands back the unfolded reading as well; the harness folds its 
 the same rule and matches. The reading as it came back is written next to the shot (`NN-…​.txt`),
 which is what a person reads when a step comes out red.
 An assert OCR cannot mechanically judge — a structured `field` value — is a `Review`: its shot is
-kept for an AI/human eye and does not fail the run. tesseract stays the Linux container path
+kept for an AI/human eye and does not fail the run. A task's **title is one of those once the task
+has ended**: done and rejected are drawn with a line through them, and the reader returns the glyphs
+under that line as other letters (`SCENARIO — work is over` came back as `SCENARIOwotk is eveF`), so
+no fold brings the two sides together. The harness follows each binding through its terminal states
+and leaves such a step for an eye, saying so in the instruction. The half worth knowing is the
+absent one: a reading that cannot find a title it is looking straight at passes a `present: false`
+step, so those lines read green while proving nothing — which is what this takes away. Write the
+machine-judged half of a road on cards that are still open. tesseract stays the Linux container path
 (`scripts/docker/gui-e2e.sh`); each driver walks the road written for it.
 
 The Linux container carries no toolchain, so it can't read the scenario itself. Its host launcher

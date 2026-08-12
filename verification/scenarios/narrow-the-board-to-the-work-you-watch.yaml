@@ -118,14 +118,26 @@ steps_gui:
     domain: task
     op: open-filters
 
-  # Read with nothing chosen yet, which is the one reading that makes every "gone" below mean anything:
-  # a card the board never drew would be absent from every shot of this road, and each of those steps
-  # would pass on a board that had lost it before the narrowing began.
+  # Read with nothing chosen yet, which is what makes every "gone" below mean anything: a card the
+  # board never drew would be absent from every shot of this road, and each of those steps would pass
+  # on a board that had lost it before the narrowing began.
+  #
+  # Both are read, and only one of them is a reading. The card past the watched states has ended, so
+  # its title is drawn through and OCR cannot be held to it either way — that one is left for an eye.
+  # The card the very next press takes away is standing here in words a reading can hold, which is
+  # what keeps the baseline a machine judges.
   - type: assert
     domain: task
     op: narrowed
     with:
       target: finished
+      present: true
+
+  - type: assert
+    domain: task
+    op: narrowed
+    with:
+      target: doing
       present: true
 
   - type: action

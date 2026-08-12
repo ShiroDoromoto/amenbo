@@ -116,10 +116,7 @@ export const ja: Translation = {
     "dec.sort.decidedDesc": "決定日が新しい順", "dec.sort.decidedAsc": "決定日が古い順",
     "board.filter": "フィルタ:", "board.group": "グループ:",
     "filter.dim.status": "ステータス", "filter.dim.assignee": "担当", "filter.dim.priority": "優先度",
-    "filter.opt.all": "すべて",
     "filter.opt.assignee.none": "未割り当て", "filter.opt.assignee.me": "自分", "filter.opt.assignee.meAi": "自分の AI",
-    // The compound status option: both terminals, whichever way the task ended.
-    "filter.opt.status.closed": "閉じた（完了・却下）",
     "board.searchPh": "タスク・AMB-T-<n> を検索",
     "board.searchFailed": "検索できなかった",
     "board.addDimension": "分類", "board.dimensionNamePh": "分類名（Enter で追加）",

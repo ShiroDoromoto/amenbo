@@ -2,7 +2,7 @@
 //
 // A filter is defined once, as a dimension with a human-facing label, and the GUI's controls grow
 // out of that definition. Dimensions, value sets, predicates and labels all live here, leaving the
-// screens to lay out labelled <select>s and nothing more.
+// screens to lay out one labelled row of values per dimension and nothing more.
 //
 // Each dimension carries a `cliKey` that pairs it with the CLI's --filter grammar
 // (crates/amenbo-core/src/query.rs), which is how a new dimension stays aligned across GUI and CLI.
@@ -13,7 +13,7 @@ import type { DimensionDto } from "../bindings/bindings";
 import { parseRef } from "./idref";
 import type { Priority, TaskCard } from "../mock/types";
 import { priorityLabel, statusLabel, t } from "./i18n";
-import { isClosed, STATUS_ALL } from "./status";
+import { STATUS_ALL } from "./status";
 
 /** One choice within a dimension. `value` matches the CLI's value; `label` is lazy so it follows the language. */
 export type FilterOption = {
@@ -31,18 +31,15 @@ export type FilterDimension = {
   options: FilterOption[];
 };
 
-/** The selection (dimension id to option value). A missing key or "" means the dimension does not filter. */
-export type FilterSelection = Record<string, string>;
+/**
+ * The selection (dimension id to the values chosen on it). A missing key or an empty array means the
+ * dimension does not filter, so choosing every value on an axis and choosing none of them narrow the
+ * same way (`AMB-D-655`). No value names more than one state: a set is what the reader composes, and
+ * a word standing for a group of states — "closed" for done-and-rejected — is what that replaces.
+ */
+export type FilterSelection = Record<string, string[]>;
 
 const PRIORITIES: Priority[] = ["high", "medium", "low"];
-
-/**
- * The one status option that names more than one value: both terminals at once. It is spelled the way
- * the CLI takes it (`status:` is comma-separated any-of, so `status:done,rejected` asks the same
- * question there), which is what lets the board's closed column send "see all" here and land on
- * exactly the set the column held.
- */
-export const CLOSED_FILTER_VALUE = "done,rejected";
 
 /** Task to (dimension id to assigned value id). Dimension and value ids are integer keys. */
 export type DimAssignments = Record<string, Record<number, number>>;
@@ -65,18 +62,11 @@ export function filterDimensions(
       id: "status",
       label: () => t("filter.dim.status"),
       cliKey: "status:",
-      options: [
-        ...STATUS_ALL.map((s) => ({
-          value: s,
-          label: () => statusLabel(s),
-          test: (task: TaskCard) => task.status === s,
-        })),
-        {
-          value: CLOSED_FILTER_VALUE,
-          label: () => t("filter.opt.status.closed"),
-          test: (task: TaskCard) => isClosed(task.status),
-        },
-      ],
+      options: STATUS_ALL.map((s) => ({
+        value: s,
+        label: () => statusLabel(s),
+        test: (task: TaskCard) => task.status === s,
+      })),
     },
     {
       id: "assignee",
@@ -114,7 +104,7 @@ export function filterDimensions(
       label: () => dim.name,
       cliKey: `dim:${dim.id}=`,
       options: dim.values.map((v) => ({
-        // `FilterSelection` is one Record across all dimensions, so its values are strings; an integer key is carried in that form.
+        // `FilterSelection` is one Record across all dimensions, so what it holds are strings; an integer key is carried in that form.
         value: String(v.id),
         label: () => v.name,
         test: (task: TaskCard) => dimAssign[task.id]?.[dim.id] === v.id,
@@ -123,13 +113,16 @@ export function filterDimensions(
   return [...builtin, ...custom];
 }
 
-/** Whether the task matches the selection. Dimensions are ANDed. */
+/**
+ * Whether the task matches the selection: dimensions are ANDed, and the values within one are ORed —
+ * the same shape the CLI's grammar has (`status:todo,in_progress dim:…`, query.rs). A value that names
+ * no option — one left over from a dimension value since deleted — is dropped rather than failing the
+ * task, so an axis whose whole selection went stale narrows nothing instead of emptying the board.
+ */
 export function passesFilters(task: TaskCard, dims: FilterDimension[], sel: FilterSelection): boolean {
   return dims.every((d) => {
-    const v = sel[d.id];
-    if (!v) return true;
-    const opt = d.options.find((o) => o.value === v);
-    return opt ? opt.test(task) : true;
+    const chosen = d.options.filter((o) => sel[d.id]?.includes(o.value));
+    return chosen.length === 0 || chosen.some((o) => o.test(task));
   });
 }
 
@@ -144,11 +137,16 @@ export function parseRefQuery(raw: string): RefQuery | null {
   return parseRef(raw);
 }
 
-/** Serialise the selection into a stable key for pager/memo recomputation (unset dimensions are dropped). */
+/**
+ * Serialise the selection into a stable key for pager/memo recomputation (dimensions narrowing
+ * nothing are dropped). The values are sorted as well as the dimensions: the same set chosen in
+ * another order is the same question, and a key that said otherwise would reset the pager on a
+ * re-click that changed nothing.
+ */
 export function selectionKey(sel: FilterSelection): string {
   return Object.entries(sel)
-    .filter(([, v]) => v)
+    .filter(([, vs]) => vs.length > 0)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([k, v]) => `${k}=${v}`)
+    .map(([k, vs]) => `${k}=${[...vs].sort().join(",")}`)
     .join("&");
 }

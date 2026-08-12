@@ -21,7 +21,7 @@ import { CalendarView } from "./CalendarView";
 import { TimelineView } from "./TimelineView";
 import { errText, statusLabel, t, tf, viewLabel } from "../core/i18n";
 import type { ComposeTarget } from "../shell/AppShell";
-import { CLOSED_FILTER_VALUE, filterDimensions, parseRefQuery, passesFilters, selectionKey, type FilterSelection } from "../core/filters";
+import { filterDimensions, parseRefQuery, passesFilters, selectionKey, type FilterSelection } from "../core/filters";
 import { fetchProjectDimensionAssignments } from "../core/mutations";
 import { DimensionManager } from "./DimensionManager";
 import { BOARD_FLIP, useBoardFlip } from "./boardFlip";
@@ -211,7 +211,12 @@ export function BoardScreen({
   // whatever is standing above it: a notice is a band over the work, not a replacement for it.
   const bareBoard = all.length === 0 && (notice === "linkFolder" || notice === "firstLoop");
   if (!project) return <div className="placeholder">{t("board.notFound")}</div>;
-  const setDim = (id: string, value: string) => setSel((prev) => ({ ...prev, [id]: value }));
+  // One value on one axis, turned on or off. Selecting is what composes the question (`AMB-D-655`), so
+  // nothing here is exclusive: the values pile up within the axis, and an axis left empty narrows nothing.
+  const toggleValue = (id: string, value: string) => setSel((prev) => {
+    const chosen = prev[id] ?? [];
+    return { ...prev, [id]: chosen.includes(value) ? chosen.filter((v) => v !== value) : [...chosen, value] };
+  });
 
   // The project header (toolbar). It is portalled into AppShell's full-width header row so that it spans main
   // plus the right pane — the right pane begins below it. Not drawn for the first instant, while the slot is unset.
@@ -288,20 +293,26 @@ export function BoardScreen({
           </span>
         )}
         <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>🔍 {t("board.filter")}</span>
+        {/* One row of values per axis, each of them a switch. A pull-down could only ever be holding one
+            value, which is what made a word for a group of states ("closed") necessary; with the values
+            standing out where they can be pressed together, none is needed. */}
         {dims.map((d) => (
-          <label key={d.id} className="filtersel">
+          <div key={d.id} className="filtersel">
             <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{d.label()}</span>
-            <select
-              value={sel[d.id] ?? ""}
-              onChange={(e) => setDim(d.id, e.target.value)}
-              style={{ fontSize: "var(--fs-xs)" }}
-            >
-              <option value="">{t("filter.opt.all")}</option>
-              {d.options.map((o) => (
-                <option key={o.value} value={o.value}>{o.label()}</option>
-              ))}
-            </select>
-          </label>
+            {d.options.map((o) => {
+              const on = sel[d.id]?.includes(o.value) ?? false;
+              return (
+                <button
+                  key={o.value}
+                  className={`filterchip ${on ? "filterchip--on" : ""}`}
+                  aria-pressed={on}
+                  onClick={() => toggleValue(d.id, o.value)}
+                >
+                  {o.label()}
+                </button>
+              );
+            })}
+          </div>
         ))}
         {view === "board" && (
           <div className="groupby">
@@ -345,9 +356,9 @@ export function BoardScreen({
             const overflow = isDone && sorted.length > DONE_COLUMN_CAP
               ? {
                   total: sorted.length,
-                  // The list narrowed to what this column holds — both terminals, as the CLI would ask
-                  // for them (`status:done,rejected`).
-                  onSeeAll: () => { setSel((s) => ({ ...s, status: CLOSED_FILTER_VALUE })); setView("list"); },
+                  // The list narrowed to what this column holds — both terminals, selected together, as
+                  // the CLI would ask for them (`status:done,rejected`).
+                  onSeeAll: () => { setSel((s) => ({ ...s, status: ["done", "rejected"] })); setView("list"); },
                 }
               : undefined;
             return (

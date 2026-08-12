@@ -303,6 +303,15 @@ const REGISTRY: &[OpSpec] = &[
     // only way to ask a screen what it does on arrival, and a road that assumed the arrival would be
     // reading the screen it never left.
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "open", required: &["project"], refs: &[], strings: &["project"], binds: false },
+    // Recutting that board: which axis its columns are split along. It is the one move that changes
+    // what a board *is* rather than which of its cards are drawn, and until it existed every screen
+    // road could only read the split a board opens on. `axis` names an axis by the name a user typed,
+    // and only an axis: the split a board opens on is the status one, and going back to it is a move
+    // no road has needed — walking out to another project and back does not do it, the board holding
+    // what it was last cut along. A road that needs it grows the op a value, beside the road.
+    //
+    // A screen road alone: a terminal has no board to cut.
+    OpSpec { kind: Kind::Action, domain: Domain::Project, op: "group-by", required: &["axis"], refs: &[], strings: &["axis"], binds: false },
     // A classification axis, its values, and the assignment that files a task under one. The axis and
     // the value travel as names — that is how the CLI takes them, and how a person says them.
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "create", required: &["name"], refs: &[], strings: &["name"], binds: false },
@@ -933,6 +942,11 @@ const REGISTRY: &[OpSpec] = &[
     // `dim:` filter already answer. The axis is named beside the value because whether the card draws
     // it at all is the axis's answer, so a step that named the value alone would not say what is
     // being asked of.
+    //
+    // `grouping: true` says the axis named is the one the board is currently cut along (`project
+    // group-by` put it there). It changes how the step is judged rather than what it claims: the value
+    // is standing on the column heading whatever the card does, so a reading of the shot would find the
+    // word either way, and an eye closes this one instead.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "carded", required: &["target", "dimension", "value"], refs: &["target"], strings: &["dimension", "value"], binds: false },
     // Which bucket of the "what to do now" view a task lands in (`overdue` / `due_today` /
     // `in_progress`) — the view is assembled from days, so the bucket is not the task's status field.

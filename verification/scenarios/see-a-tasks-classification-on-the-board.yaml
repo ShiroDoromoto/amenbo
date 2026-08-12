@@ -13,9 +13,10 @@
 # that raised the flag on screen and read it back on the same screen would pass over a build that
 # kept it on that screen alone.
 #
-# One thing is deliberately not walked here: the axis the board is grouped by is left off the cards
-# under it, since the column heading already says that value. Reading that back needs the board
-# regrouped mid-road, which is a move no op carries yet.
+# The rule has a second half, and the road walks it at the end: the axis the board is cut along is
+# left off the cards under it, since the column heading has already said that value. It takes the
+# board recut mid-road, which is also what proves the first half was about the axis and not about the
+# split the board happened to open on.
 id: see-a-tasks-classification-on-the-board
 title: A card carries the values its task holds on the axes the project put on the card, and nothing from the axes it did not
 description: >
@@ -23,7 +24,8 @@ description: >
   the board without opening anything: each card carries its own value on the axis that asked for the
   card, and neither carries the value it holds on the axis that did not. A build that drew every axis
   would put the second one on both cards; one that drew none would leave the board saying no more
-  than the column it is cut by.
+  than the column it is cut by. Then cut the board along each axis in turn: the flagged one is drawn
+  through a split it has no part in, and stops being repeated on the cards once it is the split.
 given:
   # The axis that asked for the card, and the one that did not. Both are filed under all the same —
   # what separates them is the flag, and nothing else about them differs.
@@ -158,4 +160,41 @@ steps_gui:
       target: feature
       dimension: Area
       value: layout
+      present: false
+
+  # Now cut the board along the axis that was left off the cards. Nothing about the flag changed, so
+  # what was drawn is drawn still — a build that hung the card's values off the split rather than off
+  # the axis would lose them here, and one that redrew the board from scratch would too.
+  - type: action
+    domain: project
+    op: group-by
+    with:
+      axis: Area
+
+  - type: assert
+    domain: task
+    op: carded
+    with:
+      target: feature
+      dimension: Medium
+      value: print
+      present: true
+
+  # And along the axis that is on the cards, which is where the two rules meet: the column heading says
+  # `print`, so the card under it says it no longer. The word is on this board either way — that is why
+  # the step is closed by an eye and not by a reading — and where it is standing is the whole answer.
+  - type: action
+    domain: project
+    op: group-by
+    with:
+      axis: Medium
+
+  - type: assert
+    domain: task
+    op: carded
+    with:
+      target: feature
+      dimension: Medium
+      value: print
+      grouping: true
       present: false

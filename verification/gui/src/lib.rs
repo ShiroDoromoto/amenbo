@@ -337,6 +337,11 @@ impl Instructor {
     /// right part of it; the count beside them is a bare number, and a board draws bare numbers all over
     /// itself — one on every column head — so a reading of it would pass wherever the run was pointed.
     ///
+    /// `carded` is read except on the one step that carries `grouping: true`, where it is a `Review`:
+    /// the axis named is the one the columns are cut along, so its value is written on a heading over
+    /// the very card being read. Both answers put that word on the shot, and what separates them is
+    /// which part of the board it came from — which a reading never says.
+    ///
     /// `nudge` is a `Review`, and the sentence it names is why: an offer is put in the interface's own
     /// words, so a reading of it would hold this gate to the one language the run happened to be set up
     /// in. What the step names is written down all the same — it is what the eye closing the shot is
@@ -357,7 +362,11 @@ impl Instructor {
             // The value, not the card's title: what is being asked is whether the classification is
             // drawn, and a title is on the board either way. Which card carries it is the driver's to
             // see — the instruction names it — so the reading answers the half a reading can.
-            (Domain::Task, "carded") => {
+            //
+            // Except where the axis is the one splitting the columns (`grouping: true`), which is a
+            // `Review`: the value is written on the column heading whether or not the card repeats it,
+            // so a reading finds the word on every shot of that board and settles nothing.
+            (Domain::Task, "carded") if !grouping(with) => {
                 Some(Expectation { text: arg_str(with, "value")?.to_string(), present: present(with) })
             }
             (Domain::Plugin, "browsed") if !official(with) => {
@@ -524,6 +533,12 @@ impl Instructor {
             (Domain::Project, "open") => format!(
                 "Open the project \"{}\" again, from the list of projects.",
                 req(with, "project")?
+            ),
+            // The board recut. The row is named by what it is for rather than by its label, which is a
+            // word of the interface — and the axis's own name is on its button, which the reader gave it.
+            (Domain::Project, "group-by") => format!(
+                "Above the board, in the row of buttons that choose what its columns are cut along, press \"{}\". The columns become that axis's values.",
+                req(with, "axis")?
             ),
             // `dir` is a name and not a path here as it is everywhere else: which folder is linked is
             // the run's to decide, and what the scenario writes down is what to call the one it picked.
@@ -721,6 +736,12 @@ impl Instructor {
             (Domain::Task, "carded") => match present(with) {
                 true => format!(
                     "Confirm the card \"{}\" carries \"{}\" on it — its value on the axis `{}` — with nothing opened.",
+                    self.target_label(with),
+                    req(with, "value")?,
+                    req(with, "dimension")?
+                ),
+                false if grouping(with) => format!(
+                    "Confirm the card \"{}\" does not repeat \"{}\" — the axis `{}` is the one the columns are cut along, so that word is on the heading above the card and must not be on the card itself.",
                     self.target_label(with),
                     req(with, "value")?,
                     req(with, "dimension")?
@@ -1174,6 +1195,13 @@ fn official(with: &Args) -> bool {
 /// always said out loud, so an unsaid one is a step asking that something is there.
 fn present(with: &Args) -> bool {
     with.get("present").and_then(|v| v.as_bool()).unwrap_or(true)
+}
+
+/// Whether the axis a step names is the one the board is cut along. Said out loud by the road, since
+/// nothing in a step says what the board was left grouped by — and it is what turns a reading into a
+/// `Review`, the column heading carrying the value whatever the cards under it do.
+fn grouping(with: &Args) -> bool {
+    with.get("grouping").and_then(|v| v.as_bool()).unwrap_or(false)
 }
 
 /// Render an arbitrary scalar arg for display: a string as itself, anything else through YAML so
@@ -2659,6 +2687,46 @@ steps_gui:
             let err = Instructor::new().render(&step).unwrap_err();
             assert!(err.contains(answer), "got: {err}");
         }
+    }
+
+    /// The board recut, and the one `carded` step that recut leaves to an eye. On any other axis the
+    /// value is read off the shot as before; on the axis the columns are cut along, the heading over
+    /// the card carries that word whichever way the card answers, so a reading would pass either way.
+    #[test]
+    fn the_axis_the_board_is_cut_along_leaves_its_card_to_review() {
+        let regroup = Step::Action {
+            domain: Domain::Project,
+            op: "group-by".to_string(),
+            with: [("axis".to_string(), serde_yaml::Value::from("Medium"))].into_iter().collect(),
+            bind: None,
+        };
+        let said = Instructor::new().render(&regroup).unwrap();
+        assert!(said.contains("Medium"), "the move names the axis to press: {said}");
+
+        let carded = |grouping: bool| {
+            let mut with: Args = [
+                ("target".to_string(), serde_yaml::Value::from("t")),
+                ("dimension".to_string(), serde_yaml::Value::from("Medium")),
+                ("value".to_string(), serde_yaml::Value::from("print")),
+                ("present".to_string(), serde_yaml::Value::from(false)),
+            ]
+            .into_iter()
+            .collect();
+            if grouping {
+                with.insert("grouping".to_string(), serde_yaml::Value::from(true));
+            }
+            Step::Assert { domain: Domain::Task, op: "carded".to_string(), with }
+        };
+        assert!(
+            Instructor::new().expectation(&carded(false)).is_some(),
+            "an axis the board is not cut along is read off the shot",
+        );
+        assert!(
+            Instructor::new().expectation(&carded(true)).is_none(),
+            "the axis it is cut along is a Review",
+        );
+        let said = Instructor::new().render(&carded(true)).unwrap();
+        assert!(said.contains("heading"), "and the line says where the word will be standing: {said}");
     }
 
     #[test]

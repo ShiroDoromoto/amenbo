@@ -638,7 +638,9 @@ next to a file where the screen's half quietly went stale.
 Some ops exist for one road only, and the registry carries them all the same: opening a card and
 answering which project it asks for are moves a screen's road is made of and a terminal's has none
 of, so they are written in `steps_gui` and the CLI driver maps neither. A driver maps the ops it
-meets; one it does not meet is not its to map. Answering the question an opened project puts, choosing
+meets; one it does not meet is not its to map. Cutting that board along another axis (`project
+group-by`) is the same kind: what a terminal answers with is a listing, and a listing has no columns
+to recut — the axis is a word in the filter there, not a way the answer is laid out. Answering the question an opened project puts, choosing
 which tool the text is for, pressing the button that hands it over, and dropping the answer again
 (`repo ai-launch-consent` / `ai-launch-pick` / `ai-launch-copy` / `ai-launch-consent-clear`), are the
 same kind: a terminal asks inline and prints the text where it stands, so there is nothing there to

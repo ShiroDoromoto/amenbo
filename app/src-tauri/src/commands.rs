@@ -3048,8 +3048,9 @@ fn provision_project(name: &str) -> Result<(Store, i64), CmdError> {
 /// deleted project's rows are physically gone, while the teardown that forgets its bindings entry is
 /// best-effort, so an entry can outlive the project it names. Recover onto one of those and the folder
 /// is bound to an id that names nothing, leaving nothing at all in the sidebar. Once the pointer is
-/// written, always call `record_project_ref` (the project → folders index); forget it and the folder
-/// you just bound goes missing from the list on the settings screen.
+/// written, always call `claim_project_ref` (the project → folders index); forget it and the folder
+/// you just bound goes missing from the list on the settings screen. It is a *claim* because the
+/// pointer names one project: the records other projects held for this folder are retracted with it.
 #[tauri::command]
 pub fn project_add_folder(dir: String, name: Option<String>) -> Result<WriteAck, CmdError> {
     let path = std::path::Path::new(&dir);
@@ -3102,7 +3103,7 @@ pub fn project_add_folder(dir: String, name: Option<String>) -> Result<WriteAck,
     let (store, project_id) = provision_project(&name)?;
     amenbo_core::binding::pointer_for(&store, project_id).write(path)?;
     let mut registry = store.bindings();
-    registry.record_project_ref(project_id, path.to_string_lossy());
+    registry.claim_project_ref(project_id, path.to_string_lossy());
     let _ = store.save_bindings(&registry);
     amenbo_core::agents::upsert_into_dir(
         path,
@@ -3122,7 +3123,7 @@ fn recover_lost_pointer(path: &std::path::Path, project_id: i64) -> Result<Write
     amenbo_core::binding::pointer_for(&store, project_id).write(path)?;
     {
         let mut reg = store.bindings();
-        reg.record_project_ref(project_id, path.to_string_lossy());
+        reg.claim_project_ref(project_id, path.to_string_lossy());
         let _ = store.save_bindings(&reg);
     }
     amenbo_core::agents::upsert_into_dir(
@@ -3311,7 +3312,9 @@ pub fn project_bound_folders(project_id: i64) -> Result<Vec<BoundFolderDto>, Cmd
 /// AI guidance files (AGENTS.md / CLAUDE.md). **The folder's own contents (the source) are never
 /// touched.** The nested-binding guard — refuse when an ancestor is already a managed tree — is the
 /// CLI `bind`'s same "respect the tree that is already there". Unlike `project_add_folder`, which
-/// creates a new project, this binds a folder to a project that already exists.
+/// creates a new project, this binds a folder to a project that already exists — including a folder
+/// that already named another one: re-pointing it here takes it off that project's books, because the
+/// pointer this writes names one project (`Registry::claim_project_ref`).
 #[tauri::command]
 pub fn project_bind_folder(project_id: i64, dir: String) -> Result<WriteAck, CmdError> {
     use amenbo_core::binding::find_upward_ancestor;
@@ -3333,7 +3336,7 @@ pub fn project_bind_folder(project_id: i64, dir: String) -> Result<WriteAck, Cmd
     let store = open_store()?;
     amenbo_core::binding::pointer_for(&store, project_id).write(&cwd)?;
     let mut registry = store.bindings();
-    registry.record_project_ref(project_id, cwd.to_string_lossy());
+    registry.claim_project_ref(project_id, cwd.to_string_lossy());
     store.save_bindings(&registry)?;
     amenbo_core::agents::upsert_into_dir(
         &cwd,
@@ -8134,6 +8137,50 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&orphan);
+    }
+
+    /// Re-pointing a folder from the settings screen takes it off the folder list of the project it
+    /// named before — the same claim the CLI's `bind` makes, over the same core path. Leave the old row
+    /// standing and that project's screen goes on offering a folder that no longer leads to it.
+    #[test]
+    fn the_gui_re_pointing_a_folder_takes_it_off_the_former_projects_list() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("app-repoint-home");
+        let dir = amenbo_scratch::scratch("app-repoint-dir");
+        let _ = std::fs::remove_dir_all(&tmp);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        let project = |name: &str| -> i64 {
+            let mut store = Store::open().unwrap();
+            store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: name.into(),
+                    view: View::Board,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap()
+                .id
+        };
+        let former = project("元PJ");
+        let keeper = project("移り先PJ");
+
+        project_bind_folder(former, dir.to_string_lossy().to_string()).unwrap();
+        assert_eq!(project_bound_folders(former).unwrap().len(), 1, "premise: the folder is the former project's");
+
+        project_bind_folder(keeper, dir.to_string_lossy().to_string()).unwrap();
+        assert!(project_bound_folders(former).unwrap().is_empty(), "the former project stops listing it");
+        let now = project_bound_folders(keeper).unwrap();
+        assert_eq!(now.len(), 1, "and the keeper lists it");
+        // The bind records the canonicalized path (symlinks resolved), which is what comes back here.
+        let canon = std::fs::canonicalize(&dir).unwrap();
+        assert_eq!(now[0].path, canon.to_string_lossy(), "that folder, and not another");
+        assert!(!now[0].pointer_missing, "whose pointer is the one the bind just wrote");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// The GUI's doctor screen sees **the same issues** as the CLI and repairs them through **the

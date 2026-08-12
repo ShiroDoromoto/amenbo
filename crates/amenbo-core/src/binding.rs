@@ -346,10 +346,41 @@ pub struct Registry {
 
 impl Registry {
     /// Record that `dir` holds a `.amenbo` pointing at `project_id` (many-to-one: several folders may
-    /// point at one project). Idempotent — it is a set. Every bind path calls this alongside writing the
-    /// pointer.
+    /// point at one project). Idempotent — it is a set. This adds the pair and nothing else: it is the
+    /// half [`Self::claim_project_ref`] ends with, and what a fixture building an index by hand wants.
+    /// Every path that **writes a `.amenbo`** claims instead, so that the folder is left naming one
+    /// project.
     pub fn record_project_ref(&mut self, project_id: i64, dir: impl Into<String>) {
         self.project_dirs.entry(project_id).or_default().insert(dir.into());
+    }
+
+    /// Record that `dir` points at `project_id` **and retract the records other projects hold for that
+    /// same folder**, returning the ids retracted (ascending, empty when there were none). This is what
+    /// every path that **writes a `.amenbo`** calls: the pointer names one project, so from here on the
+    /// folder is this project's. Leave the old pair standing and two live projects claim one folder —
+    /// which stops a lost pointer from being recovered ([`live_projects_claiming`] answers only when it
+    /// lands on exactly one) and leaves a folder that no longer names it on the old project's books.
+    /// Matching is normalized ([`normalize_dir_for_match`]), so a pair recorded under a differently
+    /// spelled path — a trailing slash, a symlinked parent — is retracted too. This project's **other**
+    /// folders are untouched: bindings stay many-to-one, and it is the folder, not the project, that
+    /// gets to name only one.
+    pub fn claim_project_ref(&mut self, project_id: i64, dir: impl Into<String>) -> Vec<i64> {
+        let dir = dir.into();
+        let want = normalize_dir_for_match(&dir);
+        let mut retracted = Vec::new();
+        for (pid, dirs) in self.project_dirs.iter_mut() {
+            if *pid == project_id {
+                continue;
+            }
+            let before = dirs.len();
+            dirs.retain(|d| normalize_dir_for_match(d) != want);
+            if dirs.len() != before {
+                retracted.push(*pid);
+            }
+        }
+        self.project_dirs.retain(|_, dirs| !dirs.is_empty());
+        self.record_project_ref(project_id, dir);
+        retracted
     }
 
     /// The directories recorded as pointing at `project_id` (ascending, deduped, empty if none) — the
@@ -390,8 +421,9 @@ impl Registry {
 
     /// Forget the **one `(project_id, dir)` record** — the pair the binding table is keyed by. Returns
     /// whether one was there, so the call is idempotent. Unlike [`Self::forget_dir`], the records *other*
-    /// projects hold for the same folder are left alone: a folder re-pointed at another project
-    /// (`bind` records the new pair without retracting the old one) is still that project's.
+    /// projects hold for the same folder are left alone: a folder that names another project is that
+    /// project's, whoever else's books it is still on. [`Self::claim_project_ref`] keeps a re-point from
+    /// leaving such a pair behind in the first place, but an index written before it did can hold one.
     pub fn forget_project_ref(&mut self, project_id: i64, dir: &str) -> bool {
         let Some(set) = self.project_dirs.get_mut(&project_id) else { return false };
         let removed = set.remove(dir);
@@ -930,6 +962,40 @@ mod tests {
         assert!(!reg.forget_project_ref(1, "/work/a"));
         assert!(!reg.forget_project_ref(9, "/work/b"));
         assert_eq!(reg.dirs_for_project(2), vec!["/work/a", "/work/b"]);
+    }
+
+    /// Claiming a folder for a project takes it off the books of whoever else held it — the pointer names
+    /// one project, so the reverse lookup answers with one. The claimant's own other folders, and the
+    /// other folders of the project that loses this one, are left where they are: it is the folder that
+    /// names a single project, not the project that holds a single folder.
+    #[test]
+    fn registry_claim_project_ref_leaves_the_folder_naming_one_project() {
+        let mut reg = Registry::default();
+        reg.record_project_ref(1, "/work/moved");
+        reg.record_project_ref(1, "/work/kept");
+        reg.record_project_ref(2, "/work/own");
+
+        assert_eq!(reg.claim_project_ref(2, "/work/moved"), vec![1], "it says whose record it retracted");
+        assert_eq!(reg.projects_for_dir("/work/moved"), vec![2], "the folder now names one project");
+        assert_eq!(reg.dirs_for_project(1), vec!["/work/kept"], "the old owner keeps its other folders");
+        assert_eq!(reg.dirs_for_project(2), vec!["/work/moved", "/work/own"], "and the claimant keeps its own");
+
+        // Idempotent, and a folder nobody else held retracts nothing.
+        assert!(reg.claim_project_ref(2, "/work/moved").is_empty());
+        assert!(reg.claim_project_ref(3, "/work/fresh").is_empty());
+        assert_eq!(reg.projects_for_dir("/work/fresh"), vec![3], "and is recorded all the same");
+    }
+
+    /// A pair recorded under a differently spelled path is retracted too: the claim matches the way the
+    /// reverse lookup does, or it would leave behind exactly the record it is there to retract.
+    #[test]
+    fn registry_claim_project_ref_retracts_a_pair_spelled_with_a_trailing_slash() {
+        let mut reg = Registry::default();
+        reg.record_project_ref(1, "/work/a/");
+
+        assert_eq!(reg.claim_project_ref(2, "/work/a"), vec![1]);
+        assert_eq!(reg.projects_for_dir("/work/a"), vec![2], "no stale claimant is left behind");
+        assert!(reg.dirs_for_project(1).is_empty(), "the emptied project key is cleaned up");
     }
 
     #[test]

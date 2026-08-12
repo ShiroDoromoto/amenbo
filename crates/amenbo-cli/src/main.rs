@@ -4459,10 +4459,11 @@ fn init_cmd(flags: &Flags, name: Option<String>, language: Option<String>, force
         if pointer.write(&cwd).is_ok() {
             placed.push(".amenbo");
             // Record the project→folder reverse lookup (what the settings screen lists, and the index a lost
-            // pointer is recovered from). Best-effort: a failure to record does not fail init, same as the
-            // pointer write.
+            // pointer is recovered from), claiming the folder for the project the pointer just written names
+            // — any record another project held for it is retracted. Best-effort: a failure to record does
+            // not fail init, same as the pointer write.
             let mut registry = store.bindings();
-            registry.record_project_ref(project_id, cwd.to_string_lossy());
+            registry.claim_project_ref(project_id, cwd.to_string_lossy());
             let _ = store.save_bindings(&registry);
         }
         // Idempotently upsert the generic amenbo guidance (the managed block) into both AGENTS.md and
@@ -4506,10 +4507,11 @@ fn recover_lost_pointer(
 ) -> Result<i32, CliError> {
     // Rewrite `.amenbo` (this is a bind, in effect).
     amenbo_core::binding::pointer_for(store, project_id).write(cwd).map_err(CliError::from)?;
-    // Update the bindings index idempotently (the many-to-one reverse lookup).
+    // Update the bindings index idempotently (the many-to-one reverse lookup), claiming the folder for the
+    // project the recovered pointer names.
     {
         let mut reg = store.bindings();
-        reg.record_project_ref(project_id, cwd.to_string_lossy());
+        reg.claim_project_ref(project_id, cwd.to_string_lossy());
         let _ = store.save_bindings(&reg);
     }
     // Regenerate the managed block idempotently (outside the markers is kept). The upsert keeps an existing
@@ -4594,12 +4596,17 @@ fn resolve_bind_target(dir: Option<String>) -> Result<std::path::PathBuf, CliErr
 /// folder means, which is why `bind --project` and `project add --dir` both go through it rather than each
 /// remembering the three steps.
 ///
+/// Recording the folder is a **claim**: the pointer just written names one project, so the records other
+/// projects hold for this folder are retracted with it (`Registry::claim_project_ref`). A re-point that
+/// left the old pair standing would leave two live projects claiming one folder — the old project would go
+/// on listing a folder that no longer names it, and a lost pointer there could no longer be recovered.
+///
 /// Every step is required to succeed. A caller that raised the project for this folder has to undo that on
 /// failure — a project nothing is linked to is what `AMB-D-528` refuses to create.
 fn place_binding(store: &Store, project_id: i64, dir: &std::path::Path) -> Result<(), CliError> {
     amenbo_core::binding::pointer_for(store, project_id).write(dir).map_err(CliError::from)?;
     let mut registry = store.bindings();
-    registry.record_project_ref(project_id, dir.to_string_lossy());
+    registry.claim_project_ref(project_id, dir.to_string_lossy());
     store.save_bindings(&registry).map_err(CliError::from)?;
     upsert_agent_guidance(dir, store.config.language.as_deref());
     Ok(())

@@ -759,11 +759,52 @@ fn unbinding_the_last_folder_goes_through_and_says_the_project_has_none_left() {
     assert!(out.contains("bind --project"), "and names the way back: {out}");
 }
 
+/// Re-pointing a folder at another project takes it off the books of the one it named before. The
+/// `.amenbo` written there names one project, so the folder is that project's alone: leave the old pair
+/// standing and two live projects claim one folder, which is both a folder list that lies (the old
+/// project goes on offering a folder that no longer leads to it) and a lost pointer that can no longer be
+/// recovered — recovery answers only when exactly one live project claims the folder, as the second half
+/// of this walk shows.
+#[test]
+fn re_pointing_a_folder_takes_it_off_the_project_it_named_before() {
+    let cli = Cli::new();
+    let moved = amenbo_scratch::scratch("repoint-books");
+    let moved_str = moved.to_string_lossy().to_string();
+    let former =
+        id_str(&cli.json(&["project", "add", "--name", "元PJ", "--dir", &moved_str, "--json"])["project"]["id"]);
+    let keeper = id_str(&cli.json(&["project", "add", "--name", "移り先PJ", "--json"])["project"]["id"]);
+    // `--dir` is canonicalized before it is recorded; match on that spelling.
+    let moved_canon = std::fs::canonicalize(&moved).unwrap().to_string_lossy().to_string();
+    let lists_moved = |pid: &str| -> bool {
+        cli.json(&["project", "show", pid, "--json"])["bound_folders"]
+            .as_array()
+            .is_some_and(|fs| fs.iter().any(|f| f["path"].as_str() == Some(moved_canon.as_str())))
+    };
+    assert!(lists_moved(&former), "premise: the folder starts on the former project's books");
+
+    cli.run(&["bind", "--project", &keeper, "--dir", &moved_str]);
+    assert!(!lists_moved(&former), "the re-point takes the folder off the former project's books");
+    assert!(lists_moved(&keeper), "and puts it on the keeper's");
+
+    // The other face: with one claimant left, a pointer lost from that folder can be recovered onto the
+    // keeper. Two claimants and `init` would stop at init_ambiguous_owners instead.
+    std::fs::remove_file(moved.join(".amenbo")).unwrap();
+    let recovered = cli.json_from(&moved, &["init", "--json"]);
+    assert_eq!(
+        id_str(&recovered["identity"]["project_id"]),
+        keeper,
+        "the lost pointer is recovered onto the project the folder names, not a new one: {recovered}",
+    );
+    let back = cli.json_from(&moved, &["bind", "--json"]);
+    assert_eq!(id_str(&back["binding"]["project_id"]), keeper, "and the pointer is back: {back}");
+}
+
 /// Re-pointing a folder at another project and **then** deleting the project it came from leaves the
-/// folder alone. `bind` records the new pair without retracting the old one, so the doomed project goes
-/// on listing the folder; the pointer on disk, which names one project and one only, is what says whose
-/// the folder is. Re-pointing first and deleting after is the order a consolidation is done in, so the
-/// delete may take its own record of the folder and nothing else.
+/// folder alone. The re-point has already taken the folder off the doomed project's books, so the delete
+/// has no record of it to release — and the pointer on disk, which names one project and one only, is
+/// what says whose the folder is. Re-pointing first and deleting after is the order a consolidation is
+/// done in; the guard inside the teardown is still what answers for an index written before re-pointing
+/// retracted (its own tests build that pair directly, which the CLI can no longer produce).
 #[test]
 fn deleting_a_project_leaves_a_folder_that_was_re_pointed_at_another_one_alone() {
     let cli = Cli::new();
@@ -773,12 +814,12 @@ fn deleting_a_project_leaves_a_folder_that_was_re_pointed_at_another_one_alone()
         id_str(&cli.json(&["project", "add", "--name", "畳むPJ", "--dir", &moved_str, "--json"])["project"]["id"]);
     let keeper = id_str(&cli.json(&["project", "add", "--name", "引き継ぐPJ", "--json"])["project"]["id"]);
 
-    // The move: the folder now names the keeper, while the doomed project still records it.
+    // The move: the folder now names the keeper, and the doomed project has stopped recording it.
     cli.run(&["bind", "--project", &keeper, "--dir", &moved_str]);
     let before = cli.json(&["project", "show", &doomed, "--json"]);
     assert!(
-        before["bound_folders"].as_array().is_some_and(|f| !f.is_empty()),
-        "the folder is still on the doomed project's books — that is what makes this the trap: {before}",
+        before["bound_folders"].as_array().is_some_and(|f| f.is_empty()),
+        "the re-point left the doomed project holding no record of the folder: {before}",
     );
 
     let (out, code) = cli.run(&["project", "delete", &doomed, "--yes"]);

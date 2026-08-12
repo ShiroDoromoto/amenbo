@@ -107,9 +107,11 @@ fn release_folder(store: &Store, dir: &str, project_id: i64, registry: &mut Regi
 /// Is this folder still the deleted project's to clear?
 ///
 /// A `.amenbo` names **one** project, so wherever it reads, the disk itself has the answer: the folder is
-/// ours only while its pointer still names us. A folder re-pointed at another project — `bind` records the
-/// new pair without retracting the old one, so the deleted project goes on listing it — is that project's
-/// live binding, and clearing it would unbind a project nobody asked about.
+/// ours only while its pointer still names us. A folder re-pointed at another project is that project's
+/// live binding, and clearing it would unbind a project nobody asked about. Re-pointing now retracts the
+/// old pair as it goes ([`crate::binding::Registry::claim_project_ref`]), so the deleted project usually
+/// has no record of such a folder to begin with; the check answers for the ones an index written before
+/// that still carries.
 ///
 /// With no id to read (no `.amenbo`, or one too old to name a project by id) the registry decides instead:
 /// another **living** project recording this folder makes it theirs. The deleted project's own rows are
@@ -170,10 +172,11 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
-    /// A folder **re-pointed at another project** before the delete keeps everything: `bind` records the
-    /// new pair without retracting the old one, so the doomed project still lists the folder, but the
-    /// pointer on disk names the live project and that is the one the folder belongs to. Deleting the old
-    /// project may take its own record of the folder and nothing else.
+    /// A folder **re-pointed at another project** before the delete keeps everything: the doomed project
+    /// still lists the folder here — an index written before re-pointing retracted the old pair, which is
+    /// the state this builds by hand — but the pointer on disk names the live project and that is the one
+    /// the folder belongs to. Deleting the old project may take its own record of the folder and nothing
+    /// else.
     #[test]
     fn a_folder_re_pointed_at_another_project_survives_the_delete() {
         let (mut store, ids) = store_with_projects("repointed", 2);

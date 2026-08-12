@@ -336,9 +336,11 @@ amenbo task add --title "Palette" --project "Website refresh" --dim "Area=Design
 amenbo dimension value-add Era --name "Beta" --start 2026-07-08
 amenbo dimension value-update Era Beta --end 2026-12-31
 amenbo dimension list --project "Website refresh" --json   # axes + their values
-# Slice tasks by any axis. `dim:` repeats (the parts AND); `=none` = unassigned on
-# that axis. `time_axis:` is sugar for whichever axis you marked --time-axis.
+# Slice tasks by any axis. `dim:` repeats: different axes AND, the same axis twice
+# ORs. `=none` = unassigned on that axis; `time_axis:` is sugar for whichever axis
+# you marked --time-axis.
 amenbo task list --filter "dim:Area=Design dim:Kind=none" --json
+amenbo task list --filter "dim:Area=Design dim:Area=Copy" --json   # either value
 amenbo task list --filter "time_axis:v2 done:false" --json
 
 # Words are not one of the filter keys: `search` is the one place they go. It answers
@@ -432,6 +434,7 @@ amenbo decision list --filter "status:accepted superseded:no" --with-body --limi
 # Status and data ownership
 amenbo status                               # overdue / today / in-progress summary
 amenbo task list --filter "done:false due:today priority:high" --json
+amenbo task list --filter "status:todo,in_progress priority:high,medium" --json # a key takes a set of values (comma = any-of)
 amenbo export --out ./amenbo-export         # everything: a directory — export.json plus every attachment's bytes
 amenbo export > ./amenbo-export.json        # ...or the same JSON on stdout (records only — a stream cannot carry files)
 amenbo backup ./everything.amenbo-backup      # archive: the store plus its attachments (disaster recovery)

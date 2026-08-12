@@ -385,7 +385,7 @@ pub fn list_task_ids(conn: &Connection, q: &TaskQuery) -> Result<TaskPage> {
 /// generated from the schema registry, so a column that is not in the store is a name that does not
 /// compile, and the column's type comes with it.
 const T: col::task::Cols = col::task::of("t");
-/// The task↔dimension-value link's columns, as [`dimension_pred`]'s subquery aliases them.
+/// The task↔dimension-value link's columns, as [`AxisSelection::pred`]'s subquery aliases them.
 const TDV: col::task_dimension_value::Cols = col::task_dimension_value::of("tdv");
 /// The change feed's columns, and the store's scalars — plain tables, named the same way.
 const FEED: col::change_feed::Cols = col::change_feed::ALL;
@@ -552,10 +552,16 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
             StartFilter::None => Pred::is_blank(T.start_on),
         });
     }
-    if let Some(pri) = &f.priority {
-        preds.push(match pri {
-            None => Pred::is_blank(T.priority),
-            Some(p_val) => Pred::eq(T.priority, p_val.as_str()),
+    if let Some(priorities) = &f.priority {
+        // `priority:` is an allow-set like `status:`, but with one element the column cannot hold:
+        // `none` is the *absence* of a priority, read as blank. So the named values become an `IN (…)`
+        // and `none` its own arm, ORed on only when it was asked for. An empty `IN` matches nothing, so
+        // a set of `none` alone comes out as the blank arm by itself.
+        let named = Pred::is_in(T.priority, priorities.iter().flatten().map(|p| p.as_str()));
+        preds.push(if priorities.contains(&None) {
+            named.or(Pred::is_blank(T.priority))
+        } else {
+            named
         });
     }
     debug_assert!(f.project_ref.is_none(), "Filter::resolve was not run (`project:` is silently dropped)");
@@ -583,8 +589,11 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
             Pred::eq(T.id, nf.number as i64)
         });
     }
-    if let Some(assignee) = &f.assignee {
-        preds.push(assignee_pred(assignee));
+    if let Some(assignees) = &f.assignee {
+        // An allow-set again: each element names a facet (or its absence) and they OR together, so
+        // `assignee:me,me-ai` is what is mine either way round. The parser never leaves the set empty,
+        // so the fold always has an arm to start from.
+        preds.extend(assignees.iter().map(assignee_pred).reduce(Pred::or));
     }
     if let Some(ai) = f.ai {
         // `ai:true|false` is the AI-delegation dimension (`assignee_kind = ai`), independent of the
@@ -665,38 +674,95 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
                 .pred(),
         );
     }
-    preds.extend(f.dimensions.iter().map(dimension_pred));
+    preds.extend(dimension_preds(&f.dimensions));
     preds
 }
 
-/// `dim:<axis>=<value>` / `time_axis:<value>` → an EXISTS over the task's own assignment rows. Seeks by
-/// `task_dimension_value_by_task` and matches the axis/value by primary key, so the filter stays
-/// O(result) instead of scanning the link table once per task. Only resolved ids reach here: the read
-/// entry point turned the axis/value names into ids and refused the ones that name nothing, so a typo is
-/// an error rather than a silent zero — or, on the `=none` arm, a silent *everything* (a `NOT EXISTS`
-/// over an axis that does not exist is true of every task). The `dimension_value` join still matters
-/// though the ids are live by construction: an assignment can point at a value that was deleted, and
-/// that assignment must read as *unassigned*.
-fn dimension_pred(f: &crate::query::DimensionFilter) -> Pred {
-    debug_assert!(f.resolved.is_some(), "Filter::resolve was not run (`dim:` is silently dropped)");
-    // An unresolved filter names nothing, so it selects nothing — never *everything* (the `=none` arm
-    // is a `NOT EXISTS`, and dropping it would let the read answer as if the filter were not there).
-    let Some(resolved) = &f.resolved else { return Pred::never() };
-
-    // The axis (and, when the filter names values, the value) as an `IN` list — one placeholder per id,
-    // each carrying its own bind. The `=none` arm names no values, so it constrains the axis alone.
-    let mut inner = Pred::is_in(TDV.dimension_id, resolved.axis_ids.iter().copied());
-    if let Some(ids) = &resolved.value_ids {
-        inner = inner.and(Pred::is_in(TDV.value_id, ids.iter().copied()));
+/// The `dim:` / `time_axis:` tokens as predicates, **one per axis**. Which tokens meet in a predicate is
+/// what says how they combine: tokens naming different axes stay apart and so AND, tokens naming the same
+/// axis fold into one and so OR (`AMB-D-655`) — the "set of values per axis" the other keys spell with a
+/// comma, which a value name cannot borrow because it is the user's own text and may hold one.
+///
+/// Sameness is judged on the resolved axis ids, not on what was typed: `time_axis:` and the axis's own
+/// name are two ways of naming one axis, and an axis name two projects share resolves to both ids alike.
+fn dimension_preds(filters: &[crate::query::DimensionFilter]) -> Vec<Pred> {
+    let mut axes: Vec<AxisSelection> = Vec::new();
+    for f in filters {
+        debug_assert!(f.resolved.is_some(), "Filter::resolve was not run (`dim:` is silently dropped)");
+        // An unresolved filter names no axis, so it joins no group and selects nothing — never
+        // *everything* (the `=none` arm is a `NOT EXISTS`, and dropping it would let the read answer as
+        // if the filter were not there).
+        let axis_ids = f.resolved.as_ref().map(|r| r.axis_ids.clone());
+        let at = axes
+            .iter()
+            .position(|a| a.axis_ids.is_some() && a.axis_ids == axis_ids)
+            .unwrap_or_else(|| {
+                axes.push(AxisSelection { axis_ids, value_ids: Vec::new(), unassigned: false });
+                axes.len() - 1
+            });
+        match f.resolved.as_ref().map(|r| &r.value_ids) {
+            None => {}
+            // `=none` — no live value on the axis. It is an element of the same selection: asking for
+            // "bug, or nothing on that axis" is one question about one axis.
+            Some(None) => axes[at].unassigned = true,
+            Some(Some(ids)) => {
+                for id in ids {
+                    if !axes[at].value_ids.contains(id) {
+                        axes[at].value_ids.push(*id);
+                    }
+                }
+            }
+        }
     }
-    const DV: col::dimension_value::Cols = col::dimension_value::of("dv");
-    let exists = Exists::over(TDV.table)
-        .join(DV.table, same(DV.id, TDV.value_id))
-        .filter(same(TDV.task_id, T.id))
-        .filter(inner)
-        .pred();
-    // `=none` = *no* live value on that axis.
-    exists.negated_if(resolved.value_ids.is_none())
+    axes.into_iter().map(AxisSelection::pred).collect()
+}
+
+/// What one axis was asked for, folded from every token that named it.
+struct AxisSelection {
+    /// The axis's resolved ids (`None` = the token resolved to no axis at all).
+    axis_ids: Option<Vec<i64>>,
+    /// The values named across those tokens, deduped — empty when only `=none` was asked for.
+    value_ids: Vec<i64>,
+    /// Whether `=none` was among them.
+    unassigned: bool,
+}
+
+impl AxisSelection {
+    /// The selection as an EXISTS over the task's own assignment rows. It seeks by
+    /// `task_dimension_value_by_task` and matches the axis/value by primary key, so the filter stays
+    /// O(result) instead of scanning the link table once per task — and folding an axis's values into
+    /// one `IN` list keeps it a single EXISTS however many values were named. Only resolved ids reach
+    /// here: the read entry point turned the axis/value names into ids and refused the ones that name
+    /// nothing, so a typo is an error rather than a silent zero — or, on the `=none` arm, a silent
+    /// *everything* (a `NOT EXISTS` over an axis that does not exist is true of every task). The
+    /// `dimension_value` join still matters though the ids are live by construction: an assignment can
+    /// point at a value that was deleted, and that assignment must read as *unassigned*.
+    fn pred(self) -> Pred {
+        let Some(axis_ids) = self.axis_ids else { return Pred::never() };
+        const DV: col::dimension_value::Cols = col::dimension_value::of("dv");
+        // The axis (and, where values were named, the values) as an `IN` list — one placeholder per id,
+        // each carrying its own bind.
+        let on_axis = Pred::is_in(TDV.dimension_id, axis_ids);
+        let holds = |inner: Pred| {
+            Exists::over(TDV.table)
+                .join(DV.table, same(DV.id, TDV.value_id))
+                .filter(same(TDV.task_id, T.id))
+                .filter(inner)
+                .pred()
+        };
+        let named = (!self.value_ids.is_empty())
+            .then(|| holds(on_axis.clone().and(Pred::is_in(TDV.value_id, self.value_ids))));
+        // `=none` = *no* live value on that axis, so it constrains the axis alone and negates.
+        let unassigned = self.unassigned.then(|| !holds(on_axis));
+        match (named, unassigned) {
+            (Some(named), Some(unassigned)) => named.or(unassigned),
+            (Some(named), None) => named,
+            (None, Some(unassigned)) => unassigned,
+            // Unreachable: a token names a value or `=none`, so an axis that made it into the list
+            // carries at least one arm.
+            (None, None) => Pred::never(),
+        }
+    }
 }
 
 /// [`filter_preds`]'s twin on the other side: `decision list`'s own keys, said in SQL so a search can be

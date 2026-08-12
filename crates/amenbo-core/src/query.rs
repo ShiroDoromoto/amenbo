@@ -55,13 +55,18 @@ pub struct Filter {
     pub done: Option<bool>,
     /// Allowed set for `status:` — comma-separated values (`status:todo,in_progress`) match if the
     /// task has any of them (OR within the key). Never empty: the parser demands at least one value.
+    /// Writing the key twice adds to the set rather than replacing it, so the two ways of naming
+    /// several values agree (`AMB-D-655`).
     pub status: Option<Vec<TaskStatus>>,
     pub due: Option<DueFilter>,
     /// `start:` — the declared start day, read as arrived / still ahead / never declared. The way to look
     /// at the waiting queue on purpose, rather than inferring it from a `ready:no` that three premises
     /// share.
     pub start: Option<StartFilter>,
-    pub priority: Option<Option<Priority>>, // Some(None)=none, Some(Some(p))=that priority
+    /// Allowed set for `priority:`, in the shape `status:` has (`AMB-D-655`). An element of `None` is
+    /// `priority:none` — no priority written — so the set may mix the absence of a priority with the
+    /// priorities themselves (`priority:high,none`). Never empty: the parser demands one value.
+    pub priority: Option<Vec<Option<Priority>>>,
     /// The reference written in `project:` (an id, or an exact name). Parsing only looks at grammar
     /// (it has no `conn`), so this stays an **unresolved raw string**; the entry point of the read
     /// turns it into an id via [`Filter::resolve`]. A reference that cannot be resolved is an error,
@@ -77,7 +82,9 @@ pub struct Filter {
     pub text: Option<String>,
     /// `number:` / `ref:` — filter by conversational ref (`AMB-T-<n>` / `AMB-D-<n>` / a bare number).
     pub number: Option<NumberFilter>,
-    pub assignee: Option<AssigneeFilter>,
+    /// Allowed set for `assignee:`, in the shape `status:` has (`AMB-D-655`) — `assignee:me,me-ai` is
+    /// mine either way round. Never empty: the parser demands one value.
+    pub assignee: Option<Vec<AssigneeFilter>>,
     /// `ai:true|false` — the AI-delegation dimension (`assignee_kind=ai`). Independent of the
     /// assignee dimension: it gathers everything delegated to an AI, whoever's. `me-ai` (my own AI)
     /// still exists separately on the assignee side.
@@ -92,8 +99,11 @@ pub struct Filter {
     /// share — the same reason `start:` exists beside `ready:`.
     pub draft: Option<bool>,
     /// Filtering by classification axis (dimension). Folds together `dim:<axis>=<value>` and
-    /// `time_axis:<value>`, the sugar that names only the time axis. The key may appear several
-    /// times (`dim:a=x dim:b=y`) and the elements AND together.
+    /// `time_axis:<value>`, the sugar that names only the time axis. The key may appear several times,
+    /// and what the repetition means is read off the axis (`AMB-D-655`): tokens naming **different**
+    /// axes AND (`dim:a=x dim:b=y`), tokens naming the **same** axis OR (`dim:a=x dim:a=y`), which is
+    /// the same "a set of values per axis" the other keys say with a comma. A comma is not that here:
+    /// a value's name is the user's own text and may hold one.
     pub dimensions: Vec<DimensionFilter>,
     /// `decision:<AMB-D-n | D-n | n>` — tasks linked to this decision (forward lookup through
     /// `decision_task_link`). Symmetric with `task:` on the `decision list` side: it makes the
@@ -253,7 +263,7 @@ pub enum StartFilter {
 
 /// The value of `assignee:`. `me` / `me-ai` resolve through the facet (`assignee_kind` human/ai);
 /// with a single store there is no id to name.
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AssigneeFilter {
     /// Unassigned.
     None,
@@ -319,6 +329,33 @@ fn parse_cross_ref(value: &str, want_decision: bool) -> Result<u32> {
     Ok(nf.number)
 }
 
+/// Read one key's value as an **any-of set**: comma-separated elements, each named by `one`, added to
+/// `slot` (`AMB-D-655`). Every key shaped this way — `status:` / `priority:` / `assignee:` — reads its
+/// values through here, so they cannot come to disagree about what a comma, a repetition or a
+/// duplicate means.
+///
+/// - An element `one` does not know is an error, wherever in the set it sits, and so is an empty one
+///   (`status:todo,`): a value silently dropped would widen the filter by exactly the value the writer
+///   meant to narrow by.
+/// - Writing the key again **adds to** the set rather than replacing it (`priority:high priority:low`
+///   asks for both), which is the same set the comma builds — the two spellings agree.
+/// - A duplicate value is folded away: it is the same question asked twice.
+fn parse_any_of<T: PartialEq>(
+    value: &str,
+    slot: &mut Option<Vec<T>>,
+    one: impl Fn(&str) -> Option<T>,
+    invalid: impl Fn() -> Error,
+) -> Result<()> {
+    let set = slot.get_or_insert_with(Vec::new);
+    for part in value.split(',') {
+        let parsed = one(part).ok_or_else(&invalid)?;
+        if !set.contains(&parsed) {
+            set.push(parsed);
+        }
+    }
+    Ok(())
+}
+
 impl Filter {
     /// Resolve the `project:` reference (an id, or an exact name) to a single project id. Parsing
     /// only looks at grammar (it has no `conn`), so the entry point of the read — which does have a
@@ -345,21 +382,9 @@ impl Filter {
                         _ => return Err(Error::invalid("done must be true / false")),
                     })
                 }
-                "status" => {
-                    // Several values may be given, comma-separated (`status:todo,in_progress`). A
-                    // single unknown value is an error, and so is an empty element
-                    // (`status:todo,`).
-                    let mut statuses = Vec::new();
-                    for part in value.split(',') {
-                        let parsed = TaskStatus::parse(part).ok_or_else(|| {
-                            Error::invalid("status must be todo / in_progress / done / blocked / rejected")
-                        })?;
-                        if !statuses.contains(&parsed) {
-                            statuses.push(parsed);
-                        }
-                    }
-                    f.status = Some(statuses)
-                }
+                "status" => parse_any_of(value, &mut f.status, TaskStatus::parse, || {
+                    Error::invalid("status must be todo / in_progress / done / blocked / rejected")
+                })?,
                 "due" => {
                     f.due = Some(match value {
                         "today" => DueFilter::Today,
@@ -381,28 +406,34 @@ impl Filter {
                         }
                     })
                 }
-                "priority" => {
-                    f.priority = Some(match value {
-                        "high" => Some(Priority::High),
-                        "medium" => Some(Priority::Medium),
-                        "low" => Some(Priority::Low),
-                        "none" => None,
-                        _ => return Err(Error::invalid("priority must be high / medium / low / none")),
-                    })
-                }
+                // An any-of set whose values include the *absence* of a priority: `none` is an element
+                // like the three named ones, so `priority:high,none` is a legal question.
+                "priority" => parse_any_of(
+                    value,
+                    &mut f.priority,
+                    |part| match part {
+                        "high" => Some(Some(Priority::High)),
+                        "medium" => Some(Some(Priority::Medium)),
+                        "low" => Some(Some(Priority::Low)),
+                        "none" => Some(None),
+                        _ => None,
+                    },
+                    || Error::invalid("priority must be high / medium / low / none"),
+                )?,
                 "project" => f.project_ref = Some(value.to_string()),
                 // `number:` and its alias `ref:` (synonyms — filter by conversational number).
                 "number" | "ref" => f.number = Some(NumberFilter::parse(value)?),
-                "assignee" => {
-                    f.assignee = Some(match value {
-                        "none" => AssigneeFilter::None,
-                        "me" | "human" => AssigneeFilter::Me,
-                        "me-ai" | "ai" => AssigneeFilter::MeAi,
-                        _ => {
-                            return Err(Error::invalid("assignee must be none / me / me-ai"))
-                        }
-                    })
-                }
+                "assignee" => parse_any_of(
+                    value,
+                    &mut f.assignee,
+                    |part| match part {
+                        "none" => Some(AssigneeFilter::None),
+                        "me" | "human" => Some(AssigneeFilter::Me),
+                        "me-ai" | "ai" => Some(AssigneeFilter::MeAi),
+                        _ => None,
+                    },
+                    || Error::invalid("assignee must be none / me / me-ai"),
+                )?,
                 // `ai:true|false` — the AI-delegation dimension (independent of assignee: it selects
                 // what is delegated to an AI, whoever's).
                 "ai" => {
@@ -449,8 +480,10 @@ impl Filter {
                     f.commit = Some(sha);
                 }
                 // Filter across classification axes. `dim:` names any axis; `time_axis:` is sugar for
-                // the axis designated for that role. Repeated tokens AND together (`dim:` is not a
-                // single-value key — it accumulates).
+                // the axis designated for that role. Repeated tokens accumulate, and the axis decides
+                // what that means: different axes AND, the same axis twice ORs (`AMB-D-655`). The
+                // reading is the read side's, once the names have resolved to ids
+                // (`read::dimension_preds`) — a name alone cannot say which axis it landed on.
                 "dim" | "dimension" => f.dimensions.push(DimensionFilter::parse_axis_value(value)?),
                 "time_axis" => {
                     let value = DimensionValueFilter::parse(value, || {
@@ -2705,6 +2738,83 @@ mod filter_tests {
         let day = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
         assert!(Filter::parse("status:todo,bogus", day).is_err(), "an unknown value anywhere in the set is an error");
         assert!(Filter::parse("status:todo,", day).is_err(), "an empty element is an error");
+        assert_eq!(
+            ids(tx, Some("status:todo status:done")),
+            {
+                let mut both = vec![td, dn];
+                both.sort();
+                both
+            },
+            "writing the key twice adds to the set rather than replacing it",
+        );
+    }
+
+    /// `priority:` takes the same any-of set (`AMB-D-655`), and one of its elements is the **absence** of
+    /// a priority: `priority:high,none` asks a question the column cannot answer with a single `=`. The
+    /// two ways of naming several values agree — a comma, or the key written again.
+    #[test]
+    fn priority_filter_accepts_a_set_that_may_hold_the_absence_of_one() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = proj(tx, "PJ");
+        let set_priority = |id: i64, priority: Priority| {
+            ops::task::update(tx, id, ops::task::TaskPatch { priority: Some(priority), ..Default::default() })
+                .unwrap();
+        };
+        let hi = task(tx, "high", Some(p));
+        let md = task(tx, "medium", Some(p));
+        let lo = task(tx, "low", Some(p));
+        let unset = task(tx, "unset", Some(p));
+        set_priority(hi, Priority::High);
+        set_priority(md, Priority::Medium);
+        set_priority(lo, Priority::Low);
+
+        assert_eq!(ids(tx, Some("priority:high")), vec![hi], "a single value works as before");
+        assert_eq!(ids(tx, Some("priority:none")), vec![unset], "so does the absence of one");
+        let mut hi_lo = vec![hi, lo];
+        hi_lo.sort();
+        assert_eq!(ids(tx, Some("priority:high,low")), hi_lo, "the comma is an any-of, not a name");
+        assert_eq!(ids(tx, Some("priority:high priority:low")), hi_lo, "repeating the key builds the same set");
+        let mut hi_unset = vec![hi, unset];
+        hi_unset.sort();
+        assert_eq!(
+            ids(tx, Some("priority:high,none")),
+            hi_unset,
+            "`none` is an element like the named ones — either the priority, or no priority at all",
+        );
+        assert_eq!(ids(tx, Some("priority:high,high")), vec![hi], "the same value twice is one question");
+        assert!(ids(tx, Some("priority:medium,none")).contains(&md), "a set that names neither still narrows");
+        assert!(!ids(tx, Some("priority:medium,none")).contains(&lo));
+
+        let day = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        assert!(Filter::parse("priority:high,bogus", day).is_err(), "an unknown value anywhere in the set is an error");
+        assert!(Filter::parse("priority:high,", day).is_err(), "an empty element is an error");
+    }
+
+    /// `assignee:` takes the set too, absence included: `assignee:none,me-ai` is "mine, or nobody's".
+    #[test]
+    fn assignee_filter_accepts_a_set() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = proj(tx, "PJ");
+        let ai = task(tx, "ai", Some(p));
+        let human = task(tx, "human", Some(p));
+        let unassigned = task(tx, "unassigned", Some(p));
+        ops::task::set_assignee(tx, ai, Some(ActorKind::Ai)).unwrap();
+        ops::task::set_assignee(tx, human, Some(ActorKind::Human)).unwrap();
+
+        assert_eq!(ids(tx, Some("assignee:me-ai")), vec![ai], "a single value works as before");
+        let mut mine_or_nobodys = vec![ai, unassigned];
+        mine_or_nobodys.sort();
+        assert_eq!(ids(tx, Some("assignee:none,me-ai")), mine_or_nobodys, "the absence of one is an element");
+        assert_eq!(ids(tx, Some("assignee:none assignee:me-ai")), mine_or_nobodys, "repeating the key builds the same set");
+        let mut both_facets = vec![ai, human];
+        both_facets.sort();
+        assert_eq!(ids(tx, Some("assignee:me,me-ai")), both_facets, "the two facets, and nothing unassigned");
+
+        let day = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        assert!(Filter::parse("assignee:me,bogus", day).is_err(), "an unknown value anywhere in the set is an error");
+        assert!(Filter::parse("assignee:me,", day).is_err(), "an empty element is an error");
     }
 
     /// `dim:<axis>=<value>` selects on any classification axis, and `time_axis:<value>` is sugar for
@@ -2788,6 +2898,73 @@ mod filter_tests {
         // Gatekeeping the vocabulary: `phase` is only a name a user might give an axis, never a key of
         // the grammar.
         assert!(Filter::parse("phase:dev", day).is_err(), "`phase:` is an unknown key");
+    }
+
+    /// What repeating `dim:` means is read off the **axis** (`AMB-D-655`): different axes AND, as they
+    /// always have, and the same axis twice ORs — the set of values per axis the other keys spell with a
+    /// comma, which a value's name cannot borrow because it is the user's own text. An axis is
+    /// single-select, so the old AND answered `dim:A=x dim:A=y` with nobody.
+    #[test]
+    fn the_same_axis_named_twice_asks_for_either_value() {
+        use crate::model::{DimensionCardinality, DimensionRole};
+
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = proj(tx, "PJ");
+        let axis = |name: &str, role: DimensionRole| {
+            ops::dimension::add(
+                tx,
+                p,
+                ops::dimension::NewDimension {
+                    name: name.to_string(),
+                    notes: String::new(),
+                    cardinality: DimensionCardinality::Single,
+                    ordered: true,
+                    role,
+                    show_on_card: false,
+                },
+            )
+            .unwrap()
+            .id
+        };
+        let era = axis("Era", DimensionRole::TimeAxis);
+        let category = axis("Category", DimensionRole::None);
+        let dev = ops::dimension::value_add(tx, era, "dev").unwrap().id;
+        let ops_era = ops::dimension::value_add(tx, era, "ops").unwrap().id;
+        let bug = ops::dimension::value_add(tx, category, "bug").unwrap().id;
+
+        let t_dev_bug = task(tx, "dev bug", Some(p));
+        let t_ops = task(tx, "ops", Some(p));
+        let t_bare = task(tx, "bare", Some(p));
+        ops::dimension::set(tx, t_dev_bug, dev).unwrap();
+        ops::dimension::set(tx, t_dev_bug, bug).unwrap();
+        ops::dimension::set(tx, t_ops, ops_era).unwrap();
+
+        let mut on_the_era = vec![t_dev_bug, t_ops];
+        on_the_era.sort();
+        assert_eq!(ids(tx, Some("dim:Era=dev dim:Era=ops")), on_the_era, "either value of the one axis");
+        assert_eq!(ids(tx, Some("dim:Era=dev dim:Era=dev")), vec![t_dev_bug], "the same value twice is one question");
+        let mut dev_or_bare = vec![t_dev_bug, t_bare];
+        dev_or_bare.sort();
+        assert_eq!(
+            ids(tx, Some("dim:Era=dev dim:Era=none")),
+            dev_or_bare,
+            "`=none` joins the set as an element — that value, or nothing on the axis",
+        );
+        // Two axes still AND, which is the half of the grammar this must not touch.
+        assert_eq!(ids(tx, Some("dim:Era=dev dim:Category=bug")), vec![t_dev_bug], "different axes AND");
+        assert!(ids(tx, Some("dim:Era=ops dim:Category=bug")).is_empty(), "...and an AND nobody satisfies is empty");
+        assert_eq!(
+            ids(tx, Some("dim:Era=dev dim:Era=ops dim:Category=bug")),
+            vec![t_dev_bug],
+            "the two readings compose: either era, and the category",
+        );
+        // Sameness is the resolved axis, not what was typed: `time_axis:` names this very axis.
+        assert_eq!(
+            ids(tx, Some("time_axis:dev dim:Era=ops")),
+            on_the_era,
+            "`time_axis:` and the axis's own name are one axis, so they OR",
+        );
     }
 
     /// An axis or value name that fails to resolve is **an error, not an empty result** (the same

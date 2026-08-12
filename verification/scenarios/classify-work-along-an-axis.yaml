@@ -112,6 +112,25 @@ steps_cli:
       target: banner
       present: true
 
+  # Naming the axis twice asks for either value — the set the other filter keys spell with a comma,
+  # which a value's name cannot borrow because it is the user's own text. An axis is single-select, so
+  # reading the repetition as an AND would answer with nobody.
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:medium=print dim:medium=web"
+      target: feature
+      present: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:medium=print dim:medium=web"
+      target: banner
+      present: true
+
   # Single-select: setting the other value replaces the first rather than piling up beside it.
   - type: action
     domain: dimension

@@ -315,6 +315,70 @@ fn done_asks_whether_a_task_is_closed_and_status_asks_which_way() {
     assert!(err.contains("rejected"), "the refusal names every value it would take: {err}");
 }
 
+/// A filter key names a **set** of values, not one (`AMB-D-655`): `priority:` and `assignee:` take it
+/// comma-separated as `status:` does, and `dim:` says it by naming the axis twice — a value's name is
+/// the user's own text, so a comma cannot be the separator there. Different axes go on ANDing, which is
+/// the half that must not move. Walked through the real binary, since the grammar is what a person and
+/// an AI type.
+#[test]
+fn a_filter_key_names_a_set_of_values() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "集合PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+    let add = |title: &str, priority: Option<&str>| {
+        let mut args = vec!["task", "add", "--title", title, "--project", &pid];
+        if let Some(priority) = priority {
+            args.extend(["--priority", priority]);
+        }
+        args.push("--json");
+        id_str(&cli.json(&args)["task"]["id"])
+    };
+    let high = add("高い", Some("high"));
+    let low = add("低い", Some("low"));
+    let unset = add("優先度なし", None);
+    cli.json(&["task", "assign", &high, "--to", "me-ai", "--json"]);
+    cli.json(&["task", "assign", &low, "--to", "me", "--json"]);
+    cli.json(&["dimension", "add", "--project", &pid, "--name", "エリア", "--json"]);
+    cli.json(&["dimension", "add", "--project", &pid, "--name", "区分", "--json"]);
+    for value in ["コア", "画面"] {
+        cli.json(&["dimension", "value-add", "エリア", "--name", value, "--json"]);
+    }
+    cli.json(&["dimension", "value-add", "区分", "--name", "バグ", "--json"]);
+    cli.json(&["dimension", "set", &high, "エリア", "コア", "--json"]);
+    cli.json(&["dimension", "set", &high, "区分", "バグ", "--json"]);
+    cli.json(&["dimension", "set", &low, "エリア", "画面", "--json"]);
+
+    let listed = |filter: &str| -> Vec<String> {
+        let mut ids: Vec<String> = cli.json(&["task", "list", "--project", &pid, "--filter", filter, "--json"])
+            ["tasks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| id_str(&t["id"]))
+            .collect();
+        ids.sort();
+        ids
+    };
+    let both = |a: &String, b: &String| {
+        let mut v = vec![a.clone(), b.clone()];
+        v.sort();
+        v
+    };
+
+    assert_eq!(listed("priority:high,low"), both(&high, &low), "a comma is an any-of, not a name");
+    assert_eq!(listed("priority:high priority:low"), both(&high, &low), "so is the key written twice");
+    assert_eq!(listed("priority:high,none"), both(&high, &unset), "`none` is an element like the rest");
+    assert_eq!(listed("assignee:none,me-ai"), both(&high, &unset), "mine, or nobody's");
+    assert_eq!(listed("assignee:me,me-ai"), both(&high, &low), "the two facets, and nothing unassigned");
+    assert_eq!(listed("dim:エリア=コア dim:エリア=画面"), both(&high, &low), "the same axis twice is either value");
+    assert_eq!(listed("dim:エリア=コア dim:区分=バグ"), vec![high.clone()], "different axes still AND");
+    assert!(listed("dim:エリア=画面 dim:区分=バグ").is_empty(), "...so an AND nobody satisfies is still empty");
+
+    let (err, code) = cli.run_err(&["task", "list", "--filter", "priority:high,bogus", "--json"]);
+    assert_ne!(code, 0);
+    assert!(err.contains("high"), "an unknown element anywhere in the set is refused, naming what it takes: {err}");
+}
+
 /// Every task belongs to a project: `task add` without --project is refused (no unnumbered
 /// orphan/inbox task), and the error lists existing projects to pick from.
 #[test]

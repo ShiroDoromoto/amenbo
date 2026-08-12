@@ -960,6 +960,9 @@ pub enum DimensionCmd {
         /// mark this axis as the project's time axis — its values carry periods
         #[arg(long)]
         time_axis: bool,
+        /// mark this axis to show on the task card (default: not marked)
+        #[arg(long)]
+        show_on_card: bool,
     },
     /// List a project's dimensions (display order) with their values
     List {
@@ -967,12 +970,12 @@ pub enum DimensionCmd {
         #[arg(long)]
         project: Option<String>,
     },
-    /// Show a dimension (name, notes, cardinality/ordered/role, values)
+    /// Show a dimension (name, notes, cardinality/ordered/role/card, values)
     Show {
         /// dimension ref (AMB-DIM-n) or name
         id: String,
     },
-    /// Update a dimension's name, notes, value ordering, and/or time-axis role (only the given fields change)
+    /// Update a dimension's name, notes, value ordering, time-axis role, and/or whether it goes on the task card (only the given fields change)
     Update {
         /// dimension ref (AMB-DIM-n) or name
         id: String,
@@ -986,6 +989,9 @@ pub enum DimensionCmd {
         /// whether this axis is the project's time axis (`--time-axis true|false`)
         #[arg(long)]
         time_axis: Option<bool>,
+        /// whether this axis is marked to show on the task card (`--show-on-card true|false`)
+        #[arg(long)]
+        show_on_card: Option<bool>,
     },
     /// Reorder a dimension within its project
     Move {

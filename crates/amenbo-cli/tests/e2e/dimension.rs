@@ -187,6 +187,38 @@ fn dimension_update_names_and_unnames_the_time_axis() {
     assert_eq!(vals["values"][0]["start_on"], "2026-07-08", "the dates remain in the physical columns");
 }
 
+/// Whether an axis goes on the task card is the axis's own answer (`AMB-D-651`), so this face raises it
+/// at creation or afterwards, lowers it again, and says so wherever an axis is read.
+#[test]
+fn dimension_marks_and_unmarks_an_axis_for_the_task_card() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "カードPJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+    // Raised at creation. An axis raised with nothing said about it starts down.
+    let up = cli.json(&["dimension", "add", "--project", &pid, "--name", "エリア", "--show-on-card", "--json"]);
+    assert_eq!(up["dimension"]["show_on_card"], true);
+    let down = cli.json(&["dimension", "add", "--project", &pid, "--name", "種別", "--json"]);
+    assert_eq!(down["dimension"]["show_on_card"], false);
+
+    // Raised after the fact, and the envelope names the field that moved.
+    let marked = cli.json(&["dimension", "update", "種別", "--show-on-card", "true", "--json"]);
+    assert_eq!(marked["dimension"]["show_on_card"], true);
+    assert_eq!(marked["changed"], serde_json::json!(["show_on_card"]));
+
+    // Both faces that read an axis say which way it stands.
+    let (shown, _) = cli.run(&["dimension", "show", "種別"]);
+    assert!(shown.contains("show-on-card"), "show says the axis is marked: {shown}");
+    let (listed, _) = cli.run(&["dimension", "list", "--project", &pid]);
+    assert!(listed.contains("エリア [single, show-on-card]"), "list says it too: {listed}");
+
+    // Lowered again, and nothing else on the axis moved with it.
+    let cleared = cli.json(&["dimension", "update", "種別", "--show-on-card", "false", "--json"]);
+    assert_eq!(cleared["dimension"]["show_on_card"], false);
+    assert_eq!(cleared["dimension"]["name"], "種別");
+    let (after, _) = cli.run(&["dimension", "show", "種別"]);
+    assert!(!after.contains("show-on-card"), "and it stops saying so: {after}");
+}
+
 /// A new task defaults to the era on its project's time axis that **covers today** — automation, not a
 /// requirement. With no era over today it is created unassigned, and the default can be cleared or overridden.
 #[test]

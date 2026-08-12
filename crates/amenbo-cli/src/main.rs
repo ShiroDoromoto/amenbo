@@ -5063,14 +5063,22 @@ fn project(store: &mut Store, flags: &Flags, sub: ProjectCmd) -> Result<i32, Cli
 fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> Result<i32, CliError> {
     use amenbo_core::model::{DimensionCardinality, DimensionRole};
     use amenbo_core::ops::dimension::NewDimension;
-    // A dimension's kind on one human-readable line (single, ordered, time-axis).
-    fn kind_line(cardinality: DimensionCardinality, ordered: bool, role: DimensionRole) -> String {
+    // A dimension's kind on one human-readable line (single, ordered, time-axis, show-on-card).
+    fn kind_line(
+        cardinality: DimensionCardinality,
+        ordered: bool,
+        role: DimensionRole,
+        show_on_card: bool,
+    ) -> String {
         let mut s = cardinality.as_str().to_string();
         if ordered {
             s.push_str(", ordered");
         }
         if matches!(role, DimensionRole::TimeAxis) {
             s.push_str(", time-axis");
+        }
+        if show_on_card {
+            s.push_str(", show-on-card");
         }
         s
     }
@@ -5110,7 +5118,7 @@ fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> Result<i32,
         (s, e)
     }
     match sub {
-        DimensionCmd::Add { project, name, notes, ordered, time_axis } => {
+        DimensionCmd::Add { project, name, notes, ordered, time_axis, show_on_card } => {
             let pid = project_or_bound(store, project)?;
             let new = NewDimension {
                 name,
@@ -5119,8 +5127,7 @@ fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> Result<i32,
                 cardinality: DimensionCardinality::Single,
                 ordered,
                 role: if time_axis { DimensionRole::TimeAxis } else { DimensionRole::None },
-                // No door on this face raises the flag yet, so a new axis starts off the card.
-                show_on_card: false,
+                show_on_card,
             };
             let d = store.dimension_add(pid, new).map_err(CliError::from)?;
             write_envelope(flags, "dimension.add", "dimension", serde_json::to_value(&d).unwrap(), None, false, format!("✓ Created dimension: {} ({})", d.name, dimension_label(d.id)));
@@ -5139,7 +5146,7 @@ fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> Result<i32,
                 human(flags, format!("{} dimension(s)", dims.len()));
                 for d in &dims {
                     let vals = store.dimension_values(d.id).map_err(CliError::from)?;
-                    human(flags, format!("  {}  {} [{}]  {} value(s)", dimension_label(d.id), d.name, kind_line(d.cardinality, d.ordered, d.role), vals.len()));
+                    human(flags, format!("  {}  {} [{}]  {} value(s)", dimension_label(d.id), d.name, kind_line(d.cardinality, d.ordered, d.role, d.show_on_card), vals.len()));
                     for v in &vals {
                         let period = period_line(v).map(|p| format!("  {p}")).unwrap_or_default();
                         human(flags, format!("      {}  {}{}", dimension_value_label(v.id), v.name, period));
@@ -5159,7 +5166,7 @@ fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> Result<i32,
                 print_json(&json!({ "dimension": serde_json::to_value(&d).unwrap(), "values": serde_json::to_value(&vals).unwrap() }));
             } else {
                 human(flags, format!("{}  {}", dimension_label(d.id), d.name));
-                human(flags, format!("kind: {}", kind_line(d.cardinality, d.ordered, d.role)));
+                human(flags, format!("kind: {}", kind_line(d.cardinality, d.ordered, d.role, d.show_on_card)));
                 if d.notes.trim().is_empty() {
                     human(flags, "notes: (none)");
                 } else {
@@ -5172,7 +5179,7 @@ fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> Result<i32,
                 }
             }
         }
-        DimensionCmd::Update { id, name, notes, ordered, time_axis } => {
+        DimensionCmd::Update { id, name, notes, ordered, time_axis, show_on_card } => {
             let did = store.resolve_dimension(None, &id).map_err(CliError::from)?;
             let mut changed = Vec::new();
             if name.is_some() {
@@ -5187,9 +5194,12 @@ fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> Result<i32,
             if time_axis.is_some() {
                 changed.push("role".to_string());
             }
+            if show_on_card.is_some() {
+                changed.push("show_on_card".to_string());
+            }
             let role = time_axis
                 .map(|on| if on { DimensionRole::TimeAxis } else { DimensionRole::None });
-            let d = store.dimension_update(did, name.as_deref(), notes.as_deref(), ordered, role, None).map_err(CliError::from)?;
+            let d = store.dimension_update(did, name.as_deref(), notes.as_deref(), ordered, role, show_on_card).map_err(CliError::from)?;
             write_envelope(flags, "dimension.update", "dimension", serde_json::to_value(&d).unwrap(), Some(changed), false, format!("✓ Updated dimension: {}", dimension_label(d.id)));
         }
         DimensionCmd::Move { id, before, after, top, bottom } => {

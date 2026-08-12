@@ -390,8 +390,12 @@ axis and value are named in `with` (`dimension: <axis name>`, `value: <value nam
 the command takes too; a bare number there would be read as a name, not an id. A **folder** travels
 as a plain name too (`dir: shared`), and for a different reason: a binding is answered by where a
 folder sits, so the driver is the one that places it — clear of the run's own bound CWD, which a
-pointer search would otherwise walk up into. A **plugin** is named the way the catalog names it
-(`name: worktree`), which is what every one of its commands takes.
+pointer search would otherwise walk up into. One kind of folder name is answered without being
+placed: a folder a road **moved** is named again afterwards — `folder rebind`'s `moved:`, `folder
+vanished`'s `gone:`, `folder repointed`'s `previously:` — to say which binding is meant, and placing
+it would put back the very path the move took away, which is the whole state those steps are about.
+Those names are answered from what the run moved instead. A **plugin** is named the way the catalog
+names it (`name: worktree`), which is what every one of its commands takes.
 
 `plugin run` is the one place where a step's arguments are not amenbo's. Everything after the
 plugin's name belongs to the plugin, so `command:` is the word its own face takes, `task:` hands it

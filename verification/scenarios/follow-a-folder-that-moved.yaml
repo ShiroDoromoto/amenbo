@@ -1,0 +1,157 @@
+# Folders move. They are renamed, they are dragged somewhere tidier, they come back out of a backup
+# beside where they were — and none of it is anything amenbo is told about. What it holds is a path,
+# and the path is what stops leading anywhere.
+#
+# Binding the folder again in its new home looks like the answer and is not. A bind records a *new*
+# registration, so the one the folder always had is left behind holding a path that leads nowhere —
+# and anything that named that registration — a task that says which of its project's folders it is
+# worked in, among others — is left naming a row nobody points at. What the move actually wants is the same row, moved: the folder
+# is the same folder, and the id is what says so. That is the whole of what this road is about, and
+# it is not visible from the folder's side at all — a pointer lands either way, and both roads leave a
+# folder that answers for the project. The two part company only in the registry.
+#
+# The id is the other half. It is a number the store assigns and publishes in no read amenbo offers,
+# so a reader who was never shown it cannot pass it — which is why what shows it is the refusal: in a
+# folder whose project has one gone, amenbo stops rather than going quietly to work in whatever is
+# left, and lines the vanished bindings up by id beside the command that re-points each of them. A
+# build that kept the flag and stopped printing that answer has a flag nobody can reach. So the
+# listing is walked here as a step of its own, and it is where this road learns the number it then
+# hands back.
+#
+# CLI only, and not by omission: `--rebind` has no face on screen. What the screens carry about
+# folders is the list a project's settings draw, which `link-a-folder` walks.
+id: follow-a-folder-that-moved
+title: A folder that moved keeps the binding it always had — re-pointed by id, so whatever was filed at that folder follows it
+description: >
+  Bind two folders to one project, move one of them somewhere else — pointer and all, the way a
+  rename or a restore leaves it — and read what amenbo then says: it stops, and offers the vanished
+  binding by id. Re-point that binding onto the folder's new home and read the answer back: the same
+  id, naming where the folder is now, saying where it pointed before. Then the project's own books,
+  which are the half the pointer cannot answer — they lead to the new place, and the path that leads
+  nowhere is off them, so the row moved rather than a second one being recorded.
+steps_cli:
+  # The project the folders answer for. Its own, rather than the run's, because the half this road
+  # turns on is read off a project's books.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: SCENARIO PROJECT — the one whose folder moves
+    as: pj
+
+  # The folder that will move, and one that stays beside it. The second is what says at the end that
+  # a re-point moved one row and touched no other — the many-to-one relation is where that could go
+  # wrong, and a project holding a single folder could not tell the difference.
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: workshop
+      project: pj
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: annex
+      project: pj
+
+  - type: assert
+    domain: folder
+    op: bound
+    with:
+      dir: workshop
+      project: pj
+
+  - type: assert
+    domain: folder
+    op: listed
+    with:
+      dir: workshop
+      project: pj
+
+  # Moved. Nothing here goes through amenbo — that is the point: a folder is moved by whoever moves
+  # folders, and what amenbo holds only becomes wrong afterwards.
+  - type: action
+    domain: folder
+    op: move
+    with:
+      dir: workshop
+      to: workshop-elsewhere
+
+  # The project's side is where it shows. Its books still lead to the path the folder left, so the one
+  # place a person is offered a way into a folder offers a way into nothing.
+  - type: assert
+    domain: folder
+    op: listed
+    with:
+      dir: workshop-elsewhere
+      project: pj
+      present: false
+
+  # And amenbo says so rather than working around it — with the id, which is the only place a reader
+  # or a road can get one. Asked from the folder in its new home, which is where its reader is
+  # standing: that the question is answered there at all is the pointer having travelled with the
+  # folder, since a binding is answered by walking up from where it is asked.
+  - type: assert
+    domain: folder
+    op: vanished
+    with:
+      dir: workshop-elsewhere
+      gone: workshop
+
+  # The re-point: that binding, onto where the folder stands now.
+  - type: action
+    domain: folder
+    op: rebind
+    with:
+      dir: workshop-elsewhere
+      moved: workshop
+      project: pj
+
+  # What it answered: the id it kept, the folder it names now, and the path it named before. The id is
+  # the assert's whole reason for being — it is said once, as the row moves, and afterwards there is
+  # only the state left behind, which a fresh bind would have left looking much the same.
+  - type: assert
+    domain: folder
+    op: repointed
+    with:
+      dir: workshop-elsewhere
+      previously: workshop
+
+  # The books lead where the folder is …
+  - type: assert
+    domain: folder
+    op: listed
+    with:
+      dir: workshop-elsewhere
+      project: pj
+
+  # … and the path that leads nowhere is off them. The two readings together are what says the row
+  # moved: a second bind would have left the project offering both.
+  - type: assert
+    domain: folder
+    op: listed
+    with:
+      dir: workshop
+      project: pj
+      present: false
+
+  # The folder that stayed was never in it. A re-point moves one row and touches no other, the way a
+  # bind points one folder and never a tree.
+  - type: assert
+    domain: folder
+    op: listed
+    with:
+      dir: annex
+      project: pj
+
+  # And with every folder where the registry says it is, the read that stopped goes through again —
+  # from the folder that moved, which is the one place the whole of this was for: it names the project
+  # it always named, and nothing about it is stale any more.
+  - type: assert
+    domain: folder
+    op: bound
+    with:
+      dir: workshop-elsewhere
+      project: pj

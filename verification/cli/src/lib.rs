@@ -160,6 +160,13 @@ pub(crate) struct Driver<'a> {
     /// project has left is part of that answer, and afterwards there is only the state it left —
     /// which reads the same whether the answer mentioned it or not.
     last_unbind: Option<serde_json::Value>,
+    /// What the last `bind --rebind` answered. Kept for the same reason again, and here it is the id:
+    /// no read amenbo offers publishes a binding's, so which row moved is said once, as it moves.
+    last_rebind: Option<serde_json::Value>,
+    /// Where each folder a step moved used to stand, under the name the road calls it by. A moved
+    /// folder is the one thing a later step cannot ask the session for — asking places it, and a path
+    /// placed again is a path that leads somewhere, which is the very state the road took away.
+    moved: HashMap<String, std::path::PathBuf>,
     /// What the last `plugin flush` reported. Kept for the same reason as the line above: what a
     /// flush got through, and which queues it stepped around, is said once as it returns and is
     /// nowhere to be read afterwards — the store shows the state, not who declined to touch it.
@@ -199,6 +206,8 @@ impl<'a> Driver<'a> {
             bindings: HashMap::new(),
             last_run: None,
             last_unbind: None,
+            last_rebind: None,
+            moved: HashMap::new(),
             last_flush: None,
             artifacts: HashMap::new(),
             numbers: HashMap::new(),
@@ -258,6 +267,25 @@ impl<'a> Driver<'a> {
             return Err(format!("`amenbo {}` failed: {}", args.join(" "), stdout.trim()));
         }
         Ok(v)
+    }
+
+    /// Run a command the caller expects to be **turned away**, and hand back the error object it
+    /// printed. Apart from a step's own `refused:`, which judges a refusal and stops there: this is
+    /// for the road that has to *read* one, because what it needs is published nowhere else — the
+    /// ids `bind` lines up when a folder of the project has vanished are in that answer's hint and in
+    /// no read at all. The error object goes to stderr, so it is taken off the stream it is on.
+    fn refusal_in(&self, cwd: &Path, args: &[&str]) -> Result<serde_json::Value, String> {
+        let out = self.invoke_in(cwd, args)?;
+        if out.status.success() {
+            return Err(format!("`amenbo {}` went through where it had to be turned away", args.join(" ")));
+        }
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let v: serde_json::Value = serde_json::from_str(stderr.trim()).map_err(|e| {
+            format!("`amenbo {}` was turned away without an error object ({e}): {}", args.join(" "), stderr.trim())
+        })?;
+        v.get("error")
+            .cloned()
+            .ok_or_else(|| format!("`amenbo {}` was turned away without an error object: {}", args.join(" "), stderr.trim()))
     }
 
     /// The same, for a command whose exit code is its **verdict** rather than a report on whether
@@ -498,7 +526,12 @@ impl<'a> Driver<'a> {
     /// it, because a binding is answered by where a folder sits and only the driver knows where its
     /// own isolated run lives.
     fn folder(&self, with: &Args) -> Result<PathBuf, String> {
-        let name = req_str(with, "dir")?;
+        self.folder_named(req_str(with, "dir")?)
+    }
+
+    /// The same, by the name itself — for an op that names a second folder under its own key (`folder
+    /// move`'s `to:`), the way an op that joins two objects names the second side under its own.
+    fn folder_named(&self, name: &str) -> Result<PathBuf, String> {
         self.session
             .folder(name)
             .map_err(|e| format!("could not make the folder `{name}`: {e}"))

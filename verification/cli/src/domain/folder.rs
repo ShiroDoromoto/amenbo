@@ -2,9 +2,11 @@
 //! AI launched there may reach. Every question here is asked from inside the folder it is about,
 //! since the pointer is found by walking up from the CWD.
 
+use std::path::{Path, PathBuf};
+
 use amenbo_scenario::{Args, Domain};
 
-use crate::{opt_bool, req_i64, unmapped, Driver, Outcome};
+use crate::{opt_bool, req_i64, req_str, unmapped, Driver, Outcome};
 
 impl Driver<'_> {
     pub(crate) fn folder_action(&mut self, op: &str, with: &Args, bind: Option<&str>) -> Result<Outcome, String> {
@@ -60,6 +62,45 @@ impl Driver<'_> {
                 let v = self.run_json(&["sync-guide", "--dir", &path, "--json"])?;
                 let rewritten = v["updated"].as_array().map_or(0, Vec::len);
                 Ok(Outcome::action(format!("resynced the guidance in {path} ({rewritten} file(s) rewritten)")))
+            }
+            // The folder goes and stands somewhere else, with everything lying in it — its pointer
+            // above all, which is what makes the new place the same folder rather than a bare
+            // directory. Nothing here touches amenbo: to the registry a rename, a move and a restore
+            // beside the original are one event, and it is one it is never told about.
+            //
+            // Where it stood is remembered canonically and *before* it goes: the registry records the
+            // canonical spelling, so that is what every later answer has to be matched against — and
+            // once the folder is away there is nothing left on disk to canonicalize.
+            "move" => {
+                let from = self.folder(with)?;
+                let to = self.folder_named(req_str(with, "to")?)?;
+                let was = std::fs::canonicalize(&from).unwrap_or_else(|_| from.clone());
+                move_folder(&from, &to)?;
+                self.moved.insert(req_str(with, "dir")?.to_string(), was.clone());
+                Ok(Outcome::action(format!(
+                    "moved {} to {} — the path its binding holds leads nowhere now",
+                    was.display(),
+                    to.display()
+                )))
+            }
+            // The binding that folder had, brought onto where it stands now. The id is not the road's
+            // to know, so it is read the way its reader reads it: from the answer `bind` gives in a
+            // folder whose project has one gone, which lines the vanished bindings up by id. That is
+            // also why the step names the folder that moved rather than a number.
+            "rebind" => {
+                let dir = self.folder(with)?;
+                let gone = self.moved_path(with, "moved")?;
+                let pid = match with.get("project") {
+                    Some(_) => self.resolve_key(with, "project")?,
+                    None => self.project_id,
+                };
+                let id = self.vanished_id(&dir, &gone)?;
+                let path = dir.to_string_lossy().into_owned();
+                let v = self.run_json(&[
+                    "bind", "--project", &pid.to_string(), "--rebind", &id.to_string(), "--dir", &path, "--json",
+                ])?;
+                self.last_rebind = Some(v);
+                Ok(Outcome::action(format!("re-pointed binding {id} at {path}, keeping its id")))
             }
             _ => Err(unmapped(Domain::Folder, op)),
         }
@@ -167,9 +208,129 @@ impl Driver<'_> {
                     ),
                 ))
             }
+            // amenbo does not go quietly to work in whatever is left of a project one of whose folders
+            // has vanished: the read stops, and the answer lines the gone bindings up by id beside the
+            // command that re-points them. Asked from a folder that is still there — the moved one's
+            // new home is one, since the pointer travelled with it.
+            //
+            // A refusal that never came, one that came for another reason, and one that came without
+            // the id in it are all the same verdict here: the door this road walks through is shut.
+            "vanished" => {
+                let dir = self.folder(with)?;
+                let gone = self.moved_path(with, "gone")?;
+                Ok(match self.vanished_id(&dir, &gone) {
+                    Ok(id) => Outcome::assert(
+                        true,
+                        format!(
+                            "the read in {} stopped and listed binding {id}, still pointing at {} (as expected)",
+                            dir.display(),
+                            gone.display()
+                        ),
+                    ),
+                    Err(why) => Outcome::assert(
+                        false,
+                        format!("{} is not offered for re-pointing by id (MISMATCH): {why}", gone.display()),
+                    ),
+                })
+            }
+            // What the re-point just before this one answered about the binding it moved: the id it
+            // kept, the folder it names now, and the path it named before. All three off that one
+            // answer — afterwards there is only the state it left, which carries no id at all.
+            "repointed" => {
+                let dir = self.folder(with)?;
+                let was = self.moved_path(with, "previously")?;
+                let last = self
+                    .last_rebind
+                    .as_ref()
+                    .ok_or("no binding has been re-pointed yet, so there is no answer to read one off")?;
+                let id = last["binding"]["binding_id"].as_i64();
+                let now = last["binding"]["dir"].as_str().map(PathBuf::from);
+                let before = last["binding"]["previous_dir"].as_str().map(PathBuf::from);
+                // The store records the folder canonicalized, which is the spelling that comes back.
+                let want = std::fs::canonicalize(&dir).unwrap_or_else(|_| dir.clone());
+                let pass = id.is_some() && now.as_deref() == Some(want.as_path()) && before.as_deref() == Some(was.as_path());
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "the re-point answered {} now naming {} (was {}) — expected the one that pointed at {} to name {}, {}",
+                        match id {
+                            Some(n) => format!("binding {n}"),
+                            None => "no binding id".to_string(),
+                        },
+                        show(now.as_deref()),
+                        show(before.as_deref()),
+                        was.display(),
+                        want.display(),
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
             _ => Err(unmapped(Domain::Folder, op)),
         }
     }
+
+    /// Where a folder a step moved used to stand. It is looked up rather than asked of the session,
+    /// because asking places it: a path put back is a path that leads somewhere, and a folder that
+    /// leads nowhere is the whole state this road is about. A name no `move` bound is the road
+    /// written out of order, which is what the message says.
+    fn moved_path(&self, with: &Args, key: &str) -> Result<PathBuf, String> {
+        let name = req_str(with, key)?;
+        self.moved.get(name).cloned().ok_or_else(|| {
+            format!("`{key}: {name}` names no folder this run moved — a binding is re-pointed after its folder goes, not before")
+        })
+    }
+
+    /// The id of the binding still pointing at `gone`, read the way the reader reading it does: from
+    /// what `bind` answers in a folder whose project has one that vanished. Asking is the only way —
+    /// a binding's id is in no read amenbo offers — which is exactly why the answer carries it.
+    fn vanished_id(&self, ask_from: &Path, gone: &Path) -> Result<i64, String> {
+        let err = self.refusal_in(ask_from, &["bind", "--json"])?;
+        let code = err["code"].as_str().unwrap_or_default();
+        if code != "binding_stale" {
+            return Err(format!("the read stopped with `{code}` rather than on the folder that vanished"));
+        }
+        let hint = err["hint"].as_str().unwrap_or_default();
+        vanished_bindings(hint)
+            .into_iter()
+            .find(|(_, dir)| Path::new(dir) == gone)
+            .map(|(id, _)| id)
+            .ok_or_else(|| format!("no line of the answer offers it by id: {hint}"))
+    }
+}
+
+/// A folder and everything lying in it come to stand at `to`, and the path it was at is taken away.
+/// Entry by entry rather than one rename of the folder itself, because both names are folders the
+/// session has already placed — a scenario names folders and the driver puts them somewhere, so the
+/// destination exists before anything is moved into it.
+fn move_folder(from: &Path, to: &Path) -> Result<(), String> {
+    let entries = std::fs::read_dir(from).map_err(|e| format!("could not read {}: {e}", from.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("could not read {}: {e}", from.display()))?;
+        let dest = to.join(entry.file_name());
+        std::fs::rename(entry.path(), &dest)
+            .map_err(|e| format!("could not move {} to {}: {e}", entry.path().display(), dest.display()))?;
+    }
+    std::fs::remove_dir_all(from).map_err(|e| format!("could not take {} away: {e}", from.display()))
+}
+
+/// The bindings a `binding_stale` answer offers for re-pointing, as the id and the path each one is
+/// still holding. One line per vanished binding, each written as the command that moves it with the
+/// path it points at beside — so the reading is taken on the two things a road needs and not on the
+/// sentence they are written into: a line that names no `--rebind` is prose about them, not one of
+/// them.
+fn vanished_bindings(hint: &str) -> Vec<(i64, String)> {
+    hint.lines()
+        .filter_map(|line| {
+            let id: i64 = line.split("--rebind ").nth(1)?.split_whitespace().next()?.parse().ok()?;
+            let dir = line.rsplit_once('(')?.1.trim_end().strip_suffix(')')?;
+            Some((id, dir.to_string()))
+        })
+        .collect()
+}
+
+/// A path as a note names it, and what to write where there is none to name.
+fn show(path: Option<&Path>) -> String {
+    path.map_or_else(|| "nothing".to_string(), |p| p.display().to_string())
 }
 
 /// Does what `project show` answered list this folder? The rows carry the path as a string, so the
@@ -184,7 +345,6 @@ fn lists_folder(shown: &serde_json::Value, want: &std::path::Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
 
     /// The reading `listed` is taken on: a project's own answer about its folders, matched as a path.
     /// A project that lists other folders is a miss and not an error — that is the very state
@@ -208,5 +368,44 @@ mod tests {
         // list at all is read the same way rather than blowing up mid-road.
         assert!(!lists_folder(&serde_json::json!({ "bound_folders": [] }), Path::new("/work/one")));
         assert!(!lists_folder(&serde_json::json!({}), Path::new("/work/one")));
+    }
+
+    /// The one door to a binding's id: the answer `bind` gives where a folder has vanished. Every
+    /// line that offers one is read, and the prose around them — which names the command too, without
+    /// an id — is not, since a road that read it would re-point whatever the sentence happened to
+    /// mention.
+    #[test]
+    fn the_bindings_offered_for_re_pointing_are_read_off_the_answer_and_the_prose_around_them_is_not() {
+        let hint = "The folder moved? Re-point that binding from its new home, so whatever points at it follows:\n  \
+                    • amenbo bind --project 4 --rebind 7   (/work/gone)\n  \
+                    • amenbo bind --project 4 --rebind 12   (/work/also gone)\n\
+                    Binding it again with `amenbo bind --project 4` instead records a new binding, leaving anything filed at the old one naming nothing.";
+        assert_eq!(
+            vanished_bindings(hint),
+            vec![(7, "/work/gone".to_string()), (12, "/work/also gone".to_string())],
+        );
+
+        // A build that stopped offering them leaves nothing to read, which is a road that stops
+        // rather than one that re-points a number it guessed.
+        assert!(vanished_bindings("the linked project directory was not found: /work/gone").is_empty());
+    }
+
+    /// A folder that moved is the same folder: what was lying in it — the pointer above all — is
+    /// standing in the new place, and the path it was at leads nowhere.
+    #[test]
+    fn a_moved_folder_arrives_with_what_was_in_it_and_leaves_nothing_behind() {
+        // Through the session, by the same rules a run's own folders are placed under: one parent, and
+        // a name two tests running at once cannot collide on.
+        let session = crate::scratch::session("selftest-move", false).unwrap();
+        let from = session.folder("was").unwrap();
+        let to = session.folder("now").unwrap();
+        std::fs::write(from.join(".amenbo"), br#"{"v":1,"project_id":4}"#).unwrap();
+        std::fs::write(from.join("AGENTS.md"), b"managed block").unwrap();
+
+        move_folder(&from, &to).unwrap();
+
+        assert!(!from.exists(), "the path the binding holds leads nowhere now");
+        assert!(to.join(".amenbo").is_file(), "the pointer travelled with the folder");
+        assert!(to.join("AGENTS.md").is_file(), "and so did everything else lying in it");
     }
 }

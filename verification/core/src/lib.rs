@@ -388,6 +388,25 @@ const REGISTRY: &[OpSpec] = &[
     // does today writes one — it is the state a repair exists for, so a scenario about the repair has
     // to put the folder in it, the way `repo write-file` puts a file a person already had.
     OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "legacy-pointer", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
+    // A folder that went somewhere else. Renamed, moved, restored beside where it was — to the
+    // registry they are one thing, since what it holds is a path and the path no longer leads
+    // anywhere. `dir` is the folder as it stood and `to` where it stands now, and what is in it
+    // travels with it — the pointer included, the way it does when a person drags a folder.
+    //
+    // Deleting one is a different road and is not written here: a folder that is gone has nowhere to
+    // be re-pointed to, so what answers it is `unbind` or a fresh `bind`, both of which are already
+    // said. What has no other answer is the folder that is still there under another name.
+    OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "move", required: &["dir", "to"], refs: &[], strings: &["dir", "to"], binds: false },
+    // The binding that folder had, brought onto where it stands now — **keeping its id**, which is
+    // the whole difference from binding it again. A second bind records a new row, and whatever named
+    // the old one — a task that says which of its project's folders it is worked in, among others —
+    // is left naming a row nobody points at.
+    //
+    // `dir` is the folder's new home and `moved` names the folder it was, which is how a road names a
+    // binding whose number it cannot know: the id is the store's own, and the one place it is
+    // published is the answer `bind` gives in a folder whose project has one that vanished. So this
+    // has to **follow that folder's `move`** — before it, there is nothing gone to re-point.
+    OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "rebind", required: &["dir", "moved"], refs: &["project"], strings: &["dir", "moved"], binds: false },
     // The moves a screen's road is made of where a terminal's road has none. Linking a folder to a
     // project is one command to type; on screen it is a card that opens, and that then asks which of
     // this device's projects the folder is to be linked to. Both are written down as steps rather
@@ -901,6 +920,25 @@ const REGISTRY: &[OpSpec] = &[
     // not on the sentence beside it: the same fact is published both ways on purpose, so that a
     // machine has something to read without parsing a line written in the reader's own language.
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "folders-left", required: &["left"], refs: &[], strings: &[], binds: false },
+    // What amenbo says in a folder whose project has one that vanished: it stops, rather than going
+    // quietly to work in whatever is left — and the answer lines the gone bindings up **by id**,
+    // beside the command that re-points each of them.
+    //
+    // That listing is the whole door. An id is a number the store assigns and publishes nowhere else,
+    // so a reader who was never shown it cannot pass it, and neither can anything else: this assert is
+    // also where the road learns the number its `rebind` then hands back. `dir` is the folder the
+    // question is asked from — any folder of that project that is still there, the moved one's new
+    // home included — and `gone` names the folder whose old path has to be in the answer, so it
+    // follows that folder's `move`.
+    OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "vanished", required: &["dir", "gone"], refs: &[], strings: &["dir", "gone"], binds: false },
+    // The binding as the re-point answered for it: the id it kept, the folder it names now (`dir`),
+    // and the path it named before (`previously`, the folder that moved).
+    //
+    // Read off that answer and not off the store, for the reason `folders-left` is: a binding's id is
+    // in no read amenbo offers, so the state left behind is the same shape whether the row moved or a
+    // new one was recorded under a new number. What tells the two apart is the answer saying which
+    // row it was, and it says it once. So this has to **follow its `rebind`**.
+    OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "repointed", required: &["dir", "previously"], refs: &[], strings: &["dir", "previously"], binds: false },
     // The warning a project with no folder linked carries on its own board, and the one move that ends
     // it standing beside it. How much work the board holds is not part of the question: a project
     // carrying forty cards and no folder is exactly the one nothing else on the screen speaks about, so

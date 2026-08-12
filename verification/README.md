@@ -596,6 +596,12 @@ to open a board for in the first place. The premise is what puts the columns the
 takes for granted, or — where filing is what the road is about — one piece of ordinary work that was
 already standing on that board.
 
+**A road that opens a project names one that is there**: a project the world raised, or `cwd` — the
+project a run already stands in, which amenbo raises for the folder the run works in and calls after
+it. The name travels as a word rather than as a binding, so nothing in the lint or the render would
+catch a road sending an operator to hunt a list for a project nobody made; a test over the scenario
+set holds it instead.
+
 A board the road raised itself is that same empty board, and no earlier step can fill it: a project a
 road makes is one the premise never saw. So a second project a road only reads across — the neighbour
 a narrowing has to have something to leave out — is stood up in the premise whole, with the records

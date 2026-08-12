@@ -41,6 +41,12 @@ pub struct Session {
     base: PathBuf,
 }
 
+/// The name of the folder a run works in, which is also **the name of the project it finds itself
+/// in**: amenbo calls a project after the folder it was raised for, so a road that opens a board
+/// without standing a project up opens this one. A screen road naming it in an instruction is naming
+/// this word, which is why it is a constant rather than a literal in one line of one function.
+pub const CWD_DIR: &str = "cwd";
+
 /// Create a fresh isolated session named `<tag>-<pid>-<nanos>-<n>`. Uniqueness rests on the
 /// wall clock and the counter, not on the pid: the OS recycles ids, so a name leaning on one
 /// hands two runs the same path — and a caller wiping such a path on its way in reaches a
@@ -53,7 +59,7 @@ pub fn session(tag: &str, keep: bool) -> std::io::Result<Session> {
     let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
     let base = root().join(format!("{tag}-{:x}-{nanos:x}-{n:x}", std::process::id()));
     let home = base.join("home");
-    let cwd = base.join("cwd");
+    let cwd = base.join(CWD_DIR);
     let artifacts = base.join("artifacts");
     std::fs::create_dir_all(&home)?;
     std::fs::create_dir_all(&cwd)?;

@@ -125,11 +125,15 @@ given:
 steps_gui:
   # Arrive at the board rather than assume it: what a card draws is drawn on the opening, and a road
   # that started from whatever screen the launch left would be reading something it did not ask for.
+  #
+  # The board is the one a run already stands in. This world raises no project of its own, because the
+  # axes it declares belong to the project the CLI standing it up is bound to — so the name here is
+  # the project a run finds itself in, and the harness's own tests hold the two together.
   - type: action
     domain: project
     op: open
     with:
-      project: verify
+      project: cwd
 
   - type: assert
     domain: task

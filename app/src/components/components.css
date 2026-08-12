@@ -37,8 +37,18 @@
 .filterbar { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-5); border-bottom: 1px solid var(--c-border); flex-wrap: wrap; }
 .filterchip { font-size: var(--fs-xs); border: 1px solid var(--c-border); background: var(--c-surface); border-radius: 20px; padding: 2px var(--s-3); color: var(--c-text-muted); }
 .filterchip--on { border-color: var(--c-accent); color: var(--c-accent-text); background: var(--c-accent-weak); }
-/* One filter dimension (a label plus its <select>), laid out on a single line. */
-.filtersel { display: inline-flex; align-items: center; gap: var(--s-1); }
+/* The filters, opened under the bar. One axis per line: a row of values is as wide as it needs to be,
+   and axes read down the panel rather than running into one another. */
+.filterpanel { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-5); border-bottom: 1px solid var(--c-border); background: var(--c-surface-sunken); }
+.filterpanel__axis { display: flex; align-items: baseline; gap: var(--s-2); }
+.filterpanel__label { font-size: var(--fs-xs); flex: none; min-width: 6em; }
+.filterpanel__values { display: flex; align-items: center; gap: var(--s-1); flex-wrap: wrap; }
+/* The toggle that opens them, carrying how many axes narrow while they are closed. Built like the
+   decisions button beside it — both are standing controls in the toolbar. */
+.filtertoggle { display: inline-flex; align-items: center; gap: var(--s-2); border: 1px solid var(--c-border); background: var(--c-surface); padding: var(--s-1) var(--s-3); border-radius: var(--r-sm); font-size: var(--fs-sm); color: var(--c-text-muted); }
+.filtertoggle--active { background: var(--c-accent-weak); border-color: var(--c-accent); color: var(--c-accent-text); font-weight: var(--fw-medium); }
+.filtertoggle__count { font-size: var(--fs-xs); color: var(--c-text-faint); background: var(--c-surface-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center; }
+.filtertoggle--active .filtertoggle__count { background: var(--c-surface); }
 
 .column { width: 280px; flex: none; display: flex; flex-direction: column; gap: var(--s-3); }
 .column__head { display: flex; align-items: center; gap: var(--s-2); padding: 0 var(--s-1); }

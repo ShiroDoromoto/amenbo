@@ -118,6 +118,7 @@ export const uk: Translation = {
     "dec.sort.numberDesc": "Номер, від новіших", "dec.sort.numberAsc": "Номер, від старіших",
     "dec.sort.decidedDesc": "Дата рішення, від новіших", "dec.sort.decidedAsc": "Дата рішення, від старіших",
     "board.filter": "Фільтр:", "board.group": "Групувати:",
+    "board.filters": "Фільтри",
     "filter.dim.status": "Статус", "filter.dim.assignee": "Відповідальний", "filter.dim.priority": "Пріоритет",
     "filter.opt.assignee.none": "Без відповідального", "filter.opt.assignee.me": "Я", "filter.opt.assignee.meAi": "Мій ШІ",
     "board.searchPh": "Пошук завдань / AMB-T-<n>",

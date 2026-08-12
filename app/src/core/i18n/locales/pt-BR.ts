@@ -119,6 +119,7 @@ export const ptBR: Translation = {
     "dec.sort.numberDesc": "Número, mais recentes primeiro", "dec.sort.numberAsc": "Número, mais antigas primeiro",
     "dec.sort.decidedDesc": "Decisão, mais recentes primeiro", "dec.sort.decidedAsc": "Decisão, mais antigas primeiro",
     "board.filter": "Filtro:", "board.group": "Agrupar:",
+    "board.filters": "Filtros",
     "filter.dim.status": "Situação", "filter.dim.assignee": "Responsável", "filter.dim.priority": "Prioridade",
     "filter.opt.assignee.none": "Sem responsável", "filter.opt.assignee.me": "Eu", "filter.opt.assignee.meAi": "Minha IA",
     "board.searchPh": "Buscar tarefas / AMB-T-<n>",

@@ -118,6 +118,7 @@ export const vi: Translation = {
     "dec.sort.numberDesc": "Số, mới trước", "dec.sort.numberAsc": "Số, cũ trước",
     "dec.sort.decidedDesc": "Ngày quyết, mới trước", "dec.sort.decidedAsc": "Ngày quyết, cũ trước",
     "board.filter": "Lọc:", "board.group": "Nhóm:",
+    "board.filters": "Bộ lọc",
     "filter.dim.status": "Trạng thái", "filter.dim.assignee": "Người phụ trách", "filter.dim.priority": "Mức ưu tiên",
     "filter.opt.assignee.none": "Chưa giao", "filter.opt.assignee.me": "Tôi", "filter.opt.assignee.meAi": "AI của tôi",
     "board.searchPh": "Tìm việc / AMB-T-<n>",

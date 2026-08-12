@@ -118,6 +118,7 @@ export const th: Translation = {
     "dec.sort.numberDesc": "เลขที่ ใหม่ก่อน", "dec.sort.numberAsc": "เลขที่ เก่าก่อน",
     "dec.sort.decidedDesc": "วันที่ตัดสิน ใหม่ก่อน", "dec.sort.decidedAsc": "วันที่ตัดสิน เก่าก่อน",
     "board.filter": "กรอง:", "board.group": "จัดกลุ่ม:",
+    "board.filters": "ตัวกรอง",
     "filter.dim.status": "สถานะ", "filter.dim.assignee": "ผู้รับผิดชอบ", "filter.dim.priority": "ความสำคัญ",
     "filter.opt.assignee.none": "ยังไม่มอบหมาย", "filter.opt.assignee.me": "ฉัน", "filter.opt.assignee.meAi": "AI ของฉัน",
     "board.searchPh": "ค้นงาน / AMB-T-<n>",

@@ -100,6 +100,9 @@ export function BoardScreen({
   const [tab, setTab] = useState<"tasks" | "decisions">("tasks");
   const [group, setGroup] = useState<string | number>(STATUS_GROUP);
   const [sel, setSel] = useState<FilterSelection>({});
+  // Whether the filters are open. Closed is where a board starts: the values of every axis do not fit on a
+  // line, and a reader who is not narrowing anything should be given that room for the tasks (`AMB-D-654`).
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [dimMgrOpen, setDimMgrOpen] = useState(false);
   const [dimAssign, setDimAssign] = useState<Record<string, number>>({});
   // Free-word search, run by core over every face the word index carries (see the doc comment above).
@@ -191,6 +194,9 @@ export function BoardScreen({
   );
 
   const dims = filterDimensions(projectDims, filterDimAssign);
+  // How many axes are actually narrowing, counted over the axes that exist: a selection left behind by a
+  // deleted dimension narrows nothing and must not be counted as if it did.
+  const narrowedAxes = dims.filter((d) => (sel[d.id]?.length ?? 0) > 0).length;
   const tasks = all
     .filter((t) => passesFilters(t, dims, sel))
     .filter((t) =>
@@ -257,6 +263,19 @@ export function BoardScreen({
         {project.proposedDecisionCount ? <span className="decisionsbtn__count">{project.proposedDecisionCount}</span> : null}
       </button>
       <div className="topbar__spacer" />
+      {/* The one control the filters have while they are closed, so it says how many axes are narrowing:
+          a filter still in force with its values out of sight looks like tasks that are simply gone. It
+          stands with the tasks it acts on — the decisions tab has filters of its own. */}
+      {tab === "tasks" && !bareBoard && (
+        <button
+          className={`filtertoggle ${filtersOpen ? "filtertoggle--active" : ""}`}
+          aria-expanded={filtersOpen}
+          onClick={() => setFiltersOpen((open) => !open)}
+        >
+          🔍 {t("board.filters")}
+          {narrowedAxes > 0 && <span className="filtertoggle__count">{narrowedAxes}</span>}
+        </button>
+      )}
       <button className="btn" title={t("projset.title")} aria-label={t("projset.title")} onClick={onOpenSettings}>
         <span className="btn__glyph" aria-hidden="true">⚙</span>
       </button>
@@ -307,28 +326,6 @@ export function BoardScreen({
             ⚠ {t("board.searchFailed")} — {errText(searchError)}
           </span>
         )}
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>🔍 {t("board.filter")}</span>
-        {/* One row of values per axis, each of them a switch. A pull-down could only ever be holding one
-            value, which is what made a word for a group of states ("closed") necessary; with the values
-            standing out where they can be pressed together, none is needed. */}
-        {dims.map((d) => (
-          <div key={d.id} className="filtersel">
-            <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{d.label()}</span>
-            {d.options.map((o) => {
-              const on = sel[d.id]?.includes(o.value) ?? false;
-              return (
-                <button
-                  key={o.value}
-                  className={`filterchip ${on ? "filterchip--on" : ""}`}
-                  aria-pressed={on}
-                  onClick={() => toggleValue(d.id, o.value)}
-                >
-                  {o.label()}
-                </button>
-              );
-            })}
-          </div>
-        ))}
         {view === "board" && (
           <div className="groupby">
             <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("board.group")}</span>
@@ -354,6 +351,35 @@ export function BoardScreen({
           </div>
         )}
       </div>
+
+      {/* The filters themselves, opened in place under the bar the toggle sits above. One line per axis,
+          because a row of values does not fold onto the same line as the next axis's (`AMB-D-654`) —
+          and closed, none of it takes room from the tasks. */}
+      {filtersOpen && (
+        <div className="filterpanel">
+          {dims.map((d) => (
+            <div key={d.id} className="filterpanel__axis">
+              <span className="faint filterpanel__label">{d.label()}</span>
+              <div className="filterpanel__values">
+                {/* Each value is a switch: what a reader composes here is the set to narrow to (`AMB-D-655`). */}
+                {d.options.map((o) => {
+                  const on = sel[d.id]?.includes(o.value) ?? false;
+                  return (
+                    <button
+                      key={o.value}
+                      className={`filterchip ${on ? "filterchip--on" : ""}`}
+                      aria-pressed={on}
+                      onClick={() => toggleValue(d.id, o.value)}
+                    >
+                      {o.label()}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {view === "board" && !groupingDim && (
         <div className="board" ref={boardRef}>

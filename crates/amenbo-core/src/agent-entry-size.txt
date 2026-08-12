@@ -8,7 +8,7 @@ commandDetail    568
 commands         1869
 conventions      5503
 cycles           13562
-filterGrammar    4770
+filterGrammar    5141
 inspect          150
 mode             10
 notes            645
@@ -17,4 +17,4 @@ principles       350
 schemaVersion    3
 updateAvailable  5
 version          7
-TOTAL            43722
+TOTAL            44093

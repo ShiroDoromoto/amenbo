@@ -115,6 +115,7 @@ export const de: Translation = {
     "dec.sort.numberDesc": "Nummer, neueste zuerst", "dec.sort.numberAsc": "Nummer, älteste zuerst",
     "dec.sort.decidedDesc": "Entscheidung, neueste zuerst", "dec.sort.decidedAsc": "Entscheidung, älteste zuerst",
     "board.filter": "Filter:", "board.group": "Gruppieren:",
+    "board.filters": "Filter",
     "filter.dim.status": "Status", "filter.dim.assignee": "Zuständig", "filter.dim.priority": "Priorität",
     "filter.opt.assignee.none": "Niemand", "filter.opt.assignee.me": "Ich", "filter.opt.assignee.meAi": "Meine KI",
     "board.searchPh": "Aufgaben / AMB-T-<n> durchsuchen",

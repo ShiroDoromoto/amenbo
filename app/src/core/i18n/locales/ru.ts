@@ -118,6 +118,7 @@ export const ru: Translation = {
     "dec.sort.numberDesc": "По номеру, сначала новые", "dec.sort.numberAsc": "По номеру, сначала старые",
     "dec.sort.decidedDesc": "По дате решения, сначала новые", "dec.sort.decidedAsc": "По дате решения, сначала старые",
     "board.filter": "Фильтр:", "board.group": "Группировка:",
+    "board.filters": "Фильтры",
     "filter.dim.status": "Статус", "filter.dim.assignee": "Ответственный", "filter.dim.priority": "Приоритет",
     "filter.opt.assignee.none": "Без ответственного", "filter.opt.assignee.me": "Я", "filter.opt.assignee.meAi": "Мой ИИ",
     "board.searchPh": "Поиск задач / AMB-T-<n>",

@@ -115,6 +115,7 @@ export const nl: Translation = {
     "dec.sort.numberDesc": "Nummer, nieuwste eerst", "dec.sort.numberAsc": "Nummer, oudste eerst",
     "dec.sort.decidedDesc": "Besloten, nieuwste eerst", "dec.sort.decidedAsc": "Besloten, oudste eerst",
     "board.filter": "Filter:", "board.group": "Groep:",
+    "board.filters": "Filters",
     "filter.dim.status": "Status", "filter.dim.assignee": "Verantwoordelijke", "filter.dim.priority": "Prioriteit",
     "filter.opt.assignee.none": "Niet toegewezen", "filter.opt.assignee.me": "Ik", "filter.opt.assignee.meAi": "Mijn AI",
     "board.searchPh": "Zoek taken / AMB-T-<n>",

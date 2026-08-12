@@ -15,12 +15,12 @@
 
 use rusqlite::{Connection, OptionalExtension, Transaction};
 
-use crate::binding::Registry;
+use crate::binding::{BoundFolder, Registry, Repoint};
 use crate::error::Result;
 use crate::harness::Consent;
 use crate::read_receipts::ReadReceipts;
 use crate::store_engine::schema::col;
-use crate::store_engine::sql::{Col, Delete, Insert, Int, Pred, Select, Sort, Sql, Table};
+use crate::store_engine::sql::{Col, Delete, Insert, Int, Pred, Select, Sort, Sql, Table, Update};
 use crate::store_engine::{StoreEngine, StoreEngineError};
 
 /// The plain tables this module owns, named through the generated column identifiers — so a column
@@ -71,11 +71,11 @@ pub fn load_bindings(conn: &Connection) -> Registry {
 /// which is what keeps its whole test surface intact — so the ids are held here, by matching on the pair
 /// the row is identified by. One transaction still means a contended save cannot tear.
 pub fn write_bindings(tx: &Transaction<'_>, reg: &Registry) -> Result<()> {
-    let held = binding_rows(tx)?;
-    for (id, pair) in &held {
-        if !reg.project_dirs.get(&pair.0).is_some_and(|dirs| dirs.contains(&pair.1)) {
+    let held = bound_folders(tx)?;
+    for row in &held {
+        if !reg.project_dirs.get(&row.project_id).is_some_and(|dirs| dirs.contains(&row.dir)) {
             Delete::from(BPD.table)
-                .filter(Pred::eq(BPD.id, *id))
+                .filter(Pred::eq(BPD.id, row.id))
                 .sql()
                 .execute(tx)
                 .map_err(StoreEngineError::from)?;
@@ -83,7 +83,7 @@ pub fn write_bindings(tx: &Transaction<'_>, reg: &Registry) -> Result<()> {
     }
     for (project_id, dirs) in &reg.project_dirs {
         for dir in dirs {
-            if held.iter().any(|(_, pair)| pair.0 == *project_id && pair.1 == *dir) {
+            if held.iter().any(|row| row.project_id == *project_id && row.dir == *dir) {
                 continue;
             }
             Insert::into(BPD.table)
@@ -97,52 +97,76 @@ pub fn write_bindings(tx: &Transaction<'_>, reg: &Registry) -> Result<()> {
     Ok(())
 }
 
-/// One bound folder as something else can point at it: the binding row's `id` and the path it records
-/// (`AMB-D-648`). [`Registry`] is the shape for asking *which folders* a project has and stays free of
-/// ids; this is the shape for naming **one** of them — what a task carries, and what `bind --rebind`
-/// re-points.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct BoundFolder {
-    /// The binding row's id — stable across a move or a rename of the folder, and retired when the
-    /// folder is unbound (the id is never handed to the next folder bound).
-    pub id: i64,
-    /// The path recorded for it, as it was canonicalised at bind time.
-    pub dir: String,
-}
-
-/// The folders bound to `project_id`, each with the id that names it, in path order (the set's own —
-/// there is no main folder to lead with, `AMB-D-531`). Empty when the project has none.
-pub fn bound_folders(conn: &Connection, project_id: i64) -> Vec<BoundFolder> {
-    let mut sel = Select::new();
-    let (id, dir) = (sel.col(BPD.id), sel.col(BPD.dir));
-    let mut sql = Sql::from(&sel, BPD.table);
-    sql.push_where(Some(&Pred::eq(BPD.project_id, project_id)));
-    sql.order_by([Sort::by(BPD.dir)]);
-    let Ok(mut stmt) = conn.prepare(sql.text()) else { return Vec::new() };
-    let Ok(rows) = stmt.query_map(rusqlite::params_from_iter(sql.params()), |r| {
-        Ok(BoundFolder { id: id.get(r)?, dir: dir.get(r)? })
-    }) else {
-        return Vec::new();
-    };
-    rows.flatten().collect()
-}
-
-/// Every binding row as `(id, (project_id, dir))` — what [`write_bindings`] compares the registry against.
-/// The pair is the row's identity (`UNIQUE (project_id, dir)`), so it is what says whether a row the
-/// registry holds is a row the store already has.
-fn binding_rows(tx: &Transaction<'_>) -> Result<Vec<(i64, (i64, String))>> {
+/// Every binding row, id included ([`BoundFolder`]), in id order.
+///
+/// Two readers want it. [`write_bindings`] compares the registry against it: the `(project_id, dir)`
+/// pair is the row's identity (`UNIQUE (project_id, dir)`), so it is what says whether a pair the
+/// registry holds is a row the store already has. And a caller naming **one** binding — the re-point,
+/// or the answer that shows a human which ids there are — needs the key the registry drops.
+pub fn bound_folders(conn: &Connection) -> Result<Vec<BoundFolder>> {
     let mut sel = Select::new();
     let (id, project_id, dir) = (sel.col(BPD.id), sel.col(BPD.project_id), sel.col(BPD.dir));
-    let mut stmt =
-        tx.prepare(Sql::from(&sel, BPD.table).text()).map_err(StoreEngineError::from)?;
+    let mut sql = Sql::from(&sel, BPD.table);
+    sql.order_by([Sort::by(BPD.id)]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
     let rows = stmt
-        .query_map([], |r| Ok((id.get(r)?, (project_id.get(r)?, dir.get(r)?))))
+        .query_map([], |r| {
+            Ok(BoundFolder { id: id.get(r)?, project_id: project_id.get(r)?, dir: dir.get(r)? })
+        })
         .map_err(StoreEngineError::from)?;
     let mut held = Vec::new();
     for row in rows {
         held.push(row.map_err(StoreEngineError::from)?);
     }
     Ok(held)
+}
+
+/// Re-point one binding: the row `id` comes to name `dir` (under `project_id`), keeping its id.
+/// Answers `None` when no row has that id — a number nobody bound, or one already retired.
+///
+/// The id is the whole reason this is not a registry save. [`Registry`] holds no ids, so re-pointing a
+/// folder through it would delete the old pair and insert a new one — a new id, and every task that
+/// pointed at the old one left naming nothing (`AMB-D-648`). Here the row survives its path, which is
+/// what a folder moved, renamed or restored somewhere else actually is.
+///
+/// The folder still names one project: the rows that named `dir` before are dropped, the same claim
+/// [`Registry::claim_project_ref`] makes on a plain bind (and matching the same way, so a differently
+/// spelled path — a trailing slash, a symlinked parent — is caught too). That is also what keeps the
+/// `UNIQUE (project_id, dir)` pair free for the row being re-pointed.
+pub fn repoint_binding(
+    tx: &Transaction<'_>,
+    id: i64,
+    project_id: i64,
+    dir: &str,
+) -> Result<Option<Repoint>> {
+    let held = bound_folders(tx)?;
+    let Some(row) = held.iter().find(|r| r.id == id).cloned() else { return Ok(None) };
+    let want = crate::binding::normalize_dir_for_match(dir);
+    let mut retracted = Vec::new();
+    for other in held.iter().filter(|r| r.id != id) {
+        if crate::binding::normalize_dir_for_match(&other.dir) != want {
+            continue;
+        }
+        Delete::from(BPD.table)
+            .filter(Pred::eq(BPD.id, other.id))
+            .sql()
+            .execute(tx)
+            .map_err(StoreEngineError::from)?;
+        retracted.push(other.clone());
+    }
+    Update::table(BPD.table)
+        .set_value(BPD.project_id.name(), rusqlite::types::Value::Integer(project_id))
+        .set_value(BPD.dir.name(), rusqlite::types::Value::Text(dir.to_string()))
+        .filter(Pred::eq(BPD.id, id))
+        .sql()
+        .execute(tx)
+        .map_err(StoreEngineError::from)?;
+    Ok(Some(Repoint {
+        id,
+        previous_project_id: row.project_id,
+        previous_dir: row.dir,
+        retracted,
+    }))
 }
 
 // ───────────────────────── read receipts ─────────────────────────
@@ -616,5 +640,64 @@ mod tests {
             after[1].0 > first[1].0 && after[1].2 == "/work/c",
             "the folder that arrived is numbered past the one that left: {after:?}"
         );
+    }
+
+    /// Re-pointing a binding moves the row rather than replacing it: the folder it names changes and the
+    /// id does not, which is the whole of what a folder moved, renamed or restored elsewhere needs
+    /// (`AMB-D-648`). Going through the registry instead would take the pair off and put a new one on —
+    /// a new id, and anything filed at that folder left naming nothing.
+    #[test]
+    fn re_pointing_a_binding_moves_the_row_it_names_and_keeps_its_id() {
+        let engine = StoreEngine::open_in_memory().unwrap();
+        let rows = || bound_folders(engine.conn()).unwrap();
+        let repoint = |id: i64, project: i64, dir: &str| {
+            let tx = engine.transaction().unwrap();
+            let done = repoint_binding(&tx, id, project, dir).unwrap();
+            tx.commit().unwrap();
+            done
+        };
+
+        let mut reg = Registry::default();
+        reg.record_project_ref(7, "/work/moved");
+        reg.record_project_ref(7, "/work/still-there");
+        {
+            let tx = engine.transaction().unwrap();
+            write_bindings(&tx, &reg).unwrap();
+            tx.commit().unwrap();
+        }
+        let before = rows();
+        let moved = before[0].id;
+
+        // The folder is somewhere else now. The row follows it, id and all.
+        let done = repoint(moved, 7, "/work/new-home").unwrap();
+        assert_eq!(done.previous_dir, "/work/moved");
+        assert_eq!(done.previous_project_id, 7);
+        assert!(done.retracted.is_empty(), "nothing else named that folder");
+        assert_eq!(
+            rows()[0],
+            BoundFolder { id: moved, project_id: 7, dir: "/work/new-home".to_owned() },
+            "the row that moved is the row that was there",
+        );
+        assert_eq!(rows()[1], before[1], "the project's other folder is untouched");
+
+        // A re-point can also take the binding to another project — the folder names one project, so the
+        // row it lands on is the one the caller named and the row that named the folder before is dropped.
+        let survivor = rows()[1].id;
+        let done = repoint(moved, 9, "/work/still-there").unwrap();
+        assert_eq!(done.previous_project_id, 7, "it says which project it came off");
+        assert_eq!(
+            done.retracted.iter().map(|b| b.id).collect::<Vec<_>>(),
+            vec![survivor],
+            "the binding that named that folder before is retracted, not left beside it",
+        );
+        assert_eq!(
+            rows(),
+            vec![BoundFolder { id: moved, project_id: 9, dir: "/work/still-there".to_owned() }],
+            "one folder, one binding — the one the caller named",
+        );
+
+        // A number nobody bound is not a row to invent: nothing is written and the answer says so.
+        assert!(repoint(moved + 1000, 7, "/work/elsewhere").is_none());
+        assert_eq!(rows().len(), 1, "a refused re-point writes nothing");
     }
 }

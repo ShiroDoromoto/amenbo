@@ -1201,8 +1201,8 @@ fn a_tasks_folder_is_read_from_what_its_own_project_offers() {
     reg.record_project_ref(mine, "/work/mine");
     reg.record_project_ref(theirs, "/work/theirs");
     s.save_bindings(&reg).unwrap();
-    let ours = s.bound_folders(mine);
-    let theirs_folder = s.bound_folders(theirs);
+    let ours = s.bound_folders_of(mine).unwrap();
+    let theirs_folder = s.bound_folders_of(theirs).unwrap();
     assert_eq!(ours.len(), 1, "each project offers the one folder bound to it");
     assert_eq!(theirs_folder.len(), 1);
 

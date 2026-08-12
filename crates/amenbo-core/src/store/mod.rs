@@ -171,13 +171,6 @@ impl Store {
         crate::overview::load_bindings(self.engine.conn())
     }
 
-    /// The folders bound to one project, each with the id that names it
-    /// ([`crate::overview::bound_folders`]) — the shape for pointing at **one** folder, where
-    /// [`Self::bindings`] answers which folders a project has.
-    pub fn bound_folders(&self, project_id: i64) -> Vec<crate::overview::BoundFolder> {
-        crate::overview::bound_folders(self.engine.conn(), project_id)
-    }
-
     /// Write the folder-binding registry back in a single transaction, so a save can never tear: the
     /// pairs the registry has dropped go, the pairs it has gained arrive, and a folder that is still
     /// bound keeps the row — and the id — it already had ([`crate::overview::write_bindings`]).
@@ -186,6 +179,35 @@ impl Store {
         crate::overview::write_bindings(&tx, reg)?;
         tx.commit().map_err(crate::store_engine::StoreEngineError::from)?;
         Ok(())
+    }
+
+    /// The bindings as rows, **id included** ([`crate::binding::BoundFolder`]) — what
+    /// [`Self::bindings`] drops. A surface that has to name one binding rather than list a project's
+    /// folders reads this one.
+    pub fn bound_folders(&self) -> Result<Vec<crate::binding::BoundFolder>> {
+        crate::overview::bound_folders(self.engine.conn())
+    }
+
+    /// [`Self::bound_folders`], narrowed to the folders **one project** has. This is the set a task's
+    /// place is named from (`AMB-D-648`): a task's folder is one of its own project's, which is what
+    /// keeps a place from naming a folder outside the project the task lives in.
+    pub fn bound_folders_of(&self, project_id: i64) -> Result<Vec<crate::binding::BoundFolder>> {
+        Ok(self.bound_folders()?.into_iter().filter(|f| f.project_id == project_id).collect())
+    }
+
+    /// Re-point one binding at another folder, keeping its id
+    /// ([`crate::overview::repoint_binding`] carries the whole of what that means). `None` when no
+    /// binding has that id.
+    pub fn repoint_binding(
+        &self,
+        id: i64,
+        project_id: i64,
+        dir: &str,
+    ) -> Result<Option<crate::binding::Repoint>> {
+        let tx = self.engine.transaction()?;
+        let done = crate::overview::repoint_binding(&tx, id, project_id, dir)?;
+        tx.commit().map_err(crate::store_engine::StoreEngineError::from)?;
+        Ok(done)
     }
 
     // ── Machine-local overview state (read receipts, inbox archive) ────────────────

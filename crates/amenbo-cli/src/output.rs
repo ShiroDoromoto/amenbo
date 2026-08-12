@@ -223,6 +223,61 @@ impl CliError {
         }
     }
 
+    /// A folder recorded for this project is gone — moved, renamed, or restored somewhere else. amenbo
+    /// does not quietly go and work in whatever is left, so the read stops here (`binding_stale`, core's
+    /// own code, since this is core's own refusal — what is added is the way out).
+    ///
+    /// The way out is a re-point and not a fresh `bind`, which is why the hint lines up the vanished
+    /// bindings by **id**: binding a folder again records a new row, and a task filed at the old one is
+    /// left naming a row nobody points at (`AMB-D-648`). `--rebind` keeps the id, so the folder is the
+    /// one thing that changed. Listing them is also the only way a human learns the ids at all — a
+    /// number nobody has seen is not one they can pass.
+    pub fn binding_stale(project_id: i64, gone: &[amenbo_core::binding::BoundFolder]) -> CliError {
+        let cmd = Paths::command_name();
+        let first = gone.first().map(|b| b.dir.as_str()).unwrap_or_default();
+        let mut hint = String::from(
+            "The folder moved? Re-point that binding from its new home, so whatever points at it follows:",
+        );
+        for b in gone {
+            hint.push_str(&format!("\n  • {cmd} bind --project {project_id} --rebind {}   ({})", b.id, b.dir));
+        }
+        hint.push_str(&format!(
+            "\nBinding it again with `{cmd} bind --project {project_id}` instead records a new binding, leaving anything filed at the old one naming nothing."
+        ));
+        CliError {
+            code: amenbo_core::ErrorCode::BindingStale.as_str(),
+            message: format!("the linked project directory was not found: {first}"),
+            hint: Some(hint),
+            exit: 1,
+        }
+    }
+
+    /// `bind --rebind <id>` named a binding that is not there — a mistyped number, or one already
+    /// retired by an unbind (the ids are `AUTOINCREMENT`, so a retired number is never handed out
+    /// again). Nothing is written: re-pointing is an operation on a row that exists, and inventing one
+    /// for the number given would hand back an id the human never chose.
+    pub fn binding_unknown(id: i64, project_id: i64, known: &[amenbo_core::binding::BoundFolder]) -> CliError {
+        let cmd = Paths::command_name();
+        let mine: Vec<&amenbo_core::binding::BoundFolder> =
+            known.iter().filter(|b| b.project_id == project_id).collect();
+        let hint = if mine.is_empty() {
+            format!("This project has no folder bound, so there is none to re-point. Link one with `{cmd} bind --project {project_id}`.")
+        } else {
+            let mut h = String::from("The bindings this project has, and where each one points:");
+            for b in mine {
+                let mark = if b.exists() { "" } else { "   (missing)" };
+                h.push_str(&format!("\n  • {cmd} bind --project {project_id} --rebind {}   {}{mark}", b.id, b.dir));
+            }
+            h
+        };
+        CliError {
+            code: amenbo_core::ErrorCode::NotFound.as_str(),
+            message: format!("no binding has id {id}, so there was nothing to re-point."),
+            hint: Some(hint),
+            exit: 1,
+        }
+    }
+
     /// Nested-binding guard: a new binding was requested in a **subdirectory** of a tree an ancestor's
     /// `.amenbo` already manages. A pointer there shadows the ancestor's binding (amenbo run in that
     /// subdirectory would resolve to the subdirectory's store, not the parent's) and scatters
@@ -322,7 +377,13 @@ impl From<amenbo_core::Error> for CliError {
                 Some(format!("Candidates: {}", candidates.join(", ")))
             }
             E::NotFound(_) => Some(format!("Run `{cmd} agent --json` to see how to operate.")),
-            E::BindingStale(_) => Some(format!("Re-link it with `{cmd} bind --project <id>`.")),
+            // The folder is gone, and re-linking is the wrong reflex: `bind --project <id>` records a
+            // new binding, so anything filed at the old one is left naming nothing (`AMB-D-648`). The
+            // command that answers a folder that moved keeps the id. Where the vanished bindings are in
+            // hand, `CliError::binding_stale` lists them by id instead of this fallback.
+            E::BindingStale(_) => Some(format!(
+                "The folder moved? Re-point that binding from its new home with `{cmd} bind --project <id> --rebind <binding-id>` — it keeps its id. Run `{cmd} bind` in a folder bound to that project to see the vanished bindings by id."
+            )),
             E::AlreadyReserved(_) => Some(format!(
                 "Another session reserved it first. Pick the next task (`{cmd} agent --json`), or hand it back with `{cmd} task status <id> todo` if the reservation is stale."
             )),

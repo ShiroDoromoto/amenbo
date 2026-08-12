@@ -1855,9 +1855,10 @@ pub fn task_detail(
     // does not offer, the task does not name.
     let at = row.at_binding_id.zip(placement.as_ref().map(|p| p.project.id)).and_then(
         |(binding_id, project_id)| {
-            crate::overview::bound_folders(conn, project_id)
+            crate::overview::bound_folders(conn)
+                .ok()?
                 .into_iter()
-                .find(|f| f.id == binding_id)
+                .find(|f| f.id == binding_id && f.project_id == project_id)
                 .map(|f| crate::view::FolderView { binding_id: f.id, dir: f.dir })
         },
     );

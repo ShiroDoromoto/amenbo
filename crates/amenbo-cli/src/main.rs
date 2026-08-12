@@ -3065,7 +3065,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
             };
         }
         Command::Whoami => return whoami(&store, flags),
-        Command::Bind { project, dir, force } => return bind_cmd(&store, flags, project, dir, force),
+        Command::Bind { project, dir, force, rebind } => return bind_cmd(&store, flags, project, dir, force, rebind),
         Command::Init { .. } => {
             unreachable!("handled before open")
         }
@@ -4612,7 +4612,49 @@ fn place_binding(store: &Store, project_id: i64, dir: &std::path::Path) -> Resul
     Ok(())
 }
 
-fn bind_cmd(store: &Store, flags: &Flags, project: Option<String>, dir: Option<String>, force: bool) -> Result<i32, CliError> {
+/// `amenbo bind --project <p> --rebind <binding-id>`: the binding already recorded under `binding_id`
+/// comes to name this folder, **keeping its id**. That is the whole difference from binding the folder
+/// again: a plain bind records a new row, and whatever pointed at the old one — a task filed at that
+/// folder (`AMB-D-648`) — is left naming a row nobody points at. A folder that was moved, renamed or
+/// restored somewhere else is the same folder, and this is how it is said.
+///
+/// The row has to be there. A number nobody bound (or one an unbind retired) is a typo, and the answer
+/// lines up the ids there are rather than quietly recording a new binding under the number given.
+/// Otherwise this writes exactly what a bind writes — the `.amenbo` pointer and the folder's guidance
+/// block — so the new folder is bound in every sense; only the registry side is an id-keyed re-point
+/// instead of a claim.
+fn rebind_cmd(store: &Store, flags: &Flags, pid: i64, cwd: &std::path::Path, binding_id: i64) -> Result<i32, CliError> {
+    let known = store.bound_folders().map_err(CliError::from)?;
+    if !known.iter().any(|b| b.id == binding_id) {
+        return Err(CliError::binding_unknown(binding_id, pid, &known));
+    }
+    // The pointer first, as `place_binding` writes it: the folder is what the registry is an index of.
+    amenbo_core::binding::pointer_for(store, pid).write(cwd).map_err(CliError::from)?;
+    let dir = cwd.to_string_lossy().to_string();
+    let done = store
+        .repoint_binding(binding_id, pid, &dir)
+        .map_err(CliError::from)?
+        .ok_or_else(|| CliError::binding_unknown(binding_id, pid, &known))?;
+    upsert_agent_guidance(cwd, store.config.language.as_deref());
+    let name = project_name(store, Some(pid))?.unwrap_or_default();
+    if flags.json {
+        write_envelope(flags, "bind.rebind", "binding",
+            json!({ "binding_id": done.id, "project_id": pid, "project_name": name, "dir": dir,
+                    "previous_dir": done.previous_dir, "previous_project_id": done.previous_project_id,
+                    "retracted_bindings": done.retracted.iter().map(|b| b.id).collect::<Vec<_>>() }),
+            None, false, "");
+    } else {
+        human(flags, format!("✓ Binding {} now points here — {} (was {}).", done.id, dir, done.previous_dir));
+        human(flags, "  It kept its id, so whatever was filed at that folder followed it.");
+        // The project is normally the one it already named — worth a line only when it is not.
+        if done.previous_project_id != pid {
+            human(flags, format!("  It came off project {}, and belongs to '{name}' now.", done.previous_project_id));
+        }
+    }
+    Ok(0)
+}
+
+fn bind_cmd(store: &Store, flags: &Flags, project: Option<String>, dir: Option<String>, force: bool, rebind: Option<i64>) -> Result<i32, CliError> {
     use amenbo_core::binding::find_upward_ancestor;
     // With `--dir <path>`, the `.amenbo` goes in that folder rather than the CWD — binding from outside it.
     let cwd = resolve_bind_target(dir)?;
@@ -4630,6 +4672,12 @@ fn bind_cmd(store: &Store, flags: &Flags, project: Option<String>, dir: Option<S
         // Bind: resolve the project in the store and place the `.amenbo` pointer (its project_id). Several
         // directories may point at the same project_id, which makes the relation many-to-one.
         let pid = store.resolve_project_ref(&p).map_err(CliError::from)?;
+        // `--rebind <id>` moves a binding that is already recorded onto this folder instead of adding
+        // one. Everything up to here is the same act — the guard, the project — and what differs is
+        // only whether the registry gains a row or one of its rows moves.
+        if let Some(binding_id) = rebind {
+            return rebind_cmd(store, flags, pid, &cwd, binding_id);
+        }
         place_binding(store, pid, &cwd)?;
         let name = project_name(store, Some(pid))?.unwrap_or_default();
         // For a human: what you can now do, and what to do next.
@@ -4650,11 +4698,17 @@ fn bind_cmd(store: &Store, flags: &Flags, project: Option<String>, dir: Option<S
         Some((dir, b)) => {
             // A project→dir registration whose path has vanished is binding_stale. The folders bound to a
             // project stand alongside each other, so the question is put to each of them and the first
-            // vanished one is what the error names.
-            let registry = store.bindings();
+            // vanished one is what the error names — with every one of them listed by id beside it,
+            // since re-pointing is what a vanished folder wants and an id is what that takes.
             if let Some(pid) = b.project_id {
-                if let Some(gone) = registry.stale_dirs(pid).first() {
-                    return Err(CliError::from(amenbo_core::Error::BindingStale((*gone).to_string())));
+                let gone: Vec<amenbo_core::binding::BoundFolder> = store
+                    .bound_folders()
+                    .map_err(CliError::from)?
+                    .into_iter()
+                    .filter(|f| f.project_id == pid && !f.exists())
+                    .collect();
+                if !gone.is_empty() {
+                    return Err(CliError::binding_stale(pid, &gone));
                 }
             }
             let name = project_name(store, b.project_id)?;
@@ -5317,7 +5371,7 @@ fn project_required(store: &Store) -> CliError {
 /// usually differ). A name that lands on several is refused with them listed rather than one being picked;
 /// a name that lands on none is refused with the project's folders listed, since that is the answer.
 fn resolve_bound_folder(store: &Store, project_id: i64, token: &str) -> Result<i64, CliError> {
-    let folders = store.bound_folders(project_id);
+    let folders = store.bound_folders_of(project_id).map_err(CliError::from)?;
     let listed = || folders.iter().map(|f| f.dir.as_str()).collect::<Vec<_>>().join(", ");
     if folders.is_empty() {
         return Err(CliError::from(amenbo_core::Error::invalid(format!(
@@ -5326,7 +5380,7 @@ fn resolve_bound_folder(store: &Store, project_id: i64, token: &str) -> Result<i
         ))));
     }
     let canonical = std::fs::canonicalize(token).map(|p| p.to_string_lossy().to_string());
-    let mut hits: Vec<&amenbo_core::overview::BoundFolder> =
+    let mut hits: Vec<&amenbo_core::binding::BoundFolder> =
         folders.iter().filter(|f| f.dir == token).collect();
     if hits.is_empty() {
         if let Ok(ref canon) = canonical {
@@ -8519,7 +8573,7 @@ mod tests {
         assert!(!uses_facet(&Some(Command::Agent { command: None, full: false })));
         assert!(!uses_facet(&Some(Command::Version)));
         assert!(!uses_facet(&Some(Command::Whoami)));
-        assert!(!uses_facet(&Some(Command::Bind { project: None, dir: None, force: false })));
+        assert!(!uses_facet(&Some(Command::Bind { project: None, dir: None, force: false, rebind: None })));
         assert!(!uses_facet(&Some(Command::Lint { paths: Vec::new(), stdin: false })));
         assert!(!uses_facet(&Some(Command::GithookPreCommit)));
         assert!(!uses_facet(&Some(Command::AgentHook {
@@ -8585,7 +8639,7 @@ mod tests {
             Some(Command::Version),
             Some(Command::Agent { command: None, full: false }),
             Some(Command::Update { print: false, apply: false, rollback: false }),
-            Some(Command::Bind { project: None, dir: None, force: false }),
+            Some(Command::Bind { project: None, dir: None, force: false, rebind: None }),
             Some(Command::Plugin { sub: PluginCmd::List }),
             Some(Command::Doctor { fix: false }),
             Some(Command::Doctor { fix: true }),
@@ -8605,7 +8659,7 @@ mod tests {
     fn only_the_faces_that_never_open_the_store_run_without_a_pointer() {
         // The commands that place or remove the marker, and the ones that answer from facts about the build.
         assert!(!requires_pointer(&Some(Command::Init { name: None, language: None, force: false })));
-        assert!(!requires_pointer(&Some(Command::Bind { project: None, dir: None, force: false })));
+        assert!(!requires_pointer(&Some(Command::Bind { project: None, dir: None, force: false, rebind: None })));
         assert!(!requires_pointer(&Some(Command::Version)));
         assert!(!requires_pointer(&Some(Command::Update { print: true, apply: false, rollback: false })));
         // Everything else opens the store and therefore needs a pointer. `agent` is the AI's entry point, so

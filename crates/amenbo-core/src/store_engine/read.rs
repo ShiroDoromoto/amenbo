@@ -511,6 +511,11 @@ fn attachment_ids(target_type: &str, term: search::Term<'_>) -> IdSet {
 /// The predicates an already-parsed [`Filter`] stands for — one per filter term, each carrying its own
 /// bind values ([`Pred`]), so the caller can `AND` them, negate them or hand them to two statements
 /// without anything to keep in step.
+///
+/// It is also the **only** reading of a task filter. The decision side has two — the predicates below
+/// its own heading, and [`crate::query::DecisionFilter::matches`] over a page already read — which is
+/// why the arms there name the line they restate. Nothing here has a twin to answer alike, so an arm
+/// that reaches for one is pointing at something that does not exist.
 fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
     let f = q.filter;
     let mut preds: Vec<Pred> = Vec::new();
@@ -582,7 +587,8 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
     if let Some(nf) = &f.number {
         // Conversational-number filter (`number:`/`ref:`). A `D-` typed value names a decision, so it
         // matches no task; a bare number / `#n` / `T-n` matches the task id (the id **is** the number).
-        // Mirrors `NumberFilter::matches_task`.
+        // The same reading on the other side is `NumberFilter::matches_decision`, which the decision
+        // predicates restate; on this side the number is only ever read here.
         preds.push(if nf.require_decision == Some(true) {
             Pred::never()
         } else {
@@ -597,7 +603,7 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
     }
     if let Some(ai) = f.ai {
         // `ai:true|false` is the AI-delegation dimension (`assignee_kind = ai`), independent of the
-        // assignee one. Mirrors `Filter::matches`.
+        // assignee one: `false` keeps what is assigned to a human *and* what is assigned to nobody.
         preds.push(if ai {
             Pred::eq(T.assignee_kind, ActorKind::Ai.as_str())
         } else {

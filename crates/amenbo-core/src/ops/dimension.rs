@@ -32,8 +32,9 @@ pub(crate) const NOUN: Noun = Noun { en: "dimension", code: ErrorCode::NotFoundD
 /// The noun for the dimension-value entity.
 pub(crate) const VALUE_NOUN: Noun = Noun { en: "dimension value", code: ErrorCode::NotFoundDimensionValue };
 
-/// The specification of a new dimension. The defaults — single-select, unordered, no role — are the
-/// bare shape of a user-defined axis. A time-axis phase is built by setting `role=TimeAxis`.
+/// The specification of a new dimension. The defaults — single-select, unordered, no role, off the
+/// card — are the bare shape of a user-defined axis. A time-axis phase is built by setting
+/// `role=TimeAxis`.
 #[derive(Clone, Debug)]
 pub struct NewDimension {
     pub name: String,
@@ -41,6 +42,9 @@ pub struct NewDimension {
     pub cardinality: DimensionCardinality,
     pub ordered: bool,
     pub role: DimensionRole,
+    /// Whether a task's value on this axis goes on its card (`AMB-D-651`). New axes start `false`, so
+    /// an axis reaches the cards only once somebody says it should (`AMB-D-650`).
+    pub show_on_card: bool,
 }
 
 impl Default for NewDimension {
@@ -51,6 +55,7 @@ impl Default for NewDimension {
             cardinality: DimensionCardinality::Single,
             ordered: false,
             role: DimensionRole::None,
+            show_on_card: false,
         }
     }
 }
@@ -75,6 +80,7 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewDimension) -> Result<Dimen
         cardinality: new.cardinality,
         ordered: new.ordered,
         role: new.role,
+        show_on_card: new.show_on_card,
         order_key,
         created_at: now,
         updated_at: now,
@@ -97,17 +103,20 @@ fn live_value_before(tx: &WriteTx<'_>, id: i64) -> Result<DimensionValue> {
         .ok_or_else(|| VALUE_NOUN.not_found(id.to_string()))
 }
 
-/// Update a dimension's name, notes, whether its values are ordered (`ordered`) and its role
-/// (`role`). Only the `Some` fields are written. The name is a display label, so it is free to
-/// change. Flipping `ordered` false→true brings the values' `order_key` into play (making
-/// `value_move` possible); true→false drops them back to a stable ascending-id order (`order_key`
-/// is not cleared, so flipping it on again revives the old arrangement). `role` is a nomination:
+/// Update a dimension's name, notes, whether its values are ordered (`ordered`), its role (`role`)
+/// and whether it belongs on the task card (`show_on_card`). Only the `Some` fields are written. The
+/// name is a display label, so it is free to change. Flipping `ordered` false→true brings the
+/// values' `order_key` into play (making `value_move` possible); true→false drops them back to a
+/// stable ascending-id order (`order_key` is not cleared, so flipping it on again revives the old
+/// arrangement). `role` is a nomination:
 /// set `TimeAxis` and that axis's values carry the periods and decide the "current era"; set it
 /// back to `None` and the dates stay in their columns but stop meaning anything. **Uniqueness of
 /// the nomination is not enforced**: even if several axes call themselves the time axis,
 /// [`read::current_time_axis_value`] folds them deterministically down to one by dimension order
 /// (`add`'s `--time-axis` is just as unchecked, so the same rule holds whichever door you came in
-/// by).
+/// by). `show_on_card` is the axis's own answer to whether a task's value on it goes on the card, so
+/// flipping it here moves every face at once and no number of axes flipped on is refused — the
+/// crowding that invites is the raiser's to judge (`AMB-D-650`), not this op's to cap.
 pub fn update(
     tx: &WriteTx<'_>,
     id: i64,
@@ -115,6 +124,7 @@ pub fn update(
     notes: Option<&str>,
     ordered: Option<bool>,
     role: Option<DimensionRole>,
+    show_on_card: Option<bool>,
 ) -> Result<Dimension> {
     if let Some(n) = name {
         if n.trim().is_empty() {
@@ -134,6 +144,9 @@ pub fn update(
     }
     if let Some(r) = role {
         d.role = r;
+    }
+    if let Some(c) = show_on_card {
+        d.show_on_card = c;
     }
     d.updated_at = Timestamp::now();
     emit_update(tx, record::dimension(&before), record::dimension(&d))?;
@@ -425,7 +438,7 @@ mod tests {
         let p = project_named(tx, "PJ");
         let d1 = add(tx, p, custom("D1")).unwrap();
         let d2 = add(tx, p, custom("D2")).unwrap();
-        update(tx, d1.id, Some("分類"), None, None, None).unwrap();
+        update(tx, d1.id, Some("分類"), None, None, None, None).unwrap();
         assert_eq!(dim(tx, d1.id).name, "分類");
         // Resolves by name or by id (exact match).
         assert_eq!(read::resolve_dimension_in(tx.conn(), None, "分類").unwrap(), vec![d1.id]);
@@ -592,13 +605,13 @@ mod tests {
 
         // Nominate it later and the very same dates start acting as windows. Name and notes are
         // left as they were.
-        let named = update(tx, d.id, None, None, None, Some(DimensionRole::TimeAxis)).unwrap();
+        let named = update(tx, d.id, None, None, None, Some(DimensionRole::TimeAxis), None).unwrap();
         assert_eq!(named.name, "時代");
         assert_eq!(current(tx, p, day("2026-07-09")).unwrap(), now.id);
 
         // Un-nominate it and it steps out of the resolution; the dates stay in their columns but
         // stop meaning anything.
-        update(tx, d.id, None, None, None, Some(DimensionRole::None)).unwrap();
+        update(tx, d.id, None, None, None, Some(DimensionRole::None), None).unwrap();
         assert!(current(tx, p, day("2026-07-09")).is_none());
         assert_eq!(val(tx, now.id).start_on, Some(day("2026-07-08")));
     }
@@ -617,7 +630,7 @@ mod tests {
 
         // Turn `ordered` on and `order_key` takes effect, so values can be reordered. Name and
         // notes are left as they were.
-        let updated = update(tx, d.id, None, None, Some(true), None).unwrap();
+        let updated = update(tx, d.id, None, None, Some(true), None, None).unwrap();
         assert!(updated.ordered);
         assert_eq!(updated.name, "カテゴリー");
         value_move(tx, b.id, Position::Top).unwrap();
@@ -626,13 +639,46 @@ mod tests {
 
         // Turn `ordered` back off and the values fall back to a stable ascending-id order rather
         // than `order_key`, so the reordering stops showing.
-        update(tx, d.id, None, None, Some(false), None).unwrap();
+        update(tx, d.id, None, None, Some(false), None, None).unwrap();
         assert!(!dim(tx, d.id).ordered);
         let mut expected = [("A", &a.id), ("B", &b.id)];
         expected.sort_by(|x, y| x.1.cmp(y.1));
         let expected_names: Vec<&str> = expected.iter().map(|(n, _)| *n).collect();
                 let order: Vec<String> = vals(tx, d.id).iter().map(|v| v.name.clone()).collect();
         assert_eq!(order, expected_names, "unordered means ascending id (independent of the reordering)");
+    }
+
+    /// The card flag is the axis's own (`AMB-D-651`), so it starts down, goes up and comes back down
+    /// through the same door every face uses, and nothing else on the axis moves with it.
+    #[test]
+    fn update_toggles_show_on_card_and_leaves_the_rest_alone() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        // Raised in its plain form, an axis is off the card: `AMB-D-40`'s surface is what the cards
+        // keep until somebody names an axis to widen it.
+        let d = add(tx, p, NewDimension { ordered: true, ..custom("カテゴリー") }).unwrap();
+        assert!(!dim(tx, d.id).show_on_card, "a new axis starts off the card");
+
+        // Raise the flag and it is the axis that carries it — name, notes, order and role are not
+        // touched on the way through.
+        let raised = update(tx, d.id, None, None, None, None, Some(true)).unwrap();
+        assert!(raised.show_on_card);
+        assert_eq!(raised.name, "カテゴリー");
+        assert!(raised.ordered);
+        assert_eq!(raised.role, DimensionRole::None);
+        assert!(dim(tx, d.id).show_on_card, "and it is what was written, not just what came back");
+
+        // Lower it again. Nothing about the axis remembers it was ever up.
+        update(tx, d.id, None, None, None, None, Some(false)).unwrap();
+        assert!(!dim(tx, d.id).show_on_card);
+
+        // An update that says nothing about the flag leaves it where it stands.
+        update(tx, d.id, None, None, None, None, Some(true)).unwrap();
+        update(tx, d.id, Some("区分"), None, None, None, None).unwrap();
+        let after = dim(tx, d.id);
+        assert_eq!(after.name, "区分");
+        assert!(after.show_on_card, "an unmentioned flag is not cleared");
     }
 
     #[test]

@@ -632,6 +632,13 @@ pub struct Dimension {
     /// set.
     pub ordered: bool,
     pub role: DimensionRole,
+    /// Does a task's value on this axis belong on its card? The axis holds the answer, not the device
+    /// looking at it (`AMB-D-651`): which axes a board shows is a reading of the project that whoever
+    /// raised the axis settles, so every face and every machine gets the same one. `false` is where an
+    /// axis starts and where every axis an upgrade brings in stays, so the cards keep the surface
+    /// `AMB-D-40` drew until somebody names an axis to widen it (`AMB-D-650`).
+    #[serde(default)]
+    pub show_on_card: bool,
     /// Where the dimension itself sits in the display order.
     pub order_key: String,
     pub created_at: Timestamp,

@@ -3531,13 +3531,15 @@ pub struct DimensionValueRow {
 
 /// One dimension (classification axis) of a project overview: id/name/notes plus its live values (in
 /// `order_key` order) and the flags the GUI needs to render/operate it. `role` is the snake_case wire
-/// text (`none`/`time_axis`); `ordered` says whether its values carry an order.
+/// text (`none`/`time_axis`); `ordered` says whether its values carry an order; `show_on_card` says
+/// whether a task's value on this axis belongs on its card (`AMB-D-651`).
 pub struct DimensionRow {
     pub id: i64,
     pub name: String,
     pub notes: String,
     pub role: String,
     pub ordered: bool,
+    pub show_on_card: bool,
     pub values: Vec<DimensionValueRow>,
 }
 
@@ -3610,6 +3612,7 @@ pub fn project_overview(conn: &Connection, reach: crate::reach::Reach) -> Result
         let mut sel = Select::new();
         let (project_id, id, name) = (sel.col(D.project_id), sel.col(D.id), sel.col(D.name));
         let (notes, role, ordered) = (sel.col(D.notes), sel.col(D.role), sel.col(D.ordered));
+        let show_on_card = sel.col(D.show_on_card);
         // The project is joined to keep a dimension whose project is gone out of the overview, not for a
         // column of its own — so it is named here and nowhere else.
         let mut sql = Sql::from(&sel, D.table);
@@ -3627,6 +3630,7 @@ pub fn project_overview(conn: &Connection, reach: crate::reach::Reach) -> Result
                         notes: notes.get(r)?,
                         role: role.get(r)?,
                         ordered: ordered.get(r)?,
+                        show_on_card: show_on_card.get(r)?,
                         values: Vec::new(),
                     },
                 ))

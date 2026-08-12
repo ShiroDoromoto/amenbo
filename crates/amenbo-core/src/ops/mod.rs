@@ -195,6 +195,7 @@ mod cross_project_tests {
                 cardinality: crate::model::DimensionCardinality::Single,
                 ordered: false,
                 role: crate::model::DimensionRole::None,
+                show_on_card: false,
             },
         )
         .expect("add dimension")
@@ -365,6 +366,7 @@ mod delete_children_tests {
                 cardinality: DimensionCardinality::Single,
                 ordered: false,
                 role: DimensionRole::None,
+                show_on_card: false,
             },
         )
         .expect("add dimension")

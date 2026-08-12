@@ -12,6 +12,7 @@ const dim = (role: DimensionDto["role"], values: DimensionValueDto[]): Dimension
   notes: "",
   role,
   ordered: true,
+  showOnCard: false,
   values,
 });
 

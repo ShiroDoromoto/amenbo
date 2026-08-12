@@ -302,6 +302,7 @@ pub fn dimension(d: &Dimension) -> Record {
                 ("cardinality", tv(d.cardinality.as_str())),
                 ("ordered", bv(d.ordered)),
                 ("role", tv(d.role.as_str())),
+                ("show_on_card", bv(d.show_on_card)),
                 ("order_key", tv(&d.order_key)),
             ],
             &d.created_at,

@@ -408,6 +408,25 @@ pub const STEPS: &[Step] = &[
         // task from travelling (see the registry's note on the column).
         apply: Apply::Sql("ALTER TABLE task ADD COLUMN at_binding_id BIGINT;"),
     },
+    Step {
+        to: 27,
+        name: "add dimension.show_on_card, whether an axis belongs on the task card",
+        // `AMB-D-651`. Which axes a board puts on its cards is settled by the axis itself rather than by
+        // the device looking at it, so it arrives as a column on `dimension` — one flag per axis, and
+        // none per value.
+        //
+        // **Seeded, and the seed is not a guess: `0` on every row.** The decision starts every axis on
+        // the "not shown" side, the one an upgrading store's axes were already read as, so what the
+        // cards drew yesterday is what they draw after this runs. `NOT NULL DEFAULT 0` writes that into
+        // every existing row and there is nothing further to backfill — the same shape as v21's.
+        //
+        // The column is spelled out here in frozen text, as every step's is: the registry may rename it
+        // tomorrow, and what this step added must keep meaning what it meant.
+        apply: Apply::Sql(
+            "ALTER TABLE dimension ADD COLUMN show_on_card BOOLEAN NOT NULL DEFAULT 0 \
+                 CHECK(show_on_card IN (0, 1));",
+        ),
+    },
 ];
 
 /// v23: give the change feed the window each instruction belongs to (`AMB-D-582`), so a reader closed to

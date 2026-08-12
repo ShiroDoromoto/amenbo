@@ -115,6 +115,7 @@ export const ko: Translation = {
     "dec.sort.numberDesc": "번호, 최신순", "dec.sort.numberAsc": "번호, 오래된순",
     "dec.sort.decidedDesc": "결정일, 최신순", "dec.sort.decidedAsc": "결정일, 오래된순",
     "board.filter": "필터:", "board.group": "묶음:",
+    "board.filters": "필터",
     "filter.dim.status": "상태", "filter.dim.assignee": "담당", "filter.dim.priority": "우선순위",
     "filter.opt.assignee.none": "담당 없음", "filter.opt.assignee.me": "나", "filter.opt.assignee.meAi": "내 AI",
     "board.searchPh": "작업 / AMB-T-<n> 검색",

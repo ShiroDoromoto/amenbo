@@ -127,6 +127,7 @@ const ui = {
   "dec.sort.numberDesc": "Number, newest first", "dec.sort.numberAsc": "Number, oldest first",
   "dec.sort.decidedDesc": "Decided, newest first", "dec.sort.decidedAsc": "Decided, oldest first",
   "board.filter": "Filter:", "board.group": "Group:",
+  "board.filters": "Filters",
   "filter.dim.status": "Status", "filter.dim.assignee": "Assignee", "filter.dim.priority": "Priority",
   "filter.opt.assignee.none": "Unassigned", "filter.opt.assignee.me": "Me", "filter.opt.assignee.meAi": "My AI",
   "board.searchPh": "Search tasks / AMB-T-<n>",

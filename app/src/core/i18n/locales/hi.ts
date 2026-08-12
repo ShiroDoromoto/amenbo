@@ -115,6 +115,7 @@ export const hi: Translation = {
     "dec.sort.numberDesc": "संख्या, नई पहले", "dec.sort.numberAsc": "संख्या, पुरानी पहले",
     "dec.sort.decidedDesc": "निर्णय, नया पहले", "dec.sort.decidedAsc": "निर्णय, पुराना पहले",
     "board.filter": "छाँटें:", "board.group": "समूह:",
+    "board.filters": "छाँटें",
     "filter.dim.status": "स्थिति", "filter.dim.assignee": "ज़िम्मेदार", "filter.dim.priority": "प्राथमिकता",
     "filter.opt.assignee.none": "किसी को नहीं सौंपा", "filter.opt.assignee.me": "मैं", "filter.opt.assignee.meAi": "मेरा AI",
     "board.searchPh": "काम / AMB-T-<n> खोजें",

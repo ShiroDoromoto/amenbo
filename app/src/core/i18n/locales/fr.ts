@@ -118,6 +118,7 @@ export const fr: Translation = {
     "dec.sort.numberDesc": "Numéro, du plus récent", "dec.sort.numberAsc": "Numéro, du plus ancien",
     "dec.sort.decidedDesc": "Décision, du plus récent", "dec.sort.decidedAsc": "Décision, du plus ancien",
     "board.filter": "Filtre :", "board.group": "Grouper :",
+    "board.filters": "Filtres",
     "filter.dim.status": "Statut", "filter.dim.assignee": "Responsable", "filter.dim.priority": "Priorité",
     "filter.opt.assignee.none": "Sans responsable", "filter.opt.assignee.me": "Moi", "filter.opt.assignee.meAi": "Mon IA",
     "board.searchPh": "Chercher des tâches / AMB-T-<n>",

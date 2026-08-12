@@ -118,6 +118,7 @@ export const id: Translation = {
     "dec.sort.numberDesc": "Nomor, terbaru dulu", "dec.sort.numberAsc": "Nomor, terlama dulu",
     "dec.sort.decidedDesc": "Diputuskan, terbaru dulu", "dec.sort.decidedAsc": "Diputuskan, terlama dulu",
     "board.filter": "Saring:", "board.group": "Kelompok:",
+    "board.filters": "Saringan",
     "filter.dim.status": "Status", "filter.dim.assignee": "Penanggung jawab", "filter.dim.priority": "Prioritas",
     "filter.opt.assignee.none": "Belum ada penanggung jawab", "filter.opt.assignee.me": "Saya", "filter.opt.assignee.meAi": "AI saya",
     "board.searchPh": "Cari tugas / AMB-T-<n>",

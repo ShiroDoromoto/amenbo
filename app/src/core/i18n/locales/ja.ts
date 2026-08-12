@@ -115,6 +115,7 @@ export const ja: Translation = {
     "dec.sort.numberDesc": "番号が新しい順", "dec.sort.numberAsc": "番号が古い順",
     "dec.sort.decidedDesc": "決定日が新しい順", "dec.sort.decidedAsc": "決定日が古い順",
     "board.filter": "フィルタ:", "board.group": "グループ:",
+    "board.filters": "フィルタ",
     "filter.dim.status": "ステータス", "filter.dim.assignee": "担当", "filter.dim.priority": "優先度",
     "filter.opt.assignee.none": "未割り当て", "filter.opt.assignee.me": "自分", "filter.opt.assignee.meAi": "自分の AI",
     "board.searchPh": "タスク・AMB-T-<n> を検索",

@@ -115,6 +115,7 @@ export const tr: Translation = {
     "dec.sort.numberDesc": "Numara, yeniden eskiye", "dec.sort.numberAsc": "Numara, eskiden yeniye",
     "dec.sort.decidedDesc": "Karar tarihi, yeniden eskiye", "dec.sort.decidedAsc": "Karar tarihi, eskiden yeniye",
     "board.filter": "Süz:", "board.group": "Grupla:",
+    "board.filters": "Süzgeçler",
     "filter.dim.status": "Durum", "filter.dim.assignee": "Sorumlu", "filter.dim.priority": "Öncelik",
     "filter.opt.assignee.none": "Sorumlusuz", "filter.opt.assignee.me": "Ben", "filter.opt.assignee.meAi": "Yapay zekâm",
     "board.searchPh": "İş / AMB-T-<n> ara",

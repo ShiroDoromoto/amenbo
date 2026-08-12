@@ -116,6 +116,7 @@ export const zhHant: Translation = {
     "dec.sort.numberDesc": "依編號，由新到舊", "dec.sort.numberAsc": "依編號，由舊到新",
     "dec.sort.decidedDesc": "依決定日期，由新到舊", "dec.sort.decidedAsc": "依決定日期，由舊到新",
     "board.filter": "篩選：", "board.group": "分組：",
+    "board.filters": "篩選",
     "filter.dim.status": "狀態", "filter.dim.assignee": "負責人", "filter.dim.priority": "優先度",
     "filter.opt.assignee.none": "未指派", "filter.opt.assignee.me": "我", "filter.opt.assignee.meAi": "我的 AI",
     "board.searchPh": "搜尋任務／AMB-T-<n>",

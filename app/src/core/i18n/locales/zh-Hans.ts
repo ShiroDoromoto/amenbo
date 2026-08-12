@@ -116,6 +116,7 @@ export const zhHans: Translation = {
     "dec.sort.numberDesc": "按编号，从新到旧", "dec.sort.numberAsc": "按编号，从旧到新",
     "dec.sort.decidedDesc": "按决定日期，从新到旧", "dec.sort.decidedAsc": "按决定日期，从旧到新",
     "board.filter": "筛选：", "board.group": "分组：",
+    "board.filters": "筛选",
     "filter.dim.status": "状态", "filter.dim.assignee": "负责人", "filter.dim.priority": "优先级",
     "filter.opt.assignee.none": "未分配", "filter.opt.assignee.me": "我", "filter.opt.assignee.meAi": "我的 AI",
     "board.searchPh": "搜索任务／AMB-T-<n>",

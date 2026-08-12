@@ -2727,6 +2727,7 @@ mod filter_tests {
                     cardinality: DimensionCardinality::Single,
                     ordered: true,
                     role,
+                    show_on_card: false,
                 },
             )
             .unwrap()
@@ -2811,6 +2812,7 @@ mod filter_tests {
                     cardinality: DimensionCardinality::Single,
                     ordered: true,
                     role,
+                    show_on_card: false,
                 },
             )
             .unwrap()

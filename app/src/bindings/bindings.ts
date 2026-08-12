@@ -237,9 +237,10 @@ name: string | null, ref?: string, };
 /**
  * One unified dimension (classification axis), values included, so the GUI's dimension editor and
  * assignment selects render from real data. `role` is `none` or `time_axis` (phase); `ordered`
- * says whether the values have an order.
+ * says whether the values have an order; `showOnCard` says whether a task's value on this axis
+ * belongs on its card (`AMB-D-651`) — the axis's own answer, so it reads the same on every device.
  */
-export type DimensionDto = { id: number, name: string, notes: string, role: "none" | "time_axis", ordered: boolean, values: Array<DimensionValueDto>, };
+export type DimensionDto = { id: number, name: string, notes: string, role: "none" | "time_axis", ordered: boolean, showOnCard: boolean, values: Array<DimensionValueDto>, };
 
 /**
  * The per-task assigned value for one project × dimension (`taskId`→`valueId`). The board uses it

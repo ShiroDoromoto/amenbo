@@ -669,7 +669,8 @@ datasets! {
     // values, no stable keys (no `builtin_key`). There are no tags either (multi-select, unordered): a
     // dimension is single-select, so it is not a tag, and a free-form topic name is found through the word
     // index instead (`search`). `ordered` says whether the axis's values have an order;
-    // `role` is what nominates one axis as the project's time axis.
+    // `role` is what nominates one axis as the project's time axis; `show_on_card` is whether a task's
+    // value on this axis belongs on its card (a property of the axis, not of the device — `AMB-D-651`).
     dimension => dimension {
         project_id: fk("project", "RESTRICT"),
         name: col(REQ),
@@ -679,6 +680,7 @@ datasets! {
         cardinality: enum_col("single"),
         ordered: bool_col,
         role: enum_col("none", "time_axis"),
+        show_on_card: bool_col,
         order_key: col(ORDER_KEY),
     }
 

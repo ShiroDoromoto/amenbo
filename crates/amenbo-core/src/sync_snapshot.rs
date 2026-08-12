@@ -890,6 +890,7 @@ mod tests {
                         cardinality: DimensionCardinality::Single,
                         ordered: false,
                         role: DimensionRole::None,
+                        show_on_card: false,
                     },
                 )
                 .unwrap()

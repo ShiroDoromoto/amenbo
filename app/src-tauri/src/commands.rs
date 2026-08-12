@@ -140,7 +140,8 @@ pub struct DimensionValueDto {
 
 /// One unified dimension (classification axis), values included, so the GUI's dimension editor and
 /// assignment selects render from real data. `role` is `none` or `time_axis` (phase); `ordered`
-/// says whether the values have an order.
+/// says whether the values have an order; `showOnCard` says whether a task's value on this axis
+/// belongs on its card (`AMB-D-651`) — the axis's own answer, so it reads the same on every device.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -152,6 +153,7 @@ pub struct DimensionDto {
     #[ts(type = "\"none\" | \"time_axis\"")]
     role: String,
     ordered: bool,
+    show_on_card: bool,
     values: Vec<DimensionValueDto>,
 }
 
@@ -939,6 +941,7 @@ fn collect_store(store: &Store, acc: &mut Acc) -> Result<(), CmdError> {
                 notes: d.notes.clone(),
                 role: d.role.clone(),
                 ordered: d.ordered,
+                show_on_card: d.show_on_card,
                 values: d
                     .values
                     .iter()
@@ -3406,7 +3409,7 @@ pub fn dimension_add(project_id: i64, name: String) -> Result<WriteAck, CmdError
 #[tauri::command]
 pub fn dimension_rename(id: i64, name: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.dimension_update(id, Some(&name), None, None, None)?;
+        store.dimension_update(id, Some(&name), None, None, None, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))
@@ -3425,7 +3428,7 @@ pub fn dimension_update(
 ) -> Result<WriteAck, CmdError> {
     let role = time_axis.map(|on| if on { DimensionRole::TimeAxis } else { DimensionRole::None });
     with_store_mut(|store| {
-        store.dimension_update(id, None, notes.as_deref(), ordered, role)?;
+        store.dimension_update(id, None, notes.as_deref(), ordered, role, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))

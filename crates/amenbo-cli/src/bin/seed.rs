@@ -66,6 +66,7 @@ fn generate(store: &mut Store, opts: &Opts) -> amenbo_core::Result<Summary> {
             cardinality: DimensionCardinality::Single,
             ordered: true,
             role: DimensionRole::None,
+            show_on_card: false,
         },
     )?;
     let value_ids: Vec<i64> = (0..opts.values.max(1))

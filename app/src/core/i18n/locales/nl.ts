@@ -134,6 +134,8 @@ export const nl: Translation = {
     "dimmgr.ordered": "Geordend", "dimmgr.orderedHint": "Geef de waarden een volgorde, zodat je ze hieronder kunt verschuiven",
     "dimmgr.timeAxis": "Tijdas",
     "dimmgr.timeAxisHint": "Maak deze categorie de tijdas van het project: haar waarden dragen periodes, en die waarin vandaag valt wordt als huidige gemarkeerd",
+    "dimmgr.showOnCard": "Op de kaart tonen",
+    "dimmgr.showOnCardHint": "Toont deze categorie op de taakkaart. Het antwoord hoort bij de categorie, dus het verandert voor iedereen — niet alleen op dit apparaat",
     "dimmgr.moveUp": "Omhoog", "dimmgr.moveDown": "Omlaag",
     "dimmgr.periodStart": "Begindatum", "dimmgr.periodEnd": "Einddatum",
     "dimmgr.periodStartOpen": "Geen begindatum", "dimmgr.periodEndOpen": "Loopt door",

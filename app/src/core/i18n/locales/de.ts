@@ -134,6 +134,8 @@ export const de: Translation = {
     "dimmgr.ordered": "Geordnet", "dimmgr.orderedHint": "Gib den Werten eine Reihenfolge, dann kannst du sie unten umsortieren",
     "dimmgr.timeAxis": "Zeitachse",
     "dimmgr.timeAxisHint": "Macht diese Kategorie zur Zeitachse des Projekts: Ihre Werte tragen Zeiträume, und der Wert, der heute abdeckt, wird als aktuell markiert",
+    "dimmgr.showOnCard": "Auf der Karte",
+    "dimmgr.showOnCardHint": "Zeigt diese Kategorie auf der Aufgabenkarte. Die Antwort gehört der Kategorie, also ändert sie sich für alle — nicht nur auf diesem Gerät",
     "dimmgr.moveUp": "Nach oben", "dimmgr.moveDown": "Nach unten",
     "dimmgr.periodStart": "Startdatum", "dimmgr.periodEnd": "Enddatum",
     "dimmgr.periodStartOpen": "Kein Startdatum", "dimmgr.periodEndOpen": "Laufend",

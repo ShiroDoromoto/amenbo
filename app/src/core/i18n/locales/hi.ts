@@ -134,6 +134,8 @@ export const hi: Translation = {
     "dimmgr.ordered": "क्रमित", "dimmgr.orderedHint": "मानों को क्रम दें, ताकि उन्हें नीचे ऊपर-नीचे किया जा सके",
     "dimmgr.timeAxis": "समय-अक्ष",
     "dimmgr.timeAxisHint": "इस श्रेणी को प्रोजेक्ट का समय-अक्ष बनाएँ: उसके मान अवधियाँ रखते हैं, और जिसमें आज आता है वह मौजूदा के रूप में चिह्नित होता है",
+    "dimmgr.showOnCard": "कार्ड पर दिखाएँ",
+    "dimmgr.showOnCardHint": "इस श्रेणी को कार्य कार्ड पर दिखाता है। यह उत्तर श्रेणी का अपना है, इसलिए यह सभी के लिए बदलता है, सिर्फ़ इस डिवाइस पर नहीं",
     "dimmgr.moveUp": "ऊपर ले जाएँ", "dimmgr.moveDown": "नीचे ले जाएँ",
     "dimmgr.periodStart": "आरंभ तिथि", "dimmgr.periodEnd": "अंतिम तिथि",
     "dimmgr.periodStartOpen": "आरंभ तिथि नहीं", "dimmgr.periodEndOpen": "जारी",

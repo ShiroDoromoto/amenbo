@@ -1439,6 +1439,16 @@ export async function setDimensionTimeAxis(id: number, timeAxis: boolean): Promi
   return invokeAck("dimension_update", { id, timeAxis });
 }
 
+/**
+ * Put this dimension on the task card, or take it off again. The answer belongs to the axis and not to
+ * this device (`AMB-D-651`), so the toggle moves it for every face and every machine — which is why it
+ * goes through the same op as the rest of the axis rather than into a local setting.
+ */
+export async function setDimensionShowOnCard(id: number, showOnCard: boolean): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("dimension_update", { id, showOnCard });
+}
+
 /** Delete a dimension; its values and the task assignments to them go with it. */
 export async function removeDimension(id: number): Promise<void> {
   if (!inTauri()) return;

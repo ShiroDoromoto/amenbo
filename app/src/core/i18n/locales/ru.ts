@@ -137,6 +137,8 @@ export const ru: Translation = {
     "dimmgr.ordered": "Упорядоченная", "dimmgr.orderedHint": "Задайте значениям порядок, чтобы переставлять их ниже",
     "dimmgr.timeAxis": "Ось времени",
     "dimmgr.timeAxisHint": "Сделать эту категорию осью времени проекта: её значения несут периоды, а то, в которое попадает сегодня, отмечается как текущее",
+    "dimmgr.showOnCard": "Показывать на карточке",
+    "dimmgr.showOnCardHint": "Показывает эту категорию на карточке задачи. Ответ принадлежит категории, поэтому он меняется для всех, а не только на этом устройстве",
     "dimmgr.moveUp": "Выше", "dimmgr.moveDown": "Ниже",
     "dimmgr.periodStart": "Дата начала", "dimmgr.periodEnd": "Дата окончания",
     "dimmgr.periodStartOpen": "Без даты начала", "dimmgr.periodEndOpen": "Продолжается",

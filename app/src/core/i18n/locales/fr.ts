@@ -137,6 +137,8 @@ export const fr: Translation = {
     "dimmgr.ordered": "Ordonnée", "dimmgr.orderedHint": "Donnez un ordre aux valeurs pour pouvoir les réordonner ci-dessous",
     "dimmgr.timeAxis": "Axe du temps",
     "dimmgr.timeAxisHint": "Fait de cette catégorie l'axe du temps du projet : ses valeurs portent des périodes, et celle qui couvre aujourd'hui est marquée comme courante",
+    "dimmgr.showOnCard": "Afficher sur la carte",
+    "dimmgr.showOnCardHint": "Affiche cette catégorie sur la carte de tâche. La réponse appartient à la catégorie : elle change pour tout le monde, pas seulement sur cet appareil",
     "dimmgr.moveUp": "Monter", "dimmgr.moveDown": "Descendre",
     "dimmgr.periodStart": "Date de début", "dimmgr.periodEnd": "Date de fin",
     "dimmgr.periodStartOpen": "Sans date de début", "dimmgr.periodEndOpen": "En cours",

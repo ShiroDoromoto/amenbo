@@ -10,10 +10,11 @@ import type { DimensionDto, DimensionValueDto } from "../bindings/bindings";
 
 // The management panel for classification (unified dimensions), reached from the board's axis bar as a modal of its
 // own. It exposes renaming a dimension, editing its notes and removing it; renaming and removing its values; the
-// ordered toggle and, on an ordered dimension, reordering the values; and the toggle that names an axis the time axis
-// (role: time_axis). Only on a named time axis do the values grow period fields (start/end date) and a "current"
-// marker — a period is payload of the time-axis role, so no other axis shows dates. Naming one is not forced to be
-// unique: core folds "the current era" to a single answer using the order of the dimensions.
+// ordered toggle, the toggle that names an axis the time axis (role: time_axis), the toggle that puts an axis on the
+// task card, and, on an ordered dimension, reordering the values. Only on a named time axis do the values grow period
+// fields (start/end date) and a "current" marker — a period is payload of the time-axis role, so no other axis shows
+// dates. Naming one is not forced to be unique: core folds "the current era" to a single answer using the order of the
+// dimensions.
 export function DimensionManager({ projectId, onClose }: { projectId: number; onClose: () => void }) {
   const snap = useSyncExternalStore(subscribe, getSnapshot);
   const store = useStore();
@@ -75,6 +76,17 @@ function DimensionRow({ dim, store }: { dim: DimensionDto; store: ReturnType<typ
             onChange={(e) => store.setDimensionTimeAxis(dim.id, e.target.checked)}
           />
           {t("dimmgr.timeAxis")}
+        </label>
+        {/* Whether this axis rides on the task card. It sits beside the other two because it is the same
+            kind of thing: an answer the axis carries, so it moves for everyone at once and not just for
+            whoever ticked it (`AMB-D-651`). */}
+        <label className="dimmgr__ordered" title={t("dimmgr.showOnCardHint")}>
+          <input
+            type="checkbox"
+            checked={dim.showOnCard}
+            onChange={(e) => store.setDimensionShowOnCard(dim.id, e.target.checked)}
+          />
+          {t("dimmgr.showOnCard")}
         </label>
         <button className="feed__action dimmgr__danger" onClick={removeDim}>{t("dimmgr.removeDim")}</button>
       </div>

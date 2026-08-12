@@ -134,6 +134,8 @@ export const ko: Translation = {
     "dimmgr.ordered": "순서 있음", "dimmgr.orderedHint": "값에 순서를 주면 아래에서 차례를 바꿀 수 있습니다",
     "dimmgr.timeAxis": "시간축",
     "dimmgr.timeAxisHint": "이 분류를 프로젝트의 시간축으로 삼습니다. 값마다 기간이 붙고, 오늘이 든 값이 현재로 표시됩니다",
+    "dimmgr.showOnCard": "카드에 표시",
+    "dimmgr.showOnCardHint": "이 분류를 작업 카드에 표시합니다. 분류 자체가 가진 설정이라 이 기기뿐 아니라 모두에게 같이 바뀝니다",
     "dimmgr.moveUp": "위로", "dimmgr.moveDown": "아래로",
     "dimmgr.periodStart": "시작일", "dimmgr.periodEnd": "종료일",
     "dimmgr.periodStartOpen": "시작일 없음", "dimmgr.periodEndOpen": "진행 중",

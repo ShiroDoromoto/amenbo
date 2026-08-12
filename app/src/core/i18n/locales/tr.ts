@@ -134,6 +134,8 @@ export const tr: Translation = {
     "dimmgr.ordered": "Sıralı", "dimmgr.orderedHint": "Değerlere bir sıra verin ki aşağıda yerlerini değiştirebilesiniz",
     "dimmgr.timeAxis": "Zaman ekseni",
     "dimmgr.timeAxisHint": "Bu kategoriyi projenin zaman ekseni yapın: değerleri birer dönem taşır ve bugünü kapsayan olan güncel diye işaretlenir",
+    "dimmgr.showOnCard": "Kartta göster",
+    "dimmgr.showOnCardHint": "Bu kategoriyi görev kartında gösterir. Yanıt kategoriye aittir, bu yüzden yalnızca bu cihazda değil herkes için değişir",
     "dimmgr.moveUp": "Yukarı taşı", "dimmgr.moveDown": "Aşağı taşı",
     "dimmgr.periodStart": "Başlangıç tarihi", "dimmgr.periodEnd": "Bitiş tarihi",
     "dimmgr.periodStartOpen": "Başlangıç tarihi yok", "dimmgr.periodEndOpen": "Sürüyor",

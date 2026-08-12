@@ -137,6 +137,8 @@ export const es: Translation = {
     "dimmgr.ordered": "Ordenada", "dimmgr.orderedHint": "Da un orden a los valores para poder reordenarlos abajo",
     "dimmgr.timeAxis": "Eje temporal",
     "dimmgr.timeAxisHint": "Convierte esta categoría en el eje temporal del proyecto: sus valores llevan periodos y el que cubre hoy se marca como actual",
+    "dimmgr.showOnCard": "Mostrar en la tarjeta",
+    "dimmgr.showOnCardHint": "Muestra esta categoría en la tarjeta de tarea. La respuesta pertenece a la categoría, así que cambia para todos, no solo en este dispositivo",
     "dimmgr.moveUp": "Subir", "dimmgr.moveDown": "Bajar",
     "dimmgr.periodStart": "Fecha de inicio", "dimmgr.periodEnd": "Fecha de fin",
     "dimmgr.periodStartOpen": "Sin fecha de inicio", "dimmgr.periodEndOpen": "En curso",

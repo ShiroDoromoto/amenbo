@@ -135,6 +135,8 @@ export const zhHant: Translation = {
     "dimmgr.ordered": "有順序", "dimmgr.orderedHint": "給這些值排出順序，就能在下方調整先後",
     "dimmgr.timeAxis": "時間軸",
     "dimmgr.timeAxisHint": "把這個分類設為專案的時間軸：它的值帶有期間，涵蓋今天的那個會標示為目前",
+    "dimmgr.showOnCard": "顯示在卡片上",
+    "dimmgr.showOnCardHint": "把這個分類顯示在任務卡片上。答案屬於分類本身，所以對所有人都會改變，而不只是這台裝置",
     "dimmgr.moveUp": "上移", "dimmgr.moveDown": "下移",
     "dimmgr.periodStart": "開始日期", "dimmgr.periodEnd": "結束日期",
     "dimmgr.periodStartOpen": "沒有開始日期", "dimmgr.periodEndOpen": "持續中",

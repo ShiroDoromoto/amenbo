@@ -137,6 +137,8 @@ export const vi: Translation = {
     "dimmgr.ordered": "Có thứ tự", "dimmgr.orderedHint": "Cho các giá trị một thứ tự, để bạn sắp lại được ở dưới",
     "dimmgr.timeAxis": "Trục thời gian",
     "dimmgr.timeAxisHint": "Đặt phân loại này làm trục thời gian của dự án: các giá trị của nó mang khoảng thời gian, và cái chứa hôm nay được đánh dấu là hiện hành",
+    "dimmgr.showOnCard": "Hiện trên thẻ",
+    "dimmgr.showOnCardHint": "Hiện phân loại này trên thẻ công việc. Câu trả lời thuộc về phân loại, nên nó đổi cho mọi người, không chỉ trên thiết bị này",
     "dimmgr.moveUp": "Đưa lên", "dimmgr.moveDown": "Đưa xuống",
     "dimmgr.periodStart": "Ngày bắt đầu", "dimmgr.periodEnd": "Ngày kết thúc",
     "dimmgr.periodStartOpen": "Không có ngày bắt đầu", "dimmgr.periodEndOpen": "Còn tiếp diễn",

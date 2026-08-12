@@ -3415,20 +3415,23 @@ pub fn dimension_rename(id: i64, name: String) -> Result<WriteAck, CmdError> {
     Ok(WriteAck::new(&["tasks"]))
 }
 
-/// Update a dimension's description (notes), whether its values are ordered (ordered), and whether
-/// it is the time axis (time_axis). Only the fields passed are changed — same shape as the CLI's
-/// `dimension update`. Turning `ordered` on makes reordering values (`dimension_value_move`) take
-/// effect; turning `time_axis` on makes that axis's values carry periods.
+/// Update a dimension's description (notes), whether its values are ordered (ordered), whether it is
+/// the time axis (time_axis), and whether it goes on the task card (show_on_card). Only the fields
+/// passed are changed — same shape as the CLI's `dimension update`. Turning `ordered` on makes
+/// reordering values (`dimension_value_move`) take effect; turning `time_axis` on makes that axis's
+/// values carry periods; turning `show_on_card` on puts this axis on every task card, for everyone
+/// (`AMB-D-651` — the axis holds the answer, not the device).
 #[tauri::command]
 pub fn dimension_update(
     id: i64,
     notes: Option<String>,
     ordered: Option<bool>,
     time_axis: Option<bool>,
+    show_on_card: Option<bool>,
 ) -> Result<WriteAck, CmdError> {
     let role = time_axis.map(|on| if on { DimensionRole::TimeAxis } else { DimensionRole::None });
     with_store_mut(|store| {
-        store.dimension_update(id, None, notes.as_deref(), ordered, role, None)?;
+        store.dimension_update(id, None, notes.as_deref(), ordered, role, show_on_card)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))

@@ -135,6 +135,8 @@ export const zhHans: Translation = {
     "dimmgr.ordered": "有序", "dimmgr.orderedHint": "给取值排序，这样就能在下方调整顺序",
     "dimmgr.timeAxis": "时间轴",
     "dimmgr.timeAxisHint": "把这个分类设为项目的时间轴：它的取值带有期间，包含今天的那个会标为当前",
+    "dimmgr.showOnCard": "显示在卡片上",
+    "dimmgr.showOnCardHint": "把这个分类显示在任务卡片上。答案属于分类本身，所以对所有人都会改变，而不只是这台设备",
     "dimmgr.moveUp": "上移", "dimmgr.moveDown": "下移",
     "dimmgr.periodStart": "开始日期", "dimmgr.periodEnd": "结束日期",
     "dimmgr.periodStartOpen": "无开始日期", "dimmgr.periodEndOpen": "持续中",

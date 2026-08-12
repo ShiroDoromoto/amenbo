@@ -46,6 +46,7 @@ interface Store {
   updateDimension(id: number, notes: string): void;
   setDimensionOrdered(id: number, ordered: boolean): void;
   setDimensionTimeAxis(id: number, timeAxis: boolean): void;
+  setDimensionShowOnCard(id: number, showOnCard: boolean): void;
   removeDimension(id: number): void;
   addDimensionValue(dimensionId: number, name: string): void;
   renameDimensionValue(valueId: number, name: string): void;
@@ -136,6 +137,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     updateDimension(id, notes) { run(mut.updateDimension(id, notes)); },
     setDimensionOrdered(id, ordered) { run(mut.setDimensionOrdered(id, ordered)); },
     setDimensionTimeAxis(id, timeAxis) { run(mut.setDimensionTimeAxis(id, timeAxis)); },
+    setDimensionShowOnCard(id, showOnCard) { run(mut.setDimensionShowOnCard(id, showOnCard)); },
     removeDimension(id) { run(mut.removeDimension(id)); },
     addDimensionValue(dimensionId, name) { run(mut.addDimensionValue(dimensionId, name)); },
     renameDimensionValue(valueId, name) { run(mut.renameDimensionValue(valueId, name)); },

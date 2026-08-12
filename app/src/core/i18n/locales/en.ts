@@ -146,6 +146,8 @@ const ui = {
   "dimmgr.ordered": "Ordered", "dimmgr.orderedHint": "Give the values an order so you can reorder them below",
   "dimmgr.timeAxis": "Time axis",
   "dimmgr.timeAxisHint": "Make this category the project's time axis: its values carry periods, and the one covering today is marked current",
+  "dimmgr.showOnCard": "Show on card",
+  "dimmgr.showOnCardHint": "Put this category on the task card. The category carries the answer, so it changes for everyone — not just on this device",
   "dimmgr.moveUp": "Move up", "dimmgr.moveDown": "Move down",
   "dimmgr.periodStart": "Start date", "dimmgr.periodEnd": "End date",
   "dimmgr.periodStartOpen": "No start date", "dimmgr.periodEndOpen": "Ongoing",

@@ -137,6 +137,8 @@ export const id: Translation = {
     "dimmgr.ordered": "Berurutan", "dimmgr.orderedHint": "Beri urutan pada nilainya, supaya bisa Anda susun ulang di bawah",
     "dimmgr.timeAxis": "Sumbu waktu",
     "dimmgr.timeAxisHint": "Jadikan kategori ini sumbu waktu proyek: nilainya membawa periode, dan yang mencakup hari ini ditandai sebagai yang berjalan",
+    "dimmgr.showOnCard": "Tampilkan di kartu",
+    "dimmgr.showOnCardHint": "Menampilkan kategori ini pada kartu tugas. Jawabannya milik kategori, jadi berubah untuk semua orang, bukan hanya di perangkat ini",
     "dimmgr.moveUp": "Naikkan", "dimmgr.moveDown": "Turunkan",
     "dimmgr.periodStart": "Tanggal mulai", "dimmgr.periodEnd": "Tanggal berakhir",
     "dimmgr.periodStartOpen": "Tanpa tanggal mulai", "dimmgr.periodEndOpen": "Masih berjalan",

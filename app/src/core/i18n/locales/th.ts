@@ -137,6 +137,8 @@ export const th: Translation = {
     "dimmgr.ordered": "มีลำดับ", "dimmgr.orderedHint": "ให้ลำดับกับค่าต่าง ๆ เพื่อให้จัดเรียงใหม่ได้ด้านล่าง",
     "dimmgr.timeAxis": "แกนเวลา",
     "dimmgr.timeAxisHint": "ทำให้หมวดนี้เป็นแกนเวลาของโปรเจกต์: ค่าของมันจะถือช่วงเวลา และค่าที่คลุมวันนี้จะถูกทำเครื่องหมายว่าเป็นช่วงปัจจุบัน",
+    "dimmgr.showOnCard": "แสดงบนการ์ด",
+    "dimmgr.showOnCardHint": "แสดงหมวดนี้บนการ์ดงาน คำตอบเป็นของหมวดเอง จึงเปลี่ยนสำหรับทุกคน ไม่ใช่แค่บนอุปกรณ์นี้",
     "dimmgr.moveUp": "เลื่อนขึ้น", "dimmgr.moveDown": "เลื่อนลง",
     "dimmgr.periodStart": "วันเริ่มต้น", "dimmgr.periodEnd": "วันสิ้นสุด",
     "dimmgr.periodStartOpen": "ไม่มีวันเริ่มต้น", "dimmgr.periodEndOpen": "ยังดำเนินอยู่",

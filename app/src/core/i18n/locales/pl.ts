@@ -137,6 +137,8 @@ export const pl: Translation = {
     "dimmgr.ordered": "Uporządkowana", "dimmgr.orderedHint": "Nadaj wartościom kolejność, żeby móc je poniżej przestawiać",
     "dimmgr.timeAxis": "Oś czasu",
     "dimmgr.timeAxisHint": "Uczyń tę kategorię osią czasu projektu: jej wartości niosą okresy, a ta obejmująca dziś jest oznaczana jako bieżąca",
+    "dimmgr.showOnCard": "Pokaż na karcie",
+    "dimmgr.showOnCardHint": "Pokazuje tę kategorię na karcie zadania. Odpowiedź należy do kategorii, więc zmienia się dla wszystkich, nie tylko na tym urządzeniu",
     "dimmgr.moveUp": "Przesuń w górę", "dimmgr.moveDown": "Przesuń w dół",
     "dimmgr.periodStart": "Data początkowa", "dimmgr.periodEnd": "Data końcowa",
     "dimmgr.periodStartOpen": "Bez daty początkowej", "dimmgr.periodEndOpen": "Trwa",

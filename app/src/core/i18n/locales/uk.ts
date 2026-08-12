@@ -137,6 +137,8 @@ export const uk: Translation = {
     "dimmgr.ordered": "Упорядкована", "dimmgr.orderedHint": "Задайте значенням порядок, щоб нижче їх можна було переставляти",
     "dimmgr.timeAxis": "Вісь часу",
     "dimmgr.timeAxisHint": "Зробіть цю категорію віссю часу проєкту: її значення несуть періоди, а те, у яке потрапляє сьогодні, позначається як поточне",
+    "dimmgr.showOnCard": "Показувати на картці",
+    "dimmgr.showOnCardHint": "Показує цю категорію на картці завдання. Відповідь належить категорії, тож вона змінюється для всіх, а не лише на цьому пристрої",
     "dimmgr.moveUp": "Вище", "dimmgr.moveDown": "Нижче",
     "dimmgr.periodStart": "Дата початку", "dimmgr.periodEnd": "Дата завершення",
     "dimmgr.periodStartOpen": "Без дати початку", "dimmgr.periodEndOpen": "Триває",

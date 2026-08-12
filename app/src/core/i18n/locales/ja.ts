@@ -135,6 +135,8 @@ export const ja: Translation = {
     "dimmgr.ordered": "順序あり", "dimmgr.orderedHint": "値に順序を付け、下で並べ替えられるようにする",
     "dimmgr.timeAxis": "時間軸",
     "dimmgr.timeAxisHint": "この分類をプロジェクトの時間軸にする。値に期間を持たせ、今日を含む値を「現在」と示す",
+    "dimmgr.showOnCard": "カードに出す",
+    "dimmgr.showOnCardHint": "この分類をタスクカードに出す。分類そのものが持つ設定なので、この端末だけでなく全員の見え方が変わる",
     "dimmgr.moveUp": "上へ", "dimmgr.moveDown": "下へ",
     "dimmgr.periodStart": "開始日", "dimmgr.periodEnd": "終了日",
     "dimmgr.periodStartOpen": "開始日なし", "dimmgr.periodEndOpen": "継続中",

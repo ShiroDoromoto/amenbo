@@ -138,6 +138,8 @@ export const ptBR: Translation = {
     "dimmgr.ordered": "Ordenada", "dimmgr.orderedHint": "Dê uma ordem aos valores para poder reordená-los abaixo",
     "dimmgr.timeAxis": "Eixo do tempo",
     "dimmgr.timeAxisHint": "Torna esta categoria o eixo do tempo do projeto: seus valores carregam períodos, e o que cobre hoje é marcado como atual",
+    "dimmgr.showOnCard": "Mostrar no cartão",
+    "dimmgr.showOnCardHint": "Mostra esta categoria no cartão da tarefa. A resposta pertence à categoria, então muda para todos, não só neste dispositivo",
     "dimmgr.moveUp": "Mover para cima", "dimmgr.moveDown": "Mover para baixo",
     "dimmgr.periodStart": "Data de início", "dimmgr.periodEnd": "Data de término",
     "dimmgr.periodStartOpen": "Sem data de início", "dimmgr.periodEndOpen": "Em andamento",

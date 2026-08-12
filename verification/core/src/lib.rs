@@ -256,6 +256,22 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone. A terminal has no listing standing in front of it to narrow: the words and
     // the reading are one command there, which is what `found` walks.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "narrow", required: &["words"], refs: &[], strings: &["words"], binds: false },
+    // The other narrowing on that same board, and the three moves it takes: the values are opened, some
+    // of them are chosen, and they are folded away again. Opening and folding are written as moves of
+    // their own rather than left around the choosing, because what the fold gives back is the room the
+    // tasks were drawn in — a thing only the shot after it says.
+    //
+    // A screen road alone, all three. A terminal writes the whole narrowing as one line of grammar it
+    // hands the command, so there is nothing standing in front of it to open, and nothing that would
+    // take room back by being shut.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "open-filters", required: &[], refs: &[], strings: &[], binds: false },
+    // One press, on one value of one axis. A set is composed by repeating it, which is what the axis
+    // takes: the values already chosen there stay chosen, and the board is narrowed to their union.
+    // Both words are the CLI's own — the axis is a `--filter` key and the value is what that key takes
+    // — since the words on screen are each reader's own language, and the pair the two sides share is
+    // the one thing a road can be written in.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "choose-filter", required: &["axis", "value"], refs: &[], strings: &["axis", "value"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "close-filters", required: &[], refs: &[], strings: &[], binds: false },
     // Pressing a hit through to the record it points at. The excerpt beside a hit is cut to say where
     // the words are written and never to be read in place of the record, so the press is what the hit
     // is for. The words are named here because a hit has to be standing before there is one to press,
@@ -293,6 +309,11 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "value-add", required: &["dimension", "value"], refs: &[], strings: &["dimension", "value"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "set", required: &["target", "dimension", "value"], refs: &["target"], strings: &["dimension", "value"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "unset", required: &["target", "dimension", "value"], refs: &["target"], strings: &["dimension", "value"], binds: false },
+    // Whether the axis belongs on the board's task cards. The answer is the axis's own rather than a
+    // reader's setting, which is what lets a screen road stand it up from the command line: what a
+    // card draws follows from the store, so the world a `given:` sets is the world any face opens
+    // on. `show: false` lowers it again, for a road that needs the axis off the card.
+    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "show-on-card", required: &["dimension"], refs: &[], strings: &["dimension"], binds: false },
     // Ordering between two tasks, and the anchor back to the history that carried the work out.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "depend", required: &["target", "on"], refs: &["target", "on"], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "undepend", required: &["target", "on"], refs: &["target", "on"], strings: &[], binds: false },
@@ -735,11 +756,18 @@ const REGISTRY: &[OpSpec] = &[
     // taking typing once a side is named — is not a second reading of the box but every `found` below it
     // that carries a `filter`.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "narrowing-shut", required: &[], refs: &[], strings: &[], binds: false },
-    // What the typed words left standing. Separate from `listed` because there is no filter to write it
+    // What a narrowing left standing. Separate from `listed` because there is no filter to write it
     // as: the narrowing is the screen's own, and the question it answers is which of the cards drawn a
-    // moment ago are drawn still. The words belong to the `narrow` that put them in — repeating them
-    // here would be the one place the two could disagree.
+    // moment ago are drawn still. What did the narrowing — words typed over the board, or values chosen
+    // on its axes — belongs to the move that did it; repeating it here would be the one place a step and
+    // the move in front of it could disagree, so one assert answers for both.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "narrowed", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    // The values folded away, and what the control standing in their place says while they are gone.
+    // `axes` is how many of them are narrowing — a count and not a list, since what a folded control
+    // has room to say is a number. It is its own assert rather than a reading of the board: a narrowing
+    // still in force with its values out of sight looks like tasks that are simply gone, so what the
+    // count is worth proving against is the fold itself.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "filters-folded", required: &["axes"], refs: &[], strings: &[], binds: false },
     // Whose record the press opened. The title is no witness — the hit row carries it too — so the step
     // names a phrase only the record's own face holds, and `present: false` puts the same question to a
     // record that was not the one pressed.
@@ -899,6 +927,13 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "plugin-row", required: &["project", "plugin", "state"], refs: &[], strings: &["project", "plugin", "state"], binds: false },
     // An axis as it is read back, by name: is it defined, and does it carry the value named?
     OpSpec { kind: Kind::Assert, domain: Domain::Dimension, op: "listed", required: &["dimension"], refs: &[], strings: &["dimension", "value"], binds: false },
+    // What a card says about how its task is classified — the value carried on one axis, read off the
+    // board with nothing opened. A screen road alone: a listing has no card, and the question is
+    // about a surface rather than about the filing, which `dimension listed` and the
+    // `dim:` filter already answer. The axis is named beside the value because whether the card draws
+    // it at all is the axis's answer, so a step that named the value alone would not say what is
+    // being asked of.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "carded", required: &["target", "dimension", "value"], refs: &["target"], strings: &["dimension", "value"], binds: false },
     // Which bucket of the "what to do now" view a task lands in (`overdue` / `due_today` /
     // `in_progress`) — the view is assembled from days, so the bucket is not the task's status field.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "status-bucket", required: &["target", "bucket"], refs: &["target"], strings: &["bucket"], binds: false },
@@ -1241,6 +1276,15 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     (Domain::Task, "assign"),
     (Domain::Task, "status"),
     (Domain::Task, "update"),
+    // How that work is classified: the axes a project declares, the values they offer, the filing of
+    // a task under one, and whether the axis goes on the card. A screen road about what the board
+    // *says* of a classification has to open on one already there — filing is a road of its own
+    // (`classify-work-along-an-axis`), and walking it again on screen would prove that road twice and
+    // this one not at all.
+    (Domain::Dimension, "create"),
+    (Domain::Dimension, "value-add"),
+    (Domain::Dimension, "set"),
+    (Domain::Dimension, "show-on-card"),
     // And the record on the other side, for a road that reads across both. A screen narrowed to one
     // project has to have a decision standing in another to leave out, and which project a decision
     // was filed under is nothing such a road proves — recording one is a road of its own.

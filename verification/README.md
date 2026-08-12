@@ -346,7 +346,10 @@ under one set of words while storing the value it always stored — `learn-what-
 walks the third of those doors, the panel an opened row is read by: the author's own description standing
 there with no README beside it, the same description again after a language change, the row whose author
 wrote one language keeping it unmarked, and the row nobody described at all falling back to the
-repository's README — and `be-offered-a-start-at-login`
+repository's README — `see-a-tasks-classification-on-the-board` walks what a card says of how its task
+is filed, on a board whose world was classified from a terminal: the value drawn for the axis its
+project put on the card, and nothing at all from the axis beside it that did not ask —
+and `be-offered-a-start-at-login`
 walks the one thing on screen nobody went and asked for — an offer that comes up on its own once the app has been come
 back to, and the answer that takes it away.
 
@@ -529,9 +532,15 @@ nobody has answered both hold no chosen value, and only the second follows the a
 A `listed` assert asks whether the task is in the listing; give it
 `position: first` / `last` instead of `present:` when what is under test is the order the store
 keeps, which is the only place a reorder is visible. Its neighbour `narrowed` asks the question a
-screen puts instead: which of the cards drawn a moment ago the words typed over them left standing.
-It names no filter because there is none to name — the words travel as words, and they are matched
-over the whole record, including faces a card does not show.
+screen puts instead: which of the cards drawn a moment ago are drawn still. It names no filter because
+there is none to name — the narrowing is the screen's own, and what did it belongs to the move in
+front of the assert. That is either of the two narrowings a board has, and one assert answers for
+both: `narrow` types words over the columns, which travel as words and are matched over the whole
+record including faces a card does not show, and `open-filters` / `choose-filter` / `close-filters`
+walk the values on its axes — each press adding to the set that axis is narrowed to, each pair
+written as the CLI writes it, since the chips carrying them are in the reader's own language.
+`filters-folded` reads what the fold leaves: the values off the screen, and the count of narrowing
+axes on the control they folded into.
 
 ### `given:` — the world a road starts from
 

@@ -61,13 +61,31 @@ pub fn load_bindings(conn: &Connection) -> Registry {
     reg
 }
 
-/// Replace `binding_project_dir` with `reg`'s project-keyed index, inside the caller's transaction. A
-/// full rewrite: the data is a handful of folders, so rewriting every row per save keeps the value-type
-/// API (and its whole test surface) intact, and one transaction means a contended save cannot tear.
+/// Bring `binding_project_dir` to `reg`'s project-keyed index, inside the caller's transaction: the pairs
+/// the registry no longer holds are deleted, the pairs it has gained are inserted, and **a pair that was
+/// already there is left untouched — row and id both**.
+///
+/// The difference is what a row's `id` is for (`AMB-D-648`): a task points at a bound folder by that id,
+/// so a save that deleted every row and wrote it back would renumber the whole index and leave every such
+/// task pointing at nothing. [`Registry`] is a value type that holds no ids ([`crate::binding::Registry`]),
+/// which is what keeps its whole test surface intact — so the ids are held here, by matching on the pair
+/// the row is identified by. One transaction still means a contended save cannot tear.
 pub fn write_bindings(tx: &Transaction<'_>, reg: &Registry) -> Result<()> {
-    Delete::from(BPD.table).sql().execute(tx).map_err(StoreEngineError::from)?;
+    let held = binding_rows(tx)?;
+    for (id, pair) in &held {
+        if !reg.project_dirs.get(&pair.0).is_some_and(|dirs| dirs.contains(&pair.1)) {
+            Delete::from(BPD.table)
+                .filter(Pred::eq(BPD.id, *id))
+                .sql()
+                .execute(tx)
+                .map_err(StoreEngineError::from)?;
+        }
+    }
     for (project_id, dirs) in &reg.project_dirs {
         for dir in dirs {
+            if held.iter().any(|(_, pair)| pair.0 == *project_id && pair.1 == *dir) {
+                continue;
+            }
             Insert::into(BPD.table)
                 .set(BPD.project_id, *project_id)
                 .set(BPD.dir, dir.as_str())
@@ -77,6 +95,24 @@ pub fn write_bindings(tx: &Transaction<'_>, reg: &Registry) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Every binding row as `(id, (project_id, dir))` — what [`write_bindings`] compares the registry against.
+/// The pair is the row's identity (`UNIQUE (project_id, dir)`), so it is what says whether a row the
+/// registry holds is a row the store already has.
+fn binding_rows(tx: &Transaction<'_>) -> Result<Vec<(i64, (i64, String))>> {
+    let mut sel = Select::new();
+    let (id, project_id, dir) = (sel.col(BPD.id), sel.col(BPD.project_id), sel.col(BPD.dir));
+    let mut stmt =
+        tx.prepare(Sql::from(&sel, BPD.table).text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map([], |r| Ok((id.get(r)?, (project_id.get(r)?, dir.get(r)?))))
+        .map_err(StoreEngineError::from)?;
+    let mut held = Vec::new();
+    for row in rows {
+        held.push(row.map_err(StoreEngineError::from)?);
+    }
+    Ok(held)
 }
 
 // ───────────────────────── read receipts ─────────────────────────
@@ -501,5 +537,54 @@ mod tests {
         record_launch(&engine, "2026-08-04").unwrap();
         record_launch(&engine, "2026-08-09").unwrap();
         assert_eq!(usage_tallies(&engine).unwrap(), (2, Some("2026-08-04".to_owned())));
+    }
+
+    /// A save writes the whole index, and **a folder that is still in it keeps the row it had** — id and
+    /// all (`AMB-D-648`). This is what lets something else point at a bound folder: renumbering the index
+    /// on every bind would leave every such pointer naming a folder nobody chose.
+    #[test]
+    fn a_binding_that_survives_a_save_keeps_its_id() {
+        let engine = StoreEngine::open_in_memory().unwrap();
+        let ids = || -> Vec<(i64, i64, String)> {
+            let conn = engine.conn();
+            let mut sel = Select::new();
+            let (id, project, dir) = (sel.col(BPD.id), sel.col(BPD.project_id), sel.col(BPD.dir));
+            let mut sql = Sql::from(&sel, BPD.table);
+            sql.order_by([Sort::by(BPD.id)]);
+            let mut stmt = conn.prepare(sql.text()).unwrap();
+            let rows = stmt
+                .query_map([], |r| Ok((id.get(r)?, project.get(r)?, dir.get(r)?)))
+                .unwrap();
+            rows.filter_map(|r| r.ok()).collect()
+        };
+        let save = |reg: &Registry| {
+            let tx = engine.transaction().unwrap();
+            write_bindings(&tx, reg).unwrap();
+            tx.commit().unwrap();
+        };
+
+        let mut reg = Registry::default();
+        reg.record_project_ref(7, "/work/a");
+        reg.record_project_ref(7, "/work/b");
+        save(&reg);
+        let first = ids();
+        assert_eq!(first.len(), 2, "each folder is one row");
+
+        // Saving the same index again changes nothing at all — not even the ids.
+        save(&reg);
+        assert_eq!(ids(), first, "an unchanged index is left exactly where it was");
+
+        // One folder goes, another arrives: the row that stays keeps its id, and the new one takes a
+        // number of its own rather than the one just freed.
+        reg.forget_project_ref(7, "/work/b");
+        reg.record_project_ref(7, "/work/c");
+        save(&reg);
+        let after = ids();
+        assert_eq!(after[0], first[0], "the folder still bound keeps its row");
+        assert_eq!(after.len(), 2);
+        assert!(
+            after[1].0 > first[1].0 && after[1].2 == "/work/c",
+            "the folder that arrived is numbered past the one that left: {after:?}"
+        );
     }
 }

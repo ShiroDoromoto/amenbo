@@ -387,6 +387,11 @@ pub const STEPS: &[Step] = &[
         name: "let a plugin's gate, settings and secrets sit at the device layer",
         apply: Apply::Custom(open_the_plugin_layer_key),
     },
+    Step {
+        to: 25,
+        name: "give a bound folder an id something else can point at",
+        apply: Apply::Custom(key_the_bindings_by_id),
+    },
 ];
 
 /// v23: give the change feed the window each instruction belongs to (`AMB-D-582`), so a reader closed to
@@ -933,6 +938,55 @@ fn open_the_plugin_layer_key(ctx: &Ctx<'_>) -> Result<()> {
             });
         }
     }
+    Ok(())
+}
+
+/// The shape `binding_project_dir` takes from v25 on — frozen text, like every step's: the registry may
+/// rename or reshape the table tomorrow, and what this step built must keep meaning what it meant. Built
+/// under a name of its own and renamed into place, which is the whole of the rebuild below.
+const BINDINGS_KEYED_BY_ID: &str = "CREATE TABLE binding_project_dir_v25 (\n    \
+       id         INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,\n    \
+       project_id BIGINT NOT NULL,\n    \
+       dir        TEXT NOT NULL,\n    \
+       UNIQUE (project_id, dir)\n\
+     );";
+
+/// v25: give each bound folder an `id` something else can point at (`AMB-D-648`) — a task says which
+/// bound folder it is worked in, and it says so by this id rather than by the path, so moving or renaming
+/// the folder leaves the pointer standing.
+///
+/// **A rebuild, unlike v9/v10/v24.** Those three rewrote a stored declaration in place because the tables
+/// they touched are held by `REFERENCES` on both sides, and dropping such a table performs an implicit
+/// `DELETE` that fires the very actions being changed. This table is held by none: nothing references it
+/// and it references nothing (the folder pointer deliberately outlives the project it names), so
+/// SQLite's own rebuild-and-swap is open here — and it is what is needed, since a rowid alias is
+/// something no `ALTER TABLE … ADD COLUMN` can add.
+///
+/// **The pairs come across as they are, and the ids are new.** There is nothing in an upgrading store to
+/// read an id off — no build before this one issued any — so the rows are numbered here, in the set's own
+/// ascending order, which makes the numbering the same on every machine that upgrades the same index. The
+/// pair stays the row's identity as `UNIQUE (project_id, dir)`: the key moves from being the pair to being
+/// the id, and what the pair meant — one folder recorded for one project once — is unchanged.
+///
+/// **Probed, not bare.** A store that never had the table is handed it whole by genesis, `id` included, so
+/// it arrives here already keyed and the rebuild would only renumber what is already right. Same shape as
+/// [`add_outbox_project`]'s probe, for the same reason.
+fn key_the_bindings_by_id(ctx: &Ctx<'_>) -> Result<()> {
+    let held: i64 = ctx.tx.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('binding_project_dir') WHERE name = 'id'",
+        [],
+        |r| r.get(0),
+    )?;
+    if held > 0 {
+        return Ok(());
+    }
+    ctx.tx.execute_batch(BINDINGS_KEYED_BY_ID)?;
+    ctx.tx.execute_batch(
+        "INSERT INTO binding_project_dir_v25 (project_id, dir) \
+             SELECT project_id, dir FROM binding_project_dir ORDER BY project_id, dir;
+         DROP TABLE binding_project_dir;
+         ALTER TABLE binding_project_dir_v25 RENAME TO binding_project_dir;",
+    )?;
     Ok(())
 }
 
@@ -2252,6 +2306,72 @@ mod tests {
                     )
                     .unwrap(),
                 "v{born}: the table the main folder lived in is gone",
+            );
+            std::fs::remove_dir_all(&dir).ok();
+        }
+    }
+
+    /// **v25** (`AMB-D-648`): every folder a store already had bound comes out of the chain carrying an id
+    /// something else can point at, with the pairs themselves untouched — the folders are what the store
+    /// holds, and a rebuild that lost one would unbind a folder to gain a key.
+    ///
+    /// The numbering is the set's own ascending order and not the order the rows happen to sit in, so two
+    /// machines upgrading the same index arrive at the same ids. What the pair keeps is its uniqueness, now
+    /// as a `UNIQUE` rather than the key; what the id gains is retirement, so a folder unbound does not
+    /// hand its number to the next one bound.
+    #[test]
+    fn the_chain_gives_a_bound_folder_an_id_and_keeps_the_pair_unique() {
+        // The last version whose bindings were keyed by the pair alone, named literally: the question is
+        // about that step, and a store born at v25 is handed the id by genesis with nothing to migrate.
+        const KEYLESS_BINDING_VERSION: i64 = 24;
+        for born in OLDEST_FROZEN_VERSION..=KEYLESS_BINDING_VERSION {
+            let dir = scratch(&format!("binding-id-v{born}"));
+            let engine = store_at(&dir, born);
+            // Written out of order on purpose: what numbers them is the set's order, not this one.
+            engine
+                .conn()
+                .execute_batch(
+                    "INSERT INTO binding_project_dir (project_id, dir) \
+                       VALUES (2, '/work/c'), (1, '/work/b'), (1, '/work/a');",
+                )
+                .unwrap();
+
+            run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+            let rows = |sql: &str| -> Vec<(i64, i64, String)> {
+                let conn = engine.conn();
+                let mut stmt = conn.prepare(sql).unwrap();
+                let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap();
+                rows.filter_map(|r| r.ok()).collect()
+            };
+            assert_eq!(
+                rows("SELECT id, project_id, dir FROM binding_project_dir ORDER BY id"),
+                vec![
+                    (1, 1, "/work/a".to_string()),
+                    (2, 1, "/work/b".to_string()),
+                    (3, 2, "/work/c".to_string()),
+                ],
+                "v{born}: every folder keeps its project and its path, and is numbered in the set's order",
+            );
+            assert!(
+                engine
+                    .conn()
+                    .execute(
+                        "INSERT INTO binding_project_dir (project_id, dir) VALUES (1, '/work/a')",
+                        [],
+                    )
+                    .is_err(),
+                "v{born}: one folder is still recorded for one project once",
+            );
+            engine.conn().execute("DELETE FROM binding_project_dir WHERE id = 3", []).unwrap();
+            engine
+                .conn()
+                .execute("INSERT INTO binding_project_dir (project_id, dir) VALUES (2, '/work/d')", [])
+                .unwrap();
+            assert_eq!(
+                rows("SELECT id, project_id, dir FROM binding_project_dir WHERE dir = '/work/d'"),
+                vec![(4, 2, "/work/d".to_string())],
+                "v{born}: the number an unbound folder held is retired, not handed on",
             );
             std::fs::remove_dir_all(&dir).ok();
         }

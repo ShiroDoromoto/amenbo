@@ -127,15 +127,17 @@ impl Dataset {
 }
 
 /// A table that is not a record: the store's scalars, the change feed, the folder bindings and the
-/// device-local task sets. It has no `id` surrogate, no audit columns and no field-write path — the
-/// engine's field-write path never touches it — so it is declared apart from [`DATASETS`], but declared the
+/// device-local task sets. It has no audit columns and no field-write path — the engine's field-write
+/// path never touches it — and no `id` surrogate unless the table declares one (which two of them do,
+/// having rows something else points at), so it is declared apart from [`DATASETS`], but declared the
 /// same way: one line per column, emitting both the DDL and the reader's typed identifier.
 pub struct PlainTable {
     /// Table name.
     pub name: &'static str,
     /// The columns, in the order the DDL writes them.
     pub columns: &'static [Column],
-    /// A table-level constraint written after the columns (a composite `PRIMARY KEY`), if it has one.
+    /// A table-level constraint written after the columns (a composite `PRIMARY KEY` or `UNIQUE`), if it
+    /// has one.
     pub constraint: Option<&'static str>,
 }
 
@@ -435,13 +437,13 @@ macro_rules! plain_type {
 /// generated — so these tables cannot drift from their readers either. A line is
 /// `<column>: <type>("<constraints>")`, the constraints written verbatim after the type word;
 /// a table-level constraint follows the braces as `=> "<sql>"`. Nothing is added implicitly —
-/// that is what makes a table *plain*: it has no `id` surrogate and no audit columns, because it is not
-/// a record (see each table's own note below).
+/// that is what makes a table *plain*: it gets no audit columns, and no `id` surrogate unless it declares
+/// one, because it is not a record (see each table's own note below).
 macro_rules! plain_tables {
     ($($(#[$meta:meta])* $table:ident { $($cname:ident : $ckind:ident $(($cc:literal))?),+ $(,)? } $(=> $tc:literal)?)+) => {
-        /// The tables that are **not** records: they carry no `id` surrogate, no audit columns and no
-        /// field-write path, so the engine's field-write machinery never touches them and they are not
-        /// [`DATASETS`] entries. Their DDL is generated from the declarations below, as the registry's is.
+        /// The tables that are **not** records: they carry no audit columns and no field-write path, so
+        /// the engine's field-write machinery never touches them and they are not [`DATASETS`] entries.
+        /// Their DDL is generated from the declarations below, as the registry's is.
         pub const PLAIN_TABLES: &[PlainTable] = &[
             $(PlainTable {
                 name: stringify!($table),
@@ -973,16 +975,28 @@ plain_tables! {
     }
 
     /// The device-local **folder bindings** ([`crate::binding::Registry`]) — every dir pointing at a
-    /// project, as a set of `(project, dir)` pairs, the pair itself being the key. The folders bound to
-    /// one project stand alongside each other with no order between them (`AMB-D-531`), so the set is
-    /// the whole shape.
+    /// project, as a set of `(project, dir)` pairs. The folders bound to one project stand alongside
+    /// each other with no order between them (`AMB-D-531`), so the set is the whole shape.
+    ///
+    /// `id` is what a row can be **pointed at** by (`AMB-D-648`): a task says which bound folder it is
+    /// worked in, and it says so by id rather than by path — so moving or renaming the folder leaves the
+    /// pointer standing, and re-pointing it (`bind --rebind`) is a write to this row rather than a new
+    /// one. The pair stays the row's identity all the same, as `UNIQUE (project_id, dir)`: one folder is
+    /// recorded for one project once, which is what the set means. An id and not a pair because a pair a
+    /// task carried would be a path string, and a path is exactly what stops being true.
+    ///
+    /// `AUTOINCREMENT`, for the reason a record's `RECORD_ID` carries it: a folder unbound here is a
+    /// row deleted, and without the high-water mark SQLite would hand its number to the next folder
+    /// bound — so a task still naming the old row would come to name a folder nobody pointed it at. The
+    /// number is retired instead, and a task whose folder is gone reads as having none.
     ///
     /// No `REFERENCES project(id)`: a folder pointer outlives the project it names, which is what makes
     /// the stale-binding warning and pointer recovery possible.
     binding_project_dir {
+        id: integer("PRIMARY KEY AUTOINCREMENT"),
         project_id: bigint,
         dir: text,
-    } => "PRIMARY KEY (project_id, dir)"
+    } => "UNIQUE (project_id, dir)"
 
     /// The device-local **read receipts** — a task's last-seen instant. Device-local, export-excluded
     /// overview state, so a plain `task_id → last_seen` table is the faithful shape and the row is

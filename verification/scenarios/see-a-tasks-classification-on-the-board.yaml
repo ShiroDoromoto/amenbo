@@ -1,0 +1,161 @@
+# A board is cut along one axis and says nothing about the others. Everything else a task is filed
+# under — which product, which phase, which release — is a click away in the detail pane, which is a
+# click per card for a reader whose question was about the board in front of them.
+#
+# What answers it is the axis itself: an axis its project put on the card is drawn on every card,
+# and one that did not is not. That is the road here, and it is the screen's alone — a listing has
+# no card, and whether a task is filed under a value is a question `dim:` already answers from a
+# terminal. What is under test is the surface: the filing legible where the work is standing.
+#
+# The world is declared below, and the declaration is half the claim. Two axes, one put on the card
+# and one not, and the flag is raised from the command line — because the answer belongs to the axis
+# and not to the device reading it, a board opened afterwards draws what a terminal decided. A road
+# that raised the flag on screen and read it back on the same screen would pass over a build that
+# kept it on that screen alone.
+#
+# One thing is deliberately not walked here: the axis the board is grouped by is left off the cards
+# under it, since the column heading already says that value. Reading that back needs the board
+# regrouped mid-road, which is a move no op carries yet.
+id: see-a-tasks-classification-on-the-board
+title: A card carries the values its task holds on the axes the project put on the card, and nothing from the axes it did not
+description: >
+  Open a project whose work is filed on two axes, only one of which was put on the task card. Read
+  the board without opening anything: each card carries its own value on the axis that asked for the
+  card, and neither carries the value it holds on the axis that did not. A build that drew every axis
+  would put the second one on both cards; one that drew none would leave the board saying no more
+  than the column it is cut by.
+given:
+  # The axis that asked for the card, and the one that did not. Both are filed under all the same —
+  # what separates them is the flag, and nothing else about them differs.
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: Medium
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Medium
+      value: print
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Medium
+      value: web
+
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: Area
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Area
+      value: layout
+
+  # Raised from the command line, and read back on a screen. The default is off, so an axis nobody
+  # answered for stays off the card — which is what the `Area` half below is standing on.
+  - type: action
+    domain: dimension
+    op: show-on-card
+    with:
+      dimension: Medium
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO WORLD — the printed piece
+    as: feature
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: feature
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO WORLD — the online piece
+    as: banner
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: banner
+
+  # The printed piece is filed on both axes, which is what makes the pair below a question about the
+  # axes rather than about what this task happens to carry.
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: feature
+      dimension: Medium
+      value: print
+
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: feature
+      dimension: Area
+      value: layout
+
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: banner
+      dimension: Medium
+      value: web
+
+steps_gui:
+  # Arrive at the board rather than assume it: what a card draws is drawn on the opening, and a road
+  # that started from whatever screen the launch left would be reading something it did not ask for.
+  - type: action
+    domain: project
+    op: open
+    with:
+      project: verify
+
+  - type: assert
+    domain: task
+    op: carded
+    with:
+      target: feature
+      dimension: Medium
+      value: print
+      present: true
+
+  # Its own value and not the axis's first one: a card drawing the axis rather than the filing would
+  # put the same word on both of these.
+  - type: assert
+    domain: task
+    op: carded
+    with:
+      target: banner
+      dimension: Medium
+      value: web
+      present: true
+
+  # The other half, and the one the flag exists for. The task is filed under this axis — the detail
+  # pane says so — and the board says nothing of it, because the axis never asked to be there.
+  - type: assert
+    domain: task
+    op: carded
+    with:
+      target: feature
+      dimension: Area
+      value: layout
+      present: false

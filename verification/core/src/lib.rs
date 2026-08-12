@@ -293,6 +293,11 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "value-add", required: &["dimension", "value"], refs: &[], strings: &["dimension", "value"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "set", required: &["target", "dimension", "value"], refs: &["target"], strings: &["dimension", "value"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "unset", required: &["target", "dimension", "value"], refs: &["target"], strings: &["dimension", "value"], binds: false },
+    // Whether the axis belongs on the board's task cards. The answer is the axis's own rather than a
+    // reader's setting, which is what lets a screen road stand it up from the command line: what a
+    // card draws follows from the store, so the world a `given:` sets is the world any face opens
+    // on. `show: false` lowers it again, for a road that needs the axis off the card.
+    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "show-on-card", required: &["dimension"], refs: &[], strings: &["dimension"], binds: false },
     // Ordering between two tasks, and the anchor back to the history that carried the work out.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "depend", required: &["target", "on"], refs: &["target", "on"], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "undepend", required: &["target", "on"], refs: &["target", "on"], strings: &[], binds: false },
@@ -899,6 +904,13 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "plugin-row", required: &["project", "plugin", "state"], refs: &[], strings: &["project", "plugin", "state"], binds: false },
     // An axis as it is read back, by name: is it defined, and does it carry the value named?
     OpSpec { kind: Kind::Assert, domain: Domain::Dimension, op: "listed", required: &["dimension"], refs: &[], strings: &["dimension", "value"], binds: false },
+    // What a card says about how its task is classified — the value carried on one axis, read off the
+    // board with nothing opened. A screen road alone: a listing has no card, and the question is
+    // about a surface rather than about the filing, which `dimension listed` and the
+    // `dim:` filter already answer. The axis is named beside the value because whether the card draws
+    // it at all is the axis's answer, so a step that named the value alone would not say what is
+    // being asked of.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "carded", required: &["target", "dimension", "value"], refs: &["target"], strings: &["dimension", "value"], binds: false },
     // Which bucket of the "what to do now" view a task lands in (`overdue` / `due_today` /
     // `in_progress`) — the view is assembled from days, so the bucket is not the task's status field.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "status-bucket", required: &["target", "bucket"], refs: &["target"], strings: &["bucket"], binds: false },
@@ -1241,6 +1253,15 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     (Domain::Task, "assign"),
     (Domain::Task, "status"),
     (Domain::Task, "update"),
+    // How that work is classified: the axes a project declares, the values they offer, the filing of
+    // a task under one, and whether the axis goes on the card. A screen road about what the board
+    // *says* of a classification has to open on one already there — filing is a road of its own
+    // (`classify-work-along-an-axis`), and walking it again on screen would prove that road twice and
+    // this one not at all.
+    (Domain::Dimension, "create"),
+    (Domain::Dimension, "value-add"),
+    (Domain::Dimension, "set"),
+    (Domain::Dimension, "show-on-card"),
     // And the record on the other side, for a road that reads across both. A screen narrowed to one
     // project has to have a decision standing in another to leave out, and which project a decision
     // was filed under is nothing such a road proves — recording one is a road of its own.

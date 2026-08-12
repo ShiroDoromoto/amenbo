@@ -348,6 +348,12 @@ impl Instructor {
             (Domain::Task, "opened") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
+            // The value, not the card's title: what is being asked is whether the classification is
+            // drawn, and a title is on the board either way. Which card carries it is the driver's to
+            // see — the instruction names it — so the reading answers the half a reading can.
+            (Domain::Task, "carded") => {
+                Some(Expectation { text: arg_str(with, "value")?.to_string(), present: present(with) })
+            }
             (Domain::Plugin, "browsed") if !official(with) => {
                 Some(Expectation { text: arg_str(with, "source")?.to_string(), present: true })
             }
@@ -680,6 +686,24 @@ impl Instructor {
                 self.target_label(with),
                 if present(with) { "still on" } else { "gone from" }
             ),
+            // Read on the board with nothing opened, which is the whole claim: the classification is
+            // legible where the work is. The axis is named as well as the value, since what is under
+            // test on the absent side is the axis being left off — a card that simply carries no value
+            // on it would satisfy the words and not the question.
+            (Domain::Task, "carded") => match present(with) {
+                true => format!(
+                    "Confirm the card \"{}\" carries \"{}\" on it — its value on the axis `{}` — with nothing opened.",
+                    self.target_label(with),
+                    req(with, "value")?,
+                    req(with, "dimension")?
+                ),
+                false => format!(
+                    "Confirm the card \"{}\" carries nothing from the axis `{}`: \"{}\" is nowhere on the board.",
+                    self.target_label(with),
+                    req(with, "dimension")?,
+                    req(with, "value")?
+                ),
+            },
             // Which record the press opened. Both halves name the phrase rather than the record's title:
             // the title is standing on the hit row as well, so a line read on it would pass over a press
             // that opened nothing, and over one that opened the wrong record just as quietly.

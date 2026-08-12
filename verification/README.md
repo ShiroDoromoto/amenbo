@@ -346,7 +346,10 @@ under one set of words while storing the value it always stored — `learn-what-
 walks the third of those doors, the panel an opened row is read by: the author's own description standing
 there with no README beside it, the same description again after a language change, the row whose author
 wrote one language keeping it unmarked, and the row nobody described at all falling back to the
-repository's README — and `be-offered-a-start-at-login`
+repository's README — `see-a-tasks-classification-on-the-board` walks what a card says of how its task
+is filed, on a board whose world was classified from a terminal: the value drawn for the axis its
+project put on the card, and nothing at all from the axis beside it that did not ask —
+and `be-offered-a-start-at-login`
 walks the one thing on screen nobody went and asked for — an offer that comes up on its own once the app has been come
 back to, and the answer that takes it away.
 

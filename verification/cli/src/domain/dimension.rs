@@ -20,6 +20,20 @@ impl Driver<'_> {
                 self.run_json(&["dimension", "value-add", dimension, "--name", value, "--json"])?;
                 Ok(Outcome::action(format!("added the value `{value}` to `{dimension}`")))
             }
+            // Whether the axis goes on the board's task cards. It is the axis's own answer and not a
+            // reader's setting, so a screen road stands it up through here — the world its `given:`
+            // declares — rather than reaching for the toggle that also writes it.
+            "show-on-card" => {
+                let dimension = req_str(with, "dimension")?;
+                let show = opt_bool(with, "show").unwrap_or(true);
+                let flag = if show { "true" } else { "false" };
+                self.run_json(&["dimension", "update", dimension, "--show-on-card", flag, "--json"])?;
+                let note = match show {
+                    true => format!("put `{dimension}` on the task card"),
+                    false => format!("took `{dimension}` off the task card"),
+                };
+                Ok(Outcome::action(note))
+            }
             // Filing a task under an axis and taking it back off. The axis and value go by name, which
             // is what the command takes — a bare number there would be read as a name, not an id.
             verb @ ("set" | "unset") => {

@@ -210,6 +210,10 @@ fn stand_world<'a>(
 /// One step as the summary prints it: its verdict mark, number, kind and instruction, and the shot
 /// it left behind. The hand-over says the same of a step it has no shot for yet, so what a driver
 /// reads mid-run and what the summary reports afterwards line up.
+///
+/// A step whose words met only once a misread character was forgiven says so on the same line. It
+/// passed, and the run is green on it — but a tolerance is not a reading, and the one place a person
+/// would look for that is the summary they are already reading.
 fn step_lines(r: &StepRecord) -> String {
     let mark = match r.verdict {
         Verdict::Action => "·",
@@ -217,8 +221,9 @@ fn step_lines(r: &StepRecord) -> String {
         Verdict::Fail => "✗",
         Verdict::Review => "?",
     };
+    let slip = if r.slipped { "  (one character forgiven — worth an eye)" } else { "" };
     format!(
-        "  {mark} {:02} [{}] {}\n        → {}",
+        "  {mark} {:02} [{}] {}\n        → {}{slip}",
         r.index + 1,
         r.kind,
         r.instruction,
@@ -231,9 +236,10 @@ fn step_lines(r: &StepRecord) -> String {
 /// its one machine-readable line, and a line is all it asks for — the content is the driver's to use
 /// as a note to themselves.
 ///
-/// What an assert expects OCR to find is shown with it. The reading is a substring match and no
-/// more, so a driver who can see the screen is the one who can tell a check that genuinely passed
-/// from one the words happened to satisfy.
+/// What an assert expects OCR to find is shown with it. The reading is a search for those words and
+/// no more — one misread character inside them is forgiven and nothing else is — so a driver who can
+/// see the screen is the one who can tell a check that genuinely passed from one the words happened
+/// to satisfy.
 ///
 /// End of input is a failure rather than a nod. A run with nothing left to hold it would walk the
 /// rest of the scenario off whichever screen was up, and file those shots as evidence of steps

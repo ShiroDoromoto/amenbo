@@ -217,6 +217,20 @@ dash, which Unicode files under letters. That fold is the reader's habit, so the
 what it read and hands back the unfolded reading as well; the harness folds its own expectation by
 the same rule and matches. The reading as it came back is written next to the shot (`NN-…​.txt`),
 which is what a person reads when a step comes out red.
+
+**One character inside those words is forgiven, and nothing more.** Vision reads the words on a
+screen well and the glyphs inside them not always — `day's` came back as `dav's` on a title that was
+otherwise perfect, and the fold keeps alphanumerics, so a verbatim search finds nothing. The
+expectation is therefore matched with a budget of one edit over the whole of it, and only where the
+folded expectation is at least 8 characters: under that a single edit is most of the word, and two
+values a scenario tells apart (`core`, `gore`) are exactly that far from each other. The budget is
+counted in characters rather than in words because the screen is also read in Japanese, where the
+fold leaves a title with no spaces to count. Two misreads in one title is not what this is for —
+that shot goes red and a person reads it. Which way it leans is the reassuring part: the same
+tolerance that finds a misread title on a `present: true` step finds it on a `present: false` step
+too, so it can red a run and never green one on a screen nobody stood up. A step that passed only
+because a character was forgiven says so in the summary and carries `slipped` in `manifest.json`;
+several of those in one run is a reader going wrong rather than a screen.
 An assert OCR cannot mechanically judge — a structured `field` value — is a `Review`: its shot is
 kept for an AI/human eye and does not fail the run. A task's **title is one of those once the task
 has ended**: done and rejected are drawn with a line through them, and the reader returns the glyphs

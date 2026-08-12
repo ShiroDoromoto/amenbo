@@ -136,6 +136,84 @@ fn fold(s: &str) -> String {
     out
 }
 
+/// How short an expectation has to be before a slipped character is no longer forgiven.
+///
+/// One edit inside eight characters is at most an eighth of what was asked for, and a card's title or
+/// an author's label is far longer than that. Under it, one edit is most of the word: `core` and
+/// `gore` are a value apart, and a tolerance that cannot tell them apart is one that reads a wrong
+/// screen as the right one. The line is on the **expectation**, which is this harness's own text, so
+/// which side of it a step falls on is knowable from the scenario rather than from what came back.
+const SLIP_FLOOR: usize = 8;
+
+/// Whether a reading holds an expectation, and whether holding it took forgiving a character.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Held {
+    found: bool,
+    /// True only where the words did **not** meet verbatim and one edit brought them together. A
+    /// green earned this way is worth saying out loud, so it rides to the manifest rather than being
+    /// folded into `found`.
+    slipped: bool,
+}
+
+/// Match a folded expectation against a folded reading, forgiving **one** misread character.
+///
+/// Vision reads the words on a screen well and the glyphs inside them not always: `day's` came back
+/// as `dav's` on a title that was otherwise perfect, and the fold keeps alphanumerics, so `days` and
+/// `davs` stay two different words and a verbatim search finds nothing. What is wanted is the
+/// reader's own tolerance — a person reading that shot sees the title — held to a budget small enough
+/// that a *different* title cannot be read as this one.
+///
+/// The budget is one character, over the whole expectation, however long it is. Two misreads in one
+/// title is not what this is for: that shot goes red, and a person reads it. And it is characters
+/// rather than words on purpose — the screen under test is also read in Japanese, where the fold
+/// leaves a title with no spaces in it at all, so a tolerance counted in words would be no tolerance
+/// there.
+///
+/// **Which way the looseness leans is worth knowing.** On a `present: true` step it can only turn a
+/// red green, and on a `present: false` step only a green red — the same tolerance that finds a
+/// misread title also finds it when a step says it should be gone. So the risk it carries is a step
+/// that fails, never a step that passes on a screen nobody stood up.
+fn held(reading: &str, expected: &str) -> Held {
+    if expected.is_empty() || reading.contains(expected) {
+        return Held { found: true, slipped: false };
+    }
+    let needle: Vec<char> = expected.chars().collect();
+    if needle.len() < SLIP_FLOOR {
+        return Held { found: false, slipped: false };
+    }
+    let haystack: Vec<char> = reading.chars().collect();
+    Held { found: within_one_edit(&haystack, &needle), slipped: true }
+}
+
+/// Whether `needle` stands anywhere inside `haystack` once one character is allowed to be wrong,
+/// missing, or extra. It is the ordinary edit distance with a free start and a free end — every place
+/// the needle could begin is begun at, and the answer is the cheapest way any of them ends — which is
+/// what "somewhere in this reading" means when the reading is a whole screen and the needle is a
+/// title on it.
+fn within_one_edit(haystack: &[char], needle: &[char]) -> bool {
+    // One row of the distance table: `prev[j]` is the cost of the best alignment of the needle's
+    // first `j` characters ending at the haystack position just walked past. The first row is zero
+    // across, which is the free start; deleting from the needle is what the column costs.
+    let mut prev: Vec<usize> = (0..=needle.len()).collect();
+    prev[0] = 0;
+    let mut best = prev[needle.len()];
+    for &h in haystack {
+        let mut cur = vec![0usize; needle.len() + 1];
+        for (j, &n) in needle.iter().enumerate() {
+            let substitute = prev[j] + usize::from(h != n);
+            let insert = cur[j] + 1;
+            let delete = prev[j + 1] + 1;
+            cur[j + 1] = substitute.min(insert).min(delete);
+        }
+        best = best.min(cur[needle.len()]);
+        if best <= 1 {
+            return true;
+        }
+        prev = cur;
+    }
+    best <= 1
+}
+
 // ---------------------------------------------------------------------------
 // Turning a step into a screen instruction and an expectation (the pure part)
 // ---------------------------------------------------------------------------
@@ -1328,6 +1406,11 @@ pub struct StepRecord {
     pub verdict: Verdict,
     pub expected: Option<Expectation>,
     pub found: Option<bool>,
+    /// Whether the words met only once a misread character was forgiven ([`held`]). It is worth its
+    /// own field rather than being folded into `found`: a step that passed on a tolerance is a step
+    /// whose shot is worth an eye, and a run where several of them do is a reader going wrong rather
+    /// than a screen.
+    pub slipped: bool,
 }
 
 /// The whole walk: the per-step records and the roll-up. `passed` is the AND of every OCR-judged
@@ -1412,23 +1495,27 @@ where
             .map_err(|e| format!("step {}: capturing `{screenshot}` failed: {e}", i + 1))?;
 
         // Judge an assert that named an expectation; keep the reading as evidence.
-        let (verdict, found) = match (kind, &expected) {
+        let (verdict, found, slipped) = match (kind, &expected) {
             ("assert", Some(exp)) => {
                 let reading = read_text(&shot_path)
                     .map_err(|e| format!("step {}: reading `{screenshot}` failed: {e}", i + 1))?;
-                let hit = reading.text.contains(&fold(&exp.text));
+                let hit = held(&reading.text, &fold(&exp.text));
                 let _ = std::fs::write(
                     evidence_dir.join(format!("{:02}-{kind}-{domain}-{op}.txt", i + 1)),
                     &reading.raw,
                 );
-                let pass = hit == exp.present;
+                let pass = hit.found == exp.present;
                 if !pass {
                     passed = false;
                 }
-                (if pass { Verdict::Pass } else { Verdict::Fail }, Some(hit))
+                (
+                    if pass { Verdict::Pass } else { Verdict::Fail },
+                    Some(hit.found),
+                    hit.found && hit.slipped,
+                )
             }
-            ("assert", None) => (Verdict::Review, None),
-            _ => (Verdict::Action, None),
+            ("assert", None) => (Verdict::Review, None, false),
+            _ => (Verdict::Action, None, false),
         };
 
         let record = StepRecord {
@@ -1441,6 +1528,7 @@ where
             verdict,
             expected,
             found,
+            slipped,
         };
         records.push(record);
     }
@@ -1483,10 +1571,11 @@ pub fn write_manifest(
         .map(|r| {
             let expect = match (&r.expected, r.found) {
                 (Some(e), Some(found)) => format!(
-                    ",\"expected\":{},\"present\":{},\"found\":{}",
+                    ",\"expected\":{},\"present\":{},\"found\":{},\"slipped\":{}",
                     js(&e.text),
                     e.present,
-                    found
+                    found,
+                    r.slipped
                 ),
                 _ => String::new(),
             };
@@ -2977,6 +3066,95 @@ steps_gui:
         let assert_rec = outcome.records.iter().find(|r| r.kind == "assert").unwrap();
         assert_eq!(assert_rec.verdict, Verdict::Fail);
         assert_eq!(assert_rec.found, Some(false));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The reading that started this: one glyph inside a word Vision otherwise read perfectly. The
+    /// fold cannot help — `days` and `davs` are two words to it — so the tolerance is what carries it.
+    #[test]
+    fn one_misread_character_still_meets_the_words() {
+        let title = "Post the day's finished tasks to the team channel";
+        let misread = "Post the dav's finished tasks to the team channel";
+        let hit = held(&fold(misread), &fold(title));
+        assert_eq!(hit, Held { found: true, slipped: true });
+
+        // And the reading that needed nothing forgiven says so, which is what keeps the two greens
+        // apart in the evidence.
+        assert_eq!(held(&fold(title), &fold(title)), Held { found: true, slipped: false });
+    }
+
+    /// The floor. A short expectation is a word where one character is most of the meaning, and two
+    /// values a scenario really tells apart are exactly that far from each other.
+    #[test]
+    fn a_short_expectation_forgives_nothing() {
+        assert_eq!(held("gore", "core"), Held { found: false, slipped: false });
+        // Long enough, and the same single slip is met.
+        assert_eq!(
+            held("still to be taken", "still to be token"),
+            Held { found: true, slipped: true }
+        );
+    }
+
+    /// The budget is one character over the whole expectation, so a reading that went wrong twice is
+    /// a shot for a person rather than a green.
+    #[test]
+    fn two_slips_are_not_forgiven() {
+        assert_eq!(
+            held("the boavd is navrowed", "the board is narrowed"),
+            Held { found: false, slipped: true }
+        );
+    }
+
+    /// Counted in characters and not in words, because the screen under test is also read in
+    /// Japanese, where the fold leaves a title with no spaces to count.
+    #[test]
+    fn the_tolerance_reaches_a_language_the_fold_leaves_unspaced() {
+        let title = fold("絞り込んだあとに板へ残る仕事");
+        let misread = fold("絞り込んだあとに版へ残る仕事");
+        assert!(!title.contains(' '), "the fold leaves this one word");
+        assert_eq!(held(&misread, &title), Held { found: true, slipped: true });
+    }
+
+    /// Which way the looseness leans. The same tolerance that finds a misread title on a step saying
+    /// it should be there finds it on a step saying it should be gone — so it can red a run and never
+    /// green one on a screen nobody stood up.
+    #[test]
+    fn a_forgiven_reading_counts_against_a_step_that_wanted_the_card_gone() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: SCENARIO — nobody holds it }
+    as: nobodys
+  - type: assert
+    domain: task
+    op: narrowed
+    with: { target: nobodys, present: false }
+"#;
+        let s = load(yaml);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-slip-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let outcome = walk(
+            &s,
+            &dir,
+            |p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |_| Ok(reading("SCENARIO — nobodv holds it")),
+            |_| Ok(()),
+        )
+        .expect("walk");
+
+        assert!(!outcome.passed, "the card is still on screen, misread or not");
+        let rec = outcome.records.iter().find(|r| r.kind == "assert").unwrap();
+        assert_eq!(rec.found, Some(true));
+        assert!(rec.slipped, "and the evidence says the words met on a forgiven character");
+
+        let manifest = write_manifest(&dir, &s, &[], &outcome).expect("manifest");
+        let text = std::fs::read_to_string(manifest).unwrap();
+        assert!(text.contains("\"slipped\":true"), "got: {text}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

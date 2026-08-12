@@ -681,34 +681,47 @@ function dedupById(tasks: TaskCard[]): TaskCard[] {
 }
 
 /**
+ * One token's value read as the CLI's comma-separated any-of (`status:todo,in_progress`, query.rs): the task
+ * passes when any of the values named does. A value naming nothing narrows nothing, which is also how an axis
+ * with none of its values chosen reaches here from the board's filters (`AMB-D-655`).
+ */
+function anyOf(value: string, test: (v: string) => boolean): boolean {
+  const values = (value ?? "").split(",").filter(Boolean);
+  return values.length === 0 || values.some(test);
+}
+
+/**
+ * Whether the assignee answers to one value of an `assignee:` token: `none` is unassigned, `me`/`me-ai` resolve
+ * by facet kind, a bare `human`/`ai` by kind too, and anything else is matched against the display name.
+ */
+function assigneeIs(t: TaskCard, value: string): boolean {
+  if (value === "none") return !t.assignee;
+  if (value === "me") return t.assignee?.kind === "human";
+  if (value === "me-ai") return t.assignee?.kind === "ai";
+  const v = value.toLowerCase();
+  return t.assignee?.kind === v || t.assignee?.name?.toLowerCase() === v;
+}
+
+/**
  * The browser-mock fallback (outside Tauri, i.e. iterating on the frontend alone). Filters the fixtures with a
- * subset of `task_page`'s grammar, evaluating only the tokens the views actually emit (status/done/assignee/due).
- * Words are not among them: the search is its own door now ({@link useTaskSearchIds}), not a `text:` written
- * into this expression. An assignee token resolves to a facet: `me`/`me-ai` by kind, a bare `human`/`ai`
- * by kind too, and anything else against the display name.
+ * subset of `task_page`'s grammar, evaluating only the tokens the views actually emit
+ * (status/done/assignee/priority/due). Words are not among them: the search is its own door now
+ * ({@link useTaskSearchIds}), not a `text:` written into this expression.
  */
 function mockMatches(t: TaskCard, q: TaskPageQuery): boolean {
   if (q.projectId && t.projectId !== q.projectId) return false;
   for (const token of (q.filter ?? "").split(/\s+/).filter(Boolean)) {
     const [key, value] = token.split(":");
     switch (key) {
-      // `status:` takes comma-separated any-of, as the CLI's grammar does (query.rs).
-      case "status": if (!value.split(",").includes(t.status)) return false; break;
+      case "status": if (!anyOf(value, (v) => t.status === v)) return false; break;
       // `done:` asks whether the task is **closed**, not whether it was carried out (`AMB-D-397`).
       case "done": if (isClosed(t.status) !== (value === "true")) return false; break;
       case "due": if (value === "today" && t.due !== TODAY) return false; break;
-      case "assignee":
-        if (value === "none" && t.assignee) return false;
-        else if (value === "me" && t.assignee?.kind !== "human") return false;
-        else if (value === "me-ai" && t.assignee?.kind !== "ai") return false;
-        else if (value && !["none", "me", "me-ai"].includes(value)) {
-          // A bare facet token (human/ai) matches by kind; anything else is matched against the display name.
-          const byKind = t.assignee?.kind === value.toLowerCase();
-          const byName = t.assignee?.name?.toLowerCase() === value.toLowerCase();
-          if (!byKind && !byName) return false;
-        }
-        break;
-      default: break; // Unsupported tokens are ignored — the mock is an approximation for iterating.
+      case "priority": if (!anyOf(value, (v) => (t.priority ?? "none") === v)) return false; break;
+      case "assignee": if (!anyOf(value, (v) => assigneeIs(t, v))) return false; break;
+      // Unsupported tokens are ignored — the mock is an approximation for iterating. `dim:` is one of them:
+      // the fixtures carry no dimension assignments, so there is nothing here to read a value against.
+      default: break;
     }
   }
   return true;

@@ -253,6 +253,10 @@
    this build cannot speak to, which is handed no event however its switch stands (`AMB-D-359`). Warn
    coloured, not error: nothing is broken, it simply does not fire. */
 .chip--warn { color: var(--c-warn); border: 1px solid var(--c-warn); background: transparent; }
+/* The value a card carries on an axis its owner put on the card (`AMB-D-650`). Muted, because it states
+   what the task is and not that anything is wrong with it — the chips it shares the card with report
+   trouble, and a classification must not be read as one of those. */
+.chip--dim { white-space: nowrap; cursor: default; color: var(--c-text-muted); }
 
 /* The plugin market's catalog panel: one row per registered catalog, plus the row that adds one. */
 .catsrc { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3) var(--s-5); border-bottom: 1px solid var(--c-border); background: var(--c-surface-sunken); }

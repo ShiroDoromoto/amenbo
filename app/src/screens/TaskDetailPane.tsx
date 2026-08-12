@@ -40,9 +40,11 @@ const COMMENT_PAGE = 20; // Bounded memory: how many comments render initially (
  * far enough to include it. Editing a comment does not change the comment count, so the refetch effect (keyed on
  * commentCount) never fires; the writer therefore re-reads this task's activity itself. Resolving the numbers in
  * body links (`AMB-T-<n>`) and assigning dimension values both take the primary project as their context, because
- * that is where the axes live. A dimension assignment updates this pane's map optimistically (cards do not carry
- * dimensions). Focusing the comment box for "↩ reply" cannot happen at request time — the textarea may not be
- * rendered yet — so it sets a flag and lands the focus on the render that produces it.
+ * that is where the axes live. A dimension assignment updates this pane's map optimistically, so the selects
+ * answer without waiting for the round trip; the board redraws the chips on its cards off the write's own ack,
+ * which is why nothing here reaches for them. Focusing the comment box for "↩ reply" cannot happen at request
+ * time — the textarea may not be rendered yet — so it sets a flag and lands the focus on the render that
+ * produces it.
  */
 export function TaskDetailPane({
   taskId, onDeleted, onDirtyChange, onSelectDecision, focusCommentAt, editCommentAt,

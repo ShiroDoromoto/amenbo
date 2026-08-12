@@ -335,6 +335,11 @@ amenbo task add --title "Palette" --project "Website refresh" --dim "Area=Design
 # to change with `dimension set` / `unset`.
 amenbo dimension value-add Era --name "Beta" --start 2026-07-08
 amenbo dimension value-update Era Beta --end 2026-12-31
+# --show-on-card puts the axis on the board's task cards, so a card says which value
+# it carries without being opened. Off by default, and the axis carries the answer —
+# it is the project's, not this device's. The axis the board is grouped by is left off
+# the cards under it; the column heading already says it.
+amenbo dimension update Area --show-on-card true
 amenbo dimension list --project "Website refresh" --json   # axes + their values
 # Slice tasks by any axis. `dim:` repeats (the parts AND); `=none` = unassigned on
 # that axis. `time_axis:` is sugar for whichever axis you marked --time-axis.

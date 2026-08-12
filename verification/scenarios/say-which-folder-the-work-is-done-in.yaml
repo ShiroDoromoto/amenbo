@@ -1,0 +1,168 @@
+# One project, several folders. That is not an edge case — it is what a repository cloned twice, a
+# checkout and its worktree, or one product's plugins each in their own directory actually look like,
+# and amenbo has always allowed it. What was missing is the other half: with the folders standing side
+# by side, nothing on a task said which of them the work is done in, and no reader could add it.
+#
+# What this road walks is that sentence being sayable, and nothing more. The folder is carried, not
+# enforced: naming one refuses nothing later — no reservation, no worktree — so what there is to read
+# back is the task's own answer about where it is worked, and the two ways that answer goes away.
+#
+# It only ever says what a reader typed. A task filed in one folder about work done in another is
+# ordinary, so the folder the create was standing in is never taken as a default — which is why the
+# road reads "no folder" off a task nobody said anything about, before it says anything.
+#
+# The one refusal is what makes the answer worth reading: the folder has to be one this project
+# offers. A device holds several projects and each may hold several folders, so a folder is a name a
+# reader can easily take from the wrong list — and a task pointing into another project's checkout
+# would send whoever picks it up somewhere their session cannot even reach.
+#
+# CLI only: there is no face on screen for it yet.
+id: say-which-folder-the-work-is-done-in
+title: A task says which of its project's folders the work is done in — carried when named, gone when cleared, and gone with the folder
+description: >
+  Stand a project on two folders, file a task in it, and read back that it names neither. Say which
+  folder the work is done in and read it off the task; say the other one and read the answer follow.
+  Name a folder belonging to another project on the device and watch it refused. Then take the answer
+  away twice over — once by clearing the field, and once by unbinding the folder out from under it,
+  which is the same absence arrived at from the other side.
+steps_cli:
+  # The project and the first of its folders. Raising one links a folder, so this is where the road's
+  # own checkout comes from.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: SCENARIO PROJECT — worked in more than one place
+      dir: checkout
+    as: pj
+
+  # The second, which is what makes the question mean anything: with one folder there is nothing to
+  # choose between.
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: spare
+      project: pj
+
+  # Another project on the same device, with a folder of its own — the wrong list to take a name from,
+  # which the refusal below is about.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: SCENARIO PROJECT — somebody else's checkout
+      dir: elsewhere
+    as: other
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — worked in one of two places
+      project: pj
+    as: card
+
+  # Nothing was said, so nothing is carried. The create was typed somewhere, and that somewhere is not
+  # an answer — this is the read that says so.
+  - type: assert
+    domain: task
+    op: worked-in
+    with:
+      target: card
+      present: false
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: card
+      at: spare
+
+  - type: assert
+    domain: task
+    op: worked-in
+    with:
+      target: card
+      dir: spare
+
+  # Moved to the other of the project's folders — the answer is a choice among them, and it is the
+  # last thing said that stands.
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: card
+      at: checkout
+
+  - type: assert
+    domain: task
+    op: worked-in
+    with:
+      target: card
+      dir: checkout
+
+  # A folder that belongs to another project is refused, and refused as a bad value rather than as
+  # something missing: the folder is really there, it is just not one this project offers.
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: card
+      at: elsewhere
+      refused: invalid_value
+
+  # And the refusal left the answer where it was.
+  - type: assert
+    domain: task
+    op: worked-in
+    with:
+      target: card
+      dir: checkout
+
+  # Taken back the way every other field is taken back.
+  - type: action
+    domain: task
+    op: clear
+    with:
+      target: card
+      field: at
+
+  - type: assert
+    domain: task
+    op: worked-in
+    with:
+      target: card
+      present: false
+
+  # The other way to the same absence, and the one nobody asks for: the folder itself goes. A task
+  # pointing at a binding that no longer exists would send its next reader to a path that leads
+  # nowhere, so what unbinding takes off the books it takes off the tasks too.
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: card
+      at: spare
+
+  - type: action
+    domain: folder
+    op: unbind
+    with:
+      dir: spare
+
+  - type: assert
+    domain: task
+    op: worked-in
+    with:
+      target: card
+      present: false
+
+  # The project is still standing on its other folder, so what was emptied is the task's answer and
+  # not the project's reach.
+  - type: assert
+    domain: folder
+    op: listed
+    with:
+      dir: checkout
+      project: pj

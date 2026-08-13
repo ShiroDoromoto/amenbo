@@ -556,6 +556,23 @@ pub fn validate_agent(m: &Manifest) -> Vec<Problem> {
     problems
 }
 
+/// Validate a config field's **`help` alone**, over a manifest already on disk (`AMB-D-573`). Empty ⇒ the
+/// paragraph may be shown; anything else and the face drops it whole rather than trimming it.
+///
+/// Exposed for the same reason [`validate_agent`] is — the door is not the last place these rules have to
+/// hold — and this text has a sharper reason still: the control-character rule exists *because*
+/// `plugin config get` prints the string to a terminal, where an author's escape sequence can write over
+/// what amenbo said (`AMB-D-656`). A rule that only ran at install leaves that open for everything
+/// installed before it, and for a manifest edited on disk beside the binary.
+///
+/// The one field, and not the whole manifest: what a face shows is this paragraph, so this is what it has
+/// standing to refuse. A checksum that stopped satisfying a later rule says nothing about the prose.
+pub fn validate_config_help(help: &str) -> Vec<Problem> {
+    let mut problems = Vec::new();
+    check_supporting_text(&mut problems, "help", Supporting::Help, help);
+    problems
+}
+
 /// Validate a plugin id (`name`) against the grammar (`AMB-D-360`) — exposed on its own because the same
 /// rules gate a name at install-time conflict resolution, not only at manifest intake. Each broken rule is
 /// its own problem, so an author sees all of them at once.
@@ -1886,6 +1903,16 @@ mod tests {
             })
             .collect();
         assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::SchemaTooLarge));
+    }
+
+    /// The `help` rules asked over one paragraph, which is how a face re-asks them of a manifest already
+    /// on disk (`AMB-D-573`) — the same three rules, and not one of them softened for arriving late.
+    #[test]
+    fn one_help_paragraph_can_be_asked_the_rules_on_its_own() {
+        assert!(validate_config_help("Create it under\nIncoming Webhooks.").is_empty());
+        assert_eq!(codes(&validate_config_help("Paste it.\x1b[2J")), [ProblemCode::ControlChar]);
+        assert_eq!(codes(&validate_config_help(&"あ".repeat(MAX_HELP_BYTES / 3 + 1))), [ProblemCode::TooLong]);
+        assert_eq!(codes(&validate_config_help("AMB-D-411 makes this required.")), [ProblemCode::RecordRef]);
     }
 
     /// A readonly field's value is generated and written back by the plugin, so a default is an answer it

@@ -725,6 +725,9 @@ pub enum PluginConfigCmd {
     /// Read one setting back, as this project holds it, and — for a setting that offers candidates — what
     /// it offers, with what is in force ticked (`AMB-D-415`). A secret is never echoed: it reports only
     /// whether one is set.
+    ///
+    /// What the author wrote about the setting is here too (`AMB-D-656`): the paragraph explaining it, and
+    /// a note where the value is the plugin's own to write rather than yours to type.
     Get {
         /// the installed plugin's name
         name: String,

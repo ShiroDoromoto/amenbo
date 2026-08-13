@@ -398,6 +398,11 @@ pub enum ErrorCode {
     // parts (see `Msg::part`).
     InvalidPluginProjectRequired,
     InvalidPluginSettingsRequired,
+    // The author's own check, read fail-closed at the gate (`AMB-D-664`). Two codes rather than one
+    // because the two are different facts and only one of them is about the values: the check looked and
+    // said no, or it was raised and said nothing this build can act on (`AMB-D-354`).
+    InvalidPluginCheckRefused,
+    InvalidPluginCheckSilent,
     InvalidPluginIncompatible,
     InvalidPluginUpdateIncompatible,
     PluginIncompatiblePayload,
@@ -509,6 +514,8 @@ impl ErrorCode {
             ErrorCode::InvalidPluginRollbackManifestUnparsable => "invalid_plugin_rollback_manifest_unparsable",
             ErrorCode::InvalidPluginProjectRequired => "invalid_plugin_project_required",
             ErrorCode::InvalidPluginSettingsRequired => "invalid_plugin_settings_required",
+            ErrorCode::InvalidPluginCheckRefused => "invalid_plugin_check_refused",
+            ErrorCode::InvalidPluginCheckSilent => "invalid_plugin_check_silent",
             ErrorCode::InvalidPluginIncompatible => "invalid_plugin_incompatible",
             ErrorCode::InvalidPluginUpdateIncompatible => "invalid_plugin_update_incompatible",
             ErrorCode::PluginIncompatiblePayload => "plugin_incompatible_payload",
@@ -619,6 +626,8 @@ impl ErrorCode {
         ErrorCode::InvalidPluginRollbackManifestUnparsable,
         ErrorCode::InvalidPluginProjectRequired,
         ErrorCode::InvalidPluginSettingsRequired,
+        ErrorCode::InvalidPluginCheckRefused,
+        ErrorCode::InvalidPluginCheckSilent,
         ErrorCode::InvalidPluginIncompatible,
         ErrorCode::InvalidPluginUpdateIncompatible,
         ErrorCode::PluginIncompatiblePayload,
@@ -858,6 +867,8 @@ mod tests {
             "invalid_plugin_rollback_manifest_unparsable",
             "invalid_plugin_project_required",
             "invalid_plugin_settings_required",
+            "invalid_plugin_check_refused",
+            "invalid_plugin_check_silent",
             "invalid_plugin_incompatible",
             "invalid_plugin_update_incompatible",
             "plugin_incompatible_payload",

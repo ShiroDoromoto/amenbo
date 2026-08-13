@@ -158,25 +158,39 @@ pub fn effective_enabled_in(store: &Store, plugin: &str, layer: Layer) -> Result
 /// the keys the check spoke about, which are the form's own words, and the rest of the verdict stays with
 /// the caller that is going to draw it. A check that said nothing at all names no keys: it is amenbo's own
 /// sentence about a run that did not answer, and there is nothing of the plugin's in it.
+///
+/// **And the two are told apart by code**, which is the half a reader of `--json` has instead of the
+/// sentence: [`ErrorCode::InvalidPluginCheckRefused`] is the check having looked and said no, and
+/// [`ErrorCode::InvalidPluginCheckSilent`] is a run that answered nothing this build can act on. Both are
+/// CLI-only — the GUI takes the verdict and the shut gate rather than this refusal (`AMB-D-664`).
 fn refuse_failed_check(plugin: &str, checked: &Checked) -> Result<()> {
     if checked.opens_the_gate() {
         return Ok(());
     }
     let named = checked.verdict().map(|verdict| verdict.field_keys().join(", ")).unwrap_or_default();
-    let refusal = match (checked.silence(), named.is_empty()) {
-        (Some(silence), _) => format!(
-            "plugin '{plugin}' cannot be enabled: its own check did not answer — {}",
-            silence.as_str()
+    // The code says which of the two happened, because they are different facts and a caller reading
+    // `--json` acts on them differently: a refusal is about the values in front of the user, a silence is
+    // about the plugin (`AMB-D-354`). It is a CLI-only code — the GUI is handed the verdict and the shut
+    // gate instead of this refusal (`AMB-D-664`), so no screen ever puts this sentence in front of anyone.
+    let (code, refusal) = match (checked.silence(), named.is_empty()) {
+        (Some(silence), _) => (
+            ErrorCode::InvalidPluginCheckSilent,
+            format!(
+                "plugin '{plugin}' cannot be enabled: its own check did not answer — {}",
+                silence.as_str()
+            ),
         ),
-        (None, true) => {
-            format!("plugin '{plugin}' cannot be enabled: its own check refused the values it was given")
-        }
-        (None, false) => format!(
-            "plugin '{plugin}' cannot be enabled: its own check refused the setting(s): {named}"
+        (None, true) => (
+            ErrorCode::InvalidPluginCheckRefused,
+            format!("plugin '{plugin}' cannot be enabled: its own check refused the values it was given"),
+        ),
+        (None, false) => (
+            ErrorCode::InvalidPluginCheckRefused,
+            format!("plugin '{plugin}' cannot be enabled: its own check refused the setting(s): {named}"),
         ),
     };
     Err(Error::Invalid(
-        Msg::new(refusal).with("name", plugin).with("settings", named),
+        Msg::new(refusal).coded(code).with("name", plugin).with("settings", named),
     ))
 }
 
@@ -430,6 +444,10 @@ mod tests {
                 && !format!("{err:?}").contains("cannot sign in"),
             "the author's own sentences stay off the refusal: {err:?}"
         );
+        // What a reader of `--json` has instead of the sentence. It is the finer code and not the family's,
+        // because "your values are wrong" and "a key the manifest never declared" are both `invalid_value`
+        // and nothing downstream could tell them apart.
+        assert_eq!(err.code(), "invalid_plugin_check_refused", "{err:?}");
         assert!(!effective_enabled_in(&store, "mail", Layer::Project(p)).unwrap());
     }
 
@@ -450,6 +468,9 @@ mod tests {
                 enable(&mut store, "mail", Layer::Project(p), &[], |_| true, &Checked::Silent(silence))
                     .unwrap_err();
             assert!(format!("{err:?}").contains("did not answer"), "{err:?}");
+            // A code of its own, whichever way the run failed to answer: the four silences are one fact to
+            // a caller — the check is not usable — and the reason they differ is on the execution log.
+            assert_eq!(err.code(), "invalid_plugin_check_silent", "{err:?}");
             assert!(!effective_enabled_in(&store, "mail", Layer::Project(p)).unwrap());
         }
     }

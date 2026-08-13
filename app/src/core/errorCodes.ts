@@ -145,15 +145,20 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "plugin_incompatible_floor_unreadable",
 ] as const;
 
-/** Core codes the webview never receives, because the only door they come through is the CLI. Putting a
- * plugin back on its earlier build is that door and nothing else (`AMB-D-522`): the screen offers no way
- * to ask for it, so nothing on it can be refused for these reasons. They are listed because the parity
- * test reads every code core declares, not because a reader ever meets one — which is also why they owe
- * no template. A code that reaches a screen belongs in the sentence list instead, with its prose. */
+/** Core codes the webview never receives, because the only door they come through is the CLI. Two doors
+ * are like that. Putting a plugin back on its earlier build is one (`AMB-D-522`): the screen offers no way
+ * to ask for it, so nothing on it can be refused for these reasons. The other is an enable turned away by
+ * the plugin's own check (`AMB-D-664`): the switch on screen is handed the verdict and a gate that did not
+ * move — the author's sentences *are* the refusal there — so this one travels to the terminal alone. They
+ * are listed because the parity test reads every code core declares, not because a reader ever meets one
+ * — which is also why they owe no template. A code that reaches a screen belongs in the sentence list
+ * instead, with its prose. */
 export const CORE_CLI_ONLY_ERROR_CODES = [
   "not_found_plugin_rollback_build",
   "invalid_plugin_rollback_manifest_absent",
   "invalid_plugin_rollback_manifest_unparsable",
+  "invalid_plugin_check_refused",
+  "invalid_plugin_check_silent",
 ] as const;
 
 /** Every code core can emit (`amenbo_core::ErrorCode::ALL`), at every grain. */

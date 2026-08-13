@@ -38,6 +38,7 @@ pub mod perf;
 pub mod plugin_agent;
 pub mod plugin_callback;
 pub mod plugin_catalog;
+pub mod plugin_check;
 pub mod plugin_command;
 pub mod plugin_compat;
 pub mod plugin_config;

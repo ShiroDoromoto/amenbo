@@ -31,6 +31,12 @@
 //! `required` uses), so it removes the row rather than storing a blank. There is thus one door for both
 //! set and unset.
 //!
+//! **A save is never judged by the author's check** (`AMB-D-664`). A plugin may name a call that says
+//! whether its values are usable ([`crate::plugin_check`]), and it is raised again after a save while the
+//! plugin is enabled — but by the face that has somewhere to show the answer, and never here: nothing this
+//! boundary writes is held back by it, and an enabled plugin is not switched off behind the user. What a
+//! failing check costs is one thing only, and it is spent at the gate ([`crate::plugin_trust::enable`]).
+//!
 //! **A field that offers candidates has three answers, and all three are stored here** (`AMB-D-415`): the
 //! chosen [`value`](crate::plugin_manifest::ConfigOption::value)s joined by commas, the reserved
 //! [`NONE_SELECTED`] for "none of them", and — by the clear path above — no row at all for "not answered
@@ -439,6 +445,7 @@ pub fn required_unset_for_update(
 mod tests {
     use super::*;
     use crate::config::Paths;
+    use crate::plugin_check::Checked;
     use crate::plugin_manifest::{ConfigField, ConfigOption};
 
     fn text_field(key: &str) -> ConfigField {
@@ -673,7 +680,8 @@ mod tests {
         let (mut store, _dir) = store_at("update-required");
         let p = mk_project(&mut store, "p");
         install_plugin(&store.paths.clone(), "slack", Vec::new());
-        crate::plugin_trust::enable(&mut store, "slack", Layer::Project(p), &[], |_| true).unwrap();
+        crate::plugin_trust::enable(&mut store, "slack", Layer::Project(p), &[], |_| true, &Checked::NotDeclared)
+            .unwrap();
         let available =
             install_plugin(&store.paths.clone(), "slack", vec![required_field("webhook_url")]);
 
@@ -721,7 +729,8 @@ mod tests {
 
         install_plugin(&store.paths.clone(), "slack", Vec::new());
         for id in [set_up, short] {
-            crate::plugin_trust::enable(&mut store, "slack", Layer::Project(id), &[], |_| true).unwrap();
+            crate::plugin_trust::enable(&mut store, "slack", Layer::Project(id), &[], |_| true, &Checked::NotDeclared)
+                .unwrap();
         }
         let available =
             install_plugin(&store.paths.clone(), "slack", vec![required_field("webhook_url")]);
@@ -748,7 +757,8 @@ mod tests {
         mk_project(&mut store, "untouched");
         let fields = vec![text_field("channel")];
 
-        crate::plugin_trust::enable(&mut store, "slack", Layer::Project(firing), &fields, |_| true).unwrap();
+        crate::plugin_trust::enable(&mut store, "slack", Layer::Project(firing), &fields, |_| true, &Checked::NotDeclared)
+            .unwrap();
         set(&mut store, &text_field("channel"), "slack", Layer::Project(off_with_value), "#general").unwrap();
 
         assert_eq!(
@@ -779,7 +789,8 @@ mod tests {
         let filled = mk_project(&mut store, "filled");
         let fields = vec![required_field("webhook_url")];
 
-        crate::plugin_trust::enable(&mut store, "slack", Layer::Project(short), &fields, |_| true).unwrap();
+        crate::plugin_trust::enable(&mut store, "slack", Layer::Project(short), &fields, |_| true, &Checked::NotDeclared)
+            .unwrap();
         set(&mut store, &required_field("webhook_url"), "slack", Layer::Project(filled), "https://hooks/x").unwrap();
 
         let rows = intersections(&store, "slack", &fields).unwrap();

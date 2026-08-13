@@ -111,9 +111,32 @@ pub fn prepare(
         ));
     }
 
+    assemble(store, &plugin, args, project, layer)
+}
+
+/// Everything [`prepare`] does **but the gate** — the assembly on its own, for the one call amenbo raises
+/// before a plugin is enabled (`AMB-D-664`: the settings check, [`crate::plugin_check`]).
+///
+/// It is not a way past the consent. A check raised by an enable has the consent of the hand that pressed
+/// enable (`AMB-D-351`), which is why that one call may be assembled without a gate to ask; every other
+/// road into a plugin comes through [`prepare`], where the gate is the first thing asked. The plugin is
+/// handed in already read, since a caller in this position has the manifest in hand and re-reading it off
+/// disk would be a second chance for the two to disagree.
+///
+/// The settings, the read-back path and the payload version are the same as any other run's: what a check
+/// receives is what `plugin run` would hand it, because it *is* the plugin's own command face
+/// (`AMB-D-353`).
+pub(crate) fn assemble(
+    store: &Store,
+    plugin: &crate::plugin_subscribe::InstalledPlugin,
+    args: &[String],
+    project: Option<i64>,
+    layer: crate::plugin_layer::Layer,
+) -> Result<PluginInvocation> {
+    let name = plugin.name.as_str();
     let injection = plugin_inject::resolve(store, name, &plugin.manifest.config, layer)?;
     let mut invocation =
-        PluginInvocation::new(plugin.program).stdin_json(command_stdin(injection.text));
+        PluginInvocation::new(plugin.program.clone()).stdin_json(command_stdin(injection.text));
     for arg in args {
         invocation = invocation.arg(arg.clone());
     }

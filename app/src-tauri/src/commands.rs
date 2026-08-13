@@ -6245,13 +6245,9 @@ mod tests {
             ConfigField, ConfigFieldOverlay, ConfigOption, FieldType,
         };
         let field = |key: &str, label: &str, options: Vec<ConfigOption>| ConfigField {
-            key: key.into(),
-            label: label.into(),
-            secret: false,
-            required: false,
             field_type: if options.is_empty() { FieldType::Text } else { FieldType::Multi },
             options,
-            default: None,
+            ..ConfigField::new(key, label)
         };
         let config = vec![
             field("endpoint", "Endpoint", Vec::new()),

@@ -5593,7 +5593,23 @@ pub fn plugin_set_enabled(
             let fields = installed.manifest.config.clone();
             let satisfied =
                 amenbo_core::plugin_config::satisfied_keys(store, &name, &fields, layer)?;
-            enable(store, &name, layer, &fields, |f| satisfied.iter().any(|k| k == &f.key))?;
+            // The author's own check, raised before the gate — pressing enable is the consent to run this
+            // code (`AMB-D-664` / `AMB-D-351`). Its verdict is refused inside `enable`; drawing the
+            // sentences it carries is the settings form's, and is not this switch's answer.
+            let checked = amenbo_core::plugin_check::run(
+                store,
+                &installed,
+                project_id,
+                amenbo_core::plugin_check::TIMEOUT,
+            )?;
+            enable(
+                store,
+                &name,
+                layer,
+                &fields,
+                |f| satisfied.iter().any(|k| k == &f.key),
+                &checked,
+            )?;
         } else {
             dropped_queued = disable(store, &name, layer)?.queued;
         }

@@ -113,7 +113,7 @@ pub fn prepare(
     args: &[String],
     project: Option<i64>,
 ) -> Result<PluginInvocation> {
-    assemble(store, name, Call::Free(args), project)
+    assemble(store, name, Call::Free(args), Gate::Open, project)
 }
 
 /// Assemble the invocation for a call the **settings face** raises (`AMB-D-664`): the plugin's own
@@ -136,7 +136,37 @@ pub fn prepare_declared(
     supplied: &BTreeMap<String, String>,
     project: Option<i64>,
 ) -> Result<PluginInvocation> {
-    assemble(store, name, Call::Declared { cmd, supplied }, project)
+    assemble(store, name, Call::Declared { cmd, supplied }, Gate::Open, project)
+}
+
+/// Assemble the plugin's own `settings.check` (`AMB-D-664`) — the one call raised **without asking the
+/// gate**, and the reason it is not [`prepare_declared`]'s road.
+///
+/// Everything else is that road's: `cmd` is looked up among the manifest's declarations, the settings are
+/// injected, the read-back path is the same. What differs is the gate. The moment that decides this is the
+/// enable, where there is no open gate to find: running this code is what the hand on the switch consented
+/// to (`AMB-D-351`), and what the gate does is what this run's answer decides
+/// ([`crate::plugin_check`]). The same road serves the check after a save, where the gate is open anyway.
+///
+/// It carries no asked values: a check judges what is saved, and what a press asks for is not saved.
+pub fn prepare_check(
+    store: &Store,
+    name: &str,
+    cmd: &str,
+    project: Option<i64>,
+) -> Result<PluginInvocation> {
+    let supplied = BTreeMap::new();
+    assemble(store, name, Call::Declared { cmd, supplied: &supplied }, Gate::Pressed, project)
+}
+
+/// Whether a run has to find the gate already open (`AMB-D-351`).
+enum Gate {
+    /// Every ordinary road: a plugin runs because somebody enabled it, and a shut gate refuses the run.
+    Open,
+    /// The one exception (`AMB-D-664`): the check raised while an enable is being decided. There is no gate
+    /// to find open yet — the consent is the press itself, and what this run answers is whether the gate
+    /// opens at all.
+    Pressed,
 }
 
 /// What a run was asked to call — the two faces, as the assembly reads them.
@@ -210,6 +240,7 @@ fn assemble(
     store: &Store,
     name: &str,
     call: Call<'_>,
+    gate: Gate,
     project: Option<i64>,
 ) -> Result<PluginInvocation> {
     let plugin = plugin_installed::read(&store.paths, name)?;
@@ -218,7 +249,7 @@ fn assemble(
     // The gate and the settings are read at the layer the author declared, not at the folder this ran in
     // (`AMB-D-601`); for the ordinary `scope: project` plugin the two are the same thing.
     let layer = crate::plugin_layer::Layer::of(plugin.manifest.scope, project)?;
-    if !effective_enabled_in(store, name, layer)? {
+    if matches!(gate, Gate::Open) && !effective_enabled_in(store, name, layer)? {
         let cmd = crate::config::Paths::command_name();
         return Err(crate::error::Error::invalid(
             format!(
@@ -301,7 +332,7 @@ fn run(
     project: Option<i64>,
 ) -> Result<CommandOutcome> {
     let event = call.log_event();
-    let invocation = assemble(store, name, call, project)?;
+    let invocation = assemble(store, name, call, Gate::Open, project)?;
     let log = store.paths.plugin_log_file();
     let outcome = match plugin_command::run(&invocation) {
         Ok(outcome) => outcome,

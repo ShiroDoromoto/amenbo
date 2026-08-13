@@ -2563,10 +2563,15 @@ fn refuse_update_leaving_required_unset(
 /// `plugin enable <name>` — open the gate at the layer the plugin declares, through the one boundary that
 /// moves that state ([`amenbo_core::plugin_trust`]). There is still no `--scope`: a plugin has one switch,
 /// and *where* it sits is its author's declaration rather than a choice at the call
-/// (`AMB-D-434` / `AMB-D-601`), so this command always means one thing. Fail-closed twice over: on the
+/// (`AMB-D-434` / `AMB-D-601`), so this command always means one thing. Fail-closed three times over: on the
 /// plugin's compatibility declarations ([`amenbo_core::plugin_compat`], `AMB-D-359` — a plugin this amenbo
-/// cannot speak to is refused before anything is written), and on the author's `required` settings, probed
-/// at the layer that gate is for.
+/// cannot speak to is refused before anything is written), on the author's `required` settings, probed
+/// at the layer that gate is for, and on the author's own check if the manifest names one
+/// ([`amenbo_core::plugin_check`], `AMB-D-664`).
+///
+/// **What a refused check says here is that it refused, and which settings it named** (`AMB-D-664`). The
+/// author's own sentences ride the verdict to the GUI settings form, where a person is reading; this face
+/// hands its output to an AI, and a plugin's text is not put in front of one.
 ///
 /// For a `scope: machine` plugin this one act is also the consent to let it read the whole device
 /// (`AMB-D-601`) — there is no second answer to give, which is why nothing here asks for one.
@@ -2581,8 +2586,18 @@ fn plugin_enable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i32
     let has_value = |f: &amenbo_core::plugin_manifest::ConfigField| {
         satisfied.iter().any(|k| k == &f.key)
     };
+    // The author's own check, raised before the gate because pressing enable is the consent to run this
+    // code (`AMB-D-664` / `AMB-D-351`). What comes back is refused inside `enable`; the verdict's own
+    // sentences are the settings form's and are not read here.
+    let checked = amenbo_core::plugin_check::run(
+        store,
+        &plugin,
+        bound_project(store),
+        amenbo_core::plugin_check::TIMEOUT,
+    )
+    .map_err(CliError::from)?;
 
-    amenbo_core::plugin_trust::enable(store, name, layer, &fields, has_value)
+    amenbo_core::plugin_trust::enable(store, name, layer, &fields, has_value, &checked)
         .map_err(CliError::from)?;
 
     human(flags, format!("Enabled plugin: {name} ({})", gate_where(store, layer)?));
@@ -8255,8 +8270,15 @@ mod tests {
         assert!(why(&store, Some(project)).contains("no plugin is enabled"));
 
         // Switched on here: the list is the answer, and there is nothing to explain.
-        amenbo_core::plugin_trust::enable(&mut store, "notes", Layer::Project(project), &[], |_| true)
-            .unwrap();
+        amenbo_core::plugin_trust::enable(
+            &mut store,
+            "notes",
+            Layer::Project(project),
+            &[],
+            |_| true,
+            &amenbo_core::plugin_check::Checked::NotDeclared,
+        )
+        .unwrap();
         let at_entry = plugins_for_agent(&store, Some(project));
         assert_eq!(at_entry.list[0]["name"], "notes");
         assert_eq!(at_entry.empty_because, None, "a list in hand needs no sentence about empty ones");
@@ -8333,8 +8355,15 @@ mod tests {
 
         // Enable it, then the two builds diverge: the satisfied one passes, the one that grew a required
         // field is held back and names it.
-        plugin_trust::enable(&mut store, "watcher", Layer::Project(project), &installed.config, |_| true)
-            .unwrap();
+        plugin_trust::enable(
+            &mut store,
+            "watcher",
+            Layer::Project(project),
+            &installed.config,
+            |_| true,
+            &amenbo_core::plugin_check::Checked::NotDeclared,
+        )
+        .unwrap();
         assert!(refuse_update_leaving_required_unset(&store, &same).is_ok());
         let held = refuse_update_leaving_required_unset(&store, &grew).unwrap_err();
         assert_eq!(held.code(), "invalid_value");

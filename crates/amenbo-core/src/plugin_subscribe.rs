@@ -208,6 +208,7 @@ mod tests {
     use super::*;
     use crate::plugin_layer::Layer;
     use crate::config::Paths;
+    use crate::plugin_check::Checked;
     use crate::plugin_config;
     use crate::plugin_manifest::{ConfigField, EventSubscription, Manifest, Os};
 
@@ -227,12 +228,14 @@ mod tests {
 
     /// Open a plugin's gate in one project — what an enable does.
     fn enable_in(store: &mut Store, plugin: &str, project: i64) {
-        plugin_trust::enable(store, plugin, Layer::Project(project), &[], |_| true).unwrap();
+        plugin_trust::enable(store, plugin, Layer::Project(project), &[], |_| true, &Checked::NotDeclared)
+            .unwrap();
     }
 
     /// The device gate — where a `scope: machine` plugin's one switch is (`AMB-D-601`).
     fn enable_on_the_device(store: &mut Store, plugin: &str) {
-        plugin_trust::enable(store, plugin, Layer::Device, &[], |_| true).unwrap();
+        plugin_trust::enable(store, plugin, Layer::Device, &[], |_| true, &Checked::NotDeclared)
+            .unwrap();
     }
 
     /// A project to hang an event on.

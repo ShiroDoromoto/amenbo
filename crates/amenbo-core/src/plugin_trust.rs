@@ -24,10 +24,17 @@
 //! value lives is the caller's to resolve and report through `has_value`; this boundary does not reach into
 //! storage itself.
 //!
+//! **And fail-closed on the author's own check** (`AMB-D-664`). Presence is all amenbo can judge, so a
+//! manifest may name a call that judges the rest ([`crate::plugin_check`]), and [`enable`] takes the
+//! verdict it produced: anything but a yes leaves the gate shut, a check nobody declared changes nothing.
+//! The verdict is raised by the caller and refused here, which is what keeps the two halves where they
+//! belong — the author's sentences with the face that shows them, the gate with the door that moves it.
+//!
 //! **Not the CLI, not the GUI.** Those faces call in here after they have the manifest and the resolved
 //! values; the state model and its gate are here so both drive them the same way.
 
 use crate::error::{Error, ErrorCode, Msg, Result};
+use crate::plugin_check::Checked;
 use crate::plugin_layer::Layer;
 use crate::plugin_manifest::ConfigField;
 use crate::store::Store;
@@ -78,13 +85,21 @@ pub fn missing_required(
         .collect()
 }
 
-/// Enable a plugin at one layer: fail-closed on unsatisfied `required` settings (`AMB-D-351`), then open
-/// that layer's gate. `has_value` reports whether one field currently holds a value — the caller resolves
-/// that; this boundary does not touch storage for it.
+/// Enable a plugin at one layer: fail-closed on unsatisfied `required` settings (`AMB-D-351`) and on the
+/// author's own check (`AMB-D-664`), then open that layer's gate. `has_value` reports whether one field
+/// currently holds a value — the caller resolves that; this boundary does not touch storage for it.
 ///
 /// **Opening the device gate is the consent to let the plugin read the whole machine** (`AMB-D-601`), so
 /// nothing asks a second time: a `scope: machine` plugin's [`Layer::Device`] is that answer, and there is no
 /// separate one stored beside it.
+///
+/// `checked` is what the author's check said about the values ([`crate::plugin_check::run`]), and the
+/// caller raises it rather than this door: the run is the caller's to hold, because a verdict carries
+/// sentences meant for the screen and only the face knows whether it has one
+/// ([`Verdict`](crate::plugin_check::Verdict)). What is *not* the caller's is what a verdict costs — a
+/// check that did not say yes leaves the gate shut here, so no face can enable a plugin without having
+/// asked. A plugin declaring no check hands in [`Checked::NotDeclared`], which is every plugin written
+/// before the block existed.
 ///
 /// Idempotent: a plugin already on at that layer ends where it started.
 pub fn enable(
@@ -93,8 +108,12 @@ pub fn enable(
     layer: Layer,
     fields: &[ConfigField],
     has_value: impl Fn(&ConfigField) -> bool,
+    checked: &Checked,
 ) -> Result<()> {
+    // Presence first: it costs nothing to read, and a plugin with an empty `required` field is refused in
+    // the words a user can act on, rather than in whatever the author's code made of the emptiness.
     refuse_missing_required(plugin, fields, has_value)?;
+    refuse_failed_check(plugin, checked)?;
     store.set_plugin_enabled_in_project(layer.project_id(), plugin, true)?;
     Ok(())
 }
@@ -129,6 +148,36 @@ pub fn disable(store: &mut Store, plugin: &str, layer: Layer) -> Result<Stopped>
 /// Whether the plugin fires at `layer` — the row, and nothing beside it (`AMB-D-434` / `AMB-D-601`).
 pub fn effective_enabled_in(store: &Store, plugin: &str, layer: Layer) -> Result<bool> {
     store.plugin_enabled_in_project(layer.project_id(), plugin)
+}
+
+/// The fail-closed reading of the author's own check (`AMB-D-664`), as the refusal every face shares.
+///
+/// **What it says is the field keys, and never the author's sentences.** A verdict's `message` and its
+/// per-field lines are the GUI settings form's — the face that has a person in front of it — while this
+/// refusal travels to whoever called `enable`, the CLI and its `--json` included. So the refusal repeats
+/// the keys the check spoke about, which are the form's own words, and the rest of the verdict stays with
+/// the caller that is going to draw it. A check that said nothing at all names no keys: it is amenbo's own
+/// sentence about a run that did not answer, and there is nothing of the plugin's in it.
+fn refuse_failed_check(plugin: &str, checked: &Checked) -> Result<()> {
+    if checked.opens_the_gate() {
+        return Ok(());
+    }
+    let named = checked.verdict().map(|verdict| verdict.field_keys().join(", ")).unwrap_or_default();
+    let refusal = match (checked.silence(), named.is_empty()) {
+        (Some(silence), _) => format!(
+            "plugin '{plugin}' cannot be enabled: its own check did not answer — {}",
+            silence.as_str()
+        ),
+        (None, true) => {
+            format!("plugin '{plugin}' cannot be enabled: its own check refused the values it was given")
+        }
+        (None, false) => format!(
+            "plugin '{plugin}' cannot be enabled: its own check refused the setting(s): {named}"
+        ),
+    };
+    Err(Error::Invalid(
+        Msg::new(refusal).with("name", plugin).with("settings", named),
+    ))
 }
 
 /// The fail-closed `required` check both enable doors run (`AMB-D-351`), as the refusal they share.
@@ -205,7 +254,7 @@ mod tests {
         let a = mk_project(&mut store, "a");
         let b = mk_project(&mut store, "b");
 
-        enable(&mut store, "slack", Layer::Project(a), &[], |_| true).unwrap();
+        enable(&mut store, "slack", Layer::Project(a), &[], |_| true, &Checked::NotDeclared).unwrap();
 
         assert!(effective_enabled_in(&store, "slack", Layer::Project(a)).unwrap());
         assert!(!effective_enabled_in(&store, "slack", Layer::Project(b)).unwrap());
@@ -217,14 +266,14 @@ mod tests {
         let mut store = store_at("project-disable");
         let a = mk_project(&mut store, "a");
         let b = mk_project(&mut store, "b");
-        enable(&mut store, "slack", Layer::Project(a), &[], |_| true).unwrap();
-        enable(&mut store, "slack", Layer::Project(b), &[], |_| true).unwrap();
+        enable(&mut store, "slack", Layer::Project(a), &[], |_| true, &Checked::NotDeclared).unwrap();
+        enable(&mut store, "slack", Layer::Project(b), &[], |_| true, &Checked::NotDeclared).unwrap();
 
         disable(&mut store, "slack", Layer::Project(a)).unwrap();
         assert!(!effective_enabled_in(&store, "slack", Layer::Project(a)).unwrap());
         assert!(effective_enabled_in(&store, "slack", Layer::Project(b)).unwrap(), "b is untouched");
 
-        enable(&mut store, "slack", Layer::Project(a), &[], |_| true).unwrap();
+        enable(&mut store, "slack", Layer::Project(a), &[], |_| true, &Checked::NotDeclared).unwrap();
         assert!(effective_enabled_in(&store, "slack", Layer::Project(a)).unwrap());
     }
 
@@ -272,8 +321,8 @@ mod tests {
         let mut store = store_at("project-disable-queue");
         let a = mk_project(&mut store, "A");
         let b = mk_project(&mut store, "B");
-        enable(&mut store, "slack", Layer::Project(a), &[], |_| true).unwrap();
-        enable(&mut store, "slack", Layer::Project(b), &[], |_| true).unwrap();
+        enable(&mut store, "slack", Layer::Project(a), &[], |_| true, &Checked::NotDeclared).unwrap();
+        enable(&mut store, "slack", Layer::Project(b), &[], |_| true, &Checked::NotDeclared).unwrap();
         queue_for(&store, "slack", Some(a), 1);
         queue_for(&store, "slack", Some(b), 2);
         let tx = store.read_model().write().unwrap();
@@ -295,7 +344,7 @@ mod tests {
     fn disabling_the_only_project_drops_the_queue_and_the_runners_lease() {
         let mut store = store_at("only-project-disable-queue");
         let p = mk_project(&mut store, "p");
-        enable(&mut store, "slack", Layer::Project(p), &[], |_| true).unwrap();
+        enable(&mut store, "slack", Layer::Project(p), &[], |_| true, &Checked::NotDeclared).unwrap();
         queue_for(&store, "slack", Some(p), 1);
         let tx = store.read_model().write().unwrap();
         tx.claim_runner("slack", "runner-1", "2999-01-01T00:00:00Z", "2026-07-25T09:00:00Z").unwrap();
@@ -321,7 +370,8 @@ mod tests {
         let mut store = store_at("required");
         let p = mk_project(&mut store, "p");
 
-        let err = enable(&mut store, "slack", Layer::Project(p), &fields, |_| false).unwrap_err();
+        let err = enable(&mut store, "slack", Layer::Project(p), &fields, |_| false, &Checked::NotDeclared)
+            .unwrap_err();
         assert!(format!("{err:?}").contains("webhook_url"), "the empty field is named");
         assert!(!effective_enabled_in(&store, "slack", Layer::Project(p)).unwrap());
     }
@@ -332,7 +382,8 @@ mod tests {
         let mut store = store_at("satisfied");
         let p = mk_project(&mut store, "p");
         let fields = [field("webhook_url", true)];
-        enable(&mut store, "slack", Layer::Project(p), &fields, |f| f.key == "webhook_url").unwrap();
+        enable(&mut store, "slack", Layer::Project(p), &fields, |f| f.key == "webhook_url", &Checked::NotDeclared)
+            .unwrap();
         assert!(effective_enabled_in(&store, "slack", Layer::Project(p)).unwrap());
     }
 
@@ -343,6 +394,96 @@ mod tests {
         let fields = [field("a", true), field("b", false), field("c", true)];
         let missing = missing_required(&fields, |f| f.key == "a");
         assert_eq!(missing, vec!["c"]);
+    }
+
+    // ─────────────── fail-closed on the author's own check (`AMB-D-664`) ───────────────
+
+    /// A verdict that returns [`Checked::Answered`] with `ok`.
+    fn said(ok: bool, about: &[(&str, &str)]) -> Checked {
+        Checked::Answered(crate::plugin_check::Verdict {
+            ok,
+            message: Some("cannot sign in".into()),
+            fields: about.iter().map(|(k, v)| ((*k).to_string(), (*v).to_string())).collect(),
+        })
+    }
+
+    /// A check that said no holds the gate shut, and the refusal names the settings it spoke about — never
+    /// the sentences beside them, which travel to the form that draws them.
+    #[test]
+    fn a_check_that_said_no_refuses_enable_and_names_only_the_settings() {
+        let mut store = store_at("check-no");
+        let p = mk_project(&mut store, "p");
+
+        let err = enable(
+            &mut store,
+            "mail",
+            Layer::Project(p),
+            &[],
+            |_| true,
+            &said(false, &[("smtp_user", "no such mailbox")]),
+        )
+        .unwrap_err();
+
+        assert!(format!("{err:?}").contains("smtp_user"), "the setting is named: {err:?}");
+        assert!(
+            !format!("{err:?}").contains("no such mailbox")
+                && !format!("{err:?}").contains("cannot sign in"),
+            "the author's own sentences stay off the refusal: {err:?}"
+        );
+        assert!(!effective_enabled_in(&store, "mail", Layer::Project(p)).unwrap());
+    }
+
+    /// A check that said nothing costs the same as one that said no — and says so in amenbo's own words,
+    /// since there is no answer of the plugin's to repeat.
+    #[test]
+    fn a_check_that_said_nothing_refuses_enable_too() {
+        let mut store = store_at("check-silent");
+        let p = mk_project(&mut store, "p");
+
+        for silence in [
+            crate::plugin_check::Silence::NotLaunched,
+            crate::plugin_check::Silence::Failed,
+            crate::plugin_check::Silence::TimedOut,
+            crate::plugin_check::Silence::Unreadable,
+        ] {
+            let err =
+                enable(&mut store, "mail", Layer::Project(p), &[], |_| true, &Checked::Silent(silence))
+                    .unwrap_err();
+            assert!(format!("{err:?}").contains("did not answer"), "{err:?}");
+            assert!(!effective_enabled_in(&store, "mail", Layer::Project(p)).unwrap());
+        }
+    }
+
+    /// A check that said yes opens the gate, whatever else it had to say.
+    #[test]
+    fn a_check_that_said_yes_opens_the_gate() {
+        let mut store = store_at("check-yes");
+        let p = mk_project(&mut store, "p");
+
+        enable(&mut store, "mail", Layer::Project(p), &[], |_| true, &said(true, &[])).unwrap();
+
+        assert!(effective_enabled_in(&store, "mail", Layer::Project(p)).unwrap());
+    }
+
+    /// Presence is judged first: a plugin with an empty `required` field is refused in the words a user
+    /// can act on, rather than in whatever the author's code made of the emptiness.
+    #[test]
+    fn an_empty_required_field_is_the_refusal_even_when_the_check_also_said_no() {
+        let mut store = store_at("check-and-required");
+        let p = mk_project(&mut store, "p");
+        let fields = [field("webhook_url", true)];
+
+        let err = enable(
+            &mut store,
+            "mail",
+            Layer::Project(p),
+            &fields,
+            |_| false,
+            &said(false, &[("webhook_url", "not a url")]),
+        )
+        .unwrap_err();
+
+        assert_eq!(err.code(), ErrorCode::InvalidPluginSettingsRequired.as_str(), "{err:?}");
     }
 
     /// A required field with a `default` is answered by its author (`AMB-D-415`): the run receives that
@@ -357,7 +498,7 @@ mod tests {
 
         let mut store = store_at("defaulted");
         let p = mk_project(&mut store, "p");
-        enable(&mut store, "slack", Layer::Project(p), &fields[..1], |_| false).unwrap();
+        enable(&mut store, "slack", Layer::Project(p), &fields[..1], |_| false, &Checked::NotDeclared).unwrap();
         assert!(effective_enabled_in(&store, "slack", Layer::Project(p)).unwrap());
     }
 }

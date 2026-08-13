@@ -273,6 +273,7 @@ mod tests {
             config,
             events: events.iter().map(|e| EventSubscription::new(*e)).collect(),
             agent: None,
+            settings: None,
         }
     }
 

@@ -35,8 +35,8 @@ use crate::config::is_reserved_plugin_name;
 use crate::error::Msg;
 use crate::plugin_config::MAX_CONFIG_IDENT_BYTES;
 use crate::plugin_manifest::{
-    ConfigField, ConfigFieldOverlay, Face, FieldType, Manifest, ManifestOverlay, Os, Translations,
-    NONE_SELECTED,
+    ConfigField, ConfigFieldOverlay, Face, FieldType, Manifest, ManifestOverlay, Os, SettingsAction,
+    Translations, NONE_SELECTED,
 };
 use crate::plugin_wire::{ListEntry, ListEntryOverlay};
 
@@ -101,6 +101,22 @@ pub const MAX_HELP_BYTES: usize = 1024;
 /// example of what to type, shown inside the input — so the cap is roughly the width of the box it is
 /// drawn in, not the width of a sentence.
 pub const MAX_PLACEHOLDER_BYTES: usize = 80;
+
+/// The most operations a settings face may offer (`AMB-D-664`). Every one of them is a button on one
+/// form, so the ceiling is what a screen can hold without becoming a menu — and a plugin needing more of
+/// them is a plugin whose work belongs on its command face, where a caller may pass anything.
+pub const MAX_SETTINGS_ACTIONS: usize = 4;
+/// The most one operation's button label may weigh, **in UTF-8 bytes, per language** (`AMB-D-664`) — the
+/// base label and each translation of it held to the same cap, as the supporting texts are.
+///
+/// Bytes rather than characters for the reason [`MAX_HELP_BYTES`] gives, and small because this is the
+/// text inside a button: about forty Latin characters, or a dozen Japanese ones, which is a label rather
+/// than a sentence. What a press does at length belongs in the field's `help` beside it.
+pub const MAX_ACTION_LABEL_BYTES: usize = 40;
+/// The most inputs one operation may ask for at the press (`AMB-D-664`). An ask is the one-time value a
+/// run needs and nothing keeps — a token, a code — and a form of them is a configuration schema, which is
+/// the thing next door that already exists.
+pub const MAX_ASK_FIELDS: usize = 3;
 
 /// The longest the agent block's `when` line may be (characters) — one line at the AI's entry point
 /// (`AMB-D-437`), capped like every other one-line field.
@@ -194,8 +210,12 @@ pub enum ProblemCode {
     /// neither a value that already has an answer nor a choice among candidates offered to a user.
     ReadonlyConflict,
     /// An agent command's `cmd` is not a call — it holds a word the grammar does not admit, or more words
-    /// than a call has (`AMB-D-572`).
+    /// than a call has (`AMB-D-572`). A settings call is held to the same grammar (`AMB-D-664`).
     BadCmd,
+    /// An `ask` field declares a key an ask does not have (`AMB-D-664`): a `default`, or `required`. Both
+    /// belong to a value the form stores, and an ask is the value it does not — so a field carrying one is
+    /// asking for something that would never happen, silently.
+    AskConflict,
     /// An agent command names a step in something other than the `<run>.<step>` id it is named by
     /// (`AMB-D-571`). Whether the id is one this build still has is not asked here — the ref is a name,
     /// and only its spelling is a thing a manifest can get wrong on its own.
@@ -242,6 +262,7 @@ impl ProblemCode {
         Self::NotAnOption,
         Self::ReadonlyConflict,
         Self::BadCmd,
+        Self::AskConflict,
         Self::BadStepRef,
         Self::RecordRef,
         Self::NotInBase,
@@ -276,6 +297,7 @@ impl ProblemCode {
             Self::NotAnOption => "not_an_option",
             Self::ReadonlyConflict => "readonly_conflict",
             Self::BadCmd => "bad_cmd",
+            Self::AskConflict => "ask_conflict",
             Self::BadStepRef => "bad_step_ref",
             Self::RecordRef => "record_ref",
             Self::NotInBase => "not_in_base",
@@ -329,6 +351,7 @@ pub fn validate_manifest(m: &Manifest) -> Vec<Problem> {
     check_min_amenbo(&mut problems, m.min_amenbo.as_deref());
     check_os(&mut problems, &m.os);
     check_config(&mut problems, m);
+    check_settings(&mut problems, m);
     check_events(&mut problems, m);
     check_agent(&mut problems, m);
 
@@ -944,7 +967,7 @@ fn check_config(problems: &mut Vec<Problem>, m: &Manifest) {
 
     let mut seen = HashSet::new();
     for (i, field) in m.config.iter().enumerate() {
-        check_config_key(problems, i, &field.key);
+        check_config_key(problems, &format!("config[{i}].key"), &field.key);
         check_line(problems, &format!("config[{i}].label"), &field.label, MAX_LABEL_LEN);
         if !field.key.is_empty() && !seen.insert(field.key.as_str()) {
             problems.push(Problem::new(
@@ -1174,17 +1197,21 @@ fn check_config_kind(problems: &mut Vec<Problem>, i: usize, field: &ConfigField)
 /// Check one config field key: a storage key and (for a secret) an env-var stem, so it must be a plain
 /// identifier — `[a-z][a-z0-9_]*` — and within the identifier byte cap the write boundary also enforces
 /// ([`MAX_CONFIG_IDENT_BYTES`]).
-fn check_config_key(problems: &mut Vec<Problem>, i: usize, key: &str) {
-    let loc = format!("config[{i}].key");
+///
+/// The location is the caller's because two kinds of key are held to this one grammar: a field of the
+/// schema, and the one-time input an operation asks for at the press (`AMB-D-664`, [`check_ask`]). The
+/// second is never stored, but it is handed over as an environment variable all the same, so it is the
+/// same name under the same rule.
+fn check_config_key(problems: &mut Vec<Problem>, loc: &str, key: &str) {
     if key.is_empty() {
-        problems.push(Problem::new(loc, ProblemCode::Empty, "config key must not be empty"));
+        problems.push(Problem::new(loc, ProblemCode::Empty, format!("{loc} must not be empty")));
         return;
     }
     if key.len() > MAX_CONFIG_IDENT_BYTES {
         problems.push(Problem::new(
-            loc.clone(),
+            loc,
             ProblemCode::TooLong,
-            format!("config key is too long ({} bytes; max {MAX_CONFIG_IDENT_BYTES})", key.len()),
+            format!("{loc} is too long ({} bytes; max {MAX_CONFIG_IDENT_BYTES})", key.len()),
         ));
     }
     let well_formed = key.chars().next().is_some_and(|c| c.is_ascii_lowercase())
@@ -1193,8 +1220,157 @@ fn check_config_key(problems: &mut Vec<Problem>, i: usize, key: &str) {
         problems.push(Problem::new(
             loc,
             ProblemCode::BadKey,
-            "config key must be a lowercase identifier ([a-z][a-z0-9_]*)",
+            format!("{loc} must be a lowercase identifier ([a-z][a-z0-9_]*)"),
         ));
+    }
+}
+
+/// Check the settings block — where a plugin's own code is called from the settings face (`AMB-D-664`).
+///
+/// The block is optional, and a manifest without one has nothing here to break. What it declares is
+/// *where* a call is raised, so what can be judged is the call's shape and the room the face has for it:
+///
+/// - **each call is a call.** `check` and every operation's `cmd` are the plugin's own command face, so
+///   they are held to the grammar every other declared call is held to ([`check_cmd`], `AMB-D-572`) —
+///   which is also what keeps prose out of a line drawn nowhere but run.
+/// - **a block that raises nothing is named.** Declaring `settings` with neither a check nor an operation
+///   changes nothing at all, and silence is the one answer an author cannot debug.
+/// - **the face has room for it** — [`MAX_SETTINGS_ACTIONS`] buttons, each with a label short enough to be
+///   one ([`check_action_label`]), each asking for at most [`MAX_ASK_FIELDS`] values ([`check_ask`]).
+///
+/// What a call *returns* is not judged here and cannot be: it does not exist until the call is run, which
+/// is the run boundary's to read (`AMB-D-354`, `AMB-D-664`).
+fn check_settings(problems: &mut Vec<Problem>, m: &Manifest) {
+    let Some(settings) = &m.settings else { return };
+
+    if settings.check.is_none() && settings.actions.is_empty() {
+        problems.push(Problem::new(
+            "settings",
+            ProblemCode::Empty,
+            "settings must declare a check or an action — a block that raises no call does nothing",
+        ));
+    }
+    if let Some(check) = &settings.check {
+        check_cmd(problems, "settings.check", check);
+    }
+    if settings.actions.len() > MAX_SETTINGS_ACTIONS {
+        problems.push(Problem::new(
+            "settings.actions",
+            ProblemCode::TooManyFields,
+            format!(
+                "settings offers too many actions ({}; max {MAX_SETTINGS_ACTIONS})",
+                settings.actions.len()
+            ),
+        ));
+    }
+    let stored: HashSet<&str> = m.config.iter().map(|f| f.key.as_str()).collect();
+    for (i, action) in settings.actions.iter().enumerate() {
+        check_cmd(problems, &format!("settings.actions[{i}].cmd"), &action.cmd);
+        check_action_label(problems, &format!("settings.actions[{i}].label"), &action.label);
+        check_ask(problems, i, action, &stored);
+    }
+}
+
+/// Check one operation's button label, base or translated — one function so a translation is held to the
+/// rules its base is held to (`AMB-D-620`), as [`check_supporting_text`] is.
+///
+/// The same three rules every author string on this screen keeps: it says something, it fits
+/// [`MAX_ACTION_LABEL_BYTES`], and it cites no amenbo record (`AMB-D-572`) — a button reading
+/// `AMB-D-411 requires this` borrows this store's authority for a line a third party wrote. Control
+/// characters go with the last: a label is one line, drawn plain.
+fn check_action_label(problems: &mut Vec<Problem>, at: &str, label: &str) {
+    if label.is_empty() {
+        problems.push(Problem::new(at, ProblemCode::Empty, format!("{at} must not be empty")));
+        return;
+    }
+    if label.len() > MAX_ACTION_LABEL_BYTES {
+        problems.push(Problem::new(
+            at,
+            ProblemCode::TooLong,
+            format!("{at} is too long ({} bytes; max {MAX_ACTION_LABEL_BYTES})", label.len()),
+        ));
+    }
+    if label.chars().any(char::is_control) {
+        problems.push(Problem::new(
+            at,
+            ProblemCode::ControlChar,
+            format!("{at} must not contain control characters"),
+        ));
+    }
+    check_no_record_ref(problems, at, label);
+}
+
+/// Check what one operation asks for at the press (`AMB-D-664`) — the values handed to that run and kept
+/// nowhere.
+///
+/// An ask looks like a config field and is the opposite of one, and the rules are where that difference
+/// is enforced:
+///
+/// - **it is a box, so it owes a name and a label** — the name under the key grammar every stored key
+///   keeps ([`check_config_key`]), since it is handed over as an environment variable's stem all the same.
+/// - **the name is not one the form stores**, and not one another ask in the same press already took. One
+///   name cannot mean both a saved value and a value that is never saved, and a press cannot hand over the
+///   same name twice.
+/// - **`default` and `required` are refused** rather than ignored. They are what an author carries over
+///   when they copy a config field, and both are about a value with a life after the press: a default is a
+///   stored answer to a question asked every time, and `required` gates enabling, which no press is on
+///   either side of. Dropping them quietly would leave the author believing a value is asked for that is
+///   not. Every other unknown key stays ignored, as the manifest's forward-compatibility rule says.
+fn check_ask(
+    problems: &mut Vec<Problem>,
+    i: usize,
+    action: &SettingsAction,
+    stored: &HashSet<&str>,
+) {
+    if action.ask.len() > MAX_ASK_FIELDS {
+        problems.push(Problem::new(
+            format!("settings.actions[{i}].ask"),
+            ProblemCode::TooManyFields,
+            format!(
+                "an action asks for too many values ({}; max {MAX_ASK_FIELDS})",
+                action.ask.len()
+            ),
+        ));
+    }
+    let mut seen = HashSet::new();
+    for (j, field) in action.ask.iter().enumerate() {
+        let at = format!("settings.actions[{i}].ask[{j}]");
+        let key = format!("{at}.key");
+        check_config_key(problems, &key, &field.key);
+        check_line(problems, &format!("{at}.label"), &field.label, MAX_LABEL_LEN);
+        check_no_record_ref(problems, &format!("{at}.label"), &field.label);
+        if !field.key.is_empty() {
+            if stored.contains(field.key.as_str()) {
+                problems.push(Problem::new(
+                    &key,
+                    ProblemCode::Duplicate,
+                    format!(
+                        "'{}' is already a config key — a name cannot mean both a value the form \
+                         stores and one it never keeps",
+                        field.key
+                    ),
+                ));
+            }
+            if !seen.insert(field.key.as_str()) {
+                problems.push(Problem::new(
+                    &key,
+                    ProblemCode::Duplicate,
+                    format!("this action asks for '{}' more than once", field.key),
+                ));
+            }
+        }
+        for refused in ["default", "required"] {
+            if field.extra.contains_key(refused) {
+                problems.push(Problem::new(
+                    format!("{at}.{refused}"),
+                    ProblemCode::AskConflict,
+                    format!(
+                        "an asked value must not declare {refused} — it is handed to one run and \
+                         stored nowhere"
+                    ),
+                ));
+            }
+        }
     }
 }
 
@@ -1399,8 +1575,8 @@ fn is_cmd_ident(s: &str) -> bool {
 mod tests {
     use super::*;
     use crate::plugin_manifest::{
-        AgentCommand, AgentGuide, Arch, Asset, ConfigField, ConfigOption, EventSubscription, Face,
-        Ignored, Manifest, Os, Platform,
+        AgentCommand, AgentGuide, Arch, Asset, AskField, ConfigField, ConfigOption,
+        EventSubscription, Face, Ignored, Manifest, Os, Platform, Settings,
     };
 
     /// An arch-agnostic platform key (`<os>`).
@@ -1436,8 +1612,9 @@ mod tests {
             // signature (provenance) and events (subscription) are other boundaries' to validate — the
             // manifest-shape validator here neither reads nor checks them.
             signature: None,
-            // The agent block is optional; the tests below are the ones that put one in.
+            // The agent and settings blocks are optional; the tests below are the ones that put one in.
             agent: None,
+            settings: None,
             // The one-file form: this manifest's single url serves both the OSes it lists.
             assets: Default::default(),
             events: Vec::new(),
@@ -1969,6 +2146,201 @@ mod tests {
             assert!(codes(&problems).contains(&ProblemCode::ReplyNeedsCli), "{:?}", codes(&problems));
             assert!(problems.iter().any(|p| p.location == "events[0].reply"));
         }
+    }
+
+    // ---- settings (`AMB-D-664`) ----
+
+    /// A manifest whose form raises the calls this block declares.
+    fn with_settings(check: Option<&str>, actions: Vec<SettingsAction>) -> Manifest {
+        let mut m = valid();
+        m.settings = Some(Settings { check: check.map(str::to_string), actions });
+        m
+    }
+
+    /// One operation, asking for nothing beyond what the form already stores.
+    fn action(cmd: &str, label: &str) -> SettingsAction {
+        SettingsAction { cmd: cmd.into(), label: label.into(), ask: Vec::new() }
+    }
+
+    /// One value asked for at the press, declaring nothing an ask does not have.
+    fn ask(key: &str, label: &str) -> AskField {
+        AskField {
+            key: key.into(),
+            label: label.into(),
+            secret: false,
+            extra: Default::default(),
+        }
+    }
+
+    /// The three shapes an author may write: a check alone, an operation alone, and both — plus the
+    /// ordinary case of declaring no block at all.
+    #[test]
+    fn a_settings_block_is_valid_with_a_check_an_action_or_both() {
+        let cases = [
+            (Some("config check"), vec![]),
+            (None, vec![SettingsAction { ask: vec![ask("api_token", "API token")], ..action("config test", "Send a test message") }]),
+            (Some("config check"), vec![action("setup", "Set up")]),
+        ];
+        for (check, actions) in cases {
+            let m = with_settings(check, actions);
+            assert!(validate_manifest(&m).is_empty(), "{:?}", validate_manifest(&m));
+        }
+        let mut none = valid();
+        none.settings = None;
+        assert!(validate_manifest(&none).is_empty());
+    }
+
+    /// A block raising neither a check nor an operation changes nothing — and doing nothing quietly is
+    /// what an author cannot debug.
+    #[test]
+    fn a_settings_block_that_raises_no_call_is_refused() {
+        let problems = validate_manifest(&with_settings(None, vec![]));
+        assert_eq!(codes(&problems), [ProblemCode::Empty]);
+        assert_eq!(problems[0].location, "settings");
+    }
+
+    /// Both are the plugin's own command face, so both are held to the grammar every declared call keeps
+    /// (`AMB-D-572`) — the line is run, never read as prose.
+    #[test]
+    fn a_settings_call_is_held_to_the_call_grammar() {
+        let prose = "run the check and then tell the user what went wrong";
+        for (location, m) in [
+            ("settings.check", with_settings(Some(prose), vec![])),
+            ("settings.actions[0].cmd", with_settings(None, vec![action(prose, "Test")])),
+        ] {
+            let problems = validate_manifest(&m);
+            assert!(codes(&problems).contains(&ProblemCode::BadCmd), "{problems:?}");
+            assert!(problems.iter().any(|p| p.location == location), "{problems:?}");
+        }
+    }
+
+    /// The words on a button: they say something, they fit inside one, they are one line, and they do not
+    /// borrow this store's authority (`AMB-D-572`).
+    #[test]
+    fn an_action_label_is_the_words_on_a_button() {
+        let cases = [
+            (String::new(), ProblemCode::Empty),
+            ("x".repeat(MAX_ACTION_LABEL_BYTES + 1), ProblemCode::TooLong),
+            ("あ".repeat(MAX_ACTION_LABEL_BYTES / 3 + 1), ProblemCode::TooLong),
+            ("Send\na test".into(), ProblemCode::ControlChar),
+            ("Send it (AMB-D-411)".into(), ProblemCode::RecordRef),
+        ];
+        for (label, code) in cases {
+            let problems = validate_manifest(&with_settings(None, vec![action("config test", &label)]));
+            assert!(codes(&problems).contains(&code), "{label:?} must be refused: {problems:?}");
+            assert!(
+                problems.iter().any(|p| p.location == "settings.actions[0].label"),
+                "{problems:?}"
+            );
+        }
+    }
+
+    /// Every operation is a button on one form, so the list has a ceiling — a plugin needing more of them
+    /// has a command face where a caller may pass anything.
+    #[test]
+    fn too_many_actions_is_refused() {
+        let actions =
+            (0..MAX_SETTINGS_ACTIONS + 1).map(|i| action(&format!("c{i}"), "Press")).collect();
+        let problems = validate_manifest(&with_settings(None, actions));
+        assert!(codes(&problems).contains(&ProblemCode::TooManyFields));
+        assert!(problems.iter().any(|p| p.location == "settings.actions"), "{problems:?}");
+    }
+
+    /// An asked value is a box with a name, and the name is handed over as an environment variable's stem
+    /// — so it keeps the grammar a stored key keeps, and its label the floor a label keeps.
+    #[test]
+    fn an_asked_value_is_a_named_box() {
+        for (key, label, code, at) in [
+            ("API-TOKEN", "API token", ProblemCode::BadKey, "settings.actions[0].ask[0].key"),
+            ("", "API token", ProblemCode::Empty, "settings.actions[0].ask[0].key"),
+            ("api_token", "", ProblemCode::Empty, "settings.actions[0].ask[0].label"),
+        ] {
+            let m = with_settings(
+                None,
+                vec![SettingsAction { ask: vec![ask(key, label)], ..action("config test", "Test") }],
+            );
+            let problems = validate_manifest(&m);
+            assert!(codes(&problems).contains(&code), "{problems:?}");
+            assert!(problems.iter().any(|p| p.location == at), "{problems:?}");
+        }
+    }
+
+    /// One name cannot mean both a value the form stores and one it never keeps — nor be handed over
+    /// twice in the same press.
+    #[test]
+    fn an_asked_value_may_not_take_a_name_already_spoken_for() {
+        // `webhook_url` is a field of the schema `valid()` declares.
+        let stored = with_settings(
+            None,
+            vec![SettingsAction {
+                ask: vec![ask("webhook_url", "Webhook URL")],
+                ..action("config test", "Test")
+            }],
+        );
+        let problems = validate_manifest(&stored);
+        assert_eq!(codes(&problems), [ProblemCode::Duplicate]);
+        assert_eq!(problems[0].location, "settings.actions[0].ask[0].key");
+
+        let twice = with_settings(
+            None,
+            vec![SettingsAction {
+                ask: vec![ask("code", "Code"), ask("code", "Again")],
+                ..action("config test", "Test")
+            }],
+        );
+        let problems = validate_manifest(&twice);
+        assert_eq!(codes(&problems), [ProblemCode::Duplicate]);
+        assert_eq!(problems[0].location, "settings.actions[0].ask[1].key");
+    }
+
+    /// The two keys an author carries over from a config field are named back rather than dropped: both
+    /// are about a value with a life after the press, which is the one thing an asked value does not have.
+    #[test]
+    fn an_asked_value_may_not_declare_what_only_a_stored_one_has() {
+        for refused in ["default", "required"] {
+            let m = with_settings(
+                None,
+                vec![SettingsAction {
+                    ask: vec![AskField {
+                        extra: [(refused.to_string(), Ignored)].into_iter().collect(),
+                        ..ask("code", "One-time code")
+                    }],
+                    ..action("config test", "Test")
+                }],
+            );
+            let problems = validate_manifest(&m);
+            assert_eq!(codes(&problems), [ProblemCode::AskConflict], "{problems:?}");
+            assert_eq!(problems[0].location, format!("settings.actions[0].ask[0].{refused}"));
+        }
+
+        // A key a later amenbo added is still ignored — the manifest's forward-compatibility rule.
+        let later = with_settings(
+            None,
+            vec![SettingsAction {
+                ask: vec![AskField {
+                    extra: [("some_future_key".to_string(), Ignored)].into_iter().collect(),
+                    ..ask("code", "One-time code")
+                }],
+                ..action("config test", "Test")
+            }],
+        );
+        assert!(validate_manifest(&later).is_empty(), "{:?}", validate_manifest(&later));
+    }
+
+    /// A press asks for the one-time values it needs; a form of them is the configuration schema next
+    /// door.
+    #[test]
+    fn too_many_asked_values_is_refused() {
+        let m = with_settings(
+            None,
+            vec![SettingsAction {
+                ask: (0..MAX_ASK_FIELDS + 1).map(|i| ask(&format!("k{i}"), "Value")).collect(),
+                ..action("config test", "Test")
+            }],
+        );
+        let problems = validate_manifest(&m);
+        assert!(codes(&problems).contains(&ProblemCode::TooManyFields));
+        assert!(problems.iter().any(|p| p.location == "settings.actions[0].ask"), "{problems:?}");
     }
 
     // ---- agent (`AMB-D-437`) ----

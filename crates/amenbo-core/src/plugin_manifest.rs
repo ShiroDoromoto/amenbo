@@ -535,6 +535,11 @@ pub struct Manifest {
     /// empty forms stay the same document.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub config: Vec<ConfigField>,
+    /// **Where the author's own code is called from the settings face** (`AMB-D-664`) — see [`Settings`].
+    /// Absent means nowhere, which is what every manifest written before this block says: the plugin is
+    /// enabled on the presence check alone, and its form is fields and a save button.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings: Option<Settings>,
     /// The observation events this plugin subscribes to — each an [`EventSubscription`] naming a v1 event
     /// ([`plugin_payload::V1_EVENTS`](crate::plugin_payload::V1_EVENTS)) and how its hook fires. The
     /// subscription resolver (`AMB-D-367`, `AMB-T-2032`) fires an enabled plugin only for an event whose
@@ -870,6 +875,113 @@ impl AgentCommand {
     pub fn new(cmd: impl Into<String>, does: impl Into<String>) -> Self {
         AgentCommand { cmd: cmd.into(), does: does.into(), steps: Vec::new() }
     }
+}
+
+/// **Where the author's own code is called from the settings face** (`AMB-D-664`): the check that runs when
+/// the plugin is enabled, and the operations a user presses.
+///
+/// ```yaml
+/// settings:
+///   check: config check          # run when the plugin is enabled — one call
+///   actions:                     # what a user may press (four at most)
+///     - cmd: config test
+///       label: Send a test message
+///       ask:                     # handed to that one run, and never stored
+///         - key: api_token
+///           label: API token
+///           secret: true
+/// ```
+///
+/// **The call is the command face the plugin already has** (`AMB-D-353`). What is written here is the same
+/// subcommand-and-arguments line [`AgentCommand::cmd`] holds, and the run puts `plugin run <name>` in front
+/// of it — so this block adds no protocol and no second way of speaking to a plugin. It says only *where*
+/// one of the calls a plugin already answers is raised, which is the one thing amenbo was missing: the
+/// values are already injected, and the answer already comes back on stdout.
+///
+/// **Only these two are reachable from the settings face** (`AMB-D-522`). A call taking arguments a caller
+/// chooses stays `plugin run`'s, on the CLI — what a form may raise is what the manifest named in advance.
+///
+/// **The block only says where.** When each is run, what a check's answer must look like, and what a
+/// failing one costs, are the run boundary's (`AMB-D-664`, [`crate::plugin_invoke`]) — as is every other
+/// question about a plugin's output (`AMB-D-354`). What is here is the declaration.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Settings {
+    /// **The call that says whether these values are usable** (`AMB-D-664`), run when the plugin is
+    /// enabled and again after a save while it is enabled. Absent means none, and the gate is the presence
+    /// check it always was — `required` asks whether a field holds something, and nothing more
+    /// ([`ConfigField::required`]).
+    ///
+    /// One call, not a list: the author's code has every value in hand at once, so a second call could only
+    /// look at the same values again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub check: Option<String>,
+    /// **What a user may press on the settings form** (`AMB-D-664`) — a connectivity test, a `setup` that
+    /// writes its result back through `plugin config set` (`AMB-D-406`). Absent means the form is fields and
+    /// a save button, as it was.
+    ///
+    /// An empty list does not serialize, so the absent and the empty forms stay one document — the rule
+    /// `config` and `events` already follow.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub actions: Vec<SettingsAction>,
+}
+
+/// **One operation a user may press** (`AMB-D-664`): the call it raises, the words on the button, and the
+/// input it needs that nothing should keep.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SettingsAction {
+    /// The subcommand and its arguments — the plugin's own command face, without the `amenbo plugin run
+    /// <name>` the run prepends, exactly as [`AgentCommand::cmd`] holds one.
+    pub cmd: String,
+    /// The words on the button, in the author's language. Display text, drawn plain — no Markdown and no
+    /// link, like every other author string on this screen (`AMB-D-656`). It is short because a button is:
+    /// the cap is the validator's ([`crate::plugin_validate`]).
+    ///
+    /// **Translated where the form's labels are** (`AMB-D-620`): it is read on the settings screen, so it
+    /// travels with the words beside it rather than staying the one language it was written in.
+    pub label: String,
+    /// **What this run needs and nothing keeps** (`AMB-D-664`) — a token pasted once, a one-time code. The
+    /// value is handed to the process this press starts and is stored nowhere: not in the config table, not
+    /// in the secret store, not in the form.
+    ///
+    /// Absent means the press needs nothing beyond the values already saved, which is what most operations
+    /// are. An empty list does not serialize, as everywhere else.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ask: Vec<AskField>,
+}
+
+/// **One input an operation asks for, for that run alone** (`AMB-D-664`).
+///
+/// It looks like a [`ConfigField`] and is the opposite of one: a config field is a value the user answers
+/// once and amenbo keeps, and this is a value amenbo never has. So it carries the three things a box needs
+/// to be drawn and handed over, and none of the ones that only make sense for a value with a life after the
+/// press — a `default` is a stored answer to a question that is asked every time, and `required` is a gate
+/// on enabling that this is not on either side of.
+///
+/// **Those two are refused rather than ignored** ([`crate::plugin_validate`]). They are the keys an author
+/// carries over when they copy a config field, and a key that is quietly dropped costs them a value they
+/// believe is being asked for. Every *other* unknown key is still ignored, as everywhere in this module: a
+/// key a later amenbo adds must not make this one refuse the manifest.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AskField {
+    /// The name the value is handed over under — a plain identifier, like a [`ConfigField::key`], since it
+    /// becomes an environment variable's stem. It may not be a key the form already stores: one name
+    /// cannot mean both a saved value and a value that is never saved.
+    pub key: String,
+    /// The label shown beside the box. Display text, and translated with the rest of the form
+    /// (`AMB-D-620`).
+    pub label: String,
+    /// Whether the box hides what is typed into it. The author's declaration, as on
+    /// [`ConfigField::secret`] — amenbo does not judge which values are sensitive (`AMB-D-356`).
+    ///
+    /// Unlike a config field's, this decides only what the screen shows: where the value is stored is not a
+    /// question here, because it is not stored. Absent means `false`.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub secret: bool,
+    /// What this field named that an ask does not have — kept only so the key can be named back to its
+    /// author, never read for what it held. The same slot, and the same reason, as
+    /// [`ManifestOverlay::extra`].
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, Ignored>,
 }
 
 /// **What one manifest says in one other language**, keyed by the language code it is written in
@@ -1525,6 +1637,107 @@ mod tests {
             assert!(
                 serde_json::from_value::<Manifest>(v).is_err(),
                 "a command missing `{field}` must not parse"
+            );
+        }
+    }
+
+    #[test]
+    fn no_settings_block_is_a_form_that_calls_nothing() {
+        let m: Manifest = serde_json::from_value(full_json()).unwrap();
+        assert!(m.settings.is_none(), "no `settings` key ⇒ no call raised from the form");
+        assert!(serde_json::to_value(&m).unwrap().get("settings").is_none());
+    }
+
+    #[test]
+    fn a_settings_block_round_trips() {
+        let mut v = full_json();
+        v["settings"] = serde_json::json!({
+            "check": "config check",
+            "actions": [
+                {
+                    "cmd": "config test",
+                    "label": "テスト送信",
+                    "ask": [{ "key": "api_token", "label": "API トークン", "secret": true }],
+                },
+                { "cmd": "setup", "label": "セットアップ" },
+            ],
+        });
+        let m: Manifest = serde_json::from_value(v.clone()).unwrap();
+        let settings = m.settings.as_ref().expect("the block parsed");
+        assert_eq!(settings.check.as_deref(), Some("config check"));
+        assert_eq!(settings.actions[0].cmd, "config test", "the author's own face, with no prefix");
+        assert_eq!(settings.actions[0].ask[0].key, "api_token");
+        assert!(settings.actions[1].ask.is_empty(), "a press may need nothing beyond what is saved");
+        assert_eq!(serde_json::to_value(&m).unwrap()["settings"], v["settings"]);
+    }
+
+    /// Each half of the block stands on its own, and an omitted half re-emits as no key at all — the same
+    /// absent-equals-empty rule `config` and `events` follow.
+    #[test]
+    fn a_settings_block_may_declare_a_check_alone_or_an_action_alone() {
+        for written in [
+            serde_json::json!({ "check": "config check" }),
+            serde_json::json!({ "actions": [{ "cmd": "setup", "label": "Set up" }] }),
+        ] {
+            let mut v = full_json();
+            v["settings"] = written.clone();
+            let m: Manifest = serde_json::from_value(v).unwrap();
+            assert_eq!(serde_json::to_value(&m).unwrap()["settings"], written);
+        }
+    }
+
+    /// An asked value is not hidden unless its author says so, and a field that says nothing re-emits
+    /// without the key — the rule every flag added since `AMB-D-415` keeps.
+    #[test]
+    fn an_asked_value_is_visible_unless_declared_secret() {
+        let mut v = full_json();
+        v["settings"] =
+            serde_json::json!({ "actions": [{ "cmd": "setup", "label": "Set up", "ask": [
+                { "key": "code", "label": "One-time code" },
+            ] }] });
+        let m: Manifest = serde_json::from_value(v).unwrap();
+        assert!(!m.settings.as_ref().unwrap().actions[0].ask[0].secret);
+        let out = serde_json::to_value(&m).unwrap();
+        assert!(out["settings"]["actions"][0]["ask"][0].get("secret").is_none());
+    }
+
+    /// The two keys an author carries over from a config field are kept rather than dropped, so the
+    /// validator can name them back (`AMB-D-664`) — while a key from a later amenbo is ignored, as
+    /// everywhere else in this module.
+    #[test]
+    fn an_ask_keeps_the_keys_it_does_not_have() {
+        let mut v = full_json();
+        v["settings"] = serde_json::json!({ "actions": [{ "cmd": "setup", "label": "Set up", "ask": [
+            { "key": "code", "label": "One-time code", "required": true, "default": "1234" },
+        ] }] });
+        let m: Manifest = serde_json::from_value(v).unwrap();
+        let ask = &m.settings.as_ref().unwrap().actions[0].ask[0];
+        assert_eq!(ask.extra.keys().collect::<Vec<_>>(), ["default", "required"]);
+    }
+
+    #[test]
+    fn a_settings_block_missing_a_required_field_does_not_parse() {
+        // The shape half of the door: an operation is a call and the words on its button, and an asked
+        // value is a name and the words beside its box.
+        for field in ["cmd", "label"] {
+            let mut action = serde_json::json!({ "cmd": "setup", "label": "Set up" });
+            action.as_object_mut().unwrap().remove(field);
+            let mut v = full_json();
+            v["settings"] = serde_json::json!({ "actions": [action] });
+            assert!(
+                serde_json::from_value::<Manifest>(v).is_err(),
+                "an action missing `{field}` must not parse"
+            );
+        }
+        for field in ["key", "label"] {
+            let mut ask = serde_json::json!({ "key": "code", "label": "One-time code" });
+            ask.as_object_mut().unwrap().remove(field);
+            let mut v = full_json();
+            v["settings"] =
+                serde_json::json!({ "actions": [{ "cmd": "setup", "label": "S", "ask": [ask] }] });
+            assert!(
+                serde_json::from_value::<Manifest>(v).is_err(),
+                "an asked value missing `{field}` must not parse"
             );
         }
     }

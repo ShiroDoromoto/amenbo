@@ -635,6 +635,7 @@ mod tests {
             config,
             events: Vec::new(),
             agent: None,
+            settings: None,
         };
         let home = paths.plugin_dir(name);
         std::fs::create_dir_all(&home).unwrap();

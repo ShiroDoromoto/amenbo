@@ -201,6 +201,7 @@ mod tests {
             config: Vec::new(),
             events: Vec::new(),
             agent: None,
+            settings: None,
         }
     }
 

@@ -238,6 +238,7 @@ mod tests {
                 payload_v: 1,
                 min_amenbo: None,
                 config: Vec::new(),
+                settings: None,
                 events: events.iter().map(|e| EventSubscription::new(*e)).collect(),
                 agent,
             },

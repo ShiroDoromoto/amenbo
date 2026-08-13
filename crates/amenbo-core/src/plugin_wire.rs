@@ -41,7 +41,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::plugin_manifest::{
     AgentGuide, Asset, ConfigField, ConfigFieldOverlay, EventSubscription, Manifest, Os, Platform,
-    Scope, Translations,
+    Scope, Settings, Translations,
 };
 
 /// **What a browse view draws** — the half of a manifest that rides in `catalog.json`, which everyone
@@ -128,6 +128,12 @@ pub struct Detail {
     /// The plugin's configuration schema (`AMB-D-356`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub config: Vec<ConfigField>,
+    /// Where the plugin's own code is called from the settings face (`AMB-D-664`).
+    ///
+    /// It rides here for the reason the schema it stands beside does: it is read where the plugin is
+    /// enabled and configured, on the machine it was installed on, and a browse view draws none of it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings: Option<Settings>,
     /// The observation events the plugin subscribes to (`AMB-D-383`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub events: Vec<EventSubscription>,
@@ -231,6 +237,7 @@ pub fn split(
         payload_v: manifest.payload_v,
         min_amenbo: manifest.min_amenbo.clone(),
         config: manifest.config.clone(),
+        settings: manifest.settings.clone(),
         events: manifest.events.clone(),
         agent: manifest.agent.clone(),
         about: manifest.about.clone(),
@@ -302,6 +309,7 @@ pub fn join(
         payload_v: detail.payload_v,
         min_amenbo: detail.min_amenbo.clone(),
         config: detail.config.clone(),
+        settings: detail.settings.clone(),
         events: detail.events.clone(),
         agent: detail.agent.clone(),
     };
@@ -340,6 +348,14 @@ mod tests {
             "payload_v": 1,
             "min_amenbo": "1.8.0",
             "config": [{ "key": "base", "label": "Base branch", "secret": false, "required": false }],
+            "settings": {
+                "check": "config check",
+                "actions": [{
+                    "cmd": "config test",
+                    "label": "Send a test message",
+                    "ask": [{ "key": "api_token", "label": "API token", "secret": true }],
+                }],
+            },
             "events": [{ "event": "task.status_changed", "faces": ["cli"], "reply": true }],
             "agent": {
                 "when": "Starting work on a task that will produce commits",
@@ -487,6 +503,9 @@ mod tests {
         assert_eq!(detail.payload_v, 1);
         assert_eq!(detail.min_amenbo.as_deref(), Some("1.8.0"));
         assert_eq!(detail.config.len(), 1);
+        let settings = detail.settings.as_ref().expect("where the form raises a call installs too");
+        assert_eq!(settings.check.as_deref(), Some("config check"));
+        assert_eq!(settings.actions[0].ask[0].key, "api_token", "the press's one-time input with it");
         assert_eq!(detail.events.len(), 1);
         assert_eq!(detail.events[0].faces, vec![Face::Cli]);
         assert!(detail.events[0].reply, "and the reply the subscription asked for survives the split");
@@ -602,7 +621,9 @@ mod tests {
 
         assert!(entries.is_empty(), "nobody translated it, so there is no language document to publish");
         let detail_json = serde_json::to_value(&detail).unwrap();
-        for absent in ["signature", "assets", "min_amenbo", "config", "events", "agent", "about", "i18n"] {
+        for absent in
+            ["signature", "assets", "min_amenbo", "config", "settings", "events", "agent", "about", "i18n"]
+        {
             assert!(detail_json.get(absent).is_none(), "{absent} was not written, so it is not emitted");
         }
         assert_eq!(detail_json["scope"], "project", "the default the author relied on is still stated");

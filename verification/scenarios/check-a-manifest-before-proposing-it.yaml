@@ -5,10 +5,11 @@
 id: check-a-manifest-before-proposing-it
 title: A manifest passes the catalog rules, and a broken one is turned down by the rule it broke
 description: >
-  Write a manifest the way an author would — the layer the plugin lives at, the settings it offers and
-  the words it will say for itself at the AI's entry point included — hold it up to the rules, and have it
-  pass. Then break one rule at a time — an asset URL that is not https, a setting whose default is not
-  among the choices it offers, an agent block that names no occasion, a call written as a sentence, a line
+  Write a manifest the way an author would — the layer the plugin lives at, the settings it offers, the
+  calls its settings form raises and the words it will say for itself at the AI's entry point included —
+  hold it up to the rules, and have it pass. Then break one rule at a time — an asset URL that is not
+  https, a setting whose default is not among the choices it offers, an agent block that names no occasion,
+  a call written as a sentence, a value asked for at a press declaring it is kept, a line
   citing a record of this store, a description text pointing at a page only a base could resolve, one past
   the size a language is given, a layer amenbo has no name for, and a file that does not even parse — and
   read back not just that it failed but which rule it failed on. A check that says "invalid" for the wrong
@@ -57,6 +58,15 @@ steps_cli:
                 label: Finished
               - value: task.rejected
                 label: Decided against
+        settings:
+          check: config check
+          actions:
+            - cmd: config test
+              label: SCENARIO — press me
+              ask:
+                - key: one_time_code
+                  label: SCENARIO — a code asked for once
+                  secret: true
         agent:
           when: SCENARIO — when an AI should reach for this plugin
           commands:
@@ -241,6 +251,52 @@ steps_cli:
       path: cmd-as-prose.yaml
       ok: false
       problem: bad_cmd
+
+  # A value an operation asks for at the press is handed to that one run and kept nowhere, which is the
+  # whole of what separates it from a setting. `required` is a gate on enabling that no press is on either
+  # side of, so a field carrying it is asking for something that would never happen — and the author is
+  # told so here, rather than believing a value is being demanded that is not.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      path: ask-that-is-kept.yaml
+      content: |
+        name: scenario-plugin
+        desc: SCENARIO — the same manifest, asking for a value as though it were stored
+        author: amenbo
+        repo: ShiroDoromoto/amenbo-plugin-worktree
+        os:
+          - macos
+          - linux
+        category: workflow
+        assets:
+          macos:
+            url: https://example.com/scenario-plugin-v1-macos.tar.gz
+            checksum: sha256:a6c1027eb54606d4f5e67176faeefefff3b64161b03fd76faff5908e093bf07c
+          linux-x64:
+            url: https://example.com/scenario-plugin-v1-linux-x64.tar.gz
+            checksum: sha256:f74ec13fc4341dba8bb64071651f86fb374bb932e0f15a8799bed8de014c06ac
+          linux-arm64:
+            url: https://example.com/scenario-plugin-v1-linux-arm64.tar.gz
+            checksum: sha256:a3b1ae53a6650e05673783d9d9e686b03c31582d488639a5af667f87e90988a5
+        payload_v: 1
+        settings:
+          actions:
+            - cmd: config test
+              label: SCENARIO — press me
+              ask:
+                - key: one_time_code
+                  label: SCENARIO — a code asked for once
+                  required: true
+
+  - type: assert
+    domain: plugin
+    op: validated
+    with:
+      path: ask-that-is-kept.yaml
+      ok: false
+      problem: ask_conflict
 
   # A manifest is written from outside this store, so a line in one that cites a record of it — a decision,
   # a task — points at nothing it can vouch for while reading exactly like a line the user wrote. The

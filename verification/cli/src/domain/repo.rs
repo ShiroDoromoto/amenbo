@@ -171,9 +171,10 @@ impl Driver<'_> {
                 let named = with.get("tool").and_then(|v| v.as_str());
                 let v = self.run_json(&["task", "list", "--json"])?;
                 let report = &v["setup_incomplete"]["agent_hook"];
-                // A folder with nothing left to finish is told nothing at all, so the report going
-                // silent is how it says the paste landed; while it stands, `any_wired` is the same
-                // fact from the other end.
+                // `any_wired` is the answer while the report stands, and on this face it stands
+                // until every tool in the catalog is wired — the reader here names its own, so one
+                // provider wired leaves the rest still worth carrying. A report gone silent is that
+                // same fact at its limit, and both readings say this folder starts its AI on amenbo.
                 let is_wired = report.is_null() || report["any_wired"].as_bool() == Some(true);
                 let points_at = named.is_none_or(|tool| {
                     report["unwired"]
@@ -191,6 +192,42 @@ impl Driver<'_> {
                             Some(tool) => format!(", and {tool} is not among the ones it names"),
                             None => String::new(),
                         },
+                        if wired { "wired" } else { "unwired" },
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
+            // The same report, read on one tool's own row. The reader of this face names itself, so a
+            // provider the folder shows no trace of is still asking whether *it* is wired here — and
+            // it is the one that gets no answer anywhere else: nothing in the folder points at it, so
+            // no warning is printed and the shortlist above leaves it out.
+            "ai-launch-tool" => {
+                let tool = req_str(with, "tool")?;
+                let wired = req_bool(with, "wired")?;
+                let v = self.run_json(&["task", "list", "--json"])?;
+                let report = &v["setup_incomplete"]["agent_hook"];
+                let row = report["tools"]
+                    .as_array()
+                    .and_then(|all| all.iter().find(|one| one["tool"].as_str() == Some(tool)));
+                let is_wired = match row {
+                    Some(row) => row["wired"].as_bool().unwrap_or(false),
+                    // A report gone silent is every tool in the catalog wired, this one included.
+                    None if report.is_null() => true,
+                    None => return Err(format!("the report carries no row for {tool}")),
+                };
+                // And where it is not, the row says how to fix it: a reader told it is unwired and
+                // handed no way to the text knows exactly as much as one told nothing.
+                let says_how = is_wired
+                    || row.is_some_and(|row| {
+                        row["fix"].as_str().is_some_and(|fix| fix.contains(tool))
+                    });
+                let pass = is_wired == wired && says_how;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "the report says {tool} is {}{} (expected {}, {})",
+                        if is_wired { "wired here" } else { "not wired here" },
+                        if is_wired || says_how { String::new() } else { ", and does not say how to wire it".to_string() },
                         if wired { "wired" } else { "unwired" },
                         if pass { "as expected" } else { "MISMATCH" }
                     ),

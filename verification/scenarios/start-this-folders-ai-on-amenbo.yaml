@@ -7,7 +7,8 @@
 # over the text that asks for the wiring. That text is a request for the AI the reader already works
 # with: it carries the settings, the file they belong in, and that whatever is in that file stays. So
 # the road here is the whole of what a release can break: the folder is told, the text is handed over
-# with the file it names, the wiring lands, and amenbo reads the folder as wired and stops telling.
+# with the file it names, the wiring lands, and amenbo reads the folder as wired and stops telling the
+# tool that landed it — while a tool nobody wired here reads, on its own row, that it is not.
 #
 # Nothing in it is visible from inside the workspace's own tests: the settings file is a real file in
 # a real folder, and the folder is what answers for it.
@@ -21,14 +22,18 @@
 # project — the report is drawn on arrival. The copy is a move the shot follows, so make it when the
 # run hands that step over.
 id: start-this-folders-ai-on-amenbo
-title: A folder that does not start its AI on amenbo says so, hands over what wires it, and stops saying it once that lands
+title: A folder that does not start its AI on amenbo says so, hands over what wires it, and stops telling the tool that lands it
 description: >
   The reader has a folder their AI works in and no wiring in it, which is where everyone starts. The
   road walks what amenbo does about that: it names the tool it can see in the folder and says the AI
   is not being started on amenbo; the text that fixes it comes with the file it goes in and carries
   the launch instruction rather than the spec itself; making the edit is the reader's own act — theirs
   to ask an AI of theirs for — so the run stands in for the hand that does it; and afterwards the
-  folder reads as wired, with nothing left to finish and nothing more said about it.
+  folder reads as wired, with nothing left for that tool to finish and nothing more said to it.
+
+  Where the road does not stop is the next reader. A tool the folder shows no sign of — somebody
+  opening this same folder with one of their own — is warned about nowhere and pointed at by nothing,
+  and reads on its own row that it is unwired, with the way to its text beside it.
 
   Both ends are asked of the standing sweep as well as of the line printed in passing, because a folder
   nobody is standing in is only ever found in the sweep.
@@ -114,6 +119,26 @@ steps_cli:
     op: ai-launch
     with:
       wired: true
+
+  # The tool that landed it says so on its own row, which is where an AI reads its own answer rather
+  # than the folder's.
+  - type: assert
+    domain: repo
+    op: ai-launch-tool
+    with:
+      tool: claude-code
+      wired: true
+
+  # And the one nobody wired here still says it is not. This is the reader who opens a folder somebody
+  # else set up, with a tool of their own: the folder shows no sign of it, so there is nothing to point
+  # at and nobody is warned — its own row is the whole of what it gets, and it carries the way to its
+  # text. Left out, that AI works here reading nothing about amenbo, in a folder that looks finished.
+  - type: assert
+    domain: repo
+    op: ai-launch-tool
+    with:
+      tool: codex-cli
+      wired: false
 
   # The sweep goes quiet with it. Nothing was recorded to end the report either — only the wiring
   # landing does, which is what keeps a list of folders to wire from outliving the wiring.

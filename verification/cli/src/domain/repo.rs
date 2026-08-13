@@ -97,7 +97,14 @@ impl Driver<'_> {
                 let into = v["paste_into"].as_str().ok_or("the text does not say where it goes")?;
                 let configuration =
                     v["configuration"].as_str().ok_or("the text came with no configuration")?;
-                let full = self.in_session(into)?;
+                // Which folder it lands in is `write-file`'s rule, said by `dir:` and never by the
+                // path: the run's own folder, or one a `folder` step bound. A bound folder reads as
+                // wired only from what is inside it, so a world that opens on one somebody already
+                // wired is made here and nowhere else.
+                let full = match with.get("dir") {
+                    Some(_) => self.folder(with)?.join(self.inside(into)?),
+                    None => self.in_session(into)?,
+                };
                 if let Some(dir) = full.parent() {
                     std::fs::create_dir_all(dir).map_err(|e| format!("could not make {}: {e}", dir.display()))?;
                 }

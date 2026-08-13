@@ -1,0 +1,140 @@
+# Everything amenbo says about the session-start hook is drawn from one judgement: this folder is not
+# wired yet. The report on the board is, the list of folders still waiting is, and both fall silent the
+# moment the paste lands. That is right for a report — work finished is work that stops being reported.
+#
+# It is wrong for the way to the text. Somebody who wired Claude Code and then moved to Codex CLI has
+# a folder that reads as finished and a tool that reads nothing about amenbo, and every face that would
+# have handed them the text has gone quiet on the strength of a wiring that is no longer the one they
+# use. The terminal kept its own way in the whole time; the screen had none.
+#
+# So the road stands on the state that silences everything else — a folder wired, a board with no
+# report on it — and asks for the text anyway. Two halves close it: that the way is open at all, and
+# that it is open onto the whole catalog rather than onto the tool the folder happens to trace. Both
+# are only visible from the screen: the terminal answers the same question by being asked, and there is
+# no board there for a report to be absent from.
+#
+# The world is declared below: one project bound to the folder named there, that folder carrying the
+# tool's own directory with settings that do nothing about amenbo, then wired for that tool by the
+# build under test's own text — which is what makes it wired rather than a settings file somebody
+# wrote out here. A card on the board spends the first loop, so a board with no report on it is a board
+# the report left rather than one another notice is standing on. The answer is left where a fresh store
+# leaves it, never given: a refusal would silence the report too, and this road needs it silent for the
+# one reason under test. What is left to the operator is to open that project's board, and then its
+# settings when the run hands that step over.
+id: wire-a-second-tool-in-a-folder-already-wired
+title: The text that wires a folder's AI can be taken from the project's own settings after the wiring has landed, for any tool in the catalog
+description: >
+  The reader wired this folder for one tool and now works in another. Nothing is being reported about
+  it — the folder is wired, so the report has gone and taken the list of waiting folders with it — and
+  that is the state the road opens on. The project's own settings hand the text over all the same:
+  the tools amenbo knows are on offer, the one picked is a tool this folder shows no trace of, the text
+  that follows is that tool's own with its own file named, and the button hands it over.
+
+  A way to the text that only opens while something is being reported is what this road exists against.
+  It leaves the reader who changed tools with a folder that looks finished, an AI that reads nothing
+  about amenbo, and no way in from the screen at all.
+given:
+  # The folder, bound to a project so the settings screen has one to answer for.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: workspace
+
+  # The tool this reader used first, before anything about amenbo was in it.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: workspace
+      path: .claude/settings.json
+      content: |
+        {
+          "permissions": {
+            "allow": []
+          }
+        }
+
+  # And the wiring landing, made with the build's own text rather than written out here: what counts as
+  # wired is the launch command's name, which is the build's to say and not the scenario's. This is the
+  # premise the whole road stands on — everything that would otherwise hand over the text is silent from
+  # this point.
+  - type: action
+    domain: repo
+    op: wire-ai
+    with:
+      dir: workspace
+      tool: claude-code
+
+  # The card that spends the first loop, so a board with no report on it is the report's absence rather
+  # than another notice standing in front of it.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: Order the spring seed trays
+    as: card
+
+  # Finished being written, the way work already on a board is: what this card is here for is
+  # to be an ordinary one.
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: card
+
+steps_gui:
+  # The state the road opens on: nothing is being reported. The file the report would name is the one
+  # word only the report puts on this board, so its absence is the report's — and this is the silence
+  # every step after it is read against.
+  - type: assert
+    domain: repo
+    op: ai-launch-notice
+    with:
+      tool: claude-code
+      paste_into: .claude/settings.json
+      present: false
+
+  - type: action
+    domain: project
+    op: open-settings
+    with:
+      project: Greenhouse
+
+  # Open anyway. This is the step the road exists for: the way to the text is on this screen whether or
+  # not anything is being reported, so a build that hung it on the report has nothing here to show.
+  - type: assert
+    domain: repo
+    op: ai-launch-request
+    with:
+      tool: claude-code
+      paste_into: .claude/settings.json
+
+  # And open onto the whole catalog. This folder traces one tool and is wired for it, so nothing about
+  # it points at this one — reaching it at all is only possible if every tool amenbo knows is on offer,
+  # which is exactly what the reader who changed tools needs and what a face narrowed to the traces
+  # would deny them.
+  - type: action
+    domain: repo
+    op: ai-launch-request-pick
+    with:
+      tool: codex-cli
+
+  # The text followed the pick. The file is the reading: it is this tool's own and appears nowhere else
+  # on the screen, so a picker that changed nothing but its own label reads as the miss it is.
+  - type: assert
+    domain: repo
+    op: ai-launch-request
+    with:
+      tool: codex-cli
+      paste_into: .codex/hooks.json
+
+  # And the way on: the button takes the text of the tool now picked. Where it goes is the clipboard,
+  # which no shot reads back, so the road ends at the press — what the text carries is held from the
+  # other end, by the terminal road in `start-this-folders-ai-on-amenbo`.
+  - type: action
+    domain: repo
+    op: ai-launch-request-copy
+    with:
+      tool: codex-cli

@@ -479,7 +479,11 @@ const REGISTRY: &[OpSpec] = &[
     // road to carry on — the driver stands in for the hand that pastes, the way `write-file` stands
     // in for a file a person already had. `tool` is the provider, by the name the build's own
     // catalog answers to.
-    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "wire-ai", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
+    // Where it lands follows `write-file`'s rule and for the same reason: the run's own folder unless
+    // the step names one a `folder` step bound, since a bound folder reads as wired only from what is
+    // inside it. That is also what lets this stand a world up — a road that opens on a folder somebody
+    // already wired has no other way to arrive there, the wiring being a file and not a record.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "wire-ai", required: &["tool"], refs: &[], strings: &["tool", "dir"], binds: false },
     // The moves the same road is made of on screen, where the report stands on the project's own board and
     // carries every button there is. The copy is the handing over itself — it puts the text on the
     // clipboard, which no screenshot reads, so the road ends at the press and what the text says is held
@@ -514,6 +518,13 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-pick", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-copy", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-consent-clear", required: &[], refs: &[], strings: &[], binds: false },
+    // The same two moves on the project's own settings, where the way to the text is open whatever the
+    // report is doing. They are ops of their own rather than the ones above read on another screen: the
+    // report is what those name, and on a folder already wired there is no report to name — so an
+    // instruction sending the operator to it would be one nobody could carry out. Which is the whole
+    // state this pair exists for, the reader who wired one tool and then moved to another.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-request-pick", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-request-copy", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
     // A plugin's life on this machine. `install` fetches it from the catalog and `enable` opens its
     // gate — two separate acts on purpose, since an installed plugin that never fires is the normal
     // state. `run` calls the command face: `command` is the word the plugin's own face takes, `task`
@@ -969,6 +980,16 @@ const REGISTRY: &[OpSpec] = &[
     // it they came from, so one taken here would pass over a build that dropped the inventory entirely.
     // The shot is what an eye closes it by.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-waiting", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
+    // The text itself, read on the project's own settings rather than on a report: the tool it is for
+    // (`tool`) and the file it goes into (`paste_into`), the same two halves `ai-launch-notice` reads
+    // and the same file carrying the reading.
+    //
+    // It is a separate op because what it stands against is the report being the only way there. Every
+    // other face of this hangs on the notice, which falls silent the moment a folder is wired — and the
+    // reader who most needs the text is the one who wired a tool and then changed to another. So this is
+    // read where nothing is being reported, which is a state `ai-launch-notice` cannot be asked in: its
+    // own line names a report, and `present: false` there is the absence rather than a way in.
+    OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-request", required: &["tool", "paste_into"], refs: &[], strings: &["tool", "paste_into"], binds: false },
     // A project as it is read back: one row's fields, and whether it is in the listing at all (and
     // where). `archived: true` asks the listing that carries the archived ones.
     OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
@@ -1414,6 +1435,11 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // recorded nowhere, so a bound folder that already carries a provider's settings — the state every
     // road about wiring an AI starts from — is a world no amount of store seeding reaches.
     (Domain::Repo, "write-file"),
+    // And a folder already wired, which is the same kind of world one step further on. The wiring is a
+    // file and not a record, so nothing in the store reaches it — and writing the settings out by hand
+    // would put the launch command's own name in the scenario, which is the one thing the build under
+    // test is supposed to say. This asks that build for its own text and makes the edit with it.
+    (Domain::Repo, "wire-ai"),
     // A catalog registered and a plugin already on the machine. Both are worlds a screen only reads:
     // the browsing view draws rows a catalog served, and a plugin's row is there once one is
     // installed. Standing a catalog of the run's own comes with them, since a catalog is trusted on

@@ -467,13 +467,16 @@ impl Instructor {
     /// are words of the interface; the third turns on a picker that is not there, and a reading answers
     /// which words are on a shot and never which are missing from the right part of it.
     ///
-    /// The two `ai-launch` readings are judged on what is not the interface's own words either. The
+    /// The three `ai-launch` readings are judged on what is not the interface's own words either. The
     /// hand-over is judged on the file the text goes into, which is the one thing on the road that
     /// appears nowhere else on that board, so a shot taken where the report is not standing reads as the
     /// miss it is — and the same word read the other way (`present: false`) is what says the report
-    /// went. `ai-launch-folder` is judged on the folder's own name, which the reader gave it and
-    /// the interface has no word of its own for; the board the report stands on names no folder anywhere
-    /// else, so finding one on that shot is finding it in the list.
+    /// went. `ai-launch-request` is the same word read on the project's own settings, where it is again
+    /// the only thing that says which tool's text is up; what makes it a road of its own is where it is
+    /// read, on a folder wired and nothing being reported. `ai-launch-folder` is judged on the folder's
+    /// own name, which the reader gave it and the interface has no word of its own for; the board the
+    /// report stands on names no folder anywhere else, so finding one on that shot is finding it in the
+    /// list.
     ///
     /// `ai-launch-answer` is the third of them and a `Review`, for the reason `plugin config`'s state
     /// is: all three of its answers — the yes, the no, and the never asked — are drawn as words of the
@@ -560,7 +563,7 @@ impl Instructor {
             (Domain::Folder, "ways-in") | (Domain::Folder, "none-linked") => {
                 Some(Expectation { text: arg_str(with, "absent")?.to_string(), present: false })
             }
-            (Domain::Repo, "ai-launch-notice") => {
+            (Domain::Repo, "ai-launch-notice") | (Domain::Repo, "ai-launch-request") => {
                 Some(Expectation { text: arg_str(with, "paste_into")?.to_string(), present: present(with) })
             }
             (Domain::Repo, "ai-launch-folder") => {
@@ -885,6 +888,20 @@ impl Instructor {
                 "In this project's own settings, press the button that clears its answer about starting its AI on amenbo."
                     .to_string()
             }
+            // The same two moves on the settings screen. They name that screen rather than a report,
+            // because where they are walked there is none: the folder is wired, so nothing is being
+            // reported and the operator sent to a report would find no such thing. What they are for is
+            // the reader who wired one tool and moved to another, and the pick is the half that proves
+            // the catalog is standing behind it — a tool the folder shows no trace of is reachable only
+            // if every one amenbo knows is on offer.
+            (Domain::Repo, "ai-launch-request-pick") => format!(
+                "In this project's own settings, choose \"{}\" among the tools it offers the text for.",
+                req(with, "tool")?
+            ),
+            (Domain::Repo, "ai-launch-request-copy") => format!(
+                "In this project's own settings, press the button that takes the text for \"{}\".",
+                req(with, "tool")?
+            ),
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -1266,6 +1283,17 @@ impl Instructor {
                     req(with, "paste_into")?
                 ),
             },
+            // The text on the project's own settings, standing there with nothing being reported. The
+            // file is the reading for the reason it is on the report: it is that tool's own and appears
+            // nowhere else on the screen, so a picker that changed its label and not the text reads as
+            // the miss it is. The line says the board is quiet, because that is the state under test —
+            // a way to the text that only opens while something is being reported is the one this road
+            // was written against.
+            (Domain::Repo, "ai-launch-request") => format!(
+                "Confirm this project's own settings hand over the text for \"{}\", with \"{}\" as the file it goes into — standing there while nothing on this project's board is reporting anything to wire.",
+                req(with, "tool")?,
+                req(with, "paste_into")?
+            ),
             // The record, read on the project's own face. Each state is read together with what the way
             // back out of it is doing, since that is the half a reader acts on: an answer is there to be
             // taken back, and where there is none the button that would take it back must be shut.

@@ -692,7 +692,11 @@ which tool the text is for, pressing the button that hands it over, and dropping
 (`repo ai-launch-consent` / `ai-launch-pick` / `ai-launch-copy` / `ai-launch-consent-clear`), are the
 same kind: a terminal asks inline and prints the text where it stands, so there is nothing there to
 answer, to choose between, or to press — and the answer it writes it never reads back, so it has no
-face to clear it from either. Typing words over a listing already drawn and reading which cards they
+face to clear it from either. The same three moves on the project's own settings, where the way to the
+text stays open after the wiring lands (`repo ai-launch-request` / `ai-launch-request-pick` /
+`ai-launch-request-copy`), are ops apart from those rather than the same ones read elsewhere: what
+those name is the report, and where these are walked there is none — so an instruction sending the
+operator to it would be one nobody could carry out. Typing words over a listing already drawn and reading which cards they
 left (`task narrow` / `task narrowed`) is the same kind: a terminal has no listing standing in front of
 it, so asking a word where it is written is one command there and there is nothing to narrow. Pressing a
 hit through to the record it points at, and reading which record that opened (`task open-hit` /

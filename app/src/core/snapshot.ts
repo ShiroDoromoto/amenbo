@@ -54,7 +54,6 @@ export type Snapshot = SnapshotDto & {
 const EMPTY: Snapshot = {
   language: null,
   dateLocale: null, // unset means "the one that goes with the language" — see dateLocale() in i18n
-  onboarded: true, // before load, and in the browser, no first-run flow (the Tauri snapshot overwrites this)
   roster: [],
   projects: [],
   tasks: [],
@@ -442,7 +441,6 @@ export async function loadSnapshot(opts: LoadOptions = {}): Promise<void> {
     cache = {
       language: "ja", // the browser fallback runs a Japanese UI (frontend-only iteration)
       dateLocale: null, // …and writes its dates the way that language does
-      onboarded: true, // no first-run flow when iterating in the browser
       roster: fix.roster,
       projects: fix.projects,
       tasks: fix.tasks,

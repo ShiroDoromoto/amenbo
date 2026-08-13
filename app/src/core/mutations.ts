@@ -12,7 +12,7 @@ import { applySnapshot, getSnapshot, inTauri, loadSnapshot, type Snapshot } from
 import { applyPerfConfig, invoke } from "./ipc";
 import { invalidateAllQueries, invalidateQueries, type QueryKey } from "./query";
 import { type AttachTargetType } from "./reads";
-import { t, tf, type CmdError, type CmdErrorPart } from "./i18n";
+import { guessLang, t, tf, type CmdError, type CmdErrorPart } from "./i18n";
 import { isClosed } from "./status";
 import type { ActivityItem, Facet, Priority, Status, TaskCard } from "../mock/types";
 import type { ActivityTargetDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
@@ -914,30 +914,6 @@ export async function openExternalUrl(url: string): Promise<void> {
 }
 
 /**
- * Save the first-run setup: apply the language and display names (all optional) and raise
- * `config.onboarded=true` so the flow never shows again. Skipping is calling it with nulls, which
- * raises the flag alone.
- * Outside Tauri (browser) only onboarded is raised, in the cache, for front-end-only iteration.
- */
-export async function saveOnboarding(
-  language: string | null,
-  humanName: string | null,
-  aiName: string | null,
-): Promise<void> {
-  if (inTauri()) return invokeAck("onboarding_save", { language, humanName, aiName });
-  mockMutate((s) => ({
-    ...s,
-    onboarded: true,
-    language: language ?? s.language,
-    roster: s.roster.map((a) =>
-      a.kind === "human" && humanName?.trim() ? { ...a, name: humanName.trim() }
-      : a.kind === "ai" && aiName?.trim() ? { ...a, name: aiName.trim() }
-      : a,
-    ),
-  }));
-}
-
-/**
  * Set or clear a facet's (human / AI) avatar image. A `dataUrl` (data:image/…) sets it; `null` reverts
  * to the identicon. Shrink the image before passing it in (use `fileToAvatarDataUrl`). It lives in
  * `config.human_avatar` / `ai_avatar`, so it comes back through snapshot.roster. Only the facet named
@@ -1017,6 +993,22 @@ export async function fileToAvatarDataUrl(file: File, size = 96): Promise<string
 export async function setLanguage(language: string): Promise<void> {
   if (inTauri()) return invokeAck("config_set_language", { language });
   mockMutate((s) => ({ ...s, language }));
+}
+
+/**
+ * Settle the language on a first launch, instead of asking for it. Nobody is asked which language to
+ * read in, so with `config.language` still unset the OS's answer is written as if it had been
+ * chosen — through the same path the settings screen uses, which is what also carries it into the
+ * managed block of every bound folder (`AGENTS.md` / `CLAUDE.md`). Leaving it unset instead would show
+ * a Japanese reader a Japanese window while telling their AI to write English.
+ *
+ * It runs on every startup and writes on almost none of them: a language already chosen — including
+ * one settled here on an earlier launch — is never overwritten, so this is not a way for the OS to
+ * keep re-deciding a question the user has answered.
+ */
+export async function settleLanguage(): Promise<void> {
+  if (getSnapshot().language?.trim()) return;
+  await setLanguage(guessLang());
 }
 
 // ───────────────────────── Developer settings, backup / restore ─────────────────────────

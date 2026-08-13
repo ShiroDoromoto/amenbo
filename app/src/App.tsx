@@ -4,6 +4,7 @@ import { MigrationScreen } from "./screens/MigrationScreen";
 import { RestartGate } from "./screens/RestartGate";
 import { StoreProvider } from "./store/store";
 import { installReconcileTriggers, loadSnapshot, watchStore } from "./core/snapshot";
+import { settleLanguage } from "./core/mutations";
 import { isFormatAhead, subscribeFormatAhead } from "./core/formatAhead";
 import { migrationGate } from "./core/migration";
 import { errText, t } from "./core/i18n";
@@ -41,6 +42,9 @@ export default function App() {
     let unlisten: (() => void) | undefined;
     let stopTriggers: (() => void) | undefined;
     loadSnapshot()
+      // Before the shell is mounted, so a reader whose language is still unset never sees the English
+      // frame flash past on the way to their own (settleLanguage writes on a first launch only).
+      .then(settleLanguage)
       .then(() => { if (alive) setReady(true); })
       .catch((e) => { if (alive) setError(errText(e)); });
     void watchStore().then((un) => { if (alive) unlisten = un; else un(); });

@@ -1552,7 +1552,7 @@ mod tests {
     #[test]
     fn the_hook_consent_fold_carries_the_answer_to_the_config_and_keeps_each_refusal() {
         let dir = scratch("hookfold");
-        // A store that answered the hook question was onboarded, so a config.json is already there. Seed a
+        // A store that answered the hook question has been used, so a config.json is already there. Seed a
         // default one and give it a non-default field, to prove the fold adds its key without disturbing
         // the rest.
         {
@@ -1798,7 +1798,7 @@ mod tests {
             .unwrap();
         std::fs::write(
             dir.join("config.json"),
-            br#"{"onboarded":true,"plugin_config":{"slack":{"events":"push"}}}"#,
+            br#"{"language":"ja","plugin_config":{"slack":{"events":"push"}}}"#,
         )
         .unwrap();
         std::fs::write(dir.join("plugin-secrets.json"), br#"{"slack":{"token":"s3cret"}}"#).unwrap();
@@ -1833,7 +1833,7 @@ mod tests {
         assert!(!dir.join("plugin-secrets.json").exists(), "the secret file is taken away");
         let config = std::fs::read_to_string(dir.join("config.json")).unwrap();
         assert!(!config.contains("plugin_config"), "the config key is gone: {config}");
-        assert!(config.contains("onboarded"), "and nothing else in the file moved: {config}");
+        assert!(config.contains("language"), "and nothing else in the file moved: {config}");
         std::fs::remove_dir_all(&dir).ok();
     }
 

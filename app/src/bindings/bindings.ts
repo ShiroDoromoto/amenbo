@@ -1324,10 +1324,6 @@ language: string | null,
  */
 dateLocale: string | null, 
 /**
- * First-run setup completed (config.json). False makes the GUI show first-run setup.
- */
-onboarded: boolean, 
-/**
  * This person's roster — the two facets that come from config (human / ai). It is the one
  * supply line for every roster in the GUI: the assignee picker (unassigned / human name / AI
  * name), the display name and avatar in settings, and display-name resolution. `kind` is the

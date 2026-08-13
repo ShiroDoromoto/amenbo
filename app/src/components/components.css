@@ -710,31 +710,6 @@ button.feed__target:hover { color: var(--c-accent); }
 .palette__input { width: 100%; border: none; border-bottom: 1px solid var(--c-border); padding: var(--s-4); font-size: var(--fs-lg); background: none; outline: none; }
 .palette__cmd { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--c-accent-text); }
 
-/* The first-run setup modal (OnboardingSetup: language, then name, then theme). */
-.setup__overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); padding: var(--s-5); }
-.setup__modal { width: min(440px, 100%); background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-6); }
-.setup__hero { text-align: center; margin-bottom: var(--s-5); }
-.setup__goose { font-size: var(--fs-display-lg); line-height: 1; }
-.setup__hero h2 { margin: var(--s-3) 0 var(--s-1); }
-.setup__step { min-height: 120px; }
-.setup__q { font-weight: var(--fw-bold); margin-bottom: var(--s-3); }
-/* The language step lists all nineteen, so it scrolls in place instead of growing the modal. Two
-   columns keep the list short enough that the reader sees most of it at once. */
-.setup__langs { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); max-height: 15rem; overflow-y: auto; padding: var(--s-1); }
-.setup__lang { padding: var(--s-2) var(--s-3); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface-2); cursor: pointer; text-align: left; }
-.setup__lang--on { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); }
-.setup__choices { display: flex; gap: var(--s-3); flex-wrap: wrap; }
-.setup__choice { padding: var(--s-3) var(--s-4); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface-2); cursor: pointer; }
-.setup__choice--on { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); }
-.setup__nameRow { display: flex; align-items: center; gap: var(--s-3); }
-.setup__identicon { width: 40px; height: 40px; flex: none; border-radius: 50%; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: var(--fw-bold); }
-.setup__input { flex: 1; padding: var(--s-3); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface); }
-.setup__hint { font-size: var(--fs-xs); color: var(--c-text-muted); margin-top: var(--s-2); }
-.setup__dots { display: flex; gap: var(--s-2); justify-content: center; margin: var(--s-5) 0 var(--s-3); }
-.setup__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c-border-strong); }
-.setup__dot--on { background: var(--c-accent); }
-.setup__actions { display: flex; align-items: center; gap: var(--s-3); }
-
 /* ---------- the lint hook consent modal (HookConsentModal) ---------- */
 /* The question the status pull-down asks before a rejection (RejectReasonModal). Its own block rather
    than a share of the hook consent's: the two happen to look alike, and a modal borrowing another

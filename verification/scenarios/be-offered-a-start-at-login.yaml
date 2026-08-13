@@ -27,10 +27,9 @@
 # shot — and the road itself, since an offer that never came up is one nobody can decline, and the
 # step after the first cannot be carried out at all.
 #
-# What the road wants in front of it is the app open on the board with the first two questions behind
-# it: an offer takes its turn after first-run setup and the hooks question, both of which are put to
-# someone who has not used amenbo yet. The run hands the first step over before it shoots anything,
-# so that is where to stand by the time it does.
+# What the road wants in front of it is the app open on the board with the hooks question behind it:
+# an offer takes its turn after that one, which is put to someone who has not used amenbo yet. The run
+# hands the first step over before it shoots anything, so that is where to stand by the time it does.
 id: be-offered-a-start-at-login
 title: Somebody who keeps coming back is offered a start at login, unasked, and can decline it
 description: >

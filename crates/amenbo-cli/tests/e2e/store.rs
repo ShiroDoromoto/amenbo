@@ -10,21 +10,6 @@ use serde_json::Value;
 
 use harness::*;
 
-#[test]
-fn config_onboarded_flag_roundtrips() {
-    let cli = Cli::new();
-    // The flag starts false; the GUI's first-run setup keys off config.onboarded.
-    let c0 = cli.json(&["config", "--json"]);
-    assert_eq!(c0["settings"]["onboarded"], false);
-    // An explicit set persists true into config.
-    cli.run(&["config", "set", "onboarded", "true"]);
-    let c1 = cli.json(&["config", "--json"]);
-    assert_eq!(c1["settings"]["onboarded"], true);
-    // Bogus values are rejected.
-    let (_e, code) = cli.run_err(&["config", "set", "onboarded", "maybe"]);
-    assert_ne!(code, 0);
-}
-
 /// `amenbo export` streams the whole single-DB store out as portable JSON (a thin wrapper over core's
 /// `export_json`). There is exactly one shape — no excerpts, no markdown/csv. The envelope carries an
 /// `amenbo_export` header, and its reader lives outside amenbo: nothing reads it back in.

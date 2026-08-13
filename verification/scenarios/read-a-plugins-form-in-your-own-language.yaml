@@ -93,9 +93,9 @@ given:
             task.done: Aufgabe erledigt
 
 steps_gui:
-  # Where the road starts is said out loud rather than assumed: the store was made a moment ago and
-  # somebody answered the first-run screen, so which language the interface is in is that hand's and not
-  # the road's until a step says it.
+  # Where the road starts is said out loud rather than assumed: nobody is asked which language to read
+  # in, so a fresh store opens in whatever language the machine it was made on reads — the driver's,
+  # and not the road's until a step says it.
   - type: action
     domain: store
     op: set-language

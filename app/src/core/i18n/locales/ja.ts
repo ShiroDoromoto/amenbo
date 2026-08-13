@@ -510,12 +510,6 @@ export const ja: Translation = {
     "id.copyTip": "クリックでタスクIDをコピー", "id.copied": "コピーしました",
     "facet.human": "人", "facet.ai": "AI", "facet.named": "{name}（{facet}）",
     // onboarding
-    "setup.welcome": "ようこそ", "setup.tagline": "はじめに少しだけ設定します。後で設定からいつでも変えられます。",
-    "setup.langQ": "表示言語を選んでください", "setup.nameQ": "あなたと、あなたの AI の呼び名は？",
-    "setup.humanNamePh": "あなたの名前（例: 山田）", "setup.humanNameLabel": "あなたの表示名",
-    "setup.aiNamePh": "AI の名前（既定: AI）", "setup.aiNameLabel": "AI の表示名",
-    "setup.nameHint": "後で設定からいつでも変えられます（未入力なら既定の 人間 / AI）。",
-    "setup.themeQ": "見た目のテーマ（任意）", "setup.skip": "スキップ", "setup.back": "戻る", "setup.next": "次へ", "setup.finish": "はじめる",
     "onboard.welcome": "amenbo へようこそ",
     "onboard.tagline": "人と AI で、ひとつのチーム。サーバーは要りません。データは端末から出ません。",
     "onboard.createLabel": "プロジェクトを作る", "onboard.createHint": "名前を付けて新しいプロジェクトを作成します",

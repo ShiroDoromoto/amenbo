@@ -578,8 +578,6 @@ pub struct Snapshot {
     /// differ. Passed through as written: whether a tag is usable is the formatter's judgement, and
     /// the front end falls back to the language's rather than failing to draw a date.
     date_locale: Option<String>,
-    /// First-run setup completed (config.json). False makes the GUI show first-run setup.
-    onboarded: bool,
     /// This person's roster — the two facets that come from config (human / ai). It is the one
     /// supply line for every roster in the GUI: the assignee picker (unassigned / human name / AI
     /// name), the display name and avatar in settings, and display-name resolution. `kind` is the
@@ -1007,7 +1005,6 @@ fn build_snapshot() -> Result<Snapshot, CmdError> {
         .unwrap_or_default();
     let language = config.language.clone();
     let date_locale = config.date_locale.clone();
-    let onboarded = config.onboarded;
 
     let first_snapshot = UPDATE_CHECK_REFRESHED
         .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
@@ -1025,7 +1022,6 @@ fn build_snapshot() -> Result<Snapshot, CmdError> {
     Ok(Snapshot {
         language,
         date_locale,
-        onboarded,
         roster: config
             .roster()
             .into_iter()
@@ -3645,33 +3641,11 @@ fn write_facet_names(human: Option<&str>, ai: Option<&str>) -> Result<(), CmdErr
     Ok(())
 }
 
-/// Save first-run setup: apply the language (config.language, optional) and the roster's two display
-/// names (human / AI, each optional), then raise `config.onboarded=true` so the flow never shows
-/// again. Skipping is calling it with everything null — only the flag goes up. language and
-/// onboarded live in the user-level config; the display names live in the store's own config.
-#[tauri::command]
-pub fn onboarding_save(
-    language: Option<String>,
-    human_name: Option<String>,
-    ai_name: Option<String>,
-) -> Result<WriteAck, CmdError> {
-    let paths = amenbo_core::config::Paths::resolve()?;
-    let mut config = amenbo_core::config::Config::load(&paths.config_file);
-    if let Some(l) = language.as_deref().map(str::trim).filter(|l| !l.is_empty()) {
-        config.language = Some(l.to_string());
-    }
-    config.onboarded = true;
-    config.save(&paths.config_file)?;
-
-    write_facet_names(human_name.as_deref(), ai_name.as_deref())?;
-    Ok(WriteAck::new(&[]))
-}
-
-/// Change the user's language `config.language` from the settings screen (the way to change it at
-/// any time, long after first-run onboarding). The language lives in the user-level global
-/// `config.json`, outside the store, so it can be written whether or not a store exists. When the
-/// front end applies the `language` in the snapshot we return, i18n switches over **without a
-/// restart**, with no help from `watch_store`. The change is also carried into the managed block of
+/// Change the user's language `config.language`. Nobody is asked for it on a first launch: the front
+/// end settles it from the OS through this same command, and the settings screen changes it
+/// afterwards. The language lives in the user-level global `config.json`, outside the store, so it
+/// can be written whether or not a store exists. When the front end applies the `language` in the
+/// snapshot we return, i18n switches over **without a restart**, with no help from `watch_store`. The change is also carried into the managed block of
 /// AGENTS.md and CLAUDE.md in every bound directory — closing the gap where the GUI switched to
 /// English while the AI kept being told Japanese. That part is best-effort and re-syncs only the
 /// directories the registry knows about (unregistered ones fall into line at the next bind).

@@ -294,7 +294,6 @@ pub fn run() {
       commands::task_dimensions,
       commands::project_dimension_assignments,
       commands::task_assign,
-      commands::onboarding_save,
       commands::config_set_language,
       commands::config_set_perf_log,
       commands::config_set_update_check,

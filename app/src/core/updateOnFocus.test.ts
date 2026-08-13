@@ -25,7 +25,6 @@ import { getSnapshot, loadSnapshot, reconcile, subscribe } from "./snapshot";
 
 const SNAPSHOT = {
   language: "ja",
-  onboarded: true,
   roster: [],
   projects: [],
   activity: [],

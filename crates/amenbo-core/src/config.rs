@@ -352,13 +352,6 @@ pub struct Config {
     /// boundary.
     #[serde(default)]
     pub ai_allow_project_ops: bool,
-    /// Whether first-run setup (language → name → …) has been completed. This is the **explicit
-    /// trigger** for the GUI's first-launch flow. **Defaults to false** (not done). Regardless of
-    /// whether data already exists, the GUI shows first-run setup while this is false, so a store
-    /// that has data but never got configured is not skipped. Set to true on completion. **A
-    /// user-level setting; never synced.**
-    #[serde(default)]
-    pub onboarded: bool,
     /// Whether startup runs the read-only consistency check (the same orphan/dangling-reference
     /// sweep as `doctor`) and surfaces any problem as a warning. **On by default: preventive
     /// detection in production.** It only inspects — it never repairs; repair stays a manual
@@ -474,7 +467,6 @@ impl Default for Config {
             language: None,
             date_locale: None,
             ai_allow_project_ops: false,
-            onboarded: false,
             startup_integrity_check: true,
             update_check: true,
             autostart: false,
@@ -733,17 +725,6 @@ impl Config {
                     }
                 };
             }
-            "onboarded" => {
-                self.onboarded = match value {
-                    "true" | "on" | "1" => true,
-                    "false" | "off" | "0" => false,
-                    other => {
-                        return Err(crate::error::Error::invalid(
-                            format!("onboarded must be true|false; '{other}' is invalid"),
-                        ))
-                    }
-                };
-            }
             "startup_integrity_check" => {
                 self.startup_integrity_check = match value {
                     "true" | "on" | "1" => true,
@@ -785,7 +766,7 @@ impl Config {
             "attachment.other_max" => self.attachment_limits.other_max = parse_bytes("attachment.other_max", value)?,
             other => {
                 return Err(crate::error::Error::invalid(
-                    format!("unknown config key '{other}' (known: default_view / language / date_locale / human_name / ai_name / human_avatar / ai_avatar / ai_allow_project_ops / onboarded / startup_integrity_check / update_check / perf_log / attachment.image_max / attachment.audio_max / attachment.video_max / attachment.document_max / attachment.other_max)"),
+                    format!("unknown config key '{other}' (known: default_view / language / date_locale / human_name / ai_name / human_avatar / ai_avatar / ai_allow_project_ops / startup_integrity_check / update_check / perf_log / attachment.image_max / attachment.audio_max / attachment.video_max / attachment.document_max / attachment.other_max)"),
                 ))
             }
         }

@@ -14,7 +14,6 @@ import { ListScreen } from "../screens/ListScreen";
 import { SearchScreen } from "../screens/SearchScreen";
 import { SettingsScreen } from "../screens/SettingsScreen";
 import { OnboardingScreen } from "../screens/OnboardingScreen";
-import { OnboardingSetup } from "../screens/OnboardingSetup";
 import { HookConsentModal } from "../screens/HookConsentModal";
 import { NudgeHost } from "../screens/NudgeHost";
 import { NewProjectScreen } from "../screens/NewProjectScreen";
@@ -55,9 +54,9 @@ const LIST_VIEWS = ["inbox"];
  * never rides watchStore's store-changed — but setLanguage fires the snapshot listeners after its ack, so we
  * subscribe to `currentLang` and key the shell root on it: a switch remounts everything below, which is how
  * unsubscribed chrome and useQuery-driven screens pick up the new language (AppShell's own nav history and
- * right-pane width survive). Whether first-run setup is needed is decided by config.onboarded alone, never by the
- * presence of a store, so even on a first launch with no store yet it layers as a modal over OnboardingScreen and
- * the name entry is best-effort.
+ * right-pane width survive). Nothing is asked on a first launch: the language comes from the OS (App settles it),
+ * the theme follows the OS, and the two display names start on their defaults — all three are the settings
+ * screen's to change afterwards.
  */
 export function AppShell() {
   // The initial screen is the first real project, resolved without regard to the current directory. With none at
@@ -72,10 +71,6 @@ export function AppShell() {
   const selectedTaskId = loc.sel.type === "task" ? loc.sel.id : null;
   const selectedDecisionId = loc.sel.type === "decision" ? loc.sel.id : null;
   const [compose, setCompose] = useState<ComposeTarget | null>(null);
-  const needsSetup = useSyncExternalStore(
-    subscribe,
-    () => !getSnapshot().onboarded,
-  );
 
   // Has the hooks question had its turn? The setup banner reports on the same repositories the modal asks about, so it
   // waits for this rather than talking over it — and reads the disk only once the answers have been written to it.
@@ -297,7 +292,6 @@ export function AppShell() {
 
   useEffect(() => {
     if (!showRight) return;
-    if (needsSetup) return;
     const onDown = (e: PointerEvent) => {
       if (isBlankSpaceClose(e.target as Node | null, rightpaneRef.current)) {
         void requestCloseRight(); // A blank-space click closes the pane (confirming the discard if there is unsaved input)
@@ -305,7 +299,7 @@ export function AppShell() {
     };
     document.addEventListener("pointerdown", onDown);
     return () => document.removeEventListener("pointerdown", onDown);
-  }, [showRight, needsSetup]);
+  }, [showRight]);
 
   return (
     <RefNavProvider value={refNav}>
@@ -441,19 +435,16 @@ export function AppShell() {
         )}
       </div>
 
-      {/* One question at a time, in this order: first-run setup, then the hooks question, then a nudge. Each
-          waits on the one before it by name rather than through a queue of questions — three of them, and no
-          two alike (a screen, a modal, and whatever a nudge's own view draws), so a queue would be a machine
-          holding one member of each kind and deciding nothing. What it would centralise is the order, and the
-          order is right here. */}
-      {needsSetup && <OnboardingSetup />}
-      {/* First-run setup owns the screen while it is up: the hooks question is asked about repositories, which
-          is not what someone still choosing a language came here for, and it keeps its turn until then. */}
-      {!needsSetup && <HookConsentModal onDone={onHooksAsked} />}
-      {/* A nudge is the least urgent of the three and goes last — it is raised on the strength of how much
-          amenbo has been used, which is exactly what someone still being asked the first two questions has not
+      {/* One question at a time, in this order: the hooks question, then a nudge. The second waits on the
+          first by name rather than through a queue of questions — the two are not alike (a modal, and whatever
+          a nudge's own view draws), so a queue would be a machine holding one member of each kind and deciding
+          nothing. What it would centralise is the order, and the order is right here. Nothing precedes
+          them: a first launch asks for no setup at all. */}
+      <HookConsentModal onDone={onHooksAsked} />
+      {/* A nudge is the less urgent of the two and goes last — it is raised on the strength of how much
+          amenbo has been used, which is exactly what someone still being asked the first question has not
           done yet. `hooksAsked` is that turn being over, the same latch the setup banner waits on. */}
-      {!needsSetup && hooksAsked && <NudgeHost />}
+      {hooksAsked && <NudgeHost />}
     </div>
     </RefNavProvider>
   );

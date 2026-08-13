@@ -535,12 +535,6 @@ const ui = {
   "id.copyTip": "Click to copy task ID", "id.copied": "Copied",
   "facet.human": "Human", "facet.ai": "AI", "facet.named": "{name} ({facet})",
   // onboarding
-  "setup.welcome": "Welcome", "setup.tagline": "A quick setup to get started. You can change everything later in Settings.",
-  "setup.langQ": "Choose your language", "setup.nameQ": "What should we call you and your AI?",
-  "setup.humanNamePh": "Your name (e.g. Alice)", "setup.humanNameLabel": "Your display name",
-  "setup.aiNamePh": "AI name (default: AI)", "setup.aiNameLabel": "AI display name",
-  "setup.nameHint": "You can change these anytime in Settings (defaults: Human / AI).",
-  "setup.themeQ": "Theme (optional)", "setup.skip": "Skip", "setup.back": "Back", "setup.next": "Next", "setup.finish": "Get started",
   "onboard.welcome": "Welcome to amenbo",
   "onboard.tagline": "People and AI, one team. No server required. Your data never leaves your device.",
   "onboard.createLabel": "Create a project", "onboard.createHint": "Give it a name to create a new project",

@@ -317,9 +317,10 @@ by hand, or with the screen tool's `click-named` / `type` / `key`, and send the 
 is standing where the step says it should. There is no flag for running it any other way.
 
 **The hand-over comes before the step, the first one included.** That is what lets a road open with a
-check: a run starts on a store made for it a moment ago, so the screen a launch leaves behind is the
-first-run one, and a road whose opening line reads the board would be judged against that. Handed the
-step first, the driver stands the screen where the line says before anything is captured.
+check: a run starts on a store made for it a moment ago, so the screen a launch leaves behind is
+whatever a store nobody has used yet opens on — the hooks question over an empty board — and a road
+whose opening line reads the board would be judged against that. Handed the step first, the driver
+stands the screen where the line says before anything is captured.
 
 Left to itself a run would photograph one screen as many times as the scenario is long, and pass:
 the verdict is a substring in what OCR read off the shot, so the screen before a step and the screen

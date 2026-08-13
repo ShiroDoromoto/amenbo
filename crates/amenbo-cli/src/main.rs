@@ -4884,7 +4884,6 @@ fn config(store: &mut Store, flags: &Flags, sub: Option<ConfigCmd>) -> Result<i3
             "human_display_name": store.config.human_display_name(),
             "ai_display_name": store.config.ai_display_name(),
             "ai_allow_project_ops": store.config.ai_allow_project_ops,
-            "onboarded": store.config.onboarded,
             "startup_integrity_check": store.config.startup_integrity_check,
             "update_check": store.config.update_check,
         },

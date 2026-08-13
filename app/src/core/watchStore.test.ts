@@ -45,7 +45,6 @@ import {
 
 const SNAPSHOT = {
   language: "ja",
-  onboarded: true,
   roster: [],
   projects: [],
   activity: [],

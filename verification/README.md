@@ -355,6 +355,9 @@ switch for it —
 picker that draws the row, and the switch inside it —
 `fill-in-what-a-plugin-cannot-fire-without` walks one row from the mark it wears through the refusal, the
 settings opened inside it and the press that then goes through,
+`learn-why-a-plugin-will-not-turn-on` walks the gate that turns on the author's own judgement — the two
+sentences a refusing check puts on the form after a save, the value staying saved and the plugin staying on
+under them, and the same check standing in front of the switch when it is pressed again —
 `choose-from-what-a-plugin-offers` walks a settings form through the three answers a choice holds and
 the button back to the author's default, `press-what-a-plugin-offers-to-do` walks the other half of that
 same form — the operation its author declared, drawn but unpressable while the gate is shut, the box it
@@ -562,6 +565,9 @@ takes `secret: true` for the same kind of question one tier up: the read says th
 and does not hand the value over with it. It takes `state:` for the question a value cannot answer for
 itself — `chosen`, `none` or `unanswered` — since a choice answered with none of its candidates and one
 nobody has answered both hold no chosen value, and only the second follows the author's default.
+And it takes `holds:` on a screen road for the plainest reading of all — a typed line standing in the box a
+form draws it in, which is what a road asks after something that could have taken it away. That one is the
+screen's alone, `equals` being how the same value is read where there is no box.
 A `listed` assert asks whether the task is in the listing; give it
 `position: first` / `last` instead of `present:` when what is under test is the order the store
 keeps, which is the only place a reorder is visible. Its neighbour `narrowed` asks the question a

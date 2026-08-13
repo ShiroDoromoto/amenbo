@@ -1559,6 +1559,14 @@ fn refuse_screen_reading(with: &Args) -> Result<(), String> {
                 .to_string(),
         );
     }
+    if with.contains_key("holds") {
+        return Err(
+            "`holds` is a question about the box a form draws the value in, so it belongs on a \
+             `steps_gui` road — down this pipe the value comes back as a value, which is what `equals` \
+             already reads"
+                .to_string(),
+        );
+    }
     Ok(())
 }
 
@@ -1682,6 +1690,12 @@ mod tests {
             panic!("`readonly` is a screen's question, and it has no answer down this pipe");
         };
         assert!(err.contains("readonly") && err.contains("steps_gui"), "got: {err}");
+        // And the reading beside it: what a box on a form is holding is a screen's question too, while
+        // the same value read down this pipe is what `equals` already answers.
+        let Err(err) = refuse_screen_reading(&args("{ name: worktree, key: base, holds: main }")) else {
+            panic!("`holds` names the box a form draws, which this road does not have");
+        };
+        assert!(err.contains("holds") && err.contains("equals"), "got: {err}");
         assert!(refuse_screen_reading(&args("{ name: worktree, key: base, equals: main }")).is_ok());
     }
 

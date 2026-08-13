@@ -1182,7 +1182,12 @@ const REGISTRY: &[OpSpec] = &[
     // and no button to take it back, and a terminal has neither to withhold. It reads `equals` as the
     // value that has to be standing there — the point of the reading is the value being there and being
     // out of reach, which an empty field would prove for the wrong reason.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "config", required: &["name", "key"], refs: &[], strings: &["name", "key", "state"], binds: false },
+    // `holds` is the reading only a screen has beside `readonly`, and it is a word of its own rather than
+    // the `equals` a choice takes: what it asks is that a typed line is standing in its box, which is what
+    // a road wants after something that could have taken it away — a check that refused the values a save
+    // had already written. A terminal reads that same value with `equals` and has no box to draw it in, so
+    // the CLI driver turns this one away rather than answering a question it was not asked.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "config", required: &["name", "key"], refs: &[], strings: &["name", "key", "state", "holds"], binds: false },
     // The other half of that same form, asked apart from it the way a row's line is asked apart from
     // its badge: not what the field holds, but the words it is drawn under. `label` is those words,
     // written out — the author's, in whichever language they wrote them and the reader is in — and

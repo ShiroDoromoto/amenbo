@@ -1,0 +1,232 @@
+# A gate that turns on somebody else's judgement. What a value has to look like is the author's to know —
+# amenbo judges none of it — so the switch raises their own check first and opens on nothing but a yes.
+#
+# The two roads part on what they are handed. A terminal is told the gate stayed shut and which settings the
+# check spoke about, as a code and a line it can act on; the author's own sentences are deliberately not sent
+# down that pipe. A screen is the face with a person in front of it, so it draws those sentences where the
+# boxes they are about are — one over the form, one beside the field the check named — and it draws them
+# after a save as well as after a press, because someone who has just typed a webhook is exactly who wants
+# to hear that it is wrong.
+#
+# The world below hands both roads a plugin already on, and it does that before the check is declared —
+# a premise that declared it first would be turned away by the very refusal these roads walk. The terminal's
+# road therefore opens by shutting the gate it was handed, which is the one thing it needs that the screen's
+# road does not: a screen cannot flip the author's verdict mid-run, so it walks the refusal from the state a
+# working plugin is left in, while the terminal walks it from a plugin that was never on.
+#
+# Like every line that installs a plugin, the premise goes to the catalog over the network on purpose (see
+# `put-a-plugin-on-the-machine.yaml`). The check itself, the setting it speaks about and the program that
+# answers it are the author's word — no plugin in the official catalog declares any — so all three are
+# written onto what is installed (see those ops' own notes). Everything after that is amenbo's own doing.
+id: learn-why-a-plugin-will-not-turn-on
+title: A plugin whose own check refuses the values does not turn on, and the reader is told as much where they can act on it
+description: >
+  Install the official `worktree` plugin with a setting, turn it on while nothing judges it, and then give
+  it a check that refuses. On screen: save a value into the form and the author's two sentences arrive —
+  one over the form, one beside the box the check named — while the value stays saved and the plugin stays
+  on, a check after a save undoing nothing. Turn the plugin off and on again and the same check now stands
+  in front of the gate: nothing fires, and the sentences say why. In the terminal: the gate is shut first,
+  the press is refused by the check's own code, nothing fires, and once the check answers yes the same
+  press goes through.
+given:
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: worktree
+
+  # Something for the check to speak about. A verdict names settings by their own keys, so a road that
+  # reads the line beside a box has to have a box for it to be drawn beside.
+  - type: action
+    domain: plugin
+    op: declare-setting
+    with:
+      name: worktree
+      key: webhook
+      label: Webhook URL
+
+  # On, while nothing is judging it. This is the order the world has to be built in: the check below turns
+  # every enable away, this one included, so a plugin that is to be found working is turned on first.
+  - type: action
+    domain: plugin
+    op: enable
+    with:
+      name: worktree
+
+  - type: action
+    domain: plugin
+    op: declare-check
+    with:
+      name: worktree
+      cmd: config check
+
+  - type: action
+    domain: plugin
+    op: check-program
+    with:
+      name: worktree
+      ok: false
+      message: This webhook is not one Slack will answer on
+      field: webhook
+      field_message: A workspace hook starts with https://hooks.slack.com/
+
+steps_cli:
+  # The gate the world left open, shut. A press that is going to be refused has to start from a plugin that
+  # is off — and this is the one move the terminal's road needs that the screen's cannot make, since a
+  # screen has no way to give the author's check a different answer partway through.
+  - type: action
+    domain: plugin
+    op: disable
+    with:
+      name: worktree
+
+  - type: action
+    domain: plugin
+    op: enable
+    with:
+      name: worktree
+      refused: invalid_plugin_check_refused
+
+  # Fail-closed is the half the refusal does not prove on its own: a gate that opened anyway and reported a
+  # problem would read the same from here.
+  - type: assert
+    domain: plugin
+    op: listed
+    with:
+      name: worktree
+      enabled: false
+
+  # The author's judgement, changed. What a real plugin would be answering differently about is a value the
+  # user has fixed; what a road can change is the answer itself, which is the same difference at this gate.
+  - type: action
+    domain: plugin
+    op: check-program
+    with:
+      name: worktree
+      ok: true
+
+  # The same press as before, and this time nothing is in front of it. What made the difference is the
+  # verdict, not a second way in — there is no flag that enables a plugin the check turned away.
+  - type: action
+    domain: plugin
+    op: enable
+    with:
+      name: worktree
+
+  - type: assert
+    domain: plugin
+    op: listed
+    with:
+      name: worktree
+      enabled: true
+
+  - type: action
+    domain: plugin
+    op: uninstall
+    with:
+      name: worktree
+
+# What the road wants in front of it is the device the premise describes: the official `worktree` plugin
+# installed in the store the build under test opens, declaring a setting called `webhook` and a check, its
+# gate open for the project the run stands in, and a program behind that check which refuses whatever it is
+# handed and says so in the two sentences below. Stand that with `devtool devgui cli`, in that order — the
+# gate first, since the check refuses every press including the one that would open it. Where the run
+# starts does not matter: the first step is the arrival. Every step after it moves the screen, so carry each
+# move out when the run hands that step over.
+#
+# The two sentences are read by a reading: they are the author's own, and what a build would draw in their
+# place is amenbo's word for a check that said nothing, so which of them is standing there is the whole
+# question. The rest is an eye — what a row says about a gate is the word on a button, and what a form says
+# a field holds is a chip beside it.
+steps_gui:
+  # The face this is met on: the plugin is one row among the project's own settings, and the values it is
+  # judged on are the ones kept at that crossing.
+  - type: action
+    domain: project
+    op: open-settings
+    with:
+      project: cwd
+
+  - type: action
+    domain: plugin
+    op: open-config-in-row
+    with:
+      name: worktree
+      project: cwd
+
+  # A value saved while the plugin is on. The check runs again on what the save left behind — the second of
+  # the two moments it is raised, and the one that undoes nothing.
+  - type: action
+    domain: plugin
+    op: config-set
+    with:
+      name: worktree
+      key: webhook
+      value: https://example.com/hooks/9f2a41
+
+  - type: assert
+    domain: plugin
+    op: checked
+    with:
+      name: worktree
+      text: This webhook is not one Slack will answer on
+
+  # And the line beside the box it is about. A check that could only speak about the settings as a whole
+  # would leave a reader with three fields and one complaint.
+  - type: assert
+    domain: plugin
+    op: checked
+    with:
+      name: worktree
+      key: webhook
+      text: A workspace hook starts with https://hooks.slack.com/
+
+  # What a refusal after a save does not do. The write has already landed, and the plugin was on before the
+  # check spoke — so a verdict here is a sentence for the reader and never a rollback.
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: webhook
+      holds: https://example.com/hooks/9f2a41
+
+  - type: assert
+    domain: plugin
+    op: fires-in
+    with:
+      name: worktree
+      project: cwd
+      present: true
+
+  # The other moment the same check is raised, reached from the state the first one left: the gate is shut
+  # by hand and pressed again. Nothing is thrown at the screen — the switch comes back with the verdict and
+  # a gate that did not move — so what says it was refused is the row, and the sentences beside it say why.
+  - type: action
+    domain: plugin
+    op: disable-in
+    with:
+      name: worktree
+      project: cwd
+
+  - type: action
+    domain: plugin
+    op: enable-in
+    with:
+      name: worktree
+      project: cwd
+
+  - type: assert
+    domain: plugin
+    op: fires-in
+    with:
+      name: worktree
+      project: cwd
+      present: false
+
+  - type: assert
+    domain: plugin
+    op: checked
+    with:
+      name: worktree
+      text: This webhook is not one Slack will answer on

@@ -1311,6 +1311,17 @@ impl Instructor {
                         req(with, "equals")?
                     ));
                 }
+                // A plain line, read back as the box holds it. It is asked with a word of its own rather
+                // than with the `equals` a choice takes, because the two are different readings: a
+                // choice's answer is ticks and needs the state to say which of the three it is, while a
+                // typed line is either standing in its box or it is not. What a road wants this for is a
+                // value that had to *survive* something — a check that refused it after the save, a form
+                // redrawn — so what is named is the value, not merely that something is there.
+                if let Some(value) = arg_str(with, "holds") {
+                    return Ok(format!(
+                        "Confirm the box for the setting \"{key}\" in \"{name}\"'s settings holds \"{value}\"."
+                    ));
+                }
                 let state = arg_str(with, "state").ok_or_else(|| {
                     "assert `config` on screen needs `state`: a form draws its answer as ticks, and which answer that is cannot be read off them alone".to_string()
                 })?;
@@ -2634,6 +2645,34 @@ steps_gui:
         let mut ins = Instructor::new();
         let line = ins.render(&s.steps(Driver::Gui)[0]).unwrap();
         assert!(line.contains("press the button under \"base\" that empties it"), "got: {line}");
+    }
+
+    /// The other kind of field, read by the word that means a box rather than ticks: what is asked is that
+    /// a typed line is standing where it was left. It takes no state, which is the whole difference — a
+    /// choice's three answers are told apart by a chip, and a box is either holding the value or it is not.
+    #[test]
+    fn a_typed_setting_is_read_back_as_the_box_holding_it() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: plugin
+    op: config
+    with: { name: worktree, key: webhook, holds: https://example.com/hooks/9f2a41 }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let line = ins.render(&s.steps(Driver::Gui)[0]).unwrap();
+        assert!(
+            line.contains("box for the setting \"webhook\"")
+                && line.contains("https://example.com/hooks/9f2a41"),
+            "got: {line}"
+        );
+        assert!(
+            ins.expectation(&s.steps(Driver::Gui)[0]).is_none(),
+            "what a box holds is closed by an eye, like every other reading of this form"
+        );
     }
 
     /// A screen road that says which answer a choice holds without saying which of the three it is has

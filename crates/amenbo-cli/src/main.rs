@@ -2598,7 +2598,7 @@ fn plugin_enable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i32
     .map_err(CliError::from)?;
 
     amenbo_core::plugin_trust::enable(store, name, layer, &fields, has_value, &checked)
-        .map_err(CliError::from)?;
+        .map_err(|refused| refusal_at_the_gate(name, &checked, refused))?;
 
     human(flags, format!("Enabled plugin: {name} ({})", gate_where(store, layer)?));
     if flags.json {
@@ -2609,6 +2609,36 @@ fn plugin_enable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i32
         }));
     }
     Ok(0)
+}
+
+/// What a terminal is told when an enable is refused — the refusal core wrote, plus the way on when the
+/// one who refused was the plugin's own check (`AMB-D-664`).
+///
+/// **The sentence is not rewritten here, and that is the point.** Core says that the check refused and
+/// names the settings it spoke about, in the plugin's declared keys; what the author *wrote* about those
+/// settings is not in it and does not become part of it. This face's output is read by an AI, so a
+/// plugin's own sentences are never put through it — they belong on the settings screen, and on the
+/// execution log, which is what the hint sends a reader to.
+///
+/// The hint is added only when the check is the reason. An enable is refused for other reasons too, and
+/// the one that comes first is an empty `required` field (`AMB-D-351`) — which names itself with a code of
+/// its own and already carries its own way out, so a refusal wearing that code is left as it is even when
+/// the check said no as well.
+fn refusal_at_the_gate(
+    name: &str,
+    checked: &amenbo_core::plugin_check::Checked,
+    refused: amenbo_core::Error,
+) -> CliError {
+    let mut refusal = CliError::from(refused);
+    let by_required =
+        refusal.code == amenbo_core::ErrorCode::InvalidPluginSettingsRequired.as_str();
+    if !checked.opens_the_gate() && !by_required {
+        let cmd = Paths::command_name();
+        refusal.hint = Some(format!(
+            "What the check said about those settings is on the plugin's settings screen, in the app. The run itself is on the execution log: `{cmd} plugin log {name}`.",
+        ));
+    }
+    refusal
 }
 
 /// `plugin disable <name>` — close the gate at the layer this plugin sits at (`disable ≠ uninstall`,

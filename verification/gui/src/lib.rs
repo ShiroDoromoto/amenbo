@@ -1099,11 +1099,21 @@ impl Instructor {
             // The box that press opened, read for what it is holding. Both halves are the step: the words
             // it asks under are the author's, and its being empty is the whole of what a value handed to
             // one run and kept nowhere looks like from the outside.
-            (Domain::Plugin, "press-asks") => format!(
-                "Confirm the press on \"{}\" is asking for a value under the words \"{}\", and that the box is empty rather than carrying anything typed into it before.",
-                req(with, "name")?,
-                req(with, "label")?
-            ),
+            (Domain::Plugin, "press-asks") => {
+                let name = req(with, "name")?;
+                let label = req(with, "label")?;
+                // The credential half is a line of its own rather than a clause on the other: an eye told
+                // to check two things about one box checks the first and reads past the second, and which
+                // of the two boxes is standing there is exactly what a build gets wrong.
+                match with.get("secret").and_then(|v| v.as_bool()) == Some(true) {
+                    true => format!(
+                        "Confirm the press on \"{name}\" is asking for a value under the words \"{label}\", that the box is empty, and that what is typed into it is not drawn back — it is the box a credential goes in."
+                    ),
+                    false => format!(
+                        "Confirm the press on \"{name}\" is asking for a value under the words \"{label}\", and that the box is empty rather than carrying anything typed into it before."
+                    ),
+                }
+            }
             // The button before the gate is open. What is under test is a control a reader can see and
             // cannot use, so the absence of the button would pass this for the wrong reason — the line
             // says both halves out loud.
@@ -2645,6 +2655,35 @@ steps_gui:
         let mut ins = Instructor::new();
         let line = ins.render(&s.steps(Driver::Gui)[0]).unwrap();
         assert!(line.contains("press the button under \"base\" that empties it"), "got: {line}");
+    }
+
+    /// The box a press asks in, in both of the shapes it comes in. The credential one is a line of its own
+    /// rather than a clause added to the other, since an eye handed two things to check about one box
+    /// checks the first — and which of the two boxes is standing there is what a build gets wrong. Neither
+    /// is a reading: an empty box puts no words on a shot, and nor does one drawing dots.
+    #[test]
+    fn a_box_a_press_asks_in_is_read_for_being_empty_and_for_what_it_draws_back() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: plugin
+    op: press-asks
+    with: { name: worktree, label: API token }
+  - type: assert
+    domain: plugin
+    op: press-asks
+    with: { name: worktree, label: Access token, secret: true }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("box is empty") && !lines[0].contains("credential"), "got: {}", lines[0]);
+        assert!(lines[1].contains("not drawn back") && lines[1].contains("credential"), "got: {}", lines[1]);
+        for step in s.steps(Driver::Gui) {
+            assert!(ins.expectation(step).is_none(), "an empty box is closed by an eye");
+        }
     }
 
     /// The other kind of field, read by the word that means a box rather than ticks: what is asked is that

@@ -586,7 +586,9 @@ const REGISTRY: &[OpSpec] = &[
     // press asks for, are states no install reaches. `cmd` is the call the press raises and `label` the
     // words the button is drawn under; `ask` names the one value asked at the press, under the words
     // `ask_label`, and leaving it out is the other shape an operation comes in — a button that runs the
-    // moment it is pressed.
+    // moment it is pressed. `ask_secret` is the author saying that value is a credential, which is a word
+    // on this declaration rather than an op of its own: the field written is the same field, and what the
+    // flag changes is how the form draws the box in front of it.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-action", required: &["name", "cmd", "label"], refs: &[], strings: &["name", "cmd", "label", "ask", "ask_label"], binds: false },
     // And the other half of that same block: the check an author has raised on the values before a gate
     // opens on them. It is written onto what is installed for the reason its neighbours are — no plugin in
@@ -1224,6 +1226,9 @@ const REGISTRY: &[OpSpec] = &[
     // can hold, and the author's sentences being deliberately kept off that face.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "checked", required: &["name", "text"], refs: &[], strings: &["name", "text", "key"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "press-said", required: &["name", "text"], refs: &[], strings: &["name", "text"], binds: false },
+    // `press-asks` takes `secret: true` for the box an author marked a credential: what is read then is
+    // the same emptiness plus the one thing a screen does about the flag — the characters are not drawn
+    // back at whoever typed them.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "press-asks", required: &["name", "label"], refs: &[], strings: &["name", "label"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "press-shut", required: &["name", "label"], refs: &[], strings: &["name", "label"], binds: false },
     // What a crossing's row says about the settings kept there, which is a reading of the row and not of

@@ -448,7 +448,11 @@ impl Driver<'_> {
                 // is left off rather than written empty, which the form would draw as a box with no name.
                 if let Some(key) = with.get("ask").and_then(|v| v.as_str()) {
                     let asked = with.get("ask_label").and_then(|v| v.as_str()).unwrap_or(key);
-                    action["ask"] = serde_json::json!([{ "key": key, "label": asked }]);
+                    // Whether the author called that value a credential. It rides on this same
+                    // declaration for the reason `required` rides on a setting's: the field written is the
+                    // same field, and what the flag changes is what the form does in front of it.
+                    let secret = with.get("ask_secret").and_then(|v| v.as_bool()).unwrap_or(false);
+                    action["ask"] = serde_json::json!([{ "key": key, "label": asked, "secret": secret }]);
                 }
                 // A plugin whose author wrote no settings block carries none, which is a block to write
                 // into all the same — the face is absent, not closed.
@@ -467,9 +471,15 @@ impl Driver<'_> {
                     .map_err(|e| format!("could not write {}: {e}", path.display()))?;
                 // What it asks for is said back, since a button that runs on the press and one that opens
                 // boxes first are two different roads from the same declaration.
-                Ok(Outcome::action(match with.get("ask").and_then(|v| v.as_str()) {
-                    Some(key) => format!("`{name}` now offers `{label}`, which asks for `{key}` at the press"),
-                    None => format!("`{name}` now offers `{label}`, which runs on the press"),
+                let asks_secretly = with.get("ask_secret").and_then(|v| v.as_bool()).unwrap_or(false);
+                Ok(Outcome::action(match (with.get("ask").and_then(|v| v.as_str()), asks_secretly) {
+                    (Some(key), true) => {
+                        format!("`{name}` now offers `{label}`, which asks for `{key}` as a credential at the press")
+                    }
+                    (Some(key), false) => {
+                        format!("`{name}` now offers `{label}`, which asks for `{key}` at the press")
+                    }
+                    (None, _) => format!("`{name}` now offers `{label}`, which runs on the press"),
                 }))
             }
             // And the check that stands in front of the gate, written onto the same block. It is the one

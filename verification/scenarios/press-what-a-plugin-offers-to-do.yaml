@@ -3,10 +3,11 @@
 # the author's own code — the same command face a terminal reaches, raised from the one screen that has the
 # values in front of it.
 #
-# Three promises, and the road is the three of them in order. The button does not run while the gate is
+# Four promises, and the road is the four of them in order. The button does not run while the gate is
 # shut, because pressing it is running somebody's code and the enable is where that was agreed to. A press
-# that needs a one-time value asks for it at the press. And what is typed there is handed to that run and
-# kept nowhere — which is only visible on the *second* press, where the box comes up empty again.
+# that needs a one-time value asks for it at the press. What is typed there is handed to that run and
+# kept nowhere — which is only visible on the *second* press, where the box comes up empty again. And where
+# the author called that value a credential, the box does not draw it back at the person typing it.
 #
 # Like every line that installs a plugin, the premise below goes to the catalog over the network on purpose
 # (see `put-a-plugin-on-the-machine.yaml`): a button on the settings form is a face of a plugin that is
@@ -22,11 +23,13 @@
 id: press-what-a-plugin-offers-to-do
 title: An operation a plugin's author put on its settings form runs from there once the plugin is on, asks for what it needs at the press, and keeps none of it
 description: >
-  Install the official `worktree` plugin, give it an operation its author declared — a button, and one
-  value asked for at the press — and walk it on the settings form. While the plugin is off the button is
-  drawn and cannot be pressed. Turn it on, press it, and the box it asks for comes up empty. Fill it in,
+  Install the official `worktree` plugin, give it two operations its author declared — a button apiece, each
+  asking for one value at the press — and walk them on the settings form. While the plugin is off the button
+  is drawn and cannot be pressed. Turn it on, press it, and the box it asks for comes up empty. Fill it in,
   run it, and the author's own line comes back on the form carrying what was typed. Press it a second time:
-  the box is empty again, which is the whole of a value handed to one run and kept nowhere.
+  the box is empty again, which is the whole of a value handed to one run and kept nowhere. Then the button
+  beside it, whose value its author called a credential: the same run, reached through a box that does not
+  draw back what is typed into it.
 given:
   # The project the road walks its crossing on. A crossing is a plugin and a project, and the project is
   # not one a road on screen can raise on its way past.
@@ -52,6 +55,20 @@ given:
       ask: api_token
       ask_label: API token
 
+  # The button beside it, asking for the other kind of value: one its author called a credential. It is a
+  # second operation rather than a flag on the first because what is under test is the box in front of the
+  # reader, and a form drawing one of the two kinds for both would be caught by nothing else.
+  - type: action
+    domain: plugin
+    op: declare-action
+    with:
+      name: worktree
+      cmd: config sign-in
+      label: Sign in to the service
+      ask: access_token
+      ask_label: Access token
+      ask_secret: true
+
   # And a program behind the button. An operation is code being run, so a press with nothing stood in for
   # it would read whatever the real plugin happened to say — and what the form draws is one line of that.
   - type: action
@@ -62,16 +79,17 @@ given:
 
 # What the road wants in front of it is the device the premise above describes: the project named below on
 # this machine, the official `worktree` plugin installed in the store the build under test opens, its
-# manifest declaring the operation below with the one value it asks for, a program behind it that answers a
+# manifest declaring the two operations below, each with the one value it asks for and only the second of
+# them calling that value a credential, a program behind them that answers a
 # press with a line naming what it was handed, and its gate shut everywhere. Stand that with
 # `devtool devgui cli` and the same declaration the premise makes. Where the run starts does not matter:
 # the first step is the arrival. Every step after it moves the screen, so carry each move out when the run
 # hands that step over.
 #
-# One line is closed by a reading and the rest by an eye. The author's sentence is the reading — it is the
-# one thing on those shots that neither amenbo nor the interface wrote. The button refusing the hand is
-# paint, and the box the press asks in is read for being *empty*, which no reading of the words on a shot
-# can settle.
+# Two lines are closed by a reading and the rest by an eye. The author's sentences are the readings — they
+# are the one thing on those shots that neither amenbo nor the interface wrote. The button refusing the hand
+# is paint, and the box a press asks in is read for being *empty*, and for not drawing back what was typed
+# into it, neither of which a reading of the words on a shot can settle.
 steps_gui:
   # The face this is met on: the plugin is one row among the project's own settings, and the settings kept
   # at that crossing open inside it.
@@ -164,3 +182,37 @@ steps_gui:
     with:
       name: worktree
       label: API token
+
+  # And the button beside it, which asks for a credential. The box is the one difference — what is typed
+  # into it is not drawn back at whoever typed it — and the value still reaches the run, which is the half
+  # a masked box could hide a build having dropped. That it is kept nowhere is the same machinery as the
+  # press above, whose second press came up empty: one state behind two boxes.
+  - type: action
+    domain: plugin
+    op: press
+    with:
+      name: worktree
+      label: Sign in to the service
+
+  - type: assert
+    domain: plugin
+    op: press-asks
+    with:
+      name: worktree
+      label: Access token
+      secret: true
+
+  - type: action
+    domain: plugin
+    op: press-answer
+    with:
+      name: worktree
+      label: Access token
+      value: sk-live-7c41e8b2
+
+  - type: assert
+    domain: plugin
+    op: press-said
+    with:
+      name: worktree
+      text: the operation was handed sk-live-7c41e8b2

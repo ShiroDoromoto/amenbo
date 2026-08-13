@@ -361,8 +361,9 @@ under them, and the same check standing in front of the switch when it is presse
 `choose-from-what-a-plugin-offers` walks a settings form through the three answers a choice holds and
 the button back to the author's default, `press-what-a-plugin-offers-to-do` walks the other half of that
 same form — the operation its author declared, drawn but unpressable while the gate is shut, the box it
-asks for coming up at the press, the author's own line coming back with what was typed in it, and the
-second press finding that box empty again — `finish-writing-a-task-before-anyone-takes-it` walks the one
+asks for coming up at the press, the author's own line coming back with what was typed in it, the
+second press finding that box empty again, and the button beside it asking for a credential through a box
+that draws none of it back — `finish-writing-a-task-before-anyone-takes-it` walks the one
 premise a reader settles where it is reported — the card drawn while its creation is still open, and
 the button inside it that ends the creation, `read-a-plugin-in-your-own-language` walks a listing
 across a language change — the line one author wrote in the reader's language, the row beside it whose
@@ -479,7 +480,8 @@ setting, so none has one translated either — both halves are out of reach for 
 written by the one door. Any of the three takes `required: true`, the flag that says the
 plugin cannot work without an answer — the fail-closed enable is refused while the crossing holds none,
 and no published plugin declares that either. `declare-action` is the fourth of that family and writes what the
-author offers to *do* from that same form — the button, and the one value it asks for at the press — which
+author offers to *do* from that same form — the button, the one value it asks for at the press, and whether
+that value is one the author called a credential — which
 no published plugin declares either, so the operation is a face no install reaches; `plugin press-program`
 stands the program behind it in, since an operation is code being run and what the form draws is one line
 of what that code said. `declare-check` writes the other half of that block — the judgement an author has

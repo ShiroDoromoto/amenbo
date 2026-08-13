@@ -908,3 +908,73 @@ fn plugin_catalog_pins_the_key_a_catalog_publishes_and_refuses_a_changed_one() {
     assert_eq!(re_added["added"], true, "registering again is the way to trust the new key");
     assert_ne!(re_added["fingerprint"], "6272CBB782CB57A0", "and it pins the key served now");
 }
+
+/// A plugin whose author declared a check, with a script that really answers — the two things
+/// `install_plugin` cannot give it: the `settings` block, and an executable.
+#[cfg(unix)]
+fn install_plugin_that_checks(cli: &Cli, name: &str, script: &str) {
+    use std::os::unix::fs::PermissionsExt;
+
+    install_plugin(cli, name, serde_json::json!([{ "key": "smtp_user", "label": "User" }]));
+    let dir = cli.home.join("plugins").join(name);
+    let manifest_path = dir.join("manifest.json");
+    let mut manifest: Value =
+        serde_json::from_str(&std::fs::read_to_string(&manifest_path).unwrap()).unwrap();
+    manifest["settings"] = serde_json::json!({ "check": "config check" });
+    std::fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+
+    let program = dir.join(name);
+    std::fs::write(&program, script).unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+/// `plugin enable` turned away by the plugin's own check (`AMB-D-664`).
+///
+/// What a terminal is told is that the check refused and which of the author's declared settings it spoke
+/// about. What it is **not** told is what the author wrote about them: those sentences are the settings
+/// screen's, where a person is reading, and this face's output is an AI's. The way to them is the hint —
+/// the screen, and the execution log the run itself landed on.
+#[cfg(unix)]
+#[test]
+fn plugin_enable_refused_by_the_check_names_the_settings_and_not_the_authors_words() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    install_plugin_that_checks(
+        &cli,
+        "mail",
+        "#!/bin/sh\ncat >/dev/null\nprintf '%s' '{\"v\":1,\"ok\":false,\"fields\":{\"smtp_user\":\"no such mailbox\"},\"message\":\"cannot sign in\"}'\n",
+    );
+
+    let (refusal, code) = cli.run_err(&["plugin", "enable", "mail"]);
+
+    assert_ne!(code, 0, "a check that says no leaves the plugin off");
+    assert!(refusal.contains("smtp_user"), "the setting the check named is said: {refusal}");
+    for wrote in ["no such mailbox", "cannot sign in"] {
+        assert!(!refusal.contains(wrote), "the author's own sentence reached a terminal: {refusal}");
+    }
+    assert!(refusal.contains("plugin log mail"), "the way to what it said is named: {refusal}");
+
+    // The gate did not move: the listing names no project it fires in.
+    let listed = cli.json(&["plugin", "list", "--json"]);
+    let mail = listed["plugins"].as_array().unwrap().iter().find(|p| p["name"] == "mail").unwrap();
+    assert_eq!(
+        mail["enabled_projects"].as_array().unwrap().len(),
+        0,
+        "the refusal is fail-closed: {listed}"
+    );
+
+    // A check that says nothing readable costs the same, and says so in amenbo's own words.
+    install_plugin_that_checks(&cli, "mail", "#!/bin/sh\ncat >/dev/null\nprintf 'looks fine'\n");
+    let (silent, code) = cli.run_err(&["plugin", "enable", "mail"]);
+    assert_ne!(code, 0);
+    assert!(silent.contains("did not answer"), "a silence is not a yes: {silent}");
+
+    // And the same plugin, once its check says yes, enables as any other does.
+    install_plugin_that_checks(
+        &cli,
+        "mail",
+        "#!/bin/sh\ncat >/dev/null\nprintf '%s' '{\"v\":1,\"ok\":true}'\n",
+    );
+    let enabled = cli.json(&["plugin", "enable", "mail", "--json"]);
+    assert_eq!(enabled["enabled"], true, "a yes opens the gate");
+}

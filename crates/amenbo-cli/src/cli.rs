@@ -480,7 +480,11 @@ pub enum PluginCmd {
     /// command's. Refused while a setting the author
     /// marked `required` is still empty; fill it with `plugin config set` first. Refused too when
     /// the plugin is not compatible with this build — a different payload contract, or a floor above the
-    /// running version (`AMB-D-359`).
+    /// running version (`AMB-D-359`). And refused when the plugin's **own check** says no: a call the
+    /// author declared under `settings`, run here with the values in hand (`AMB-D-664`), where a check
+    /// that fails, hangs or answers unreadably counts as a no. The refusal names the settings the check
+    /// spoke about; what it *said* about them is drawn on the settings screen in the app, and the run
+    /// itself is on `plugin log`.
     Enable {
         /// the installed plugin's name
         name: String,

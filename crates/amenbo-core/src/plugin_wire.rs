@@ -41,7 +41,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::plugin_manifest::{
     AgentGuide, Asset, ConfigField, ConfigFieldOverlay, EventSubscription, Manifest, Os, Platform,
-    Scope, Settings, Translations,
+    Scope, Settings, SettingsOverlay, Translations,
 };
 
 /// **What a browse view draws** — the half of a manifest that rides in `catalog.json`, which everyone
@@ -191,6 +191,11 @@ pub struct DetailOverlay {
     /// (`AMB-D-621`).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub config: BTreeMap<String, ConfigFieldOverlay>,
+    /// The settings block's buttons in this language, keyed by the call each raises (`AMB-D-664`). It
+    /// rides here because the block it translates does: both are read on the form of a plugin someone
+    /// installed, never while browsing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings: Option<SettingsOverlay>,
 }
 
 /// Publish one validated manifest, and what its author wrote it as in other languages, as the documents
@@ -243,9 +248,16 @@ pub fn split(
         about: manifest.about.clone(),
         i18n: translations
             .iter()
-            .filter(|(_, o)| o.about.is_some() || !o.config.is_empty())
+            .filter(|(_, o)| o.about.is_some() || !o.config.is_empty() || o.settings.is_some())
             .map(|(lang, o)| {
-                (lang.clone(), DetailOverlay { about: o.about.clone(), config: o.config.clone() })
+                (
+                    lang.clone(),
+                    DetailOverlay {
+                        about: o.about.clone(),
+                        config: o.config.clone(),
+                        settings: o.settings.clone(),
+                    },
+                )
             })
             .collect(),
     };
@@ -290,6 +302,7 @@ pub fn join(
         let overlay = translations.entry(lang.clone()).or_default();
         overlay.about = o.about.clone();
         overlay.config = o.config.clone();
+        overlay.settings = o.settings.clone();
     }
     let manifest = Manifest {
         name: entry.name.clone(),
@@ -319,7 +332,7 @@ pub fn join(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugin_manifest::{Face, ManifestOverlay};
+    use crate::plugin_manifest::{Face, ManifestOverlay, SettingsActionOverlay};
 
     /// A manifest exercising every field, so a split that drops one is visible rather than merely
     /// unrepresented. Both distributable forms are written at once — which is not a shape the door accepts,
@@ -366,7 +379,8 @@ mod tests {
     }
 
     /// What that manifest's author wrote it as elsewhere, exercising both faces at once: a language that
-    /// translates the line a browse view draws, and the text and labels a detail view shows.
+    /// translates the line a browse view draws, and the text, the labels and the buttons a detail view
+    /// and a settings form show.
     fn translated() -> Translations {
         Translations::from([(
             "ja".to_string(),
@@ -380,6 +394,20 @@ mod tests {
                         ..ConfigFieldOverlay::default()
                     },
                 )]),
+                settings: Some(SettingsOverlay {
+                    actions: BTreeMap::from([(
+                        "config test".to_string(),
+                        SettingsActionOverlay {
+                            label: Some("テスト送信".into()),
+                            ask: BTreeMap::from([(
+                                "api_token".to_string(),
+                                "API トークン".to_string(),
+                            )]),
+                            ..SettingsActionOverlay::default()
+                        },
+                    )]),
+                    ..SettingsOverlay::default()
+                }),
                 ..ManifestOverlay::default()
             },
         )])
@@ -462,7 +490,9 @@ mod tests {
         let overlay = translated()["ja"].clone();
         let translatable = keys(serde_json::to_value(&overlay).unwrap());
         assert!(
-            translatable.contains(&"desc".to_string()) && translatable.contains(&"config".to_string()),
+            translatable.contains(&"desc".to_string())
+                && translatable.contains(&"config".to_string())
+                && translatable.contains(&"settings".to_string()),
             "the fixture translates both faces, or this proves nothing: {translatable:?}",
         );
         for field in &translatable {
@@ -552,6 +582,11 @@ mod tests {
             ja.config["base"].label.as_deref(),
             Some("基点にするブランチ"),
             "and the form labels rode there with it",
+        );
+        assert_eq!(
+            ja.settings.as_ref().unwrap().actions["config test"].label.as_deref(),
+            Some("テスト送信"),
+            "and the buttons on that same form, which is where the block they translate is read",
         );
     }
 
@@ -653,8 +688,8 @@ mod tests {
     /// **A language is published on a face only when it has something to say there** (`AMB-D-622`). An
     /// author who translated the one line a browse view draws and left the detail alone gets a
     /// `catalog.<lang>.json` entry and no detail entry, and one who did the reverse gets the reverse —
-    /// so no reader fetches a document that turns out to hold an empty object. The detail face has two
-    /// translatable fields, and either one alone is something to say there.
+    /// so no reader fetches a document that turns out to hold an empty object. The detail face has three
+    /// translatable fields, and any one of them alone is something to say there.
     #[test]
     fn a_language_reaches_only_the_faces_it_translates() {
         let translations = Translations::from([
@@ -676,6 +711,22 @@ mod tests {
                 },
             ),
             (
+                "es".to_string(),
+                ManifestOverlay {
+                    settings: Some(SettingsOverlay {
+                        actions: BTreeMap::from([(
+                            "config test".to_string(),
+                            SettingsActionOverlay {
+                                label: Some("Enviar una prueba".into()),
+                                ..SettingsActionOverlay::default()
+                            },
+                        )]),
+                        ..SettingsOverlay::default()
+                    }),
+                    ..ManifestOverlay::default()
+                },
+            ),
+            (
                 "fr".to_string(),
                 ManifestOverlay { about: Some("Quelques mots.".into()), ..ManifestOverlay::default() },
             ),
@@ -686,8 +737,8 @@ mod tests {
         assert_eq!(entries.keys().collect::<Vec<_>>(), ["ja"], "only ja translated the line");
         assert_eq!(
             detail.i18n.keys().collect::<Vec<_>>(),
-            ["de", "fr"],
-            "de translated the form and fr the text — each is the detail face on its own",
+            ["de", "es", "fr"],
+            "de translated the form, es its buttons and fr the text — each is the detail face on its own",
         );
     }
 }

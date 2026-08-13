@@ -997,9 +997,10 @@ pub type Translations = BTreeMap<String, ManifestOverlay>;
 ///
 /// It mirrors the manifest's shape and carries only the fields a person reads on a GUI face
 /// (`AMB-D-620`, `AMB-D-638`): the one-line `desc`, the description text a detail view draws, and the
-/// labels of the configuration form. Everything else — the author's name, the category vocabulary, what
-/// the plugin says at the AI's entry point — stays the one language it was written in, so there is no
-/// key here to write it in another.
+/// words of the configuration form — its field labels, and the buttons the settings block puts beside
+/// them (`AMB-D-664`). Everything else — the author's name, the category vocabulary, what the plugin says
+/// at the AI's entry point — stays the one language it was written in, so there is no key here to write
+/// it in another.
 ///
 /// **Every field is optional**, because a translation is a layer and not a replacement: what an author
 /// did not translate is not missing, it is the base value (`AMB-D-623`), and amenbo never fills a gap on
@@ -1026,8 +1027,59 @@ pub struct ManifestOverlay {
     /// re-ordering their form silently re-labels every language.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub config: BTreeMap<String, ConfigFieldOverlay>,
+    /// The words the settings block puts on the same form, in this language (`AMB-D-664`). Absent means
+    /// the buttons read as their author wrote them, the same field-by-field fallback everything here
+    /// takes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings: Option<SettingsOverlay>,
     /// What this overlay named that amenbo does not translate — kept only so the key can be named back
     /// to its author, never read for what it held.
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, Ignored>,
+}
+
+/// **The settings block's words, in one language** (`AMB-D-664`) — the translated half of [`Settings`].
+///
+/// Only what a person reads is here, which on this block is the buttons: `check` and every `cmd` are
+/// calls the plugin answers, not text anyone is shown, so there is no key to write them in another
+/// language.
+///
+/// ```yaml
+/// # plugins/mail.de.yaml
+/// settings:
+///   actions:
+///     config test:                     # the base action's `cmd` is the key
+///       label: Testnachricht senden
+///       ask:
+///         api_token: API-Token         # the base ask's `key` is the key
+/// ```
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SettingsOverlay {
+    /// The operations' words, **keyed by the operation's [`cmd`](SettingsAction::cmd)**, where the
+    /// manifest declares an ordered list — the pairing every translation here takes (`AMB-D-621`), for
+    /// the reason the config fields take it: a translation carries no order of its own, so an author
+    /// re-ordering their buttons would otherwise silently re-label every language.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub actions: BTreeMap<String, SettingsActionOverlay>,
+    /// What this overlay named that amenbo does not translate, as on [`ManifestOverlay`].
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, Ignored>,
+}
+
+/// **One operation's words, in one language** (`AMB-D-664`) — the translated half of a
+/// [`SettingsAction`]. Its `cmd` is the call it raises and is not translated; the button and the boxes a
+/// press puts in front of the user are.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SettingsActionOverlay {
+    /// The words on the button, in this language. Absent means the base label.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    /// The labels beside the boxes this press asks for, **keyed by the ask's [`key`](AskField::key)** —
+    /// the name the value is handed over under, which is the plugin's wire vocabulary and so is never
+    /// translated.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub ask: BTreeMap<String, String>,
+    /// What this overlay named that amenbo does not translate, as on [`ManifestOverlay`].
     #[serde(flatten)]
     pub extra: BTreeMap<String, Ignored>,
 }
@@ -1789,6 +1841,11 @@ mod tests {
                     "placeholder": "main",
                 },
             },
+            "settings": {
+                "actions": {
+                    "config test": { "label": "テスト送信", "ask": { "api_token": "API トークン" } },
+                },
+            },
         }))
         .unwrap();
 
@@ -1802,6 +1859,10 @@ mod tests {
             o.config["events"].help.is_none() && o.config["events"].placeholder.is_none(),
             "a field whose supporting text was left in the base translates none of it",
         );
+        let settings = o.settings.as_ref().expect("the buttons on that form are read there too");
+        let action = &settings.actions["config test"];
+        assert_eq!(action.label.as_deref(), Some("テスト送信"), "keyed by the call it raises, never by position");
+        assert_eq!(action.ask["api_token"], "API トークン", "and the boxes by the name they are handed over under");
         assert!(o.extra.is_empty(), "everything it wrote is something amenbo translates");
 
         // What was not translated re-emits as absent, never as an empty string standing in for a line
@@ -1819,11 +1880,15 @@ mod tests {
             "desc": "説明",
             "author": "書いた人",
             "config": { "base": { "label": "ラベル", "default": "main" } },
+            "settings": { "check": "検査", "actions": { "config test": { "label": "試す", "cmd": "設定 テスト" } } },
         }))
         .unwrap();
 
         assert_eq!(o.extra.keys().collect::<Vec<_>>(), ["author"]);
         assert_eq!(o.config["base"].extra.keys().collect::<Vec<_>>(), ["default"]);
+        let settings = o.settings.as_ref().unwrap();
+        assert_eq!(settings.extra.keys().collect::<Vec<_>>(), ["check"], "a call is not shown to anyone");
+        assert_eq!(settings.actions["config test"].extra.keys().collect::<Vec<_>>(), ["cmd"]);
     }
 
     /// The overlay's file name is what says which language it is, and which manifest it is beside

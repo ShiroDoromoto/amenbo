@@ -337,7 +337,7 @@ describe("this project's plugin crossings", () => {
   it("marks a crossing short of a required value, and opens its settings in the row", async () => {
     hoisted.installs = [install({
       name: "notify",
-      config: [{ key: "webhook_url", label: "Webhook", required: true, secret: false, fieldType: "text", options: [] }],
+      config: [{ key: "webhook_url", label: "Webhook", required: true, secret: false, readonly: false, fieldType: "text", options: [] }],
     })];
     await render([]);
 

@@ -1,0 +1,137 @@
+# A setting whose value is not the user's to give. Some of what a plugin takes it works out for itself —
+# an address its own setup registered, a key it generated — and writes back through the door every value
+# goes in by. What the author declares about such a field is who fills it in, and the whole
+# of what amenbo does with that word is on the screen: no box to type in, and no button to take the value
+# away. Pressing one would not correct anything; it would break the plugin that wrote it.
+#
+# The two roads therefore say opposite things about the same field, and both are the point. A terminal
+# writes it — that door is how the plugin's own value arrives, so closing it would close the road the
+# value comes in on. A screen withholds it, because the person standing there is the one who has nothing
+# to say about this field.
+#
+# Like every line that installs a plugin, the premise below goes to the catalog over the network on
+# purpose (see `put-a-plugin-on-the-machine.yaml`): a field a form refuses to offer is a face of a plugin
+# that is really there.
+id: leave-a-value-the-plugin-wrote-alone
+title: A setting the plugin fills in for itself is shown and not offered — the screen gives no way to type it or to take it away, while the door it was written through stays open
+description: >
+  Install the official `worktree` plugin, give it a setting its author says the plugin fills in itself,
+  and put a value there the way the plugin would. Read it back, and write it again: the write door is
+  open on purpose, since that is the road a generated value arrives on. Then the same field on screen,
+  where the promise is an absence — the value is shown as words, with no box under it to type in and no
+  button beside it to empty it.
+given:
+  # The project the screen road walks its crossing on. A value belongs to a crossing, and the project is
+  # not one a road on screen can raise on its way past.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: worktree
+
+  # Who fills a setting in is the author's word like everything else it takes, and no plugin in the
+  # official catalog declares a setting at all — so the declaration is written onto the installed
+  # manifest here (see the op's own note). Everything after it is amenbo's own doing.
+  - type: action
+    domain: plugin
+    op: declare-setting
+    with:
+      name: worktree
+      key: worker_url
+      label: Worker URL
+      readonly: true
+
+  # And the value the plugin's own setup would have written. It stands in the premise rather than on the
+  # screen road for the reason the declaration does: there is no move on a form that produces it, which
+  # is exactly what that road then reads.
+  - type: action
+    domain: plugin
+    op: config-set
+    with:
+      name: worktree
+      key: worker_url
+      value: https://greenhouse.example.test/board
+
+steps_cli:
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: worker_url
+      equals: https://greenhouse.example.test/board
+
+  # The door stays open here. A plugin that re-registered itself writes the new address through the same
+  # command anybody types, and a refusal on this side would leave it with nowhere to put the value it
+  # just worked out — the declaration binds the screen, not the write.
+  - type: action
+    domain: plugin
+    op: config-set
+    with:
+      name: worktree
+      key: worker_url
+      value: https://greenhouse.example.test/moved
+
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: worker_url
+      equals: https://greenhouse.example.test/moved
+
+  - type: action
+    domain: plugin
+    op: uninstall
+    with:
+      name: worktree
+
+# The same field where the difference is visible. A terminal has no box and no button to withhold, so
+# there is nothing there for this word to change; a form has both, and what it draws instead of them is
+# the whole of what the author declared.
+#
+# What the road wants in front of it is the world the premise stands: the official `worktree` plugin
+# installed in the store the build under test opens, its manifest declaring `worker_url` as a setting the
+# plugin fills in itself, and the address above already held for the project named there. Stand that with
+# `devtool devgui cli` and the same declaration the premise makes. The moves on the row are the
+# operator's, made as the run hands each step over.
+#
+# The line is closed by an eye rather than by a reading: what is being read is an absence, and no reading
+# says what is not on a screen.
+steps_gui:
+  - type: action
+    domain: project
+    op: open-settings
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: plugin
+    op: draw-crossing
+    with:
+      name: worktree
+      project: Greenhouse
+
+  # The settings are opened inside the row, where the crossing has already answered which project the
+  # value belongs to.
+  - type: action
+    domain: plugin
+    op: open-config-in-row
+    with:
+      name: worktree
+      project: Greenhouse
+
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: worker_url
+      readonly: true
+      equals: https://greenhouse.example.test/board

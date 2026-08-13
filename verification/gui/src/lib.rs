@@ -1227,6 +1227,16 @@ impl Instructor {
             (Domain::Plugin, "config") => {
                 let name = req(with, "name")?;
                 let key = req(with, "key")?;
+                // A field whose value the plugin wrote back. What is read here is an
+                // absence — no box, no button — so the value has to be standing there while it is read:
+                // an empty field would draw neither of them either, and would say nothing about whether
+                // this one is out of reach.
+                if with.get("readonly").and_then(|v| v.as_bool()) == Some(true) {
+                    return Ok(format!(
+                        "Confirm the setting \"{key}\" in \"{name}\"'s settings shows \"{}\" as words on the screen, with no box to type into and no button beside it that empties it.",
+                        req(with, "equals")?
+                    ));
+                }
                 let state = arg_str(with, "state").ok_or_else(|| {
                     "assert `config` on screen needs `state`: a form draws its answer as ticks, and which answer that is cannot be read off them alone".to_string()
                 })?;
@@ -1666,6 +1676,26 @@ steps_gui:
         assert!(lines[0].contains("Create a task titled \"SEED\""));
         assert!(lines[1].contains("\"SEED\"") && lines[1].contains("me-ai"));
         assert!(lines[2].contains("\"SEED\"") && lines[2].contains("present in"));
+    }
+
+    /// A setting the plugin fills in for itself: what the operator is asked to confirm is an absence,
+    /// so the instruction names the value that has to be standing there while they read it — an empty
+    /// field would carry no box and no button either, and would prove nothing about this one.
+    #[test]
+    fn a_readonly_setting_is_read_as_a_value_with_nothing_to_press() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: plugin
+    op: config
+    with: { name: viewer, key: worker_url, readonly: true, equals: https://example.test/board }
+"#);
+        let mut ins = Instructor::new();
+        let line = ins.render(&s.steps(Driver::Gui)[0]).unwrap();
+        assert!(line.contains("worker_url") && line.contains("https://example.test/board"), "got: {line}");
+        assert!(line.contains("no box") && line.contains("no button"), "got: {line}");
     }
 
     #[test]

@@ -5,8 +5,8 @@
 //
 // What these guard: **one text with its folders listed under it**, so four folders are four lines and not
 // four screens of identical request; the text on screen before it is copied, with the copy carrying the
-// tool the reader picked; and the two ways off the screen kept apart — **"no" records a refusal** and is
-// the only ending the report has, while **"close" records nothing** and is spent the moment the project is
+// tool the reader picked; and the two ways off the screen kept apart — **the refusal is recorded** and is
+// the only ending the report has, while **"later" records nothing** and is spent the moment the project is
 // opened again.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -40,7 +40,7 @@ vi.mock("../core/mutations", () => ({
   },
 }));
 
-import { t } from "../core/i18n";
+import { t, tn } from "../core/i18n";
 import { AgentHookWiringRow, useAgentHookWiring } from "./AgentHookWiringRow";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -139,16 +139,36 @@ describe("the project's standing wiring row", () => {
     expect(dirs()).toEqual(["/w/one", "/w/two", "/w/three"]);
   });
 
+  // "Once" means one thing over one folder and another over four, and the heading is the only place that
+  // difference is written — the list underneath is the same list either way.
+  it("words the folder heading for how many are waiting", async () => {
+    hoisted.waiting = [waiting({ dirs: ["/w/one"] })];
+    await render();
+    const heading = () => container.querySelector(".agenthookrow__folders")?.textContent;
+
+    expect(heading()).toBe(tn("agentHookWiring.folders", 1));
+
+    hoisted.waiting = [waiting({ dirs: ["/w/one", "/w/two", "/w/three"] })];
+    await render(8);
+
+    expect(heading()).toBe(tn("agentHookWiring.folders", 3));
+    // Read in the language that splits at one — Japanese and the rest write a single arm on purpose.
+    expect(tn("agentHookWiring.folders", 3, "en"), "and the two arms are not the same sentence")
+      .not.toBe(tn("agentHookWiring.folders", 1, "en"));
+  });
+
   // Three buttons and no fourth: the text, the refusal, and the way off the screen that answers nothing.
-  it("offers the text, the no, and the close — and nothing else", async () => {
+  it("offers the text, the refusal, and the way off — and nothing else", async () => {
     hoisted.waiting = [waiting()];
     await render();
 
     expect([...container.querySelectorAll("button")].map((b) => b.textContent)).toEqual([
       t("agentHookWiring.copy"),
       t("agentHookWiring.no"),
-      t("pane.close"),
+      t("agentHookWiring.later"),
     ]);
+    // Its own label, not the shared one — the row's way off the screen and the feed's are named apart.
+    expect(t("agentHookWiring.later")).not.toBe(t("pane.close"));
   });
 
   // The reason the no is on the row at all: it is the one answer that ends the report, and a reader who
@@ -181,7 +201,7 @@ describe("the project's standing wiring row", () => {
     hoisted.waiting = [waiting()];
     await render(7);
 
-    await act(async () => { button(t("pane.close")).click(); });
+    await act(async () => { button(t("agentHookWiring.later")).click(); });
     expect(container.querySelector(".agenthookrow")).toBeNull();
     expect(hoisted.answered, "closing answers nothing").toEqual([]);
 

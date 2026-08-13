@@ -392,7 +392,7 @@ function HarnessSection({ projectId }: { projectId: number }) {
             board row's question, asked where the text is; what is outstanding is a folder. */}
         {waitingDirs.length > 0 && (
           <div className="settings__row">
-            <span className="settings__k">{t("agentHookWiring.title")}</span>
+            <span className="settings__k">{t("projset.harnessWaiting")}</span>
             <ul className="agenthookrow__dirs">
               {waitingDirs.map((dir) => <li key={dir}>{dir}</li>)}
             </ul>

@@ -28,7 +28,7 @@
 // reader owns, made by an AI of theirs, so the moment to read it is before it is handed over.
 import { useCallback, useEffect, useState } from "react";
 import { answerAgentHookOffer, fetchAgentHookProjectWiring } from "../core/mutations";
-import { errText, t, tf } from "../core/i18n";
+import { errText, t, tf, tn } from "../core/i18n";
 import type { AgentHookWiringDto } from "../bindings/bindings";
 
 /** What a project still has to wire, and the row's way of saying a refusal has landed. */
@@ -145,7 +145,9 @@ export function AgentHookWiringRow({ projectId, wiring }: { projectId: number; w
       <div className="agenthookrow__what">
         {tf("agentHookWiring.what", { tool: row.tool.label, file: row.tool.pasteInto })}
       </div>
-      <div className="agenthookrow__folders">{t("agentHookWiring.folders")}</div>
+      {/* Counted, because the one instruction the heading carries is what it means to paste "once": with a
+          single folder that is the whole of it, and with several it is once over again in each. */}
+      <div className="agenthookrow__folders">{tn("agentHookWiring.folders", row.dirs.length)}</div>
       <ul className="agenthookrow__dirs">
         {row.dirs.map((dir) => <li key={dir}>{dir}</li>)}
       </ul>
@@ -160,8 +162,10 @@ export function AgentHookWiringRow({ projectId, wiring }: { projectId: number; w
         <button className="btn" disabled={busy} onClick={() => void refuse()}>
           {t("agentHookWiring.no")}
         </button>
+        {/* Its own label, not the shared "close" one: the two buttons beside each other differ in what they
+            leave behind, and that is what each says (`AMB-D-663`). */}
         <button className="btn" disabled={busy} onClick={() => setClosed(true)}>
-          {t("pane.close")}
+          {t("agentHookWiring.later")}
         </button>
       </div>
     </div>

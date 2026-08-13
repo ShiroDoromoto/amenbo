@@ -94,6 +94,7 @@ const ui = {
   "projset.harnessYes": "Yes",
   "projset.harnessNo": "No",
   "projset.harnessUnanswered": "Not asked yet",
+  "projset.harnessWaiting": "Folders here that still start their AI without amenbo",
   "projset.harnessClear": "Clear the answer",
   "nav.settings": "Settings", "nav.onboarding": "Get started",
   "nav.decisions": "Decisions", "nav.commands": "Commands", "nav.search": "Search",
@@ -484,13 +485,15 @@ const ui = {
   // The standing row on a project's own screen — the whole of what the GUI says about the session-start
   // hook. It speaks for one project and names that project's folders, and the last of its buttons is the
   // "no" that ends it.
-  "agentHookWiring.title": "Folders here that still start their AI without amenbo",
+  "agentHookWiring.title": "Have your AI read amenbo at the start of every session",
   "agentHookWiring.what": "{tool}: give the text below to your AI to edit {file}, and your AI reads how to work with amenbo at the start of every session and records the work as tasks.",
-  "agentHookWiring.folders": "Once in each of these folders:",
+  "agentHookWiring.folders.one": "The folder still waiting (paste the text once):",
+  "agentHookWiring.folders.other": "The folders still waiting (paste the text once in each):",
   "agentHookWiring.pick": "Which tool do you use here?",
   "agentHookWiring.copy": "Copy the text",
   "agentHookWiring.copied": "Copied",
-  "agentHookWiring.no": "No",
+  "agentHookWiring.no": "Don't show this again",
+  "agentHookWiring.later": "Later",
   "app.crashTitle": "Something went wrong",
   "app.crashHint": "The screen failed to render. Reload to recover — your data is safe.",
   "app.crashReload": "Reload",

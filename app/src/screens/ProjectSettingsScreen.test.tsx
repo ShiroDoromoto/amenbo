@@ -445,6 +445,6 @@ describe("the answer about starting this project's AI on amenbo", () => {
   it("says nothing where no folder is waiting", async () => {
     await render([]);
 
-    expect(harnessSection().textContent).not.toContain(t("agentHookWiring.title"));
+    expect(harnessSection().textContent).not.toContain(t("projset.harnessWaiting"));
   });
 });

@@ -15,8 +15,8 @@ description: >
   read back not just that it failed but which rule it failed on. A check that says "invalid" for the wrong
   reason is a check an author cannot act on. Then write the same manifest in another language, in the file
   beside it that is how a translation is supplied, and see that it is read with the manifest: one that lines
-  up passes, one naming a setting the manifest does not declare is turned down, and one written in a
-  language amenbo is not read in is turned down too.
+  up — its settings form's buttons included — passes, one naming a setting the manifest does not declare is
+  turned down, and one written in a language amenbo is not read in is turned down too.
 steps_cli:
   - type: action
     domain: repo
@@ -449,7 +449,17 @@ steps_cli:
             options:
               - value: task.done
                 label: Finished
+        settings:
+          actions:
+            - cmd: config test
+              label: SCENARIO — press me
+              ask:
+                - key: one_time_code
+                  label: SCENARIO — a code asked for once
 
+  # Everything on that form is read by the same person, so the buttons the settings block puts beside the
+  # fields are translated with them — each keyed by the call it raises, and each asked value by the name it
+  # is handed over under, because a translation carries no order of its own.
   - type: action
     domain: repo
     op: write-file
@@ -462,6 +472,12 @@ steps_cli:
             label: Was gemeldet wird
             options:
               task.done: Aufgabe erledigt
+        settings:
+          actions:
+            config test:
+              label: SCENARIO — hier drücken
+              ask:
+                one_time_code: SCENARIO — ein einmal abgefragter Code
 
   - type: assert
     domain: plugin

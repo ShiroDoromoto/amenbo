@@ -36,7 +36,7 @@ use crate::error::Msg;
 use crate::plugin_config::MAX_CONFIG_IDENT_BYTES;
 use crate::plugin_manifest::{
     ConfigField, ConfigFieldOverlay, Face, FieldType, Manifest, ManifestOverlay, Os, SettingsAction,
-    Translations, NONE_SELECTED,
+    SettingsOverlay, Translations, NONE_SELECTED,
 };
 use crate::plugin_wire::{ListEntry, ListEntryOverlay};
 
@@ -518,6 +518,80 @@ fn check_overlay(problems: &mut Vec<Problem>, m: &Manifest, lang: &str, o: &Mani
                 continue;
             }
             check_line(problems, &at_option, label, MAX_LABEL_LEN);
+        }
+    }
+
+    if let Some(settings) = &o.settings {
+        check_settings_overlay(problems, m, &at("settings"), settings);
+    }
+}
+
+/// One language's **settings block** against the base's (`AMB-D-664`) — the buttons on the form whose
+/// labels the block above just translated, held to the same two rules everything here is:
+///
+/// - **what it names exists in the base** — the operation, keyed by the call it raises, and the value that
+///   operation asks for, keyed by the name it is handed over under. A key lining up with nothing is a
+///   translation whose only symptom is that it never appears, which is the `config` case again.
+/// - **the text obeys the rule its base text obeys** — the same functions the base labels go through
+///   ([`check_action_label`], [`check_ask_label`]), so a button is one line inside a button in every
+///   language.
+///
+/// Neither `check` nor an operation's `cmd` is here to be gotten wrong: they are calls, not text a reader
+/// is shown, so an overlay naming one is an unknown key and is named back as such above.
+fn check_settings_overlay(
+    problems: &mut Vec<Problem>,
+    m: &Manifest,
+    loc: &str,
+    o: &SettingsOverlay,
+) {
+    let Some(base) = &m.settings else {
+        problems.push(Problem::new(
+            loc,
+            ProblemCode::NotInBase,
+            "the manifest declares no settings to translate",
+        ));
+        return;
+    };
+
+    for extra in o.extra.keys() {
+        problems.push(Problem::new(
+            format!("{loc}.{extra}"),
+            ProblemCode::NotInBase,
+            format!("'{extra}' is not something amenbo shows a reader in their own language"),
+        ));
+    }
+
+    for (cmd, action) in &o.actions {
+        let at = format!("{loc}.actions[{cmd}]");
+        let Some(base) = base.actions.iter().find(|a| &a.cmd == cmd) else {
+            problems.push(Problem::new(
+                at,
+                ProblemCode::NotInBase,
+                format!("settings declares no action '{cmd}'"),
+            ));
+            continue;
+        };
+        for extra in action.extra.keys() {
+            problems.push(Problem::new(
+                format!("{at}.{extra}"),
+                ProblemCode::NotInBase,
+                format!("'{extra}' is not something amenbo shows a reader in their own language"),
+            ));
+        }
+        if let Some(label) = &action.label {
+            check_action_label(problems, &format!("{at}.label"), label);
+        }
+        for (key, label) in &action.ask {
+            let at_ask = format!("{at}.ask[{key}]");
+            if !base.ask.iter().any(|f| &f.key == key) {
+                problems.push(Problem::new(
+                    at_ask,
+                    ProblemCode::NotInBase,
+                    format!("action '{cmd}' asks for no '{key}'"),
+                ));
+                continue;
+            }
+            check_ask_label(problems, &at_ask, label);
         }
     }
 }
@@ -1250,6 +1324,10 @@ fn check_config_key(problems: &mut Vec<Problem>, loc: &str, key: &str) {
 /// - **each call is a call.** `check` and every operation's `cmd` are the plugin's own command face, so
 ///   they are held to the grammar every other declared call is held to ([`check_cmd`], `AMB-D-572`) —
 ///   which is also what keeps prose out of a line drawn nowhere but run.
+/// - **no two operations raise the same call.** A `cmd` is what a translation pairs its button with
+///   (`AMB-D-621`, [`check_settings_overlay`]) — a translation carries no order of its own — so the same
+///   one twice is a key that names two buttons, and one of them is relabelled in every language but the
+///   author's.
 /// - **a block that raises nothing is named.** Declaring `settings` with neither a check nor an operation
 ///   changes nothing at all, and silence is the one answer an author cannot debug.
 /// - **the face has room for it** — [`MAX_SETTINGS_ACTIONS`] buttons, each with a label short enough to be
@@ -1281,8 +1359,17 @@ fn check_settings(problems: &mut Vec<Problem>, m: &Manifest) {
         ));
     }
     let stored: HashSet<&str> = m.config.iter().map(|f| f.key.as_str()).collect();
+    let mut seen = HashSet::new();
     for (i, action) in settings.actions.iter().enumerate() {
-        check_cmd(problems, &format!("settings.actions[{i}].cmd"), &action.cmd);
+        let at_cmd = format!("settings.actions[{i}].cmd");
+        check_cmd(problems, &at_cmd, &action.cmd);
+        if !action.cmd.is_empty() && !seen.insert(action.cmd.as_str()) {
+            problems.push(Problem::new(
+                at_cmd,
+                ProblemCode::Duplicate,
+                format!("action '{}' is declared more than once", action.cmd),
+            ));
+        }
         check_action_label(problems, &format!("settings.actions[{i}].label"), &action.label);
         check_ask(problems, i, action, &stored);
     }
@@ -1314,6 +1401,16 @@ fn check_action_label(problems: &mut Vec<Problem>, at: &str, label: &str) {
             format!("{at} must not contain control characters"),
         ));
     }
+    check_no_record_ref(problems, at, label);
+}
+
+/// Check one asked value's label, base or translated — one function so a translation is held to the rules
+/// its base is held to (`AMB-D-620`), as [`check_action_label`] is.
+///
+/// It is the label a form field keeps ([`MAX_LABEL_LEN`], one line, non-empty), plus the no-citing rule
+/// every author string on this screen keeps (`AMB-D-572`).
+fn check_ask_label(problems: &mut Vec<Problem>, at: &str, label: &str) {
+    check_line(problems, at, label, MAX_LABEL_LEN);
     check_no_record_ref(problems, at, label);
 }
 
@@ -1354,8 +1451,7 @@ fn check_ask(
         let at = format!("settings.actions[{i}].ask[{j}]");
         let key = format!("{at}.key");
         check_config_key(problems, &key, &field.key);
-        check_line(problems, &format!("{at}.label"), &field.label, MAX_LABEL_LEN);
-        check_no_record_ref(problems, &format!("{at}.label"), &field.label);
+        check_ask_label(problems, &format!("{at}.label"), &field.label);
         if !field.key.is_empty() {
             if stored.contains(field.key.as_str()) {
                 problems.push(Problem::new(
@@ -1593,7 +1689,7 @@ mod tests {
     use super::*;
     use crate::plugin_manifest::{
         AgentCommand, AgentGuide, Arch, Asset, AskField, ConfigField, ConfigOption,
-        EventSubscription, Face, Ignored, Manifest, Os, Platform, Settings,
+        EventSubscription, Face, Ignored, Manifest, Os, Platform, Settings, SettingsActionOverlay,
     };
 
     /// An arch-agnostic platform key (`<os>`).
@@ -2262,6 +2358,26 @@ mod tests {
         }
     }
 
+    /// The call an operation raises is what its translation is paired by (`AMB-D-621`), so declaring the
+    /// same one twice is a key naming two buttons — and the second of them would read as the first in
+    /// every language but the one it was written in.
+    #[test]
+    fn two_actions_raising_the_same_call_are_refused() {
+        let m = with_settings(
+            None,
+            vec![action("config test", "Send a test"), action("config test", "Send another")],
+        );
+        let problems = validate_manifest(&m);
+        assert_eq!(codes(&problems), [ProblemCode::Duplicate]);
+        assert_eq!(problems[0].location, "settings.actions[1].cmd");
+
+        let distinct = with_settings(
+            None,
+            vec![action("config test", "Send a test"), action("setup", "Set up")],
+        );
+        assert!(validate_manifest(&distinct).is_empty(), "{:?}", validate_manifest(&distinct));
+    }
+
     /// Every operation is a button on one form, so the list has a ceiling — a plugin needing more of them
     /// has a command face where a caller may pass anything.
     #[test]
@@ -2835,6 +2951,130 @@ mod tests {
             codes(&validate_overlays(&m, &huge)).contains(&ProblemCode::SchemaTooLarge),
             "the form is drawn one language at a time, so each language is bounded like the base",
         );
+    }
+
+    /// That manifest with a settings block, so an overlay has a button and a one-time box to translate
+    /// (`AMB-D-664`).
+    fn valid_with_settings() -> Manifest {
+        let mut m = valid_with_candidates();
+        m.settings = Some(Settings {
+            check: Some("config check".into()),
+            actions: vec![SettingsAction {
+                ask: vec![ask("api_token", "API token")],
+                ..action("config test", "Send a test message")
+            }],
+        });
+        m
+    }
+
+    /// One language's overlay of that block — the button keyed by the call it raises, the boxes by the
+    /// name each is handed over under.
+    fn settings_overlay(cmd: &str, label: Option<&str>, ask: &[(&str, &str)]) -> Translations {
+        let mut t = overlay("ja");
+        t.get_mut("ja").unwrap().settings = Some(SettingsOverlay {
+            actions: std::collections::BTreeMap::from([(
+                cmd.to_string(),
+                SettingsActionOverlay {
+                    label: label.map(str::to_string),
+                    ask: ask.iter().map(|(k, v)| ((*k).to_string(), (*v).to_string())).collect(),
+                    ..SettingsActionOverlay::default()
+                },
+            )]),
+            ..SettingsOverlay::default()
+        });
+        t
+    }
+
+    /// The words a press puts on the screen translate like the words beside them (`AMB-D-664`,
+    /// `AMB-D-620`): the button, and the label of each value it asks for.
+    #[test]
+    fn a_translated_settings_block_that_lines_up_has_no_problems() {
+        let m = valid_with_settings();
+        let t = settings_overlay("config test", Some("テスト送信"), &[("api_token", "API トークン")]);
+        assert!(validate_overlays(&m, &t).is_empty(), "{:?}", validate_overlays(&m, &t));
+
+        // A layer over the block that translates only the button is the field-by-field fallback, not a
+        // gap: the boxes read as their author wrote them (`AMB-D-623`).
+        let button_only = settings_overlay("config test", Some("テスト送信"), &[]);
+        assert!(validate_overlays(&m, &button_only).is_empty());
+    }
+
+    /// **Everything the settings layer names has to exist in the base too** (`AMB-D-621`) — the block, the
+    /// operation keyed by its call, the value that operation asks for, and the keys amenbo does not show a
+    /// reader at all. Each would otherwise be a translation whose only symptom is that it never appears.
+    #[test]
+    fn a_translated_settings_block_naming_what_the_base_does_not_have_is_refused() {
+        let m = valid_with_settings();
+
+        let no_such_action = settings_overlay("config send", Some("送信"), &[]);
+        let problems = validate_overlays(&m, &no_such_action);
+        assert_eq!(codes(&problems), vec![ProblemCode::NotInBase]);
+        assert_eq!(problems[0].location, "i18n[ja].settings.actions[config send]");
+
+        let no_such_ask = settings_overlay("config test", None, &[("code", "確認コード")]);
+        let problems = validate_overlays(&m, &no_such_ask);
+        assert_eq!(codes(&problems), vec![ProblemCode::NotInBase]);
+        assert_eq!(problems[0].location, "i18n[ja].settings.actions[config test].ask[code]");
+
+        // The call itself is not text anyone is shown, so translating it is an unknown key — at the block
+        // and at the operation alike.
+        let mut translated_call = settings_overlay("config test", Some("テスト送信"), &[]);
+        let settings = translated_call.get_mut("ja").unwrap().settings.as_mut().unwrap();
+        settings.extra.insert("check".into(), Ignored);
+        settings.actions.get_mut("config test").unwrap().extra.insert("cmd".into(), Ignored);
+        let problems = validate_overlays(&m, &translated_call);
+        assert_eq!(codes(&problems), vec![ProblemCode::NotInBase; 2]);
+        assert_eq!(problems[0].location, "i18n[ja].settings.check");
+        assert_eq!(problems[1].location, "i18n[ja].settings.actions[config test].cmd");
+
+        // And a manifest with no block at all has nothing here to translate.
+        let mut no_block = valid_with_candidates();
+        no_block.settings = None;
+        let problems =
+            validate_overlays(&no_block, &settings_overlay("config test", Some("テスト送信"), &[]));
+        assert_eq!(codes(&problems), vec![ProblemCode::NotInBase]);
+        assert_eq!(problems[0].location, "i18n[ja].settings");
+    }
+
+    /// **A translated button is held to the rules its base is** (`AMB-D-620`). It is drawn in the same
+    /// button and beside the same box whichever language fills it, so the cap, the one-line shape and the
+    /// no-citing rule (`AMB-D-572`) travel with the field.
+    #[test]
+    fn a_translated_button_obeys_the_rules_the_base_button_obeys() {
+        let m = valid_with_settings();
+
+        for (label, code) in [
+            (String::new(), ProblemCode::Empty),
+            ("あ".repeat(MAX_ACTION_LABEL_BYTES / 3 + 1), ProblemCode::TooLong),
+            ("テスト\n送信".into(), ProblemCode::ControlChar),
+            ("送信する（AMB-D-411）".into(), ProblemCode::RecordRef),
+        ] {
+            let t = settings_overlay("config test", Some(&label), &[]);
+            let problems = validate_overlays(&m, &t);
+            assert!(codes(&problems).contains(&code), "{label:?} must be refused: {problems:?}");
+            assert!(
+                problems
+                    .iter()
+                    .any(|p| p.location == "i18n[ja].settings.actions[config test].label"),
+                "{problems:?}",
+            );
+        }
+
+        for (label, code) in [
+            (String::new(), ProblemCode::Empty),
+            ("ラ".repeat(MAX_LABEL_LEN + 1), ProblemCode::TooLong),
+            ("AMB-D-411 のトークン".into(), ProblemCode::RecordRef),
+        ] {
+            let t = settings_overlay("config test", None, &[("api_token", &label)]);
+            let problems = validate_overlays(&m, &t);
+            assert!(codes(&problems).contains(&code), "{label:?} must be refused: {problems:?}");
+            assert!(
+                problems
+                    .iter()
+                    .any(|p| p.location == "i18n[ja].settings.actions[config test].ask[api_token]"),
+                "{problems:?}",
+            );
+        }
     }
 
     /// A manifest whose first field carries both supporting texts, so an overlay has a paragraph and an

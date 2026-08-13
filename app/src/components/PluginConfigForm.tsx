@@ -10,7 +10,7 @@ import {
   type PluginInstall,
   type PluginLayer,
 } from "../core/pluginInstalls";
-import { optionLabel, settingLabel } from "../core/pluginText";
+import { optionLabel, settingHelp, settingLabel, settingPlaceholder } from "../core/pluginText";
 
 /**
  * The settings of one installed plugin, drawn from the schema its author declared (`AMB-D-356`).
@@ -29,6 +29,11 @@ import { optionLabel, settingLabel } from "../core/pluginText";
  * **A secret is written, never read back.** It never leaves core — the form has only "held / not held"
  * to draw — which is why setting one asks for it twice: with nothing to compare against afterwards, the
  * second box is the only check on a typo.
+ *
+ * **The author may say more than a caption** (`AMB-D-656`): a paragraph under the input, an example
+ * inside an empty one, and — for a value their own plugin writes back — no input at all. What they wrote
+ * is drawn as plain text, with no Markdown and no link: a form asking for a credential is the last screen
+ * on which to offer somewhere its author chose to go.
  *
  * **Every value belongs to one layer** (`AMB-D-434` / `AMB-D-601`), secret or not — a project's rows, or
  * the device's for a plugin its author declared the machine's — and **which one is the caller's to say**
@@ -136,7 +141,11 @@ export function PluginConfigForm({ install, layer, onWrote }: {
               group rather than pointing at one input. */}
           <label
             className="plugcfg__label"
-            htmlFor={f.fieldType === "multi" ? undefined : `cfg-${install.name}-${f.key}`}
+            htmlFor={
+              f.fieldType === "multi" || f.readonly
+                ? undefined
+                : `cfg-${install.name}-${f.key}`
+            }
           >
             {settingLabel(f)}
             {f.required && <span className="chip">{t("plugins.cfg.required")}</span>}
@@ -155,7 +164,12 @@ export function PluginConfigForm({ install, layer, onWrote }: {
               </span>
             )}
           </label>
-          {f.secret ? (
+          {f.readonly ? (
+            /* The plugin writes this one (`AMB-D-656`), so there is nothing to type: the value stands
+               where its input would, and the clear button below is not drawn either. A secret readonly
+               field is down to the chip above — its value never leaves core, so there is none to show. */
+            !f.secret && stored(f) !== "" && <div className="plugcfg__fixed">{stored(f)}</div>
+          ) : f.secret ? (
             <>
               <input
                 {...asTyped}
@@ -164,7 +178,11 @@ export function PluginConfigForm({ install, layer, onWrote }: {
                 autoComplete="new-password"
                 disabled={busy}
                 value={secrets[f.key]?.value ?? ""}
-                placeholder={heldFor(f.key)?.secretSet ? t("plugins.cfg.secretReplace") : ""}
+                placeholder={
+                  heldFor(f.key)?.secretSet
+                    ? t("plugins.cfg.secretReplace")
+                    : settingPlaceholder(f) ?? ""
+                }
                 onChange={(e) =>
                   setSecrets((s) => ({
                     ...s,
@@ -227,12 +245,18 @@ export function PluginConfigForm({ install, layer, onWrote }: {
               disabled={busy}
               value={shown(f)}
               /* An empty box under a "default" chip would leave the value in force unreadable — the
-                 candidates of a choice are ticked, and this is the same showing for a line. */
-              placeholder={f.defaultValue ?? ""}
+                 candidates of a choice are ticked, and this is the same showing for a line. The
+                 author's example takes the slot only where there is no default to show in it: a
+                 default is the value a run really receives, and an example is not (`AMB-D-656`). */
+              placeholder={f.defaultValue ?? settingPlaceholder(f) ?? ""}
               onChange={(e) => setEdits((s) => ({ ...s, [f.key]: e.target.value }))}
             />
           )}
-          {held(heldFor(f.key)) && (
+          {/* The author's own paragraph about this field (`AMB-D-656`), under the input it explains.
+              Text and nothing else: the newlines are theirs, and no Markdown or link is drawn from it —
+              this is the screen a secret is typed into. */}
+          {settingHelp(f) && <div className="faint plugcfg__help">{settingHelp(f)}</div>}
+          {!f.readonly && held(heldFor(f.key)) && (
             <button
               className="feed__action"
               disabled={busy}

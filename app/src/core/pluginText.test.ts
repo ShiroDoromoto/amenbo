@@ -4,13 +4,21 @@
 // one is the ordinary state, and it has to read as one line of prose either way.
 import { describe, expect, it } from "vitest";
 import type { PluginConfigOptionDto, PluginWantedSettingDto } from "../bindings/bindings";
-import { optionLabel, pluginAbout, pluginDesc, settingLabel } from "./pluginText";
+import {
+  optionLabel,
+  pluginAbout,
+  pluginDesc,
+  settingHelp,
+  settingLabel,
+  settingPlaceholder,
+} from "./pluginText";
 
 const setting = (over: Partial<PluginWantedSettingDto>): PluginWantedSettingDto => ({
   key: "channel",
   label: "Channel",
   secret: false,
   required: true,
+  readonly: false,
   fieldType: "text",
   options: [],
   ...over,
@@ -54,6 +62,19 @@ describe("settingLabel", () => {
   it("captions a field in the reader's language, else the author's", () => {
     expect(settingLabel(setting({ labelI18n: "チャンネル" }))).toBe("チャンネル");
     expect(settingLabel(setting({}))).toBe("Channel");
+  });
+});
+
+describe("settingHelp and settingPlaceholder", () => {
+  it("take the reader's language, else the author's, else nothing at all", () => {
+    expect(settingHelp(setting({ help: "Paste the URL.", helpI18n: "URL を貼る。" }))).toBe("URL を貼る。");
+    expect(settingHelp(setting({ help: "Paste the URL." }))).toBe("Paste the URL.");
+    expect(settingHelp(setting({}))).toBeUndefined();
+
+    expect(settingPlaceholder(setting({ placeholder: "2026-01-31", placeholderI18n: "2026年1月31日" })))
+      .toBe("2026年1月31日");
+    expect(settingPlaceholder(setting({ placeholder: "2026-01-31" }))).toBe("2026-01-31");
+    expect(settingPlaceholder(setting({}))).toBeUndefined();
   });
 });
 

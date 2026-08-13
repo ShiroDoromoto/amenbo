@@ -44,6 +44,25 @@ export function settingLabel(f: PluginWantedSettingDto): string {
 }
 
 /**
+ * A setting's paragraph in the reader's language, else the author's own — and `undefined` for a field
+ * whose author wrote none (`AMB-D-656`), which is a field whose label says everything it has to say.
+ *
+ * Whatever comes back is drawn as plain text: no Markdown, no link (`AMB-D-656`).
+ */
+export function settingHelp(f: PluginWantedSettingDto): string | undefined {
+  return f.helpI18n ?? f.help ?? undefined;
+}
+
+/**
+ * A setting's example in the reader's language, else the author's own (`AMB-D-656`) — `undefined` where
+ * they wrote none. An example is not always the same string in every language, which is why it has a
+ * translated half at all.
+ */
+export function settingPlaceholder(f: PluginWantedSettingDto): string | undefined {
+  return f.placeholderI18n ?? f.placeholder ?? undefined;
+}
+
+/**
  * One candidate's caption in the reader's language, else the author's own. The value beside it is never
  * translated — it is what travels to the plugin.
  */

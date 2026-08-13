@@ -320,6 +320,11 @@
 .plugcfg__choice { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-xs); }
 .plugcfg__choice input { width: auto; }
 .plugcfg__note { font-size: var(--fs-xs); }
+/* The author's paragraph under an input (`AMB-D-656`). Their line breaks are kept — it is a body, and
+   the only shape it has is the one they typed — and nothing in it is drawn as markup or as a link. */
+.plugcfg__help { font-size: var(--fs-xs); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* A field whose value the plugin writes, standing where its input would (`AMB-D-656`). */
+.plugcfg__fixed { font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .plugdet__readme { border-top: 1px solid var(--c-border); padding-top: var(--s-3); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .plugdet__foot { border-top: 1px solid var(--c-border); margin-top: var(--s-4); padding-top: var(--s-2); font-size: var(--fs-xs); }
 /* Holder-side surface of `AMB-D-366`: premises pinned on after a task was reserved. A different axis from

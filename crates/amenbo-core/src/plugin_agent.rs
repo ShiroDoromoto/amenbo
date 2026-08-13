@@ -37,6 +37,12 @@
 //! description is written there whoever wrote it (`AMB-D-576`). What the split decides is which reader a
 //! sentence reaches, not whether it is kept.
 //!
+//! **What a plugin's settings say never rides here either** (`AMB-D-656`), badge or no badge. A field's
+//! `help` and `placeholder` are the author's prose as much as `desc` is, and the readers they were
+//! written for are the settings form and `plugin config get`. The split above says which of an author's
+//! sentences an AI meets; these two meet none, which a test holds over the whole entry rather than over
+//! the keys it happens to have today.
+//!
 //! **A call can also be hung where it is a tool** (`AMB-D-571`, [`tools`]): the author names the step of
 //! amenbo's own cycle their call serves, and the step is handed the calling form alone. The shelves stay
 //! as they were — the sentences never leave this one — and what crosses is a number and a line to type.
@@ -280,6 +286,51 @@ mod tests {
                 "events": ["task.status_changed"],
             })
         );
+    }
+
+    /// **What an author wrote about their settings stays off the AI's face** (`AMB-D-656`). `help` and
+    /// `placeholder` are prose, and prose in the one document an AI is pointed at reads as instruction —
+    /// the line `AMB-D-575`/`AMB-D-576` drew for `desc`, drawn again for the two keys that came later.
+    ///
+    /// Today no part of the schema rides here, which is why the guard is over the whole entry as text
+    /// rather than over the keys it has: what it holds is not *these keys are absent* but *nothing an
+    /// author wrote about a field arrives*, however a later change spells it. The badge makes no
+    /// difference — an official author's paragraph is prose too, and `plugin config get` and the settings
+    /// form are where either is read.
+    #[test]
+    fn nothing_an_author_wrote_about_a_setting_reaches_the_entry_point() {
+        use crate::plugin_manifest::ConfigField;
+
+        let mut plugin = installed("worktree", Some(guide()), &["task.status_changed"]);
+        plugin.manifest.config = vec![
+            ConfigField {
+                help: Some("Create it under Incoming Webhooks.".into()),
+                placeholder: Some("https://hooks.example.test/T000/B000".into()),
+                secret: true,
+                ..ConfigField::new("webhook_url", "Webhook URL")
+            },
+            ConfigField { readonly: true, ..ConfigField::new("worker_url", "Worker URL") },
+        ];
+
+        let written = [
+            "config",
+            "webhook_url",
+            "Webhook URL",
+            "Create it under",
+            "hooks.example.test",
+            "worker_url",
+            "readonly",
+            "placeholder",
+        ];
+        for official in [true, false] {
+            plugin.manifest.official = official;
+            let document = serde_json::to_string(&entry(&plugin, "amenbo").0).unwrap();
+            let hung = format!("{:?}", tools(&[&plugin], "amenbo"));
+            for word in written {
+                assert!(!document.contains(word), "'{word}' reached the entry: {document}");
+                assert!(!hung.contains(word), "'{word}' reached a step: {hung}");
+            }
+        }
     }
 
     /// The name in the calling form is the one read off disk, and the command word is this build's — a

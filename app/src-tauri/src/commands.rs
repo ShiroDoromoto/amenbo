@@ -5599,7 +5599,6 @@ pub fn plugin_set_enabled(
             let checked = amenbo_core::plugin_check::run(
                 store,
                 &installed,
-                layer,
                 project_id,
                 amenbo_core::plugin_check::TIMEOUT,
             )?;

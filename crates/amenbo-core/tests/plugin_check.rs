@@ -75,9 +75,8 @@ fn enable_after_check_within(
     bound: Duration,
 ) -> amenbo_core::error::Result<Checked> {
     let plugin = amenbo_core::plugin_installed::read(&store.paths, "mail")?;
-    let layer = Layer::Project(project);
-    let checked = plugin_check::run(store, &plugin, layer, Some(project), bound)?;
-    enable(store, "mail", layer, &plugin.manifest.config, |_| true, &checked)?;
+    let checked = plugin_check::run(store, &plugin, Some(project), bound)?;
+    enable(store, "mail", Layer::Project(project), &plugin.manifest.config, |_| true, &checked)?;
     Ok(checked)
 }
 
@@ -142,7 +141,7 @@ fn a_check_that_fails_has_checked_nothing_and_lands_on_the_log() {
 
     let logged = amenbo_core::plugin_log::recent(&store.paths.plugin_log_file(), "mail");
     assert_eq!(logged.len(), 1, "the run is on the log whichever way it ended");
-    assert_eq!(logged[0].event, plugin_check::LOG_EVENT);
+    assert_eq!(logged[0].event, amenbo_core::plugin_invoke::SETTINGS_LOG_EVENT);
     assert_eq!(logged[0].code, Some(3));
     assert_eq!(logged[0].stderr, "boom\n");
 }
@@ -212,8 +211,7 @@ fn the_check_after_a_save_answers_without_moving_the_gate() {
     )
     .unwrap();
     let plugin = amenbo_core::plugin_installed::read(&store.paths, "mail").unwrap();
-    let checked =
-        plugin_check::run(&store, &plugin, Layer::Project(project), Some(project), PATIENT).unwrap();
+    let checked = plugin_check::run(&store, &plugin, Some(project), PATIENT).unwrap();
 
     assert!(!checked.opens_the_gate(), "the answer is a no");
     assert_eq!(checked.verdict().unwrap().fields["smtp_user"], "no such mailbox");
@@ -257,8 +255,7 @@ fn a_check_that_cannot_start_refuses_too() {
     .unwrap();
 
     let plugin = amenbo_core::plugin_installed::read(&store.paths, "mail").unwrap();
-    let checked =
-        plugin_check::run(&store, &plugin, Layer::Project(project), Some(project), PATIENT).unwrap();
+    let checked = plugin_check::run(&store, &plugin, Some(project), PATIENT).unwrap();
 
     assert_eq!(checked.silence(), Some(Silence::NotLaunched));
     let err = enable(

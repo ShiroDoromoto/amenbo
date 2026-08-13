@@ -2592,7 +2592,6 @@ fn plugin_enable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i32
     let checked = amenbo_core::plugin_check::run(
         store,
         &plugin,
-        layer,
         bound_project(store),
         amenbo_core::plugin_check::TIMEOUT,
     )

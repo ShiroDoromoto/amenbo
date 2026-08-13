@@ -9,6 +9,7 @@
 #![cfg(unix)]
 
 use amenbo_core::plugin_layer::Layer;
+use std::collections::BTreeMap;
 use std::os::unix::fs::PermissionsExt;
 
 use amenbo_core::config::Paths;
@@ -22,25 +23,35 @@ use amenbo_core::Store;
 /// script standing in for the executable — and one project to call it in, since every gate is a project's
 /// (`AMB-D-434`).
 fn store_with_plugin(label: &str, name: &str, script: &str) -> (Store, i64) {
+    store_with_settings(label, name, script, None)
+}
+
+/// The same, for a plugin whose manifest declares a `settings` block — the check and the operations its
+/// form may raise (`AMB-D-664`).
+fn store_with_settings(
+    label: &str,
+    name: &str,
+    script: &str,
+    settings: Option<serde_json::Value>,
+) -> (Store, i64) {
     let base = amenbo_scratch::scratch(label);
     let paths = Paths::at(base.clone());
     let home = paths.plugin_dir(name);
     std::fs::create_dir_all(&home).unwrap();
-    std::fs::write(
-        home.join("manifest.json"),
-        serde_json::json!({
-            "name": name,
-            "desc": "a plugin that answers",
-            "author": "amenbo",
-            "repo": "ShiroDoromoto/amenbo-plugin-test",
-            "os": ["macos", "linux"],
-            "category": "workflow",
-            "url": "https://example.invalid/plugin.tar.gz",
-            "checksum": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-        })
-        .to_string(),
-    )
-    .unwrap();
+    let mut manifest = serde_json::json!({
+        "name": name,
+        "desc": "a plugin that answers",
+        "author": "amenbo",
+        "repo": "alice/amenbo-plugin-test",
+        "os": ["macos", "linux"],
+        "category": "workflow",
+        "url": "https://example.invalid/plugin.tar.gz",
+        "checksum": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    });
+    if let Some(settings) = settings {
+        manifest["settings"] = settings;
+    }
+    std::fs::write(home.join("manifest.json"), manifest.to_string()).unwrap();
     let program = home.join(name);
     std::fs::write(&program, script).unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -164,4 +175,112 @@ fn a_called_plugin_reads_the_store_and_its_window_out_of_its_environment() {
     // The gate it fired through is the project's, and so is the window (`AMB-D-406`).
     let reach = amenbo_core::idref::project(project);
     assert_eq!(outcome.value(), Some(format!("{base}|{reach}\n").as_str()));
+}
+
+/// One operation the settings face declares: a test send, asking for a token at the press.
+fn settings_block() -> serde_json::Value {
+    serde_json::json!({
+        "check": "config check",
+        "actions": [{
+            "cmd": "config test",
+            "label": "Send a test message",
+            "ask": [{ "key": "api_token", "label": "API token", "secret": true }],
+        }],
+    })
+}
+
+/// A press, end to end (`AMB-D-664`): the words the *manifest* declared reach argv, and the value the
+/// person typed reaches the child on its environment — and nowhere else. The second press, with nothing
+/// typed, is the proof that nothing was kept: the same button hands over an empty value rather than the
+/// one before it.
+#[test]
+fn a_declared_operation_runs_the_manifests_words_with_the_value_asked_for_at_the_press() {
+    let (mut store, project) = store_with_settings(
+        "invoke-declared",
+        "slack",
+        "#!/bin/sh\ncat >/dev/null\nprintf '%s %s|%s\\n' \"$1\" \"$2\" \"${AMENBO_ASK_API_TOKEN}\"\n",
+        Some(settings_block()),
+    );
+    enable(&mut store, "slack", Layer::Project(project), &[], |_| true, &Checked::NotDeclared)
+        .unwrap();
+
+    let supplied = BTreeMap::from([("api_token".to_string(), "xoxb-typed-once".to_string())]);
+    let outcome =
+        plugin_invoke::call_declared(&store, "slack", "config test", &supplied, Some(project))
+            .unwrap();
+    assert_eq!(outcome.value(), Some("config test|xoxb-typed-once\n"));
+
+    // Nothing kept it: not the store, which is what the next press reads nothing out of, and not the
+    // execution log, which holds the run's stderr and no value at all (`AMB-D-361`).
+    let again =
+        plugin_invoke::call_declared(&store, "slack", "config test", &BTreeMap::new(), Some(project))
+            .unwrap();
+    assert_eq!(again.value(), Some("config test|\n"), "a value that is never stored is never re-sent");
+    let log = std::fs::read_to_string(store.paths.plugin_log_file()).unwrap();
+    assert!(!log.contains("xoxb-typed-once"), "the asked value is off the log");
+}
+
+/// The run lands on the execution log under the face that raised it — a line nobody typed
+/// (`AMB-D-361`/`AMB-D-664`).
+#[test]
+fn a_press_is_logged_as_a_settings_run() {
+    let (mut store, project) = store_with_settings(
+        "invoke-declared-log",
+        "slack",
+        "#!/bin/sh\ncat >/dev/null\nprintf 'no channel configured\\n' 1>&2\nexit 4\n",
+        Some(settings_block()),
+    );
+    enable(&mut store, "slack", Layer::Project(project), &[], |_| true, &Checked::NotDeclared)
+        .unwrap();
+
+    let outcome =
+        plugin_invoke::call_declared(&store, "slack", "config test", &BTreeMap::new(), Some(project))
+            .unwrap();
+    assert_eq!(outcome.value(), None, "a failed press relays no value");
+
+    let logged = amenbo_core::plugin_log::recent(&store.paths.plugin_log_file(), "slack");
+    assert_eq!(logged.len(), 1);
+    assert_eq!(logged[0].event, plugin_invoke::SETTINGS_LOG_EVENT);
+    assert_eq!(logged[0].code, Some(4));
+    assert_eq!(logged[0].stderr, "no channel configured\n", "the author's line is the log's material");
+}
+
+/// What a form may raise is what the manifest named in advance (`AMB-D-522`): the plugin's own faces are
+/// no more reachable from here than anyone else's.
+#[test]
+fn a_call_outside_the_declaration_is_refused_before_anything_runs() {
+    let (mut store, project) = store_with_settings(
+        "invoke-declared-undeclared",
+        "slack",
+        "#!/bin/sh\nprintf 'ran\\n'\n",
+        Some(settings_block()),
+    );
+    enable(&mut store, "slack", Layer::Project(project), &[], |_| true, &Checked::NotDeclared)
+        .unwrap();
+
+    let err =
+        plugin_invoke::call_declared(&store, "slack", "config wipe", &BTreeMap::new(), Some(project))
+            .unwrap_err();
+    assert!(err.message_en().contains("settings face"), "{}", err.message_en());
+    assert!(
+        amenbo_core::plugin_log::recent(&store.paths.plugin_log_file(), "slack").is_empty(),
+        "a call that was never raised has no run to log",
+    );
+}
+
+/// The gate holds on this face too (`AMB-D-351`): a plugin nobody has enabled runs nothing, declared or
+/// not. The check that runs *at* the moment of enabling is the enabling path's own.
+#[test]
+fn a_disabled_plugin_raises_nothing_from_its_settings_face() {
+    let (store, project) = store_with_settings(
+        "invoke-declared-gate",
+        "slack",
+        "#!/bin/sh\nprintf 'ran\\n'\n",
+        Some(settings_block()),
+    );
+
+    let err =
+        plugin_invoke::call_declared(&store, "slack", "config test", &BTreeMap::new(), Some(project))
+            .unwrap_err();
+    assert!(err.message_en().contains("not enabled"), "{}", err.message_en());
 }

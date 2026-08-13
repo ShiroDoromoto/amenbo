@@ -31,6 +31,12 @@
 //! This layer does not launch the plugin or build the event payload — it returns the two pieces, and the
 //! hook/command wiring (`AMB-T-1972`) attaches [`env`](Injection::env) to the invocation and merges
 //! [`text`](Injection::text) into the stdin document.
+//!
+//! **A third road, for the values with no storage behind them** ([`asked`], `AMB-D-664`): what an operation
+//! on the settings face asks for at the press — a token pasted once — is handed to that one run as an
+//! environment variable and written nowhere. It is the mirror image of everything above, which is why it
+//! reads nothing: there is no field to look up and no layer to look it up at, only the values the face
+//! collected on their way through.
 
 use serde_json::{Map, Value};
 
@@ -45,14 +51,36 @@ use crate::store::Store;
 /// author reads the value at `$AMENBO_CONFIG_<KEY>` (see [`secret_env_name`] for the exact transform).
 pub const SECRET_ENV_PREFIX: &str = "AMENBO_CONFIG_";
 
+/// The environment-variable prefix a one-time asked value is handed over under (`AMB-D-664`). Its own
+/// segment, beside [`SECRET_ENV_PREFIX`]'s: a press that asks for `api_token` and a stored secret keyed
+/// `api_token` would otherwise be the same variable, and they are opposites — one is kept and one is
+/// never written down. The validator keeps the two key sets apart in a single manifest
+/// ([`crate::plugin_validate`]); the separate prefix is what keeps them apart in the child's environment
+/// even so.
+pub const ASK_ENV_PREFIX: &str = "AMENBO_ASK_";
+
 /// The environment-variable name a secret field's value is injected under: [`SECRET_ENV_PREFIX`] followed
 /// by the field key upper-cased, with every character that is not an ASCII letter or digit mapped to `_`
 /// (so `webhook_url` → `AMENBO_CONFIG_WEBHOOK_URL`). Keys are snake_case identifiers by convention (their
 /// shape is the validator's, `AMB-T-1988`); the transform is deterministic so an author can name the
 /// variable from the key alone.
 pub fn secret_env_name(key: &str) -> String {
-    let mut name = String::with_capacity(SECRET_ENV_PREFIX.len() + key.len());
-    name.push_str(SECRET_ENV_PREFIX);
+    env_name(SECRET_ENV_PREFIX, key)
+}
+
+/// The environment-variable name an asked value is handed over under (`AMB-D-664`): [`ASK_ENV_PREFIX`]
+/// and the ask's key through the same transform [`secret_env_name`] spells a config key with, so
+/// `api_token` → `AMENBO_ASK_API_TOKEN`. An author reads it out of the environment for that one run and
+/// finds it nowhere afterwards.
+pub fn ask_env_name(key: &str) -> String {
+    env_name(ASK_ENV_PREFIX, key)
+}
+
+/// A key as an environment variable's stem under `prefix`: upper-cased, with every character that is not
+/// an ASCII letter or digit mapped to `_`.
+fn env_name(prefix: &str, key: &str) -> String {
+    let mut name = String::with_capacity(prefix.len() + key.len());
+    name.push_str(prefix);
     for c in key.chars() {
         if c.is_ascii_alphanumeric() {
             name.push(c.to_ascii_uppercase());
@@ -125,6 +153,38 @@ pub fn resolve(
     Ok(injection)
 }
 
+/// The environment variables one press's **asked** values ride on (`AMB-D-664`) — the road beside
+/// [`resolve`]'s, for the values that are never stored and so are never read back from anywhere.
+///
+/// `fields` is what the pressed operation declares it asks for, `supplied` what the face collected at the
+/// press. The declaration is what is handed over, not the collection: every declared key becomes a
+/// variable ([`ask_env_name`]), and a key the manifest did not ask for is **refused** rather than dropped
+/// — the caller is amenbo's own settings face, so a name that reaches here unasked-for is a fault in the
+/// face and not something a plugin should be left to notice. A declared key the user left blank is handed
+/// over empty: an ask has no `required` (`AMB-D-664`), so an empty box is an answer, and the author reads
+/// one variable per declared key either way.
+///
+/// Everything travels on the environment, `secret: false` included: the flag says what the screen shows,
+/// and there is no other road here — stdin is the config document's ([`resolve`]), and argv is the
+/// declared call's words.
+pub fn asked(
+    fields: &[crate::plugin_manifest::AskField],
+    supplied: &std::collections::BTreeMap<String, String>,
+) -> Result<Vec<(String, String)>> {
+    if let Some(stray) = supplied.keys().find(|k| !fields.iter().any(|f| &&f.key == k)) {
+        return Err(crate::error::Error::invalid(format!(
+            "this call asks for no value named '{stray}' — only what its `ask` declares is handed over"
+        )));
+    }
+    Ok(fields
+        .iter()
+        .map(|field| {
+            let value = supplied.get(&field.key).cloned().unwrap_or_default();
+            (ask_env_name(&field.key), value)
+        })
+        .collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -176,6 +236,47 @@ mod tests {
         // A char outside [A-Za-z0-9] maps to underscore, and the prefix guards amenbo's own vars.
         assert_eq!(secret_env_name("api.key"), "AMENBO_CONFIG_API_KEY");
         assert_eq!(secret_env_name("home"), "AMENBO_CONFIG_HOME");
+    }
+
+    /// An asked value has its own prefix, so a press asking for `token` and a stored secret keyed `token`
+    /// are two variables and not one (`AMB-D-664`).
+    #[test]
+    fn an_asked_value_is_named_under_its_own_prefix() {
+        assert_eq!(ask_env_name("api_token"), "AMENBO_ASK_API_TOKEN");
+        assert_ne!(ask_env_name("token"), secret_env_name("token"));
+    }
+
+    fn ask(key: &str) -> crate::plugin_manifest::AskField {
+        crate::plugin_manifest::AskField {
+            key: key.to_string(),
+            label: key.to_string(),
+            secret: true,
+            extra: Default::default(),
+        }
+    }
+
+    /// Every declared key is handed over — the one that was typed into, and the one that was left blank
+    /// (an ask has no `required`, so an empty box is an answer).
+    #[test]
+    fn every_declared_ask_is_handed_over_and_a_blank_one_goes_over_empty() {
+        let supplied = std::collections::BTreeMap::from([("code".to_string(), "1234".to_string())]);
+        let env = asked(&[ask("code"), ask("note")], &supplied).unwrap();
+        assert_eq!(
+            env,
+            vec![
+                ("AMENBO_ASK_CODE".to_string(), "1234".to_string()),
+                ("AMENBO_ASK_NOTE".to_string(), String::new()),
+            ]
+        );
+    }
+
+    /// A value the operation never asked for is refused, not dropped: the face collected it, so a name
+    /// nobody declared is that face's fault and worth saying out loud.
+    #[test]
+    fn a_value_nobody_asked_for_is_refused() {
+        let supplied = std::collections::BTreeMap::from([("code".to_string(), "1234".to_string())]);
+        let err = asked(&[ask("note")], &supplied).unwrap_err();
+        assert!(err.message_en().contains("code"), "{}", err.message_en());
     }
 
     #[test]

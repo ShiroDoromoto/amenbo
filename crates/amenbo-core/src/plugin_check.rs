@@ -15,10 +15,11 @@
 //!
 //! **It runs before the gate, and it is the one call that does.** Running somebody else's code is what
 //! enabling *means* (`AMB-D-351`), so a check raised by an enable has the consent of the hand that pressed
-//! it — which is exactly why this is not [`plugin_invoke::prepare`](crate::plugin_invoke::prepare)'s road,
-//! the one that refuses a plugin whose gate is shut. Everything else about the run is that road's: the
-//! same command face (`AMB-D-353`), the same injected settings (`AMB-D-356`), the same read-back path
-//! (`AMB-D-406`), the same execution log (`AMB-D-361`).
+//! it — which is why it is assembled by [`prepare_check`](crate::plugin_invoke::prepare_check) rather than
+//! by the settings face's ordinary road ([`prepare_declared`](crate::plugin_invoke::prepare_declared)),
+//! which raises what a user presses and holds the gate the way every other call does. Everything else about
+//! the run is that road's: the same command face (`AMB-D-353`), the same injected settings (`AMB-D-356`),
+//! the same read-back path (`AMB-D-406`), the same execution log (`AMB-D-361`).
 //!
 //! **Fail-closed** (`AMB-D-354`). The verdict is a document ([`Verdict`]), and a run that does not produce
 //! one — will not start, exits non-zero, overruns [`TIMEOUT`], or writes something this build cannot read
@@ -39,7 +40,6 @@ use serde_json::Value;
 
 use crate::error::Result;
 use crate::plugin_exec::PluginOutput;
-use crate::plugin_layer::Layer;
 use crate::plugin_log::{self, Outcome, Run};
 use crate::plugin_manifest::ConfigField;
 use crate::plugin_payload::VERSION;
@@ -57,11 +57,6 @@ pub const TIMEOUT: Duration = Duration::from_secs(2);
 /// puts beside a field (`AMB-D-664`). One line under a text box, and the cap says so; a check with a
 /// paragraph to deliver has the execution log for it (`AMB-D-361`).
 pub const MAX_VERDICT_TEXT_BYTES: usize = 200;
-
-/// What the execution log records in the `event` column for a check. Not one of the v1 event names (all of
-/// them dotted) and not the command face's `command` either: nothing fired this run and no caller asked
-/// for a return value — the settings face raised it — so the log stays readable as *which face was this*.
-pub const LOG_EVENT: &str = "check";
 
 /// What came back when the settings face raised the author's check — the whole of what a gate is judged on
 /// (`AMB-D-664`).
@@ -180,16 +175,17 @@ impl Silence {
 
 /// Raise the check this plugin declares, and read the verdict (`AMB-D-664`).
 ///
-/// `layer` is the layer whose settings and gate the plugin's author declared ([`Layer`], `AMB-D-601`) and
-/// `project` the project the face is standing in — the same pair every other run of this plugin is
-/// assembled from. A plugin that declares no check is [`Checked::NotDeclared`] and nothing is spawned.
+/// `project` is the project the face is standing in, as every other run of this plugin is assembled from
+/// (the layer its gate and settings sit at follows the author's declaration, `AMB-D-601`). A plugin that
+/// declares no check is [`Checked::NotDeclared`] and nothing is spawned.
 ///
 /// `bound` is how long the check may take: [`TIMEOUT`] is the rule (`AMB-D-664`) and what every face hands
 /// in. It is an argument for the reason [`run_reply`](crate::plugin_hooks::run_reply)'s is — the bound
 /// belongs to whoever is waiting on the answer — and it is what lets a test drive both sides of it without
 /// spending the wall clock to do so.
 ///
-/// The run is on the execution log whichever way it ends (`AMB-D-361`), under [`LOG_EVENT`]: *why was I not
+/// The run is on the execution log whichever way it ends (`AMB-D-361`), filed with the rest of what the
+/// settings face raises ([`SETTINGS_LOG_EVENT`](crate::plugin_invoke::SETTINGS_LOG_EVENT)): *why was I not
 /// allowed to enable this* is exactly the question that log answers.
 ///
 /// `Err` is for the assembly failing — a plugin whose settings cannot be resolved, or a project-scoped
@@ -198,17 +194,14 @@ impl Silence {
 pub fn run(
     store: &Store,
     plugin: &InstalledPlugin,
-    layer: Layer,
     project: Option<i64>,
     bound: Duration,
 ) -> Result<Checked> {
     let Some(cmd) = plugin.manifest.settings.as_ref().and_then(|s| s.check.as_deref()) else {
         return Ok(Checked::NotDeclared);
     };
-    // The call is the plugin's own command face, written as one line of words (`AMB-D-353`/`AMB-D-572`) —
-    // the same spelling `plugin run <name> …` would be handed on argv.
-    let args: Vec<String> = cmd.split_whitespace().map(str::to_string).collect();
-    let invocation = crate::plugin_invoke::assemble(store, plugin, &args, project, layer)?;
+    let invocation =
+        crate::plugin_invoke::prepare_check(store, &plugin.name, cmd, project)?;
 
     let waited = invocation.spawn().and_then(|running| running.wait_timeout(bound));
     let (checked, recorded) = read(&plugin.name, &plugin.manifest.config, waited, bound);
@@ -227,7 +220,7 @@ fn read(
 ) -> (Checked, Run) {
     let line = |outcome, code, elapsed, stderr: &str| Run {
         plugin: plugin.to_string(),
-        event: LOG_EVENT,
+        event: crate::plugin_invoke::SETTINGS_LOG_EVENT,
         outcome,
         code,
         elapsed,
@@ -448,7 +441,7 @@ mod tests {
             TIMEOUT,
         );
         assert!(checked.opens_the_gate());
-        assert_eq!(recorded.event, LOG_EVENT);
+        assert_eq!(recorded.event, crate::plugin_invoke::SETTINGS_LOG_EVENT);
         assert_eq!(recorded.outcome, Outcome::Ok);
         assert_eq!(recorded.stderr, "signed in", "the author's stderr is what the log is for");
     }

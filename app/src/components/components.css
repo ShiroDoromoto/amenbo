@@ -656,6 +656,12 @@ button.feed__target:hover { color: var(--c-accent); }
   white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .agenthookrow__pick { align-self: flex-start; padding: var(--s-1) var(--s-2); font-size: var(--fs-sm); }
+/* The always-open way to the request text on the project settings screen (`AMB-D-670`) — a column in the
+   value half of a `settings__row`, reusing the row above's list and text blocks. `min-width: 0` is what
+   holds it there: without it a flex item is as wide as its widest line, and the request would push the
+   whole screen sideways instead of scrolling inside itself. */
+.harnessreq { display: flex; flex-direction: column; gap: var(--s-2); flex: 1; min-width: 0; }
+.harnessreq__pick { align-self: flex-start; padding: var(--s-1) var(--s-2); font-size: var(--fs-sm); }
 /* Copy, no, close — in that order, and wrapping rather than shrinking, since the row is narrow enough for
    three buttons to meet the edge in a language that spells them out. */
 .agenthookrow__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }

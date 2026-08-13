@@ -4,9 +4,9 @@
 // diff (only the fields that changed) to `updateProject`. Destructive operations go through a plugin-dialog confirmation.
 import { useEffect, useState } from "react";
 import {
-  bindFolder, clearAgentHookConsent, deleteProject, fetchAgentHookConsent, fetchBoundFolders,
-  fetchProjectSettings, openTerminal, pickFolder, revealFolder, setProjectArchived, unbindFolder,
-  updateProject,
+  bindFolder, clearAgentHookConsent, deleteProject, fetchAgentHookConsent, fetchAgentHookRequests,
+  fetchBoundFolders, fetchProjectSettings, openTerminal, pickFolder, revealFolder, setProjectArchived,
+  unbindFolder, updateProject,
 } from "../core/mutations";
 import { useAgentHookWiring } from "./AgentHookWiringRow";
 import { PluginCrossingRow } from "../components/PluginCrossingRow";
@@ -14,7 +14,7 @@ import { usePluginInstalls } from "../core/pluginInstalls";
 import { inTauri } from "../core/snapshot";
 import { confirmDialog } from "../core/dialog";
 import { errText, t, tf, viewLabel } from "../core/i18n";
-import type { BoundFolderDto, ProjectSettingsDto } from "../bindings/bindings";
+import type { AgentHookRequestsDto, BoundFolderDto, ProjectSettingsDto } from "../bindings/bindings";
 import { asTyped } from "../core/keys";
 
 type View = ProjectSettingsDto["view"];
@@ -336,6 +336,12 @@ function FoldersSection({ projectId }: { projectId: number }) {
  * from disk. The board draws one standing notice and no more (`AMB-D-535`), which means the folders still
  * waiting are not always on it; this is the place they are always listed. The board is where the reader
  * acts, this is where they look over what there is.
+ *
+ * **What is looked over here goes quiet; the request face beside it does not** ({@link HarnessRequest},
+ * `AMB-D-670`). The answer row and the waiting list both come from the notice, so a project with every
+ * folder wired says nothing on either — which is the state a reader changing tools arrives in. Taking the
+ * text is put on the same section rather than another screen, because it is the same subject; it just
+ * hangs on nothing.
  */
 function HarnessSection({ projectId }: { projectId: number }) {
   // undefined while the record is being read, null for a project that has never been asked.
@@ -399,12 +405,97 @@ function HarnessSection({ projectId }: { projectId: number }) {
           </div>
         )}
 
+        <HarnessRequest projectId={projectId} />
+
         {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
 
         <div className="newproj__nextrow">
           {/* Nothing to clear where nothing was answered, and the state row above says so. */}
           <button className="btn" onClick={() => void clear()} disabled={busy || answer === undefined || answer === null}>
             {t("projset.harnessClear")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The way to the request text that is always open (`AMB-D-670`).
+ *
+ * **It hangs on no notice.** Everything else about the session-start hook is drawn from
+ * `harness::setup_notice` — the board's standing row, and the waiting-folders list above this — and that
+ * goes quiet once the wiring lands. Which leaves the reader who wired one tool and then moved to another
+ * with no way to the text in the GUI at all, while the command line kept `agent-hook snippet <tool>`. So
+ * this reads its own answer and shows the same thing before and after anything is wired.
+ *
+ * **The whole catalog is on offer, not what the folders trace.** The tool being moved to has left nothing
+ * behind yet, which is the point of coming here. Picking is the reader's, and the first row is only where
+ * the list starts.
+ *
+ * **One text, the folders listed under it.** Same as the board's row: the request for a tool is the same
+ * wherever it goes, so it goes up once with this project's folders beside it.
+ */
+function HarnessRequest({ projectId }: { projectId: number }) {
+  const [catalog, setCatalog] = useState<AgentHookRequestsDto>({ tools: [], dirs: [] });
+  // Which tool the reader picked; unset is the head of the catalog. No inference from the folders here —
+  // what is traced is what they are leaving.
+  const [picked, setPicked] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    setPicked(null);
+    setCopied(false);
+    fetchAgentHookRequests(projectId)
+      .then((got) => { if (alive) setCatalog(got); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [projectId]);
+
+  if (catalog.tools.length === 0) return null;
+  const tool = catalog.tools.find((one) => one.tool === picked) ?? catalog.tools[0];
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(tool.request);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch { /* where the clipboard is unavailable, quietly skip */ }
+  };
+
+  return (
+    <div className="settings__row">
+      <span className="settings__k">{t("projset.harnessRequest")}</span>
+      <div className="harnessreq">
+        <span className="newproj__hint">{t("projset.harnessRequestHint")}</span>
+        <select
+          className="harnessreq__pick"
+          aria-label={t("agentHookWiring.pick")}
+          value={tool.tool}
+          onChange={(e) => { setPicked(e.target.value); setCopied(false); }}
+        >
+          {catalog.tools.map((one) => (
+            <option key={one.tool} value={one.tool}>{one.label}</option>
+          ))}
+        </select>
+        <span className="newproj__hint">
+          {tf("agentHookWiring.what", { tool: tool.label, file: tool.pasteInto })}
+        </span>
+        {/* Where to paste it. A project with nothing bound has nowhere, and that is said rather than left
+            as a heading over an empty list — the folder section above is where it is answered. */}
+        <span className="newproj__hint">
+          {catalog.dirs.length > 0 ? t("projset.harnessRequestDirs") : t("projset.noFolders")}
+        </span>
+        {catalog.dirs.length > 0 && (
+          <ul className="agenthookrow__dirs">
+            {catalog.dirs.map((dir) => <li key={dir}>{dir}</li>)}
+          </ul>
+        )}
+        <pre className="agenthookrow__request">{tool.request}</pre>
+        <div className="newproj__nextrow">
+          <button className="btn" onClick={() => void copy()}>
+            {copied ? t("agentHookWiring.copied") : t("agentHookWiring.copy")}
           </button>
         </div>
       </div>

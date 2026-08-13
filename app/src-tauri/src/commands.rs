@@ -4611,6 +4611,51 @@ pub fn agent_hook_project_wiring(project_id: i64) -> Result<Vec<AgentHookWiringD
         .collect())
 }
 
+/// The whole catalog and this project's folders — what the settings screen's "take the request" face is
+/// drawn from (`AMB-D-670`).
+///
+/// **Two lists, not rows.** [`agent_hook_project_wiring`] answers with the tools a folder is waiting on,
+/// so its unit is a pairing and a tool nothing waits for is left out. This one is the reader coming to
+/// fetch text, so the tool is theirs to pick out of the whole catalog and the folders are the same
+/// wherever they paste it — pairing them would be inventing an order the reader already knows.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AgentHookRequestsDto {
+    /// Every harness amenbo knows, in catalog order, each with the text that asks for its wiring.
+    tools: Vec<AgentHookToolDto>,
+    /// This project's bound folders — where the picked tool's request is pasted. Empty for a project
+    /// nothing is bound to.
+    dirs: Vec<String>,
+}
+
+/// The request for any tool in the catalog, whatever this project has already wired (`AMB-D-670`).
+///
+/// **It hangs on nothing.** [`agent_hook_project_wiring`] reads the folders through
+/// [`amenbo_core::harness::setup_notice`], which falls silent once the wiring lands or a refusal is
+/// recorded — and the standing row and the waiting-folders list go with it. That silence is right for a
+/// report of work left and wrong for a face someone pressed: a reader who wired Claude Code and then
+/// moved to Codex CLI had no way to the text at all. So this reads no notice and no consent, and answers
+/// the same before and after.
+///
+/// **The whole catalog, not the traces.** A tool being moved to has left nothing in the folder yet, which
+/// is the same reasoning that makes [`amenbo_core::harness::offered`] hand a traceless folder every row.
+/// Picking is the reader's.
+///
+/// **Every bound folder, including one that is not on disk.** What is answered is where this project is,
+/// and a folder gone missing is a fact the settings screen already reports beside this. Skipping it here
+/// would take a paste target off the list for a reason the reader is being told about a section away.
+#[tauri::command]
+pub fn agent_hook_requests(project_id: i64) -> Result<AgentHookRequestsDto, CmdError> {
+    use amenbo_core::harness;
+
+    let store = open_store_read()?;
+    let cmd = amenbo_core::config::Paths::command_name();
+    let dirs = store.bindings().dirs_for_project(project_id).iter().map(|d| d.to_string()).collect();
+    let tools = harness::HARNESSES.iter().map(|one| agent_hook_tool(one, cmd)).collect();
+    Ok(AgentHookRequestsDto { tools, dirs })
+}
+
 /// What [`repair_pointers`] returns: how many folders were fixed, and how many were left waiting on
 /// a human's judgement.
 #[derive(Debug, Serialize, TS)]
@@ -9618,6 +9663,73 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(&wired_dir);
+        let _ = std::fs::remove_dir_all(&tmp);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// The request is there for the asking whatever the report says (`AMB-D-670`).
+    ///
+    /// Everything else about the session-start hook is drawn from `harness::setup_notice`, which goes
+    /// quiet on the wiring landing and on a refusal — and that silence took the GUI's only way to the text
+    /// with it, leaving the reader who wired one tool and then moved to another with nothing to press.
+    /// So this reads neither, and the two folders below are the two states that silence it.
+    #[test]
+    fn the_request_face_hands_over_the_whole_catalog_whatever_the_report_has_gone_quiet_about() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("app-agenthookreq-home");
+        let base = amenbo_scratch::scratch("app-agenthookreq-dirs");
+        let _ = std::fs::remove_dir_all(&tmp);
+        let _ = std::fs::remove_dir_all(&base);
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        let mut store = Store::open().unwrap();
+        let project = store
+            .project_add(amenbo_core::ops::project::NewProject {
+                name: "配線済みのPJ".into(),
+                view: View::Board,
+                notes: String::new(),
+                color: None,
+            })
+            .unwrap()
+            .id;
+        drop(store);
+        let dir = base.join("wired");
+        std::fs::create_dir_all(&dir).unwrap();
+        let dir = std::fs::canonicalize(&dir).unwrap();
+        claude_folder(&dir, true);
+        project_bind_folder(project, dir.to_string_lossy().to_string()).unwrap();
+
+        assert!(
+            agent_hook_project_wiring(project).unwrap().is_empty(),
+            "the report has nothing to say here — which is the state this face is for",
+        );
+
+        let taken = agent_hook_requests(project).unwrap();
+        assert_eq!(
+            taken.tools.iter().map(|one| one.tool.as_str()).collect::<Vec<_>>(),
+            amenbo_core::harness::HARNESSES.iter().map(|one| one.id).collect::<Vec<_>>(),
+            "the whole catalog in its own order — the tool being moved to has left no trace yet",
+        );
+        assert_eq!(
+            taken.dirs,
+            [dir.to_string_lossy().to_string()],
+            "and this project's folders, which is where any of them would be pasted",
+        );
+        let codex = taken.tools.iter().find(|one| one.tool == "codex-cli").expect("in the catalog");
+        assert!(
+            codex.request.contains(&codex.paste_into) && codex.request.contains("Merge"),
+            "each row carries its own request, not the one the folder traces: {}",
+            codex.request,
+        );
+
+        // A refusal is the other way the report falls silent, and it is not a way out of this one: it
+        // ends a warning nobody asked for, while this is a face somebody pressed.
+        agent_hook_answer(project, false).unwrap();
+        let after = agent_hook_requests(project).unwrap();
+        assert_eq!(after.tools.len(), taken.tools.len(), "a no does not take the text away");
+        assert_eq!(after.dirs, taken.dirs, "nor the folders it is pasted into");
+
+        let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::remove_dir_all(&base);
     }

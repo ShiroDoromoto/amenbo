@@ -38,6 +38,26 @@ export type ActorDto = { name: string, kind: "human" | "ai",
 avatar?: string, };
 
 /**
+ * The whole catalog and this project's folders — what the settings screen's "take the request" face is
+ * drawn from (`AMB-D-670`).
+ *
+ * **Two lists, not rows.** [`agent_hook_project_wiring`] answers with the tools a folder is waiting on,
+ * so its unit is a pairing and a tool nothing waits for is left out. This one is the reader coming to
+ * fetch text, so the tool is theirs to pick out of the whole catalog and the folders are the same
+ * wherever they paste it — pairing them would be inventing an order the reader already knows.
+ */
+export type AgentHookRequestsDto = { 
+/**
+ * Every harness amenbo knows, in catalog order, each with the text that asks for its wiring.
+ */
+tools: Array<AgentHookToolDto>, 
+/**
+ * This project's bound folders — where the picked tool's request is pasted. Empty for a project
+ * nothing is bound to.
+ */
+dirs: Array<string>, };
+
+/**
  * One AI harness a folder could start its session on `amenbo agent` with, and the text that would do it
  * ([`amenbo_core::harness`]).
  *

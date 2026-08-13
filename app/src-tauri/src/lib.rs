@@ -346,6 +346,7 @@ pub fn run() {
       commands::hook_notices,
       commands::hook_answer,
       commands::agent_hook_project_wiring,
+      commands::agent_hook_requests,
       commands::agent_hook_answer,
       commands::agent_hook_consent,
       commands::agent_hook_consent_clear,

@@ -8,7 +8,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AgentHookWiringDto, BoundFolderDto } from "../bindings/bindings";
+import type { AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto } from "../bindings/bindings";
 import type { PluginInstall } from "../core/pluginInstalls";
 
 const hoisted = vi.hoisted(() => ({
@@ -24,6 +24,8 @@ const hoisted = vi.hoisted(() => ({
   consent: null as boolean | null,
   /** What core's per-project walk reports is still waiting to be wired, grouped by harness. */
   waiting: [] as AgentHookWiringDto[],
+  /** The catalog and this project's folders, which core answers with whatever is already wired. */
+  requests: { tools: [], dirs: [] } as AgentHookRequestsDto,
   /** The writes that were called, arguments and all. */
   calls: [] as Array<Array<number | string>>,
 }));
@@ -66,6 +68,7 @@ vi.mock("../core/mutations", () => {
     setProjectArchived: record("setProjectArchived"),
     fetchAgentHookConsent: () => Promise.resolve(hoisted.consent),
     fetchAgentHookProjectWiring: () => Promise.resolve(hoisted.waiting),
+    fetchAgentHookRequests: () => Promise.resolve(hoisted.requests),
     clearAgentHookConsent: (projectId: number) => {
       hoisted.calls.push(["clearAgentHookConsent", projectId]);
       hoisted.consent = null;
@@ -111,6 +114,7 @@ beforeEach(() => {
   hoisted.installs = [];
   hoisted.consent = null;
   hoisted.waiting = [];
+  hoisted.requests = { tools: [], dirs: [] };
   hoisted.gated.length = 0;
   hoisted.answers.length = 0;
   hoisted.calls.length = 0;
@@ -369,13 +373,28 @@ const clearButton = () =>
   Array.from(harnessSection().querySelectorAll("button")).find(
     (b) => b.textContent === t("projset.harnessClear"),
   ) as HTMLButtonElement;
-/** The folders the section says are still waiting to be wired. */
-const waitingList = () =>
-  [...harnessSection().querySelectorAll("li")].map((li) => li.textContent);
+/** The folders the section says are still waiting to be wired. Scoped to its own row, since the request
+ *  face below it lists folders too — and those are paste targets rather than work left. */
+const waitingList = () => {
+  const label = [...harnessSection().querySelectorAll(".settings__k")].find(
+    (k) => k.textContent === t("projset.harnessWaiting"),
+  );
+  const at = label?.closest(".settings__row");
+  return at ? [...at.querySelectorAll("li")].map((li) => li.textContent) : [];
+};
+/** The always-open way to the request text (`AMB-D-670`), which hangs on no notice. */
+const requestBlock = () => harnessSection().querySelector(".harnessreq") as HTMLElement | null;
+const requestPicker = () => requestBlock()!.querySelector("select") as HTMLSelectElement;
+const requestText = () => requestBlock()!.querySelector("pre")!.textContent;
+const requestDirs = () => [...requestBlock()!.querySelectorAll("li")].map((li) => li.textContent);
 /** What core's per-project walk answers for one harness. The prose in it is core's, not the screen's. */
 const waitingOn = (tool: string, dirs: string[]): AgentHookWiringDto => ({
   tool: { tool, label: tool, pasteInto: `.${tool}/settings.json`, request: "REQUEST-A" },
   dirs,
+});
+/** One catalog row as the request face reads it, its text naming the tool so a swap is legible. */
+const tool = (id: string): AgentHookRequestsDto["tools"][number] => ({
+  tool: id, label: id, pasteInto: `.${id}/settings.json`, request: `${id} の依頼文`,
 });
 
 // The way back out of an answer that is otherwise final (`AMB-D-459`). What the section is judged on is
@@ -447,5 +466,58 @@ describe("the answer about starting this project's AI on amenbo", () => {
     await render([]);
 
     expect(harnessSection().textContent).not.toContain(t("projset.harnessWaiting"));
+  });
+});
+
+// The way to the text that never closes (`AMB-D-670`). Everything above hangs on core's notice and goes
+// quiet as the wiring lands — which is exactly the state a reader changing tools arrives in, and the state
+// in which the GUI used to offer them nothing at all.
+describe("taking the request whatever the report has gone quiet about", () => {
+  it("is there with nothing waiting, and offers every tool the catalog holds", async () => {
+    hoisted.requests = { tools: [tool("claude-code"), tool("codex-cli")], dirs: ["/w/one"] };
+    await render([]);
+
+    expect(waitingList()).toEqual([]);
+    expect([...requestPicker().options].map((o) => o.value)).toEqual(["claude-code", "codex-cli"]);
+    expect(requestText()).toContain("claude-code の依頼文");
+  });
+
+  it("hands over the text for the tool picked, not the one the folders trace", async () => {
+    hoisted.waiting = [waitingOn("claude-code", ["/w/one"])];
+    hoisted.requests = { tools: [tool("claude-code"), tool("codex-cli")], dirs: ["/w/one"] };
+    await render([]);
+
+    await act(async () => {
+      const pick = requestPicker();
+      pick.value = "codex-cli";
+      pick.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(requestText()).toContain("codex-cli の依頼文");
+  });
+
+  // Where it is pasted is every folder this project is bound to — not the ones core reports as waiting,
+  // which is the list that empties. A project bound to nothing says so rather than heading an empty list.
+  it("lists this project's folders as where the text goes, and says so when there are none", async () => {
+    hoisted.requests = { tools: [tool("claude-code")], dirs: ["/w/one", "/w/two"] };
+    await render([]);
+    expect(requestDirs()).toEqual(["/w/one", "/w/two"]);
+    expect(harnessSection().textContent).toContain(t("projset.harnessRequestDirs"));
+
+    await act(() => root.unmount());
+    root = createRoot(container);
+    hoisted.requests = { tools: [tool("claude-code")], dirs: [] };
+    await render([]);
+    expect(requestDirs()).toEqual([]);
+    expect(harnessSection().textContent).not.toContain(t("projset.harnessRequestDirs"));
+  });
+
+  // Outside Tauri there is no catalog to read, and a picker with nothing in it is a face that failed
+  // rather than one with nothing to say.
+  it("draws nothing at all where the catalog came back empty", async () => {
+    await render([]);
+
+    expect(requestBlock()).toBeNull();
   });
 });

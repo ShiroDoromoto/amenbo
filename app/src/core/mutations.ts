@@ -15,7 +15,7 @@ import { type AttachTargetType } from "./reads";
 import { guessLang, t, tf, type CmdError, type CmdErrorPart } from "./i18n";
 import { isClosed } from "./status";
 import type { ActivityItem, Facet, Priority, Status, TaskCard } from "../mock/types";
-import type { ActivityTargetDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
+import type { ActivityTargetDto, AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
 import { taskRef } from "./idref";
 
 /**
@@ -683,6 +683,21 @@ export async function markNudgePut(nudgeId: string): Promise<void> {
 export async function fetchAgentHookProjectWiring(projectId: number): Promise<AgentHookWiringDto[]> {
   if (!inTauri()) return [];
   return await invoke<AgentHookWiringDto[]>("agent_hook_project_wiring", { projectId });
+}
+
+/**
+ * The whole harness catalog and this project's folders, so the request for any tool can be taken from the
+ * settings screen whatever is already wired (`AMB-D-670`).
+ *
+ * It is a second read rather than a filter over `fetchAgentHookProjectWiring` because that one goes quiet:
+ * the wiring landing, or a refusal, empties it — and the reader who moved from one tool to another is
+ * exactly the reader it is empty for. This one hangs on neither.
+ *
+ * Outside Tauri there is no catalog to read, so it answers with nothing on both lists.
+ */
+export async function fetchAgentHookRequests(projectId: number): Promise<AgentHookRequestsDto> {
+  if (!inTauri()) return { tools: [], dirs: [] };
+  return await invoke<AgentHookRequestsDto>("agent_hook_requests", { projectId });
 }
 
 /**

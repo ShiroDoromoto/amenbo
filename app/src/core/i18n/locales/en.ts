@@ -421,6 +421,12 @@ const ui = {
   "plugins.cfg.secretMismatch": "The two entries do not match",
   "plugins.cfg.clear": "Clear", "plugins.cfg.save": "Save", "plugins.cfg.saving": "Saving…",
   "plugins.cfg.saved": "Saved", "plugins.cfg.cleared": "Cleared",
+  "plugins.act.title": "Operations", "plugins.act.needsEnabled": "Turn the plugin on to use these.",
+  "plugins.act.running": "Running…", "plugins.act.ok": "Done", "plugins.act.failed": "It did not finish",
+  "plugins.act.run": "Run", "plugins.act.cancel": "Cancel",
+  "plugins.act.askNote": "Handed to this run only, and kept nowhere.",
+  "plugins.check.refused": "Its own check refused these settings, so it was not turned on.",
+  "plugins.check.noAnswer": "Its own check did not answer, so it was not turned on. The run log says what happened.",
   // the update banner and its explicit re-check
   "plugins.updates.title.one": "{n} plugin update available", "plugins.updates.title.other": "{n} plugin updates available",
   "plugins.updates.apply": "Update", "plugins.updates.applyAll": "Update all",

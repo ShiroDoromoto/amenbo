@@ -1,16 +1,26 @@
 import { useState } from "react";
-import type { PluginWantedSettingDto } from "../bindings/bindings";
+import type { PluginCheckDto, PluginWantedSettingDto } from "../bindings/bindings";
 import { errText, t } from "../core/i18n";
 import { asTyped } from "../core/keys";
 import {
   NONE_SELECTED,
+  runPluginAction,
   setPluginConfig,
   usePluginConfig,
+  type PluginAction,
+  type PluginActionRan,
   type PluginConfigField,
   type PluginInstall,
   type PluginLayer,
 } from "../core/pluginInstalls";
-import { optionLabel, settingHelp, settingLabel, settingPlaceholder } from "../core/pluginText";
+import {
+  actionLabel,
+  askLabel,
+  optionLabel,
+  settingHelp,
+  settingLabel,
+  settingPlaceholder,
+} from "../core/pluginText";
 
 /**
  * The settings of one installed plugin, drawn from the schema its author declared (`AMB-D-356`).
@@ -44,16 +54,36 @@ import { optionLabel, settingHelp, settingLabel, settingPlaceholder } from "../c
  * something any plugin can carry in a project it is off in — so a crossing has a form whether or not
  * the plugin is on there.
  *
+ * **The author's own code speaks on this screen and nowhere else** (`AMB-D-664`). Two things reach it:
+ * what their `check` said about the values when the gate was last pressed — one sentence at the head, and
+ * one beside each box it named — and the operations they declared, drawn as buttons. Both are plain text
+ * for the reason everything else here is, and a press runs a call the manifest named rather than anything
+ * this form composed (`AMB-D-522`).
+ *
+ * **A button needs an open gate.** Running the plugin's code is what enabling means (`AMB-D-351`), so the
+ * operations are drawn but not pressable while the crossing is off, with a line saying which.
+ *
  * The author's schema comes from the install (it is the same wherever you stand) and what is *held* is
  * read for the named layer, which is why the two arrive separately.
  */
-export function PluginConfigForm({ install, layer, onWrote }: {
+export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
   install: PluginInstall;
   /**
    * The layer whose values are being written — the row this form was opened inside. `null` is the
    * device's own row, for a plugin its author declared the machine's (`AMB-D-601`).
    */
   layer: PluginLayer;
+  /**
+   * Whether the plugin fires at this crossing — what decides if its operations may be pressed
+   * (`AMB-D-664`). The row knows; the form does not read the gate a second time.
+   */
+  enabled: boolean;
+  /**
+   * What the author's check said the last time the gate was pressed at this crossing (`AMB-D-664`), or
+   * nothing — a plugin that declares no check, or a switch nobody has touched this session. It is a fact
+   * about one press, so it is the row's to hold and to retire.
+   */
+  check?: PluginCheckDto | null;
   /**
    * Called once a write to this crossing lands, so the row around the form can retire what a value
    * standing here made out of date — the refusal an enable met over a `required` setting this form has
@@ -71,6 +101,13 @@ export function PluginConfigForm({ install, layer, onWrote }: {
   const [error, setError] = useState<string | null>(null);
   // What the last write did, said back in its own words: a clear removed a value, a save wrote one.
   const [done, setDone] = useState<"plugins.cfg.saved" | "plugins.cfg.cleared" | null>(null);
+  // Which operation is being pressed, which one has its boxes open, what has been typed into them, and
+  // what the last press of each one came back with. The typed values are wiped on every open and every
+  // press: this face is the one place a value is allowed to exist, and it does not outlive the run.
+  const [pressing, setPressing] = useState<string | null>(null);
+  const [asking, setAsking] = useState<string | null>(null);
+  const [asked, setAsked] = useState<Record<string, string>>({});
+  const [ran, setRan] = useState<Record<string, PluginActionRan>>({});
   const { fields } = usePluginConfig(install.name, layer);
 
   // What that project holds for a key — absent until the read lands, which is not "unset".
@@ -133,8 +170,35 @@ export function PluginConfigForm({ install, layer, onWrote }: {
       setSecrets((s) => ({ ...s, [f.key]: { value: "", confirm: "" } }));
     }, "plugins.cfg.cleared");
 
+  // Press one operation: the boxes it asked for go with the call and are dropped on the way back, whether
+  // it succeeded or not. A refusal — a shut gate, a plugin that will not start — is a sentence like any
+  // other error here; a run that failed is an answer and is drawn as one.
+  const onPress = async (a: PluginAction) => {
+    setPressing(a.cmd);
+    setError(null);
+    try {
+      const outcome = await runPluginAction(install.name, a.cmd, asked, layer);
+      setRan((s) => ({ ...s, [a.cmd]: outcome }));
+      setAsking(null);
+      setAsked({});
+    } catch (e) {
+      setError(errText(e));
+    } finally {
+      setPressing(null);
+    }
+  };
+
   return (
     <div className="plugcfg">
+      {/* What the author's check said about these settings as a whole (`AMB-D-664`), at the head of the
+          form because that is what it is about. A silence has no sentence of theirs in it, so amenbo says
+          what happened in its own words and leaves the reason to the run log. */}
+      {check && !check.ok && (
+        <div className="pluggate__note">
+          {check.answered ? check.message ?? t("plugins.check.refused") : t("plugins.check.noAnswer")}
+        </div>
+      )}
+      {check?.ok && check.message && <div className="plugcfg__note">{check.message}</div>}
       {install.config.map((f) => (
         <div key={f.key} className="plugcfg__field">
           {/* A choice is a group of boxes, each with its own label, so the caption above it names the
@@ -256,6 +320,11 @@ export function PluginConfigForm({ install, layer, onWrote }: {
               Text and nothing else: the newlines are theirs, and no Markdown or link is drawn from it —
               this is the screen a secret is typed into. */}
           {settingHelp(f) && <div className="faint plugcfg__help">{settingHelp(f)}</div>}
+          {/* What the author's check said about *this* box (`AMB-D-664`) — beside the one it named, which
+              is the whole reason a verdict carries keys at all. Plain text, like their paragraph above. */}
+          {check?.fields[f.key] && (
+            <div className="pluggate__note">{check.fields[f.key]}</div>
+          )}
           {!f.readonly && held(heldFor(f.key)) && (
             <button
               className="feed__action"
@@ -279,6 +348,79 @@ export function PluginConfigForm({ install, layer, onWrote }: {
         )}
         {error && <div className="pluggate__note">{error}</div>}
       </div>
+
+      {/* The operations their author declared (`AMB-D-664`). Drawn under the fields because that is what
+          they act on, and only for a plugin that declared any — a form with none is the form it was. */}
+      {install.actions.length > 0 && (
+        <div className="plugcfg__acts">
+          <div className="faint plugcfg__note">{t("plugins.act.title")}</div>
+          {!enabled && <div className="plugcfg__note">{t("plugins.act.needsEnabled")}</div>}
+          {install.actions.map((a) => (
+            <div key={a.cmd} className="plugcfg__act">
+              <button
+                className="feed__action"
+                disabled={!enabled || pressing !== null}
+                onClick={() => {
+                  // A press that asks for nothing runs; one that asks opens its boxes first, empty every
+                  // time — nothing here remembers what was typed into them last.
+                  if (a.ask.length === 0) return void onPress(a);
+                  setAsked({});
+                  setAsking((s) => (s === a.cmd ? null : a.cmd));
+                }}
+              >
+                {pressing === a.cmd ? t("plugins.act.running") : actionLabel(a)}
+              </button>
+              {asking === a.cmd && (
+                <div className="plugcfg__ask">
+                  {a.ask.map((f) => (
+                    <label key={f.key} className="plugcfg__field">
+                      <span className="plugcfg__label">{askLabel(f)}</span>
+                      <input
+                        {...asTyped}
+                        type={f.secret ? "password" : "text"}
+                        autoComplete={f.secret ? "new-password" : "off"}
+                        disabled={pressing !== null}
+                        value={asked[f.key] ?? ""}
+                        onChange={(e) =>
+                          setAsked((s) => ({ ...s, [f.key]: e.target.value }))
+                        }
+                      />
+                    </label>
+                  ))}
+                  {/* The one thing worth saying about these boxes: what is typed into them goes to this
+                      run and is kept nowhere, which is what makes them different from the form above. */}
+                  <div className="faint plugcfg__note">{t("plugins.act.askNote")}</div>
+                  <button
+                    className="btn"
+                    disabled={pressing !== null}
+                    onClick={() => void onPress(a)}
+                  >
+                    {t("plugins.act.run")}
+                  </button>
+                  <button
+                    className="feed__action"
+                    disabled={pressing !== null}
+                    onClick={() => {
+                      setAsking(null);
+                      setAsked({});
+                    }}
+                  >
+                    {t("plugins.act.cancel")}
+                  </button>
+                </div>
+              )}
+              {/* What the press did: the author's own line where they wrote one, and amenbo's word for it
+                  where they did not. An operation has no return value to draw (`AMB-D-664`). */}
+              {ran[a.cmd] && pressing !== a.cmd && (
+                <div className={ran[a.cmd].ok ? "faint plugcfg__note" : "pluggate__note"}>
+                  {ran[a.cmd].message ??
+                    t(ran[a.cmd].ok ? "plugins.act.ok" : "plugins.act.failed")}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

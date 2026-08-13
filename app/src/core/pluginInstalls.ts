@@ -15,6 +15,8 @@ import { invoke } from "./ipc";
 import { inTauri, subscribe } from "./snapshot";
 import { invalidateQueries, useQuery } from "./query";
 import type {
+  PluginActionDto,
+  PluginActionRanDto,
   PluginConfigFieldDto,
   PluginGateMovedDto,
   PluginInstallDto,
@@ -29,6 +31,10 @@ export type PluginConfigField = PluginConfigFieldDto;
 export type PluginRemoved = PluginRemovedDto;
 /** Where a moved gate ended up, and what closing it dropped (generated DTO). */
 export type PluginGateMoved = PluginGateMovedDto;
+/** One operation its author declared, as a button and whatever that press asks for (generated DTO). */
+export type PluginAction = PluginActionDto;
+/** What one press did (generated DTO). */
+export type PluginActionRan = PluginActionRanDto;
 
 /**
  * Which layer a row is drawn at — a project's id, or `null` for the device's own row (`AMB-D-601`).
@@ -201,6 +207,35 @@ export async function setPluginConfig(
   if (!inTauri()) return;
   await invoke<null>("plugin_config_set", { name, key, value, projectId: layer });
   reloadConfig();
+}
+
+/**
+ * Press one operation the plugin's author declared (Tauri: `plugin_settings_action`, `AMB-D-664`).
+ *
+ * `cmd` names a declaration and is never a line composed here: core looks it up in the manifest and takes
+ * the words from there, so this seam cannot ask a plugin to run something its author did not write
+ * (`AMB-D-522`).
+ *
+ * `supplied` is what this press asked for (`ask`) — handed to that one run and stored nowhere, which is
+ * why nothing is refetched afterwards: an operation writes back through `plugin config set` when it has
+ * something to save, and that is a write like any other.
+ *
+ * A refusal — a shut gate, a plugin that will not start — throws; a plugin that ran and failed comes back
+ * as `ok: false` with whatever line it wrote, because "it ran and said no" is an answer, not an error.
+ */
+export async function runPluginAction(
+  name: string,
+  cmd: string,
+  supplied: Record<string, string>,
+  layer: PluginLayer,
+): Promise<PluginActionRan> {
+  if (!inTauri()) return { ok: false };
+  return invoke<PluginActionRan>("plugin_settings_action", {
+    name,
+    cmd,
+    supplied,
+    projectId: layer,
+  });
 }
 
 /**

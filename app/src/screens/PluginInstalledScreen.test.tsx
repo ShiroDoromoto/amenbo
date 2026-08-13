@@ -9,6 +9,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NONE_SELECTED } from "../core/pluginInstalls";
 import type { PluginConfigField, PluginInstall } from "../core/pluginInstalls";
 import type {
+  PluginActionDto,
+  PluginActionRanDto,
+  PluginCheckDto,
   PluginDeviceRowDto,
   PluginProjectRowDto,
   PluginWantedSettingDto,
@@ -30,6 +33,14 @@ const hoisted = vi.hoisted(() => ({
   droppedQueued: 0,
   /** What the switch is turned away with, for a test about a refusal rather than a move. */
   refuse: undefined as string | undefined,
+  /** What the author's own check said when the switch was pressed (`AMB-D-664`) — none unless a test
+   *  is about a verdict. */
+  check: undefined as PluginCheckDto | undefined,
+  /** Every operation pressed, in order — the values it was handed included, since those are the whole
+   *  question about an `ask`. */
+  pressed: [] as { name: string; cmd: string; supplied: Record<string, string>; projectId: number | null }[],
+  /** What a press answers with. */
+  ran: { ok: true } as PluginActionRanDto,
   projects: [] as { id: number; name: string }[],
   /** What each project holds for a plugin's settings, keyed by plugin then project. */
   held: {} as Record<string, Record<number, PluginConfigField[]>>,
@@ -61,7 +72,23 @@ vi.mock("../core/pluginInstalls", async (importOriginal) => {
     setPluginEnabled: (name: string, projectId: number, enabled: boolean) => {
       hoisted.gated.push({ name, projectId, enabled });
       if (hoisted.refuse != null) return Promise.reject(new Error(hoisted.refuse));
-      return Promise.resolve({ enabled, droppedQueued: hoisted.droppedQueued });
+      // A check that refused leaves the gate where it was and comes back as the verdict, which is what
+      // the form draws (`AMB-D-664`).
+      const moved = hoisted.check && !hoisted.check.ok ? !enabled : enabled;
+      return Promise.resolve({
+        enabled: moved,
+        droppedQueued: hoisted.droppedQueued,
+        check: hoisted.check,
+      });
+    },
+    runPluginAction: (
+      name: string,
+      cmd: string,
+      supplied: Record<string, string>,
+      projectId: number | null,
+    ) => {
+      hoisted.pressed.push({ name, cmd, supplied, projectId });
+      return Promise.resolve(hoisted.ran);
     },
     uninstallPlugin: (name: string) => {
       hoisted.removed.push(name);
@@ -142,6 +169,7 @@ const row = ({ on = [], ...over }: Partial<PluginInstall> & { name: string; on?:
   compatible: true,
   projects: on.map((project) => at(project, { enabled: true })),
   config: [],
+  actions: [],
   scope: over.device ? "machine" : "project",
   ...over,
 });
@@ -172,6 +200,13 @@ const field = (
   ...over,
 });
 
+/** One operation its author declared (`AMB-D-664`), asking for nothing until a test says it does. */
+const action = (over: Partial<PluginActionDto> & { cmd: string }): PluginActionDto => ({
+  label: over.cmd,
+  ask: [],
+  ...over,
+});
+
 const button = (label: string) =>
   Array.from(container.querySelectorAll("button")).find((b) => b.textContent === label);
 const rows = () => Array.from(container.querySelectorAll(".feed__item"));
@@ -199,6 +234,9 @@ beforeEach(() => {
   hoisted.gated = [];
   hoisted.droppedQueued = 0;
   hoisted.refuse = undefined;
+  hoisted.check = undefined;
+  hoisted.pressed = [];
+  hoisted.ran = { ok: true };
   hoisted.projects = [];
   hoisted.held = {};
   hoisted.removed = [];
@@ -685,6 +723,125 @@ describe("the settings form", () => {
     await act(async () => { button(t("plugins.cfg.clear"))!.click(); });
     expect(hoisted.wrote).toEqual([{ name: "notify", key: "events", value: "", projectId: 7 }]);
     expect(container.textContent).toContain(t("plugins.cfg.cleared"));
+  });
+});
+
+// The settings face is where a plugin author's own code speaks to a person (`AMB-D-664`): the check it
+// ran when the switch was pressed, and the operations it declared. Both are drawn here and nowhere else
+// — the CLI is told the keys and never the sentences.
+describe("what the author's own code says on the form", () => {
+  it("draws a refusing check's sentences where each one belongs, and leaves the gate shut", async () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    hoisted.installs = [row({ name: "mail", config: [field({ key: "smtp_host" })], projects: [at(7)] })];
+    hoisted.held = { mail: { 7: [field({ key: "smtp_host", value: "smtp.example.test" })] } };
+    hoisted.check = {
+      ok: false,
+      answered: true,
+      message: "SCENARIO — the mailbox would not answer",
+      fields: { smtp_host: "SCENARIO — there is a space in it" },
+    };
+    render();
+
+    await act(async () => { button(t("plugins.enable"))!.click(); });
+
+    // The refusal opens the form itself: the sentences are about boxes, and a button someone has to find
+    // first is a refusal nobody reads.
+    expect(container.querySelector(".plugcfg"), "nobody pressed the settings button").not.toBeNull();
+    expect(container.textContent).toContain("SCENARIO — the mailbox would not answer");
+    expect(container.textContent).toContain("SCENARIO — there is a space in it");
+  });
+
+  // A silence is amenbo's reading of a run, with nothing of the plugin's in it (`AMB-D-354`) — so the
+  // form says what happened in its own words and leaves the reason to the execution log.
+  it("says the check did not answer when it said nothing readable", async () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    hoisted.installs = [row({ name: "mail", config: [field({ key: "smtp_host" })], projects: [at(7)] })];
+    hoisted.check = { ok: false, answered: false, fields: {} };
+    render();
+
+    await act(async () => { button(t("plugins.enable"))!.click(); });
+    expect(container.textContent).toContain(t("plugins.check.noAnswer"));
+  });
+
+  // What a form may raise is what the manifest named in advance (`AMB-D-522`): the press hands back the
+  // declared `cmd`, never a line this screen composed.
+  it("raises the declared call the pressed button names", async () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    hoisted.installs = [
+      row({ name: "slack", on: [7], actions: [action({ cmd: "config test", label: "Send a test" })] }),
+    ];
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+
+    await act(async () => { button("Send a test")!.click(); });
+    expect(hoisted.pressed).toEqual([
+      { name: "slack", cmd: "config test", supplied: {}, projectId: 7 },
+    ]);
+    expect(container.textContent).toContain(t("plugins.act.ok"));
+  });
+
+  // Running somebody else's code is what enabling means (`AMB-D-351`), so an off crossing draws the
+  // buttons and will not press them — with the line that says which.
+  it("will not press an operation at a crossing the plugin is off in", () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    hoisted.installs = [
+      row({ name: "slack", projects: [at(7)], actions: [action({ cmd: "config test", label: "Send a test" })] }),
+    ];
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+
+    expect(button("Send a test")!.disabled).toBe(true);
+    expect(container.textContent).toContain(t("plugins.act.needsEnabled"));
+  });
+
+  // The one-time value: it rides with the press and is stored nowhere — not through the settings door,
+  // and not in the form once the press is over (`AMB-D-664`).
+  it("asks for what a press needs, hands it to that run, and keeps it nowhere", async () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    hoisted.installs = [
+      row({
+        name: "viewer",
+        on: [7],
+        actions: [action({
+          cmd: "setup",
+          label: "Set it up",
+          ask: [{ key: "api_token", label: "API token", secret: true }],
+        })],
+      }),
+    ];
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+
+    // Pressing the button opens its boxes rather than running: the run needs an answer first.
+    act(() => { button("Set it up")!.click(); });
+    expect(hoisted.pressed).toEqual([]);
+    const box = container.querySelector<HTMLInputElement>(".plugcfg__ask input")!;
+    expect(box.type, "the author said it is a secret").toBe("password");
+    expect(container.textContent).toContain(t("plugins.act.askNote"));
+
+    act(() => { type(box, "t-1"); });
+    await act(async () => { button(t("plugins.act.run"))!.click(); });
+
+    expect(hoisted.pressed).toEqual([
+      { name: "viewer", cmd: "setup", supplied: { api_token: "t-1" }, projectId: 7 },
+    ]);
+    expect(hoisted.wrote, "an asked value goes through no settings door").toEqual([]);
+    expect(container.querySelector(".plugcfg__ask"), "and the boxes are gone with it").toBeNull();
+  });
+
+  // An operation has no return value: what a run that failed leaves on the screen is the one line its
+  // author wrote (`AMB-D-664`), and nothing about the form changes.
+  it("shows the line a failed operation wrote", async () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    hoisted.installs = [
+      row({ name: "slack", on: [7], actions: [action({ cmd: "config test", label: "Send a test" })] }),
+    ];
+    hoisted.ran = { ok: false, message: "SCENARIO — the webhook returned 404" };
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+
+    await act(async () => { button("Send a test")!.click(); });
+    expect(container.textContent).toContain("SCENARIO — the webhook returned 404");
   });
 });
 

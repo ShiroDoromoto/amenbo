@@ -325,6 +325,13 @@
 .plugcfg__help { font-size: var(--fs-xs); white-space: pre-wrap; overflow-wrap: anywhere; }
 /* A field whose value the plugin writes, standing where its input would (`AMB-D-656`). */
 .plugcfg__fixed { font-size: var(--fs-sm); overflow-wrap: anywhere; }
+/* The operations the author declared (`AMB-D-664`), under the fields they act on and ruled off from them:
+   these run somebody else's code, where everything above only writes a value down. */
+.plugcfg__acts { border-top: 1px solid var(--c-border); margin-top: var(--s-3); padding-top: var(--s-2); display: flex; flex-direction: column; gap: var(--s-2); }
+.plugcfg__act { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-1); }
+/* What one press asks for and nothing keeps — indented under its own button, so the boxes read as part of
+   the press rather than as more settings. */
+.plugcfg__ask { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-1); width: 100%; padding-left: var(--s-3); }
 .plugdet__readme { border-top: 1px solid var(--c-border); padding-top: var(--s-3); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .plugdet__foot { border-top: 1px solid var(--c-border); margin-top: var(--s-4); padding-top: var(--s-2); font-size: var(--fs-xs); }
 /* Holder-side surface of `AMB-D-366`: premises pinned on after a task was reserved. A different axis from

@@ -209,6 +209,7 @@ function install(
       ...filledIn.map((project) => ({ project, enabled: false, hasValue: true, requiredUnset: false })),
     ],
     config: [],
+    actions: [],
     scope: over.device ? "machine" : "project",
     ...over,
   };

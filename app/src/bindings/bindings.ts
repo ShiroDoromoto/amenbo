@@ -504,6 +504,78 @@ export type PlacementDto = { project: ProjectRefDto, };
 export type PlainRefDto = { id: string, name: string, };
 
 /**
+ * **One operation the settings form may raise** (`AMB-D-664`) — a button, and whatever that press has to
+ * ask for before it can run.
+ *
+ * `cmd` is not shown to anyone: it is the name the press hands back, and the only thing amenbo will
+ * raise a call by ([`plugin_settings_action`]). What is drawn is the label, plain — no Markdown and no
+ * link, like every other author string on this screen (`AMB-D-656`).
+ */
+export type PluginActionDto = { 
+/**
+ * The declared call this button raises, as the manifest wrote it — the form's handle on it, never a
+ * line a caller composes (`AMB-D-522`).
+ */
+cmd: string, 
+/**
+ * The words on the button, in the author's language.
+ */
+label: string, 
+/**
+ * Those words in the reader's language, when their author wrote them (`AMB-D-620`). Beside the base
+ * label, never over it — the form picks (`AMB-D-623`).
+ */
+labelI18n?: string, 
+/**
+ * What this press asks for and nothing keeps (`AMB-D-664`). Empty is the ordinary operation, which
+ * runs on the values already saved.
+ */
+ask: Array<PluginAskDto>, };
+
+/**
+ * What pressing one of a plugin's declared operations did (`AMB-D-664`) — the whole of what the form
+ * draws afterwards.
+ *
+ * **An operation has no return value.** What comes back is whether the run succeeded and the one line its
+ * author wrote to stderr, which is the same reading every command run gets (`AMB-D-353`). Anything longer
+ * is on the execution log, where every run of this plugin already is (`AMB-D-361`).
+ */
+export type PluginActionRanDto = { 
+/**
+ * Whether the run exited successfully. `false` changes nothing — a failed operation is a line on the
+ * screen, not a state the form has to recover from.
+ */
+ok: boolean, 
+/**
+ * The author's own line, as written to stderr and drawn plain. Absent when the run said nothing.
+ */
+message?: string, };
+
+/**
+ * **One value an operation asks for at the press** (`AMB-D-664`) — a box drawn only while the press is
+ * being made, whose answer is handed to that one run and stored nowhere.
+ */
+export type PluginAskDto = { 
+/**
+ * The name the value travels under — what the press hands back beside it, and never something the
+ * form stores.
+ */
+key: string, 
+/**
+ * The label beside the box, in the author's language.
+ */
+label: string, 
+/**
+ * That label in the reader's language, when their author wrote one (`AMB-D-620`).
+ */
+labelI18n?: string, 
+/**
+ * Whether the box hides what is typed into it — the author's declaration, as on a secret setting
+ * (`AMB-D-356`). Here it decides only what the screen shows: there is no store to route it to.
+ */
+secret: boolean, };
+
+/**
  * The plugin market view: every entry across the merged catalogs, plus which catalogs answered.
  */
 export type PluginCatalogDto = { entries: Array<PluginEntryDto>, sources: Array<PluginCatalogSourceDto>, 
@@ -594,6 +666,34 @@ reachable: boolean,
  * How many entries it offered, before cross-catalog de-duplication.
  */
 offered: number, };
+
+/**
+ * What the author's own check said about the values, for the screen that shows the form (`AMB-D-664`).
+ *
+ * It rides back with the gate because the check is what an enable raises: the switch is where the run
+ * happens, and the form is where its sentences belong. A verdict may say yes and still have something to
+ * say, which is why this is not a failure report.
+ */
+export type PluginCheckDto = { 
+/**
+ * Whether the check said the values are usable. `false` with the gate shut is the refusal.
+ */
+ok: boolean, 
+/**
+ * Whether the check answered at all. `false` is a run that said nothing this build can read — the
+ * fail-closed silence (`AMB-D-354`), which carries no sentence of the author's and so gets amenbo's.
+ */
+answered: boolean, 
+/**
+ * The one sentence about the settings as a whole, for the head of the form. Absent when the check
+ * wrote none.
+ */
+message?: string, 
+/**
+ * One sentence per setting the check spoke about, keyed by the setting's own key — drawn beside the
+ * box it names. Core has already dropped any key the manifest does not declare.
+ */
+fields: Record<string, string>, };
 
 /**
  * One setting a plugin's author declared, and what this machine currently holds for it
@@ -805,7 +905,15 @@ enabled: boolean,
  * How many queued events the disable dropped. Zero on an enable, and on a disable that found an
  * empty queue — the ordinary case, which a face is meant to pass over in silence.
  */
-droppedQueued: number, };
+droppedQueued: number, 
+/**
+ * What the author's own check said, when an enable raised one (`AMB-D-664`). Absent on a disable —
+ * nothing is checked on the way out — and on a plugin that declares no check.
+ *
+ * A verdict here with `enabled: false` is the refusal: the gate did not move, and the reason is the
+ * author's sentences rather than one of amenbo's.
+ */
+check?: PluginCheckDto, };
 
 /**
  * One plugin this machine holds, as the market draws its state on top of the catalog entry of the same
@@ -853,7 +961,12 @@ incompatibleReason?: string,
  * declares none, which is the form's own answer to whether there is anything to configure. What is
  * held for a key is one project's (`AMB-D-434`) and comes from [`plugin_config_read`].
  */
-config: Array<PluginWantedSettingDto>, };
+config: Array<PluginWantedSettingDto>, 
+/**
+ * The operations the author declared, in that order (`AMB-D-664`) — the buttons the settings form
+ * draws beside those fields. Empty is a plugin whose form is fields and a save, as every form was.
+ */
+actions: Array<PluginActionDto>, };
 
 /**
  * One "project × plugin" intersection, as both plugin faces draw a row for it (`AMB-D-447`) — the state

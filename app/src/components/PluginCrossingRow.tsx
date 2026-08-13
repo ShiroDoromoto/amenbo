@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { PluginCheckDto } from "../bindings/bindings";
 import { errText, t, tn } from "../core/i18n";
 import {
   crossingAt,
@@ -50,15 +51,23 @@ export function PluginCrossingRow({ install, layer, name }: {
   // it matters — the same silence the CLI keeps.
   const [dropped, setDropped] = useState(0);
   const [open, setOpen] = useState(false);
+  // What the author's own check said the last time this switch was pressed (`AMB-D-664`). It is a fact
+  // about one press, like the refusal beside it, so a write to this crossing's settings retires it.
+  const [check, setCheck] = useState<PluginCheckDto | null>(null);
   const at = crossingAt(install, layer);
 
   const move = async (next: boolean) => {
     setBusy(true);
     setError(null);
     setDropped(0);
+    setCheck(null);
     try {
       const moved = await setPluginEnabled(install.name, layer, next);
       setDropped(moved.droppedQueued);
+      setCheck(moved.check ?? null);
+      // A check that shut the gate says why in the author's own sentences, and those are drawn beside the
+      // boxes they are about — so the form is opened rather than left as a button someone has to find.
+      if (moved.check && !moved.check.ok) setOpen(true);
     } catch (e) {
       // A refusal is core's — a build this amenbo cannot speak to, a `required` setting this project
       // has no value for — and it is the sentence worth showing beside the place to fix it.
@@ -88,8 +97,9 @@ export function PluginCrossingRow({ install, layer, name }: {
           {t(at.enabled ? "plugins.disable" : "plugins.enable")}
         </button>
         {/* Only for a plugin whose author declared any — an empty form is the form's own answer to
-            whether there is anything to configure, and it is not worth a button. */}
-        {install.config.length > 0 && (
+            whether there is anything to configure, and it is not worth a button. Operations count as
+            something to open it for: a plugin with a button and no field still has a form. */}
+        {(install.config.length > 0 || install.actions.length > 0) && (
           <button className="feed__action" onClick={() => setOpen((s) => !s)}>
             {t(open ? "plugins.cfg.hide" : "plugins.cfg.open")}
           </button>
@@ -104,7 +114,19 @@ export function PluginCrossingRow({ install, layer, name }: {
           would be a row saying its settings are filled in and unfillable in the same breath. What may be
           enabled now is answered by pressing again, which is the one thing that can answer it. */}
       {open && (
-        <PluginConfigForm install={install} layer={layer} onWrote={() => setError(null)} />
+        <PluginConfigForm
+          install={install}
+          layer={layer}
+          enabled={at.enabled}
+          check={check}
+          onWrote={() => {
+            setError(null);
+            // The verdict is about the values that were there when the switch was pressed, so a save
+            // outlives it exactly as the refusal above does — and what is true now is answered by
+            // pressing again.
+            setCheck(null);
+          }}
+        />
       )}
     </div>
   );

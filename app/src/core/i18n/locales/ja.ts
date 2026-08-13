@@ -410,6 +410,12 @@ export const ja: Translation = {
     "plugins.cfg.secretMismatch": "2つの入力が一致しません",
     "plugins.cfg.clear": "消す", "plugins.cfg.save": "保存", "plugins.cfg.saving": "保存中…",
     "plugins.cfg.saved": "保存しました", "plugins.cfg.cleared": "消しました",
+    "plugins.act.title": "操作", "plugins.act.needsEnabled": "有効にすると押せます。",
+    "plugins.act.running": "実行中…", "plugins.act.ok": "実行しました", "plugins.act.failed": "最後まで実行できませんでした",
+    "plugins.act.run": "実行", "plugins.act.cancel": "やめる",
+    "plugins.act.askNote": "この実行にだけ渡され、保存されません。",
+    "plugins.check.refused": "プラグインの検査がこの設定を断ったので、有効にしていません。",
+    "plugins.check.noAnswer": "プラグインの検査が答えなかったので、有効にしていません。何が起きたかは実行ログにあります。",
     // the update banner and its explicit re-check
     "plugins.updates.title.other": "プラグインの更新があります（{n} 件）",
     "plugins.updates.apply": "更新", "plugins.updates.applyAll": "まとめて更新",

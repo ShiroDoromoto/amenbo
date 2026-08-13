@@ -85,6 +85,7 @@ const row = ({ on = [], ...over }: Partial<PluginInstall> & { name: string; on?:
   compatible: true,
   projects: on.map((project) => ({ project, enabled: true, hasValue: false, requiredUnset: false })),
   config: [],
+  actions: [],
   scope: "project",
   ...over,
 });

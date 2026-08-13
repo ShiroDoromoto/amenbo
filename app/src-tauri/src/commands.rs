@@ -5278,6 +5278,86 @@ fn wanted_settings(
     config.iter().map(|f| wanted_setting(f, overlay.and_then(|o| o.get(&f.key)))).collect()
 }
 
+/// **One operation the settings form may raise** (`AMB-D-664`) — a button, and whatever that press has to
+/// ask for before it can run.
+///
+/// `cmd` is not shown to anyone: it is the name the press hands back, and the only thing amenbo will
+/// raise a call by ([`plugin_settings_action`]). What is drawn is the label, plain — no Markdown and no
+/// link, like every other author string on this screen (`AMB-D-656`).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginActionDto {
+    /// The declared call this button raises, as the manifest wrote it — the form's handle on it, never a
+    /// line a caller composes (`AMB-D-522`).
+    cmd: String,
+    /// The words on the button, in the author's language.
+    label: String,
+    /// Those words in the reader's language, when their author wrote them (`AMB-D-620`). Beside the base
+    /// label, never over it — the form picks (`AMB-D-623`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    label_i18n: Option<String>,
+    /// What this press asks for and nothing keeps (`AMB-D-664`). Empty is the ordinary operation, which
+    /// runs on the values already saved.
+    ask: Vec<PluginAskDto>,
+}
+
+/// **One value an operation asks for at the press** (`AMB-D-664`) — a box drawn only while the press is
+/// being made, whose answer is handed to that one run and stored nowhere.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginAskDto {
+    /// The name the value travels under — what the press hands back beside it, and never something the
+    /// form stores.
+    key: String,
+    /// The label beside the box, in the author's language.
+    label: String,
+    /// That label in the reader's language, when their author wrote one (`AMB-D-620`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    label_i18n: Option<String>,
+    /// Whether the box hides what is typed into it — the author's declaration, as on a secret setting
+    /// (`AMB-D-356`). Here it decides only what the screen shows: there is no store to route it to.
+    secret: bool,
+}
+
+/// The operations a plugin's settings block declares, each with its words in the reader's language
+/// (`AMB-D-664`) — empty for a plugin that declares none, which is the form's own answer to whether there
+/// is anything to press.
+///
+/// `check` has no counterpart here: it is not a button, it is what an enable raises on its own, and what
+/// it said comes back with the gate ([`PluginCheckDto`]).
+fn wanted_actions(
+    settings: Option<&amenbo_core::plugin_manifest::Settings>,
+    overlay: Option<&amenbo_core::plugin_manifest::SettingsOverlay>,
+) -> Vec<PluginActionDto> {
+    let Some(settings) = settings else { return Vec::new() };
+    settings
+        .actions
+        .iter()
+        .map(|action| {
+            let translated = overlay.and_then(|o| o.actions.get(&action.cmd));
+            PluginActionDto {
+                cmd: action.cmd.clone(),
+                label: action.label.clone(),
+                label_i18n: translated.and_then(|a| a.label.clone()),
+                ask: action
+                    .ask
+                    .iter()
+                    .map(|field| PluginAskDto {
+                        label_i18n: translated.and_then(|a| a.ask.get(&field.key).cloned()),
+                        key: field.key.clone(),
+                        label: field.label.clone(),
+                        secret: field.secret,
+                    })
+                    .collect(),
+            }
+        })
+        .collect()
+}
+
 /// What the catalog's **detail document** says about one plugin — the half of its entry that is fetched
 /// for the one plugin someone opened, never for the list (`AMB-D-385`).
 ///
@@ -5396,6 +5476,9 @@ pub struct PluginInstallDto {
     /// declares none, which is the form's own answer to whether there is anything to configure. What is
     /// held for a key is one project's (`AMB-D-434`) and comes from [`plugin_config_read`].
     config: Vec<PluginWantedSettingDto>,
+    /// The operations the author declared, in that order (`AMB-D-664`) — the buttons the settings form
+    /// draws beside those fields. Empty is a plugin whose form is fields and a save, as every form was.
+    actions: Vec<PluginActionDto>,
 }
 
 /// Read one declared setting into its DTO, at the layer this plugin's values live at
@@ -5440,6 +5523,10 @@ fn install_row(
     use amenbo_core::plugin_layer::Layer;
     let why = amenbo_core::plugin_compat::check(&plugin.manifest).err();
     let config = wanted_settings(&plugin.manifest.config, overlay.map(|o| &o.config));
+    let actions = wanted_actions(
+        plugin.manifest.settings.as_ref(),
+        overlay.and_then(|o| o.settings.as_ref()),
+    );
     let projects =
         amenbo_core::plugin_config::intersections(store, &plugin.name, &plugin.manifest.config)?
             .into_iter()
@@ -5478,6 +5565,7 @@ fn install_row(
         compatible: why.is_none(),
         incompatible_reason: why.map(|why| why.to_string()),
         config,
+        actions,
     })
 }
 
@@ -5587,6 +5675,7 @@ pub fn plugin_set_enabled(
         let installed = amenbo_core::plugin_installed::read(&store.paths, &name)?;
         let layer = amenbo_core::plugin_layer::Layer::of(installed.manifest.scope, project_id)?;
         let mut dropped_queued = 0;
+        let mut check = None;
         if enabled {
             amenbo_core::plugin_compat::check(&installed.manifest)
                 .map_err(|incompatible| CmdError::from(incompatible.into_error(&name)))?;
@@ -5594,30 +5683,89 @@ pub fn plugin_set_enabled(
             let satisfied =
                 amenbo_core::plugin_config::satisfied_keys(store, &name, &fields, layer)?;
             // The author's own check, raised before the gate — pressing enable is the consent to run this
-            // code (`AMB-D-664` / `AMB-D-351`). Its verdict is refused inside `enable`; drawing the
-            // sentences it carries is the settings form's, and is not this switch's answer.
+            // code (`AMB-D-664` / `AMB-D-351`).
             let checked = amenbo_core::plugin_check::run(
                 store,
                 &installed,
                 project_id,
                 amenbo_core::plugin_check::TIMEOUT,
             )?;
-            enable(
-                store,
-                &name,
-                layer,
-                &fields,
-                |f| satisfied.iter().any(|k| k == &f.key),
-                &checked,
-            )?;
+            let has_value = |f: &amenbo_core::plugin_manifest::ConfigField| {
+                satisfied.iter().any(|k| k == &f.key)
+            };
+            // A check that refused is **the answer, not an error**: what it refused over is the sentences
+            // it wrote, and those are this face's to draw beside the boxes they are about (`AMB-D-664`).
+            // Core's refusal names the keys and drops the sentences, deliberately, because it also
+            // travels to faces with nobody in front of them — so the gate coming back shut, with the
+            // verdict, is what the form works from. Every other refusal is still thrown: an incompatible
+            // build and an empty `required` field have no verdict to draw, only a sentence to show.
+            let shut_by_the_check = !checked.opens_the_gate()
+                && amenbo_core::plugin_trust::missing_required(&fields, has_value).is_empty();
+            match enable(store, &name, layer, &fields, has_value, &checked) {
+                Ok(()) => {}
+                Err(_) if shut_by_the_check => {}
+                Err(refused) => return Err(refused.into()),
+            }
+            check = checked_dto(&checked);
         } else {
             dropped_queued = disable(store, &name, layer)?.queued;
         }
         Ok(PluginGateMovedDto {
             enabled: effective_enabled_in(store, &name, layer)?,
             dropped_queued,
+            check,
         })
     })
+}
+
+/// What the author's check said, as the settings form reads it (`AMB-D-664`) — `None` for a plugin that
+/// declares none, which is every plugin written before the block existed.
+///
+/// The sentences travel whole and are drawn plain: amenbo does not read them (`AMB-D-356`), and the form
+/// puts each one where it belongs — the per-field lines beside their boxes, the `message` at the head.
+fn checked_dto(checked: &amenbo_core::plugin_check::Checked) -> Option<PluginCheckDto> {
+    match checked {
+        amenbo_core::plugin_check::Checked::NotDeclared => None,
+        amenbo_core::plugin_check::Checked::Answered(verdict) => Some(PluginCheckDto {
+            ok: verdict.ok,
+            message: verdict.message.clone(),
+            fields: verdict.fields.clone(),
+            answered: true,
+        }),
+        // A silence has nothing of the plugin's in it (`AMB-D-354`), so nothing is invented here either:
+        // the face says the check did not answer, and the execution log holds why (`AMB-D-361`).
+        amenbo_core::plugin_check::Checked::Silent(_) => Some(PluginCheckDto {
+            ok: false,
+            message: None,
+            fields: std::collections::BTreeMap::new(),
+            answered: false,
+        }),
+    }
+}
+
+/// What the author's own check said about the values, for the screen that shows the form (`AMB-D-664`).
+///
+/// It rides back with the gate because the check is what an enable raises: the switch is where the run
+/// happens, and the form is where its sentences belong. A verdict may say yes and still have something to
+/// say, which is why this is not a failure report.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginCheckDto {
+    /// Whether the check said the values are usable. `false` with the gate shut is the refusal.
+    ok: bool,
+    /// Whether the check answered at all. `false` is a run that said nothing this build can read — the
+    /// fail-closed silence (`AMB-D-354`), which carries no sentence of the author's and so gets amenbo's.
+    answered: bool,
+    /// The one sentence about the settings as a whole, for the head of the form. Absent when the check
+    /// wrote none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    message: Option<String>,
+    /// One sentence per setting the check spoke about, keyed by the setting's own key — drawn beside the
+    /// box it names. Core has already dropped any key the manifest does not declare.
+    #[ts(type = "Record<string, string>")]
+    fields: std::collections::BTreeMap<String, String>,
 }
 
 /// Where a gate ended up, and what closing it threw away (`AMB-D-399`) — what [`plugin_set_enabled`]
@@ -5636,6 +5784,14 @@ pub struct PluginGateMovedDto {
     /// empty queue — the ordinary case, which a face is meant to pass over in silence.
     #[ts(type = "number")]
     dropped_queued: usize,
+    /// What the author's own check said, when an enable raised one (`AMB-D-664`). Absent on a disable —
+    /// nothing is checked on the way out — and on a plugin that declares no check.
+    ///
+    /// A verdict here with `enabled: false` is the refusal: the gate did not move, and the reason is the
+    /// author's sentences rather than one of amenbo's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    check: Option<PluginCheckDto>,
 }
 
 /// Write one plugin setting — the GUI form's half of `plugin config set`, through the one write
@@ -5675,6 +5831,66 @@ pub fn plugin_config_set(
         amenbo_core::plugin_config::set(store, &field, &name, layer, &value)?;
         Ok(())
     })
+}
+
+/// What pressing one of a plugin's declared operations did (`AMB-D-664`) — the whole of what the form
+/// draws afterwards.
+///
+/// **An operation has no return value.** What comes back is whether the run succeeded and the one line its
+/// author wrote to stderr, which is the same reading every command run gets (`AMB-D-353`). Anything longer
+/// is on the execution log, where every run of this plugin already is (`AMB-D-361`).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginActionRanDto {
+    /// Whether the run exited successfully. `false` changes nothing — a failed operation is a line on the
+    /// screen, not a state the form has to recover from.
+    ok: bool,
+    /// The author's own line, as written to stderr and drawn plain. Absent when the run said nothing.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    message: Option<String>,
+}
+
+/// Raise one operation a plugin's settings block declared (`AMB-D-664`) — the settings face's one way of
+/// running somebody else's code, and the only one it has.
+///
+/// **`cmd` names a declaration; it is never a line to run.** Core looks it up among the manifest's
+/// `settings.actions` and takes the words from there, so a caller chooses *which* declared call runs and
+/// never what it is handed (`AMB-D-522`); a `cmd` the manifest does not declare is refused there. The
+/// gate is the ordinary one — what a form raises, it raises on an enabled plugin.
+///
+/// `supplied` carries the values this press asked for (`ask`), and they reach the child process and go no
+/// further: not the config table, not the secret store, not this call's answer (`AMB-D-664`). The values
+/// already saved are injected as they are for every run, and are not repeated here.
+///
+/// `project_id` is the project the form is standing in, as everywhere else on this face — required for a
+/// `scope: project` plugin, and the device's own for a `scope: machine` one (`AMB-D-601`).
+#[tauri::command]
+pub fn plugin_settings_action(
+    name: String,
+    cmd: String,
+    supplied: std::collections::BTreeMap<String, String>,
+    project_id: Option<i64>,
+) -> Result<PluginActionRanDto, CmdError> {
+    // A read handle, though this runs somebody's code: the press writes nothing of its own, and what the
+    // plugin has to write it writes by calling amenbo back (`AMB-D-406`) — which is a door of its own, and
+    // not one to hold shut for however long a `setup` takes (`AMB-D-664` puts no bound on a press).
+    {
+        let store = &open_store_read()?;
+        let outcome =
+            amenbo_core::plugin_invoke::call_declared(store, &name, &cmd, &supplied, project_id)?;
+        let (ok, diagnostic) = match &outcome {
+            amenbo_core::plugin_command::CommandOutcome::Returned { diagnostic, .. } => {
+                (true, diagnostic)
+            }
+            amenbo_core::plugin_command::CommandOutcome::Failed { diagnostic, .. } => {
+                (false, diagnostic)
+            }
+        };
+        let line = diagnostic.lines().find(|l| !l.trim().is_empty()).map(str::to_string);
+        Ok(PluginActionRanDto { ok, message: line })
+    }
 }
 
 /// What an uninstall actually found and removed (`AMB-D-357`) — the receipt the face reports from.
@@ -6331,6 +6547,89 @@ mod tests {
         // No layer at all is the same answer as a layer that says nothing: the form as its author wrote it.
         let bare = wanted_settings(&config, None);
         assert!(bare.iter().all(|f| f.label_i18n.is_none()));
+    }
+
+    /// The buttons are paired the same way (`AMB-D-664`): an operation by the call it raises, and a value
+    /// it asks for by the name that value travels under. Neither of those is translated — they are what
+    /// the press hands back — and the words beside them are.
+    #[test]
+    fn the_buttons_a_form_draws_pair_by_the_call_and_the_name_they_travel_under() {
+        use amenbo_core::plugin_manifest::{
+            AskField, Settings, SettingsAction, SettingsActionOverlay, SettingsOverlay,
+        };
+        let settings = Settings {
+            check: Some("config check".into()),
+            actions: vec![
+                SettingsAction {
+                    cmd: "config test".into(),
+                    label: "Send a test message".into(),
+                    ask: vec![AskField {
+                        key: "api_token".into(),
+                        label: "API token".into(),
+                        secret: true,
+                        extra: Default::default(),
+                    }],
+                },
+                SettingsAction { cmd: "setup".into(), label: "Set up".into(), ask: Vec::new() },
+            ],
+        };
+        // Only the first operation, written in the other order than the manifest declares them — which is
+        // exactly what a pairing by position would get wrong.
+        let overlay = SettingsOverlay {
+            actions: std::collections::BTreeMap::from([(
+                "config test".to_string(),
+                SettingsActionOverlay {
+                    label: Some("テスト送信".into()),
+                    ask: std::collections::BTreeMap::from([(
+                        "api_token".to_string(),
+                        "API トークン".to_string(),
+                    )]),
+                    ..SettingsActionOverlay::default()
+                },
+            )]),
+            ..SettingsOverlay::default()
+        };
+
+        let drawn = wanted_actions(Some(&settings), Some(&overlay));
+        assert_eq!(drawn[0].cmd, "config test", "the call is the handle, and is not translated");
+        assert_eq!(drawn[0].label, "Send a test message", "the author's own words stand");
+        assert_eq!(drawn[0].label_i18n.as_deref(), Some("テスト送信"));
+        assert_eq!(drawn[0].ask[0].key, "api_token", "nor is the name the value travels under");
+        assert_eq!(drawn[0].ask[0].label_i18n.as_deref(), Some("API トークン"));
+        assert!(drawn[0].ask[0].secret, "the author said so, and the box hides what is typed");
+        assert_eq!(drawn[1].label_i18n, None, "an untranslated button carries no second line");
+
+        assert!(wanted_actions(Some(&settings), None).iter().all(|a| a.label_i18n.is_none()));
+        assert!(wanted_actions(None, None).is_empty(), "a plugin declaring no block has no buttons");
+    }
+
+    /// What a verdict reaches the screen as (`AMB-D-664`). The three states are three answers: a plugin
+    /// with no check has nothing to draw, one that answered carries the author's sentences whole, and one
+    /// that said nothing readable carries none of them — the silence is amenbo's own reading of the run.
+    #[test]
+    fn a_verdict_reaches_the_form_whole_and_a_silence_reaches_it_as_a_silence() {
+        use amenbo_core::plugin_check::{Checked, Silence, Verdict};
+
+        assert!(checked_dto(&Checked::NotDeclared).is_none());
+
+        let answered = checked_dto(&Checked::Answered(Verdict {
+            ok: false,
+            message: Some("the mailbox would not answer".into()),
+            fields: std::collections::BTreeMap::from([(
+                "smtp_host".to_string(),
+                "there is a space in it".to_string(),
+            )]),
+        }))
+        .expect("a check that answered is something to draw");
+        assert!(!answered.ok && answered.answered);
+        assert_eq!(answered.message.as_deref(), Some("the mailbox would not answer"));
+        assert_eq!(answered.fields["smtp_host"], "there is a space in it");
+
+        let silent = checked_dto(&Checked::Silent(Silence::TimedOut)).expect("a silence is drawn too");
+        assert!(!silent.ok, "a silence never opens a gate, and the form says the gate is shut");
+        assert!(!silent.answered);
+        assert_eq!(silent.message, None, "there is no sentence of the author's in it");
+        assert!(silent.fields.is_empty());
     }
 
     /// The installed face draws its form in the reader's language off what the install kept beside the

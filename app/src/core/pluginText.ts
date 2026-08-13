@@ -11,7 +11,12 @@
 // **A fallback is never announced** (`AMB-D-623`). An untranslated plugin is an English line among
 // translated ones and nothing on screen marks it: the reader is not being told about the catalog's
 // coverage, they are reading a description.
-import type { PluginConfigOptionDto, PluginWantedSettingDto } from "../bindings/bindings";
+import type {
+  PluginActionDto,
+  PluginAskDto,
+  PluginConfigOptionDto,
+  PluginWantedSettingDto,
+} from "../bindings/bindings";
 
 /** Anything carrying an author's one-line description: a catalog entry, or the build an update offers. */
 export interface PluginDescribed {
@@ -68,4 +73,17 @@ export function settingPlaceholder(f: PluginWantedSettingDto): string | undefine
  */
 export function optionLabel(o: PluginConfigOptionDto): string {
   return o.labelI18n ?? o.label;
+}
+
+/**
+ * The words on one operation's button, in the reader's language, else the author's own (`AMB-D-664`).
+ * The `cmd` beside it is never translated — it is the call the press raises.
+ */
+export function actionLabel(a: PluginActionDto): string {
+  return a.labelI18n ?? a.label;
+}
+
+/** The caption beside a box a press asks for, in the reader's language, else the author's own. */
+export function askLabel(f: PluginAskDto): string {
+  return f.labelI18n ?? f.label;
 }

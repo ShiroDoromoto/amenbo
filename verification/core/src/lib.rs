@@ -550,6 +550,12 @@ const REGISTRY: &[OpSpec] = &[
     // rather than an op of its own: the field written is the same field, and what the flag changes is
     // what amenbo then does about an empty one.
     //
+    // `readonly: true` writes the flag that says the value is the plugin's own to fill in and not the
+    // user's. It is a word on this declaration for the reason `required` is: the field
+    // written is the same field, and what the flag changes is what the faces then do about it — a form
+    // draws the value with no box and no button, while the write door stays open, since that door is how
+    // the plugin's own value arrives.
+    //
     // `translated` writes the words the author put on that same field in other languages, keyed by
     // language code — the `label` a form draws it under, and for a choice the `options` its candidates
     // are drawn under, keyed by the value each one stores. It goes where an install puts what a catalog
@@ -1128,6 +1134,12 @@ const REGISTRY: &[OpSpec] = &[
     // same question of the settings form — which boxes are ticked, and which of the three the field
     // says it is holding — so `state` is what a road there is written on, with `equals` naming the
     // candidates a chosen one leaves ticked.
+    //
+    // `readonly: true` is the one reading only a screen has, so the CLI driver turns it
+    // away rather than passing over it: what it asks is that the value is shown with no box to type in
+    // and no button to take it back, and a terminal has neither to withhold. It reads `equals` as the
+    // value that has to be standing there — the point of the reading is the value being there and being
+    // out of reach, which an empty field would prove for the wrong reason.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "config", required: &["name", "key"], refs: &[], strings: &["name", "key", "state"], binds: false },
     // The other half of that same form, asked apart from it the way a row's line is asked apart from
     // its badge: not what the field holds, but the words it is drawn under. `label` is those words,
@@ -1331,6 +1343,13 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // already declared — the declaration is the world, and the answering is the road.
     (Domain::Plugin, "declare-setting"),
     (Domain::Plugin, "declare-choice"),
+    // And a value already filled in for one of them. Answering a setting is a road of its own and is
+    // deliberately not one a premise walks — except that a setting the author marked `readonly` is not
+    // answered by anybody a road can be: the value is the plugin's own, written back through
+    // `plugin config set`, and the screen's whole promise about it is that it offers no way
+    // to type one or to take one away. A form with nothing in the field would draw no button either, and
+    // would prove that promise for the wrong reason.
+    (Domain::Plugin, "config-set"),
     // And the layer it says it lives at, for that same reason one line further out: the layer is the
     // author's word too, every plugin the official catalog serves declares none, and a screen road
     // about reading the layer off a row has to find a row that already declares one.

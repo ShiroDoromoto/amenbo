@@ -373,11 +373,21 @@ impl Driver<'_> {
             "declare-setting" => {
                 let name = req_str(with, "name")?;
                 let key = req_str(with, "key")?;
-                self.declare_field(name, key, with, serde_json::json!({}))?;
+                // Whose value it is, when the author said it is not the user's. The flag
+                // rides on the same declaration `required` does, and for the same reason: the field
+                // written is the same field, and what changes is what the faces do about it.
+                let over = match opt_bool(with, "readonly") {
+                    Some(true) => serde_json::json!({ "readonly": true }),
+                    _ => serde_json::json!({}),
+                };
+                self.declare_field(name, key, with, over)?;
                 // Whether the plugin can work without an answer is the difference the scenario after this
                 // turns on, so the evidence line says which of the two was written.
-                Ok(Outcome::action(match opt_bool(with, "required") {
-                    Some(true) => {
+                Ok(Outcome::action(match (opt_bool(with, "readonly"), opt_bool(with, "required")) {
+                    (Some(true), _) => {
+                        format!("`{name}` now declares `{key}` as a value it fills in itself")
+                    }
+                    (_, Some(true)) => {
                         format!("`{name}` now declares `{key}`, and cannot be enabled while it is empty")
                     }
                     _ => format!("`{name}` now declares `{key}`"),
@@ -1071,6 +1081,7 @@ impl Driver<'_> {
             "config" => {
                 let name = req_str(with, "name")?;
                 let key = req_str(with, "key")?;
+                refuse_screen_reading(with)?;
                 let v = self.run_json(&["plugin", "config", "get", name, key, "--json"])?;
                 // Which of the three answers the field holds. It is asked apart from the value because
                 // the value cannot tell two of them apart: a choice answered with none of the
@@ -1400,6 +1411,25 @@ impl Driver<'_> {
     }
 }
 
+/// The one question about a setting that only a screen can answer, turned away here rather than quietly
+/// passing.
+///
+/// `readonly` asks that a value is shown with no box to type into and no button to take it back. A
+/// terminal has neither to withhold, and the write door it does have stays open on purpose — that door
+/// is how the plugin's own value arrives. So a step asking it down this pipe would come
+/// back green off a build that had stopped withholding anything, which is the reading this refuses.
+fn refuse_screen_reading(with: &Args) -> Result<(), String> {
+    if with.contains_key("readonly") {
+        return Err(
+            "`readonly` is a question about what the form withholds, so it belongs on a `steps_gui` \
+             road where an eye reads it — a terminal has no box and no button, and writing the value \
+             is open there on purpose"
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
 /// What one field's translations leave behind in the record beside the manifest: whatever was already
 /// held, with this field's words written into each language the step named.
 ///
@@ -1508,6 +1538,19 @@ mod tests {
 
     fn args(yaml: &str) -> Args {
         serde_yaml::from_str(yaml).expect("the args a step would carry")
+    }
+
+    /// The reading a terminal has no way to answer, refused rather than passed over: a
+    /// form withholds a box and a button, and down this pipe there is neither — while the write door
+    /// that is open here is the one the plugin's own value arrives through.
+    #[test]
+    fn what_only_a_form_withholds_is_refused_on_this_road() {
+        let Err(err) = refuse_screen_reading(&args("{ name: worktree, key: worker_url, readonly: true }"))
+        else {
+            panic!("`readonly` is a screen's question, and it has no answer down this pipe");
+        };
+        assert!(err.contains("readonly") && err.contains("steps_gui"), "got: {err}");
+        assert!(refuse_screen_reading(&args("{ name: worktree, key: base, equals: main }")).is_ok());
     }
 
     fn served(docs: &[(String, String)], path: &str) -> serde_json::Value {

@@ -900,6 +900,14 @@ const REGISTRY: &[OpSpec] = &[
     // fires, and whether what it injects reaches the model, is outside amenbo, so nothing here says
     // enabled and nothing says it works.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch", required: &["wired"], refs: &[], strings: &["tool"], binds: false },
+    // The same report read on one tool's own row (`tool`), and whether that row says wired (`wired`).
+    // `ai-launch` above answers for the folder as a whole, and names only what amenbo can point at —
+    // a provider whose directory is right there. This one answers for a provider the folder shows no
+    // sign of, which is the reader that opens a folder somebody else wired with a tool of their own:
+    // it knows which harness it is where nothing in the folder does, and its own row is the only place
+    // the answer is. Where a row says unwired it has to carry the way to that tool's text as well, an
+    // answer that leaves the reader unable to act being no answer.
+    OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-tool", required: &["tool", "wired"], refs: &[], strings: &["tool"], binds: false },
     // The text handed over to make that happen: what it carries (`carries` — the launch instruction,
     // which is the one part of it that is not the provider's own shape) and the file it says to put
     // it in (`paste_into`). What is under test is the handing over, since amenbo's whole part in this

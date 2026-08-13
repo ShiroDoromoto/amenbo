@@ -197,6 +197,42 @@ impl Driver<'_> {
                     ),
                 ))
             }
+            // The same report, read on one tool's own row. The reader of this face names itself, so a
+            // provider the folder shows no trace of is still asking whether *it* is wired here — and
+            // it is the one that gets no answer anywhere else: nothing in the folder points at it, so
+            // no warning is printed and the shortlist above leaves it out.
+            "ai-launch-tool" => {
+                let tool = req_str(with, "tool")?;
+                let wired = req_bool(with, "wired")?;
+                let v = self.run_json(&["task", "list", "--json"])?;
+                let report = &v["setup_incomplete"]["agent_hook"];
+                let row = report["tools"]
+                    .as_array()
+                    .and_then(|all| all.iter().find(|one| one["tool"].as_str() == Some(tool)));
+                let is_wired = match row {
+                    Some(row) => row["wired"].as_bool().unwrap_or(false),
+                    // A report gone silent is every tool in the catalog wired, this one included.
+                    None if report.is_null() => true,
+                    None => return Err(format!("the report carries no row for {tool}")),
+                };
+                // And where it is not, the row says how to fix it: a reader told it is unwired and
+                // handed no way to the text knows exactly as much as one told nothing.
+                let says_how = is_wired
+                    || row.is_some_and(|row| {
+                        row["fix"].as_str().is_some_and(|fix| fix.contains(tool))
+                    });
+                let pass = is_wired == wired && says_how;
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "the report says {tool} is {}{} (expected {}, {})",
+                        if is_wired { "wired here" } else { "not wired here" },
+                        if is_wired || says_how { String::new() } else { ", and does not say how to wire it".to_string() },
+                        if wired { "wired" } else { "unwired" },
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
             // The text that closes the gap, read from the face that hands it over. The file it names
             // is checked beside what it carries, because the two only work together: a configuration
             // landing somewhere the provider does not read leaves the folder exactly as unwired as

@@ -162,8 +162,10 @@ export function AgentHookWiringRow({ projectId, wiring }: { projectId: number; w
         <button className="btn" disabled={busy} onClick={() => void refuse()}>
           {t("agentHookWiring.no")}
         </button>
+        {/* Its own label, not the shared "close" one: the two buttons beside each other differ in what they
+            leave behind, and that is what each says (`AMB-D-663`). */}
         <button className="btn" disabled={busy} onClick={() => setClosed(true)}>
-          {t("pane.close")}
+          {t("agentHookWiring.later")}
         </button>
       </div>
     </div>

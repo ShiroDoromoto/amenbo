@@ -428,6 +428,81 @@ impl Driver<'_> {
                     "`{name}` now offers `{options}` as the answers to `{key}`"
                 )))
             }
+            // And the door one tier along: an operation the settings form offers to run, with the one
+            // value that press asks for. It is written onto the installed manifest for the reason a
+            // declared setting is (see the registry) — the block is the author's word and no published
+            // plugin carries one. A plugin already declaring this same call has it replaced, so a road
+            // that declares twice reads as the second declaration rather than as two buttons.
+            "declare-action" => {
+                let name = req_str(with, "name")?;
+                let cmd = req_str(with, "cmd")?;
+                let label = req_str(with, "label")?;
+                let path = self.session.home.join("plugins").join(name).join("manifest.json");
+                let raw = std::fs::read_to_string(&path)
+                    .map_err(|e| format!("could not read {}: {e}", path.display()))?;
+                let mut manifest: serde_json::Value = serde_json::from_str(&raw)
+                    .map_err(|e| format!("{} is not the manifest it should be: {e}", path.display()))?;
+                let mut action = serde_json::json!({ "cmd": cmd, "label": label });
+                // What the press asks for, where the step named one. An operation asking for nothing is
+                // the other shape it comes in — a button that runs the moment it is pressed — so the key
+                // is left off rather than written empty, which the form would draw as a box with no name.
+                if let Some(key) = with.get("ask").and_then(|v| v.as_str()) {
+                    let asked = with.get("ask_label").and_then(|v| v.as_str()).unwrap_or(key);
+                    action["ask"] = serde_json::json!([{ "key": key, "label": asked }]);
+                }
+                // A plugin whose author wrote no settings block carries none, which is a block to write
+                // into all the same — the face is absent, not closed.
+                if manifest["settings"].is_null() {
+                    manifest["settings"] = serde_json::json!({});
+                }
+                if manifest["settings"]["actions"].is_null() {
+                    manifest["settings"]["actions"] = serde_json::json!([]);
+                }
+                let declared = manifest["settings"]["actions"].as_array_mut().ok_or_else(|| {
+                    format!("{}'s settings block does not offer a list of operations", path.display())
+                })?;
+                declared.retain(|a| a["cmd"].as_str() != Some(cmd));
+                declared.push(action);
+                std::fs::write(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?)
+                    .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+                // What it asks for is said back, since a button that runs on the press and one that opens
+                // boxes first are two different roads from the same declaration.
+                Ok(Outcome::action(match with.get("ask").and_then(|v| v.as_str()) {
+                    Some(key) => format!("`{name}` now offers `{label}`, which asks for `{key}` at the press"),
+                    None => format!("`{name}` now offers `{label}`, which runs on the press"),
+                }))
+            }
+            // Standing in a program that says what a press handed it, so the one line a form draws has an
+            // author behind it. An operation gives nothing back (see the registry): what is drawn is the
+            // first line the run wrote to stderr, and the value the press asked for arrives in the
+            // environment of that same run and is kept nowhere else — so the program says both in one
+            // line, and a road can read from the form that the press reached the author's code carrying
+            // what was typed into it.
+            "press-program" => {
+                let name = req_str(with, "name")?;
+                let path = self.session.home.join("plugins").join(name).join(name);
+                if !path.exists() {
+                    return Err(format!("`{name}` has no program at {} to stand in for", path.display()));
+                }
+                // `AMENBO_ASK_` is amenbo's own prefix for what a press asked for, and the whole value is
+                // taken rather than the variable's name, since what the form draws is read by an eye. A
+                // press that asked for nothing leaves the line saying so, which is the reading a road
+                // about a button that runs outright wants. The script ends cleanly whatever it found:
+                // a non-zero exit is a failed operation, and the line would be drawn as one.
+                std::fs::write(
+                    &path,
+                    "#!/bin/sh\n\
+                     asked=$(env | sed -n 's/^AMENBO_ASK_[A-Za-z0-9_]*=//p' | head -1)\n\
+                     if [ -z \"$asked\" ]; then asked='nothing at all'; fi\n\
+                     echo \"the operation was handed $asked\" >&2\n\
+                     exit 0\n",
+                )
+                .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+                make_runnable(&path)?;
+                Ok(Outcome::action(format!(
+                    "left `{name}` answering a press with one line, naming what it was asked for"
+                )))
+            }
             // Writing what a plugin says for itself onto the manifest beside its binary — the author's
             // `agent` block, arriving the only way it can while the scenario is not to depend on the
             // catalog's own wording (see the registry). The block is one thing rather than a list, so a

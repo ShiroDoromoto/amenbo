@@ -580,6 +580,14 @@ const REGISTRY: &[OpSpec] = &[
     // shape a choice comes in. `translated` is the same word it is on `declare-setting`, and this is
     // where its `options` half has anything to translate.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-choice", required: &["name", "key", "options"], refs: &[], strings: &["name", "key", "label", "options", "default"], binds: false },
+    // An installed plugin declaring an operation a reader may press on its settings form. Same reason as
+    // the three above it, one door further along: what that form offers is the author's word, and no
+    // plugin in the official catalog declares a settings block at all — so the button, and the value a
+    // press asks for, are states no install reaches. `cmd` is the call the press raises and `label` the
+    // words the button is drawn under; `ask` names the one value asked at the press, under the words
+    // `ask_label`, and leaving it out is the other shape an operation comes in — a button that runs the
+    // moment it is pressed.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-action", required: &["name", "cmd", "label"], refs: &[], strings: &["name", "cmd", "label", "ask", "ask_label"], binds: false },
     // An installed plugin saying, in its author's words, when to reach for it and what to type. What a
     // plugin says for itself is written in its manifest and amenbo invents none of it, so this is the
     // author's block arriving the only way it can — written onto the installed manifest, the way
@@ -613,6 +621,13 @@ const REGISTRY: &[OpSpec] = &[
     // What it reads back is amenbo's own doing: which value, at which tier, and whether there is one
     // left at all.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "echo-program", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // An installed plugin whose program answers a press with a line of its own. An operation raised from
+    // the settings form has no return value: what the form draws afterwards is the author's first line on
+    // stderr, and the value that press asked for reaches the run as an environment variable and is kept
+    // nowhere. Both are only visible from inside the run, and only a program willing to say what it was
+    // handed can say either — which no published plugin is, none of them declaring an operation at all.
+    // So the driver stands one in that writes its one line, naming what it was asked for.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "press-program", required: &["name"], refs: &[], strings: &["name"], binds: false },
     // An installed plugin whose program calls amenbo back. A payload names a record and carries none of
     // it, so the route to the content is the binary itself, run from inside the plugin with the store and
     // the window amenbo put in its environment — and no plugin in the official catalog takes it (the one
@@ -737,6 +752,17 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "config-choose", required: &["name", "key", "options"], refs: &[], strings: &["name", "key", "options"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "config-choose-none", required: &["name", "key"], refs: &[], strings: &["name", "key"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "config-restore-default", required: &["name", "key"], refs: &[], strings: &["name", "key"], binds: false },
+    // The operations an author put on that same form, as a screen has them. `press` presses the button
+    // drawn under the words it was declared with — which raises the call outright where it asks for
+    // nothing, and otherwise opens the boxes it asks for, empty every time; `press-answer` fills the one
+    // box and lets the run go, which is the second half of a press and a move of its own.
+    //
+    // A screen road alone, for the reason `config-choose` is one: a terminal reaches the author's code
+    // with `plugin run`, which names the call itself and hands it whatever arguments were typed. What is
+    // under test here is the door that does neither — the press chooses among the calls the manifest
+    // declared, and the value it needs is asked at the press and kept nowhere afterwards.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "press", required: &["name", "label"], refs: &[], strings: &["name", "label"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "press-answer", required: &["name", "label", "value"], refs: &[], strings: &["name", "label", "value"], binds: false },
     // Asserts
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "listed", required: &["filter"], refs: &["target"], strings: &["filter", "position"], binds: false },
     // Where a word is written. Separate from `listed` because the question is a different one: a
@@ -1155,6 +1181,20 @@ const REGISTRY: &[OpSpec] = &[
     // answers with values and never draws a label, and what it does print is English whatever the
     // reader's language says.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "asks", required: &["name", "key", "label"], refs: &[], strings: &["name", "key", "label", "candidate"], binds: false },
+    // The three readings a pressed operation leaves, each asked apart from the others because each is a
+    // different promise. `press-said` is the line the run left on the form — the author's own words,
+    // quoted whole the way a row's line is, since what a build could draw instead is amenbo's own sentence
+    // and nothing on the screen says which of the two is standing there. `press-asks` is the box in front
+    // of that: the words the press asks under, and that it is holding nothing — which on a second press is
+    // the whole of what "handed to this run and kept nowhere" looks like from outside. `press-shut` is the
+    // button before the gate is open: drawn where it will be, and refusing the hand.
+    //
+    // A screen road alone, all three. What a terminal has instead is `plugin run`, whose answer is a
+    // return value on stdout rather than a line beside a button, which asks for nothing at the press, and
+    // which is refused with a code rather than by a control that cannot be used.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "press-said", required: &["name", "text"], refs: &[], strings: &["name", "text"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "press-asks", required: &["name", "label"], refs: &[], strings: &["name", "label"], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "press-shut", required: &["name", "label"], refs: &[], strings: &["name", "label"], binds: false },
     // What a crossing's row says about the settings kept there, which is a reading of the row and not of
     // one field: the mark a crossing wears while it owes a value, the form standing open inside the row,
     // and the row saying a value is held. Whether the plugin fires there is the other reading of the same
@@ -1343,6 +1383,12 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // already declared — the declaration is the world, and the answering is the road.
     (Domain::Plugin, "declare-setting"),
     (Domain::Plugin, "declare-choice"),
+    // And what it offers to *do* from that same form, with the program that answers a press. The
+    // declaration is the world for the same reason a setting's is — no published plugin carries one — and
+    // the program comes with it: an operation is code being run, so a road that pressed a button no
+    // stand-in was answering would be reading whatever the real plugin happened to say.
+    (Domain::Plugin, "declare-action"),
+    (Domain::Plugin, "press-program"),
     // And a value already filled in for one of them. Answering a setting is a road of its own and is
     // deliberately not one a premise walks — except that a setting the author marked `readonly` is not
     // answered by anybody a road can be: the value is the plugin's own, written back through

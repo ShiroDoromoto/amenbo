@@ -356,7 +356,10 @@ picker that draws the row, and the switch inside it —
 `fill-in-what-a-plugin-cannot-fire-without` walks one row from the mark it wears through the refusal, the
 settings opened inside it and the press that then goes through,
 `choose-from-what-a-plugin-offers` walks a settings form through the three answers a choice holds and
-the button back to the author's default, `finish-writing-a-task-before-anyone-takes-it` walks the one
+the button back to the author's default, `press-what-a-plugin-offers-to-do` walks the other half of that
+same form — the operation its author declared, drawn but unpressable while the gate is shut, the box it
+asks for coming up at the press, the author's own line coming back with what was typed in it, and the
+second press finding that box empty again — `finish-writing-a-task-before-anyone-takes-it` walks the one
 premise a reader settles where it is reported — the card drawn while its creation is still open, and
 the button inside it that ends the creation, `read-a-plugin-in-your-own-language` walks a listing
 across a language change — the line one author wrote in the reader's language, the row beside it whose
@@ -472,7 +475,11 @@ and why one follows a reader changing language with nothing fetched. No publishe
 setting, so none has one translated either — both halves are out of reach for the one reason, and are
 written by the one door. Any of the three takes `required: true`, the flag that says the
 plugin cannot work without an answer — the fail-closed enable is refused while the crossing holds none,
-and no published plugin declares that either. `plugin declare-scope` writes the layer the author
+and no published plugin declares that either. `declare-action` is the fourth of that family and writes what the
+author offers to *do* from that same form — the button, and the one value it asks for at the press — which
+no published plugin declares either, so the operation is a face no install reaches; `plugin press-program`
+stands the program behind it in, since an operation is code being run and what the form draws is one line
+of what that code said. `plugin declare-scope` writes the layer the author
 declared — one project's rows, or the device's — which is the same kind of word and unreachable for the
 same reason: a manifest saying nothing means `project`, and every published plugin says nothing, so the
 road a machine-wide plugin walks (one enable, one window on the whole device) exists only once this is
@@ -686,6 +693,13 @@ shape the box takes while no side is chosen and there is no grammar to read the 
 the button takes while there is no answer left to clear. Both are read off how the control is drawn, not
 off what it does when used: one shut in the build and painted like a live one is one a reader still
 reaches for.
+
+Pressing an operation a plugin's author put on its settings form, answering what that press asks for, and
+reading the line it left, the box it asked in and the button before the gate was open (`plugin press` /
+`press-answer` / `press-said` / `press-asks` / `press-shut`), are one road's for a reason of their own: a
+terminal reaches the same author's code through `plugin run`, which names the call itself, takes whatever
+arguments are typed after it, and answers with a return value — so what is under test here, a press
+choosing among the calls a manifest declared and asking for what that one needs, has no terminal to walk.
 
 Changing the language the interface is read in, and reading the words a plugin's own text reaches a
 reader as (`store set-language` / `plugin line` / `plugin asks`), are one road's for a different reason:

@@ -1,0 +1,166 @@
+# What a plugin's author offers to *do* from its settings form, pressed. The form is where somebody sits
+# with a webhook they have just typed and no way to find out whether it works, so the button beside it runs
+# the author's own code — the same command face a terminal reaches, raised from the one screen that has the
+# values in front of it.
+#
+# Three promises, and the road is the three of them in order. The button does not run while the gate is
+# shut, because pressing it is running somebody's code and the enable is where that was agreed to. A press
+# that needs a one-time value asks for it at the press. And what is typed there is handed to that run and
+# kept nowhere — which is only visible on the *second* press, where the box comes up empty again.
+#
+# Like every line that installs a plugin, the premise below goes to the catalog over the network on purpose
+# (see `put-a-plugin-on-the-machine.yaml`): a button on the settings form is a face of a plugin that is
+# really there. What the operation is, and what it asks for, are the author's word — no plugin in the
+# official catalog declares any — so both are written onto what is installed, and the program that answers
+# the press is stood in beside them (see those ops' own notes). Everything from the first step on is
+# amenbo's own doing.
+#
+# This goal has no terminal road. `plugin run` reaches the author's code from a shell, but it is a
+# different door: it names the call itself, it takes whatever arguments are typed after it, and its answer
+# is a return value rather than a line beside a button. What is under test here is the door that chooses
+# among the calls a manifest declared, asks for what that call needs at the press, and forgets it.
+id: press-what-a-plugin-offers-to-do
+title: An operation a plugin's author put on its settings form runs from there once the plugin is on, asks for what it needs at the press, and keeps none of it
+description: >
+  Install the official `worktree` plugin, give it an operation its author declared — a button, and one
+  value asked for at the press — and walk it on the settings form. While the plugin is off the button is
+  drawn and cannot be pressed. Turn it on, press it, and the box it asks for comes up empty. Fill it in,
+  run it, and the author's own line comes back on the form carrying what was typed. Press it a second time:
+  the box is empty again, which is the whole of a value handed to one run and kept nowhere.
+given:
+  # The project the road walks its crossing on. A crossing is a plugin and a project, and the project is
+  # not one a road on screen can raise on its way past.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: worktree
+
+  - type: action
+    domain: plugin
+    op: declare-action
+    with:
+      name: worktree
+      cmd: config test
+      label: Send a test message
+      ask: api_token
+      ask_label: API token
+
+  # And a program behind the button. An operation is code being run, so a press with nothing stood in for
+  # it would read whatever the real plugin happened to say — and what the form draws is one line of that.
+  - type: action
+    domain: plugin
+    op: press-program
+    with:
+      name: worktree
+
+# What the road wants in front of it is the device the premise above describes: the project named below on
+# this machine, the official `worktree` plugin installed in the store the build under test opens, its
+# manifest declaring the operation below with the one value it asks for, a program behind it that answers a
+# press with a line naming what it was handed, and its gate shut everywhere. Stand that with
+# `devtool devgui cli` and the same declaration the premise makes. Where the run starts does not matter:
+# the first step is the arrival. Every step after it moves the screen, so carry each move out when the run
+# hands that step over.
+#
+# One line is closed by a reading and the rest by an eye. The author's sentence is the reading — it is the
+# one thing on those shots that neither amenbo nor the interface wrote. The button refusing the hand is
+# paint, and the box the press asks in is read for being *empty*, which no reading of the words on a shot
+# can settle.
+steps_gui:
+  # The face this is met on: the plugin is one row among the project's own settings, and the settings kept
+  # at that crossing open inside it.
+  - type: action
+    domain: project
+    op: open-settings
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: plugin
+    op: draw-crossing
+    with:
+      name: worktree
+      project: Greenhouse
+
+  # A plugin with a button and no field still has a form, which is what there is to open here — nothing in
+  # this manifest asks for a setting to be filled in.
+  - type: action
+    domain: plugin
+    op: open-config-in-row
+    with:
+      name: worktree
+      project: Greenhouse
+
+  # The gate, read where the button is. Pressing it would be running the author's code, and the enable is
+  # where that was agreed to — so before it, the operation is something a reader can see and cannot use.
+  # Drawing no button at all would pass a reading of the words and prove the wrong thing, which is why the
+  # step says both halves.
+  - type: assert
+    domain: plugin
+    op: press-shut
+    with:
+      name: worktree
+      label: Send a test message
+
+  - type: action
+    domain: plugin
+    op: enable-in
+    with:
+      name: worktree
+      project: Greenhouse
+
+  # The press. It does not run yet: this operation asks for a value, so what the press opens is the box for
+  # it — which is the difference between a button and a command line with an argument on it.
+  - type: action
+    domain: plugin
+    op: press
+    with:
+      name: worktree
+      label: Send a test message
+
+  - type: assert
+    domain: plugin
+    op: press-asks
+    with:
+      name: worktree
+      label: API token
+
+  - type: action
+    domain: plugin
+    op: press-answer
+    with:
+      name: worktree
+      label: API token
+      value: cf-9f2a41d7e6
+
+  # The author's own line, back on the form. It carries what was typed, which is the half that says the
+  # press really reached their code with the value in hand — an operation has no return value, so this
+  # sentence is the whole of what a run says for itself here.
+  - type: assert
+    domain: plugin
+    op: press-said
+    with:
+      name: worktree
+      text: the operation was handed cf-9f2a41d7e6
+
+  # And the second press, which is where "kept nowhere" is visible at all. A value the form had quietly
+  # stored would come back in this box, and the run before it would look exactly the same.
+  - type: action
+    domain: plugin
+    op: press
+    with:
+      name: worktree
+      label: Send a test message
+
+  - type: assert
+    domain: plugin
+    op: press-asks
+    with:
+      name: worktree
+      label: API token

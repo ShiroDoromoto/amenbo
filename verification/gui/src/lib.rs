@@ -400,6 +400,17 @@ impl Instructor {
     /// `asks` is that pair's third: the words a settings form draws a field, or one of a choice's
     /// answers, under. Author's words again, read the same way and for the same reason.
     ///
+    /// `press-said` is the fourth of that family, one press along: the line an operation left on the
+    /// form. It is the author's own sentence, and what a build would draw in its place where the program
+    /// said nothing is amenbo's — so the two are told apart by which of them is standing there, and a
+    /// reading settles that.
+    ///
+    /// Its two neighbours are `Review`s. `press-asks` reads a box that is *empty*, which is what a value
+    /// handed to one run and kept nowhere looks like from outside — the words it is asked under are on the
+    /// shot whether or not anything was kept in it, so a reading of them would go green over the very
+    /// build this is written to catch. `press-shut` is the same shape as `ai-launch-consent-clear-shut`:
+    /// what it is about is a button refusing the hand, and paint is not something a reading gives back.
+    ///
     /// `body` is the fourth, and the one read in both directions. What an opened panel is read by is
     /// prose somebody wrote — the author's description, or the README off the repository — so a
     /// reading can be held to it either way: found, for the one that should be standing there, and
@@ -529,6 +540,9 @@ impl Instructor {
             }
             (Domain::Plugin, "asks") => {
                 Some(Expectation { text: arg_str(with, "label")?.to_string(), present: true })
+            }
+            (Domain::Plugin, "press-said") => {
+                Some(Expectation { text: arg_str(with, "text")?.to_string(), present: true })
             }
             (Domain::Plugin, "detail") => {
                 Some(Expectation { text: arg_str(with, "declares")?.to_string(), present: true })
@@ -815,6 +829,22 @@ impl Instructor {
                 req(with, "name")?,
                 req(with, "key")?
             ),
+            // The button an author put on that form, pressed. Where the operation asks for something the
+            // press does not run it — the boxes come up first — so the line stops at the press, and what
+            // the shot after it holds is those boxes as they were opened.
+            (Domain::Plugin, "press") => format!(
+                "In the settings for \"{}\", press the operation drawn as \"{}\", and do nothing further with what it opens.",
+                req(with, "name")?,
+                req(with, "label")?
+            ),
+            // The second half of that press. Typing and running belong to one move: a shot of a filled
+            // box nobody ran would be evidence of a value the author's code was never handed.
+            (Domain::Plugin, "press-answer") => format!(
+                "In the settings for \"{}\", type \"{}\" into the box the press opened under \"{}\", and run it.",
+                req(with, "name")?,
+                req(with, "value")?,
+                req(with, "label")?
+            ),
             // The one answer the report takes, and the only button on it that writes anything. Closing the
             // report is not among them: it records nothing and is spent the moment the project is opened
             // again, which is a road that ends where it started rather than one this scenario walks.
@@ -1038,6 +1068,30 @@ impl Instructor {
                     ),
                 }
             }
+            // The line a press left on the form. It is quoted whole for the reason a row's line is: where
+            // the author's program said nothing, amenbo draws a sentence of its own in that same place,
+            // and nothing on the screen says which of the two is standing there.
+            (Domain::Plugin, "press-said") => format!(
+                "Confirm the settings form for \"{}\" draws \"{}\" beside the operation that was pressed.",
+                req(with, "name")?,
+                req(with, "text")?
+            ),
+            // The box that press opened, read for what it is holding. Both halves are the step: the words
+            // it asks under are the author's, and its being empty is the whole of what a value handed to
+            // one run and kept nowhere looks like from the outside.
+            (Domain::Plugin, "press-asks") => format!(
+                "Confirm the press on \"{}\" is asking for a value under the words \"{}\", and that the box is empty rather than carrying anything typed into it before.",
+                req(with, "name")?,
+                req(with, "label")?
+            ),
+            // The button before the gate is open. What is under test is a control a reader can see and
+            // cannot use, so the absence of the button would pass this for the wrong reason — the line
+            // says both halves out loud.
+            (Domain::Plugin, "press-shut") => format!(
+                "Confirm the settings form for \"{}\" draws the operation \"{}\" and will not let it be pressed while the plugin is off, saying as much rather than leaving a reader to find out.",
+                req(with, "name")?,
+                req(with, "label")?
+            ),
             (Domain::Plugin, "detail") => format!(
                 "Confirm the panel open under \"{}\" — the row the catalog \"{}\" served — says installing it would mean \"{}\".",
                 req(with, "name")?,

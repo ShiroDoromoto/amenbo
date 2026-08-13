@@ -41,7 +41,7 @@ fn store_with_settings(
         "name": name,
         "desc": "a plugin that answers",
         "author": "amenbo",
-        "repo": "ShiroDoromoto/amenbo-plugin-test",
+        "repo": "alice/amenbo-plugin-test",
         "os": ["macos", "linux"],
         "category": "workflow",
         "url": "https://example.invalid/plugin.tar.gz",

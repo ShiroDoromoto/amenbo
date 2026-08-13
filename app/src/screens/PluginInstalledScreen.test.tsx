@@ -164,6 +164,7 @@ const field = (
   label: over.key,
   secret: false,
   required: false,
+  readonly: false,
   secretSet: false,
   fieldType: "text",
   options: [],
@@ -621,6 +622,56 @@ describe("the settings form", () => {
 
     expect(rows()[0].textContent).not.toContain(t("plugins.cfg.requiredEmpty"));
     expect(rows()[1].textContent).toContain(t("plugins.cfg.requiredEmpty"));
+  });
+
+  // The author's own paragraph belongs under the input it explains, drawn as they typed it — their line
+  // breaks kept, and nothing in it turned into a link (`AMB-D-656`).
+  it("draws the author's paragraph under the field, as plain text", () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    const webhook = field({
+      key: "webhook",
+      help: "Create it under Incoming Webhooks.\n\n[Not a link](https://example.test/x)",
+      placeholder: "https://hooks.example.test/T000/B000",
+    });
+    hoisted.installs = [row({ name: "notify", on: [7], config: [webhook] })];
+    hoisted.held = { notify: { 7: [webhook] } };
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+
+    const help = container.querySelector(".plugcfg__help")!;
+    expect(help.textContent).toBe(
+      "Create it under Incoming Webhooks.\n\n[Not a link](https://example.test/x)",
+    );
+    expect(help.querySelector("a")).toBe(null);
+    expect(boxes()[0].placeholder).toBe("https://hooks.example.test/T000/B000");
+  });
+
+  // A default is the value a run really receives; an example is not. So the box shows the default where
+  // there is one, and falls to the author's example only where there is not (`AMB-D-656` / `AMB-D-474`).
+  it("shows the default in the empty box, and the example only without one", () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    const base = field({ key: "base", defaultValue: "main", placeholder: "release/*" });
+    hoisted.installs = [row({ name: "worktree", on: [7], config: [base] })];
+    hoisted.held = { worktree: { 7: [base] } };
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+
+    expect(boxes()[0].placeholder).toBe("main");
+  });
+
+  // A value the plugin writes back is not the user's to edit or to take away (`AMB-D-656`): the viewer's
+  // three fields are its `setup`'s, and the clear button beside them was a way to break it.
+  it("shows a readonly setting's value with no input and no way to clear it", () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    const worker = field({ key: "worker_url", readonly: true, value: "https://amenbo.example.test" });
+    hoisted.installs = [row({ name: "viewer", on: [7], config: [worker] })];
+    hoisted.held = { viewer: { 7: [worker] } };
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+
+    expect(container.querySelector(".plugcfg__fixed")!.textContent).toBe("https://amenbo.example.test");
+    expect(boxes()).toEqual([]);
+    expect(button(t("plugins.cfg.clear"))).toBe(undefined);
   });
 
   // Clearing is the same door as setting: an empty value is "not provided", which is what `required` reads.

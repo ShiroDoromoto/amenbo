@@ -190,8 +190,8 @@ describe("what the opened entry says installing it would mean", () => {
     hoisted.detail = doc({
       events: ["task.created", "task.completed"],
       config: [
-        { key: "webhook", label: "Webhook URL", secret: true, required: true, fieldType: "text", options: [] },
-        { key: "events", label: "Which events", secret: false, required: false, fieldType: "text", options: [] },
+        { key: "webhook", label: "Webhook URL", secret: true, required: true, readonly: false, fieldType: "text", options: [] },
+        { key: "events", label: "Which events", secret: false, required: false, readonly: false, fieldType: "text", options: [] },
       ],
     });
     render();

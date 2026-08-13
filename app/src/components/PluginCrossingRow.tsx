@@ -51,8 +51,9 @@ export function PluginCrossingRow({ install, layer, name }: {
   // it matters — the same silence the CLI keeps.
   const [dropped, setDropped] = useState(0);
   const [open, setOpen] = useState(false);
-  // What the author's own check said the last time this switch was pressed (`AMB-D-664`). It is a fact
-  // about one press, like the refusal beside it, so a write to this crossing's settings retires it.
+  // What the author's own check last said about this crossing's values (`AMB-D-664`) — raised by the
+  // switch, and again by a save while the gate is open. It is a fact about the values as they stood at
+  // that run, so a write to this crossing replaces it with what the check said about what it left.
   const [check, setCheck] = useState<PluginCheckDto | null>(null);
   const at = crossingAt(install, layer);
 
@@ -119,12 +120,13 @@ export function PluginCrossingRow({ install, layer, name }: {
           layer={layer}
           enabled={at.enabled}
           check={check}
-          onWrote={() => {
+          onWrote={(said) => {
             setError(null);
-            // The verdict is about the values that were there when the switch was pressed, so a save
-            // outlives it exactly as the refusal above does — and what is true now is answered by
-            // pressing again.
-            setCheck(null);
+            // The verdict the switch left was about the values that were there when it was pressed, and a
+            // save moves them — so what replaces it is the check raised on what the save left behind
+            // (`AMB-D-664`), and nothing at all where the gate is shut and none was raised. Whether the
+            // plugin may be *enabled* now is still only answered by pressing again.
+            setCheck(said);
           }}
         />
       )}

@@ -36,6 +36,11 @@ const hoisted = vi.hoisted(() => ({
   /** What the author's own check said when the switch was pressed (`AMB-D-664`) — none unless a test
    *  is about a verdict. */
   check: undefined as PluginCheckDto | undefined,
+  /** Every check raised after a write, in order — the crossing it was raised at included. */
+  checked: [] as { name: string; projectId: number | null }[],
+  /** What that check answers (`AMB-D-664`) — nothing unless a test is about a save-time verdict, which
+   *  is also core's answer for a crossing whose gate is shut. */
+  saveCheck: undefined as PluginCheckDto | undefined,
   /** Every operation pressed, in order — the values it was handed included, since those are the whole
    *  question about an `ask`. */
   pressed: [] as { name: string; cmd: string; supplied: Record<string, string>; projectId: number | null }[],
@@ -97,6 +102,10 @@ vi.mock("../core/pluginInstalls", async (importOriginal) => {
     setPluginConfig: (name: string, key: string, value: string, projectId: number | null) => {
       hoisted.wrote.push({ name, key, value, projectId });
       return Promise.resolve();
+    },
+    checkPluginSettings: (name: string, projectId: number | null) => {
+      hoisted.checked.push({ name, projectId });
+      return Promise.resolve(hoisted.saveCheck ?? null);
     },
   };
 });
@@ -235,6 +244,8 @@ beforeEach(() => {
   hoisted.droppedQueued = 0;
   hoisted.refuse = undefined;
   hoisted.check = undefined;
+  hoisted.checked = [];
+  hoisted.saveCheck = undefined;
   hoisted.pressed = [];
   hoisted.ran = { ok: true };
   hoisted.projects = [];
@@ -761,6 +772,64 @@ describe("what the author's own code says on the form", () => {
 
     await act(async () => { button(t("plugins.enable"))!.click(); });
     expect(container.textContent).toContain(t("plugins.check.noAnswer"));
+  });
+
+  // The other moment the author's code speaks (`AMB-D-664`): a save raises the same check, once the boxes
+  // have all landed — one run for the save, not one per box, since each box is its own write.
+  it("raises one check after a save, and draws what it said over a save that stands", async () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    hoisted.installs = [
+      row({
+        name: "mail",
+        on: [7],
+        config: [field({ key: "smtp_host" }), field({ key: "smtp_user" })],
+      }),
+    ];
+    hoisted.saveCheck = {
+      ok: false,
+      answered: true,
+      message: "SCENARIO — the mailbox would not answer",
+      fields: { smtp_user: "SCENARIO — it is not an address" },
+    };
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+    act(() => {
+      type(boxes()[0], "smtp.example.test");
+      type(boxes()[1], "postmaster");
+    });
+
+    await act(async () => { button(t("plugins.cfg.save"))!.click(); });
+
+    expect(hoisted.wrote).toEqual([
+      { name: "mail", key: "smtp_host", value: "smtp.example.test", projectId: 7 },
+      { name: "mail", key: "smtp_user", value: "postmaster", projectId: 7 },
+    ]);
+    expect(hoisted.checked, "two writes, and one check over what they left").toEqual([
+      { name: "mail", projectId: 7 },
+    ]);
+    expect(container.textContent).toContain("SCENARIO — the mailbox would not answer");
+    expect(container.textContent).toContain("SCENARIO — it is not an address");
+    // Nothing is taken back by it: the save is reported as the save it was (`AMB-D-664`).
+    expect(container.textContent).toContain(t("plugins.cfg.saved"));
+  });
+
+  // A verdict is about the values as they stood when it ran, so a save replaces the switch's rather than
+  // leaving its sentence standing over values it never saw.
+  it("replaces the switch's verdict with what the save's check said", async () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    hoisted.installs = [row({ name: "mail", config: [field({ key: "smtp_host" })], projects: [at(7)] })];
+    hoisted.check = { ok: false, answered: true, message: "SCENARIO — when it was pressed", fields: {} };
+    hoisted.saveCheck = { ok: true, answered: true, message: "SCENARIO — after the save", fields: {} };
+    render();
+
+    await act(async () => { button(t("plugins.enable"))!.click(); });
+    expect(container.textContent).toContain("SCENARIO — when it was pressed");
+
+    act(() => { type(boxes()[0], "smtp.example.test"); });
+    await act(async () => { button(t("plugins.cfg.save"))!.click(); });
+
+    expect(container.textContent).not.toContain("SCENARIO — when it was pressed");
+    expect(container.textContent).toContain("SCENARIO — after the save");
   });
 
   // What a form may raise is what the manifest named in advance (`AMB-D-522`): the press hands back the

@@ -4,6 +4,7 @@ import { errText, t } from "../core/i18n";
 import { asTyped } from "../core/keys";
 import {
   NONE_SELECTED,
+  checkPluginSettings,
   runPluginAction,
   setPluginConfig,
   usePluginConfig,
@@ -55,10 +56,15 @@ import {
  * the plugin is on there.
  *
  * **The author's own code speaks on this screen and nowhere else** (`AMB-D-664`). Two things reach it:
- * what their `check` said about the values when the gate was last pressed — one sentence at the head, and
- * one beside each box it named — and the operations they declared, drawn as buttons. Both are plain text
- * for the reason everything else here is, and a press runs a call the manifest named rather than anything
- * this form composed (`AMB-D-522`).
+ * what their `check` said about the values — one sentence at the head, and one beside each box it named —
+ * and the operations they declared, drawn as buttons. Both are plain text for the reason everything else
+ * here is, and a press runs a call the manifest named rather than anything this form composed
+ * (`AMB-D-522`).
+ *
+ * **The check is raised twice, and only one of them can refuse anything.** At the switch it decides whether
+ * the gate opens; here, after a save at a crossing the plugin is already on, it decides nothing at all —
+ * the value stays written and the plugin stays on, and what the run is for is the sentence beside the box
+ * someone can still go back and fix.
  *
  * **A button needs an open gate.** Running the plugin's code is what enabling means (`AMB-D-351`), so the
  * operations are drawn but not pressable while the crossing is off, with a line saying which.
@@ -79,17 +85,20 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
    */
   enabled: boolean;
   /**
-   * What the author's check said the last time the gate was pressed at this crossing (`AMB-D-664`), or
-   * nothing — a plugin that declares no check, or a switch nobody has touched this session. It is a fact
-   * about one press, so it is the row's to hold and to retire.
+   * What the author's check last said about this crossing's values (`AMB-D-664`), or nothing — a plugin
+   * that declares no check, or a crossing nobody has pressed or saved at this session. It is a fact about
+   * one run, so it is the row's to hold and to retire.
    */
   check?: PluginCheckDto | null;
   /**
    * Called once a write to this crossing lands, so the row around the form can retire what a value
    * standing here made out of date — the refusal an enable met over a `required` setting this form has
    * just filled in.
+   *
+   * What it is handed is the check raised on the values as they now stand, which replaces the one the
+   * switch left: `null` where nothing was raised — an off crossing, a plugin declaring no check.
    */
-  onWrote?: () => void;
+  onWrote?: (check: PluginCheckDto | null) => void;
 }) {
   // Only what the user actually typed, keyed by field. Kept apart from the stored values so a refetch
   // never argues with a half-typed box, and so a cleared box reads as "clear this", not as "unchanged".
@@ -125,6 +134,21 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
     return answer === "" || answer === NONE_SELECTED ? [] : answer.split(",");
   };
 
+  // What the author's check says about the values a write has just left behind (`AMB-D-664`), or nothing
+  // — a plugin that declares no check, and a crossing whose gate is shut, which core is the one to answer
+  // (running their code is what enabling means, `AMB-D-351`).
+  //
+  // A refusal to raise it at all is swallowed on purpose: the write has already landed by then, and a save
+  // that succeeded must not wear an error over what was asked about it afterwards. The run is on the
+  // execution log either way (`AMB-D-361`).
+  const checkAfterWrite = async (): Promise<PluginCheckDto | null> => {
+    try {
+      return await checkPluginSettings(install.name, layer);
+    } catch {
+      return null;
+    }
+  };
+
   const run = async (op: () => Promise<unknown>, said: typeof done) => {
     setBusy(true);
     setError(null);
@@ -133,8 +157,9 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
       await op();
       setDone(said);
       // Both doors are a write — a value saved, and one taken back — and either leaves whatever was said
-      // about this crossing's settings out of date.
-      onWrote?.();
+      // about this crossing's settings out of date. What replaces it is the check raised on what stands
+      // there now: after the write, and never in place of it (`AMB-D-664`).
+      onWrote?.(await checkAfterWrite());
     } catch (e) {
       setError(errText(e));
     } finally {

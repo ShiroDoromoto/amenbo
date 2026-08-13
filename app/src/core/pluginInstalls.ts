@@ -17,6 +17,7 @@ import { invalidateQueries, useQuery } from "./query";
 import type {
   PluginActionDto,
   PluginActionRanDto,
+  PluginCheckDto,
   PluginConfigFieldDto,
   PluginGateMovedDto,
   PluginInstallDto,
@@ -35,6 +36,8 @@ export type PluginGateMoved = PluginGateMovedDto;
 export type PluginAction = PluginActionDto;
 /** What one press did (generated DTO). */
 export type PluginActionRan = PluginActionRanDto;
+/** What the author's own check said about the values (generated DTO). */
+export type PluginCheck = PluginCheckDto;
 
 /**
  * Which layer a row is drawn at — a project's id, or `null` for the device's own row (`AMB-D-601`).
@@ -207,6 +210,26 @@ export async function setPluginConfig(
   if (!inTauri()) return;
   await invoke<null>("plugin_config_set", { name, key, value, projectId: layer });
   reloadConfig();
+}
+
+/**
+ * Raise the author's check on the values as they now stand (Tauri: `plugin_settings_check`, `AMB-D-664`)
+ * — the second moment a check runs, and the one that takes nothing back.
+ *
+ * It belongs **after** the writes, not between them: the door above writes one setting at a time, and a
+ * form with three changed boxes uses it three times, so this is called once when they have all landed.
+ * Whatever it answers, the values stay written and an enabled plugin stays enabled — what the run is for
+ * here is the sentence beside the box.
+ *
+ * `null` is a check nobody raised: the plugin declares none, or the crossing's gate is shut — running the
+ * author's code is what enabling means (`AMB-D-351`), and a save is not that press.
+ */
+export async function checkPluginSettings(
+  name: string,
+  layer: PluginLayer,
+): Promise<PluginCheck | null> {
+  if (!inTauri()) return null;
+  return invoke<PluginCheck | null>("plugin_settings_check", { name, projectId: layer });
 }
 
 /**

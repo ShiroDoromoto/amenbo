@@ -5833,6 +5833,44 @@ pub fn plugin_config_set(
     })
 }
 
+/// Raise the author's check on the values as they now stand (`AMB-D-664`) — the **second** of the two
+/// moments a check runs, and the one that undoes nothing.
+///
+/// **It is raised after a save, never in front of one.** The write has already landed through
+/// [`plugin_config_set`] by the time this is called, so a verdict that refuses changes nothing: the value
+/// stays written and an enabled plugin stays enabled (`AMB-D-664`). What the run is *for* here is the
+/// sentence on the screen — someone has just typed a webhook and can still fix it — which is why the
+/// answer is the same [`PluginCheckDto`] the switch comes back with, drawn in the same places.
+///
+/// **Only while the gate is open.** A check at an enable is the press's own consent to run the author's
+/// code (`AMB-D-351`); a save is not that press, so at a crossing the plugin is off in nothing is raised
+/// and the answer is `None` — as it is for a plugin that declares no check at all.
+///
+/// This is one call per save rather than one per field: [`plugin_config_set`] writes a single setting, and
+/// a form with three changed boxes uses that door three times. Checking inside it would spawn the author's
+/// program on each of them, and the first two would be judging a half-written state.
+#[tauri::command]
+pub fn plugin_settings_check(
+    name: String,
+    project_id: Option<i64>,
+) -> Result<Option<PluginCheckDto>, CmdError> {
+    // A read handle, as the press beside it takes: the run writes nothing of amenbo's, and what the
+    // plugin has to write it writes by calling amenbo back (`AMB-D-406`).
+    let store = &open_store_read()?;
+    let installed = amenbo_core::plugin_installed::read(&store.paths, &name)?;
+    let layer = amenbo_core::plugin_layer::Layer::of(installed.manifest.scope, project_id)?;
+    if !amenbo_core::plugin_trust::effective_enabled_in(store, &name, layer)? {
+        return Ok(None);
+    }
+    let checked = amenbo_core::plugin_check::run(
+        store,
+        &installed,
+        project_id,
+        amenbo_core::plugin_check::TIMEOUT,
+    )?;
+    Ok(checked_dto(&checked))
+}
+
 /// What pressing one of a plugin's declared operations did (`AMB-D-664`) — the whole of what the form
 /// draws afterwards.
 ///
@@ -6351,6 +6389,18 @@ mod tests {
         std::fs::write(&path, serde_json::to_vec(&manifest).unwrap()).unwrap();
     }
 
+    /// The same plant for a plugin whose author declared a check (`AMB-D-664`). The program beside the
+    /// manifest is the plant's stand-in and will not launch, so the check is always a silence — the
+    /// fail-closed answer, and the one a test can have without shipping an executable.
+    fn plant_checking_plugin(home: &std::path::Path, name: &str, config: serde_json::Value) {
+        plant_plugin_with(home, name, config);
+        let path = home.join("plugins").join(name).join("manifest.json");
+        let mut manifest: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        manifest["settings"] = serde_json::json!({ "check": "config check" });
+        std::fs::write(&path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+    }
+
     /// The GUI's creation screen asks for a name and nothing else, so the view a new project opens on
     /// has one source: the configured `default_view`. It is the same answer the CLI gives when `--view`
     /// is omitted, and the reason the setting is a setting rather than a value nothing acts on.
@@ -6630,6 +6680,82 @@ mod tests {
         assert!(!silent.answered);
         assert_eq!(silent.message, None, "there is no sentence of the author's in it");
         assert!(silent.fields.is_empty());
+    }
+
+    /// The other moment a check runs (`AMB-D-664`) — after a save, where it costs nothing. It is raised
+    /// only at a crossing whose gate is already open, because a save is not the press that consents to run
+    /// somebody else's code (`AMB-D-351`), and what it says reaches nothing behind it: the value stays
+    /// written and the plugin stays on, even for the silence that would have kept the gate shut.
+    #[test]
+    fn a_save_raises_the_check_where_the_gate_is_open_and_takes_nothing_back() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("plugin-check-after-save");
+        std::env::set_var("AMENBO_HOME", &tmp);
+        let project_id = {
+            let mut store = Store::open().unwrap();
+            store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: "テストPJ".into(),
+                    view: View::List,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap()
+                .id
+        };
+        plant_checking_plugin(
+            &tmp,
+            "mail",
+            serde_json::json!([{"key": "smtp_host", "label": "Host", "secret": false, "required": false}]),
+        );
+        let saved = || {
+            plugin_config_set(
+                "mail".into(),
+                "smtp_host".into(),
+                "smtp.example.test".into(),
+                Some(project_id),
+            )
+            .unwrap()
+        };
+        let held = || {
+            plugin_config_read("mail".into(), Some(project_id)).unwrap()[0].value.clone()
+        };
+
+        // Off: a save is a save, and nobody's code runs behind it.
+        saved();
+        assert!(
+            plugin_settings_check("mail".into(), Some(project_id)).unwrap().is_none(),
+            "an off crossing raises nothing — the press that consents has not happened"
+        );
+
+        // The gate is opened through the trust door rather than the switch: the switch would raise this
+        // same check, and the plant's program will not start, which is the silence that keeps a gate shut.
+        // What is being tested is the moment *after* that, so the plugin stands in for one whose check
+        // said yes when it was enabled.
+        {
+            let mut store = Store::open().unwrap();
+            amenbo_core::plugin_trust::enable(
+                &mut store,
+                "mail",
+                amenbo_core::plugin_layer::Layer::Project(project_id),
+                &[],
+                |_| true,
+                &amenbo_core::plugin_check::Checked::NotDeclared,
+            )
+            .unwrap();
+        }
+
+        saved();
+        let said = plugin_settings_check("mail".into(), Some(project_id))
+            .unwrap()
+            .expect("an open gate raises the check the manifest declared");
+        assert!(!said.ok && !said.answered, "the plant's program will not start, so it said nothing");
+        assert_eq!(held().as_deref(), Some("smtp.example.test"), "the save is never taken back");
+        let row = plugin_installs("en".into()).unwrap().into_iter().find(|r| r.name == "mail").unwrap();
+        assert!(
+            row.projects.iter().any(|p| p.project == project_id && p.enabled),
+            "and an enabled plugin is not switched off behind the user's back"
+        );
     }
 
     /// The installed face draws its form in the reader's language off what the install kept beside the

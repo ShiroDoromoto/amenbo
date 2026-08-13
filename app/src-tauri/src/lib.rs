@@ -363,6 +363,7 @@ pub fn run() {
       commands::plugin_set_enabled,
       commands::plugin_config_read,
       commands::plugin_config_set,
+      commands::plugin_settings_check,
       commands::plugin_settings_action,
       commands::plugin_uninstall,
       commands::plugin_updates,

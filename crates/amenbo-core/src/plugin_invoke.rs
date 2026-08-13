@@ -165,7 +165,9 @@ enum Gate {
     Open,
     /// The one exception (`AMB-D-664`): the check raised while an enable is being decided. There is no gate
     /// to find open yet — the consent is the press itself, and what this run answers is whether the gate
-    /// opens at all.
+    /// opens at all. The check after a save comes down the same road with the gate already open, so what
+    /// this arm waives is nothing there; requiring it is that face's, which raises the check only where the
+    /// plugin is on.
     Pressed,
 }
 

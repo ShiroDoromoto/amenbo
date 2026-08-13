@@ -43,6 +43,11 @@
 //! sentences an AI meets; these two meet none, which a test holds over the whole entry rather than over
 //! the keys it happens to have today.
 //!
+//! **Nor does where a plugin's settings form calls its author** (`AMB-D-664`). The block names a check and
+//! the operations a person may press, and every part of it — the button's words, the value asked for at the
+//! press, and the two calls themselves — is a declaration about a screen an AI never stands in front of.
+//! The calls it may raise on its own are the author's `agent` block, right here.
+//!
 //! **A call can also be hung where it is a tool** (`AMB-D-571`, [`tools`]): the author names the step of
 //! amenbo's own cycle their call serves, and the step is handed the calling form alone. The shelves stay
 //! as they were — the sentences never leave this one — and what crosses is a number and a line to type.
@@ -323,6 +328,61 @@ mod tests {
             "readonly",
             "placeholder",
         ];
+        for official in [true, false] {
+            plugin.manifest.official = official;
+            let document = serde_json::to_string(&entry(&plugin, "amenbo").0).unwrap();
+            let hung = format!("{:?}", tools(&[&plugin], "amenbo"));
+            for word in written {
+                assert!(!document.contains(word), "'{word}' reached the entry: {document}");
+                assert!(!hung.contains(word), "'{word}' reached a step: {hung}");
+            }
+        }
+    }
+
+    /// **Where an author's code is called from the settings form stays off the AI's face** (`AMB-D-664`).
+    /// The block is read by the form and by nothing else: `label` is prose, `ask` names a value asked of a
+    /// person at a press, and even the two calls are declarations about a screen an AI never stands in
+    /// front of — so what an entry point would gain from any of it is a road no reader here can walk.
+    ///
+    /// Held as text over the whole entry, for the reason the guard above it is: what it says is not *these
+    /// keys are absent* but *nothing about the settings face arrives*, however a later change spells it.
+    /// The badge makes no difference here either.
+    ///
+    /// What a check or an operation *returns* is a different reader and a different boundary: it does not
+    /// exist until the call is run, so the guard on it belongs where the return is read (`AMB-T-3098`),
+    /// not over a document built from the manifest.
+    #[test]
+    fn where_the_settings_form_calls_the_author_never_reaches_the_entry_point() {
+        use crate::plugin_manifest::{AskField, Settings, SettingsAction};
+
+        let mut plugin = installed("worktree", Some(guide()), &["task.status_changed"]);
+        plugin.manifest.settings = Some(Settings {
+            check: Some("config check".into()),
+            actions: vec![SettingsAction {
+                cmd: "config test".into(),
+                label: "Send a test message".into(),
+                ask: vec![AskField {
+                    key: "api_token".into(),
+                    label: "API token".into(),
+                    secret: true,
+                    extra: Default::default(),
+                }],
+            }],
+        });
+
+        // Not the bare word `ask`: it is a substring of `task`, which the calling forms and the steps are
+        // full of — a guard that cannot fail is worse than no guard. The key and the label it names are
+        // what a leak would actually carry.
+        let written =
+            ["settings", "config", "actions", "Send a test message", "api_token", "API token"];
+
+        // The manifest really says all of it, so what follows is the entry being narrower than what it was
+        // built from — not a fixture that never carried the words.
+        let manifest = serde_json::to_string(&plugin.manifest).unwrap();
+        for word in written {
+            assert!(manifest.contains(word), "the fixture must declare '{word}': {manifest}");
+        }
+
         for official in [true, false] {
             plugin.manifest.official = official;
             let document = serde_json::to_string(&entry(&plugin, "amenbo").0).unwrap();

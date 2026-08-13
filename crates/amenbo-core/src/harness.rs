@@ -470,6 +470,29 @@ pub fn setup_notice(found: &[Wiring], consent: Option<Consent>) -> Option<Notice
     (!unwired.is_empty() || !any_wired).then_some(Notice { unwired, any_wired })
 }
 
+/// Whether the setup this folder's session-start wiring is part of is still unfinished **for a reader that
+/// names its own harness** (`AMB-D-440`) — the machine face's silence, where [`setup_notice`] is a person's.
+///
+/// The same folder answers the two differently, because the two are told which provider by different
+/// things. A person is told by the folder, so one provider wired with nothing else traced leaves them
+/// nothing to act on and [`setup_notice`] goes quiet. The reader here is the harness itself: a provider
+/// that left no trace is not absent from this folder, it is the one parsing this. So what ends the report
+/// is the whole catalog being wired, and not any row of it — until then some row is unwired, and the
+/// reader may be that row.
+///
+/// The case this is the difference on: a folder wired for Claude Code, read by Codex CLI. Nothing is
+/// traced unwired, so a person is told nothing and rightly; the report the harness reads must still stand,
+/// or the one AI that could hand a human the text never learns it is unwired.
+///
+/// A refusal ends it either way, and for [`setup_notice`]'s reason: a reader who said no has no setup
+/// pending.
+pub fn setup_incomplete(found: &[Wiring], consent: Option<Consent>) -> bool {
+    if consent.is_some_and(|answer| !answer.allowed) {
+        return false;
+    }
+    !found.iter().all(Wiring::wired)
+}
+
 /// The harnesses to put in front of a reader who has asked for the text, in catalog order: the ones the
 /// folder points at, or — where it points at none — the catalog (`AMB-D-440`).
 ///
@@ -797,6 +820,35 @@ mod tests {
             assert_eq!(setup_notice(&traced, Some(consent)), None, "{consent:?}");
             assert_eq!(setup_notice(&quiet_folder, Some(consent)), None, "{consent:?}");
         }
+    }
+
+    /// What the machine face's report answers to, against the person's. The case it exists for is the
+    /// folder wired for one tool and read by another: a person has nothing left to act on there, and the
+    /// harness reading it is unwired and learns it nowhere else.
+    #[test]
+    fn the_machine_face_stands_until_the_whole_catalog_is_wired() {
+        let bare = |id: &'static str, traced| Wiring { id, label: id, wired_at: None, traced };
+        let wired = |id: &'static str| Wiring {
+            id,
+            label: id,
+            wired_at: Some(PathBuf::from("somewhere")),
+            traced: true,
+        };
+
+        // One wired, nothing else traced: the person's face is done, this one is not.
+        let one_of_two = [wired("claude-code"), bare("codex-cli", false)];
+        assert_eq!(setup_notice(&one_of_two, Some(Consent::answered(true))), None);
+        assert!(setup_incomplete(&one_of_two, Some(Consent::answered(true))));
+
+        // Every row wired: no reader of this can be the unwired one, so there is nothing left to say.
+        assert!(!setup_incomplete(&[wired("claude-code"), wired("codex-cli")], Some(Consent::answered(true))));
+
+        // A refusal ends it here too, whatever the folder holds.
+        for consent in [Consent::answered(false), Consent::answered_again(false)] {
+            assert!(!setup_incomplete(&one_of_two, Some(consent)), "{consent:?}");
+        }
+        // An unanswered question does not: consent is not wiring.
+        assert!(setup_incomplete(&one_of_two, None));
     }
 
     /// What a reader who asked for the text is handed. The case this exists for is the folder that traces

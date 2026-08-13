@@ -171,9 +171,10 @@ impl Driver<'_> {
                 let named = with.get("tool").and_then(|v| v.as_str());
                 let v = self.run_json(&["task", "list", "--json"])?;
                 let report = &v["setup_incomplete"]["agent_hook"];
-                // A folder with nothing left to finish is told nothing at all, so the report going
-                // silent is how it says the paste landed; while it stands, `any_wired` is the same
-                // fact from the other end.
+                // `any_wired` is the answer while the report stands, and on this face it stands
+                // until every tool in the catalog is wired — the reader here names its own, so one
+                // provider wired leaves the rest still worth carrying. A report gone silent is that
+                // same fact at its limit, and both readings say this folder starts its AI on amenbo.
                 let is_wired = report.is_null() || report["any_wired"].as_bool() == Some(true);
                 let points_at = named.is_none_or(|tool| {
                     report["unwired"]

@@ -207,8 +207,20 @@ fn an_unwired_folder_reports_the_tool_it_traces_and_how_to_get_its_text() {
         "the report does not say how to get the text: {report}"
     );
     assert_eq!(report["any_wired"], false);
-    // The catalog rides along, because a harness that left no trace still knows which one it is.
-    assert!(report["tools"].as_array().is_some_and(|all| all.len() >= 5), "{report}");
+    // The catalog rides along, because a harness that left no trace still knows which one it is — and each
+    // row says whether *it* is wired, which is the question that reader has.
+    let tools = report["tools"].as_array().expect("the report carries no catalog");
+    assert!(tools.len() >= 5, "{report}");
+    assert!(tools.iter().all(|one| one["wired"] == false), "nothing is wired in this folder: {report}");
+    let claude = tools
+        .iter()
+        .find(|one| one["tool"] == "claude-code")
+        .unwrap_or_else(|| panic!("the catalog omits the tool this folder traces: {report}"));
+    assert_eq!(claude["traced"], true, "the folder has a .claude in it: {report}");
+    assert!(
+        claude["fix"].as_str().is_some_and(|fix| fix.contains("agent-hook snippet claude-code")),
+        "an unwired row does not say how to get its text: {report}"
+    );
 
     // The text face says it on stderr, and the command the user actually ran still succeeds.
     let (out, err, code) = cli.run_both(&["task", "list"]);
@@ -233,29 +245,101 @@ fn a_folder_that_traces_no_tool_says_it_only_where_the_reader_can_name_its_own()
     let report = &doc["setup_incomplete"]["agent_hook"];
     assert_eq!(report["any_wired"], false, "the AI is told what the folder is missing: {doc}");
     assert!(report["unwired"].as_array().is_some_and(|named| named.is_empty()), "{report}");
-    assert!(report["tools"].as_array().is_some_and(|all| all.len() >= 5), "{report}");
+    let tools = report["tools"].as_array().expect("the report carries no catalog");
+    assert!(tools.len() >= 5, "{report}");
+    assert!(
+        tools.iter().all(|one| one["wired"] == false && one["traced"] == false),
+        "a folder that traces nothing says otherwise on a row: {report}"
+    );
 }
 
-/// Once the wiring has landed the report stops — and only then. It is the file that ends it, since amenbo
+/// Wire `cli`'s folder for one tool, the way the request asks a reader's AI to: the `configuration` the
+/// document carries, in the file it names. The request itself is prose and would not parse as settings,
+/// which is exactly why the `--json` face carries the two apart.
+fn wire(cli: &Cli, tool: &str) {
+    let doc = cli.json(&["agent-hook", "snippet", tool, "--json"]);
+    let into = cli.home.join(doc["paste_into"].as_str().expect("the document names no file"));
+    std::fs::create_dir_all(into.parent().unwrap()).unwrap();
+    let configuration = doc["configuration"].as_str().expect("the document carries no configuration");
+    std::fs::write(into, configuration).unwrap();
+}
+
+/// Once the wiring has landed the warning stops — and only then. It is the file that ends it, since amenbo
 /// never writes that file itself.
-///
-/// What lands here is the `configuration` the request carries, written by the hand the request is
-/// addressed to: the request itself is prose and would not parse as settings, which is exactly why the
-/// `--json` face carries the two apart.
 #[test]
-fn a_wired_folder_is_told_nothing() {
+fn a_wired_folder_stops_warning_the_person_who_wired_it() {
     let cli = Cli::new();
     cli.run(&["init", "--name", "Alice"]);
     std::fs::create_dir_all(cli.home.join(".claude")).unwrap();
+    wire(&cli, "claude-code");
 
-    let doc = cli.json(&["agent-hook", "snippet", "claude-code", "--json"]);
-    let configuration = doc["configuration"].as_str().expect("the document carries no configuration");
-    std::fs::write(cli.home.join(".claude/settings.json"), configuration).unwrap();
+    let (_, err, code) = cli.run_both(&["task", "list"]);
+    assert_eq!(code, 0);
+    assert!(!err.contains("agent-hook"), "the tool this folder shows is wired and still warned about: {err}");
+}
 
-    let doc = cli.json(&["task", "list", "--json"]);
+/// The folder is wired for one tool and the AI reading it is another — a Claude Code folder somebody opens
+/// Codex CLI in. Nothing is traced unwired, so a person is told nothing, rightly. The reader of the `--json`
+/// face is the unwired one and learns it nowhere else: its own row carries the answer and the way to the
+/// text (`AMB-D-440`).
+#[test]
+fn a_folder_wired_for_one_tool_tells_the_next_one_it_is_not() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "Alice"]);
+    std::fs::create_dir_all(cli.home.join(".claude")).unwrap();
+    wire(&cli, "claude-code");
+
+    let doc = cli.json(&["task", "list", "--json", "--actor", "ai"]);
+    let report = &doc["setup_incomplete"]["agent_hook"];
+    assert_eq!(report["any_wired"], true, "the folder is wired for Claude Code: {doc}");
+    // Nothing to name: the folder shows no trace of the tool that is unwired, which is why the person's
+    // face is silent and this one cannot be.
+    assert!(report["unwired"].as_array().is_some_and(|named| named.is_empty()), "{report}");
+
+    let tools = report["tools"].as_array().expect("the report carries no catalog");
+    let row = |id: &str| {
+        tools
+            .iter()
+            .find(|one| one["tool"] == id)
+            .unwrap_or_else(|| panic!("the catalog omits {id}: {report}"))
+            .clone()
+    };
+    assert_eq!(row("claude-code")["wired"], true, "the wiring that landed is not read back: {report}");
+    assert_eq!(row("claude-code")["wired_at"], ".claude/settings.json");
+    assert!(row("claude-code")["fix"].is_null(), "a wired tool is told to wire itself: {report}");
+
+    let codex = row("codex-cli");
+    assert_eq!(codex["wired"], false, "the reader is told it is wired when it is not: {report}");
+    assert_eq!(codex["traced"], false);
+    assert!(
+        codex["fix"].as_str().is_some_and(|fix| fix.contains("agent-hook snippet codex-cli")),
+        "the reader is not told how to get its own text: {report}"
+    );
+}
+
+/// What ends the machine face's report is the whole catalog being wired — the one state in which no reader
+/// of it can be the unwired one. The catalog it names is where the list to wire comes from, so a provider
+/// added to it later is covered here rather than left out.
+#[test]
+fn the_report_ends_when_every_tool_in_the_catalog_is_wired() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "Alice"]);
+
+    let doc = cli.json(&["task", "list", "--json", "--actor", "ai"]);
+    let tools: Vec<String> = doc["setup_incomplete"]["agent_hook"]["tools"]
+        .as_array()
+        .expect("the report carries no catalog")
+        .iter()
+        .map(|one| one["tool"].as_str().expect("a catalog row names no tool").to_string())
+        .collect();
+    for tool in &tools {
+        wire(&cli, tool);
+    }
+
+    let doc = cli.json(&["task", "list", "--json", "--actor", "ai"]);
     assert!(
         doc.get("setup_incomplete").is_none(),
-        "a folder that starts its AI on amenbo has nothing left to finish: {doc}"
+        "a folder that starts every AI on amenbo has nothing left to finish: {doc}"
     );
 }
 

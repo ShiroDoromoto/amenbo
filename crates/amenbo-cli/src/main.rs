@@ -4043,6 +4043,12 @@ fn offer_agent_hook(
 /// where the folder shows nothing. The one-time question is put in either case: it is asked once per
 /// project, and being asked once is how the feature is ever discovered.
 ///
+/// **So the two are silenced by different things too**, and each asks its own
+/// ([`amenbo_core::harness::setup_incomplete`] here, [`amenbo_core::harness::setup_notice`] for the
+/// person). A folder wired for one tool and traced by no other has nothing left to tell a person — while
+/// the next AI opened in it is another tool entirely, still unwired, and the report is where it finds that
+/// out.
+///
 /// A warning either way: the command the user ran succeeds regardless, and text goes to stderr so stdout
 /// stays pipeable.
 fn report_unwired_harnesses(
@@ -4053,27 +4059,45 @@ fn report_unwired_harnesses(
 ) {
     use amenbo_core::harness;
 
-    let Some(notice) = harness::setup_notice(found, consent) else { return };
     if flags.json {
+        if !harness::setup_incomplete(found, consent) {
+            return;
+        }
         set_setup_report(
             "agent_hook",
             json!({
-                "unwired": notice.unwired.iter().map(|one| json!({
+                // What amenbo can point at: the shortlist a face built for a person is held to, carried
+                // here too so a reader can tell the providers this folder shows from the rest of the row.
+                "unwired": found.iter().filter(|one| one.traced && !one.wired()).map(|one| json!({
                     "tool": one.id,
                     "label": one.label,
                     "fix": format!("{cmd} agent-hook snippet {}", one.id),
                 })).collect::<Vec<_>>(),
-                "any_wired": notice.any_wired,
-                // The catalog, because a harness that left no trace in the folder is still the one reading
-                // this and can name itself (`AMB-D-440`).
-                "tools": harness::HARNESSES.iter().map(|one| one.id).collect::<Vec<_>>(),
+                "any_wired": found.iter().any(harness::Wiring::wired),
+                // Every row of the catalog with what this folder says about it, because a harness that left
+                // no trace in the folder is still the one reading this and can name itself (`AMB-D-440`).
+                // Its own row is the answer it came for — whether *it* is wired — which no set amenbo
+                // picked out by trace can give it.
+                "tools": found.iter().map(|one| json!({
+                    "tool": one.id,
+                    "label": one.label,
+                    "wired": one.wired(),
+                    "wired_at": one.wired_at,
+                    "traced": one.traced,
+                    // Only where there is something to fix: on a wired row it would read as an edit still
+                    // owed.
+                    "fix": (!one.wired()).then(|| format!("{cmd} agent-hook snippet {}", one.id)),
+                })).collect::<Vec<_>>(),
                 // While nobody has answered, the reader here is the one who can put the question to a
                 // person — amenbo cannot, on this face. Naming the way back is what lets that answer land;
                 // once there is one on record, there is no question left to carry.
                 "record_answer": consent.is_none().then(|| format!("{cmd} agent-hook answer <yes|no>")),
             }),
         );
-    } else if !flags.quiet {
+        return;
+    }
+    let Some(notice) = harness::setup_notice(found, consent) else { return };
+    if !flags.quiet {
         match notice.unwired.as_slice() {
             // Nothing to point at: the folder shows no provider of its own, so there is no line here a
             // person could act on. The question already offered them the feature, and the `--json` face

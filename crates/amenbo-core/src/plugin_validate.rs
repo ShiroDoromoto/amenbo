@@ -465,6 +465,25 @@ fn check_overlay(problems: &mut Vec<Problem>, m: &Manifest, lang: &str, o: &Mani
         if let Some(label) = &field.label {
             check_line(problems, &format!("{loc}.label"), label, MAX_LABEL_LEN);
         }
+        // The supporting text is translated where the base wrote some (`AMB-D-656`). Translating what the
+        // manifest never wrote is the `about` case again: the text would reach readers of one language and
+        // nobody else, which is not a fallback but a hole.
+        for (which, translated, base_has) in [
+            (Supporting::Help, &field.help, base.help.is_some()),
+            (Supporting::Placeholder, &field.placeholder, base.placeholder.is_some()),
+        ] {
+            let Some(translated) = translated else { continue };
+            let at = format!("{loc}.{}", which.key());
+            if !base_has {
+                problems.push(Problem::new(
+                    &at,
+                    ProblemCode::NotInBase,
+                    format!("config field '{key}' declares no {} to translate", which.key()),
+                ));
+                continue;
+            }
+            check_supporting_text(problems, &at, which, translated);
+        }
         for (value, label) in &field.options {
             let at_option = format!("{loc}.options[{value}]");
             if !base.options.iter().any(|o| &o.value == value) {
@@ -485,6 +504,8 @@ fn check_overlay(problems: &mut Vec<Problem>, m: &Manifest, lang: &str, o: &Mani
 /// not written again here.
 fn overlay_schema_bytes(f: &ConfigFieldOverlay) -> usize {
     f.label.as_deref().map_or(0, str::len)
+        + f.help.as_deref().map_or(0, str::len)
+        + f.placeholder.as_deref().map_or(0, str::len)
         + f.options.iter().map(|(value, label)| value.len() + label.len()).sum::<usize>()
 }
 
@@ -953,7 +974,47 @@ fn schema_bytes(f: &ConfigField) -> usize {
 
 /// Check the supporting text a field may carry (`AMB-D-656`) — the paragraph under the input, and the
 /// example inside it. Both are optional, and absent is not a mistake: a field that says nothing beyond its
-/// label says nothing, which is what every schema written before these keys says.
+/// label says nothing, which is what every schema written before these keys says. The rules themselves
+/// are [`check_supporting_text`]'s, which is also where a translation of either is judged.
+fn check_config_text(problems: &mut Vec<Problem>, i: usize, field: &ConfigField) {
+    for (which, value) in
+        [(Supporting::Help, &field.help), (Supporting::Placeholder, &field.placeholder)]
+    {
+        let Some(value) = value else { continue };
+        check_supporting_text(problems, &format!("config[{i}].{}", which.key()), which, value);
+    }
+}
+
+/// Which of the two supporting texts is in hand (`AMB-D-656`). They are held to the same three rules and
+/// differ in two things: how much they may weigh, and whether a newline is text in them.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Supporting {
+    /// The paragraph under the input — a body.
+    Help,
+    /// The example inside it — one line.
+    Placeholder,
+}
+
+impl Supporting {
+    /// The manifest key it is written under, which is the word a location and a message name it by.
+    fn key(self) -> &'static str {
+        match self {
+            Self::Help => "help",
+            Self::Placeholder => "placeholder",
+        }
+    }
+
+    /// The most it may weigh, in UTF-8 bytes, per language.
+    fn max_bytes(self) -> usize {
+        match self {
+            Self::Help => MAX_HELP_BYTES,
+            Self::Placeholder => MAX_PLACEHOLDER_BYTES,
+        }
+    }
+}
+
+/// Check one supporting text, base or translated — one function so a translation is held to the rules its
+/// base is held to (`AMB-D-621`), which is the whole of what a language changes about it.
 ///
 /// Three rules, the same ones every author string is held to:
 ///
@@ -964,43 +1025,32 @@ fn schema_bytes(f: &ConfigField) -> usize {
 ///   author's string that can move the cursor can write over what amenbo said (`AMB-D-656`).
 /// - **no citing an amenbo record** (`AMB-D-572`) — author prose drawn inside amenbo's own window, where
 ///   `AMB-D-411 makes this required` borrows this store's authority exactly as it does in `desc`.
-fn check_config_text(problems: &mut Vec<Problem>, i: usize, field: &ConfigField) {
-    if let Some(help) = &field.help {
-        let at = format!("config[{i}].help");
-        check_text_bytes(problems, &at, help, MAX_HELP_BYTES);
-        if help.chars().any(|c| c.is_control() && c != '\n') {
-            problems.push(Problem::new(
-                &at,
-                ProblemCode::ControlChar,
-                format!("{at} must not contain control characters (a newline aside)"),
-            ));
-        }
-        check_no_record_ref(problems, &at, help);
-    }
-    if let Some(placeholder) = &field.placeholder {
-        let at = format!("config[{i}].placeholder");
-        check_text_bytes(problems, &at, placeholder, MAX_PLACEHOLDER_BYTES);
-        if placeholder.chars().any(char::is_control) {
-            problems.push(Problem::new(
-                &at,
-                ProblemCode::ControlChar,
-                format!("{at} must not contain control characters"),
-            ));
-        }
-        check_no_record_ref(problems, &at, placeholder);
-    }
-}
-
-/// Check one author text against a byte cap. Bytes, not characters, wherever what is bounded is a
-/// document rather than a line of layout ([`check_about`] takes the same measure, for the same reason).
-fn check_text_bytes(problems: &mut Vec<Problem>, at: &str, value: &str, max: usize) {
-    if value.len() > max {
+fn check_supporting_text(
+    problems: &mut Vec<Problem>,
+    at: &str,
+    which: Supporting,
+    value: &str,
+) {
+    if value.len() > which.max_bytes() {
         problems.push(Problem::new(
             at,
             ProblemCode::TooLong,
-            format!("{at} is too long ({} bytes; max {max})", value.len()),
+            format!("{at} is too long ({} bytes; max {})", value.len(), which.max_bytes()),
         ));
     }
+    let body = which == Supporting::Help;
+    if value.chars().any(|c| c.is_control() && !(body && c == '\n')) {
+        problems.push(Problem::new(
+            at,
+            ProblemCode::ControlChar,
+            if body {
+                format!("{at} must not contain control characters (a newline aside)")
+            } else {
+                format!("{at} must not contain control characters")
+            },
+        ));
+    }
+    check_no_record_ref(problems, at, value);
 }
 
 /// Check that a `readonly` declaration is one the field can carry (`AMB-D-656`).
@@ -2386,6 +2436,94 @@ mod tests {
             codes(&validate_overlays(&m, &huge)).contains(&ProblemCode::SchemaTooLarge),
             "the form is drawn one language at a time, so each language is bounded like the base",
         );
+    }
+
+    /// A manifest whose first field carries both supporting texts, so an overlay has a paragraph and an
+    /// example to translate (`AMB-D-656`).
+    fn valid_with_supporting() -> Manifest {
+        let mut m = valid_with_candidates();
+        m.config[0] = ConfigField {
+            help: Some("Create it under Incoming Webhooks.".into()),
+            placeholder: Some("https://hooks.example.com/T000/B000".into()),
+            secret: true,
+            required: true,
+            ..ConfigField::new("webhook_url", "Webhook URL")
+        };
+        m
+    }
+
+    /// One language's overlay of that field's supporting text.
+    fn supporting_overlay(help: Option<&str>, placeholder: Option<&str>) -> Translations {
+        let mut t = overlay("ja");
+        t.get_mut("ja").unwrap().config.insert(
+            "webhook_url".into(),
+            ConfigFieldOverlay {
+                help: help.map(str::to_string),
+                placeholder: placeholder.map(str::to_string),
+                ..ConfigFieldOverlay::default()
+            },
+        );
+        t
+    }
+
+    /// **The supporting text is translated with the label** (`AMB-D-656`) — the two are read together, so
+    /// a form half in the reader's language is what leaving them out would give.
+    #[test]
+    fn a_translated_supporting_text_lines_up_with_its_base() {
+        let m = valid_with_supporting();
+        let t = supporting_overlay(
+            Some("Incoming Webhooks から作る。\n\nチャンネルごとに1本。"),
+            Some("https://hooks.example.com/T000/B000"),
+        );
+        assert!(validate_overlays(&m, &t).is_empty(), "{:?}", validate_overlays(&m, &t));
+
+        // Either half alone is a layer too: what is not translated is the base's, not a hole.
+        assert!(validate_overlays(&m, &supporting_overlay(Some("作り方はこちら。"), None)).is_empty());
+        assert!(validate_overlays(&m, &supporting_overlay(None, Some("https://example.com/x"))).is_empty());
+    }
+
+    /// A translation obeys the rules its base obeys (`AMB-D-621`): the cap it is measured against, the
+    /// control-character floor — a newline being text in the paragraph and not in the example — and the
+    /// no-citing rule, none of which the language changes.
+    #[test]
+    fn a_translated_supporting_text_is_held_to_the_same_rules() {
+        let m = valid_with_supporting();
+        let of = |t: Translations| codes(&validate_overlays(&m, &t));
+
+        assert!(of(supporting_overlay(Some(&"あ".repeat(MAX_HELP_BYTES / 3 + 1)), None))
+            .contains(&ProblemCode::TooLong));
+        assert!(of(supporting_overlay(None, Some(&"あ".repeat(MAX_PLACEHOLDER_BYTES / 3 + 1))))
+            .contains(&ProblemCode::TooLong));
+
+        assert!(of(supporting_overlay(Some("一行目\n二行目"), None)).is_empty(), "the paragraph is a body");
+        assert!(of(supporting_overlay(Some("消す\u{1b}[2J"), None)).contains(&ProblemCode::ControlChar));
+        assert!(of(supporting_overlay(None, Some("一行目\n二行目"))).contains(&ProblemCode::ControlChar));
+
+        assert!(of(supporting_overlay(Some("AMB-D-411 が要求している"), None))
+            .contains(&ProblemCode::RecordRef));
+
+        let mut huge = supporting_overlay(Some("ラ"), None);
+        huge.get_mut("ja").unwrap().config.get_mut("webhook_url").unwrap().help =
+            Some("ラ".repeat(MAX_CONFIG_SCHEMA_BYTES));
+        assert!(
+            of(huge).contains(&ProblemCode::SchemaTooLarge),
+            "a translated paragraph is counted into the language's schema like every other string",
+        );
+    }
+
+    /// Translating a paragraph the manifest never wrote is the `about` case again (`AMB-D-621`): the text
+    /// would reach readers of one language and nobody else, which is a hole and not a fallback.
+    #[test]
+    fn translating_supporting_text_the_manifest_does_not_have_is_refused() {
+        let m = valid_with_candidates();
+        for (t, at) in [
+            (supporting_overlay(Some("作り方はこちら。"), None), "i18n[ja].config[webhook_url].help"),
+            (supporting_overlay(None, Some("例")), "i18n[ja].config[webhook_url].placeholder"),
+        ] {
+            let problems = validate_overlays(&m, &t);
+            assert_eq!(codes(&problems), [ProblemCode::NotInBase]);
+            assert_eq!(problems[0].location, at, "the author is told which key has no base");
+        }
     }
 
     /// Every language is judged, and every problem in it collected — an author fixing their overlays

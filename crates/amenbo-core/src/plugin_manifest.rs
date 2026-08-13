@@ -920,14 +920,29 @@ pub struct ManifestOverlay {
     pub extra: BTreeMap<String, Ignored>,
 }
 
-/// **One configuration field's labels, in one language** (`AMB-D-621`) — the translated half of a
+/// **One configuration field's words, in one language** (`AMB-D-621`) — the translated half of a
 /// [`ConfigField`]. The field's `key`, its type, and what it stores are the plugin's wire vocabulary and
-/// are not translated; what a person reads on the form is.
+/// are not translated; what a person reads on the form is: its label, its supporting text
+/// (`AMB-D-656`), and its candidates' labels.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConfigFieldOverlay {
     /// The label shown beside the field, in this language. Absent means the base label.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+    /// The field's [`help`](ConfigField::help), in this language (`AMB-D-656`). Absent means the base
+    /// text is what a reader sees — the field-by-field fallback the whole overlay takes (`AMB-D-623`).
+    ///
+    /// A label translated while the paragraph under it stays English is half a form: the two are read
+    /// together, so they are translated together (`AMB-D-620`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub help: Option<String>,
+    /// The field's [`placeholder`](ConfigField::placeholder), in this language (`AMB-D-656`). Absent
+    /// means the base example.
+    ///
+    /// An example is not always the same string in every language — a date, an address, a name written
+    /// the way the reader writes one — so it is the author's to restate, not amenbo's to carry over.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placeholder: Option<String>,
     /// The candidates' labels, in this language — **keyed by the candidate's stored
     /// [`value`](ConfigOption::value)**, for the same reason the fields are keyed rather than ordered.
     /// The value itself is what travels to the plugin, so it is never translated.
@@ -1555,15 +1570,25 @@ mod tests {
             "desc": "タスクごとに git worktree を切り分ける",
             "config": {
                 "events": { "label": "何を報告するか", "options": { "task.done": "タスクが完了した" } },
-                "base": { "label": "基点にするブランチ" },
+                "base": {
+                    "label": "基点にするブランチ",
+                    "help": "書かなければ、いま居るブランチから切る。",
+                    "placeholder": "main",
+                },
             },
         }))
         .unwrap();
 
         assert_eq!(o.desc.as_deref(), Some("タスクごとに git worktree を切り分ける"));
         assert_eq!(o.config["base"].label.as_deref(), Some("基点にするブランチ"));
+        assert_eq!(o.config["base"].help.as_deref(), Some("書かなければ、いま居るブランチから切る。"));
+        assert_eq!(o.config["base"].placeholder.as_deref(), Some("main"));
         assert_eq!(o.config["events"].options["task.done"], "タスクが完了した");
         assert!(o.config["base"].options.is_empty(), "a field with no candidates translates none");
+        assert!(
+            o.config["events"].help.is_none() && o.config["events"].placeholder.is_none(),
+            "a field whose supporting text was left in the base translates none of it",
+        );
         assert!(o.extra.is_empty(), "everything it wrote is something amenbo translates");
 
         // What was not translated re-emits as absent, never as an empty string standing in for a line

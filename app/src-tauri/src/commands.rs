@@ -6270,7 +6270,7 @@ mod tests {
                     "task.done".to_string(),
                     "タスクが終わったとき".to_string(),
                 )]),
-                extra: Default::default(),
+                ..ConfigFieldOverlay::default()
             },
         )]);
 

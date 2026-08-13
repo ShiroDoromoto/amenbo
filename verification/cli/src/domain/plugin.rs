@@ -472,6 +472,63 @@ impl Driver<'_> {
                     None => format!("`{name}` now offers `{label}`, which runs on the press"),
                 }))
             }
+            // And the check that stands in front of the gate, written onto the same block. It is the one
+            // declaration that changes what an enable does, so a plugin carrying it is a plugin whose
+            // switch runs somebody else's code before it opens anything.
+            "declare-check" => {
+                let name = req_str(with, "name")?;
+                let cmd = req_str(with, "cmd")?;
+                let path = self.session.home.join("plugins").join(name).join("manifest.json");
+                let raw = std::fs::read_to_string(&path)
+                    .map_err(|e| format!("could not read {}: {e}", path.display()))?;
+                let mut manifest: serde_json::Value = serde_json::from_str(&raw)
+                    .map_err(|e| format!("{} is not the manifest it should be: {e}", path.display()))?;
+                if manifest["settings"].is_null() {
+                    manifest["settings"] = serde_json::json!({});
+                }
+                // One check, not a list: a plugin that already declared one has it replaced, the way a
+                // second `declare-agent` replaces the block rather than joining it.
+                manifest["settings"]["check"] = serde_json::json!(cmd);
+                std::fs::write(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?)
+                    .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+                Ok(Outcome::action(format!("`{name}` now has `{cmd}` judge its settings before its gate opens")))
+            }
+            // Standing in a program that answers that check. Whether values are usable is the author's
+            // judgement and amenbo makes none of its own (see the registry), so a no is a thing only a
+            // program can say — and which way it answers is the scenario's to choose, since the road that
+            // matters is the same values turned away and then let through. The document goes to stdout,
+            // where amenbo reads a verdict from; anything the run wants to say for a log goes nowhere here.
+            "check-program" => {
+                let name = req_str(with, "name")?;
+                let ok = req_bool(with, "ok")?;
+                let path = self.session.home.join("plugins").join(name).join(name);
+                if !path.exists() {
+                    return Err(format!("`{name}` has no program at {} to stand in for", path.display()));
+                }
+                let mut verdict = serde_json::json!({ "v": 1, "ok": ok });
+                if let Some(message) = with.get("message").and_then(|v| v.as_str()) {
+                    verdict["message"] = serde_json::json!(message);
+                }
+                // The line beside one box, which is a different reading from the sentence over the form:
+                // a check may speak about the settings as a whole, about one of them, or about both.
+                if let Some(field) = with.get("field").and_then(|v| v.as_str()) {
+                    let said = with.get("field_message").and_then(|v| v.as_str()).unwrap_or(field);
+                    verdict["fields"] = serde_json::json!({ field: said });
+                }
+                let document = serde_json::to_string(&verdict).map_err(|e| e.to_string())?;
+                // Single quotes around the document, so nothing in the author's sentences reaches the
+                // shell. A sentence carrying one would end the string and is refused rather than written.
+                if document.contains('\'') {
+                    return Err("a verdict's sentences cannot carry a single quote — the program says them from a script".to_string());
+                }
+                std::fs::write(&path, format!("#!/bin/sh\necho '{document}'\nexit 0\n"))
+                    .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+                make_runnable(&path)?;
+                Ok(Outcome::action(match ok {
+                    true => format!("left `{name}`'s own check saying its settings are usable"),
+                    false => format!("left `{name}`'s own check turning its settings away"),
+                }))
+            }
             // Standing in a program that says what a press handed it, so the one line a form draws has an
             // author behind it. An operation gives nothing back (see the registry): what is drawn is the
             // first line the run wrote to stderr, and the value the press asked for arrives in the

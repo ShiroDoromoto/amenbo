@@ -400,6 +400,10 @@ impl Instructor {
     /// `asks` is that pair's third: the words a settings form draws a field, or one of a choice's
     /// answers, under. Author's words again, read the same way and for the same reason.
     ///
+    /// `checked` reads the same kind of sentence one door earlier — what the author's check said about the
+    /// values, over the form or beside the box it named. Their words again, and told from amenbo's own
+    /// sentence in that same place by which of the two is standing there.
+    ///
     /// `press-said` is the fourth of that family, one press along: the line an operation left on the
     /// form. It is the author's own sentence, and what a build would draw in its place where the program
     /// said nothing is amenbo's — so the two are told apart by which of them is standing there, and a
@@ -541,7 +545,7 @@ impl Instructor {
             (Domain::Plugin, "asks") => {
                 Some(Expectation { text: arg_str(with, "label")?.to_string(), present: true })
             }
-            (Domain::Plugin, "press-said") => {
+            (Domain::Plugin, "checked") | (Domain::Plugin, "press-said") => {
                 Some(Expectation { text: arg_str(with, "text")?.to_string(), present: true })
             }
             (Domain::Plugin, "detail") => {
@@ -1065,6 +1069,22 @@ impl Instructor {
                     ),
                     None => format!(
                         "Confirm the settings form for \"{name}\" asks for the setting \"{key}\" under the words \"{label}\"."
+                    ),
+                }
+            }
+            // What the author's check said, in whichever of its two places the step names. The line beside
+            // a box and the sentence over the form are different readings of one verdict — a check may
+            // speak about the settings as a whole, about one of them, or about both — so the step says
+            // which one it is looking at rather than leaving an eye to find the words anywhere on screen.
+            (Domain::Plugin, "checked") => {
+                let name = req(with, "name")?;
+                let text = req(with, "text")?;
+                match arg_str(with, "key") {
+                    Some(key) => format!(
+                        "Confirm the settings form for \"{name}\" draws \"{text}\" beside the setting \"{key}\", which is where its own check spoke about that box."
+                    ),
+                    None => format!(
+                        "Confirm the settings form for \"{name}\" carries \"{text}\" at its head, which is what its own check said about these settings as a whole."
                     ),
                 }
             }
@@ -1990,6 +2010,38 @@ steps_gui:
 
         let exp = ins.expectation(&s.steps(Driver::Gui)[1]).expect("a detail assert is OCR-judged");
         assert_eq!(exp, Expectation { text: "Channel webhook".to_string(), present: true });
+    }
+
+    /// What the author's own check said, in both of the places a verdict reaches a reader: the sentence
+    /// over the form, and the line beside the box it named. Each is sent to OCR on its own words, since
+    /// what a build would draw there instead is amenbo's sentence — and the two are told apart by nothing
+    /// else. The instruction says which of the two places is being read, because an eye handed only the
+    /// words would close the step off either.
+    #[test]
+    fn a_checks_two_sentences_are_read_where_each_of_them_is_drawn() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: plugin
+    op: checked
+    with: { name: standup, text: The webhook is not one Slack answers on }
+  - type: assert
+    domain: plugin
+    op: checked
+    with: { name: standup, key: webhook, text: There is a space in it }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("at its head") && !lines[0].contains("beside"), "got: {}", lines[0]);
+        assert!(lines[1].contains("beside the setting \"webhook\""), "got: {}", lines[1]);
+
+        for (i, text) in ["The webhook is not one Slack answers on", "There is a space in it"].iter().enumerate() {
+            let exp = ins.expectation(&s.steps(Driver::Gui)[i]).expect("a check's own sentence is OCR-judged");
+            assert_eq!(exp, Expectation { text: text.to_string(), present: true });
+        }
     }
 
     /// The gate line: the switch is moved a project at a time — in that project's own row — and read

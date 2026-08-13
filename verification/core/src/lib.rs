@@ -588,6 +588,11 @@ const REGISTRY: &[OpSpec] = &[
     // `ask_label`, and leaving it out is the other shape an operation comes in — a button that runs the
     // moment it is pressed.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-action", required: &["name", "cmd", "label"], refs: &[], strings: &["name", "cmd", "label", "ask", "ask_label"], binds: false },
+    // And the other half of that same block: the check an author has raised on the values before a gate
+    // opens on them. It is written onto what is installed for the reason its neighbours are — no plugin in
+    // the official catalog declares a settings block — so a gate that turns on somebody else's judgement
+    // is a door no install reaches. `cmd` is the call the check raises.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-check", required: &["name", "cmd"], refs: &[], strings: &["name", "cmd"], binds: false },
     // An installed plugin saying, in its author's words, when to reach for it and what to type. What a
     // plugin says for itself is written in its manifest and amenbo invents none of it, so this is the
     // author's block arriving the only way it can — written onto the installed manifest, the way
@@ -628,6 +633,17 @@ const REGISTRY: &[OpSpec] = &[
     // handed can say either — which no published plugin is, none of them declaring an operation at all.
     // So the driver stands one in that writes its one line, naming what it was asked for.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "press-program", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // An installed plugin whose program answers the check with a verdict. Whether the values are usable is
+    // the author's judgement and amenbo makes none of its own, so the only thing that can say no is a
+    // program that says it — and no published plugin declares a check to answer at all. `ok` is that
+    // judgement, which the road picks rather than the program: the same values are the ones a fixed answer
+    // could never turn away and then let through. `message` is the sentence for the head of the form and
+    // `field_message` the one drawn beside the setting `field` names, both being the author's own words,
+    // which is what a road reads back to know whose sentence reached the screen.
+    //
+    // A plugin has one program, so this stands in for whatever was standing there before — `press-program`
+    // included. A road walks the one it is about.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "check-program", required: &["name", "ok"], refs: &[], strings: &["name", "message", "field", "field_message"], binds: false },
     // An installed plugin whose program calls amenbo back. A payload names a record and carries none of
     // it, so the route to the content is the binary itself, run from inside the plugin with the store and
     // the window amenbo put in its environment — and no plugin in the official catalog takes it (the one
@@ -1192,6 +1208,16 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone, all three. What a terminal has instead is `plugin run`, whose answer is a
     // return value on stdout rather than a line beside a button, which asks for nothing at the press, and
     // which is refused with a code rather than by a control that cannot be used.
+    // What the author's check said, where a reader meets it: one sentence at the head of the settings form,
+    // and one beside each box the verdict named. `key` picks which of the two is being read — named, it is
+    // the line under that setting; left out, the one over the whole form. Both are quoted whole for the
+    // reason a row's line is: where the check said nothing amenbo draws a sentence of its own in the same
+    // place, and the screen does not say which of the two is standing there.
+    //
+    // A screen road alone. A terminal meets the same verdict as the reason an enable was refused, which is
+    // read by the `refused:` code on the enable itself — a code being what a driver comparing exit statuses
+    // can hold, and the author's sentences being deliberately kept off that face.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "checked", required: &["name", "text"], refs: &[], strings: &["name", "text", "key"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "press-said", required: &["name", "text"], refs: &[], strings: &["name", "text"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "press-asks", required: &["name", "label"], refs: &[], strings: &["name", "label"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "press-shut", required: &["name", "label"], refs: &[], strings: &["name", "label"], binds: false },
@@ -1389,6 +1415,11 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // stand-in was answering would be reading whatever the real plugin happened to say.
     (Domain::Plugin, "declare-action"),
     (Domain::Plugin, "press-program"),
+    // And the check it raises before a gate opens, with the program that answers it. Same pair and the
+    // same reason: the declaration is the author's word, and a road that pressed a switch with nothing
+    // standing in would be judged by whatever the real plugin thought of the values.
+    (Domain::Plugin, "declare-check"),
+    (Domain::Plugin, "check-program"),
     // And a value already filled in for one of them. Answering a setting is a road of its own and is
     // deliberately not one a premise walks — except that a setting the author marked `readonly` is not
     // answered by anybody a road can be: the value is the plugin's own, written back through

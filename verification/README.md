@@ -479,7 +479,11 @@ and no published plugin declares that either. `declare-action` is the fourth of 
 author offers to *do* from that same form — the button, and the one value it asks for at the press — which
 no published plugin declares either, so the operation is a face no install reaches; `plugin press-program`
 stands the program behind it in, since an operation is code being run and what the form draws is one line
-of what that code said. `plugin declare-scope` writes the layer the author
+of what that code said. `declare-check` writes the other half of that block — the judgement an author has
+raised on the values before a gate opens on them — and `plugin check-program` answers it, `ok:` being the
+scenario's to choose, since what a road about a gate wants is the same values turned away and then let
+through. A plugin has one program, so those two stand-ins replace whatever stood there before, each other
+included: a road walks the one it is about. `plugin declare-scope` writes the layer the author
 declared — one project's rows, or the device's — which is the same kind of word and unreachable for the
 same reason: a manifest saying nothing means `project`, and every published plugin says nothing, so the
 road a machine-wide plugin walks (one enable, one window on the whole device) exists only once this is
@@ -693,6 +697,11 @@ shape the box takes while no side is chosen and there is no grammar to read the 
 the button takes while there is no answer left to clear. Both are read off how the control is drawn, not
 off what it does when used: one shut in the build and painted like a live one is one a reader still
 reaches for.
+
+Reading what a plugin's own check said about its settings (`plugin checked`) is one road's for a reason of
+its own: the verdict's sentences are the author's and are drawn on the settings form, while a terminal
+meets the same refusal as an error code on the enable it turned away — which is what the `refused:` on that
+step already reads.
 
 Pressing an operation a plugin's author put on its settings form, answering what that press asks for, and
 reading the line it left, the box it asked in and the button before the gate was open (`plugin press` /

@@ -72,9 +72,9 @@ pub const MAX_LABEL_LEN: usize = 100;
 /// and bloating the generated form / stored config.
 pub const MAX_CONFIG_FIELDS: usize = 32;
 /// The largest a config schema may be in total, summed over every field's declared text — its key and
-/// label, its candidates' values and labels, and its default (`AMB-D-356`, the safe floor). Bounds the
-/// schema as a whole, complementing the per-field caps: candidates are counted here because a handful of
-/// fields can still carry a great deal of them.
+/// label, its supporting text, its candidates' values and labels, and its default (`AMB-D-356`, the safe
+/// floor). Bounds the schema as a whole, complementing the per-field caps: candidates and help text are
+/// counted here because a handful of fields can still carry a great deal of either.
 pub const MAX_CONFIG_SCHEMA_BYTES: usize = 8 * 1024;
 /// The most candidates one `multi` field may offer (`AMB-D-415`, the same safe floor the schema keeps).
 /// Every one of them is a checkbox in the form, so the ceiling is what keeps a field a choice rather than
@@ -86,6 +86,21 @@ pub const MAX_OPTION_VALUE_LEN: usize = 100;
 /// The longest a text field's `default` may be (characters). A default is a seed for a line the user
 /// types, so it is bounded like one; a `multi` field's default is bounded by its candidates instead.
 pub const MAX_DEFAULT_LEN: usize = 200;
+
+/// The most a config field's `help` may weigh, **per language, in UTF-8 bytes** (`AMB-D-656`) — the base
+/// text and each translation of it held to the same cap, as [`MAX_ABOUT_BYTES`] is.
+///
+/// Bytes rather than characters for the same reason: the catalog carries every language at once
+/// (`AMB-D-622`), so what a cap has to bound is a document. 1KB is around five hundred Japanese
+/// characters — a paragraph explaining one input, which is what this key is for. A field needing more
+/// than that is asking for the description text (`about`) or the README, both of which the plugin's
+/// detail view already offers. The whole schema's cap ([`MAX_CONFIG_SCHEMA_BYTES`]) still applies over
+/// the top: these texts are counted into it, so a form of many fields spends its budget on them.
+pub const MAX_HELP_BYTES: usize = 1024;
+/// The most a config field's `placeholder` may weigh, per language, in UTF-8 bytes (`AMB-D-656`). One
+/// example of what to type, shown inside the input — so the cap is roughly the width of the box it is
+/// drawn in, not the width of a sentence.
+pub const MAX_PLACEHOLDER_BYTES: usize = 80;
 
 /// The longest the agent block's `when` line may be (characters) — one line at the AI's entry point
 /// (`AMB-D-437`), capped like every other one-line field.
@@ -174,6 +189,10 @@ pub enum ProblemCode {
     OptionsNeedMulti,
     /// A `multi` field's `default` names something the field does not offer (`AMB-D-415`).
     NotAnOption,
+    /// A field declares `readonly` beside something that contradicts it (`AMB-D-656`): a `default`, or
+    /// `type: multi`. The value of a readonly field is one the plugin generates and writes back, which is
+    /// neither a value that already has an answer nor a choice among candidates offered to a user.
+    ReadonlyConflict,
     /// An agent command's `cmd` is not a call — it holds a word the grammar does not admit, or more words
     /// than a call has (`AMB-D-572`).
     BadCmd,
@@ -221,6 +240,7 @@ impl ProblemCode {
         Self::ReplyNeedsCli,
         Self::OptionsNeedMulti,
         Self::NotAnOption,
+        Self::ReadonlyConflict,
         Self::BadCmd,
         Self::BadStepRef,
         Self::RecordRef,
@@ -254,6 +274,7 @@ impl ProblemCode {
             Self::ReplyNeedsCli => "reply_needs_cli",
             Self::OptionsNeedMulti => "options_need_multi",
             Self::NotAnOption => "not_an_option",
+            Self::ReadonlyConflict => "readonly_conflict",
             Self::BadCmd => "bad_cmd",
             Self::BadStepRef => "bad_step_ref",
             Self::RecordRef => "record_ref",
@@ -877,9 +898,10 @@ fn check_os(problems: &mut Vec<Problem>, os: &[Os]) {
     }
 }
 
-/// Check the config schema against the safe floor (`AMB-D-356`, `AMB-D-415`): a field-count cap, a
-/// total-size cap, a key grammar, a label floor, unique keys, and — for a field that declares a kind — the
-/// shape its kind owes. The per-value byte/control floor is a different boundary — it guards a
+/// Check the config schema against the safe floor (`AMB-D-356`, `AMB-D-415`, `AMB-D-656`): a field-count
+/// cap, a total-size cap, a key grammar, a label floor, unique keys, the supporting text a field may
+/// carry, and — for a field that declares a kind or declares itself readonly — the shape that declaration
+/// owes. The per-value byte/control floor is a different boundary — it guards a
 /// *user-typed value* at write time ([`crate::plugin_config::check_value`]) — and is not here; this
 /// validates the *author-declared schema*.
 fn check_config(problems: &mut Vec<Problem>, m: &Manifest) {
@@ -910,16 +932,108 @@ fn check_config(problems: &mut Vec<Problem>, m: &Manifest) {
                 format!("config key '{}' is declared more than once", field.key),
             ));
         }
+        check_config_text(problems, i, field);
         check_config_kind(problems, i, field);
+        check_config_readonly(problems, i, field);
     }
 }
 
-/// How much of the schema's size budget one field spends: every string its author wrote into it.
+/// How much of the schema's size budget one field spends: every string its author wrote into it, the
+/// supporting text `AMB-D-656` added included. A per-field cap alone would leave the schema unbounded —
+/// [`MAX_CONFIG_FIELDS`] fields of [`MAX_HELP_BYTES`] is four times the whole schema's cap — so the two
+/// texts are counted here like every other string, and a form of many fields spends its budget on them.
 fn schema_bytes(f: &ConfigField) -> usize {
     f.key.len()
         + f.label.len()
+        + f.help.as_deref().map_or(0, str::len)
+        + f.placeholder.as_deref().map_or(0, str::len)
         + f.options.iter().map(|o| o.value.len() + o.label.len()).sum::<usize>()
         + f.default.as_deref().map_or(0, str::len)
+}
+
+/// Check the supporting text a field may carry (`AMB-D-656`) — the paragraph under the input, and the
+/// example inside it. Both are optional, and absent is not a mistake: a field that says nothing beyond its
+/// label says nothing, which is what every schema written before these keys says.
+///
+/// Three rules, the same ones every author string is held to:
+///
+/// - **it fits its cap** ([`MAX_HELP_BYTES`], [`MAX_PLACEHOLDER_BYTES`]), in bytes, per language.
+/// - **no control character.** `help` is a body, so a newline is text in it and the rest of the control
+///   range is not; `placeholder` is one line, so a newline is a control character there too. What the rule
+///   keeps out is a terminal escape sequence: `plugin config get` prints these to a terminal, and an
+///   author's string that can move the cursor can write over what amenbo said (`AMB-D-656`).
+/// - **no citing an amenbo record** (`AMB-D-572`) — author prose drawn inside amenbo's own window, where
+///   `AMB-D-411 makes this required` borrows this store's authority exactly as it does in `desc`.
+fn check_config_text(problems: &mut Vec<Problem>, i: usize, field: &ConfigField) {
+    if let Some(help) = &field.help {
+        let at = format!("config[{i}].help");
+        check_text_bytes(problems, &at, help, MAX_HELP_BYTES);
+        if help.chars().any(|c| c.is_control() && c != '\n') {
+            problems.push(Problem::new(
+                &at,
+                ProblemCode::ControlChar,
+                format!("{at} must not contain control characters (a newline aside)"),
+            ));
+        }
+        check_no_record_ref(problems, &at, help);
+    }
+    if let Some(placeholder) = &field.placeholder {
+        let at = format!("config[{i}].placeholder");
+        check_text_bytes(problems, &at, placeholder, MAX_PLACEHOLDER_BYTES);
+        if placeholder.chars().any(char::is_control) {
+            problems.push(Problem::new(
+                &at,
+                ProblemCode::ControlChar,
+                format!("{at} must not contain control characters"),
+            ));
+        }
+        check_no_record_ref(problems, &at, placeholder);
+    }
+}
+
+/// Check one author text against a byte cap. Bytes, not characters, wherever what is bounded is a
+/// document rather than a line of layout ([`check_about`] takes the same measure, for the same reason).
+fn check_text_bytes(problems: &mut Vec<Problem>, at: &str, value: &str, max: usize) {
+    if value.len() > max {
+        problems.push(Problem::new(
+            at,
+            ProblemCode::TooLong,
+            format!("{at} is too long ({} bytes; max {max})", value.len()),
+        ));
+    }
+}
+
+/// Check that a `readonly` declaration is one the field can carry (`AMB-D-656`).
+///
+/// The key says the value is written by the plugin and not by the user, which two other declarations
+/// contradict outright:
+///
+/// - **a `default`** is an answer the field already has before anything generates one. A generated value
+///   that is allowed to arrive pre-answered is not generated.
+/// - **`type: multi`** is a choice offered to a user, and there is no user to offer it to. What a readonly
+///   field shows is the value that was written back, not a set of candidates.
+///
+/// `required` is not among them: a generated value may well be one the plugin cannot run without, and
+/// declaring both is how an author keeps `enable` shut until their `setup` has run.
+fn check_config_readonly(problems: &mut Vec<Problem>, i: usize, field: &ConfigField) {
+    if !field.readonly {
+        return;
+    }
+    let loc = format!("config[{i}].readonly");
+    if field.default.is_some() {
+        problems.push(Problem::new(
+            &loc,
+            ProblemCode::ReadonlyConflict,
+            "a readonly field must not declare a default — its value is written by the plugin",
+        ));
+    }
+    if field.field_type == FieldType::Multi {
+        problems.push(Problem::new(
+            &loc,
+            ProblemCode::ReadonlyConflict,
+            "a readonly field must not be type: multi — there is no user to offer the candidates to",
+        ));
+    }
 }
 
 /// Check one field's kind against what that kind owes (`AMB-D-415`).
@@ -1631,6 +1745,129 @@ mod tests {
         // Each field is within every per-field cap; together they are more schema than the whole may be.
         m.config = vec![full_of_options("a"), full_of_options("b")];
         assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::SchemaTooLarge));
+    }
+
+    // ---- a field's supporting text, and who writes its value (`AMB-D-656`) ----
+
+    /// A field carrying a paragraph and an example, and one whose value the plugin writes back — the
+    /// three keys as an author writes them.
+    #[test]
+    fn the_supporting_text_an_author_wrote_passes() {
+        let mut m = valid();
+        m.config = vec![
+            ConfigField {
+                help: Some("Create it under\nIncoming Webhooks.\n\nOne channel per URL.".into()),
+                placeholder: Some("https://hooks.example.com/T000/B000".into()),
+                secret: true,
+                ..ConfigField::new("webhook_url", "Webhook URL")
+            },
+            ConfigField {
+                help: Some("setup writes this. There is nothing to type.".into()),
+                readonly: true,
+                required: true,
+                ..ConfigField::new("worker_url", "Worker URL")
+            },
+        ];
+        assert!(validate_manifest(&m).is_empty(), "{:?}", validate_manifest(&m));
+    }
+
+    /// Both texts are bounded in bytes, per language — what they are counted into is a document the
+    /// catalog carries in every language at once.
+    #[test]
+    fn supporting_text_over_its_cap_is_refused() {
+        let mut m = valid();
+        m.config = vec![ConfigField {
+            help: Some("あ".repeat(MAX_HELP_BYTES / 3 + 1)),
+            ..ConfigField::new("k", "L")
+        }];
+        let problems = validate_manifest(&m);
+        assert_eq!(codes(&problems), [ProblemCode::TooLong]);
+        assert_eq!(problems[0].location, "config[0].help");
+
+        m.config = vec![ConfigField {
+            placeholder: Some("x".repeat(MAX_PLACEHOLDER_BYTES + 1)),
+            ..ConfigField::new("k", "L")
+        }];
+        let problems = validate_manifest(&m);
+        assert_eq!(codes(&problems), [ProblemCode::TooLong]);
+        assert_eq!(problems[0].location, "config[0].placeholder");
+    }
+
+    /// `plugin config get` prints these to a terminal, so an escape sequence in one could write over what
+    /// amenbo said. A newline is the one control character `help` is a body for, and `placeholder` — one
+    /// line inside an input — is not even that.
+    #[test]
+    fn a_control_character_in_supporting_text_is_refused() {
+        let mut m = valid();
+        m.config = vec![ConfigField {
+            help: Some("Paste the URL.\x1b[2J".into()),
+            ..ConfigField::new("k", "L")
+        }];
+        let problems = validate_manifest(&m);
+        assert_eq!(codes(&problems), [ProblemCode::ControlChar]);
+        assert_eq!(problems[0].location, "config[0].help");
+
+        m.config = vec![ConfigField {
+            placeholder: Some("first\nsecond".into()),
+            ..ConfigField::new("k", "L")
+        }];
+        assert_eq!(codes(&validate_manifest(&m)), [ProblemCode::ControlChar]);
+    }
+
+    /// Author prose drawn inside amenbo's own window, so the rule `desc` and the description text keep
+    /// holds here too (`AMB-D-572`): a manifest is not written from inside this store.
+    #[test]
+    fn supporting_text_citing_an_amenbo_record_is_refused() {
+        let mut m = valid();
+        m.config =
+            vec![ConfigField { help: Some("AMB-D-411 makes this required.".into()), ..ConfigField::new("k", "L") }];
+        assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::RecordRef));
+    }
+
+    /// The per-field cap alone would leave the schema unbounded — many fields, each within its own cap,
+    /// still add up to more document than the whole may be.
+    #[test]
+    fn supporting_text_counts_towards_the_schema_size_cap() {
+        let mut m = valid();
+        m.config = (0..8)
+            .map(|i| ConfigField {
+                help: Some("h".repeat(MAX_HELP_BYTES)),
+                ..ConfigField::new(format!("k{i}"), "L")
+            })
+            .collect();
+        assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::SchemaTooLarge));
+    }
+
+    /// A readonly field's value is generated and written back by the plugin, so a default is an answer it
+    /// has before anything generates one, and a choice is candidates offered to nobody.
+    #[test]
+    fn a_readonly_field_that_contradicts_itself_is_refused() {
+        let mut m = valid();
+        m.config = vec![ConfigField {
+            readonly: true,
+            default: Some("main".into()),
+            ..ConfigField::new("k", "L")
+        }];
+        let problems = validate_manifest(&m);
+        assert_eq!(codes(&problems), [ProblemCode::ReadonlyConflict]);
+        assert_eq!(problems[0].location, "config[0].readonly");
+
+        m.config = vec![ConfigField { readonly: true, ..multi(None) }];
+        assert_eq!(codes(&validate_manifest(&m)), [ProblemCode::ReadonlyConflict]);
+    }
+
+    /// `readonly` and `required` are orthogonal: declaring both is how an author keeps `enable` shut
+    /// until their own `setup` has written the value.
+    #[test]
+    fn a_readonly_field_may_still_be_required() {
+        let mut m = valid();
+        m.config = vec![ConfigField {
+            readonly: true,
+            required: true,
+            secret: true,
+            ..ConfigField::new("auth_token", "Auth token")
+        }];
+        assert!(validate_manifest(&m).is_empty(), "{:?}", validate_manifest(&m));
     }
 
     #[test]

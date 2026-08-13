@@ -2854,7 +2854,8 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     // above). In a bare directory — no pointer (.amenbo), no AMENBO_HOME/AMENBO_PROJECT_DIR — do not quietly
     // create the single store; tell the user to run init. bind is the exception (it is what places a
     // pointer). `agent` still requires a pointer: the AI's entry point is stopped by location, on purpose.
-    // The folderless side door is `--project <name or id>`, which names a project on this same device.
+    // `--project <name or id>` is no side door around this: it names which project a command works in, and
+    // still needs a location that reaches a store (this guard runs whether or not it was passed).
     if requires_pointer(&cli.command) && !store_reachable() {
         // Offer the projects that actually exist on this device as candidates. Do not open the store: listing
         // candidates is no reason to forward-migrate a store the user never asked us to touch.

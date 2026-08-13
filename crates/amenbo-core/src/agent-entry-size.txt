@@ -6,7 +6,7 @@ amenbo           104
 capabilities     7710
 commandDetail    568
 commands         1869
-conventions      5503
+conventions      5502
 cycles           13562
 filterGrammar    5141
 inspect          150
@@ -17,4 +17,4 @@ principles       350
 schemaVersion    3
 updateAvailable  5
 version          7
-TOTAL            44093
+TOTAL            44092

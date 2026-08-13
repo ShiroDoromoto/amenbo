@@ -40,7 +40,7 @@ vi.mock("../core/mutations", () => ({
   },
 }));
 
-import { t } from "../core/i18n";
+import { t, tn } from "../core/i18n";
 import { AgentHookWiringRow, useAgentHookWiring } from "./AgentHookWiringRow";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -137,6 +137,24 @@ describe("the project's standing wiring row", () => {
     expect(container.querySelectorAll(".agenthookrow__request")).toHaveLength(1);
     expect(shownRequest()).toBe("REQUEST-A");
     expect(dirs()).toEqual(["/w/one", "/w/two", "/w/three"]);
+  });
+
+  // "Once" means one thing over one folder and another over four, and the heading is the only place that
+  // difference is written — the list underneath is the same list either way.
+  it("words the folder heading for how many are waiting", async () => {
+    hoisted.waiting = [waiting({ dirs: ["/w/one"] })];
+    await render();
+    const heading = () => container.querySelector(".agenthookrow__folders")?.textContent;
+
+    expect(heading()).toBe(tn("agentHookWiring.folders", 1));
+
+    hoisted.waiting = [waiting({ dirs: ["/w/one", "/w/two", "/w/three"] })];
+    await render(8);
+
+    expect(heading()).toBe(tn("agentHookWiring.folders", 3));
+    // Read in the language that splits at one — Japanese and the rest write a single arm on purpose.
+    expect(tn("agentHookWiring.folders", 3, "en"), "and the two arms are not the same sentence")
+      .not.toBe(tn("agentHookWiring.folders", 1, "en"));
   });
 
   // Three buttons and no fourth: the text, the refusal, and the way off the screen that answers nothing.

@@ -26,6 +26,32 @@ pub fn name() -> &'static str {
     crate::config::Paths::command_name()
 }
 
+/// Whether `candidate` is a name amenbo filed a server under **before** the name said the machine
+/// (`AMB-D-679`): `<command>-<the project's slug>`, where [`name`] is now the command alone.
+///
+/// An entry under one of these keeps working, so nothing about it looks broken — and setting amenbo up
+/// again writes the new name beside it rather than over it, which is the doubling `AMB-D-679` set out
+/// to be rid of. Finding them is therefore a read of its own ([`crate::mcp_probe`]), and clearing one
+/// is a request the reader is handed ([`crate::mcp_request::remove_stale`]).
+///
+/// The test is the old name's shape and nothing more: a slug is lower-case alphanumerics joined with
+/// `-` ([`crate::slug`]), so whatever follows the separator that could have been one is taken for one.
+/// It cannot be narrower. On production the command is `amenbo`, which leaves a dev build's old entry
+/// (`amenbo-dev-shop`) reading exactly like a project actually named "dev shop" — and a rule carved to
+/// exclude the first would take the second off the list of entries its owner is offered a way to clear.
+pub fn is_superseded_name(candidate: &str) -> bool {
+    candidate.strip_prefix(name()).and_then(|rest| rest.strip_prefix('-')).is_some_and(is_slug_shaped)
+}
+
+/// Whether a word could be a project's slug: something rather than nothing, lower-case ASCII
+/// alphanumerics and `-`, and no `-` left at either end ([`crate::slug::base`]).
+fn is_slug_shaped(word: &str) -> bool {
+    !word.is_empty()
+        && !word.starts_with('-')
+        && !word.ends_with('-')
+        && word.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+}
+
 /// The word that binds a server to its folders. It is written into an entry by whatever sets one up and
 /// read back out of one by whatever asks whether a project is already set up ([`crate::mcp_probe`]), so
 /// the two say it once between them rather than once each.
@@ -84,5 +110,25 @@ mod tests {
     #[test]
     fn the_name_says_the_machine_and_not_the_project() {
         assert_eq!(name(), "amenbo");
+    }
+
+    /// The old name is the current one with a project's slug hung off it, and every shape a slug can
+    /// take has to be caught: a plain word, one squeezed out of a longer name, and one that took a
+    /// number to stay unique.
+    #[test]
+    fn a_name_with_a_slug_hung_off_it_is_the_one_that_was_superseded() {
+        for old in ["amenbo-shop", "amenbo-web-site-2026", "amenbo-shop-2", "amenbo-project"] {
+            assert!(is_superseded_name(old), "{old} is an old name");
+        }
+    }
+
+    /// What is not one. The entry in use is the case that matters most — offering to delete it would
+    /// take away the server the reader just set up — and the rest is somebody else's entry, which this
+    /// is not entitled to name at all.
+    #[test]
+    fn neither_the_name_in_use_nor_a_strangers_is_read_as_superseded() {
+        for other in ["amenbo", "amenbo-", "amenboshop", "amenbo-Shop", "amenbo-shop!", "something-else"] {
+            assert!(!is_superseded_name(other), "{other} is not an old name");
+        }
     }
 }

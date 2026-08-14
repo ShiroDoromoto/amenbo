@@ -532,42 +532,13 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
         preds.push(Pred::is_in(T.status, statuses.iter().map(|s| s.as_str())));
     }
     if let Some(due) = &f.due {
-        let today = q.today.to_string();
-        preds.push(match due {
-            DueFilter::Today => Pred::eq(T.due_on, today),
-            DueFilter::Overdue => Pred::is_not_null(T.due_on)
-                .and(Pred::ne(T.due_on, ""))
-                .and(Pred::cmp(T.due_on, "<", today)),
-            DueFilter::Week => Pred::cmp(T.due_on, ">=", today)
-                .and(Pred::cmp(T.due_on, "<=", (q.today + Duration::days(7)).to_string())),
-            DueFilter::None => Pred::is_blank(T.due_on),
-            DueFilter::On(d) => Pred::eq(T.due_on, d.to_string()),
-        });
+        preds.push(due_pred(due, q.today));
     }
     if let Some(start) = &f.start {
-        // The same reading of `start_on` the ready predicate makes (`view::not_started_until`), said in
-        // SQL: declared and still ahead is the waiting queue, declared and arrived is startable, blank is
-        // nothing declared. Dates compare lexicographically (`YYYY-MM-DD`), as everywhere a day column is
-        // compared here.
-        let today = q.today.to_string();
-        let declared = !Pred::is_blank(T.start_on);
-        preds.push(match start {
-            StartFilter::Today => declared.and(Pred::cmp(T.start_on, "<=", today.as_str())),
-            StartFilter::Future => declared.and(Pred::cmp(T.start_on, ">", today.as_str())),
-            StartFilter::None => Pred::is_blank(T.start_on),
-        });
+        preds.push(start_pred(start, q.today));
     }
     if let Some(priorities) = &f.priority {
-        // `priority:` is an allow-set like `status:`, but with one element the column cannot hold:
-        // `none` is the *absence* of a priority, read as blank. So the named values become an `IN (…)`
-        // and `none` its own arm, ORed on only when it was asked for. An empty `IN` matches nothing, so
-        // a set of `none` alone comes out as the blank arm by itself.
-        let named = Pred::is_in(T.priority, priorities.iter().flatten().map(|p| p.as_str()));
-        preds.push(if priorities.contains(&None) {
-            named.or(Pred::is_blank(T.priority))
-        } else {
-            named
-        });
+        preds.push(priority_pred(priorities));
     }
     debug_assert!(f.project_ref.is_none(), "Filter::resolve was not run (`project:` is silently dropped)");
     if let Some(project_id) = f.project_id {
@@ -585,15 +556,7 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
         }
     }
     if let Some(nf) = &f.number {
-        // Conversational-number filter (`number:`/`ref:`). A `D-` typed value names a decision, so it
-        // matches no task; a bare number / `#n` / `T-n` matches the task id (the id **is** the number).
-        // The same reading on the other side is `NumberFilter::matches_decision`, which the decision
-        // predicates restate; on this side the number is only ever read here.
-        preds.push(if nf.require_decision == Some(true) {
-            Pred::never()
-        } else {
-            Pred::eq(T.id, nf.number as i64)
-        });
+        preds.push(number_pred(nf));
     }
     if let Some(assignees) = &f.assignee {
         // An allow-set again: each element names a facet (or its absence) and they OR together, so
@@ -602,13 +565,7 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
         preds.extend(assignees.iter().map(assignee_pred).reduce(Pred::or));
     }
     if let Some(ai) = f.ai {
-        // `ai:true|false` is the AI-delegation dimension (`assignee_kind = ai`), independent of the
-        // assignee one: `false` keeps what is assigned to a human *and* what is assigned to nobody.
-        preds.push(if ai {
-            Pred::eq(T.assignee_kind, ActorKind::Ai.as_str())
-        } else {
-            Pred::is_null(T.assignee_kind).or(Pred::ne(T.assignee_kind, ActorKind::Ai.as_str()))
-        });
+        preds.push(ai_pred(ai));
     }
     if let Some(draft) = f.draft {
         // `draft:` — the fourth premise asked for on its own, the way `start:` asks for the third. It is
@@ -616,72 +573,145 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
         preds.push(Pred::eq(T.draft, draft));
     }
     if let Some(ready) = f.ready {
-        // This is `crate::view::is_ready` restated in SQL, because a filter cannot ask four
-        // booleans of a row it has not read yet. A task is held back by an *open* blocker (a live
-        // dependency edge to a live blocker that has not ended), by an *unsettled premise*
-        // (`unsettled_premise`), by a *start day that has not arrived*, or by a *creation not yet
-        // finished*. The reserve guard (`reserve_blockers`) reads the same derivations, so the filter
-        // and the guard cannot drift apart, and
-        // `a_start_day_still_ahead_holds_the_task_back_on_every_read` holds this restatement to the
-        // predicate on every arm.
-        const L: col::decision_task_link::Cols = col::decision_task_link::of("l");
-        const DC: col::decision::Cols = col::decision::of("dc");
-        const D: col::task_dependency::Cols = col::task_dependency::of("d");
-        const B: col::task::Cols = col::task::of("b");
-
-        let premise = Exists::over(L.table)
-            .join(DC.table, same(DC.id, L.decision_id))
-            .filter(same(L.task_id, T.id))
-            .filter(unsettled_premise(DC))
-            .pred();
-
-        let open_blocker = Exists::over(D.table)
-            .join(B.table, same(B.id, D.blocked_by_id))
-            .filter(same(D.task_id, T.id))
-            .filter(still_open(B.status))
-            .pred();
-
-        // A `start_on` that is set and still ahead of today. Blank means nothing was declared about
-        // when to start, which holds nothing back. The dates compare lexicographically (`YYYY-MM-DD`),
-        // as everywhere else the read model compares a day column.
-        let not_started = (!Pred::is_blank(T.start_on))
-            .and(Pred::cmp(T.start_on, ">", q.today.to_string().as_str()));
-
-        // The fourth premise, read straight off the column — the creation has not been finished.
-        let still_draft = Pred::eq(T.draft, true);
-
-        preds.push(open_blocker.or(premise).or(not_started).or(still_draft).negated_if(ready));
+        preds.push(held_back(q.today).negated_if(ready));
     }
     if let Some(decision) = f.decision {
-        // `decision:` — tasks a decision links to (live link, live decision), as an EXISTS so it seeks
-        // the link index instead of scanning the links per task.
-        const L: col::decision_task_link::Cols = col::decision_task_link::of("l");
-        const DL: col::decision::Cols = col::decision::of("dl");
-
-        preds.push(
-            Exists::over(L.table)
-                .join(DL.table, same(DL.id, L.decision_id))
-                .filter(same(L.task_id, T.id))
-                .filter(Pred::eq(L.decision_id, i64::from(decision)))
-                .pred(),
-        );
+        preds.push(decision_link_pred(decision));
     }
     if let Some(sha) = &f.commit {
-        // `commit:` — tasks recording this SHA (the reverse chain git → task), as an EXISTS so it seeks
-        // the `task_commit_by_sha` index instead of scanning a task's commits per row (O(result)). The
-        // SHA arrives already normalised (the filter parser folds case through the door's `normalize`),
-        // so it matches by the bytes it was stored as.
-        const TC: col::task_commit::Cols = col::task_commit::of("tc");
-
-        preds.push(
-            Exists::over(TC.table)
-                .filter(same(TC.task_id, T.id))
-                .filter(Pred::eq(TC.sha, sha.as_str()))
-                .pred(),
-        );
+        preds.push(commit_pred(sha));
     }
     preds.extend(dimension_preds(&f.dimensions));
     preds
+}
+
+/// `due:` — the day keys, all read off the one `due_on` column. Dates compare lexicographically
+/// (`YYYY-MM-DD`), as everywhere a day column is compared here.
+fn due_pred(due: &DueFilter, today: NaiveDate) -> Pred {
+    let day = today.to_string();
+    match due {
+        DueFilter::Today => Pred::eq(T.due_on, day),
+        DueFilter::Overdue => Pred::is_not_null(T.due_on)
+            .and(Pred::ne(T.due_on, ""))
+            .and(Pred::cmp(T.due_on, "<", day)),
+        DueFilter::Week => Pred::cmp(T.due_on, ">=", day)
+            .and(Pred::cmp(T.due_on, "<=", (today + Duration::days(7)).to_string())),
+        DueFilter::None => Pred::is_blank(T.due_on),
+        DueFilter::On(d) => Pred::eq(T.due_on, d.to_string()),
+    }
+}
+
+/// `start:` — the same reading of `start_on` the ready predicate makes (`view::not_started_until`), said
+/// in SQL: declared and still ahead is the waiting queue, declared and arrived is startable, blank is
+/// nothing declared.
+fn start_pred(start: &StartFilter, today: NaiveDate) -> Pred {
+    let day = today.to_string();
+    let declared = !Pred::is_blank(T.start_on);
+    match start {
+        StartFilter::Today => declared.and(Pred::cmp(T.start_on, "<=", day.as_str())),
+        StartFilter::Future => declared.and(Pred::cmp(T.start_on, ">", day.as_str())),
+        StartFilter::None => Pred::is_blank(T.start_on),
+    }
+}
+
+/// `priority:` is an allow-set like `status:`, but with one element the column cannot hold: `none` is the
+/// *absence* of a priority, read as blank. So the named values become an `IN (…)` and `none` its own arm,
+/// ORed on only when it was asked for. An empty `IN` matches nothing, so a set of `none` alone comes out
+/// as the blank arm by itself.
+fn priority_pred(priorities: &[Option<Priority>]) -> Pred {
+    let named = Pred::is_in(T.priority, priorities.iter().flatten().map(|p| p.as_str()));
+    if priorities.contains(&None) {
+        named.or(Pred::is_blank(T.priority))
+    } else {
+        named
+    }
+}
+
+/// Conversational-number filter (`number:`/`ref:`). A `D-` typed value names a decision, so it matches no
+/// task; a bare number / `#n` / `T-n` matches the task id (the id **is** the number). The same reading on
+/// the other side is [`crate::query::NumberFilter::matches_decision`], which the decision predicates
+/// restate; on this side the number is only ever read here.
+fn number_pred(nf: &crate::query::NumberFilter) -> Pred {
+    if nf.require_decision == Some(true) {
+        Pred::never()
+    } else {
+        Pred::eq(T.id, nf.number as i64)
+    }
+}
+
+/// `ai:true|false` is the AI-delegation dimension (`assignee_kind = ai`), independent of the assignee
+/// one: `false` keeps what is assigned to a human *and* what is assigned to nobody.
+fn ai_pred(ai: bool) -> Pred {
+    if ai {
+        Pred::eq(T.assignee_kind, ActorKind::Ai.as_str())
+    } else {
+        Pred::is_null(T.assignee_kind).or(Pred::ne(T.assignee_kind, ActorKind::Ai.as_str()))
+    }
+}
+
+/// What `ready:` asks, in the held-back direction the caller negates for `ready:yes`.
+///
+/// This is `crate::view::is_ready` restated in SQL, because a filter cannot ask four booleans of a row it
+/// has not read yet. A task is held back by an *open* blocker (a live dependency edge to a live blocker
+/// that has not ended), by an *unsettled premise* ([`unsettled_premise`]), by a *start day that has not
+/// arrived*, or by a *creation not yet finished*. The reserve guard ([`reserve_blockers`]) reads the same
+/// derivations, so the filter and the guard cannot drift apart, and
+/// `a_start_day_still_ahead_holds_the_task_back_on_every_read` holds this restatement to the predicate on
+/// every arm.
+fn held_back(today: NaiveDate) -> Pred {
+    const L: col::decision_task_link::Cols = col::decision_task_link::of("l");
+    const DC: col::decision::Cols = col::decision::of("dc");
+    const D: col::task_dependency::Cols = col::task_dependency::of("d");
+    const B: col::task::Cols = col::task::of("b");
+
+    let premise = Exists::over(L.table)
+        .join(DC.table, same(DC.id, L.decision_id))
+        .filter(same(L.task_id, T.id))
+        .filter(unsettled_premise(DC))
+        .pred();
+
+    let open_blocker = Exists::over(D.table)
+        .join(B.table, same(B.id, D.blocked_by_id))
+        .filter(same(D.task_id, T.id))
+        .filter(still_open(B.status))
+        .pred();
+
+    // A `start_on` that is set and still ahead of today. Blank means nothing was declared about when to
+    // start, which holds nothing back. The dates compare lexicographically (`YYYY-MM-DD`), as everywhere
+    // else the read model compares a day column.
+    let not_started =
+        (!Pred::is_blank(T.start_on)).and(Pred::cmp(T.start_on, ">", today.to_string().as_str()));
+
+    // The fourth premise, read straight off the column — the creation has not been finished.
+    let still_draft = Pred::eq(T.draft, true);
+
+    open_blocker.or(premise).or(not_started).or(still_draft)
+}
+
+/// `decision:` — tasks a decision links to (live link, live decision), as an EXISTS so it seeks the link
+/// index instead of scanning the links per task.
+fn decision_link_pred(decision: u32) -> Pred {
+    const L: col::decision_task_link::Cols = col::decision_task_link::of("l");
+    const DL: col::decision::Cols = col::decision::of("dl");
+
+    Exists::over(L.table)
+        .join(DL.table, same(DL.id, L.decision_id))
+        .filter(same(L.task_id, T.id))
+        .filter(Pred::eq(L.decision_id, i64::from(decision)))
+        .pred()
+}
+
+/// `commit:` — tasks recording this SHA (the reverse chain git → task), as an EXISTS so it seeks the
+/// `task_commit_by_sha` index instead of scanning a task's commits per row (O(result)). The SHA arrives
+/// already normalised (the filter parser folds case through the door's `normalize`), so it matches by the
+/// bytes it was stored as.
+fn commit_pred(sha: &str) -> Pred {
+    const TC: col::task_commit::Cols = col::task_commit::of("tc");
+
+    Exists::over(TC.table)
+        .filter(same(TC.task_id, T.id))
+        .filter(Pred::eq(TC.sha, sha))
+        .pred()
 }
 
 /// The `dim:` / `time_axis:` tokens as predicates, **one per axis**. Which tokens meet in a predicate is
@@ -1955,21 +1985,6 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
     let project_id = q.reach.narrow(q.project_id).map_err(StoreEngineError::OutOfReach)?;
     let started = std::time::Instant::now();
 
-    const TC: col::task_comment::Cols = col::task_comment::of("tc");
-    const DC: col::decision_comment::Cols = col::decision_comment::of("dc");
-    const DIM: col::dimension::Cols = col::dimension::of("dim");
-    const DV: col::dimension_value::Cols = col::dimension_value::of("dv");
-    const TASK: &str = search::DATASET_TASK;
-    const DECISION: &str = search::DATASET_DECISION;
-
-    // The words are looked up **once for the statement**, at its head, and every arm asks membership of
-    // that (`AMB-D-511`). Twelve arms put the same words to the same copy, and the statement is built
-    // twice over — the count and the page — so a lookup written where it is asked is a walk of the copy
-    // per arm, whichever path the term's length takes it down. What each arm means is untouched.
-    let mut head = search::terms_head(terms);
-    let asked: Vec<search::Term<'_>> = (0..terms.len()).map(search::Term::Named).collect();
-    let asked = asked.as_slice();
-
     // Which sides still have an arm standing. A side the caller narrowed away is one whose every arm is
     // gated off, so its sets are made for nobody — and a `MATERIALIZED` set is built when the statement
     // runs, not when a row needs it.
@@ -1984,36 +1999,86 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
     // Which is also the shape a person searches in — the first thing typed is one ordinary word.
     let record_level = terms.len() > 1;
 
-    // With several words the set is still needed, and then it goes to the head for the same reason the
-    // lookups do: "this task carries the word somewhere" is a union over six ways in — its own copy, its
-    // comments, its labels, the axis behind them, what is attached to it and to those comments — and
-    // written into the arms it is built by each of the twelve, twice over. Named here, it is built once.
+    let head = search_head(terms, record_level, wants_task, wants_decision);
+    let asked: Vec<search::Term<'_>> = (0..terms.len()).map(search::Term::Named).collect();
+    let (task_side, decision_side) =
+        search_sides(q, project_id, record_level, wants_task, wants_decision);
+    let arms = HitArms { q, asked: asked.as_slice(), task_side, decision_side };
+    let (slots, mut sql) = hit_union(&arms);
+
+    let total = count_hits(conn, &sql, head.as_ref())?;
+
+    sql.push(hit_order(q.sort, &slots))
+        .limit(q.limit.map(|n| n as i64).unwrap_or(-1))
+        .offset(q.offset as i64);
+    if let Some(head) = &head {
+        sql.with_head(head);
+    }
+    let hits = read_hits(conn, &sql, &slots)?;
+
+    crate::perf::record_query("engine.search_hits", total, hits.len(), started.elapsed());
+    Ok(SearchPage { total_matched: total, hits })
+}
+
+/// The words are looked up **once for the statement**, at its head, and every arm asks membership of that
+/// (`AMB-D-511`). Twelve arms put the same words to the same copy, and the statement is built twice over
+/// — the count and the page — so a lookup written where it is asked is a walk of the copy per arm,
+/// whichever path the term's length takes it down. What each arm means is untouched.
+///
+/// With several words the record-level set is still needed, and then it goes to the head for the same
+/// reason the lookups do: "this task carries the word somewhere" is a union over six ways in — its own
+/// copy, its comments, its labels, the axis behind them, what is attached to it and to those comments —
+/// and written into the arms it is built by each of the twelve, twice over. Named here, it is built once.
+/// Only for a side that still has an arm standing, which is the gate [`search_sides`] asks it under too.
+fn search_head(
+    terms: &[String],
+    record_level: bool,
+    wants_task: bool,
+    wants_decision: bool,
+) -> Option<Sql> {
+    let mut head = search::terms_head(terms);
     if let Some(head) = &mut head {
         if record_level {
             for i in 0..terms.len() {
                 if wants_task {
-                    push_words_cte(head, TASK, i, task_word_sets(search::Term::Named(i)));
+                    push_words_cte(head, search::DATASET_TASK, i, task_word_sets(search::Term::Named(i)));
                 }
                 if wants_decision {
-                    push_words_cte(head, DECISION, i, decision_word_sets(search::Term::Named(i)));
+                    push_words_cte(
+                        head,
+                        search::DATASET_DECISION,
+                        i,
+                        decision_word_sets(search::Term::Named(i)),
+                    );
                 }
             }
         }
     }
+    head
+}
+
+/// Everything asked of each side, folded once and cloned into every arm that owns that side: the
+/// record-level AND, the reach, and the structural narrowing, which lands on the side whose grammar it
+/// was written in and is the very predicate that side's own listing narrows by ([`filter_preds`] /
+/// [`decision_filter_preds`]), so the two reads cannot come to read one expression differently.
+fn search_sides(
+    q: &SearchQuery,
+    project_id: Option<i64>,
+    record_level: bool,
+    wants_task: bool,
+    wants_decision: bool,
+) -> (Option<Pred>, Option<Pred>) {
     // Named only where it was built. A side the caller narrowed away has no set at the head, so nothing
     // may name one: the arms of that side are all gated off and never answer, but the reference stands in
     // the statement all the same, and a `WITH` name that was never pushed is a table SQLite cannot find —
     // the whole search fails to prepare rather than the dead side going quiet. So the gate that decided
     // whether to build the set is the gate that decides whether to ask it.
     let side_words = |wanted: bool, id: String, owner_kind: &'static str| {
-        (record_level && wanted)
-            .then(|| Pred::all((0..terms.len()).map(|i| words_named(id.clone(), owner_kind, i))))
+        (record_level && wanted).then(|| {
+            Pred::all((0..q.terms.len()).map(|i| words_named(id.clone(), owner_kind, i)))
+        })
     };
 
-    // Everything asked of one side, folded once and cloned into every arm that owns that side: the
-    // record-level AND, the reach, and the structural narrowing, which lands on the side whose grammar
-    // it was written in and is the very predicate that side's own listing narrows by (`filter_preds` /
-    // `decision_filter_preds`), so the two reads cannot come to read one expression differently.
     let task_filter = match q.filter {
         Some(crate::query::SearchNarrowing::Task(f)) => Some(filter_preds(&TaskQuery {
             reach: q.reach,
@@ -2028,36 +2093,78 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
     };
     let task_side = Pred::all(
         [
-            side_words(wants_task, T.id.to_sql(), TASK).flatten(),
+            side_words(wants_task, T.id.to_sql(), search::DATASET_TASK).flatten(),
             project_id.map(|pid| Pred::eq(T.project_id, pid)),
             task_filter.and_then(Pred::all),
         ]
         .into_iter()
         .flatten(),
     );
+
     let decision_filter = match q.filter {
         Some(crate::query::SearchNarrowing::Decision(f)) => Some(decision_filter_preds(f)),
         _ => None,
     };
     let decision_side = Pred::all(
         [
-            side_words(wants_decision, DEC.id.to_sql(), DECISION).flatten(),
+            side_words(wants_decision, DEC.id.to_sql(), search::DATASET_DECISION).flatten(),
             project_id.map(|pid| Pred::eq(DEC.project_id, pid)),
             decision_filter.and_then(Pred::all),
         ]
         .into_iter()
         .flatten(),
     );
-    let gate = |face: HitFace, owner_kind: &str| {
-        (!kept_by_axes(q.kind, q.face, owner_kind, face)).then(Pred::never)
-    };
-    let (slots, mut sql) = Union::all(|sel| {
+
+    (task_side, decision_side)
+}
+
+/// What every arm of the hit query is handed: the words as a face is asked about them, and the predicate
+/// the record behind the arm has to answer, one per side. Each arm names its own face and owner kind, and
+/// everything else it needs is here.
+struct HitArms<'a> {
+    q: &'a SearchQuery<'a>,
+    asked: &'a [search::Term<'a>],
+    task_side: Option<Pred>,
+    decision_side: Option<Pred>,
+}
+
+impl HitArms<'_> {
+    /// One arm's `WHERE`: this face carries a term, the record it belongs to answers everything asked of
+    /// **its own** side — which is the side its owner kind names, every arm being one record's — and the
+    /// arm is one the two axes left standing ([`kept_by_axes`]).
+    fn r#where(&self, face_carries: Pred, face: HitFace, owner_kind: &str) -> Option<Pred> {
+        let side = match owner_kind {
+            search::DATASET_DECISION => &self.decision_side,
+            _ => &self.task_side,
+        };
+        let gate = (!kept_by_axes(self.q.kind, self.q.face, owner_kind, face)).then(Pred::never);
+        hit_where(face_carries, side, &gate)
+    }
+}
+
+/// The twelve arms, in the order their faces are projected. The first names the row shape the rest are
+/// held to ([`HitSlots`]), and the groups are the families of face: a record's own copy, a comment on it,
+/// a label it was placed on, and what is attached — to the record, or to one of its comments.
+fn hit_union(a: &HitArms) -> (HitSlots, Sql) {
+    let union = own_face_arms(a);
+    let union = comment_arms(a, union);
+    let union = label_arms(a, union);
+    let union = attachment_arms(a, union);
+    comment_attachment_arms(a, union).into_parts()
+}
+
+/// A record's own copy: a task's title and notes, a decision's title and body.
+fn own_face_arms(a: &HitArms) -> Union<HitSlots> {
+    const TASK: &str = search::DATASET_TASK;
+    const DECISION: &str = search::DATASET_DECISION;
+
+    Union::all(|sel| {
         // A task's title.
         let slots =
             hit_slots(sel, HitFace::Title, TASK, T.id, T.title, None, T.updated_at, T.title.to_sql());
         let mut tail = Sql::from_table(T.table);
         tail.push_where(
-            hit_where(face_hit(TASK, T.id, &["title"], asked), &task_side, &gate(HitFace::Title, TASK),).as_ref(),
+            a.r#where(face_hit(TASK, T.id, &["title"], a.asked), HitFace::Title, TASK).as_ref(),
         );
         (slots, tail)
     })
@@ -2067,7 +2174,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
             hit_slots(sel, HitFace::Body, TASK, T.id, T.title, None, T.updated_at, T.notes.to_sql());
         let mut tail = Sql::from_table(T.table);
         tail.push_where(
-            hit_where(face_hit(TASK, T.id, &["notes"], asked), &task_side, &gate(HitFace::Body, TASK),).as_ref(),
+            a.r#where(face_hit(TASK, T.id, &["notes"], a.asked), HitFace::Body, TASK).as_ref(),
         );
         (slots, tail)
     })
@@ -2085,7 +2192,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
         );
         let mut tail = Sql::from_table(DEC.table);
         tail.push_where(
-            hit_where(face_hit(DECISION, DEC.id, &["title"], asked), &decision_side, &gate(HitFace::Title, DECISION),)
+            a.r#where(face_hit(DECISION, DEC.id, &["title"], a.asked), HitFace::Title, DECISION)
                 .as_ref(),
         );
         (slots, tail)
@@ -2104,213 +2211,260 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
         );
         let mut tail = Sql::from_table(DEC.table);
         tail.push_where(
-            hit_where(face_hit(DECISION, DEC.id, &["body"], asked), &decision_side, &gate(HitFace::Body, DECISION),)
+            a.r#where(face_hit(DECISION, DEC.id, &["body"], a.asked), HitFace::Body, DECISION)
                 .as_ref(),
         );
         (slots, tail)
     })
-    .arm(|sel| {
-        // A comment on a task — dated by when it was posted.
-        let slots = hit_slots(
-            sel,
-            HitFace::Comment,
-            TASK,
-            T.id,
-            T.title,
-            Some(TC.id),
-            TC.created_at,
-            TC.text.to_sql(),
-        );
-        let mut tail = Sql::from_table(TC.table);
-        tail.join(T.table, same(T.id, TC.task_id)).push_where(
-            hit_where(face_hit(search::DATASET_TASK_COMMENT, TC.id, &["text"], asked), &task_side, &gate(HitFace::Comment, TASK),)
-                .as_ref(),
-        );
-        (slots, tail)
-    })
-    .arm(|sel| {
-        // A comment on a decision.
-        let slots = hit_slots(
-            sel,
-            HitFace::Comment,
-            DECISION,
-            DEC.id,
-            DEC.title,
-            Some(DC.id),
-            DC.created_at,
-            DC.text.to_sql(),
-        );
-        let mut tail = Sql::from_table(DC.table);
-        tail.join(DEC.table, same(DEC.id, DC.decision_id)).push_where(
-            hit_where(
-                face_hit(search::DATASET_DECISION_COMMENT, DC.id, &["text"], asked),
-                &decision_side,
-                &gate(HitFace::Comment, DECISION),
-            )
-            .as_ref(),
-        );
-        (slots, tail)
-    })
-    .arm(|sel| {
-        // A label the task was placed on — the value's name.
-        let slots =
-            hit_slots(sel, HitFace::Label, TASK, T.id, T.title, None, DV.updated_at, DV.name.to_sql());
-        let mut tail = Sql::from_table(TDV.table);
-        tail.join(T.table, same(T.id, TDV.task_id))
-            .join(DV.table, same(DV.id, TDV.value_id))
-            .push_where(
-                hit_where(
-                    face_hit(search::DATASET_DIMENSION_VALUE, DV.id, &["name"], asked),
-                    &task_side,
-                    &gate(HitFace::Label, TASK),
-                )
-                .as_ref(),
-            );
-        (slots, tail)
-    })
-    .arm(|sel| {
-        // The axis that label is a value of, reached through the same placement.
-        let slots =
-            hit_slots(sel, HitFace::Label, TASK, T.id, T.title, None, DIM.updated_at, DIM.name.to_sql());
-        let mut tail = Sql::from_table(TDV.table);
-        tail.join(T.table, same(T.id, TDV.task_id))
-            .join(DIM.table, same(DIM.id, TDV.dimension_id))
-            .push_where(
-                hit_where(
-                    face_hit(search::DATASET_DIMENSION, DIM.id, &["name"], asked),
-                    &task_side,
-                    &gate(HitFace::Label, TASK),
-                )
-                .as_ref(),
-            );
-        (slots, tail)
-    })
-    .arm(|sel| {
-        // Something attached to a task.
-        let slots = hit_slots(
-            sel,
-            HitFace::Attachment,
-            TASK,
-            T.id,
-            T.title,
-            None,
-            A.updated_at,
-            attachment_name(A),
-        );
-        let mut tail = Sql::from_table(A.table);
-        tail.join(T.table, hangs_off(TASK, T.id)).push_where(
-            hit_where(
-                face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], asked),
-                &task_side,
-                &gate(HitFace::Attachment, TASK),
-            )
-            .as_ref(),
-        );
-        (slots, tail)
-    })
-    .arm(|sel| {
-        // Something attached to a decision.
-        let slots = hit_slots(
-            sel,
-            HitFace::Attachment,
-            DECISION,
-            DEC.id,
-            DEC.title,
-            None,
-            A.updated_at,
-            attachment_name(A),
-        );
-        let mut tail = Sql::from_table(A.table);
-        tail.join(DEC.table, hangs_off(DECISION, DEC.id)).push_where(
-            hit_where(
-                face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], asked),
-                &decision_side,
-                &gate(HitFace::Attachment, DECISION),
-            )
-            .as_ref(),
-        );
-        (slots, tail)
-    })
-    .arm(|sel| {
-        // Something pinned to a comment on a task: the task's, by the same reading that puts the
-        // comment's own body here.
-        let slots = hit_slots(
-            sel,
-            HitFace::Attachment,
-            TASK,
-            T.id,
-            T.title,
-            Some(TC.id),
-            A.updated_at,
-            attachment_name(A),
-        );
-        let mut tail = Sql::from_table(A.table);
-        tail.join(TC.table, hangs_off(search::DATASET_TASK_COMMENT, TC.id))
-            .join(T.table, same(T.id, TC.task_id))
-            .push_where(
-                hit_where(
-                    face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], asked),
-                    &task_side,
-                    &gate(HitFace::Attachment, TASK),
-                )
-                .as_ref(),
-            );
-        (slots, tail)
-    })
-    .arm(|sel| {
-        // Something pinned to a comment on a decision.
-        let slots = hit_slots(
-            sel,
-            HitFace::Attachment,
-            DECISION,
-            DEC.id,
-            DEC.title,
-            Some(DC.id),
-            A.updated_at,
-            attachment_name(A),
-        );
-        let mut tail = Sql::from_table(A.table);
-        tail.join(DC.table, hangs_off(search::DATASET_DECISION_COMMENT, DC.id))
-            .join(DEC.table, same(DEC.id, DC.decision_id))
-            .push_where(
-                hit_where(
-                    face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], asked),
-                    &decision_side,
-                    &gate(HitFace::Attachment, DECISION),
-                )
-                .as_ref(),
-            );
-        (slots, tail)
-    })
-    .into_parts();
+}
 
-    // The total is counted over the arms as they stand, before the page is cut from them. The head goes
-    // on each statement rather than inside the arms: the lookups are the whole statement's, and the count
-    // reads the arms through a derived table, which the head reaches into just the same.
+/// A comment on either side — dated by when it was posted, and carried by the record it hangs off.
+fn comment_arms(a: &HitArms, union: Union<HitSlots>) -> Union<HitSlots> {
+    const TC: col::task_comment::Cols = col::task_comment::of("tc");
+    const DC: col::decision_comment::Cols = col::decision_comment::of("dc");
+    const TASK: &str = search::DATASET_TASK;
+    const DECISION: &str = search::DATASET_DECISION;
+
+    union
+        .arm(|sel| {
+            // A comment on a task.
+            let slots = hit_slots(
+                sel,
+                HitFace::Comment,
+                TASK,
+                T.id,
+                T.title,
+                Some(TC.id),
+                TC.created_at,
+                TC.text.to_sql(),
+            );
+            let mut tail = Sql::from_table(TC.table);
+            tail.join(T.table, same(T.id, TC.task_id)).push_where(
+                a.r#where(
+                    face_hit(search::DATASET_TASK_COMMENT, TC.id, &["text"], a.asked),
+                    HitFace::Comment,
+                    TASK,
+                )
+                .as_ref(),
+            );
+            (slots, tail)
+        })
+        .arm(|sel| {
+            // A comment on a decision.
+            let slots = hit_slots(
+                sel,
+                HitFace::Comment,
+                DECISION,
+                DEC.id,
+                DEC.title,
+                Some(DC.id),
+                DC.created_at,
+                DC.text.to_sql(),
+            );
+            let mut tail = Sql::from_table(DC.table);
+            tail.join(DEC.table, same(DEC.id, DC.decision_id)).push_where(
+                a.r#where(
+                    face_hit(search::DATASET_DECISION_COMMENT, DC.id, &["text"], a.asked),
+                    HitFace::Comment,
+                    DECISION,
+                )
+                .as_ref(),
+            );
+            (slots, tail)
+        })
+}
+
+/// A label the task was placed on, and the axis that label is a value of — both reached through the same
+/// placement, and both the task's (a decision carries no classification).
+fn label_arms(a: &HitArms, union: Union<HitSlots>) -> Union<HitSlots> {
+    const DIM: col::dimension::Cols = col::dimension::of("dim");
+    const DV: col::dimension_value::Cols = col::dimension_value::of("dv");
+    const TASK: &str = search::DATASET_TASK;
+
+    union
+        .arm(|sel| {
+            // The value's name.
+            let slots =
+                hit_slots(sel, HitFace::Label, TASK, T.id, T.title, None, DV.updated_at, DV.name.to_sql());
+            let mut tail = Sql::from_table(TDV.table);
+            tail.join(T.table, same(T.id, TDV.task_id))
+                .join(DV.table, same(DV.id, TDV.value_id))
+                .push_where(
+                    a.r#where(
+                        face_hit(search::DATASET_DIMENSION_VALUE, DV.id, &["name"], a.asked),
+                        HitFace::Label,
+                        TASK,
+                    )
+                    .as_ref(),
+                );
+            (slots, tail)
+        })
+        .arm(|sel| {
+            // The axis behind it.
+            let slots =
+                hit_slots(sel, HitFace::Label, TASK, T.id, T.title, None, DIM.updated_at, DIM.name.to_sql());
+            let mut tail = Sql::from_table(TDV.table);
+            tail.join(T.table, same(T.id, TDV.task_id))
+                .join(DIM.table, same(DIM.id, TDV.dimension_id))
+                .push_where(
+                    a.r#where(
+                        face_hit(search::DATASET_DIMENSION, DIM.id, &["name"], a.asked),
+                        HitFace::Label,
+                        TASK,
+                    )
+                    .as_ref(),
+                );
+            (slots, tail)
+        })
+}
+
+/// Something attached to a record — its name, which is a filename or a url ([`attachment_name`]).
+fn attachment_arms(a: &HitArms, union: Union<HitSlots>) -> Union<HitSlots> {
+    const TASK: &str = search::DATASET_TASK;
+    const DECISION: &str = search::DATASET_DECISION;
+
+    union
+        .arm(|sel| {
+            // Something attached to a task.
+            let slots = hit_slots(
+                sel,
+                HitFace::Attachment,
+                TASK,
+                T.id,
+                T.title,
+                None,
+                A.updated_at,
+                attachment_name(A),
+            );
+            let mut tail = Sql::from_table(A.table);
+            tail.join(T.table, hangs_off(TASK, T.id)).push_where(
+                a.r#where(
+                    face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], a.asked),
+                    HitFace::Attachment,
+                    TASK,
+                )
+                .as_ref(),
+            );
+            (slots, tail)
+        })
+        .arm(|sel| {
+            // Something attached to a decision.
+            let slots = hit_slots(
+                sel,
+                HitFace::Attachment,
+                DECISION,
+                DEC.id,
+                DEC.title,
+                None,
+                A.updated_at,
+                attachment_name(A),
+            );
+            let mut tail = Sql::from_table(A.table);
+            tail.join(DEC.table, hangs_off(DECISION, DEC.id)).push_where(
+                a.r#where(
+                    face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], a.asked),
+                    HitFace::Attachment,
+                    DECISION,
+                )
+                .as_ref(),
+            );
+            (slots, tail)
+        })
+}
+
+/// Something pinned to a comment: the record's, by the same reading that puts the comment's own body
+/// here — so the hit points at the record, and names the comment it sits under.
+fn comment_attachment_arms(a: &HitArms, union: Union<HitSlots>) -> Union<HitSlots> {
+    const TC: col::task_comment::Cols = col::task_comment::of("tc");
+    const DC: col::decision_comment::Cols = col::decision_comment::of("dc");
+    const TASK: &str = search::DATASET_TASK;
+    const DECISION: &str = search::DATASET_DECISION;
+
+    union
+        .arm(|sel| {
+            // Pinned to a comment on a task.
+            let slots = hit_slots(
+                sel,
+                HitFace::Attachment,
+                TASK,
+                T.id,
+                T.title,
+                Some(TC.id),
+                A.updated_at,
+                attachment_name(A),
+            );
+            let mut tail = Sql::from_table(A.table);
+            tail.join(TC.table, hangs_off(search::DATASET_TASK_COMMENT, TC.id))
+                .join(T.table, same(T.id, TC.task_id))
+                .push_where(
+                    a.r#where(
+                        face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], a.asked),
+                        HitFace::Attachment,
+                        TASK,
+                    )
+                    .as_ref(),
+                );
+            (slots, tail)
+        })
+        .arm(|sel| {
+            // Pinned to a comment on a decision.
+            let slots = hit_slots(
+                sel,
+                HitFace::Attachment,
+                DECISION,
+                DEC.id,
+                DEC.title,
+                Some(DC.id),
+                A.updated_at,
+                attachment_name(A),
+            );
+            let mut tail = Sql::from_table(A.table);
+            tail.join(DC.table, hangs_off(search::DATASET_DECISION_COMMENT, DC.id))
+                .join(DEC.table, same(DEC.id, DC.decision_id))
+                .push_where(
+                    a.r#where(
+                        face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], a.asked),
+                        HitFace::Attachment,
+                        DECISION,
+                    )
+                    .as_ref(),
+                );
+            (slots, tail)
+        })
+}
+
+/// The total, counted over the arms as they stand, before the page is cut from them. The head goes on
+/// each statement rather than inside the arms: the lookups are the whole statement's, and the count reads
+/// the arms through a derived table, which the head reaches into just the same.
+fn count_hits(conn: &Connection, sql: &Sql, head: Option<&Sql>) -> Result<usize> {
     let mut counted = Select::new();
     let matched = counted.count_all();
-    let mut count = Sql::from_sub(&counted, &sql, "hit");
-    if let Some(head) = &head {
+    let mut count = Sql::from_sub(&counted, sql, "hit");
+    if let Some(head) = head {
         count.with_head(head);
     }
     let total = conn
         .query_row(count.text(), rusqlite::params_from_iter(count.params()), |r| matched.get(r))
-        .map_err(StoreEngineError::from)? as usize;
+        .map_err(StoreEngineError::from)?;
+    Ok(total as usize)
+}
 
-    let (tier, kind, owner_id, owner_title, comment_id, at, text) = slots;
+/// Newest first within whatever leads: the current context is on the new side of a store that only
+/// accumulates. The id breaks the remaining ties so a page boundary never wobbles between two reads. The
+/// compound query names its order by position, which is the projection's to say ([`Slot::ordinal`]).
+fn hit_order(sort: crate::query::SearchSort, slots: &HitSlots) -> String {
+    let (tier, _, owner_id, _, _, at, _) = slots;
     let (tier_n, at_n, id_n) = (tier.ordinal(), at.ordinal(), owner_id.ordinal());
-    // Newest first within whatever leads: the current context is on the new side of a store that only
-    // accumulates. The id breaks the remaining ties so a page boundary never wobbles between two reads.
-    let order = match q.sort {
+    match sort {
         crate::query::SearchSort::Face => format!(" ORDER BY {tier_n}, {at_n} DESC, {id_n} DESC"),
         crate::query::SearchSort::Newest => format!(" ORDER BY {at_n} DESC, {tier_n}, {id_n} DESC"),
         crate::query::SearchSort::Oldest => format!(" ORDER BY {at_n}, {tier_n}, {id_n}"),
-    };
-    sql.push(order).limit(q.limit.map(|n| n as i64).unwrap_or(-1)).offset(q.offset as i64);
-    if let Some(head) = &head {
-        sql.with_head(head);
     }
+}
 
+/// The page itself, read back through the slots the arms were held to.
+fn read_hits(conn: &Connection, sql: &Sql, slots: &HitSlots) -> Result<Vec<SearchHitRow>> {
+    let (tier, kind, owner_id, owner_title, comment_id, at, text) = slots;
     let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
     let hits = stmt
         .query_map(rusqlite::params_from_iter(sql.params()), |r| {
@@ -2328,9 +2482,7 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
         .map_err(StoreEngineError::from)?
         .collect::<rusqlite::Result<Vec<SearchHitRow>>>()
         .map_err(StoreEngineError::from)?;
-
-    crate::perf::record_query("engine.search_hits", total, hits.len(), started.elapsed());
-    Ok(SearchPage { total_matched: total, hits })
+    Ok(hits)
 }
 
 /// Where the records a page of hits points at stand: a task's status, priority and classification, and a
@@ -3637,166 +3789,13 @@ pub struct ProjectRow {
 /// closed `reach` sees one project, its own; everything downstream (counts, dimensions) is keyed off the
 /// rows this first query returns, so narrowing here narrows the whole overview.
 pub fn project_overview(conn: &Connection, reach: crate::reach::Reach) -> Result<Vec<ProjectRow>> {
-    const P: col::project::Cols = col::project::ALL;
-    const D: col::dimension::Cols = col::dimension::of("d");
-    const V: col::dimension_value::Cols = col::dimension_value::of("v");
-    const TA: col::task::Cols = col::task::ALL;
-    // The reach narrows each query through the column that query reaches the project by — the scope and
-    // its value travel together, rather than as a fragment each caller had to count `?1` against. An open
-    // reach adds no predicate at all.
-    fn scoped<N: Nullability>(reach: Option<i64>, c: Col<Int, N>) -> Option<Pred> {
-        reach.map(|pid| Pred::eq(c, pid))
-    }
     let reach = reach.project();
 
-    // Projects (non-archived) in order_key order.
-    let mut projects: Vec<ProjectRow> = {
-        let mut sel = Select::new();
-        let (id, name, color, default_view) =
-            (sel.col(P.id), sel.col(P.name), sel.col(P.color), sel.col(P.default_view));
-        let pred = Pred::all([not_archived(P)].into_iter().chain(scoped(reach, P.id)));
-        let mut sql = Sql::from(&sel, P.table);
-        sql.push_where(pred.as_ref())
-            .order_by([Sort::by(P.order_key), Sort::by(P.id)]);
-        let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
-        let rows = stmt
-            .query_map(rusqlite::params_from_iter(sql.params()), |r| {
-                Ok(ProjectRow {
-                    id: id.get(r)?,
-                    name: name.get(r)?,
-                    color: color.get(r)?,
-                    default_view: default_view.get(r)?,
-                    open_count: 0,
-                    proposed_decision_count: 0,
-                    dimensions: Vec::new(),
-                })
-            })
-            .map_err(StoreEngineError::from)?
-            .collect::<rusqlite::Result<Vec<ProjectRow>>>()
-            .map_err(StoreEngineError::from)?;
-        rows
-    };
-
-    // Dimensions of those projects with their live values. Two grouped queries (dimensions, then
-    // values) keyed by project/dimension; order_key order preserved on both.
-    let mut dimensions_by_project: HashMap<i64, Vec<DimensionRow>> = HashMap::new();
-    {
-        let mut sel = Select::new();
-        let (project_id, id, name) = (sel.col(D.project_id), sel.col(D.id), sel.col(D.name));
-        let (notes, role, ordered) = (sel.col(D.notes), sel.col(D.role), sel.col(D.ordered));
-        let show_on_card = sel.col(D.show_on_card);
-        // The project is joined to keep a dimension whose project is gone out of the overview, not for a
-        // column of its own — so it is named here and nowhere else.
-        let mut sql = Sql::from(&sel, D.table);
-        sql.join(P.table, same(P.id, D.project_id))
-            .push_where(scoped(reach, D.project_id).as_ref())
-            .order_by([Sort::by(D.order_key), Sort::by(D.id)]);
-        let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
-        let rows = stmt
-            .query_map(rusqlite::params_from_iter(sql.params()), |r| {
-                Ok((
-                    project_id.get(r)?,
-                    DimensionRow {
-                        id: id.get(r)?,
-                        name: name.get(r)?,
-                        notes: notes.get(r)?,
-                        role: role.get(r)?,
-                        ordered: ordered.get(r)?,
-                        show_on_card: show_on_card.get(r)?,
-                        values: Vec::new(),
-                    },
-                ))
-            })
-            .map_err(StoreEngineError::from)?;
-        for row in rows {
-            let (pid, dim) = row.map_err(StoreEngineError::from)?;
-            dimensions_by_project.entry(pid).or_default().push(dim);
-        }
-    }
-    let mut values_by_dimension: HashMap<i64, Vec<DimensionValueRow>> = HashMap::new();
-    {
-        let mut sel = Select::new();
-        let (dimension_id, id, name) = (sel.col(V.dimension_id), sel.col(V.id), sel.col(V.name));
-        let (start_on, end_on) = (sel.col(V.start_on), sel.col(V.end_on));
-        let mut sql = Sql::from(&sel, V.table);
-        sql.join(D.table, same(D.id, V.dimension_id))
-            .push_where(scoped(reach, D.project_id).as_ref())
-            .order_by([Sort::by(V.order_key), Sort::by(V.id)]);
-        let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
-        let rows = stmt
-            .query_map(rusqlite::params_from_iter(sql.params()), |r| {
-                Ok((
-                    dimension_id.get(r)?,
-                    DimensionValueRow {
-                        id: id.get(r)?,
-                        name: name.get(r)?,
-                        start_on: parse_card_date(start_on.get(r)?)?,
-                        end_on: parse_card_date(end_on.get(r)?)?,
-                    },
-                ))
-            })
-            .map_err(StoreEngineError::from)?;
-        for row in rows {
-            let (did, val) = row.map_err(StoreEngineError::from)?;
-            values_by_dimension.entry(did).or_default().push(val);
-        }
-    }
-
-    // Open (not-yet-done) task count per project, in one grouped pass over live tasks. Placement is
-    // task-held (`task.project_id`); "open" = status other than `done`, matching the sidebar
-    // smart-view badges.
-    let mut open_count_by_project: HashMap<i64, usize> = HashMap::new();
-    {
-        let mut sel = Select::new();
-        // `project_id` is nullable in the registry, and the `WHERE` below is what makes it present here.
-        let project_id = sel.col(TA.project_id.required());
-        let count = sel.count_all();
-        let pred = Pred::all(
-            [still_open(TA.status), Pred::is_not_null(TA.project_id)]
-                .into_iter()
-                .chain(scoped(reach, TA.project_id)),
-        );
-        let mut sql = Sql::from(&sel, TA.table);
-        sql.push_where(pred.as_ref()).group_by([TA.project_id.to_sql()]);
-        let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
-        let rows = stmt
-            .query_map(rusqlite::params_from_iter(sql.params()), |r| {
-                Ok((project_id.get(r)?, count.get(r)? as usize))
-            })
-            .map_err(StoreEngineError::from)?;
-        for row in rows {
-            let (pid, count) = row.map_err(StoreEngineError::from)?;
-            open_count_by_project.insert(pid, count);
-        }
-    }
-
-    // Proposed (under-discussion) decision count per project, in one grouped pass. "Proposed" is the
-    // stored status; a superseded proposal is excluded because currency is derived from the edges, not the
-    // status — accepted/rejected fall out by the status filter alone.
-    let mut proposed_count_by_project: HashMap<i64, usize> = HashMap::new();
-    {
-        const DC: col::decision::Cols = col::decision::ALL;
-        let mut sel = Select::new();
-        let project_id = sel.col(DC.project_id);
-        let count = sel.count_all();
-        let pred = Pred::all(
-            [Pred::eq(DC.status, crate::model::DecisionStatus::Proposed.as_str()), !superseded(DC)]
-                .into_iter()
-                .chain(scoped(reach, DC.project_id)),
-        );
-        let mut sql = Sql::from(&sel, DC.table);
-        sql.push_where(pred.as_ref()).group_by([DC.project_id.to_sql()]);
-        let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
-        let rows = stmt
-            .query_map(rusqlite::params_from_iter(sql.params()), |r| {
-                Ok((project_id.get(r)?, count.get(r)? as usize))
-            })
-            .map_err(StoreEngineError::from)?;
-        for row in rows {
-            let (pid, count) = row.map_err(StoreEngineError::from)?;
-            proposed_count_by_project.insert(pid, count);
-        }
-    }
+    let mut projects = overview_projects(conn, reach)?;
+    let mut dimensions_by_project = overview_dimensions(conn, reach)?;
+    let mut values_by_dimension = overview_dimension_values(conn, reach)?;
+    let mut open_count_by_project = overview_open_counts(conn, reach)?;
+    let mut proposed_count_by_project = overview_proposed_counts(conn, reach)?;
 
     for proj in &mut projects {
         let mut dimensions = dimensions_by_project.remove(&proj.id).unwrap_or_default();
@@ -3809,6 +3808,185 @@ pub fn project_overview(conn: &Connection, reach: crate::reach::Reach) -> Result
     }
 
     Ok(projects)
+}
+
+/// The reach narrows each of the overview's queries through the column that query reaches the project by
+/// — the scope and its value travel together, rather than as a fragment each caller had to count `?1`
+/// against. An open reach adds no predicate at all.
+fn scoped<N: Nullability>(reach: Option<i64>, c: Col<Int, N>) -> Option<Pred> {
+    reach.map(|pid| Pred::eq(c, pid))
+}
+
+/// The overview's live (non-archived) projects in `order_key` order, with the counts and dimensions still
+/// empty — every other query below is keyed off these rows, so narrowing here narrows the whole overview.
+fn overview_projects(conn: &Connection, reach: Option<i64>) -> Result<Vec<ProjectRow>> {
+    const P: col::project::Cols = col::project::ALL;
+
+    let mut sel = Select::new();
+    let (id, name, color, default_view) =
+        (sel.col(P.id), sel.col(P.name), sel.col(P.color), sel.col(P.default_view));
+    let pred = Pred::all([not_archived(P)].into_iter().chain(scoped(reach, P.id)));
+    let mut sql = Sql::from(&sel, P.table);
+    sql.push_where(pred.as_ref())
+        .order_by([Sort::by(P.order_key), Sort::by(P.id)]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+            Ok(ProjectRow {
+                id: id.get(r)?,
+                name: name.get(r)?,
+                color: color.get(r)?,
+                default_view: default_view.get(r)?,
+                open_count: 0,
+                proposed_decision_count: 0,
+                dimensions: Vec::new(),
+            })
+        })
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<ProjectRow>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(rows)
+}
+
+/// The dimensions of those projects, grouped by project in `order_key` order — their values are read by
+/// [`overview_dimension_values`], the second half of the same grouped pass.
+fn overview_dimensions(
+    conn: &Connection,
+    reach: Option<i64>,
+) -> Result<HashMap<i64, Vec<DimensionRow>>> {
+    const P: col::project::Cols = col::project::ALL;
+    const D: col::dimension::Cols = col::dimension::of("d");
+
+    let mut sel = Select::new();
+    let (project_id, id, name) = (sel.col(D.project_id), sel.col(D.id), sel.col(D.name));
+    let (notes, role, ordered) = (sel.col(D.notes), sel.col(D.role), sel.col(D.ordered));
+    let show_on_card = sel.col(D.show_on_card);
+    // The project is joined to keep a dimension whose project is gone out of the overview, not for a
+    // column of its own — so it is named here and nowhere else.
+    let mut sql = Sql::from(&sel, D.table);
+    sql.join(P.table, same(P.id, D.project_id))
+        .push_where(scoped(reach, D.project_id).as_ref())
+        .order_by([Sort::by(D.order_key), Sort::by(D.id)]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+            Ok((
+                project_id.get(r)?,
+                DimensionRow {
+                    id: id.get(r)?,
+                    name: name.get(r)?,
+                    notes: notes.get(r)?,
+                    role: role.get(r)?,
+                    ordered: ordered.get(r)?,
+                    show_on_card: show_on_card.get(r)?,
+                    values: Vec::new(),
+                },
+            ))
+        })
+        .map_err(StoreEngineError::from)?;
+    let mut by_project: HashMap<i64, Vec<DimensionRow>> = HashMap::new();
+    for row in rows {
+        let (pid, dim) = row.map_err(StoreEngineError::from)?;
+        by_project.entry(pid).or_default().push(dim);
+    }
+    Ok(by_project)
+}
+
+/// The live values of those dimensions, grouped by dimension in `order_key` order.
+fn overview_dimension_values(
+    conn: &Connection,
+    reach: Option<i64>,
+) -> Result<HashMap<i64, Vec<DimensionValueRow>>> {
+    const D: col::dimension::Cols = col::dimension::of("d");
+    const V: col::dimension_value::Cols = col::dimension_value::of("v");
+
+    let mut sel = Select::new();
+    let (dimension_id, id, name) = (sel.col(V.dimension_id), sel.col(V.id), sel.col(V.name));
+    let (start_on, end_on) = (sel.col(V.start_on), sel.col(V.end_on));
+    let mut sql = Sql::from(&sel, V.table);
+    sql.join(D.table, same(D.id, V.dimension_id))
+        .push_where(scoped(reach, D.project_id).as_ref())
+        .order_by([Sort::by(V.order_key), Sort::by(V.id)]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+            Ok((
+                dimension_id.get(r)?,
+                DimensionValueRow {
+                    id: id.get(r)?,
+                    name: name.get(r)?,
+                    start_on: parse_card_date(start_on.get(r)?)?,
+                    end_on: parse_card_date(end_on.get(r)?)?,
+                },
+            ))
+        })
+        .map_err(StoreEngineError::from)?;
+    let mut by_dimension: HashMap<i64, Vec<DimensionValueRow>> = HashMap::new();
+    for row in rows {
+        let (did, val) = row.map_err(StoreEngineError::from)?;
+        by_dimension.entry(did).or_default().push(val);
+    }
+    Ok(by_dimension)
+}
+
+/// Open (not-yet-done) task count per project, in one grouped pass over live tasks. Placement is
+/// task-held (`task.project_id`); "open" = status other than `done`, matching the sidebar smart-view
+/// badges.
+fn overview_open_counts(conn: &Connection, reach: Option<i64>) -> Result<HashMap<i64, usize>> {
+    const TA: col::task::Cols = col::task::ALL;
+
+    let mut sel = Select::new();
+    // `project_id` is nullable in the registry, and the `WHERE` below is what makes it present here.
+    let project_id = sel.col(TA.project_id.required());
+    let count = sel.count_all();
+    let pred = Pred::all(
+        [still_open(TA.status), Pred::is_not_null(TA.project_id)]
+            .into_iter()
+            .chain(scoped(reach, TA.project_id)),
+    );
+    let mut sql = Sql::from(&sel, TA.table);
+    sql.push_where(pred.as_ref()).group_by([TA.project_id.to_sql()]);
+    grouped_counts(conn, &sql, project_id, count)
+}
+
+/// Proposed (under-discussion) decision count per project, in one grouped pass. "Proposed" is the stored
+/// status; a superseded proposal is excluded because currency is derived from the edges, not the status —
+/// accepted/rejected fall out by the status filter alone.
+fn overview_proposed_counts(conn: &Connection, reach: Option<i64>) -> Result<HashMap<i64, usize>> {
+    const DC: col::decision::Cols = col::decision::ALL;
+
+    let mut sel = Select::new();
+    let project_id = sel.col(DC.project_id);
+    let count = sel.count_all();
+    let pred = Pred::all(
+        [Pred::eq(DC.status, crate::model::DecisionStatus::Proposed.as_str()), !superseded(DC)]
+            .into_iter()
+            .chain(scoped(reach, DC.project_id)),
+    );
+    let mut sql = Sql::from(&sel, DC.table);
+    sql.push_where(pred.as_ref()).group_by([DC.project_id.to_sql()]);
+    grouped_counts(conn, &sql, project_id, count)
+}
+
+/// Read a `GROUP BY project_id` count back as a map — the shape both overview counts come in.
+fn grouped_counts(
+    conn: &Connection,
+    sql: &Sql,
+    project_id: Slot<i64>,
+    count: Slot<i64>,
+) -> Result<HashMap<i64, usize>> {
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+            Ok((project_id.get(r)?, count.get(r)? as usize))
+        })
+        .map_err(StoreEngineError::from)?;
+    let mut by_project: HashMap<i64, usize> = HashMap::new();
+    for row in rows {
+        let (pid, count) = row.map_err(StoreEngineError::from)?;
+        by_project.insert(pid, count);
+    }
+    Ok(by_project)
 }
 
 /// A project the store has **not** archived. The flag is a `bool` a row need not carry, so it can read as

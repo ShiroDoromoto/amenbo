@@ -253,6 +253,39 @@ fn a_folder_that_traces_no_tool_says_it_only_where_the_reader_can_name_its_own()
     );
 }
 
+/// And a caller on the other side of MCP is told none of it (`AMB-D-683`). The report asks for a
+/// session-start hook, which is a shell command a provider runs on opening a folder — and that caller
+/// opens no folder and has no shell, so it would be asked on every call for something it cannot do.
+///
+/// The same folder, read the same way, still tells the AI working in it from a shell: which is why this
+/// turns on the road the call arrived by rather than on anything in the folder.
+#[test]
+fn a_call_that_arrived_over_mcp_is_not_asked_to_wire_a_session_start_hook() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "Alice"]);
+    // A folder that uses Claude Code, with nothing wired in it — the state the report exists for.
+    std::fs::create_dir_all(cli.home.join(".claude")).unwrap();
+
+    let over_mcp = cli.run_env(
+        // What `amenbo mcp` sets on the children a tool call re-runs: the folders it is serving.
+        &[("AMENBO_MCP_DIRS", cli.home.to_string_lossy().as_ref())],
+        &["task", "list", "--json"],
+    );
+    assert_eq!(over_mcp.1, 0, "{}", over_mcp.0);
+    let doc: serde_json::Value = serde_json::from_str(&over_mcp.0).expect("the answer is JSON");
+    assert!(
+        doc["setup_incomplete"]["agent_hook"].is_null(),
+        "a caller with no shell is asked to wire a hook: {doc}"
+    );
+
+    // And the reader who can act on it still is, off the very same folder.
+    let doc = cli.json(&["task", "list", "--json"]);
+    assert_eq!(
+        doc["setup_incomplete"]["agent_hook"]["unwired"][0]["tool"], "claude-code",
+        "the shell reader lost the report with them: {doc}"
+    );
+}
+
 /// Wire `cli`'s folder for one tool, the way the request asks a reader's AI to: the `configuration` the
 /// document carries, in the file it names. The request itself is prose and would not parse as settings,
 /// which is exactly why the `--json` face carries the two apart.

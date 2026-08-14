@@ -125,15 +125,20 @@ fn a_host_shakes_hands_lists_the_tools_and_calls_them() {
         .collect();
     assert_eq!(names, vec!["agent", "agent_command", "run"]);
 
-    // `agent` answers with the entry point, and with the part of it only a **bound** folder has: the
-    // server was started somewhere else, so this could only have been read where `--dir` pointed.
+    // `agent` answers with the entry point — and without the session-start report, which is the one
+    // part of it this caller could do nothing with: a hook is a shell command run on opening a folder,
+    // and nothing on this side of MCP opens one (`AMB-D-683`). It is the whole way through that is
+    // under test here — the server setting the road on the child it re-runs, and the child reading it.
+    //
+    // Which folder the answer came from is held by `one_server_answers_about_the_folder_each_call_names`,
+    // where two bound folders tell each other apart by the projects in them.
     let result = server.call(3, "agent", &bound, json!({}));
     assert_eq!(result["isError"], false, "the entry point is there to be read: {result}");
     let spec: Value = serde_json::from_str(&text(&result)).expect("the tool hands back amenbo's own JSON");
     assert!(spec["agentCycle"].is_object(), "the entry point carries the cycle");
     assert!(
-        spec["setup_incomplete"].is_object(),
-        "a folder bound to nothing has no setup report — this one came from the bound folder",
+        spec["setup_incomplete"]["agent_hook"].is_null(),
+        "a caller with no shell is asked to wire a session-start hook: {spec}",
     );
 
     // `agent_command` pulls the one command it was asked for.

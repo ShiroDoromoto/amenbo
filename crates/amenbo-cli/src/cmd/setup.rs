@@ -663,6 +663,17 @@ fn offer_agent_hook(
 /// the next AI opened in it is another tool entirely, still unwired, and the report is where it finds that
 /// out.
 ///
+/// **A run the MCP server started is told none of it** (`AMB-D-683`). What the report asks for is a
+/// session-start hook, and a hook is a shell command a provider runs when it opens a folder: the caller
+/// on the other side of MCP opens no folder and has no shell, so it is being asked for something it
+/// cannot do — on every call, the report being a standing one. The duty the hook would carry is already
+/// done there by the server's own `agent` tool (`AMB-D-667`).
+///
+/// It is read off the road the call arrived by ([`amenbo_core::env::mcp_dirs`], set by `amenbo mcp` on
+/// the children a tool call re-runs) and not off the folder. The folder is what the GUI has to go on,
+/// having no caller to ask (`AMB-D-680`) — and reading it here would silence the *shell* AI working in
+/// that same folder, which is the one reader that can act on the report.
+///
 /// A warning either way: the command the user ran succeeds regardless, and text goes to stderr so stdout
 /// stays pipeable.
 fn report_unwired_harnesses(
@@ -673,6 +684,9 @@ fn report_unwired_harnesses(
 ) {
     use amenbo_core::harness;
 
+    if amenbo_core::env::mcp_dirs().is_some() {
+        return;
+    }
     if flags.json {
         if !harness::setup_incomplete(found, consent) {
             return;

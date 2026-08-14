@@ -405,7 +405,8 @@ A scenario is an `id`, a human `title`, an optional `description`, an optional `
 the roads start from), and an ordered list of steps
 under `steps_cli` and/or `steps_gui`. Each step is an `action` (changes state) or an
 `assert` (an expected result), names the `domain` it touches (`task` / `decision` /
-`comment` / `project` / `dimension` / `attachment` / `store` / `folder` / `repo` / `plugin`) and an
+`comment` / `project` / `dimension` / `attachment` / `store` / `folder` / `repo` / `plugin` /
+`mcp`) and an
 `op`, and carries named args under `with`. An action may bind its result with `as:`, and a later step
 refers back to it with `target:` — an op that joins two objects names the second under its own key
 (`decision link`'s `task:`), and every such key is checked back to an earlier binding, not just
@@ -457,6 +458,14 @@ hands over the text that starts a folder's AI on it and writes no settings file 
 past that point exists only if someone pastes — and it pastes what the build under test handed over,
 into the file that build named. All of it stays inside the run's own throwaway folder — a
 path that is absolute, or that climbs out with `..`, is refused.
+
+One more is not in the store either, and is not a command at all. **`mcp`** is amenbo reached over a
+protocol rather than typed at: `serve` starts one server for one folder and holds it up
+for the rest of the road, `call` calls a tool on it with the words a caller sends, and `offers` and
+`answered` read what it published and what came back. It is a domain of its own because a protocol
+has a conversation where a command has an exit code — the server outlives the step that stood it, and
+a tool that ran and refused comes back as a *result* marked in error rather than as a transport fault,
+which is what an assert there is written against.
 
 A few ops exist to put something **wrong**, because a repair cannot be shown working over a store
 where there is nothing to repair — and a sweep that sweeps nothing looks exactly like one that works.

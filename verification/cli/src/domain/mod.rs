@@ -12,6 +12,7 @@ pub(crate) mod comment;
 pub(crate) mod decision;
 pub(crate) mod dimension;
 pub(crate) mod folder;
+pub(crate) mod mcp;
 pub(crate) mod plugin;
 pub(crate) mod project;
 pub(crate) mod repo;

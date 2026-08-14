@@ -184,6 +184,11 @@ pub(crate) struct Driver<'a> {
     /// for the length of the scenario because a host answers only while it is alive: dropping one
     /// after the step that made it would leave every later step pointed at a closed port.
     catalogs: HashMap<String, StoodCatalog>,
+    /// The MCP server a road stood up, held for the length of that road. It is one because a server
+    /// serves one folder and a road walks one — and it is held rather than started per step because a
+    /// conversation is what the protocol has: dropping it between steps would leave every later one
+    /// talking to a closed pipe.
+    server: Option<crate::domain::mcp::Standing>,
     /// Set while a step that declared `refused:` is running. It is read where a failed invocation
     /// is judged, so the arm issuing the command never has to know it might be turned away —
     /// [`Driver::refused`] puts it up and takes it back down around the one call.
@@ -212,6 +217,7 @@ impl<'a> Driver<'a> {
             artifacts: HashMap::new(),
             numbers: HashMap::new(),
             catalogs: HashMap::new(),
+            server: None,
             refusal: None,
         };
         let v = d.run_json(&["init", "--name", "verify", "--json"])?;
@@ -446,6 +452,7 @@ impl<'a> Driver<'a> {
             Domain::Attachment => self.attachment_action(domain, op, with, bind),
             Domain::Repo => self.repo_action(op, with),
             Domain::Plugin => self.plugin_action(op, with, bind),
+            Domain::Mcp => self.mcp_action(op, with),
         }
     }
 
@@ -469,6 +476,7 @@ impl<'a> Driver<'a> {
             Domain::Attachment => self.attachment_assert(op, with),
             Domain::Repo => self.repo_assert(op, with),
             Domain::Plugin => self.plugin_assert(op, with),
+            Domain::Mcp => self.mcp_assert(op, with),
         }
     }
 

@@ -538,6 +538,11 @@ const REGISTRY: &[OpSpec] = &[
     // reason every other move on a screen road is: the screen it opens onto is what the asserts after
     // it are read against, and a fold nobody opened leaves them read against the screen in front of it.
     // A screen road alone, the fold being the screen's own — a terminal has nothing folded.
+    //
+    // Not `Domain::Mcp`, for all that the name says MCP: that domain is the protocol itself — a
+    // server standing for a folder and being called over two streams — and nothing here speaks it. What
+    // this reads is settings lying on the machine, which is this domain's, and the family it belongs
+    // beside is the wiring text one screen over.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "mcp-open", required: &[], refs: &[], strings: &[], binds: false },
     // A plugin's life on this machine. `install` fetches it from the catalog and `enable` opens its
     // gate — two separate acts on purpose, since an installed plugin that never fires is the normal

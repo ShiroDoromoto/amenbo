@@ -84,8 +84,8 @@ fi
 required=(
     "crates/amenbo-core/src/update_check.rs:is_disabled"   # withholds the upstream query
     "crates/amenbo-core/src/self_update.rs:apply"          # refuses the in-place swap
-    "crates/amenbo-cli/src/main.rs:update_cmd"             # words the refusal for `update`
-    "crates/amenbo-cli/src/main.rs:self_update_cmd"        # words it for `update --apply`
+    "crates/amenbo-cli/src/cmd/update.rs:update_cmd"       # words the refusal for `update`
+    "crates/amenbo-cli/src/cmd/update.rs:self_update_cmd"  # words it for `update --apply`
 )
 
 missing=""

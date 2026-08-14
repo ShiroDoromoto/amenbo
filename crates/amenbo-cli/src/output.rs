@@ -643,6 +643,16 @@ pub fn warn_body(body: &str) {
     }
 }
 
+/// The count header on any listing. When paging returns only part of the matches (count < total_matched),
+/// name the total too: `3 task(s)`, or `3 of 42 task(s)` on a page.
+pub fn count_header(count: usize, total_matched: usize, noun: &str) -> String {
+    if count < total_matched {
+        format!("{count} of {total_matched} {noun}(s)")
+    } else {
+        format!("{count} {noun}(s)")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

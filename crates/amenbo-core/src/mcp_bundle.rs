@@ -14,11 +14,11 @@
 //! (`AMB-D-666`). Shipping a copy of amenbo inside would be a second amenbo to keep in step with the
 //! first.
 //!
-//! **One bundle per project, and the name is what keeps them apart.** A server is bound to one folder,
-//! so a machine working two projects wants two of these — and a host keeps its extensions under the
-//! name the manifest gives. That name is [`crate::mcp::Server`]'s, shared with every other road a
-//! server is set up by: a bundle and a request that named one thing differently would leave a project
-//! set up twice under two names.
+//! **One bundle per machine, because the name is the machine's** (`AMB-D-679`). A host keeps its
+//! extensions under the name the manifest gives, and that name is [`crate::mcp::name`] — shared with
+//! every other road a server is set up by, so a bundle and a request that named one thing differently
+//! would leave one machine set up twice under two names. A reader who saves this file again therefore
+//! replaces the extension they already had rather than adding a second one beside it.
 //!
 //! **The manifest carries the required fields and nothing else.** Every optional word is one more
 //! thing a host may read differently than the version of the spec it was written against, and none of
@@ -42,17 +42,17 @@ pub const EXTENSION: &str = "mcpb";
 /// The spec version the manifest below is written against.
 const MANIFEST_VERSION: &str = "0.3";
 
-/// What to call the file the reader saves. It is the server's own name, so a bundle written again for
-/// the same project lands on the file it landed on before.
-pub fn file_name(server: &Server) -> String {
-    format!("{}.{EXTENSION}", server.name())
+/// What to call the file the reader saves. It is the server's own name, so a bundle written again
+/// lands on the file it landed on before rather than piling a second one up beside it.
+pub fn file_name() -> String {
+    format!("{}.{EXTENSION}", crate::mcp::name())
 }
 
 /// The manifest document, as it sits at the archive's root.
 pub fn manifest(server: &Server) -> String {
     let document = serde_json::json!({
         "manifest_version": MANIFEST_VERSION,
-        "name": server.name(),
+        "name": crate::mcp::name(),
         "version": crate::agent::VERSION,
         // The product's name as a person reads it (`AMB-D-633`) — this line is the one part of the
         // document a reader sees, and the lowercase spelling is the command's and the identifier's.
@@ -82,7 +82,7 @@ pub fn manifest(server: &Server) -> String {
 ///
 /// The archive holds the manifest and nothing else, which is what a bundle carrying no code is.
 pub fn write_into(server: &Server, dir: &Path) -> std::io::Result<PathBuf> {
-    let path = dir.join(file_name(server));
+    let path = dir.join(file_name());
     let mut archive = zip::ZipWriter::new(std::fs::File::create(&path)?);
     archive
         .start_file(MANIFEST, zip::write::SimpleFileOptions::default())
@@ -97,7 +97,7 @@ mod tests {
     use super::*;
 
     fn server<'a>(folder: &'a Path, exe: &'a Path) -> Server<'a> {
-        Server { slug: "shop", project: "Shop", folder, exe }
+        Server { project: "Shop", folder, exe }
     }
 
     /// The fields a host refuses a manifest for want of, and the arguments that bind the server to one
@@ -112,7 +112,7 @@ mod tests {
         for field in ["manifest_version", "name", "version", "description", "author", "server"] {
             assert!(!read[field].is_null(), "the manifest says nothing about `{field}`");
         }
-        assert_eq!(read["name"], "amenbo-shop");
+        assert_eq!(read["name"], "amenbo");
         assert_eq!(read["author"]["name"], "Amenbo");
         assert_eq!(read["server"]["type"], "binary");
         assert_eq!(read["server"]["mcp_config"]["command"], "/usr/local/bin/amenbo");
@@ -122,17 +122,12 @@ mod tests {
         );
     }
 
-    /// The file the reader saves is named after the server, so a bundle written twice for one project
-    /// lands where the first one did rather than piling a second file up beside it.
+    /// The file the reader saves is named after the server, and the server's name is the machine's —
+    /// so a bundle written twice lands where the first one did rather than piling a second file up
+    /// beside it.
     #[test]
     fn the_file_is_named_after_the_server() {
-        let folder = Path::new("/work/shop");
-        let exe = Path::new("/usr/local/bin/amenbo");
-        assert_eq!(file_name(&server(folder, exe)), "amenbo-shop.mcpb");
-        assert_ne!(
-            file_name(&server(folder, exe)),
-            file_name(&Server { slug: "greenhouse", ..server(folder, exe) })
-        );
+        assert_eq!(file_name(), "amenbo.mcpb");
     }
 
     /// What a host opens: an archive with the manifest at its root, and the same document that was
@@ -146,7 +141,7 @@ mod tests {
         let exe = Path::new("/usr/local/bin/amenbo");
         let written = write_into(&server(folder, exe), &dir).expect("the bundle is written");
 
-        assert_eq!(written.file_name().and_then(|n| n.to_str()), Some("amenbo-shop.mcpb"));
+        assert_eq!(written.file_name().and_then(|n| n.to_str()), Some("amenbo.mcpb"));
         let mut archive =
             zip::ZipArchive::new(std::fs::File::open(&written).expect("the file is there"))
                 .expect("a zip");

@@ -38,6 +38,21 @@ pub fn plugin_reach() -> Option<String> {
     var(PLUGIN_REACH_VAR)
 }
 
+/// The name of [`mcp_dirs`], for the MCP server that sets it on every run it starts
+/// (`crate::mcp`).
+pub const MCP_DIRS_VAR: &str = "AMENBO_MCP_DIRS";
+
+/// `AMENBO_MCP_DIRS` — the folders the MCP server this run was started by is serving, one per line
+/// (`AMB-D-679`). Set by `amenbo mcp` on the children a tool call re-runs, unset everywhere else.
+///
+/// It is read by the one thing whose advice depends on the road the call arrived by: the `no_pointer`
+/// refusal, whose way out is `init` / `bind` — and neither is served over MCP, so the caller reading
+/// it cannot take the road it names. What it needs instead is the folders that *are* served, and the
+/// person who can add one.
+pub fn mcp_dirs() -> Option<String> {
+    var(MCP_DIRS_VAR)
+}
+
 /// `AMENBO_PROJECT_DIR` — where the search for the `.amenbo` pointer starts, so the GUI and friends
 /// can name a directory other than the CWD.
 pub fn project_dir() -> Option<OsString> {

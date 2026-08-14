@@ -785,9 +785,10 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
             return agent_hook_snippet_cmd(flags, tool, *copy)
         }
         // The MCP server, ahead of every guard that asks about *this* directory: a host launches it from
-        // wherever it happens to stand, and the only folder that decides anything here is `--dir`
-        // (`AMB-D-666`). It opens no store — each tool call re-runs this executable in that folder, and
-        // the guards answer there, to the child, in the words a person typing there would read.
+        // wherever it happens to stand, and the only folders that decide anything here are the ones
+        // `--dir` names (`AMB-D-679`). It opens no store — each tool call re-runs this executable in the
+        // folder that call named, and the guards answer there, to the child, in the words a person
+        // typing there would read.
         Some(Command::Mcp { dir }) => return mcp_cmd(dir),
         Some(Command::Version) if !store_reachable() => {
             advise_linux_system_orphan();

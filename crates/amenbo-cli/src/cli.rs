@@ -398,21 +398,23 @@ pub enum Command {
     /// gets nothing out of typing this.
     ///
     /// It is a thin mediator and nothing else — every tool call runs this same executable again as a
-    /// child process, in the folder `--dir` names, and hands back what that run wrote (`AMB-D-665`).
+    /// child process, in the folder that call named, and hands back what that run wrote (`AMB-D-665`).
     /// Which project the folder belongs to is the `.amenbo` pointer's answer there, exactly as it is
     /// for a person typing in it.
     ///
-    /// One server, one folder (`AMB-D-666`): a host that wants two projects writes two entries.
+    /// One server, as many folders as `--dir` was given (`AMB-D-679`): the set is the person's to
+    /// choose, and every call names one of it — including when it holds a single folder, so a call
+    /// never leaves where it lands to a default.
     ///
     /// Three tools (`AMB-D-667`): `agent`, the whole of how to work here; `agent_command`, one
     /// command's spec; and `run`, which types the caller's own words. Two things are named rather than
     /// passed through — the facet is this server's to declare (`AMB-D-668`), and `bind` and `init` are
-    /// refused, either of them being a way for an AI to re-point the folder it was given.
+    /// refused, either of them being a way for an AI to re-point a folder it was given.
     Mcp {
-        /// the folder this server works in — every tool call runs there. The project is whatever its
-        /// `.amenbo` points at
-        #[arg(long, value_name = "PATH")]
-        dir: String,
+        /// the folders this server works in, one call in one of them. The project is whatever each
+        /// one's `.amenbo` points at
+        #[arg(long, value_name = "PATH", num_args = 1.., required = true)]
+        dir: Vec<String>,
     },
 
     /// Physically erase content from this store's truth source.

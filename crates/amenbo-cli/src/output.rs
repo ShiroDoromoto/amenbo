@@ -121,6 +121,27 @@ pub struct CliError {
     pub exit: i32,
 }
 
+/// The way out of [`CliError::no_pointer`] written for a caller reaching this folder over MCP, where
+/// the two commands that place a pointer are refused (`AMB-D-666`) and there is no terminal to type
+/// them in anyway.
+///
+/// Two things are said, and the order is the point. The folders the server *does* serve come first,
+/// because the likeliest mistake is a caller that named the wrong one of a set it was given, and that
+/// mistake is corrected in the next call without troubling anybody. Only then the road that opens this
+/// folder, which is a person's: they add it to a project in amenbo's own window. Naming the host's
+/// settings instead would be advice for a different mistake — the set is chosen there, but nothing in
+/// it reaches a folder amenbo has never been told about.
+fn hint_for_a_caller_with_no_terminal(dirs: &str) -> String {
+    let listed = dirs
+        .lines()
+        .filter(|dir| !dir.trim().is_empty())
+        .map(|dir| format!("\n  • {dir}"))
+        .collect::<String>();
+    format!(
+        "The commands that would set a project up here — init and bind — are not served over MCP, so neither is a road you can take.\nThe folders this server works in:{listed}\nIf you meant one of those, name it in the next call. To work in *this* folder, ask the person to add it to a project in amenbo's own window (the project's folders) — that is the only thing that opens it, and it takes no terminal."
+    )
+}
+
 impl CliError {
     pub fn confirmation_required(what: &str) -> CliError {
         CliError {
@@ -140,17 +161,30 @@ impl CliError {
     /// `candidate_projects` is non-empty, the projects that actually exist on this machine. Enumerating
     /// them is a plain SQLite probe: it never opens a store, so it cannot forward-migrate one as a side
     /// effect.
+    ///
+    /// Both halves of that fork are a person's to walk, and over MCP there is no person at the other
+    /// end: `init` and `bind` are refused there (`AMB-D-666`), so a caller handed this hint would be
+    /// sent down two roads that are both closed. When the run came from a server
+    /// ([`amenbo_core::env::mcp_dirs`])
+    /// the hint is written for that reader instead — the folders it can actually reach, and the one
+    /// thing that opens this one, which is a person adding it to a project in amenbo's own window.
     pub fn no_pointer(candidate_projects: &[String]) -> CliError {
         let cmd = Paths::command_name();
-        let mut hint = format!(
-            "Pick one:\n  • Start a new project here: {cmd} init --name <you>\n  • Link an existing project: {cmd} bind --project <name or id>",
-        );
-        if !candidate_projects.is_empty() {
-            hint.push_str("\nExisting projects:");
-            for p in candidate_projects {
-                hint.push_str(&format!("\n  • {cmd} bind --project {p}"));
+        let hint = match amenbo_core::env::mcp_dirs() {
+            Some(dirs) => hint_for_a_caller_with_no_terminal(&dirs),
+            None => {
+                let mut hint = format!(
+                    "Pick one:\n  • Start a new project here: {cmd} init --name <you>\n  • Link an existing project: {cmd} bind --project <name or id>",
+                );
+                if !candidate_projects.is_empty() {
+                    hint.push_str("\nExisting projects:");
+                    for p in candidate_projects {
+                        hint.push_str(&format!("\n  • {cmd} bind --project {p}"));
+                    }
+                }
+                hint
             }
-        }
+        };
         CliError {
             code: CliErrorCode::NoPointer.as_str(),
             message: "This folder is not linked to amenbo (no .amenbo found).".to_string(),
@@ -661,6 +695,20 @@ mod tests {
 
     fn set<I: IntoIterator<Item = &'static str>>(it: I) -> BTreeSet<&'static str> {
         it.into_iter().collect()
+    }
+
+    /// The way out written for a caller with no terminal names the folders that *are* served and the
+    /// person who can link this one — and neither of the two commands that place a pointer, since both
+    /// are refused over MCP and advising them sends the reader down a closed road (`AMB-T-3156`).
+    #[test]
+    fn the_no_terminal_hint_offers_the_set_and_a_person_rather_than_two_closed_roads() {
+        let hint = hint_for_a_caller_with_no_terminal("/work/shop\n/work/greenhouse\n");
+        assert!(hint.contains("/work/shop"), "the folders it could have named: {hint}");
+        assert!(hint.contains("/work/greenhouse"), "all of them: {hint}");
+        assert!(hint.contains("amenbo's own window"), "and the road a person walks: {hint}");
+        for closed in ["init --name", "bind --project"] {
+            assert!(!hint.contains(closed), "`{closed}` cannot be reached from here: {hint}");
+        }
     }
 
     #[test]

@@ -1,9 +1,9 @@
 //! The MCP server as a host meets it: a real `amenbo mcp` process, driven over its own two streams.
 //!
 //! What only a real process can show is the part the unit tests stub out — that a tool call reaches
-//! amenbo at all, and that it reaches it **in the folder `--dir` names**. Every server here is
-//! started from a folder that is bound to nothing, so an answer that could only have come from the
-//! bound folder is the proof (`AMB-D-666`).
+//! amenbo at all, and that it reaches it **in the folder the call named**. Every server here is
+//! started from a folder that is bound to nothing, so an answer that could only have come from a
+//! folder in the set is the proof (`AMB-D-666`, `AMB-D-679`).
 
 mod harness;
 
@@ -22,14 +22,15 @@ struct Server {
 }
 
 impl Server {
-    /// Start one for `dir`, from `cwd` — which the tests deliberately make a folder that decides
+    /// Start one for `dirs`, from `cwd` — which the tests deliberately make a folder that decides
     /// nothing, so nothing here can pass by accident.
-    fn start(home: &std::path::Path, cwd: &std::path::Path, dir: &std::path::Path) -> Server {
+    fn start(home: &std::path::Path, cwd: &std::path::Path, dirs: &[&std::path::Path]) -> Server {
         let mut child = Command::new(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(cwd)
-            .args(["mcp", "--dir", &dir.to_string_lossy()])
+            .args(["mcp", "--dir"])
+            .args(dirs.iter().map(|dir| dir.to_string_lossy().into_owned()))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
@@ -59,8 +60,12 @@ impl Server {
         self.stdin.flush().expect("failed to flush the notification");
     }
 
-    /// Call one tool and hand back its result.
-    fn call(&mut self, id: i64, name: &str, arguments: Value) -> Value {
+    /// Call one tool, for one of the folders this server was given, and hand back its result. Every
+    /// tool takes the folder and none of them defaults it (`AMB-D-679`), so it is written in here
+    /// rather than left to each caller to remember.
+    fn call(&mut self, id: i64, name: &str, dir: &std::path::Path, arguments: Value) -> Value {
+        let mut arguments = arguments;
+        arguments["folder"] = json!(dir.to_string_lossy());
         let reply = self.ask(id, "tools/call", json!({ "name": name, "arguments": arguments }));
         assert!(reply.get("error").is_none(), "a tool call is not a protocol fault: {reply}");
         reply["result"].clone()
@@ -101,7 +106,7 @@ fn a_bound_and_an_unbound_folder(cli: &Cli) -> (std::path::PathBuf, std::path::P
 fn a_host_shakes_hands_lists_the_tools_and_calls_them() {
     let cli = Cli::new();
     let (bound, unbound) = a_bound_and_an_unbound_folder(&cli);
-    let mut server = Server::start(&cli.home, &unbound, &bound);
+    let mut server = Server::start(&cli.home, &unbound, &[&bound]);
 
     let hello = server.ask(1, "initialize", json!({ "protocolVersion": "2025-06-18" }));
     assert_eq!(hello["result"]["protocolVersion"], "2025-06-18");
@@ -122,7 +127,7 @@ fn a_host_shakes_hands_lists_the_tools_and_calls_them() {
 
     // `agent` answers with the entry point, and with the part of it only a **bound** folder has: the
     // server was started somewhere else, so this could only have been read where `--dir` pointed.
-    let result = server.call(3, "agent", json!({}));
+    let result = server.call(3, "agent", &bound, json!({}));
     assert_eq!(result["isError"], false, "the entry point is there to be read: {result}");
     let spec: Value = serde_json::from_str(&text(&result)).expect("the tool hands back amenbo's own JSON");
     assert!(spec["agentCycle"].is_object(), "the entry point carries the cycle");
@@ -132,7 +137,7 @@ fn a_host_shakes_hands_lists_the_tools_and_calls_them() {
     );
 
     // `agent_command` pulls the one command it was asked for.
-    let result = server.call(4, "agent_command", json!({ "command": "task add" }));
+    let result = server.call(4, "agent_command", &bound, json!({ "command": "task add" }));
     assert_eq!(result["isError"], false, "{result}");
     let spec: Value = serde_json::from_str(&text(&result)).expect("one command's spec, as JSON");
     assert_eq!(spec["name"], "task add");
@@ -147,9 +152,9 @@ fn a_host_shakes_hands_lists_the_tools_and_calls_them() {
 fn what_amenbo_refuses_reaches_the_caller_as_amenbo_wrote_it() {
     let cli = Cli::new();
     let (bound, unbound) = a_bound_and_an_unbound_folder(&cli);
-    let mut server = Server::start(&cli.home, &unbound, &bound);
+    let mut server = Server::start(&cli.home, &unbound, &[&bound]);
 
-    let result = server.call(1, "agent_command", json!({ "command": "no-such-command" }));
+    let result = server.call(1, "agent_command", &bound, json!({ "command": "no-such-command" }));
     assert_eq!(result["isError"], true, "a command nobody registered is a refusal: {result}");
     let refusal: Value = serde_json::from_str(&text(&result)).expect("the refusal is amenbo's own JSON");
     assert_eq!(refusal["error"]["code"], "unknown_command");
@@ -163,7 +168,7 @@ fn what_amenbo_refuses_reaches_the_caller_as_amenbo_wrote_it() {
 fn run_reaches_the_bound_folder_and_the_facet_is_never_the_caller_s() {
     let cli = Cli::new();
     let (bound, unbound) = a_bound_and_an_unbound_folder(&cli);
-    let mut server = Server::start(&cli.home, &unbound, &bound);
+    let mut server = Server::start(&cli.home, &unbound, &[&bound]);
 
     // A write, with the caller naming the person as the actor. It lands as the AI's: an AI reads and
     // writes only inside the project its folder is bound to, and passing `human` through would take
@@ -171,6 +176,7 @@ fn run_reaches_the_bound_folder_and_the_facet_is_never_the_caller_s() {
     let result = server.call(
         1,
         "run",
+        &bound,
         json!({ "args": ["task", "add", "--title", "over the wire", "--json", "--actor", "human"] }),
     );
     assert_eq!(result["isError"], false, "{result}");
@@ -180,7 +186,7 @@ fn run_reaches_the_bound_folder_and_the_facet_is_never_the_caller_s() {
 
     // And the task is in the bound folder's project — the server's own folder is bound to nothing, so an
     // AI standing there would have reached no project at all.
-    let result = server.call(2, "run", json!({ "args": ["task", "list", "--json"] }));
+    let result = server.call(2, "run", &bound, json!({ "args": ["task", "list", "--json"] }));
     assert_eq!(result["isError"], false, "{result}");
     let listed: Value = serde_json::from_str(&text(&result)).expect("amenbo's own JSON");
     let refs: Vec<&str> =
@@ -206,8 +212,8 @@ fn bind_is_refused_and_the_folder_still_points_where_it_did() {
     assert_eq!(exit_code(&elsewhere), 0, "{}", String::from_utf8_lossy(&elsewhere.stderr));
 
     let before = std::fs::read_to_string(bound.join(".amenbo")).expect("the pointer");
-    let mut server = Server::start(&cli.home, &unbound, &bound);
-    let result = server.call(1, "run", json!({ "args": ["bind", "--project", "Elsewhere"] }));
+    let mut server = Server::start(&cli.home, &unbound, &[&bound]);
+    let result = server.call(1, "run", &bound, json!({ "args": ["bind", "--project", "Elsewhere"] }));
     assert_eq!(result["isError"], true, "bind is not served here: {result}");
     assert!(
         text(&result).contains("bind"),
@@ -229,17 +235,18 @@ fn bind_is_refused_and_the_folder_still_points_where_it_did() {
 fn a_destructive_command_still_waits_for_the_confirmation() {
     let cli = Cli::new();
     let (bound, unbound) = a_bound_and_an_unbound_folder(&cli);
-    let mut server = Server::start(&cli.home, &unbound, &bound);
+    let mut server = Server::start(&cli.home, &unbound, &[&bound]);
 
     let added: Value = serde_json::from_str(&text(&server.call(
         1,
         "run",
+        &bound,
         json!({ "args": ["task", "add", "--title", "to be deleted", "--json"] }),
     )))
     .expect("amenbo's own JSON");
     let id = added["task"]["ref"].as_str().expect("the new task's ref").to_string();
 
-    let result = server.call(2, "run", json!({ "args": ["task", "delete", &id, "--json"] }));
+    let result = server.call(2, "run", &bound, json!({ "args": ["task", "delete", &id, "--json"] }));
     assert_eq!(result["isError"], true, "a destructive command is not waved through: {result}");
     let refusal: Value = serde_json::from_str(&text(&result)).expect("amenbo's own JSON");
     assert_eq!(refusal["error"]["code"], "confirmation_required");
@@ -252,25 +259,131 @@ fn a_destructive_command_still_waits_for_the_confirmation() {
 fn a_call_that_cannot_be_shaped_is_a_protocol_fault() {
     let cli = Cli::new();
     let (bound, unbound) = a_bound_and_an_unbound_folder(&cli);
-    let mut server = Server::start(&cli.home, &unbound, &bound);
+    let mut server = Server::start(&cli.home, &unbound, &[&bound]);
 
+    let folder = json!(bound.to_string_lossy());
     let reply = server.ask(1, "tools/call", json!({ "name": "typo", "arguments": {} }));
     assert_eq!(reply["error"]["code"], -32602, "no tool goes by that name: {reply}");
-    let reply = server.ask(2, "tools/call", json!({ "name": "agent_command", "arguments": {} }));
+    let reply =
+        server.ask(2, "tools/call", json!({ "name": "agent_command", "arguments": { "folder": folder } }));
     assert_eq!(reply["error"]["code"], -32602, "`agent_command` needs a command: {reply}");
-    let reply = server.ask(3, "resources/list", json!({}));
+    let reply = server.ask(3, "tools/call", json!({ "name": "agent", "arguments": {} }));
+    assert_eq!(reply["error"]["code"], -32602, "and every tool needs a folder: {reply}");
+    let reply = server.ask(4, "resources/list", json!({}));
     assert_eq!(reply["error"]["code"], -32601, "no resources are served here: {reply}");
-    // Still serving after three refusals — a mistake ends the call, not the session.
-    let reply = server.ask(4, "ping", json!({}));
+    // Still serving after four refusals — a mistake ends the call, not the session.
+    let reply = server.ask(5, "ping", json!({}));
     assert!(reply["result"].is_object(), "{reply}");
 
     server.stop();
 }
 
-/// `--dir` naming no folder is refused where a person can read it, not once per tool call for the
-/// life of a server nobody can use.
+/// A second folder for the tests that need the set to be more than one, bound to a project of its own.
+fn a_second_bound_folder(cli: &Cli, name: &str, from: &std::path::Path) -> std::path::PathBuf {
+    let dir = amenbo_scratch::scratch("mcp-bound-too");
+    std::fs::create_dir_all(&dir).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        .env("AMENBO_HOME", &cli.home)
+        .env("AMENBO_UPDATE_CHECK", "0")
+        .current_dir(from)
+        .args(["project", "add", "--name", name, "--dir", &dir.to_string_lossy(), "--actor", "human"])
+        .output()
+        .expect("failed to raise the other project");
+    assert_eq!(exit_code(&out), 0, "project add: {}", String::from_utf8_lossy(&out.stderr));
+    dir
+}
+
+/// The whole of what a set buys: one server, and a call that lands in the folder it named
+/// (`AMB-D-679`). Two projects, one connection, and neither answer carries the other's project.
 #[test]
-fn a_dir_that_names_no_folder_is_refused_at_the_start() {
+fn one_server_answers_about_the_folder_each_call_names() {
+    let cli = Cli::new();
+    let (bound, unbound) = a_bound_and_an_unbound_folder(&cli);
+    let second = a_second_bound_folder(&cli, "Greenhouse", &bound);
+    let mut server = Server::start(&cli.home, &unbound, &[&bound, &second]);
+
+    // The listing names both, so the very first call can be right about where it is going.
+    let listed = server.ask(1, "tools/list", json!({}));
+    for tool in listed["result"]["tools"].as_array().expect("tools") {
+        let described = tool["description"].as_str().unwrap_or_default();
+        for dir in [&bound, &second] {
+            assert!(
+                described.contains(&*dir.to_string_lossy()),
+                "{} does not offer {}: {described}",
+                tool["name"],
+                dir.display(),
+            );
+        }
+    }
+
+    let here = server.call(2, "run", &bound, json!({ "args": ["project", "list", "--json"] }));
+    assert_eq!(here["isError"], false, "{here}");
+    let there = server.call(3, "run", &second, json!({ "args": ["project", "list", "--json"] }));
+    assert_eq!(there["isError"], false, "{there}");
+    // `init` names the project after the folder it was run in; the second was raised by name.
+    let first = bound.file_name().expect("a name").to_string_lossy().into_owned();
+    assert!(text(&here).contains(&first), "the first folder's own project: {}", text(&here));
+    assert!(text(&there).contains("Greenhouse"), "and the second's: {}", text(&there));
+    assert!(
+        !text(&here).contains("Greenhouse"),
+        "one call reaches one project, not the set: {}",
+        text(&here),
+    );
+
+    server.stop();
+}
+
+/// A folder the person did not choose is out of reach, and the way back is the set itself — which is
+/// what the caller names next (`AMB-D-679`, form 5).
+#[test]
+fn a_folder_outside_the_set_is_out_of_reach_and_nothing_runs_there() {
+    let cli = Cli::new();
+    let (bound, unbound) = a_bound_and_an_unbound_folder(&cli);
+    let elsewhere = a_second_bound_folder(&cli, "Elsewhere", &bound);
+    let mut server = Server::start(&cli.home, &unbound, &[&bound]);
+
+    let result = server.call(1, "run", &elsewhere, json!({ "args": ["project", "list", "--json"] }));
+    assert_eq!(result["isError"], true, "a folder nobody chose is not served: {result}");
+    let said = text(&result);
+    assert!(said.contains("out_of_reach"), "the refusal names itself: {said}");
+    assert!(said.contains(&*bound.to_string_lossy()), "and says what it could have named: {said}");
+    assert!(!said.contains("Elsewhere"), "nothing was read there: {said}");
+
+    server.stop();
+}
+
+/// A folder in the set that no project has been set up in is said to be that, in the listing, before
+/// anything is called for it — so the choice is informed rather than a round trip. It is named rather
+/// than dropped: the person chose it, and what is wrong with it is that nobody has linked it, which is
+/// a sentence the caller can hand to the person who can.
+#[test]
+fn the_listing_says_which_folders_have_no_project_yet() {
+    let cli = Cli::new();
+    let (bound, unbound) = a_bound_and_an_unbound_folder(&cli);
+    let mut server = Server::start(&cli.home, &unbound, &[&bound, &unbound]);
+
+    let listed = server.ask(1, "tools/list", json!({}));
+    for tool in listed["result"]["tools"].as_array().expect("tools") {
+        let described = tool["description"].as_str().unwrap_or_default();
+        let unlinked = format!("{} — no project is set up here yet", unbound.display());
+        assert!(described.contains(&unlinked), "{}: {described}", tool["name"]);
+        assert!(
+            described.contains(&format!("{}\n", bound.display())),
+            "and the linked one carries no such line: {described}",
+        );
+    }
+    // And it is still a folder calls are served for, since the pointer it lacks can appear at any time.
+    let result = server.call(2, "run", &unbound, json!({ "args": ["status", "--json"] }));
+    assert!(!text(&result).contains("out_of_reach: this server"), "it is in the set: {}", text(&result));
+
+    server.stop();
+}
+
+/// `--dir` naming no folder at all is refused where a person can read it, not once per tool call for
+/// the life of a server nobody can use. One bad path among good ones is dropped instead: the set comes
+/// out of a host's free-text field, and a mistyped line there is not a reason to serve nothing.
+#[test]
+fn a_dir_that_names_no_folder_is_refused_at_the_start_but_only_takes_itself_down() {
     let cli = Cli::new();
     let missing = cli.home.join("never-made");
     let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
@@ -288,4 +401,10 @@ fn a_dir_that_names_no_folder_is_refused_at_the_start() {
         "the refusal names the argument: {}",
         String::from_utf8_lossy(&out.stderr),
     );
+
+    let (bound, unbound) = a_bound_and_an_unbound_folder(&cli);
+    let mut server = Server::start(&cli.home, &unbound, &[&missing, &bound]);
+    let result = server.call(1, "agent", &bound, json!({}));
+    assert_eq!(result["isError"], false, "the folder that is there is still served: {result}");
+    server.stop();
 }

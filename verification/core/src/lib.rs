@@ -1453,21 +1453,28 @@ const REGISTRY: &[OpSpec] = &[
     // catalog rules. `ok` is the verdict, and `problem` names the code a failing one must report —
     // a manifest can be wrong in more ways than one, and a line about the wrong reason proves nothing.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "validated", required: &["path", "ok"], refs: &[], strings: &["path", "problem"], binds: false },
-    // amenbo spoken to rather than typed at. A host starts one server per folder, and everything
-    // after that goes over the two streams — so the road is the protocol's shape rather than the
-    // store's: stand a server, read what it publishes, call through it, read what came back.
+    // amenbo spoken to rather than typed at. A host starts one server for a set of folders, and
+    // everything after that goes over the two streams — so the road is the protocol's shape rather
+    // than the store's: stand a server, read what it publishes, call through it, read what came back.
     //
-    // `serve` starts it for the folder named, and holds it up for the rest of the road — a server
+    // `serve` starts it for the folders named, and holds it up for the rest of the road — a server
     // dropped after the step that stood it would leave every later step talking to a closed pipe. It
     // also settles the handshake and takes the tool list once, which is what `offers` then reads: a
     // list fetched again per assert would be a second question, and the one worth asking is what this
     // server published when it came up.
-    OpSpec { kind: Kind::Action, domain: Domain::Mcp, op: "serve", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
-    // `call` is a tool called by name, with the words the caller sends under it — `args` verbatim, the
-    // way `plugin run` carries a plugin's own. What comes back is read by `answered`, for the reason
-    // every other returned document is read by an assert of its own: a call's answer is a document,
-    // and the step that made the call has no verdict to give about it.
-    OpSpec { kind: Kind::Action, domain: Domain::Mcp, op: "call", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
+    //
+    // `dirs` is a list even when it holds one folder, because a set of one is what the server is
+    // given — the spelling says so rather than leaving a road to imply it.
+    OpSpec { kind: Kind::Action, domain: Domain::Mcp, op: "serve", required: &["dirs"], refs: &[], strings: &[], binds: false },
+    // `call` is a tool called by name, in the folder `dir` names, with the words the caller sends
+    // under it — `args` verbatim, the way `plugin run` carries a plugin's own. The folder is required
+    // here because it is required there: every tool takes one and none of them defaults it, so a road
+    // that left it out would be walking a call no host can make. Naming one the server was not given
+    // is a road too — the answer is out of reach, and that is a document like any other. What comes
+    // back is read by `answered`, for the reason every other returned document is read by an assert of
+    // its own: a call's answer is a document, and the step that made the call has no verdict to give
+    // about it.
+    OpSpec { kind: Kind::Action, domain: Domain::Mcp, op: "call", required: &["tool", "dir"], refs: &[], strings: &["tool", "dir"], binds: false },
     // What the standing server publishes: one tool, present or absent. Named one at a time rather
     // than as a list, because what a road is about is a tool being reachable — and a road that named
     // the whole set would fail on a tool nobody was asking about.

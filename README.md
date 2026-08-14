@@ -480,10 +480,10 @@ amenbo agent-hook snippet claude-code       # the text for one tool (claude-code
 amenbo agent-hook snippet cursor --copy     # ...onto this machine's clipboard instead
 amenbo agent-hook answer yes                # record what a person answered, for this project
 
-# Serve one folder over MCP, for an AI that cannot run amenbo in the folder itself.
-# A host starts this, never a hand — what goes over the two streams is JSON-RPC.
-# See "Reaching amenbo from an AI that cannot open a folder".
-amenbo mcp --dir /path/to/the/folder        # one server, one folder
+# Serve a folder or more over MCP, for an AI that cannot run amenbo in the folder
+# itself. A host starts this, never a hand — what goes over the two streams is
+# JSON-RPC. See "Reaching amenbo from an AI that cannot open a folder".
+amenbo mcp --dir /path/to/a /path/to/another  # one server, and a call names one
 
 # Identity
 amenbo whoami                               # this store's identity
@@ -641,23 +641,31 @@ a sandbox somewhere other than your machine. For those, `amenbo mcp` speaks **MC
 (JSON-RPC on stdin/stdout), and the host you configure starts it.
 
 It is a **mediator, not a second amenbo**. Every tool call re-runs the same
-executable in the folder the server was given and hands back what that run wrote,
-so the startup, the integrity check and the reach are the CLI's own — and a folder
+executable in the folder that call named and hands back what that run wrote, so
+the startup, the integrity check and the reach are the CLI's own — and a folder
 that is not bound is refused in the words you would read typing there yourself.
 
 |  | CLI | MCP |
 | --- | --- | --- |
 | How the AI reaches amenbo | runs `amenbo` itself | calls a tool on a server the host started |
-| Where the project comes from | the folder the AI was started in | the folder written into the host's settings |
-| How many projects one setup reaches | whichever folder it is standing in | exactly one; a second project is a second entry |
+| Where the project comes from | the folder the AI was started in | the folder the call names, out of the ones in the host's settings |
+| How many projects one setup reaches | whichever folder it is standing in | the folders you listed, one per call |
 | Which commands | all of them | all of them, less `bind` and `init` |
 | Who declares the facet | whoever types `--actor` | the server, and it is always `ai` |
 
-Three tools: **`agent`** (how to work here, in full), **`agent_command`** (one
-command's spec), and **`run`**, which types the words you would have typed after
-`amenbo`. Passing them through is what keeps `amenbo agent` the single description
-of what can be typed, rather than one tool definition per command going stale
-beside it.
+**You choose the folders; the AI chooses which one this call is for.** They arrive
+on the command line the host was given, so nothing sent over the streams widens
+that set, and naming a folder outside it comes back out of reach with the set
+itself in the answer. Naming one is required even when you listed a single folder:
+a default would put a call somewhere nobody said.
+
+Three tools: **`agent`** (how to work in one folder, in full), **`agent_command`**
+(one command's spec), and **`run`**, which types the words you would have typed
+after `amenbo`. Each takes the folder it is for, and each carries the list of the
+ones it may be called for, so the first call is already right about where it is
+going. Passing the words through is what keeps `amenbo agent` the single
+description of what can be typed, rather than one tool definition per command
+going stale beside it.
 
 Two things are named rather than passed through. The **facet** is the server's to
 declare — an `--actor` the caller wrote is dropped and `ai` put in its place, since
@@ -679,12 +687,13 @@ stable is the line the server is started with, for anyone who keeps their settin
 by hand:
 
 ```sh
-amenbo mcp --dir /path/to/the/folder
+amenbo mcp --dir /path/to/a/folder /path/to/another
 ```
 
-That is not a command to type at a terminal: what goes over the two streams is
-JSON-RPC, so typing it only leaves a process waiting for a protocol nobody is
-speaking.
+One `--dir` takes them all — a folder that is not there is dropped with a line on
+the host's log, and only a set with nothing left in it is refused. That is not a
+command to type at a terminal: what goes over the two streams is JSON-RPC, so
+typing it only leaves a process waiting for a protocol nobody is speaking.
 
 </details>
 

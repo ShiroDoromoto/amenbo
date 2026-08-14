@@ -1,27 +1,31 @@
 # The road for an AI that cannot run amenbo itself. A chat with no terminal, or a tool whose commands
 # run in a sandbox somewhere other than this machine, reaches a project the other way round: the host
-# starts `amenbo mcp` for one folder, and everything after that goes over the two streams.
+# starts `amenbo mcp` for the folders a person chose, and everything after that goes over the two
+# streams.
 #
-# What this walks is the whole of what that costs. A server serves the one folder it was given, so a
-# road never says which project it means. Its tools are three and the words go through them verbatim,
-# so what a caller can do is what a person could type — less the two commands that would move the
-# folder out from under it. And the facet is the server's to declare: an `--actor human` written by
-# the caller is dropped, and the record says an AI acted.
+# What this walks is the whole of what that costs. A server serves the folders it was given and no
+# others, so every call says which one it means — and one that names a folder outside the set is
+# turned away with the set itself, which is what lets the next call be right. Its tools are three and
+# the words go through them verbatim, so what a caller can do is what a person could type — less the
+# two commands that would move a folder out from under it. And the facet is the server's to declare:
+# an `--actor human` written by the caller is dropped, and the record says an AI acted.
 #
 # A screen road alone has nowhere to walk this: there is no window in front of a protocol, and the
 # app the settings reach is not this machine's to open. The road that hands those settings over is a
 # screen's, and it stops where this one starts.
 id: work-a-project-from-an-ai-that-has-no-terminal
-title: A host starts one server for one folder, and the AI behind it reads the way to work, files a task and is refused the two commands that would move the folder
+title: A host starts one server for the folders a person chose, and the AI behind it names one of them per call, files a task there, is turned away from a folder nobody chose, and is refused the two commands that would move a folder
 description: >
-  Stand `amenbo mcp` for a project's folder, read back the tools it publishes, and walk one round
-  trip: the spec that says how to work here, a task filed through the words a person would have
-  typed, and that task read back off the board. Then the two refusals — the facet the caller asked
-  for is not the one recorded, and `bind` is turned away as a result the model reads rather than as a
-  fault the host swallows.
+  Stand `amenbo mcp` for two of a person's folders, read back the tools it publishes, and walk one
+  round trip: the spec that says how to work in the folder named, a task filed through the words a
+  person would have typed, and that task read back off the board. Then the three refusals — a folder
+  the person did not choose is out of reach and says what was on offer instead, the facet the caller
+  asked for is not the one recorded, and `bind` is turned away as a result the model reads rather
+  than as a fault the host swallows.
 given:
-  # The project the server will answer about, and the folder that says so. A server is told a folder
-  # and works the project out from it, so the folder is the whole of what the road hands over.
+  # The two projects the server will answer about, and the folders that say so. A server is told
+  # folders and works each project out from the one a call names, so the folders are the whole of what
+  # the road hands over.
   - type: action
     domain: project
     op: create
@@ -35,12 +39,29 @@ given:
     with:
       dir: greenhouse
 
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Orchard
+      dir: orchard
+
+  - type: action
+    domain: folder
+    op: init
+    with:
+      dir: orchard
+
 steps_cli:
+  # One server, both folders. The set is the person's: it arrives on the command line the host was
+  # given, and nothing sent over the streams widens it.
   - type: action
     domain: mcp
     op: serve
     with:
-      dir: greenhouse
+      dirs:
+        - greenhouse
+        - orchard
 
   # The three the manifest publishes. `run` is the one everything else rides on, so it is the one
   # named: a host that offered the two readers and not the writer would leave an AI able to read the
@@ -60,13 +81,15 @@ steps_cli:
       tool: task_add
       present: false
 
-  # The spec, read whole. It is the first thing an AI does here and the reason `run` needs no tool of
-  # its own per command: what can be typed is described once, by amenbo.
+  # The spec, read whole, for the folder this call names. It is the first thing an AI does here and
+  # the reason `run` needs no tool of its own per command: what can be typed is described once, by
+  # amenbo.
   - type: action
     domain: mcp
     op: call
     with:
       tool: agent
+      dir: greenhouse
 
   - type: assert
     domain: mcp
@@ -81,6 +104,7 @@ steps_cli:
     op: call
     with:
       tool: run
+      dir: greenhouse
       args:
         - "--actor"
         - "human"
@@ -102,6 +126,7 @@ steps_cli:
     op: call
     with:
       tool: run
+      dir: greenhouse
       args:
         - "task"
         - "list"
@@ -114,7 +139,50 @@ steps_cli:
     with:
       contains: SCENARIO — filed from an AI with no terminal
 
-  # The one door that stays shut. Re-pointing the folder is the shape this whole road rests on, so
+  # The other folder of the set, over the same connection. What comes back is the other project's own
+  # board — which is what the naming buys, and what says the folder decides where a call lands rather
+  # than the server having a favourite.
+  - type: action
+    domain: mcp
+    op: call
+    with:
+      tool: run
+      dir: orchard
+      args:
+        - "project"
+        - "list"
+
+  - type: assert
+    domain: mcp
+    op: answered
+    with:
+      contains: Orchard
+
+  # A folder nobody chose. The refusal is a result the model reads, and it carries the set — so the
+  # way back is in the answer rather than in a second question.
+  - type: action
+    domain: mcp
+    op: call
+    with:
+      tool: run
+      dir: unchosen
+      args:
+        - "task"
+        - "list"
+
+  - type: assert
+    domain: mcp
+    op: answered
+    with:
+      ok: false
+
+  - type: assert
+    domain: mcp
+    op: answered
+    with:
+      contains: out_of_reach
+
+  # The one door that stays shut. Re-pointing a folder is the shape this whole road rests on, so
   # `bind` is refused — and refused as a *result*, marked in error, which is what puts the reason in
   # front of the model instead of leaving the host to swallow it as a transport fault.
   - type: action
@@ -122,6 +190,7 @@ steps_cli:
     op: call
     with:
       tool: run
+      dir: greenhouse
       args:
         - "bind"
         - "--project"

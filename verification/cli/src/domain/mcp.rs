@@ -1,15 +1,19 @@
 //! The `mcp` domain: amenbo reached over a protocol rather than typed at.
 //!
 //! Every other domain here drives the shipped binary one invocation at a time and reads what it
-//! printed. This one drives it as a **server**: started once for a folder, kept alive for the length
-//! of the road, and spoken to in JSON-RPC over its two streams. That is the whole reason it is a
-//! domain of its own — what a road walks is the protocol, and a protocol has a conversation where a
+//! printed. This one drives it as a **server**: started once for a set of folders, kept alive for the
+//! length of the road, and spoken to in JSON-RPC over its two streams. That is the whole reason it is
+//! a domain of its own — what a road walks is the protocol, and a protocol has a conversation where a
 //! command has an exit code.
 //!
 //! **The binary is the same one, in the same isolated store.** A server that reached anywhere else
 //! would be a second amenbo and would prove nothing about the one under test, so it is spawned
-//! through the same invocation the rest of the driver uses: the run's `AMENBO_HOME`, and the folder
+//! through the same invocation the rest of the driver uses: the run's `AMENBO_HOME`, and the folders
 //! the step names.
+//!
+//! Every call names the folder it is for, so `call` carries a `dir` the way `serve` carries the set
+//! — including a folder the server was never given, which is a road worth walking: what comes back
+//! is the refusal, and a refusal is a document like any other.
 //!
 //! **What the road reads is what a host would.** A tool that ran and refused comes back as a result
 //! marked in error rather than as a transport fault, which is what puts the reason in front of the
@@ -29,7 +33,7 @@ use crate::{req_bool, req_str, unmapped, Driver, Outcome};
 /// know is that the revision it asked for is the revision it got.
 const PROTOCOL: &str = "2025-06-18";
 
-/// A server standing for one folder, and the conversation held with it.
+/// A server standing for a set of folders, and the conversation held with it.
 pub(crate) struct Standing {
     child: Child,
     stdin: ChildStdin,
@@ -89,16 +93,33 @@ impl Driver<'_> {
         })
     }
 
+    /// The folders a `serve` step stands a server for. Always a list, even of one: a set is what the
+    /// server is given, and the spelling says so rather than leaving a road to imply it.
+    fn folders(&self, with: &Args) -> Result<Vec<std::path::PathBuf>, String> {
+        let named = with
+            .get("dirs")
+            .and_then(|dirs| dirs.as_sequence())
+            .ok_or("`dirs` is the folders the server is given, so it is a list")?;
+        named
+            .iter()
+            .map(|dir| {
+                let dir = dir.as_str().ok_or("every entry under `dirs` must be a folder's name")?;
+                self.folder_named(dir)
+            })
+            .collect()
+    }
+
     pub(crate) fn mcp_action(&mut self, op: &str, with: &Args) -> Result<Outcome, String> {
         match op {
-            // Stand the server up for one folder, settle the handshake, and take what it publishes.
+            // Stand the server up for the folders named, settle the handshake, and take what it
+            // publishes.
             // All three at once because none of them is a move a host makes on its own: a server is
             // started, and being spoken to at all is what the rest of the road is.
             "serve" => {
-                let dir = self.folder(with)?;
+                let dirs = self.folders(with)?;
                 let mut child = Command::new(&self.bin)
                     .args(["mcp", "--dir"])
-                    .arg(&dir)
+                    .args(&dirs)
                     .current_dir(&self.session.cwd)
                     .env("AMENBO_HOME", &self.session.home)
                     .env("AMENBO_UPDATE_CHECK", "0")
@@ -106,7 +127,7 @@ impl Driver<'_> {
                     .stdout(Stdio::piped())
                     .stderr(Stdio::null())
                     .spawn()
-                    .map_err(|e| format!("could not start the server for {}: {e}", dir.display()))?;
+                    .map_err(|e| format!("could not start the server for {}: {e}", shown(&dirs)))?;
                 let stdin = child.stdin.take().ok_or("the server took no input")?;
                 let stdout = child.stdout.take().ok_or("the server offered no output")?;
                 let mut standing = Standing {
@@ -140,14 +161,18 @@ impl Driver<'_> {
                 self.server = Some(standing);
                 Ok(Outcome::action(format!(
                     "a server is standing for {} (speaking {spoken}, offering {listed})",
-                    dir.display()
+                    shown(&dirs)
                 )))
             }
             // One tool called, with the words the caller sends under it. The answer is kept for the
             // assert that follows, the way a plugin's return value is.
             "call" => {
                 let tool = req_str(with, "tool")?.to_string();
+                // Which folder the call is for. Every tool takes it and none of them defaults it, so a
+                // road that left it out would be walking a call no host can make.
+                let dir = self.folder(with)?;
                 let mut arguments = serde_json::Map::new();
+                arguments.insert("folder".to_string(), Value::String(dir.display().to_string()));
                 if let Some(words) = with.get("args") {
                     let words = words
                         .as_sequence()
@@ -177,7 +202,8 @@ impl Driver<'_> {
                 let said = text_of(&result).len();
                 standing.last = Some(result);
                 Ok(Outcome::action(format!(
-                    "called `{tool}` — it came back {} with {said} byte(s)",
+                    "called `{tool}` for {} — it came back {} with {said} byte(s)",
+                    dir.display(),
                     if errored { "in error" } else { "cleanly" }
                 )))
             }
@@ -245,6 +271,11 @@ impl Driver<'_> {
             _ => Err(unmapped(Domain::Mcp, op)),
         }
     }
+}
+
+/// The folders a server was stood up for, for the line the run prints.
+fn shown(dirs: &[std::path::PathBuf]) -> String {
+    dirs.iter().map(|dir| dir.display().to_string()).collect::<Vec<_>>().join(", ")
 }
 
 /// Everything the answer said, as one string. A result carries its text in blocks, and a road asking

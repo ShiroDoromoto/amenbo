@@ -1,7 +1,9 @@
-//! amenbo as an app on the other side of MCP reaches it: one server per folder (`AMB-D-666`).
+//! amenbo as an app on the other side of MCP reaches it: one server per folder (`AMB-D-666`), which
+//! is what is written from here. The server itself takes as many folders as it is given
+//! (`AMB-D-679`), and a call names one of them; an entry of one folder is a set of one.
 //!
-//! A server is nothing but the command that starts it and the folder it is bound to. Which project
-//! that folder belongs to is worked out by the amenbo the command starts, standing there — so what a
+//! A server is nothing but the command that starts it and the folders it is bound to. Which project
+//! each folder belongs to is worked out by the amenbo the command starts, standing there — so what a
 //! host is told is a path and an argument, never a project id.
 //!
 //! **The name is the whole of what keeps two of them apart.** A machine working two projects wants two
@@ -12,9 +14,13 @@
 
 use std::path::Path;
 
-/// The word that binds a server to its folder. It is written into an entry by whatever sets one up and
+/// The word that binds a server to its folders. It is written into an entry by whatever sets one up and
 /// read back out of one by whatever asks whether a project is already set up ([`crate::mcp_probe`]), so
 /// the two say it once between them rather than once each.
+///
+/// The flag takes **one or more** folders on the server's side (`AMB-D-679`), and a call names the one
+/// it is for. What is written from here is still a single folder: the set an entry carries is the
+/// person's choice, and the faces where that choice is made are not these.
 pub const DIR_FLAG: &str = "--dir";
 
 /// amenbo, as one project's MCP server.

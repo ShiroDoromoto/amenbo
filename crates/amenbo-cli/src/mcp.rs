@@ -2,15 +2,20 @@
 //! folder of its own (`AMB-D-665`).
 //!
 //! It is a mediator, not a second implementation. Every tool call re-runs this executable
-//! (`current_exe`) as a child process with its working directory fixed to the folder the server was
-//! started for, and hands the host what that run wrote. So the startup, the integrity check, the
-//! pointer repair and the reach are the CLI's own, decided once and in one place — and a folder that
-//! is not bound, or a store this build cannot read, is refused in the same words a person typing there
-//! would read.
+//! (`current_exe`) as a child process with its working directory fixed to the folder that call named,
+//! and hands the host what that run wrote. So the startup, the integrity check, the pointer repair and
+//! the reach are the CLI's own, decided once and in one place — and a folder that is not bound, or a
+//! store this build cannot read, is refused in the same words a person typing there would read.
 //!
-//! One server serves one folder (`AMB-D-666`): the folder arrives as `--dir` at startup, and nothing a
-//! caller sends can move it. That is what keeps `--project`, which is a person's word and not an AI's,
-//! out of reach from this side.
+//! One server serves the folders `--dir` was given, and a call names one of them (`AMB-D-679`). The
+//! set arrives at startup and nothing a caller sends can widen it: what an AI chooses is which of the
+//! person's folders this call is for, never which folders there are. That is also what keeps
+//! `--project`, a person's word and not an AI's, out of reach from this side — a folder is named, and
+//! which project it is remains the `.amenbo` pointer's answer, there.
+//!
+//! Naming one is required even when the set holds a single folder (`AMB-D-679`, form 3): a default
+//! would put the call somewhere the caller never said, and the caller is the one thing here that can
+//! be wrong about where it meant.
 //!
 //! Three tools (`AMB-D-667`): `agent` and `agent_command`, which read the spec, and `run`, which
 //! carries the caller's own words to any of amenbo's commands. Passing them through is what keeps
@@ -49,10 +54,13 @@ const INVALID_PARAMS: i64 = -32602;
 const OUR_FACET: &str = "ai";
 
 /// The commands `run` will not carry, whatever the caller writes (`AMB-D-667`). Both place the
-/// `.amenbo` pointer, and this server's whole shape is one folder named by the person who configured
-/// it (`AMB-D-666`) — a pointer the AI may rewrite is that shape undone. There is no flag to get past
-/// this: a person who wants either types it in the folder itself.
+/// `.amenbo` pointer, and this server's whole shape is a set of folders named by the person who
+/// configured it (`AMB-D-666`, `AMB-D-679`) — a pointer the AI may rewrite is that shape undone. There
+/// is no flag to get past this: a person who wants either types it in the folder itself.
 const REFUSED: &[&str] = &["bind", "init"];
+
+/// The tool argument every call carries: which of this server's folders it is for.
+const FOLDER_ARG: &str = "folder";
 
 /// What one run of the child left behind: whether it succeeded, and the text to hand back.
 pub struct Ran {
@@ -60,19 +68,24 @@ pub struct Ran {
     pub text: String,
 }
 
-/// How a tool call reaches amenbo. The server's own implementation re-runs this executable; the tests
-/// put a recorder here, so what the argument shaping produces can be read without forking anything.
+/// How a tool call reaches amenbo, in the folder it named. The server's own implementation re-runs
+/// this executable; the tests put a recorder here, so what the argument shaping produces can be read
+/// without forking anything.
 pub trait CallAmenbo {
-    fn call(&self, args: &[String]) -> Ran;
+    fn call(&self, dir: &Path, args: &[String]) -> Ran;
 }
 
-/// The real caller: this executable again, in the folder the server was started for.
+/// The real caller: this executable again, in the folder the call named.
 struct SelfCall {
-    dir: PathBuf,
+    /// The whole set, as the child is told it — one folder per line, under
+    /// [`amenbo_core::env::MCP_DIRS_VAR`]. A child cannot work the set out for itself (its argv is the
+    /// caller's words and its CWD is one folder), and the one refusal that has to name it — no pointer
+    /// here, and no way to place one from this side — is written down there, in amenbo's own words.
+    serving: String,
 }
 
 impl CallAmenbo for SelfCall {
-    fn call(&self, args: &[String]) -> Ran {
+    fn call(&self, dir: &Path, args: &[String]) -> Ran {
         let exe = match std::env::current_exe() {
             Ok(exe) => exe,
             Err(e) => return Ran { ok: false, text: format!("Cannot find the amenbo executable: {e}") },
@@ -82,11 +95,12 @@ impl CallAmenbo for SelfCall {
         // the protocol stream — a child inheriting it would eat the host's next request.
         let out = std::process::Command::new(exe)
             .args(args)
-            .current_dir(&self.dir)
+            .current_dir(dir)
+            .env(amenbo_core::env::MCP_DIRS_VAR, &self.serving)
             .stdin(Stdio::null())
             .output();
         match out {
-            Err(e) => Ran { ok: false, text: format!("Cannot run amenbo in {}: {e}", self.dir.display()) },
+            Err(e) => Ran { ok: false, text: format!("Cannot run amenbo in {}: {e}", dir.display()) },
             Ok(out) => {
                 let stdout = String::from_utf8_lossy(&out.stdout).trim_end().to_string();
                 let stderr = String::from_utf8_lossy(&out.stderr).trim_end().to_string();
@@ -109,39 +123,60 @@ impl CallAmenbo for SelfCall {
     }
 }
 
-/// `amenbo mcp --dir <path>` — serve one folder over MCP until the host closes the stream
-/// (`AMB-D-665`, `AMB-D-666`).
+/// `amenbo mcp --dir <path> [<path> …]` — serve a set of folders over MCP until the host closes the
+/// stream (`AMB-D-665`, `AMB-D-679`).
 ///
-/// The one thing decided here is the folder, and it is decided once: a path that names no directory is
-/// refused now, on the terminal, rather than as a spawn failure inside every tool call for the life of
-/// the server. Whether that folder is bound, whether this build can read its store, whether it is a
+/// The one thing decided here is the set, and it is decided once. A path that names no directory is
+/// dropped now, on the terminal, rather than becoming a spawn failure inside every call that names it
+/// for the life of the server — and dropped rather than fatal, because a set comes out of a host's own
+/// free-text field (`AMB-T-3156`), where one mistyped path would otherwise take down every folder that
+/// was written correctly. Nothing being left is the one refusal: there is then nowhere to serve.
+///
+/// Whether a folder that *is* there is bound, whether this build can read its store, whether it is a
 /// worktree nobody should work in — none of those are asked here. They are the child's to answer, in
 /// the folder it runs in, so the host reads amenbo's own words instead of a second opinion this process
 /// formed about a folder it never opened.
 ///
 /// It writes nothing on stdout of its own: that stream is the protocol's.
-pub(crate) fn mcp_cmd(dir: &str) -> Result<i32, CliError> {
-    let path = std::path::PathBuf::from(dir);
-    if !path.is_dir() {
+pub(crate) fn mcp_cmd(dirs: &[String]) -> Result<i32, CliError> {
+    let mut folders: Vec<PathBuf> = Vec::new();
+    let mut gone: Vec<&str> = Vec::new();
+    for dir in dirs {
+        let path = PathBuf::from(dir);
+        if !path.is_dir() {
+            gone.push(dir);
+        } else if !folders.contains(&path) {
+            // The same folder written twice is one folder. It would otherwise be listed twice in
+            // every tool's description, which reads as two roads where there is one.
+            folders.push(path);
+        }
+    }
+    if folders.is_empty() {
         return Err(CliError {
             code: "invalid_value",
-            message: format!("--dir '{dir}' is not a folder, so there is nowhere to serve."),
+            message: format!(
+                "None of the folders named with --dir is a folder on this machine ({}), so there is nowhere to serve.",
+                gone.join(", ")
+            ),
             hint: Some(format!(
-                "Name the folder the project is worked in — the one holding its `.amenbo` — in the host's own settings: `{} mcp --dir <path>`.",
+                "Name the folders the projects are worked in — the ones holding their `.amenbo` — in the host's own settings: `{} mcp --dir <path> [<path> …]`.",
                 Paths::command_name()
             )),
             exit: 2,
         });
     }
-    Ok(serve(&path))
+    for missing in gone {
+        eprintln!("amenbo mcp: --dir '{missing}' is not a folder on this machine, so it is not served.");
+    }
+    Ok(serve(&folders))
 }
 
-/// Serve the folder until the host closes the stream. The return value is this process's exit code.
+/// Serve the folders until the host closes the stream. The return value is this process's exit code.
 ///
 /// Both streams belong to the protocol: nothing else may be written to stdout, and what this server
 /// has to say for itself goes to stderr, where the host logs it.
-pub fn serve(dir: &Path) -> i32 {
-    let caller = SelfCall { dir: dir.to_path_buf() };
+pub fn serve(dirs: &[PathBuf]) -> i32 {
+    let caller = SelfCall { serving: listing(dirs) };
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
     for line in stdin.lock().lines() {
@@ -155,7 +190,7 @@ pub fn serve(dir: &Path) -> i32 {
         if line.trim().is_empty() {
             continue;
         }
-        let Some(reply) = respond(&line, &caller) else { continue };
+        let Some(reply) = respond(&line, &caller, dirs) else { continue };
         // A host that walked away is not an error to report: it is the end of the session, and the
         // next read would say so anyway.
         if writeln!(stdout, "{reply}").and_then(|()| stdout.flush()).is_err() {
@@ -167,7 +202,7 @@ pub fn serve(dir: &Path) -> i32 {
 
 /// Answer one message. `None` is a notification — a message with no `id`, which the protocol says is
 /// never replied to, however it turned out.
-fn respond(line: &str, caller: &dyn CallAmenbo) -> Option<Value> {
+fn respond(line: &str, caller: &dyn CallAmenbo, dirs: &[PathBuf]) -> Option<Value> {
     let msg: Value = match serde_json::from_str(line) {
         Ok(msg) => msg,
         // Nothing was parsed, so there is no id to answer under. Null is what the protocol asks for.
@@ -192,8 +227,8 @@ fn respond(line: &str, caller: &dyn CallAmenbo) -> Option<Value> {
     Some(match method {
         "initialize" => reply(id, initialize(&params)),
         "ping" => reply(id, json!({})),
-        "tools/list" => reply(id, json!({ "tools": tools() })),
-        "tools/call" => match call(&params, caller) {
+        "tools/list" => reply(id, json!({ "tools": tools(dirs) })),
+        "tools/call" => match call(&params, caller, dirs) {
             Ok(result) => reply(id, result),
             Err((code, message)) => error(id, code, &message),
         },
@@ -213,51 +248,95 @@ fn initialize(params: &Value) -> Value {
         // Tools, and nothing else: no resources, no prompts, and no list that changes under the host.
         "capabilities": { "tools": { "listChanged": false } },
         "serverInfo": { "name": Paths::command_name(), "version": VERSION },
-        "instructions": "Call `agent` first and follow what it says — it is how work is done in this folder, in full. `agent_command` pulls one command's flags, arguments and examples when you are about to use it, and `run` types it.",
+        "instructions": "Every call names the folder it is for — the folders this server works in are listed on each tool. Call `agent` first for one of them and follow what it says: it is how work is done in that folder, in full. `agent_command` pulls one command's flags, arguments and examples when you are about to use it, and `run` types it.",
     })
 }
 
 /// The tools this build serves. Descriptions are written for the model that reads the list, not for a
 /// person: what the tool answers, and when to reach for it.
-fn tools() -> Value {
+///
+/// Each one carries the folders it may be called for (`AMB-D-679`, form 7). A host reads the listing
+/// before the model calls anything, so putting the set here is what lets the very first call name a
+/// folder correctly — and it is answered per request, so a folder that was set up after this server
+/// started reads as set up the next time the list is pulled.
+fn tools(dirs: &[PathBuf]) -> Value {
+    let served = offered(dirs);
+    let folder = json!({
+        "type": "string",
+        "description": "which of this server's folders to work in — one of the ones listed in this tool's description, written exactly as it is listed there",
+    });
     json!([
         {
             "name": "agent",
-            "description": "How to work in this folder, in full: the working practice to follow, the rules that bind it, and an index of every command by name. Call this first, before anything else, and follow what it says. It also reports what is installed here and whether this build is current.",
-            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false },
+            "description": format!("How to work in one folder, in full: the working practice to follow, the rules that bind it, and an index of every command by name. Call this first, before anything else, and follow what it says. It also reports what is installed there and whether this build is current.\n\n{served}"),
+            "inputSchema": {
+                "type": "object",
+                "properties": { FOLDER_ARG: folder },
+                "required": [FOLDER_ARG],
+                "additionalProperties": false,
+            },
         },
         {
             "name": "agent_command",
-            "description": "One command's full spec — summary, arguments, flags, examples — pulled by the name the index in `agent` lists it under (compound names carry a space, as in `task add`). Read this before using a command instead of guessing a flag from its name.",
+            "description": format!("One command's full spec — summary, arguments, flags, examples — pulled by the name the index in `agent` lists it under (compound names carry a space, as in `task add`). Read this before using a command instead of guessing a flag from its name.\n\n{served}"),
             "inputSchema": {
                 "type": "object",
                 "properties": {
+                    FOLDER_ARG: folder,
                     "command": {
                         "type": "string",
                         "description": "the command's name as the agent index lists it, for example `task add` or `decision show`",
                     },
                 },
-                "required": ["command"],
+                "required": [FOLDER_ARG, "command"],
                 "additionalProperties": false,
             },
         },
         {
             "name": "run",
-            "description": "Run an amenbo command in this folder and hand back exactly what it wrote. The words are the ones you would type after `amenbo`, one per array element — pull the command's spec with `agent_command` first rather than guessing a flag. Add `--json` yourself where you want machine-readable output. Do not pass `--actor`: this server declares the facet, and one you write is dropped. `bind` and `init` are refused here — ask the person to run either in the folder itself.",
+            "description": format!("Run an amenbo command in one folder and hand back exactly what it wrote. The words are the ones you would type after `amenbo`, one per array element — pull the command's spec with `agent_command` first rather than guessing a flag. Add `--json` yourself where you want machine-readable output. Do not pass `--actor`: this server declares the facet, and one you write is dropped. `bind` and `init` are refused here — ask the person to run either in the folder itself.\n\n{served}"),
             "inputSchema": {
                 "type": "object",
                 "properties": {
+                    FOLDER_ARG: folder,
                     "args": {
                         "type": "array",
                         "items": { "type": "string" },
                         "description": "the command and its flags, one word per element, as they would be typed after `amenbo` — for example [\"task\", \"list\", \"--filter\", \"status:todo\", \"--json\"]. Empty runs amenbo with no arguments, which is today's work",
                     },
                 },
-                "required": ["args"],
+                "required": [FOLDER_ARG, "args"],
                 "additionalProperties": false,
             },
         },
     ])
+}
+
+/// The folders this server was given, as one line each — what a caller copies a name out of, and what
+/// the child is handed so a refusal can name the set it could have reached instead.
+fn listing(dirs: &[PathBuf]) -> String {
+    dirs.iter().map(|dir| dir.display().to_string()).collect::<Vec<_>>().join("\n")
+}
+
+/// The same set, written for the model that has to choose from it — every folder, and which of them
+/// have a project set up in them at this moment.
+///
+/// The unset-up ones are named rather than dropped. Dropping them would make a folder the person
+/// deliberately chose read as one this server was never given, and the answer to naming it would be
+/// "out of reach" — which is not what is wrong with it. What is wrong is that nobody has linked it
+/// yet, and that is a sentence the caller can hand to the person who can.
+fn offered(dirs: &[PathBuf]) -> String {
+    let lines = dirs
+        .iter()
+        .map(|dir| match amenbo_core::binding::find_upward(dir) {
+            Some(_) => format!("\n  • {}", dir.display()),
+            None => format!(
+                "\n  • {} — no project is set up here yet; a call naming it is answered with that, and only a person can link it",
+                dir.display()
+            ),
+        })
+        .collect::<String>();
+    format!("Folders this server works in — every call names exactly one of them, written as it is here:{lines}")
 }
 
 /// What a tool call comes to: a command line to run, or a refusal to hand back without running one.
@@ -270,20 +349,77 @@ enum Shaped {
 /// which is the caller's mistake to correct. Everything the model is meant to *read* comes back as `Ok`
 /// with `isError`: amenbo's own refusal, and this server's, which the model has to see in order to hand
 /// it to the person instead of trying again.
-fn call(params: &Value, caller: &dyn CallAmenbo) -> Result<Value, (i64, String)> {
+fn call(params: &Value, caller: &dyn CallAmenbo, dirs: &[PathBuf]) -> Result<Value, (i64, String)> {
     let name = params
         .get("name")
         .and_then(Value::as_str)
         .ok_or_else(|| (INVALID_PARAMS, "A tool call must name a tool.".to_string()))?;
     let args = params.get("arguments").unwrap_or(&Value::Null);
-    let ran = match argv_for(name, args)? {
-        Shaped::Run(argv) => caller.call(&argv),
-        Shaped::Refused(why) => Ran { ok: false, text: why },
+    // The tool is read first, so a name nobody serves is answered as that rather than as a folder
+    // missing from a call that was never going to run.
+    let shaped = argv_for(name, args)?;
+    let ran = match where_it_runs(name, args, dirs)? {
+        // A call with nowhere to run is answered before what it would have run is: the words it
+        // carried never got a folder to be typed in, whatever else was wrong with them.
+        Where::OutOfReach(why) => Ran { ok: false, text: why },
+        Where::In(dir) => match shaped {
+            Shaped::Run(argv) => caller.call(dir, &argv),
+            Shaped::Refused(why) => Ran { ok: false, text: why },
+        },
     };
     Ok(json!({
         "content": [{ "type": "text", "text": ran.text }],
         "isError": !ran.ok,
     }))
+}
+
+/// Where one tool call runs: the folder it named, or the refusal for a folder this server was not
+/// given.
+enum Where<'a> {
+    In(&'a Path),
+    OutOfReach(String),
+}
+
+/// Read the folder a call named and find it in the set (`AMB-D-679`, forms 2–5).
+///
+/// `Err` is the caller's protocol mistake — no folder named at all, which no default fills in.
+/// Naming one that is not in the set is not a mistake of that kind: it is a real answer the model has
+/// to read, because what it says is that the person chose a different set, and the way back is in the
+/// answer itself.
+fn where_it_runs<'a>(name: &str, args: &Value, dirs: &'a [PathBuf]) -> Result<Where<'a>, (i64, String)> {
+    let named = args
+        .get(FOLDER_ARG)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|folder| !folder.is_empty())
+        .ok_or_else(|| {
+            (
+                INVALID_PARAMS,
+                format!("{name} takes `{FOLDER_ARG}`: which folder to work in. {}", offered(dirs)),
+            )
+        })?;
+    Ok(match found(named, dirs) {
+        Some(dir) => Where::In(dir),
+        None => Where::OutOfReach(format!(
+            "`{named}` is out_of_reach: this server was not given that folder, and the set is the person's to choose — nothing sent over this connection widens it.\n\n{}",
+            offered(dirs)
+        )),
+    })
+}
+
+/// The folder in the set a caller's name stands for, if any.
+///
+/// The name is matched as written first, so one copied out of a tool's description always lands.
+/// Failing that, the filesystem is asked what the two paths are: a trailing slash, a `.` in the
+/// middle, or a symlinked route to the same folder is the same folder, and a caller that reached the
+/// right place by another spelling should not be turned away from it.
+fn found<'a>(named: &str, dirs: &'a [PathBuf]) -> Option<&'a Path> {
+    let asked = Path::new(named);
+    if let Some(hit) = dirs.iter().find(|dir| dir.as_path() == asked) {
+        return Some(hit);
+    }
+    let real = asked.canonicalize().ok()?;
+    dirs.iter().find(|dir| dir.canonicalize().is_ok_and(|its| its == real)).map(PathBuf::as_path)
 }
 
 /// What one tool call becomes on the command line. The two reading tools name every word themselves, so
@@ -333,7 +469,7 @@ fn shape(words: &[String]) -> Shaped {
     let line = read_line(words);
     if let Some(refused) = line.subcommand.as_deref().filter(|s| REFUSED.contains(s)) {
         return Shaped::Refused(format!(
-            "`{refused}` is not served over MCP: it writes the pointer that says which project this folder is, and this server was given one folder to work in. Ask the person to run `{} {refused} …` in the folder itself.",
+            "`{refused}` is not served over MCP: it writes the pointer that says which project a folder is, and the folders this server works in are the person's to choose. Ask the person to run `{} {refused} …` in the folder itself, or to add the folder to a project in amenbo's own window.",
             Paths::command_name()
         ));
     }
@@ -426,10 +562,19 @@ mod tests {
     use super::*;
     use std::cell::RefCell;
 
-    /// A caller that records what it was asked to run and answers with a fixed reply — the shaping is
-    /// the subject here, and forking the binary would say nothing more about it.
+    /// The set a test server stands for. These are names, not places: what a call does with one is
+    /// decided by the set it was given, and nothing here opens a folder.
+    const SHOP: &str = "/work/shop";
+    const GREENHOUSE: &str = "/work/greenhouse";
+
+    fn dirs() -> Vec<PathBuf> {
+        vec![PathBuf::from(SHOP), PathBuf::from(GREENHOUSE)]
+    }
+
+    /// A caller that records what it was asked to run, and where, and answers with a fixed reply — the
+    /// shaping is the subject here, and forking the binary would say nothing more about it.
     struct Recorder {
-        seen: RefCell<Vec<Vec<String>>>,
+        seen: RefCell<Vec<(PathBuf, Vec<String>)>>,
         ok: bool,
     }
 
@@ -443,19 +588,34 @@ mod tests {
         }
 
         fn last(&self) -> Vec<String> {
-            self.seen.borrow().last().cloned().expect("nothing was run")
+            self.seen.borrow().last().cloned().expect("nothing was run").1
+        }
+
+        fn last_dir(&self) -> PathBuf {
+            self.seen.borrow().last().cloned().expect("nothing was run").0
         }
     }
 
     impl CallAmenbo for Recorder {
-        fn call(&self, args: &[String]) -> Ran {
-            self.seen.borrow_mut().push(args.to_vec());
+        fn call(&self, dir: &Path, args: &[String]) -> Ran {
+            self.seen.borrow_mut().push((dir.to_path_buf(), args.to_vec()));
             Ran { ok: self.ok, text: "what amenbo wrote".to_string() }
         }
     }
 
     fn ask(line: &str, caller: &dyn CallAmenbo) -> Value {
-        respond(line, caller).expect("a request is always answered")
+        respond(line, caller, &dirs()).expect("a request is always answered")
+    }
+
+    /// One tool call, for one of the server's folders.
+    fn call_for(tool: &str, folder: &str, arguments: Value) -> String {
+        let mut arguments = arguments;
+        arguments[FOLDER_ARG] = json!(folder);
+        json!({
+            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": { "name": tool, "arguments": arguments },
+        })
+        .to_string()
     }
 
     #[test]
@@ -485,57 +645,117 @@ mod tests {
     /// The words `run` was handed, as the child would have been given them.
     fn ran(args: &[&str]) -> Vec<String> {
         let caller = Recorder::new();
-        let call = json!({
-            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
-            "params": { "name": "run", "arguments": { "args": args } },
-        });
-        let out = ask(&call.to_string(), &caller);
+        let out = ask(&call_for("run", SHOP, json!({ "args": args })), &caller);
         assert_eq!(out["result"]["isError"], false, "{out}");
         caller.last()
     }
 
     #[test]
-    fn the_listing_carries_the_three_tools() {
+    fn the_listing_carries_the_three_tools_and_the_folders_each_may_be_called_for() {
         let caller = Recorder::new();
         let out = ask(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#, &caller);
         let tools = out["result"]["tools"].as_array().expect("tools is an array");
         let names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
         assert_eq!(names, vec!["agent", "agent_command", "run"], "the three the decision names");
         for tool in tools {
-            assert!(
-                tool["description"].as_str().is_some_and(|d| !d.is_empty()),
-                "a tool nobody described is one the model cannot pick: {tool}",
-            );
+            let described = tool["description"].as_str().unwrap_or_default();
+            assert!(!described.is_empty(), "a tool nobody described is one the model cannot pick: {tool}");
             assert_eq!(tool["inputSchema"]["type"], "object", "every tool declares an object schema: {tool}");
+            // The set is on every tool, because a host reads the listing before the model calls
+            // anything — this is where the first call learns what it may name (`AMB-D-679`, form 7).
+            for dir in [SHOP, GREENHOUSE] {
+                assert!(described.contains(dir), "`{dir}` is missing from {}: {described}", tool["name"]);
+            }
+            let required = tool["inputSchema"]["required"].as_array().expect("what it requires");
+            assert!(
+                required.iter().any(|arg| arg == FOLDER_ARG),
+                "the folder is required, whatever else is: {tool}",
+            );
         }
     }
 
     #[test]
-    fn agent_runs_the_entry_point() {
+    fn agent_runs_the_entry_point_in_the_folder_the_call_named() {
         let caller = Recorder::new();
-        let out = ask(r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"agent","arguments":{}}}"#, &caller);
+        let out = ask(&call_for("agent", GREENHOUSE, json!({})), &caller);
         assert_eq!(caller.last(), vec!["agent", "--json"]);
+        assert_eq!(caller.last_dir(), PathBuf::from(GREENHOUSE), "the call runs where it said");
         assert_eq!(out["result"]["content"][0]["text"], "what amenbo wrote");
         assert_eq!(out["result"]["isError"], false);
+    }
+
+    /// Every tool takes the folder, and none of them fills it in (`AMB-D-679`, form 3). A default
+    /// would put the call somewhere the caller never said — which is the one thing an AI is able to be
+    /// wrong about here.
+    #[test]
+    fn a_call_that_names_no_folder_runs_nothing_and_is_told_the_set() {
+        for (tool, arguments) in [
+            ("agent", json!({})),
+            ("agent_command", json!({ "command": "task add" })),
+            ("run", json!({ "args": ["status"] })),
+        ] {
+            let caller = Recorder::new();
+            let call = json!({
+                "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                "params": { "name": tool, "arguments": arguments },
+            });
+            let out = ask(&call.to_string(), &caller);
+            assert_eq!(out["error"]["code"], INVALID_PARAMS, "{tool}: {out}");
+            let said = out["error"]["message"].as_str().unwrap_or_default();
+            assert!(said.contains(SHOP) && said.contains(GREENHOUSE), "{tool} says what it could be given: {said}");
+            assert!(caller.seen.borrow().is_empty(), "{tool} ran with nowhere to run it");
+        }
+    }
+
+    /// A folder the person did not choose is out of reach, and the answer carries the way back: the
+    /// set itself, which is what the caller names in its next call (`AMB-D-679`, form 5).
+    #[test]
+    fn a_folder_outside_the_set_is_out_of_reach_and_the_answer_says_what_is_in_it() {
+        let caller = Recorder::new();
+        let out = ask(&call_for("run", "/work/somewhere-else", json!({ "args": ["status"] })), &caller);
+        assert!(out.get("error").is_none(), "the refusal is the tool's answer, to be read: {out}");
+        assert_eq!(out["result"]["isError"], true, "{out}");
+        let said = out["result"]["content"][0]["text"].as_str().unwrap_or_default();
+        assert!(said.contains("out_of_reach"), "the refusal names itself: {said}");
+        assert!(said.contains(SHOP) && said.contains(GREENHOUSE), "and the set it could have named: {said}");
+        assert!(caller.seen.borrow().is_empty(), "nothing runs outside the set");
+    }
+
+    /// The same folder written another way is the same folder: what a caller reached by a longer route
+    /// is the one the person chose, and turning it away would be this server disagreeing with the
+    /// filesystem about where a path leads.
+    #[test]
+    fn a_folder_spelled_another_way_is_still_the_one_in_the_set() {
+        let here = std::env::temp_dir();
+        let set = vec![here.clone()];
+        let roundabout = here.join(".");
+        assert_eq!(
+            found(&roundabout.to_string_lossy(), &set).map(Path::to_path_buf),
+            Some(here.clone()),
+            "a path that leads to the folder is the folder",
+        );
+        assert!(found("/there/is/no/such/folder", &set).is_none(), "and one that leads elsewhere is not");
+    }
+
+    /// What the child is handed: the set, one folder per line. The refusal that has to name it is
+    /// written where the child stands, so this is the only way it can know what else was on offer.
+    #[test]
+    fn the_child_is_told_the_whole_set_one_folder_to_a_line() {
+        assert_eq!(listing(&dirs()), format!("{SHOP}\n{GREENHOUSE}"));
+        assert_eq!(listing(&[]), "", "a set of nothing is never served, and reads as nothing");
     }
 
     #[test]
     fn agent_command_carries_the_name_it_was_given() {
         let caller = Recorder::new();
-        ask(
-            r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"agent_command","arguments":{"command":"task add"}}}"#,
-            &caller,
-        );
+        ask(&call_for("agent_command", SHOP, json!({ "command": "task add" })), &caller);
         assert_eq!(caller.last(), vec!["agent", "--command", "task add", "--json"]);
     }
 
     #[test]
     fn agent_command_without_a_name_is_the_caller_s_mistake_and_runs_nothing() {
         let caller = Recorder::new();
-        let out = ask(
-            r#"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"agent_command","arguments":{"command":"  "}}}"#,
-            &caller,
-        );
+        let out = ask(&call_for("agent_command", SHOP, json!({ "command": "  " })), &caller);
         assert_eq!(out["error"]["code"], INVALID_PARAMS);
         assert!(caller.seen.borrow().is_empty(), "nothing is run for a call that cannot be shaped");
     }
@@ -611,11 +831,7 @@ mod tests {
             vec!["--json", "bind", "--project", "somewhere-else"],
         ] {
             let caller = Recorder::new();
-            let call = json!({
-                "jsonrpc": "2.0", "id": 1, "method": "tools/call",
-                "params": { "name": "run", "arguments": { "args": line } },
-            });
-            let out = ask(&call.to_string(), &caller);
+            let out = ask(&call_for("run", SHOP, json!({ "args": line })), &caller);
             assert!(out.get("error").is_none(), "the refusal is the tool's answer, to be read: {out}");
             assert_eq!(out["result"]["isError"], true, "{out}");
             assert!(
@@ -638,19 +854,13 @@ mod tests {
     #[test]
     fn run_without_words_to_run_is_the_caller_s_mistake() {
         let caller = Recorder::new();
-        let out = ask(r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run","arguments":{}}}"#, &caller);
+        let out = ask(&call_for("run", SHOP, json!({})), &caller);
         assert_eq!(out["error"]["code"], INVALID_PARAMS);
         // One line where a list belongs is the mistake worth naming: it would otherwise be run as a
         // single word nobody answers to.
-        let out = ask(
-            r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"run","arguments":{"args":"task list"}}}"#,
-            &caller,
-        );
+        let out = ask(&call_for("run", SHOP, json!({ "args": "task list" })), &caller);
         assert_eq!(out["error"]["code"], INVALID_PARAMS);
-        let out = ask(
-            r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"run","arguments":{"args":["task",2]}}}"#,
-            &caller,
-        );
+        let out = ask(&call_for("run", SHOP, json!({ "args": ["task", 2] })), &caller);
         assert_eq!(out["error"]["code"], INVALID_PARAMS);
         assert!(caller.seen.borrow().is_empty(), "nothing is run for a call that cannot be shaped");
     }
@@ -677,7 +887,7 @@ mod tests {
     #[test]
     fn a_refusal_comes_back_as_the_tool_s_result() {
         let caller = Recorder::failing();
-        let out = ask(r#"{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"agent","arguments":{}}}"#, &caller);
+        let out = ask(&call_for("agent", SHOP, json!({})), &caller);
         assert!(out.get("error").is_none(), "a tool that ran is not a protocol fault: {out}");
         assert_eq!(out["result"]["isError"], true);
         assert_eq!(out["result"]["content"][0]["text"], "what amenbo wrote");
@@ -686,8 +896,8 @@ mod tests {
     #[test]
     fn a_notification_is_never_answered() {
         let caller = Recorder::new();
-        assert!(respond(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#, &caller).is_none());
-        assert!(respond(r#"{"jsonrpc":"2.0","method":"notifications/cancelled","params":{}}"#, &caller).is_none());
+        assert!(respond(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#, &caller, &dirs()).is_none());
+        assert!(respond(r#"{"jsonrpc":"2.0","method":"notifications/cancelled","params":{}}"#, &caller, &dirs()).is_none());
         assert!(caller.seen.borrow().is_empty());
     }
 
@@ -722,7 +932,7 @@ mod tests {
         let caller = Recorder::new();
         let out = ask(r#"{"jsonrpc":"2.0","id":8}"#, &caller);
         assert_eq!(out["error"]["code"], INVALID_REQUEST);
-        assert!(respond(r#"{"jsonrpc":"2.0"}"#, &caller).is_none());
+        assert!(respond(r#"{"jsonrpc":"2.0"}"#, &caller, &dirs()).is_none());
     }
 
     /// One line out per line in, and no newline inside it — the framing this transport is.

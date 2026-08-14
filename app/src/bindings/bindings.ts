@@ -407,6 +407,44 @@ cmd: string, };
 export type LinkedTaskRefDto = { id: number, name: string, ref?: string, status: "todo" | "in_progress" | "done" | "blocked" | "rejected", };
 
 /**
+ * One app this project could be reached from over MCP, as a screen draws its row (`AMB-D-671`,
+ * `AMB-D-672`, `AMB-D-673`).
+ *
+ * The two texts travel with the row for the reason the harness request does: the surface both shows
+ * one and copies it, and a button that had to go and ask first could hand over an empty clipboard
+ * with no second chance to notice. They are empty for the app amenbo writes a file for — there is no
+ * request to give anybody there, and the button beside it writes the file instead.
+ */
+export type McpAppDto = { 
+/**
+ * The catalog's own id for it (`claude-desktop`).
+ */
+app: string, 
+/**
+ * The product's name for itself, for the row.
+ */
+label: string, 
+/**
+ * Whether amenbo writes this one a file to open, rather than handing over a request
+ * (`AMB-D-672`). It is what decides which button the row draws.
+ */
+writesFile: boolean, 
+/**
+ * Whether this app already holds this project's server (`AMB-D-673`).
+ */
+configured: boolean, 
+/**
+ * The folder that entry binds the server to, when it names one. Shown beside "set up", because
+ * set up for *which* folder is the half a reader cannot work out for themselves.
+ */
+folder: string | null, 
+/**
+ * The request that asks the reader's AI to add it, and the one that asks for it to be taken back
+ * out. Empty where amenbo writes the file.
+ */
+addRequest: string, removeRequest: string, };
+
+/**
  * [`amenbo_core::migrate::MigrationReport`] as the completion panel reads it.
  */
 export type MigrationDoneDto = { 

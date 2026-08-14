@@ -4656,6 +4656,135 @@ pub fn agent_hook_requests(project_id: i64) -> Result<AgentHookRequestsDto, CmdE
     Ok(AgentHookRequestsDto { tools, dirs })
 }
 
+/// One app this project could be reached from over MCP, as a screen draws its row (`AMB-D-671`,
+/// `AMB-D-672`, `AMB-D-673`).
+///
+/// The two texts travel with the row for the reason the harness request does: the surface both shows
+/// one and copies it, and a button that had to go and ask first could hand over an empty clipboard
+/// with no second chance to notice. They are empty for the app amenbo writes a file for — there is no
+/// request to give anybody there, and the button beside it writes the file instead.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct McpAppDto {
+    /// The catalog's own id for it (`claude-desktop`).
+    app: String,
+    /// The product's name for itself, for the row.
+    label: String,
+    /// Whether amenbo writes this one a file to open, rather than handing over a request
+    /// (`AMB-D-672`). It is what decides which button the row draws.
+    writes_file: bool,
+    /// Whether this app already holds this project's server (`AMB-D-673`).
+    configured: bool,
+    /// The folder that entry binds the server to, when it names one. Shown beside "set up", because
+    /// set up for *which* folder is the half a reader cannot work out for themselves.
+    folder: Option<String>,
+    /// The request that asks the reader's AI to add it, and the one that asks for it to be taken back
+    /// out. Empty where amenbo writes the file.
+    add_request: String,
+    remove_request: String,
+}
+
+/// This project's own server, and the folder it is bound to — the two things every MCP face needs and
+/// neither of them is on screen.
+///
+/// The folder is the first this project has bound. A server answers about the project rather than
+/// about the folder (the amenbo it starts works the project out from where it stands), so where a
+/// project has several, any one of them reaches the same backlog — and the one named is written into
+/// the text the reader is handed, so nothing about which is silent.
+fn mcp_server_of(
+    store: &amenbo_core::store::Store,
+    project_id: i64,
+) -> Result<Option<(String, String, std::path::PathBuf)>, CmdError> {
+    let Some(project) = store.project(project_id)? else { return Ok(None) };
+    let Some(slug) = project.slug else { return Ok(None) };
+    let registry = store.bindings();
+    let Some(dir) = registry.dirs_for_project(project_id).into_iter().next() else {
+        return Ok(None);
+    };
+    Ok(Some((slug, project.name, std::path::PathBuf::from(dir))))
+}
+
+/// The amenbo a host will run: the command shipped beside this build's own binary.
+///
+/// A bundle and a request both name a path rather than a command word, because the host that runs it
+/// is not a shell and has no `PATH` of the reader's to look one up in. The CLI ships as a sidecar next
+/// to the app's binary, so that is where it is looked for; where it is not found — an unusual install,
+/// or a run out of a build tree — the command's own name is the best that can be said, and a reader
+/// whose `PATH` carries it is still reached.
+fn mcp_exe() -> std::path::PathBuf {
+    let cmd = amenbo_core::config::Paths::command_name();
+    let named = if cfg!(windows) { format!("{cmd}.exe") } else { cmd.to_string() };
+    match std::env::current_exe().ok().and_then(|exe| exe.parent().map(|at| at.join(&named))) {
+        Some(beside) if beside.is_file() => beside,
+        _ => std::path::PathBuf::from(named),
+    }
+}
+
+/// Every app this project could be reached from, in catalog order, with what each one already holds
+/// (`AMB-D-673`).
+///
+/// The list is the same whichever screen asks — the one that just made a project and the one that
+/// looks after an old one (`AMB-D-671`) — so it is one command rather than two. A project with no
+/// folder bound to it has nowhere to point a server, and answers with nothing rather than with rows
+/// nobody can act on.
+#[tauri::command]
+pub fn mcp_apps(project_id: i64) -> Result<Vec<McpAppDto>, CmdError> {
+    use amenbo_core::{mcp::Server, mcp_apps, mcp_probe, mcp_request};
+
+    let store = open_store_read()?;
+    let Some((slug, name, folder)) = mcp_server_of(&store, project_id)? else {
+        return Ok(Vec::new());
+    };
+    let exe = mcp_exe();
+    let server = Server { slug: &slug, project: &name, folder: &folder, exe: &exe };
+
+    Ok(mcp_apps::MCP_APPS
+        .iter()
+        .zip(mcp_probe::probe(&server))
+        .map(|(app, found)| McpAppDto {
+            app: app.id.to_string(),
+            label: app.label.to_string(),
+            writes_file: app.amenbo_writes,
+            configured: found.set,
+            folder: found.folder.map(|at| at.display().to_string()),
+            add_request: match app.amenbo_writes {
+                true => String::new(),
+                false => mcp_request::add(app, &server),
+            },
+            remove_request: match app.amenbo_writes {
+                true => String::new(),
+                false => mcp_request::remove(app, &server),
+            },
+        })
+        .collect())
+}
+
+/// Write this project's bundle into `into_dir`, and hand back the file that was written
+/// (`AMB-D-672`).
+///
+/// The folder is the reader's to choose, asked for on the surface: what happens to this file next is
+/// that they open it, so it has to land somewhere they can find. amenbo writes nothing into the app's
+/// own settings — the file is the hand-over, and the app is the thing that reads it.
+#[tauri::command]
+pub fn mcp_bundle_write(project_id: i64, into_dir: String) -> Result<String, CmdError> {
+    use amenbo_core::{mcp::Server, mcp_bundle};
+
+    let store = open_store_read()?;
+    let Some((slug, name, folder)) = mcp_server_of(&store, project_id)? else {
+        return Err(CmdError::coded(
+            "mcp.no_folder",
+            "this project has no folder for a server to be bound to",
+            serde_json::Value::Null,
+        ));
+    };
+    let exe = mcp_exe();
+    let server = Server { slug: &slug, project: &name, folder: &folder, exe: &exe };
+    let written = mcp_bundle::write_into(&server, std::path::Path::new(&into_dir))
+        .map_err(|e| CmdError::coded("mcp.bundle_write", e.to_string(), serde_json::Value::Null))?;
+    Ok(written.display().to_string())
+}
+
 /// What [`repair_pointers`] returns: how many folders were fixed, and how many were left waiting on
 /// a human's judgement.
 #[derive(Debug, Serialize, TS)]

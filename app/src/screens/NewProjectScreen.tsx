@@ -14,6 +14,7 @@
 // nothing there for a folder to bind and the create goes through on a name alone.
 import { useState } from "react";
 import { FirstLoop } from "../components/FirstLoop";
+import { McpSetup } from "./McpSetup";
 import { useCliCommandName } from "../core/cliCommand";
 import { createProject, pickFolder, revealFolder } from "../core/mutations";
 import { inTauri } from "../core/snapshot";
@@ -116,7 +117,7 @@ export function NewProjectScreen({ onCreated, onCancel }: { onCreated: (nav: Nav
  * on to the board.
  */
 function DoneStep({ created, onOpenBoard }: { created: Created; onOpenBoard: () => void }) {
-  const { name, dir } = created;
+  const { id, name, dir } = created;
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // What is copied is meant to be pasted into a terminal, so it has to be the command this build installs.
@@ -150,6 +151,10 @@ function DoneStep({ created, onOpenBoard }: { created: Created; onOpenBoard: () 
         {inTauri() && dir && (
           <>
             <FirstLoop dir={dir} />
+            {/* The offer for the reader whose AI cannot open that folder at all (`AMB-D-671`). It sits
+                after the first loop because that is the road for everyone else, and folded because
+                most readers are on it. */}
+            <McpSetup projectId={id} />
             <div className="newproj__next">
               <span className="newproj__label">{t("newproj.moreTitle")}</span>
               <div className="newproj__nextrow">

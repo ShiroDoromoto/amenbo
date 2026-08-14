@@ -9,6 +9,7 @@ import {
   unbindFolder, updateProject,
 } from "../core/mutations";
 import { useAgentHookWiring } from "./AgentHookWiringRow";
+import { McpSetup } from "./McpSetup";
 import { PluginCrossingRow } from "../components/PluginCrossingRow";
 import { usePluginInstalls } from "../core/pluginInstalls";
 import { inTauri } from "../core/snapshot";
@@ -406,6 +407,11 @@ function HarnessSection({ projectId }: { projectId: number }) {
         )}
 
         <HarnessRequest projectId={projectId} />
+
+        {/* The other way in, for the AI that cannot open a folder at all (`AMB-D-671`). Same section
+            because it is the same subject — how this project is reached from an AI — and folded, since
+            the road above it is the one most readers are on. */}
+        <McpSetup projectId={projectId} />
 
         {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
 

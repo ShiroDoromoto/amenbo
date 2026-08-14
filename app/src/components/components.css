@@ -662,6 +662,24 @@ button.feed__target:hover { color: var(--c-accent); }
    whole screen sideways instead of scrolling inside itself. */
 .harnessreq { display: flex; flex-direction: column; gap: var(--s-2); flex: 1; min-width: 0; }
 .harnessreq__pick { align-self: flex-start; padding: var(--s-1) var(--s-2); font-size: var(--fs-sm); }
+/* The folded way in for an AI that cannot open a folder (`AMB-D-671`). It stands on two screens and is
+   the same block on both, so it carries its own column rather than borrowing either one's. `min-width: 0`
+   for the reason `harnessreq` needs it: a path is one long word, and without it the row is as wide as the
+   longest one instead of scrolling inside itself. */
+.mcp { display: flex; flex-direction: column; gap: var(--s-2); flex: 1; min-width: 0; }
+.mcp__toggle { align-self: flex-start; }
+.mcp__apps { display: flex; flex-direction: column; gap: var(--s-3); margin: 0; padding: 0; list-style: none; }
+/* One app: its name, what it already holds, and the one move that changes it. The state and the folder
+   sit on one line where there is room and wrap where there is not — the folder is the longer half and the
+   one that has to stay readable. */
+.mcp__app {
+  display: flex; flex-direction: column; gap: var(--s-1);
+  padding: var(--s-2) var(--s-3); border-radius: var(--r-sm); background: var(--c-surface-sunken);
+}
+.mcp__name { font-weight: var(--fw-bold); font-size: var(--fs-sm); }
+.mcp__state { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); font-size: var(--fs-sm); }
+.mcp__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.mcp__saved { font-size: var(--fs-xs); overflow-wrap: anywhere; }
 /* Copy, no, close — in that order, and wrapping rather than shrinking, since the row is narrow enough for
    three buttons to meet the edge in a language that spells them out. */
 .agenthookrow__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }

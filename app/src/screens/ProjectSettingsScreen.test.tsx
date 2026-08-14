@@ -74,6 +74,10 @@ vi.mock("../core/mutations", () => {
       hoisted.consent = null;
       return Promise.resolve();
     },
+    // The folded MCP block in the same section reads this. It has a screen test of its own
+    // (`mcpSetup.test.tsx`); here it offers no app, so it draws nothing and nothing below it moves.
+    fetchMcpApps: () => Promise.resolve([]),
+    saveMcpBundle: () => Promise.resolve(null),
   };
 });
 

@@ -668,12 +668,15 @@ whole shape this rests on. Nothing else is added — `--yes` least of all, so a
 destructive command still stops at the confirmation you are the one to give.
 
 **Set it up from the desktop app.** The project creation screen and the project
-settings screen both carry it: for the apps that read a settings file, amenbo
-writes that file for you; for the rest, it hands you the request to give the AI,
-the same way `agent-hook snippet` does. The settings themselves are deliberately
-not reproduced here — each host spells them differently and revises that format on
-its own schedule. What is stable is the line the server is started with, for anyone
-who keeps their settings by hand:
+settings screen both carry it, folded away until you want it. Each app is listed
+with whether it already holds this project and which folder it holds it for. One
+of them cannot run a command at all, so for that one amenbo writes a file you
+open and the app takes the server from it; every other app has an AI of its own,
+which is handed the request and does the merge — the same way `agent-hook snippet`
+does. The settings themselves are deliberately not reproduced here — each host
+spells them differently and revises that format on its own schedule. What is
+stable is the line the server is started with, for anyone who keeps their settings
+by hand:
 
 ```sh
 amenbo mcp --dir /path/to/the/folder

@@ -30,6 +30,10 @@ vi.mock("../core/mutations", () => ({
   revealFolder: () => Promise.resolve(),
   openTerminal: () => Promise.resolve(),
   fetchCliCommandName: () => Promise.resolve("amenbo"),
+  // The folded MCP block on the done step reads this; nothing here is about it, so it offers no app
+  // and draws nothing.
+  fetchMcpApps: () => Promise.resolve([]),
+  saveMcpBundle: () => Promise.resolve(null),
 }));
 
 import { t } from "../core/i18n";

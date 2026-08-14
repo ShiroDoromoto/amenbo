@@ -107,6 +107,16 @@ pub struct McpApp {
     /// there, and it says what it changed. An app that cannot run one has nobody to ask, so the file
     /// is the only road left.
     pub amenbo_writes: bool,
+    /// Where this app keeps what it was handed as a bundle, for the one app handed one — the directory
+    /// its extensions live under, relative to the OS's own settings directory. `None` for every app
+    /// that takes a settings file instead.
+    ///
+    /// It sits beside [`place`](McpApp::place) rather than in it because both are true of that app at
+    /// once, and a reader can have set it up either way. A bundle it opened writes nothing into the
+    /// settings file (`AMB-T-3156`) — an entry there is one the reader wrote by hand — so an answer
+    /// that asked only the file would miss every reader who took the road amenbo offers, and one that
+    /// asked only the extensions would miss the reader who wrote their own.
+    pub extensions: Option<&'static str>,
 }
 
 impl McpApp {
@@ -116,6 +126,15 @@ impl McpApp {
     /// `None` only where the OS will not say where the user's home is.
     pub fn settings_path(&self, folder: &Path) -> Option<PathBuf> {
         self.place.resolve(folder)
+    }
+
+    /// The directory this app keeps its extensions under, for the one app that takes a bundle.
+    ///
+    /// `None` where the app takes a settings file instead — and, as everywhere else here, where the OS
+    /// will not say what the user's settings directory is.
+    pub fn extensions_dir(&self) -> Option<PathBuf> {
+        let held = self.extensions?;
+        Some(directories::BaseDirs::new()?.config_dir().join(held))
     }
 }
 
@@ -133,6 +152,9 @@ pub static MCP_APPS: &[McpApp] = &[
         format: Format::Json,
         servers_key: "mcpServers",
         amenbo_writes: true,
+        // The bundle it is handed becomes an extension of its own, kept under this directory beside
+        // the settings file above (`AMB-T-3156`).
+        extensions: Some("Claude"),
     },
     McpApp {
         id: "claude-code",
@@ -141,6 +163,7 @@ pub static MCP_APPS: &[McpApp] = &[
         format: Format::Json,
         servers_key: "mcpServers",
         amenbo_writes: false,
+        extensions: None,
     },
     McpApp {
         id: "cursor",
@@ -149,6 +172,7 @@ pub static MCP_APPS: &[McpApp] = &[
         format: Format::Json,
         servers_key: "mcpServers",
         amenbo_writes: false,
+        extensions: None,
     },
     McpApp {
         id: "vscode",
@@ -159,6 +183,7 @@ pub static MCP_APPS: &[McpApp] = &[
         // and names no second spelling, so this is the word rather than the family's.
         servers_key: "servers",
         amenbo_writes: false,
+        extensions: None,
     },
     McpApp {
         id: "codex-cli",
@@ -170,6 +195,7 @@ pub static MCP_APPS: &[McpApp] = &[
         // A table rather than an object: an entry is written `[mcp_servers.<name>]`.
         servers_key: "mcp_servers",
         amenbo_writes: false,
+        extensions: None,
     },
     McpApp {
         id: "gemini-cli",
@@ -178,6 +204,7 @@ pub static MCP_APPS: &[McpApp] = &[
         format: Format::Json,
         servers_key: "mcpServers",
         amenbo_writes: false,
+        extensions: None,
     },
     McpApp {
         id: "antigravity",
@@ -193,6 +220,7 @@ pub static MCP_APPS: &[McpApp] = &[
         format: Format::Json,
         servers_key: "mcpServers",
         amenbo_writes: false,
+        extensions: None,
     },
 ];
 

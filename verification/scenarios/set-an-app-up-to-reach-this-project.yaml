@@ -35,6 +35,10 @@ description: >
   app can walk: a request for the apps that have an AI of their own, a file for the one that cannot run
   a command.
 
+  Then the file road is walked to its end and the screen is asked again — because the app that takes a
+  file keeps what it was given somewhere its settings file never sees, and a reader who has just set it
+  up must not come back to a row saying they have not.
+
   What this road stands against is a fold that lists apps and says nothing about them: "set up" with no
   folder under it, or one button drawn for every row.
 
@@ -119,13 +123,15 @@ steps_gui:
       app: claude-code
       road: request
 
-  # The row beside it, on the same screen: an app this machine's settings say nothing about. Nothing is
-  # named after it, a folder being what an entry has and this one has none.
+  # The row beside it, on the same screen: an app nothing has been set up in. Nothing is named after
+  # it, a folder being what an entry has and this one has none. It is one of the apps whose settings
+  # live in the folder, so this run's own folder is the whole of what is asked — the answer is the
+  # same on every machine, whatever the person walking this road has installed.
   - type: assert
     domain: repo
     op: mcp-app
     with:
-      app: claude-desktop
+      app: cursor
       set: false
 
   # And the other road, which is why this app is the one to read it on: it cannot run a command, so
@@ -154,3 +160,25 @@ steps_gui:
     with:
       app: claude-desktop
       tool: run
+
+  # And back, to the screen that offered the file, with the question it asked before: is this app set
+  # up? The app writes nothing into the settings file a bundle came from, so the answer lives in what
+  # it keeps of the extension itself — and a build that looked only at the file would say "not set up"
+  # to a reader who has just watched it work. The screen is opened again rather than looked at where
+  # it stood, because what is under test is the reading and not a cached draw.
+  - type: action
+    domain: project
+    op: open-settings
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: repo
+    op: mcp-open
+
+  - type: assert
+    domain: repo
+    op: mcp-app
+    with:
+      app: claude-desktop
+      set: true

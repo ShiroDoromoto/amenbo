@@ -53,7 +53,25 @@ const MANIFEST_VERSION: &str = "0.3";
 /// the command line. A host expands the placeholder where it stands in `args`, one argv per folder —
 /// which is what makes `args` the road the set travels: the same placeholder in `env` arrives as the
 /// literal text, since a variable there has one string to be (`AMB-T-3156`).
-const FOLDERS_KEY: &str = "folders";
+///
+/// The read that asks later which folders an app is set up for looks the word up here
+/// ([`crate::mcp_probe`]), so the two say it once between them rather than once each.
+pub(crate) const FOLDERS_KEY: &str = "folders";
+
+/// Who the manifest says wrote this bundle. It is a word in the document, and it is also half of the
+/// id a host files the extension under — which is why it is a constant rather than a literal in the
+/// document below.
+const AUTHOR: &str = "Amenbo";
+
+/// What a host files this bundle's extension under: the local-bundle prefix, the author lowercased,
+/// and the manifest's name (`AMB-T-3156`).
+///
+/// It is derived here because it is derived from this document — a reader asking later whether the app
+/// is set up is asking after the extension *this* bundle became, and an id worked out anywhere else
+/// would be a second opinion about a name only the manifest decides.
+pub fn extension_id() -> String {
+    format!("local.mcpb.{}.{}", AUTHOR.to_lowercase(), crate::mcp::name())
+}
 
 /// What to call the file the reader saves. It is the server's own name, so a bundle written again
 /// lands on the file it landed on before rather than piling a second one up beside it.
@@ -81,7 +99,7 @@ pub fn manifest(server: &Server) -> String {
         // a description repeating them would go stale the first time they do.
         "description": "Work your Amenbo projects from this app — their backlogs, their decisions \
                         and the way to use them, for the folders set below.",
-        "author": { "name": "Amenbo" },
+        "author": { "name": AUTHOR },
         // The one place this app differs from every other: the folders the server works in are the
         // host's to keep, not amenbo's (`AMB-D-681`). What is declared here is the field they live
         // in, and what is written into it is the choice the reader already made in amenbo — so the
@@ -200,6 +218,19 @@ mod tests {
         // the field looks — and the reader is then sent to press save on a value they never typed
         // (`AMB-T-3157`).
         assert!(declared["required"].is_null(), "nothing here asks the reader to answer twice");
+    }
+
+    /// The id a host files this bundle under, built from the two words the manifest carries. It is
+    /// what the read that asks later whether the app is set up looks for ([`crate::mcp_probe`]), so a
+    /// change to either word here is a change to what that read finds.
+    #[test]
+    fn the_extension_is_filed_under_the_author_and_the_name_the_manifest_carries() {
+        let read: serde_json::Value =
+            serde_json::from_str(&manifest(&server(&one("/work/shop"), Path::new("/bin/a"))))
+                .expect("valid JSON");
+        assert_eq!(extension_id(), "local.mcpb.amenbo.amenbo");
+        assert_eq!(read["author"]["name"], "Amenbo", "the author, before the host lowercases it");
+        assert_eq!(read["name"], "amenbo", "and the name, as it stands");
     }
 
     /// The file the reader saves is named after the server, and the server's name is the machine's —

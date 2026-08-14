@@ -15,6 +15,12 @@
 //! under ([`crate::mcp::name`]). An app holding some other MCP server is not holding this one,
 //! and a reader who wrote their own entry by hand under that name is a reader who set it up.
 //!
+//! **The app that takes a bundle is asked twice**, because a bundle it opened writes nothing into the
+//! settings file (`AMB-T-3156`): what it leaves is an extension of its own, and asking only the file
+//! would answer "not set up" to every reader who took the road amenbo offers. So the file is read as
+//! for any other app — an entry there is one the reader wrote by hand, and theirs is the one they will
+//! look for — and where it says nothing the extension answers ([`extension`]).
+//!
 //! **What amenbo used to write is read too, and answered apart.** The name moved from the project's to
 //! the machine's (`AMB-D-679`), and an entry under the old one goes on working — so it is invisible to
 //! a reader and to a read that only asks after the name in use, while a fresh setup lands beside it
@@ -32,6 +38,15 @@ use std::path::{Path, PathBuf};
 
 use crate::mcp::{Server, DIR_FLAG};
 use crate::mcp_apps::{Format, McpApp, MCP_APPS};
+
+/// Where an app that takes a bundle keeps the extensions themselves, under
+/// [`McpApp::extensions_dir`] — one directory per extension, holding the manifest it was installed
+/// from.
+const EXTENSIONS: &str = "Claude Extensions";
+
+/// And where it keeps what the reader answered about each of them: one file per extension, named
+/// after it. The two are read together, in that order (see [`extension`]).
+const EXTENSION_SETTINGS: &str = "Claude Extensions Settings";
 
 /// What one app's settings say about one project.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,13 +104,68 @@ pub fn read(app: &McpApp, server: &Server) -> Setup {
     // reader's; sorted, a row that lists two of them lists them the same way twice running.
     stale.sort_by(|a, b| a.name.cmp(&b.name));
 
+    // And what the app holds as an extension of its own, for the one app that takes a bundle. It is
+    // asked second and answers only where the settings file said nothing: a reader who has both has
+    // written one of them by hand, and their own entry is the one they will look for.
+    let held = app.extensions_dir().and_then(|dir| extension(&dir)).filter(|_| current.is_none());
+
     Setup {
         id: app.id,
         label: app.label,
-        set: current.is_some(),
-        folder: current.and_then(|(_, args)| bound_folder(args)),
+        set: current.is_some() || held.is_some(),
+        folder: match current {
+            Some((_, args)) => bound_folder(args),
+            None => held.and_then(|folders| folders.into_iter().next()),
+        },
         stale,
     }
+}
+
+/// The folders amenbo's own extension is set up for, or `None` where this app is not holding one.
+///
+/// **The answer is in two places and the order is the whole of it** (`AMB-T-3157`). What the reader
+/// saved is kept beside the extension, and outranks everything: it is what the host puts on the
+/// command line. Where they saved nothing that file has no answers in it — which is not "no folders"
+/// but "the ones the bundle arrived with", still reaching the server, and those are in the manifest
+/// the extension was installed from. Reading only the first would tell the most ordinary reader of
+/// all — the one who installed it and touched nothing — that they are not set up.
+///
+/// An extension that is there but names no folder answers with an empty list rather than with `None`:
+/// it is installed, which is the question `set` asks, and a reader who emptied the field is still a
+/// reader who set the app up.
+fn extension(dir: &Path) -> Option<Vec<PathBuf>> {
+    let id = crate::mcp_bundle::extension_id();
+    let saved = read_json(&dir.join(EXTENSION_SETTINGS).join(format!("{id}.json")));
+    let installed = read_json(&dir.join(EXTENSIONS).join(&id).join("manifest.json"));
+    let key = crate::mcp_bundle::FOLDERS_KEY;
+
+    let answered = saved
+        .as_ref()
+        .and_then(|document| document.get("userConfig")?.get(key)?.as_array())
+        .map(|folders| paths(folders));
+    let arrived = installed
+        .as_ref()
+        .and_then(|document| document.get("user_config")?.get(key)?.get("default")?.as_array())
+        .map(|folders| paths(folders));
+
+    // Neither file there at all: whatever else is under this directory, amenbo's extension is not.
+    // Uninstalling takes both away together (`AMB-T-3156`), so their absence is the answer.
+    if saved.is_none() && installed.is_none() {
+        return None;
+    }
+    Some(answered.or(arrived).unwrap_or_default())
+}
+
+/// A document read off disk, or `None` for one that is not there, cannot be read, or does not parse —
+/// the same answer a settings file gives, and for the same reason.
+fn read_json(path: &Path) -> Option<serde_json::Value> {
+    serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()
+}
+
+/// A list of values as the folders it holds, dropping whatever is not a word — the same rule the
+/// arguments of an entry are read by.
+fn paths(values: &[serde_json::Value]) -> Vec<PathBuf> {
+    values.iter().filter_map(|v| v.as_str()).map(PathBuf::from).collect()
 }
 
 /// Every server this app's settings hold, as the name it is filed under and the arguments it starts
@@ -174,6 +244,91 @@ mod tests {
 
     fn app(id: &str) -> &'static McpApp {
         crate::mcp_apps::find(id).expect("listed")
+    }
+
+    /// What an app that took a bundle holds afterwards, written the way it writes it: the manifest the
+    /// extension was installed from, and — where the reader saved the settings screen — their own
+    /// answers beside it.
+    fn extension_files(dir: &Path, arrived: Option<&str>, saved: Option<&str>) {
+        let id = crate::mcp_bundle::extension_id();
+        if let Some(folders) = arrived {
+            write(
+                &dir.join(EXTENSIONS).join(&id).join("manifest.json"),
+                &format!(r#"{{"user_config":{{"folders":{{"multiple":true,"default":{folders}}}}}}}"#),
+            );
+        }
+        if let Some(folders) = saved {
+            write(
+                &dir.join(EXTENSION_SETTINGS).join(format!("{id}.json")),
+                &format!(r#"{{"isEnabled":true,"userConfig":{{"folders":{folders}}}}}"#),
+            );
+        }
+    }
+
+    /// The reader who installed the bundle and touched nothing is set up, for the folders it arrived
+    /// with. Their own answers are not written down until they save that screen, so a read that asked
+    /// only for those would tell the most ordinary reader of all that they were not set up.
+    #[test]
+    fn an_extension_nobody_has_answered_for_is_set_up_for_the_folders_it_arrived_with() {
+        let dir = scratch("arrived");
+        extension_files(&dir, Some(r#"["/work/shop","/work/greenhouse"]"#), None);
+
+        assert_eq!(
+            extension(&dir),
+            Some(vec![PathBuf::from("/work/shop"), PathBuf::from("/work/greenhouse")]),
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// And once they have answered, their answer is the one that reaches the server — so it is the one
+    /// read back, whatever the bundle arrived with.
+    #[test]
+    fn what_the_reader_saved_outranks_what_the_bundle_arrived_with() {
+        let dir = scratch("saved");
+        extension_files(&dir, Some(r#"["/work/shop"]"#), Some(r#"["/work/elsewhere"]"#));
+
+        assert_eq!(extension(&dir), Some(vec![PathBuf::from("/work/elsewhere")]));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// An extension a reader emptied the field of is still an extension they installed. Answering
+    /// "not set up" would send them to install a second one beside the first.
+    #[test]
+    fn an_extension_with_no_folder_left_in_it_is_still_installed() {
+        let dir = scratch("emptied");
+        extension_files(&dir, Some(r#"["/work/shop"]"#), Some("[]"));
+
+        assert_eq!(extension(&dir), Some(Vec::new()));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// Nothing there is not set up — and uninstalling takes both files away together, so their absence
+    /// is the whole of the answer.
+    #[test]
+    fn an_app_holding_no_extension_of_amenbos_is_not_set_up() {
+        let dir = scratch("none");
+        assert_eq!(extension(&dir), None, "nothing on disk");
+
+        // Somebody else's extension is not this one: the id is the manifest amenbo wrote.
+        write(
+            &dir.join(EXTENSIONS).join("local.mcpb.someone.else").join("manifest.json"),
+            r#"{"user_config":{"folders":{"default":["/work/theirs"]}}}"#,
+        );
+        assert_eq!(extension(&dir), None, "another extension is not amenbo's");
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The one app that takes a bundle is the one asked about extensions at all; every other row is a
+    /// settings file and nothing else, so nothing goes looking beside them.
+    #[test]
+    fn only_the_app_that_takes_a_bundle_is_asked_what_it_holds() {
+        let held: Vec<&str> =
+            MCP_APPS.iter().filter(|app| app.extensions.is_some()).map(|app| app.id).collect();
+        assert_eq!(held, vec!["claude-desktop"]);
     }
 
     /// The whole answer, off a folder's own settings: the entry is there, and it names the folder it

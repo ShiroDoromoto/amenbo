@@ -3679,7 +3679,9 @@ pub fn mcp_apps(project_id: i64) -> Result<Vec<McpAppDto>, CmdError> {
             label: app.label.to_string(),
             writes_file: app.amenbo_writes,
             configured: found.set,
-            folder: found.folder.map(|at| at.display().to_string()),
+            // The first of the folders that entry reaches. This screen is one project's, so it
+            // draws one folder; the app-scoped screen is what shows the set (`AMB-T-3162`).
+            folder: found.folders.first().map(|at| at.display().to_string()),
             add_request: match app.amenbo_writes {
                 true => String::new(),
                 false => mcp_request::add(app, &server),

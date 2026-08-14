@@ -1042,6 +1042,24 @@ const REGISTRY: &[OpSpec] = &[
     // A `Review`: what separates the two is the label on a button, and a label is a word of the
     // interface.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "mcp-road", required: &["app", "road"], refs: &[], strings: &["app", "road"], binds: false },
+    // Where that file ends up: the app itself, with amenbo standing among its servers and a tool of
+    // amenbo's under it. One app only, and the one the file road is for — it is the single app whose
+    // settings amenbo writes with nobody in between, so a format it got wrong is amenbo's fault and
+    // nothing catches it short of the app reading the file. Every other app is handed a request its own
+    // AI carries out, and what amenbo owns there is the wording, which a harness can hold up on its own.
+    //
+    // Named tool by tool for the reason the protocol road names them so: what a road is about is one
+    // tool being reachable, and the whole set would fail on a tool nobody was asking about.
+    //
+    // Not `Domain::Mcp`, though this is the protocol coming up: that domain is the harness speaking it
+    // — a server it stood and calls it made over two streams — and here the speaking is the app's. What
+    // is read is another program's screen, which nothing in this workspace drives, so the step belongs
+    // beside the fold that wrote the file rather than beside the calls.
+    //
+    // It is a `Review`, and further out than the others: the reading behind an OCR verdict is taken off
+    // a shot of the build under test, and the window worth reading here is a different program's. The
+    // instruction asks the attending AI for that shot, which is the evidence the step leaves.
+    OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "mcp-in-app", required: &["app", "tool"], refs: &[], strings: &["app", "tool"], binds: false },
     // A project as it is read back: one row's fields, and whether it is in the listing at all (and
     // where). `archived: true` asks the listing that carries the archived ones.
     OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },

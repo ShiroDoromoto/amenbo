@@ -484,6 +484,11 @@ impl Instructor {
     /// the label on a button are all words of the interface, and which of them is standing is not
     /// something the presence of text can settle.
     ///
+    /// `mcp-in-app` is a `Review` further out than either. What settles it is on another program's
+    /// screen, and every reading here is taken off a shot of the build under test — so there is no
+    /// wording of the expectation that would be read against the right window. The instruction asks the
+    /// attending AI for that shot instead, and an eye closes the step from it.
+    ///
     /// `ai-launch-answer` is the third of them and a `Review`, for the reason `plugin config`'s state
     /// is: all three of its answers — the yes, the no, and the never asked — are drawn as words of the
     /// interface, and which of them is standing is not something the presence of text can settle.
@@ -1374,6 +1379,24 @@ impl Instructor {
                 ),
                 other => return Err(format!("assert `mcp-road` does not know the road `{other}`")),
             },
+            // The file taken the rest of the way: into the app it was written for, and read there. The
+            // line carries what the operator has to have in place before the step can be walked at all,
+            // because none of it is amenbo's to stand up — an app that has not been updated, or has
+            // nobody signed in, draws no servers whatever the file says, and the step would read as a
+            // format amenbo got wrong.
+            //
+            // It also asks for the shot, which no other step has to: every other one is closed by the
+            // run's own shot of the build under test, and the window that settles this one belongs to
+            // another program.
+            (Domain::Repo, "mcp-in-app") => format!(
+                "Take the file this road just offered into \"{}\"'s own settings — merging it with what \
+                 is already there — and start that app again. With it updated and signed in beforehand, \
+                 confirm amenbo stands among the servers it lists and the tool \"{}\" is under it. Shoot \
+                 that app's window yourself and keep the picture with this run: the shot taken here is \
+                 of amenbo, which is not where the answer is.",
+                req(with, "app")?,
+                req(with, "tool")?
+            ),
             // Which folders that one text is still waiting on. The line says "under" on purpose: what is
             // under test is a list standing beneath a single request, so a screen carrying the request
             // once per folder is the miss it catches — and a road naming several folders writes a step

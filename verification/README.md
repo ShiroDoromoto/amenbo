@@ -737,6 +737,15 @@ There is nothing folded there, no list of apps, and no row for one to be read of
 draw them are the screen's, and a terminal that grew one would be a road of its own rather than this one
 written out again.
 
+`repo mcp-in-app` walks off that screen and is one road's for a further reason: what it reads is another
+program, opened by hand with the file the fold just handed over. It is written for the one app whose
+settings amenbo writes itself, with nobody in between — everywhere else a reader's own AI does the edit,
+and what amenbo owns there is the wording, which is held up without leaving this workspace. The step is a
+`Review` whichever way it goes, since the shot a run takes is of the build under test and the window that
+settles this one is not; the instruction asks the attending AI for that picture instead. It is walked once
+a release, and going further — the app's own AI making a task through the server — is a round trip walked
+once and not per release, what is on the far side of it being somebody else's product.
+
 Reading what a plugin's own check said about its settings (`plugin checked`) is one road's for a reason of
 its own: the verdict's sentences are the author's and are drawn on the settings form, while a terminal
 meets the same refusal as an error code on the enable it turned away — which is what the `refused:` on that

@@ -35,6 +35,10 @@ description: >
 
   What this road stands against is a fold that lists apps and says nothing about them: "set up" with no
   folder under it, or one button drawn for every row.
+
+  Then the file road is walked to its end, off amenbo's screen and into the app it was written for: the
+  one app amenbo writes settings for with nobody in between, asked whether it reads them — amenbo among
+  the servers it lists, with a tool of amenbo's under it.
 given:
   # The project and the folder it is bound to. A project with no folder has nowhere to point a server,
   # and the fold draws nothing at all — so the folder is the premise the whole road stands on.
@@ -131,3 +135,20 @@ steps_gui:
     with:
       app: claude-desktop
       road: file
+
+  # And the file taken the rest of the way, into the app it was written for. This is the one place the
+  # road leaves amenbo's own screen, and the one app it has to: everywhere else a reader's own AI writes
+  # the settings and amenbo holds only the wording, but here amenbo writes the file itself and it lands
+  # with nobody in between. A format got wrong is amenbo's fault, and nothing this side of the app
+  # reading it would say so.
+  #
+  # What the app is asked for is the whole of what the file is for — amenbo among its servers, and a
+  # tool of amenbo's under it, which is the server having started. Going further, to the app's AI making
+  # a task, is one round trip walked once and not per release: what is on the other side of it is
+  # somebody else's product, which changes without amenbo changing.
+  - type: assert
+    domain: repo
+    op: mcp-in-app
+    with:
+      app: claude-desktop
+      tool: run

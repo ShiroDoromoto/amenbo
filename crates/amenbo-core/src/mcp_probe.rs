@@ -15,6 +15,13 @@
 //! under ([`crate::mcp::name`]). An app holding some other MCP server is not holding this one,
 //! and a reader who wrote their own entry by hand under that name is a reader who set it up.
 //!
+//! **What amenbo used to write is read too, and answered apart.** The name moved from the project's to
+//! the machine's (`AMB-D-679`), and an entry under the old one goes on working — so it is invisible to
+//! a reader and to a read that only asks after the name in use, while a fresh setup lands beside it
+//! rather than on it. Those are gathered as [`Setup::stale`], never folded into
+//! [`set`](Setup::set): the question "is this app set up" is about the entry amenbo writes today, and
+//! an old one is the separate question of what to clear away ([`crate::mcp_request::remove_stale`]).
+//!
 //! **Every failure is "not set up".** A settings file that is missing, unreadable, or does not parse
 //! says nothing about this project — it is not a fault to report, and a reader told "something is
 //! wrong with your Cursor settings" by a backlog tool is being told about the wrong thing. The one
@@ -39,6 +46,23 @@ pub struct Setup {
     /// the two can disagree: an entry someone edited by hand may name no folder, and a row saying
     /// "set up" with nothing after it is still the truth.
     pub folder: Option<PathBuf>,
+    /// The entries this app still holds under a name amenbo used to write, by name
+    /// ([`crate::mcp::is_superseded_name`]). Empty for a reader who never set amenbo up under the old
+    /// scheme, which is every reader who arrived after `AMB-D-679`.
+    pub stale: Vec<Stale>,
+}
+
+/// An entry left behind under a superseded name — what a reader has to be shown before they can be
+/// asked whether to clear it ([`crate::mcp_request::remove_stale`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Stale {
+    /// The name it is filed under. A removal has to name it, and it is also the only thing telling one
+    /// of these apart from the entry in use.
+    pub name: String,
+    /// The folder it binds its server to, where it names one at all — read for the same reason
+    /// [`Setup::folder`] is, since which project a reader is being offered to clear away is a question
+    /// only the folder answers.
+    pub folder: Option<PathBuf>,
 }
 
 /// Every listed app's answer for this project, in catalog order ([`MCP_APPS`]).
@@ -48,32 +72,67 @@ pub fn probe(server: &Server) -> Vec<Setup> {
 
 /// One app's answer, read from its own settings.
 pub fn read(app: &McpApp, server: &Server) -> Setup {
-    let entry = server
+    let name = crate::mcp::name();
+    let entries = server
         .settings_folder()
         .and_then(|folder| app.settings_path(folder))
-        .and_then(|path| args_of(app, &path, crate::mcp::name()));
+        .and_then(|path| entries(app, &path))
+        .unwrap_or_default();
+    let current = entries.iter().find(|(filed, _)| filed == name);
+
+    let mut stale: Vec<Stale> = entries
+        .iter()
+        .filter(|(filed, _)| crate::mcp::is_superseded_name(filed))
+        .map(|(filed, args)| Stale { name: filed.clone(), folder: bound_folder(args) })
+        .collect();
+    // A settings document is a map, so the order they came out in is the parser's rather than the
+    // reader's; sorted, a row that lists two of them lists them the same way twice running.
+    stale.sort_by(|a, b| a.name.cmp(&b.name));
+
     Setup {
         id: app.id,
         label: app.label,
-        set: entry.is_some(),
-        folder: entry.as_deref().and_then(bound_folder),
+        set: current.is_some(),
+        folder: current.and_then(|(_, args)| bound_folder(args)),
+        stale,
     }
 }
 
-/// The arguments the named entry starts its server with, or `None` where this app holds no such entry
-/// — which is also what every unreadable file answers.
-fn args_of(app: &McpApp, path: &Path, name: &str) -> Option<Vec<String>> {
+/// Every server this app's settings hold, as the name it is filed under and the arguments it starts
+/// with, or `None` where there is nothing to read — which is also what every unreadable file answers.
+///
+/// An entry whose arguments are missing, or are not a list, is read as an entry that carries none
+/// rather than as no entry at all: what makes one an entry is that a name is filed there, and the
+/// alternative would tell a reader who hand-edited theirs into that state that they had never set
+/// amenbo up.
+fn entries(app: &McpApp, path: &Path) -> Option<Vec<(String, Vec<String>)>> {
     let text = std::fs::read_to_string(path).ok()?;
     match app.format {
         Format::Json => {
             let document: serde_json::Value = serde_json::from_str(&text).ok()?;
-            let entry = document.get(app.servers_key)?.get(name)?;
-            Some(words(entry.get("args")?.as_array()?, |v| v.as_str()))
+            let servers = document.get(app.servers_key)?.as_object()?;
+            Some(
+                servers
+                    .iter()
+                    .map(|(name, entry)| {
+                        let args = entry.get("args").and_then(|v| v.as_array());
+                        (name.clone(), args.map(|list| words(list, |v| v.as_str())).unwrap_or_default())
+                    })
+                    .collect(),
+            )
         }
         Format::Toml => {
             let document: toml::Value = toml::from_str(&text).ok()?;
-            let entry = document.get(app.servers_key)?.get(name)?;
-            Some(words(entry.get("args")?.as_array()?, |v| v.as_str()))
+            let servers = document.get(app.servers_key)?.as_table()?;
+            Some(
+                servers
+                    .iter()
+                    .map(|(name, entry)| {
+                        let args = entry.get("args").and_then(|v| v.as_array());
+                        (name.clone(), args.map(|list| words(list, |v| v.as_str())).unwrap_or_default())
+                    })
+                    .collect(),
+            )
         }
     }
 }
@@ -139,18 +198,71 @@ mod tests {
     }
 
     /// Somebody else's server is not this one, however close its name reads — the name is what the
-    /// answer turns on, and it is matched whole.
+    /// answer turns on, and it is matched whole. Neither is it something to offer to delete: an entry
+    /// amenbo never wrote is not amenbo's to name.
     #[test]
     fn an_entry_under_another_name_is_not_this_one() {
         let dir = scratch("names");
         let exe = Path::new("/usr/local/bin/amenbo");
         write(
             &dir.join(".cursor/mcp.json"),
-            r#"{"mcpServers":{"amenbo-greenhouse":{"command":"a","args":["mcp","--dir","/work/g"]},
+            r#"{"mcpServers":{"amenboard":{"command":"a","args":["mcp","--dir","/work/g"]},
                "something-else":{"command":"b","args":[]}}}"#,
         );
 
-        assert!(!read(app("cursor"), &server(std::slice::from_ref(&dir), exe)).set);
+        let found = read(app("cursor"), &server(std::slice::from_ref(&dir), exe));
+        assert!(!found.set);
+        assert!(found.stale.is_empty(), "{:?}", found.stale);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The entry in use and the ones an older amenbo left, read apart in one pass. A reader who set two
+    /// projects up under the old scheme has two to clear, and each names the folder it was bound to —
+    /// which is the only thing telling them apart on screen.
+    #[test]
+    fn the_names_amenbo_used_to_write_are_read_beside_the_one_it_writes_now() {
+        let dir = scratch("stale");
+        let exe = Path::new("/usr/local/bin/amenbo");
+        write(
+            &dir.join(".cursor/mcp.json"),
+            r#"{"mcpServers":{"amenbo":{"command":"a","args":["mcp","--dir","/work/shop"]},
+               "amenbo-shop":{"command":"a","args":["mcp","--dir","/work/shop"]},
+               "amenbo-greenhouse":{"command":"a","args":["mcp","--dir","/work/g"]},
+               "something-else":{"command":"b","args":[]}}}"#,
+        );
+
+        let found = read(app("cursor"), &server(std::slice::from_ref(&dir), exe));
+        assert!(found.set, "the entry in use is there");
+        assert_eq!(found.folder.as_deref(), Some(Path::new("/work/shop")));
+        assert_eq!(
+            found.stale,
+            vec![
+                Stale { name: "amenbo-greenhouse".into(), folder: Some(PathBuf::from("/work/g")) },
+                Stale { name: "amenbo-shop".into(), folder: Some(PathBuf::from("/work/shop")) },
+            ],
+            "both old entries, in a settled order"
+        );
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// An old entry on its own leaves the app not set up: it is the name amenbo writes today that the
+    /// question is about, and answering "set up" off an entry the reader is being asked to delete would
+    /// leave them with nothing.
+    #[test]
+    fn an_old_entry_alone_does_not_make_an_app_set_up() {
+        let dir = scratch("staleonly");
+        let exe = Path::new("/usr/local/bin/amenbo");
+        write(
+            &dir.join(".cursor/mcp.json"),
+            r#"{"mcpServers":{"amenbo-shop":{"command":"a","args":["mcp","--dir","/work/shop"]}}}"#,
+        );
+
+        let found = read(app("cursor"), &server(std::slice::from_ref(&dir), exe));
+        assert!(!found.set, "not set up");
+        assert_eq!(found.folder, None);
+        assert_eq!(found.stale.len(), 1, "and one entry to clear");
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -192,9 +304,10 @@ mod tests {
              args = [\n  \"mcp\",\n  \"--dir\",\n  \"/work/shop\",   # the folder\n]\n",
         );
 
-        let found = args_of(app("codex-cli"), &settings, "amenbo").expect("the entry is found");
-        assert_eq!(found, vec!["mcp", "--dir", "/work/shop"]);
-        assert_eq!(bound_folder(&found).as_deref(), Some(Path::new("/work/shop")));
+        let read = entries(app("codex-cli"), &settings).expect("the document parses");
+        let found = &read.iter().find(|(name, _)| name == "amenbo").expect("the entry is found").1;
+        assert_eq!(found, &["mcp", "--dir", "/work/shop"]);
+        assert_eq!(bound_folder(found).as_deref(), Some(Path::new("/work/shop")));
 
         std::fs::remove_dir_all(&dir).ok();
     }

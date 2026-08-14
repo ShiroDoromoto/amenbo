@@ -22,7 +22,9 @@
 //!
 //! **Taking it back out is a request too, and not the same one.** A removal names the entry and
 //! nothing else: there is no configuration to carry, and a reader who moved a project or finished with
-//! one is otherwise left editing by hand the thing they were never asked to edit by hand.
+//! one is otherwise left editing by hand the thing they were never asked to edit by hand. There are two
+//! of them, because there are two entries to take out: the one amenbo writes today, and the one an
+//! older amenbo left under a name it no longer uses ([`remove_stale`], `AMB-D-679`).
 //!
 //! English, like the request the harness hands over: the recipient is a model, and one text is one
 //! text to keep in step with.
@@ -117,6 +119,27 @@ pub fn remove(app: &McpApp, server: &Server) -> String {
         label = app.label,
         settings = settings(app, server),
         name = crate::mcp::name(),
+    )
+}
+
+/// The request that clears out an entry left under a name amenbo no longer writes
+/// (`AMB-D-679`, found by [`crate::mcp_probe`]).
+///
+/// It names the entry rather than the project, because the two have come apart: the name carries the
+/// slug the project had when the entry was written, and the reader may have renamed that project or
+/// finished with it since. What it says beyond the name is which entry stays — the one in use reads as
+/// a near neighbour of the one being taken out, and "delete the amenbo entry" would be carried out
+/// either way.
+pub fn remove_stale(app: &McpApp, server: &Server, name: &str) -> String {
+    format!(
+        "Please remove an Amenbo MCP server entry that an older Amenbo left behind, from {label}.\n\
+         \n\
+         In `{settings}`, delete the MCP server entry named `{name}` and nothing else — every other \
+         server in that file stays, the `{current}` entry Amenbo uses now included. Tell me what you \
+         changed.",
+        label = app.label,
+        settings = settings(app, server),
+        current = crate::mcp::name(),
     )
 }
 
@@ -278,6 +301,23 @@ mod tests {
         assert!(said.contains("/work/shop/.cursor/mcp.json"), "{said}");
         assert!(!said.contains("```"), "there is nothing to fence: {said}");
         assert!(said.contains("stays"), "{said}");
+    }
+
+    /// Clearing out an old entry names that entry, and says which one is not to go with it. Without
+    /// that second half the request reads as "delete the amenbo entry", and the AI acting on it is as
+    /// likely to take the live one.
+    #[test]
+    fn clearing_an_old_entry_names_it_and_spares_the_one_in_use() {
+        let folder = one("/work/shop");
+        let exe = Path::new("/usr/local/bin/amenbo");
+        let said = remove_stale(app("cursor"), &server(&folder, exe), "amenbo-greenhouse");
+
+        assert!(said.contains("`amenbo-greenhouse`"), "the old entry is named: {said}");
+        assert!(said.contains("`amenbo` entry Amenbo uses now"), "the live one is spared: {said}");
+        assert!(said.contains("/work/shop/.cursor/mcp.json"), "{said}");
+        assert!(!said.contains("```"), "there is nothing to fence: {said}");
+        // The project it was written for is gone from the name's meaning, so it is not claimed here.
+        assert!(!said.contains("Shop"), "no project is named: {said}");
     }
 
     /// Every app the catalog lists can be asked, both ways — a row nobody can word a request for would

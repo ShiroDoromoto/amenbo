@@ -1,7 +1,8 @@
-# MCP takes a setting per project, and the reader it is for is the one whose AI cannot open a folder at
-# all. Everything about that is folded away on the project's own settings, because most readers never
-# need it — and behind the fold the apps are listed, never asked about: which one the reader uses is not
-# remembered and not guessed, since they change tools and a remembered answer is wrong by the next day.
+# MCP takes a setting per app, and the reader it is for is the one whose AI cannot open a folder at all.
+# The screen is the app's rather than the project's, because a server is one per app and reaches as many
+# folders as the reader chose — so what a row asks is which projects that app may reach. The apps
+# themselves are listed, never asked about: which one the reader uses is not remembered and not guessed,
+# since they change tools and a remembered answer is wrong by the next day.
 #
 # What *is* read off disk is the other question — whether an app already holds this project — and that
 # is a fact about the settings rather than a preference about the reader. It is drawn with the folder
@@ -26,14 +27,13 @@
 # it again would stop recognising every entry already out there, and this road going red is that being
 # said out loud.
 id: set-an-app-up-to-reach-this-project
-title: The project's own settings say which apps already reach it, for which folder, and hand each one the road its app can walk
+title: One screen says which apps already reach amenbo, for which folders, and hands each one the road its app can walk — and what is ticked there comes back off the app it was carried into
 description: >
-  The reader wants an AI that cannot open a folder to reach this project. The project's own settings
-  carry the offer, folded away; opened, it lists the apps amenbo knows. One of them already holds this
-  project and says so with the folder its entry names — a folder that is not this project's, which is
-  exactly why the folder is drawn at all. The rest are not set up, and each row offers the one road its
-  app can walk: a request for the apps that have an AI of their own, a file for the one that cannot run
-  a command.
+  The reader wants an AI that cannot open a folder to reach their projects. One screen lists the apps
+  amenbo knows. One of them already holds a server and says so with the folder its entry names — a
+  folder that is not any of this reader's projects, which is exactly why the folder is drawn at all.
+  The rest are not set up, and each row offers the one road its app can walk: a request for the apps
+  that have an AI of their own, a file for the one that cannot run a command.
 
   Then the file road is walked to its end and the screen is asked again — because the app that takes a
   file keeps what it was given somewhere its settings file never sees, and a reader who has just set it
@@ -54,20 +54,6 @@ given:
     with:
       name: Greenhouse
       dir: workspace
-
-  # An ordinary card, so the road arrives at a board with work on it rather than at the first loop.
-  - type: action
-    domain: task
-    op: create
-    with:
-      title: Order the spring seed trays
-    as: card
-
-  - type: action
-    domain: task
-    op: finish-creating
-    with:
-      target: card
 
   # One app already reaching this project: the entry a reader's own AI would have written, under the
   # name amenbo answers to. The folder it names is deliberately not the folder these settings sit in —
@@ -90,14 +76,9 @@ given:
         }
 
 steps_gui:
-  - type: action
-    domain: project
-    op: open-settings
-    with:
-      project: Greenhouse
-
-  # Folded until it is asked for. Opening it is the step, because everything read after this is read
-  # against the screen it opens onto.
+  # The screen is the app's, not the project's: a server is one per app, and it reaches as many folders
+  # as the reader chose. Opening it is the step, because everything read after this is read against the
+  # screen it opens onto.
   - type: action
     domain: repo
     op: mcp-open
@@ -144,6 +125,17 @@ steps_gui:
       app: claude-desktop
       road: file
 
+  # And taken. What goes out is the whole of what is ticked, not the difference from what was there —
+  # so the step names every project that is to be ticked and says the rest are to be left clear. That
+  # is the move this screen exists to make the same the second time as the first.
+  - type: action
+    domain: repo
+    op: mcp-choose
+    with:
+      app: claude-desktop
+      projects:
+        - Greenhouse
+
   # And the file taken the rest of the way, into the app it was written for. This is the one place the
   # road leaves amenbo's own screen, and the one app it has to: everywhere else a reader's own AI writes
   # the settings and amenbo holds only the wording, but here amenbo writes the file itself and it lands
@@ -167,18 +159,17 @@ steps_gui:
   # to a reader who has just watched it work. The screen is opened again rather than looked at where
   # it stood, because what is under test is the reading and not a cached draw.
   - type: action
-    domain: project
-    op: open-settings
-    with:
-      project: Greenhouse
-
-  - type: action
     domain: repo
     op: mcp-open
 
+  # The loop closes here. What was ticked went out with the file, the app took it, and the row is read
+  # back off what the app kept — standing on the same project it was ticked for. A build that wrote the
+  # selection and could not read it again would pass every step before this one.
   - type: assert
     domain: repo
     op: mcp-app
     with:
       app: claude-desktop
       set: true
+      projects:
+        - Greenhouse

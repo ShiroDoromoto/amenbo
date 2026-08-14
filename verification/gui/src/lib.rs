@@ -926,10 +926,23 @@ impl Instructor {
             // it, since a fold that opened onto nothing is the state every assert after this reads
             // against.
             (Domain::Repo, "mcp-open") => {
-                "On the screen standing now, open the folded offer to reach this project from an AI whose \
-                 host cannot open a folder — the apps it lists come up with it."
+                "Open the screen where an AI is connected — the one that lists the apps amenbo knows, \
+                 with the projects each of them may reach. Open it again where the road has already \
+                 been on it: what a row says has to be read now, not remembered from before the road \
+                 left."
                     .to_string()
             }
+            // Ticking a row and taking its road. Every project that is to be ticked is named, and the
+            // rest are said to be left clear, because what goes out is the whole selection and not the
+            // difference — an operator who added to what was already ticked would be walking the move
+            // this screen exists to have taken away.
+            (Domain::Repo, "mcp-choose") => format!(
+                "On the row for \"{}\", tick exactly these projects and leave every other one clear:{}. \
+                 Then take the one road that row offers — press its button, and where it asks where to \
+                 put a file, put it somewhere you can find again.",
+                req(with, "app")?,
+                names(with, "projects")?
+            ),
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -1350,13 +1363,15 @@ impl Instructor {
             // is sent: it is the reader's own path, and the screen has no other reason to draw one.
             (Domain::Repo, "mcp-app") => match (set(with), with.get("dir")) {
                 (true, Some(_)) => format!(
-                    "Confirm the row for \"{}\" reads as already set up, naming \"{}\" as the folder its entry reaches.",
+                    "Confirm the row for \"{}\" reads as already set up, naming \"{}\" as the folder its entry reaches.{}",
                     req(with, "app")?,
-                    req(with, "dir")?
+                    req(with, "dir")?,
+                    ticked(with)?
                 ),
                 (true, None) => format!(
-                    "Confirm the row for \"{}\" reads as already set up.",
-                    req(with, "app")?
+                    "Confirm the row for \"{}\" reads as already set up.{}",
+                    req(with, "app")?,
+                    ticked(with)?
                 ),
                 // Nothing is named after it: what a row not set up says about a folder is nothing, and a
                 // line naming one would send the eye looking for a path that is right to be missing.
@@ -1555,6 +1570,36 @@ fn file_named(with: &Args) -> Result<&str, String> {
 
 fn req<'a>(with: &'a Args, key: &str) -> Result<&'a str, String> {
     arg_str(with, key).ok_or_else(|| format!("arg `{key}` must be a string"))
+}
+
+/// The names a step lists under `key`, as one clause an operator reads off. It is a list because what
+/// it stands for is a selection, and the words are the reader's own — project names, which the screen
+/// draws and nothing here can shorten.
+fn names(with: &Args, key: &str) -> Result<String, String> {
+    let listed = with
+        .get(key)
+        .and_then(|v| v.as_sequence())
+        .ok_or_else(|| format!("arg `{key}` is a selection, so it is a list"))?;
+    let words: Vec<&str> = listed
+        .iter()
+        .map(|one| one.as_str().ok_or_else(|| format!("every entry under `{key}` must be a name")))
+        .collect::<Result<_, _>>()?;
+    match words.as_slice() {
+        [] => Ok(" none of them".to_string()),
+        words => Ok(format!(" {}", words.join(", "))),
+    }
+}
+
+/// The projects a row is read as having ticked, where the road says which — an empty tail where it
+/// does not, since a row's selection is not what every reading of it is about.
+fn ticked(with: &Args) -> Result<String, String> {
+    match with.get("projects") {
+        None => Ok(String::new()),
+        Some(_) => Ok(format!(
+            " Confirm the projects ticked on that row are exactly these, and no others:{}.",
+            names(with, "projects")?
+        )),
+    }
 }
 
 /// The four places a hit can be on, in words an operator reads off the row. The set is closed and a
@@ -3046,10 +3091,10 @@ steps_gui:
         assert!(fold("This folder looks like Claude Code's.").contains(&fold("claude-code")));
     }
 
-    /// The other way in, read behind its fold: the folder an app's entry names is the reading, and the
-    /// two rows either side of it are the two roads. A row read with no folder named is a `Review` — the
-    /// words that say whether an app is set up are the interface's own, and so is the label on the
-    /// button that says which road it offers.
+    /// The other way in, read off the screen that lists the apps: the folder an app's entry names is the
+    /// reading, and the two rows either side of it are the two roads. A row read with no folder named is
+    /// a `Review` — the words that say whether an app is set up are the interface's own, and so is the
+    /// label on the button that says which road it offers.
     #[test]
     fn the_folder_an_apps_entry_names_is_what_the_mcp_row_is_read_by() {
         let yaml = r#"
@@ -3076,7 +3121,7 @@ steps_gui:
         let mut ins = Instructor::new();
         let steps = s.steps(Driver::Gui);
         let lines: Vec<String> = steps.iter().map(|st| ins.render(st).unwrap()).collect();
-        assert!(lines[0].contains("folded"), "got: {}", lines[0]);
+        assert!(lines[0].contains("where an AI is connected"), "got: {}", lines[0]);
         assert!(
             lines[1].contains("\"/Users/reader/greenhouse\"") && lines[1].contains("already set up"),
             "got: {}",

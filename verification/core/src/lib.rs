@@ -547,12 +547,15 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-request-copy", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
     // The other way in for an AI whose host cannot open a folder at all, which is folded away until it
     // is asked for. Most readers never need it — somebody working from a terminal has amenbo already —
-    // so the offer is one line to walk past, and everything about it is behind this one move.
+    // so it is one item to walk past, and everything about it is behind this one move.
     //
     // Opening it is a step of the road rather than something the operator does on the way, and for the
     // reason every other move on a screen road is: the screen it opens onto is what the asserts after
-    // it are read against, and a fold nobody opened leaves them read against the screen in front of it.
-    // A screen road alone, the fold being the screen's own — a terminal has nothing folded.
+    // it are read against, and a screen nobody opened leaves them read against the one in front of it.
+    // It is also the way *back*: a road that left for another app and returned reads the same rows
+    // again, and a re-open is what makes the second reading a reading rather than a cached draw.
+    // A screen road alone — a terminal reaches a project by standing in its folder, and has no list of
+    // apps at all.
     //
     // Not `Domain::Mcp`, for all that the name says MCP: that domain is the protocol itself — a
     // server standing for a folder and being called over two streams — and nothing here speaks it. What
@@ -1032,8 +1035,15 @@ const REGISTRY: &[OpSpec] = &[
     // read where nothing is being reported, which is a state `ai-launch-notice` cannot be asked in: its
     // own line names a report, and `present: false` there is the absence rather than a way in.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-request", required: &["tool", "paste_into"], refs: &[], strings: &["tool", "paste_into"], binds: false },
-    // One app's row in the fold `mcp-open` opens: whether that app already reaches this project, and
-    // the folder its entry names when it does.
+    // One app's row on the screen `mcp-open` opens: whether that app already reaches amenbo at all, the
+    // folder its entry names when it does, and — where the road is about them — the projects standing
+    // ticked on it.
+    //
+    // `projects` is the row's own opening state, which is read off the settings rather than remembered:
+    // a reader who has set this app up before has to arrive at their own selection, and a build that
+    // opened every row empty would have them rebuild it before touching anything. It is a list because
+    // the selection is one, and the reading is exact — a project ticked that the entry does not reach
+    // is as wrong as one missing.
     //
     // The folder is a second word rather than part of the first because the two are separately true:
     // an app is set up for *some* folder, and which one is the half a reader cannot work out — an entry
@@ -1057,6 +1067,15 @@ const REGISTRY: &[OpSpec] = &[
     // A `Review`: what separates the two is the label on a button, and a label is a word of the
     // interface.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "mcp-road", required: &["app", "road"], refs: &[], strings: &["app", "road"], binds: false },
+    // Ticking a row's projects and taking the road it offers — the one move on this screen that writes
+    // anything. What goes out is the **whole** selection every time, so the step names every project
+    // that is to be ticked and says the rest are to be left clear: a build that added to what was there
+    // instead would pass a road that only ever named one.
+    //
+    // It is an action rather than an assert because what it produces leaves amenbo — a request goes to
+    // the clipboard and a file goes wherever the reader picks — so what is read afterwards is the app
+    // it was carried into (`mcp-in-app`) and the row itself, read again.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "mcp-choose", required: &["app", "projects"], refs: &[], strings: &["app"], binds: false },
     // Where that file ends up: the app itself, with amenbo standing among its servers and a tool of
     // amenbo's under it. One app only, and the one the file road is for — it is the single app whose
     // settings amenbo writes with nobody in between, so a format it got wrong is amenbo's fault and

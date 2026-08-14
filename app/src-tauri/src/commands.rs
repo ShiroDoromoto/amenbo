@@ -3616,14 +3616,13 @@ pub fn agent_hook_requests(project_id: i64) -> Result<AgentHookRequestsDto, CmdE
 fn mcp_server_of(
     store: &amenbo_core::store::Store,
     project_id: i64,
-) -> Result<Option<(String, String, std::path::PathBuf)>, CmdError> {
+) -> Result<Option<(String, std::path::PathBuf)>, CmdError> {
     let Some(project) = store.project(project_id)? else { return Ok(None) };
-    let Some(slug) = project.slug else { return Ok(None) };
     let registry = store.bindings();
     let Some(dir) = registry.dirs_for_project(project_id).into_iter().next() else {
         return Ok(None);
     };
-    Ok(Some((slug, project.name, std::path::PathBuf::from(dir))))
+    Ok(Some((project.name, std::path::PathBuf::from(dir))))
 }
 
 /// The amenbo a host will run: the command shipped beside this build's own binary.
@@ -3667,11 +3666,11 @@ pub fn mcp_apps(project_id: i64) -> Result<Vec<McpAppDto>, CmdError> {
     use amenbo_core::{mcp::Server, mcp_apps, mcp_probe, mcp_request};
 
     let store = open_store_read()?;
-    let Some((slug, name, folder)) = mcp_server_of(&store, project_id)? else {
+    let Some((name, folder)) = mcp_server_of(&store, project_id)? else {
         return Ok(Vec::new());
     };
     let exe = mcp_exe();
-    let server = Server { slug: &slug, project: &name, folder: &folder, exe: &exe };
+    let server = Server { project: &name, folder: &folder, exe: &exe };
 
     Ok(mcp_apps::MCP_APPS
         .iter()
@@ -3705,7 +3704,7 @@ pub fn mcp_bundle_write(project_id: i64, into_dir: String) -> Result<String, Cmd
     use amenbo_core::{mcp::Server, mcp_bundle};
 
     let store = open_store_read()?;
-    let Some((slug, name, folder)) = mcp_server_of(&store, project_id)? else {
+    let Some((name, folder)) = mcp_server_of(&store, project_id)? else {
         return Err(CmdError::coded(
             "mcp.no_folder",
             "this project has no folder for a server to be bound to",
@@ -3713,7 +3712,7 @@ pub fn mcp_bundle_write(project_id: i64, into_dir: String) -> Result<String, Cmd
         ));
     };
     let exe = mcp_exe();
-    let server = Server { slug: &slug, project: &name, folder: &folder, exe: &exe };
+    let server = Server { project: &name, folder: &folder, exe: &exe };
     let written = mcp_bundle::write_into(&server, std::path::Path::new(&into_dir))
         .map_err(|e| CmdError::coded("mcp.bundle_write", e.to_string(), serde_json::Value::Null))?;
     Ok(written.display().to_string())

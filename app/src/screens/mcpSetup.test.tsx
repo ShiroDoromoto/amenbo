@@ -21,7 +21,7 @@ const hoisted = vi.hoisted(() => ({
   /** Every bundle write, by project — the one move on this block that writes anything. */
   written: [] as number[],
   /** Where the write says the file landed, or `null` for a picker that was closed. */
-  writtenTo: "/w/downloads/amenbo-shop.mcpb" as string | null,
+  writtenTo: "/w/downloads/amenbo.mcpb" as string | null,
 }));
 
 vi.mock("../core/snapshot", async (importOriginal) => {
@@ -86,7 +86,7 @@ beforeEach(() => {
   hoisted.apps = [];
   hoisted.asked = [];
   hoisted.written = [];
-  hoisted.writtenTo = "/w/downloads/amenbo-shop.mcpb";
+  hoisted.writtenTo = "/w/downloads/amenbo.mcpb";
   clipboard = [];
   Object.defineProperty(navigator, "clipboard", {
     configurable: true,
@@ -134,7 +134,7 @@ describe("the way in for an AI that cannot open a folder", () => {
 
     await act(async () => { button(t("mcp.write")).click(); });
     expect(hoisted.written).toEqual([7]);
-    expect(container.textContent).toContain(tf("mcp.written", { path: "/w/downloads/amenbo-shop.mcpb" }));
+    expect(container.textContent).toContain(tf("mcp.written", { path: "/w/downloads/amenbo.mcpb" }));
   });
 
   it("says which folder an app is set up for, and offers to take it back out", async () => {

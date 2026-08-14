@@ -21,8 +21,10 @@
 # is written out here rather than asked of the build under test, which is the opposite of what
 # `wire-ai` does one road over, and for a reason: nothing the shipped CLI hands over carries this text —
 # both faces that produce it are the screen's — and the name the entry is found under is a compatibility
-# surface in its own right, sitting in files readers' own AIs wrote. A build that renamed it would stop
-# recognising every entry already out there, and this road going red is that being said out loud.
+# surface in its own right, sitting in files readers' own AIs wrote. It is the machine's name rather than
+# any one project's, so one entry is what a reader has however many projects they work; a build that moved
+# it again would stop recognising every entry already out there, and this road going red is that being
+# said out loud.
 id: set-an-app-up-to-reach-this-project
 title: The project's own settings say which apps already reach it, for which folder, and hand each one the road its app can walk
 description: >
@@ -76,7 +78,7 @@ given:
       content: |
         {
           "mcpServers": {
-            "amenbo-greenhouse": {
+            "amenbo": {
               "command": "/usr/local/bin/amenbo",
               "args": ["mcp", "--dir", "/Users/reader/greenhouse"]
             }

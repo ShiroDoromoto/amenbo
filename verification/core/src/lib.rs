@@ -684,10 +684,18 @@ const REGISTRY: &[OpSpec] = &[
     // halves: `false` leaves the next write undelivered, `true` gives the directory back, which
     // whatever reads or delivers afterwards needs.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "installed-dir", required: &["readable"], refs: &[], strings: &[], binds: false },
-    // What an installed plugin is told, for the project the run stands in. `key` is a setting its
-    // author declared; an empty value is how one is taken back, which is why it is a value here and
-    // not an op of its own.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "config-set", required: &["name", "key", "value"], refs: &[], strings: &["name", "key", "value"], binds: false },
+    // What an installed plugin is told, for one crossing. `key` is a setting its author declared; an
+    // empty value is how one is taken back, which is why it is a value here and not an op of its own.
+    //
+    // `project` is the crossing the value belongs to. A setting is held per project, and a terminal
+    // says which project it is writing for by standing in a folder bound to it — there is no flag for
+    // it — so the driver stands in that project's folder before it types. Naming none is the folder
+    // the run itself works from, which is bound to nothing and so answers to the store's default
+    // project: the right silence for a road that only needs a value somewhere, and the wrong one for a
+    // road whose crossing is named elsewhere, where a write nobody placed lands out of its sight.
+    // A screen never names it: the row a form is opened inside has already answered which crossing is
+    // being written, so the GUI driver turns the word away.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "config-set", required: &["name", "key", "value"], refs: &[], strings: &["name", "key", "value", "project"], binds: false },
     // A catalog of the run's own, answering on the loopback for as long as the scenario lasts.
     // Registering one is a trust decision taken on the key it publishes beside its `catalog.json`,
     // and a key is only published by something that answers on a port — no URL a scenario can write
@@ -1218,7 +1226,12 @@ const REGISTRY: &[OpSpec] = &[
     // a road wants after something that could have taken it away — a check that refused the values a save
     // had already written. A terminal reads that same value with `equals` and has no box to draw it in, so
     // the CLI driver turns this one away rather than answering a question it was not asked.
-    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "config", required: &["name", "key"], refs: &[], strings: &["name", "key", "state", "holds"], binds: false },
+    //
+    // `project` names the crossing the value is read from, and it is the same word `config-set` takes,
+    // for the same reason: down this pipe the read is a command typed somewhere, and where it is typed
+    // is what decides which project answers. A road that named the crossing on the way in and left it
+    // unnamed here would be asking the default project about a value it was never told.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "config", required: &["name", "key"], refs: &[], strings: &["name", "key", "state", "holds", "project"], binds: false },
     // The other half of that same form, asked apart from it the way a row's line is asked apart from
     // its badge: not what the field holds, but the words it is drawn under. `label` is those words,
     // written out — the author's, in whichever language they wrote them and the reader is in — and

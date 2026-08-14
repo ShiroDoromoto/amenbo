@@ -26,6 +26,7 @@ pub mod export;
 pub mod harness;
 pub mod idref;
 pub mod lint;
+pub mod mcp_apps;
 pub mod migrate;
 pub mod model;
 pub mod nudge;

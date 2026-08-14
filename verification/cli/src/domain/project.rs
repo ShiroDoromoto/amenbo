@@ -107,7 +107,11 @@ impl Driver<'_> {
 /// people — spaces, dashes of several widths, Japanese — and this is only the scratch folder the run
 /// links, so what it owes is a path that is legible in a failure message and distinct between two
 /// projects of one session.
-fn folder_name(name: &str) -> String {
+///
+/// It is also the way back: a later step that names a project is looking for the folder bound to it,
+/// and the name is all it has to find one by ([`Driver::project_folder`]). So the mapping is a
+/// function of the project's name and nothing else — no counter, no order of creation.
+pub(crate) fn folder_name(name: &str) -> String {
     let mut out = String::new();
     for ch in name.chars() {
         if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-') {

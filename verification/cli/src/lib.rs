@@ -537,6 +537,34 @@ impl<'a> Driver<'a> {
             .map_err(|e| format!("could not make the folder `{name}`: {e}"))
     }
 
+    /// Where to stand for a step that names a `project:` — the folder this run linked to it when the
+    /// premise raised it. Some of what amenbo holds is held per project, and a terminal says which
+    /// project it means by standing in a folder bound to that one; there is no flag for it. A step
+    /// that names none gets `None`, which is the run's own working directory: bound to nothing, and
+    /// so answering to the store's default project.
+    ///
+    /// The binding is read back before the folder is handed over. A folder that answers with another
+    /// project — or with none, which is what a name no `project create` ever raised leaves behind —
+    /// would take the command somewhere quietly and leave the road reading the wrong crossing, which
+    /// is the whole reason a step gets to name one.
+    fn project_folder(&self, with: &Args) -> Result<Option<PathBuf>, String> {
+        let Some(name) = with.get("project") else { return Ok(None) };
+        let name = name.as_str().ok_or("arg `project` must be a string")?;
+        let dir = self.folder_named(&crate::domain::project::folder_name(name))?;
+        let v = self.run_json_in(&dir, &["bind", "--json"])?;
+        match v["binding"]["project_name"].as_str() {
+            Some(bound) if bound == name => Ok(Some(dir)),
+            other => Err(format!(
+                "`project: {name}` names no folder this run stands in — {} is bound to {}",
+                dir.display(),
+                match other {
+                    Some(bound) => format!("`{bound}`"),
+                    None => "no project".to_string(),
+                }
+            )),
+        }
+    }
+
     /// Resolve a step's `target:` to the id an earlier action bound. The loader already proved
     /// the name resolves to an earlier `as:`, so a miss here is an internal error, not user input.
     fn resolve(&self, with: &Args) -> Result<i64, String> {

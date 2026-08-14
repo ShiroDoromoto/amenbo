@@ -21,7 +21,7 @@ description: >
   where the promise is an absence — the value is shown as words, with no box under it to type in and no
   button beside it to empty it.
 given:
-  # The project the screen road walks its crossing on. A value belongs to a crossing, and the project is
+  # The project both roads walk their crossing on. A value belongs to a crossing, and the project is
   # not one a road on screen can raise on its way past.
   - type: action
     domain: project
@@ -50,14 +50,22 @@ given:
   # And the value the plugin's own setup would have written. It stands in the premise rather than on the
   # screen road for the reason the declaration does: there is no move on a form that produces it, which
   # is exactly what that road then reads.
+  #
+  # The crossing is named because a value belongs to one: the screen road walks `worktree` × `Greenhouse`
+  # and reads this value off it, so a write left unplaced would land on whatever project the run's own
+  # folder answers to and leave that row empty. Both roads read the crossing named here.
   - type: action
     domain: plugin
     op: config-set
     with:
       name: worktree
       key: worker_url
+      project: Greenhouse
       value: https://greenhouse.example.test/board
 
+# The terminal walks the same crossing the premise wrote at, and says so on every step: down here the
+# project is answered by where the command is typed, so a step that named none would be asking the
+# folder this run happens to stand in — a different project, holding nothing anybody wrote.
 steps_cli:
   - type: assert
     domain: plugin
@@ -65,7 +73,19 @@ steps_cli:
     with:
       name: worktree
       key: worker_url
+      project: Greenhouse
       equals: https://greenhouse.example.test/board
+
+  # And nowhere else. A setting is held per crossing, so the project this run's own folder answers to
+  # holds none of it — which is the reading that says the address above really is at the crossing the
+  # screen road then opens, rather than at whichever one the write happened to land on.
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: worker_url
+      set: false
 
   # The door stays open here. A plugin that re-registered itself writes the new address through the same
   # command anybody types, and a refusal on this side would leave it with nowhere to put the value it
@@ -76,6 +96,7 @@ steps_cli:
     with:
       name: worktree
       key: worker_url
+      project: Greenhouse
       value: https://greenhouse.example.test/moved
 
   - type: assert
@@ -84,6 +105,7 @@ steps_cli:
     with:
       name: worktree
       key: worker_url
+      project: Greenhouse
       equals: https://greenhouse.example.test/moved
 
   - type: action

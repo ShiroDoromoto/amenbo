@@ -811,16 +811,23 @@ impl Driver<'_> {
             // Filling in a setting the plugin's author declared. An empty value is the way one is
             // taken back, so it is passed through as written rather than being turned into an op of
             // its own — the command reads it the same way a person typing `""` does.
+            //
+            // A setting is held per crossing, and the command names no project: which one it writes
+            // for is answered by where it is typed. So a step that names a crossing is typed from
+            // that project's folder, and one that names none is typed where the run stands.
             "config-set" => {
                 let name = req_str(with, "name")?;
                 let key = req_str(with, "key")?;
                 let value = req_str(with, "value")?;
-                let v = self.run_json(&[
-                    "plugin", "config", "set", name, key, value, "--json",
-                ])?;
+                let argv = ["plugin", "config", "set", name, key, value, "--json"];
+                let v = match self.project_folder(with)? {
+                    Some(dir) => self.run_json_in(&dir, &argv)?,
+                    None => self.run_json(&argv)?,
+                };
+                let crossing = crossing_named(with);
                 Ok(Outcome::action(match v["cleared"].as_bool() {
-                    Some(true) => format!("took `{key}` back off `{name}` for this project"),
-                    _ => format!("told `{name}` its `{key}` for this project"),
+                    Some(true) => format!("took `{key}` back off `{name}` for {crossing}"),
+                    _ => format!("told `{name}` its `{key}` for {crossing}"),
                 }))
             }
             // A catalog of the run's own on the loopback, so a scenario can walk what only a catalog
@@ -1218,13 +1225,19 @@ impl Driver<'_> {
                     ),
                 ))
             }
-            // A setting read back as this project holds it — one value per setting, so the read asks
-            // the same question the write answered.
+            // A setting read back as one project holds it — one value per crossing, so the read asks
+            // the same question the write answered, and from the same place: which project answers is
+            // decided by where the command is typed, not by anything on it.
             "config" => {
                 let name = req_str(with, "name")?;
                 let key = req_str(with, "key")?;
                 refuse_screen_reading(with)?;
-                let v = self.run_json(&["plugin", "config", "get", name, key, "--json"])?;
+                let argv = ["plugin", "config", "get", name, key, "--json"];
+                let v = match self.project_folder(with)? {
+                    Some(dir) => self.run_json_in(&dir, &argv)?,
+                    None => self.run_json(&argv)?,
+                };
+                let held = crossing_read(with);
                 // Which of the three answers the field holds. It is asked apart from the value because
                 // the value cannot tell two of them apart: a choice answered with none of the
                 // candidates and one nobody has answered yet both read as nothing chosen, and only the
@@ -1235,7 +1248,7 @@ impl Driver<'_> {
                     return Ok(Outcome::assert(
                         pass,
                         format!(
-                            "plugin `{name}` holds `{key}` as `{got}` (expected `{want}`, {})",
+                            "plugin `{name}` holds `{key}`{held} as `{got}` (expected `{want}`, {})",
                             if pass { "as expected" } else { "MISMATCH" }
                         ),
                     ));
@@ -1252,7 +1265,7 @@ impl Driver<'_> {
                     return Ok(Outcome::assert(
                         pass,
                         format!(
-                            "plugin `{name}` reads `{key}` back as {}{} (expected {}, {})",
+                            "plugin `{name}` reads `{key}`{held} back as {}{} (expected {}, {})",
                             if declared { "a secret" } else { "an ordinary setting" },
                             if leaked { ", value and all" } else { "" },
                             if want { "a secret nobody echoes" } else { "an ordinary setting" },
@@ -1268,7 +1281,7 @@ impl Driver<'_> {
                         Ok(Outcome::assert(
                             pass,
                             format!(
-                                "plugin `{name}` reads `{key}` back as {} (expected {want}, {})",
+                                "plugin `{name}` reads `{key}`{held} back as {} (expected {want}, {})",
                                 v["value"],
                                 if pass { "as expected" } else { "MISMATCH" }
                             ),
@@ -1282,7 +1295,7 @@ impl Driver<'_> {
                         Ok(Outcome::assert(
                             got == want,
                             format!(
-                                "plugin `{name}` {} `{key}` (expected {}, {})",
+                                "plugin `{name}` {} `{key}`{held} (expected {}, {})",
                                 if got { "holds a" } else { "holds no" },
                                 if want { "set" } else { "unset" },
                                 if got == want { "as expected" } else { "MISMATCH" }
@@ -1550,6 +1563,26 @@ impl Driver<'_> {
         let all = translated_into(held, key, with);
         std::fs::write(&path, serde_json::to_string_pretty(&all).map_err(|e| e.to_string())?)
             .map_err(|e| format!("could not write {}: {e}", path.display()))
+    }
+}
+
+/// The crossing a settings step named, as a line about it reads. A value is held per project, so a
+/// line that left the project out would report a write and a read as the same act wherever they
+/// landed — which is exactly the disagreement worth naming when two of these sit next to each other.
+fn crossing_named(with: &Args) -> String {
+    match with.get("project").and_then(|v| v.as_str()) {
+        Some(project) => format!("`{project}`"),
+        None => "the project this run stands in".to_string(),
+    }
+}
+
+/// The same, for a verdict that reads a value back — a phrase to drop mid-sentence, and nothing at
+/// all where the step named no crossing (the reading is then about the one place the run stands, and
+/// saying so in every line would be noise).
+fn crossing_read(with: &Args) -> String {
+    match with.get("project").and_then(|v| v.as_str()) {
+        Some(project) => format!(" in `{project}`"),
+        None => String::new(),
     }
 }
 

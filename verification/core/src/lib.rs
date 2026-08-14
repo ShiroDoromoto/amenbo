@@ -176,6 +176,11 @@ pub enum Domain {
     /// A plugin on this machine: what is installed, whose gate is open, what a call returned, and
     /// what the execution log kept. Named by the name it carries in the catalog, never by a binding.
     Plugin,
+    /// amenbo reached the other way round: a server the host of an AI starts, spoken to over
+    /// JSON-RPC rather than typed at. A domain of its own because what a road walks here is the
+    /// protocol — a server standing for one folder, the tools it publishes, and what a call through
+    /// one comes back with — and none of that is a record in the store.
+    Mcp,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1425,6 +1430,30 @@ const REGISTRY: &[OpSpec] = &[
     // catalog rules. `ok` is the verdict, and `problem` names the code a failing one must report —
     // a manifest can be wrong in more ways than one, and a line about the wrong reason proves nothing.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "validated", required: &["path", "ok"], refs: &[], strings: &["path", "problem"], binds: false },
+    // amenbo spoken to rather than typed at. A host starts one server per folder, and everything
+    // after that goes over the two streams — so the road is the protocol's shape rather than the
+    // store's: stand a server, read what it publishes, call through it, read what came back.
+    //
+    // `serve` starts it for the folder named, and holds it up for the rest of the road — a server
+    // dropped after the step that stood it would leave every later step talking to a closed pipe. It
+    // also settles the handshake and takes the tool list once, which is what `offers` then reads: a
+    // list fetched again per assert would be a second question, and the one worth asking is what this
+    // server published when it came up.
+    OpSpec { kind: Kind::Action, domain: Domain::Mcp, op: "serve", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
+    // `call` is a tool called by name, with the words the caller sends under it — `args` verbatim, the
+    // way `plugin run` carries a plugin's own. What comes back is read by `answered`, for the reason
+    // every other returned document is read by an assert of its own: a call's answer is a document,
+    // and the step that made the call has no verdict to give about it.
+    OpSpec { kind: Kind::Action, domain: Domain::Mcp, op: "call", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
+    // What the standing server publishes: one tool, present or absent. Named one at a time rather
+    // than as a list, because what a road is about is a tool being reachable — and a road that named
+    // the whole set would fail on a tool nobody was asking about.
+    OpSpec { kind: Kind::Assert, domain: Domain::Mcp, op: "offers", required: &["tool", "present"], refs: &[], strings: &["tool"], binds: false },
+    // And what the last call came back with. `ok` is the half a protocol error cannot say: a tool that
+    // ran and refused is a *result* that is marked as an error, not a fault of the transport, so the
+    // model reads the refusal instead of the host swallowing it. `contains` is the words that refusal
+    // — or that answer — has to carry, since a road about a door being shut is about which door.
+    OpSpec { kind: Kind::Assert, domain: Domain::Mcp, op: "answered", required: &[], refs: &[], strings: &["contains"], binds: false },
 ];
 
 fn lookup(kind: Kind, domain: Domain, op: &str) -> Option<&'static OpSpec> {

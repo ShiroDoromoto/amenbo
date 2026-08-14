@@ -1,0 +1,140 @@
+# The road for an AI that cannot run amenbo itself. A chat with no terminal, or a tool whose commands
+# run in a sandbox somewhere other than this machine, reaches a project the other way round: the host
+# starts `amenbo mcp` for one folder, and everything after that goes over the two streams.
+#
+# What this walks is the whole of what that costs. A server serves the one folder it was given, so a
+# road never says which project it means. Its tools are three and the words go through them verbatim,
+# so what a caller can do is what a person could type — less the two commands that would move the
+# folder out from under it. And the facet is the server's to declare: an `--actor human` written by
+# the caller is dropped, and the record says an AI acted.
+#
+# A screen road alone has nowhere to walk this: there is no window in front of a protocol, and the
+# app the settings reach is not this machine's to open. The road that hands those settings over is a
+# screen's, and it stops where this one starts.
+id: work-a-project-from-an-ai-that-has-no-terminal
+title: A host starts one server for one folder, and the AI behind it reads the way to work, files a task and is refused the two commands that would move the folder
+description: >
+  Stand `amenbo mcp` for a project's folder, read back the tools it publishes, and walk one round
+  trip: the spec that says how to work here, a task filed through the words a person would have
+  typed, and that task read back off the board. Then the two refusals — the facet the caller asked
+  for is not the one recorded, and `bind` is turned away as a result the model reads rather than as a
+  fault the host swallows.
+given:
+  # The project the server will answer about, and the folder that says so. A server is told a folder
+  # and works the project out from it, so the folder is the whole of what the road hands over.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse
+
+  - type: action
+    domain: folder
+    op: init
+    with:
+      dir: greenhouse
+
+steps_cli:
+  - type: action
+    domain: mcp
+    op: serve
+    with:
+      dir: greenhouse
+
+  # The three the manifest publishes. `run` is the one everything else rides on, so it is the one
+  # named: a host that offered the two readers and not the writer would leave an AI able to read the
+  # spec and unable to act on it.
+  - type: assert
+    domain: mcp
+    op: offers
+    with:
+      tool: run
+      present: true
+
+  # A tool nobody declared is not there, which is the other half of what a published list means.
+  - type: assert
+    domain: mcp
+    op: offers
+    with:
+      tool: task_add
+      present: false
+
+  # The spec, read whole. It is the first thing an AI does here and the reason `run` needs no tool of
+  # its own per command: what can be typed is described once, by amenbo.
+  - type: action
+    domain: mcp
+    op: call
+    with:
+      tool: agent
+
+  - type: assert
+    domain: mcp
+    op: answered
+    with:
+      ok: true
+
+  # The words a person would have typed, sent through. The facet the caller writes is the point of
+  # this line: it says `human`, and the server declares `ai` in its place.
+  - type: action
+    domain: mcp
+    op: call
+    with:
+      tool: run
+      args:
+        - "--actor"
+        - "human"
+        - "task"
+        - "add"
+        - "--title"
+        - "SCENARIO — filed from an AI with no terminal"
+
+  - type: assert
+    domain: mcp
+    op: answered
+    with:
+      ok: true
+
+  # And the record says who acted. Read back through the same door, because a road about a server is
+  # about what the server's own calls leave behind.
+  - type: action
+    domain: mcp
+    op: call
+    with:
+      tool: run
+      args:
+        - "task"
+        - "list"
+        - "--filter"
+        - "ai:true"
+
+  - type: assert
+    domain: mcp
+    op: answered
+    with:
+      contains: SCENARIO — filed from an AI with no terminal
+
+  # The one door that stays shut. Re-pointing the folder is the shape this whole road rests on, so
+  # `bind` is refused — and refused as a *result*, marked in error, which is what puts the reason in
+  # front of the model instead of leaving the host to swallow it as a transport fault.
+  - type: action
+    domain: mcp
+    op: call
+    with:
+      tool: run
+      args:
+        - "bind"
+        - "--project"
+        - "somewhere-else"
+
+  - type: assert
+    domain: mcp
+    op: answered
+    with:
+      ok: false
+
+  - type: assert
+    domain: mcp
+    op: answered
+    with:
+      contains: bind

@@ -8,6 +8,7 @@
 mod agent;
 mod cli;
 mod doctor_text;
+mod mcp;
 mod output;
 mod validate_text;
 
@@ -409,6 +410,10 @@ fn uses_facet(cmd: &Option<Command>) -> bool {
         // Its sibling `answer` is not here: it writes this project's row, so it declares a facet like
         // every other write.
         | Command::AgentHook { sub: AgentHookCmd::Snippet { .. } }
+        // The MCP server opens no store of its own: it speaks a protocol on two streams and re-runs this
+        // executable for every tool call (`AMB-D-665`). The facet is the child's to declare, in the folder
+        // the child works — and a host launching a server is in no position to pass one anyway.
+        | Command::Mcp { .. }
         // A runner fires the hooks a facet's own writes already queued: it creates nothing, assigns
         // nothing, and was handed the store to work (`AMB-T-2175`). So was a plugin calling amenbo back,
         // whose window comes from the gate it fired through rather than from a facet (`AMB-D-406`).
@@ -455,6 +460,8 @@ fn stamps_facet(cmd: &Option<Command>) -> bool {
         // A runner fires the hooks a facet's own writes already queued; it creates nothing and assigns
         // nothing, so there is no author for it to stamp (`AMB-T-2175`).
         | Command::PluginRunner { .. }
+        // The MCP server writes nothing itself; what its tool calls run is a child that stamps its own.
+        | Command::Mcp { .. }
         // `validate` reads a manifest file the author names and touches no store at all; the rest of the
         // group moves this machine's plugin state and the plugin's own per-project rows (settings, the
         // enable gate). Those are local settings like `config`: they carry no author and leave no activity
@@ -621,6 +628,10 @@ fn nested_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBuf> {
         | Some(Command::AgentHook { .. })
         | Some(Command::PluginRunner { .. })
         | Some(Command::Plugin { sub: PluginCmd::Validate { .. } })
+        // The MCP server is launched by a host, from whatever directory that host happened to be in, and
+        // it opens no store there. The folder that decides anything is `--dir`, and the child that runs in
+        // it meets this guard itself — one answer, given where it is owed.
+        | Some(Command::Mcp { .. })
         | Some(Command::Unbind { .. }) => None,
         Some(Command::Bind { dir: Some(d), .. })
         | Some(Command::Project { sub: ProjectCmd::Add { dir: d, .. } }) => {
@@ -2832,6 +2843,11 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         Some(Command::AgentHook { sub: AgentHookCmd::Snippet { tool, copy } }) => {
             return agent_hook_snippet_cmd(flags, tool, *copy)
         }
+        // The MCP server, ahead of every guard that asks about *this* directory: a host launches it from
+        // wherever it happens to stand, and the only folder that decides anything here is `--dir`
+        // (`AMB-D-666`). It opens no store — each tool call re-runs this executable in that folder, and
+        // the guards answer there, to the child, in the words a person typing there would read.
+        Some(Command::Mcp { dir }) => return mcp_cmd(dir),
         Some(Command::Version) if !store_reachable() => {
             advise_linux_system_orphan();
             return version_unbound(flags);
@@ -3395,6 +3411,9 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         Command::AgentHook { .. } => {
             unreachable!("`agent-hook snippet` is handled before open")
         }
+        Command::Mcp { .. } => {
+            unreachable!("the MCP server is handled before open")
+        }
     }
     Ok(0)
 }
@@ -3456,6 +3475,33 @@ fn agent_hook_snippet_cmd(flags: &Flags, tool: &str, copy: bool) -> Result<i32, 
         println!("{request}");
     }
     Ok(0)
+}
+
+/// `amenbo mcp --dir <path>` — serve one folder over MCP until the host closes the stream
+/// (`AMB-D-665`, `AMB-D-666`).
+///
+/// The one thing decided here is the folder, and it is decided once: a path that names no directory is
+/// refused now, on the terminal, rather than as a spawn failure inside every tool call for the life of
+/// the server. Whether that folder is bound, whether this build can read its store, whether it is a
+/// worktree nobody should work in — none of those are asked here. They are the child's to answer, in
+/// the folder it runs in, so the host reads amenbo's own words instead of a second opinion this process
+/// formed about a folder it never opened.
+///
+/// It writes nothing on stdout of its own: that stream is the protocol's.
+fn mcp_cmd(dir: &str) -> Result<i32, CliError> {
+    let path = std::path::PathBuf::from(dir);
+    if !path.is_dir() {
+        return Err(CliError {
+            code: "invalid_value",
+            message: format!("--dir '{dir}' is not a folder, so there is nowhere to serve."),
+            hint: Some(format!(
+                "Name the folder the project is worked in — the one holding its `.amenbo` — in the host's own settings: `{} mcp --dir <path>`.",
+                Paths::command_name()
+            )),
+            exit: 2,
+        });
+    }
+    Ok(mcp::serve(&path))
 }
 
 /// `amenbo agent-hook answer <yes|no>` — write down what a person answered about starting this folder's

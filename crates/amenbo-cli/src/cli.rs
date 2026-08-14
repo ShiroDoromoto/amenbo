@@ -393,6 +393,25 @@ pub enum Command {
         sub: AgentHookCmd,
     },
 
+    /// Speak MCP on stdin/stdout, so an AI that cannot open a folder can still reach one. Started by
+    /// the host that reads it, never by hand: what goes over the two streams is JSON-RPC, so a terminal
+    /// gets nothing out of typing this.
+    ///
+    /// It is a thin mediator and nothing else — every tool call runs this same executable again as a
+    /// child process, in the folder `--dir` names, and hands back what that run wrote (`AMB-D-665`).
+    /// Which project the folder belongs to is the `.amenbo` pointer's answer there, exactly as it is
+    /// for a person typing in it.
+    ///
+    /// One server, one folder (`AMB-D-666`): a host that wants two projects writes two entries. This
+    /// build serves the two reading tools — `agent`, the whole of how to work here, and
+    /// `agent_command`, one command's spec.
+    Mcp {
+        /// the folder this server works in — every tool call runs there. The project is whatever its
+        /// `.amenbo` points at
+        #[arg(long, value_name = "PATH")]
+        dir: String,
+    },
+
     /// Physically erase content from this store's truth source.
     ///
     /// An ordinary delete removes the row but leaves its bytes in the file's freed pages, and editing a

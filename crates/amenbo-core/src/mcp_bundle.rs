@@ -10,9 +10,16 @@
 //!
 //! **What is inside is a pointer, not a program.** A bundle may carry the server's own code; this one
 //! carries none. amenbo is already on the machine — a whole installer put it there — so what the
-//! manifest names is the binary that is standing, and the arguments that bind it to one folder
-//! (`AMB-D-666`). Shipping a copy of amenbo inside would be a second amenbo to keep in step with the
-//! first.
+//! manifest names is the binary that is standing, and the arguments that start it (`AMB-D-666`).
+//! Shipping a copy of amenbo inside would be a second amenbo to keep in step with the first.
+//!
+//! **The folders are the host's to keep here, and amenbo's only to start with** (`AMB-D-681`). Every
+//! other app is handed the set written out; this one keeps it in a setting of its own, so what the
+//! manifest carries is the field, a placeholder standing where the folders go, and the choice the
+//! reader already made as that field's opening value. It is an opening value in the strict sense:
+//! the moment the reader saves the settings screen their own answer is stored and outranks it, and a
+//! bundle written again cannot move a folder they have chosen (`AMB-T-3157`). So this file sets a
+//! reader up once, and the screen it points at is where the set changes afterwards.
 //!
 //! **One bundle per machine, because the name is the machine's** (`AMB-D-679`). A host keeps its
 //! extensions under the name the manifest gives, and that name is [`crate::mcp::name`] — shared with
@@ -42,10 +49,24 @@ pub const EXTENSION: &str = "mcpb";
 /// The spec version the manifest below is written against.
 const MANIFEST_VERSION: &str = "0.3";
 
+/// The name of the one setting this manifest declares, and the placeholder that puts what it holds on
+/// the command line. A host expands the placeholder where it stands in `args`, one argv per folder —
+/// which is what makes `args` the road the set travels: the same placeholder in `env` arrives as the
+/// literal text, since a variable there has one string to be (`AMB-T-3156`).
+const FOLDERS_KEY: &str = "folders";
+
 /// What to call the file the reader saves. It is the server's own name, so a bundle written again
 /// lands on the file it landed on before rather than piling a second one up beside it.
 pub fn file_name() -> String {
     format!("{}.{EXTENSION}", crate::mcp::name())
+}
+
+/// The folders the setting starts out holding — the ones this server was written for.
+///
+/// It is a list whatever it holds, because the field is one: a host reading a bare string where a
+/// list was declared has a shape to reconcile that nobody meant it to have.
+fn folders(server: &Server) -> Vec<String> {
+    vec![server.folder.display().to_string()]
 }
 
 /// The manifest document, as it sits at the archive's root.
@@ -63,6 +84,29 @@ pub fn manifest(server: &Server) -> String {
             server.folder.display()
         ),
         "author": { "name": "Amenbo" },
+        // The one place this app differs from every other: the folders the server works in are the
+        // host's to keep, not amenbo's (`AMB-D-681`). What is declared here is the field they live
+        // in, and what is written into it is the choice the reader already made in amenbo — so the
+        // reader who installs this and does nothing else is already set up for that folder.
+        //
+        // **`required` is not written, deliberately.** With it, the host counts the field as
+        // unanswered however full it looks, refuses to enable the extension, and sends the reader to
+        // the settings screen to press save on a value they never typed (`AMB-T-3157`). Without it,
+        // installing is the whole of what they do. Nothing is lost by leaving it out: the field is
+        // never empty unless a person empties it, and a person emptying it is the set being theirs.
+        "user_config": {
+            FOLDERS_KEY: {
+                "type": "directory",
+                "title": "Project folders",
+                "description": "The folders this server works in. Each call from the AI names one of them, and each folder's project is whatever amenbo is set up for there.",
+                "multiple": true,
+                // What the reader gets on a first install — and only a first install. Once they save
+                // the settings screen, their own answer is stored and outranks this, so a bundle
+                // written again cannot move a folder they have chosen (`AMB-T-3157`); the way to
+                // change it from then on is that screen.
+                "default": folders(server),
+            },
+        },
         "server": {
             "type": "binary",
             // The entry point of a bundle that carries no code is the binary it points at. It is
@@ -71,7 +115,14 @@ pub fn manifest(server: &Server) -> String {
             "entry_point": server.command(),
             "mcp_config": {
                 "command": server.command(),
-                "args": server.args(),
+                // The folders are named by the placeholder rather than written out, because the
+                // field above is what holds them from here on. It stands where a folder would, and
+                // the host puts as many argv there as the field has.
+                "args": [
+                    "mcp",
+                    crate::mcp::DIR_FLAG,
+                    format!("${{user_config.{FOLDERS_KEY}}}"),
+                ],
             },
         },
     });
@@ -100,10 +151,10 @@ mod tests {
         Server { project: "Shop", folder, exe }
     }
 
-    /// The fields a host refuses a manifest for want of, and the arguments that bind the server to one
-    /// folder — the whole of what this document is for.
+    /// The fields a host refuses a manifest for want of, and the arguments that start the server —
+    /// the whole of what this document is for.
     #[test]
-    fn the_manifest_carries_what_a_host_asks_for_and_the_folder_it_is_bound_to() {
+    fn the_manifest_carries_what_a_host_asks_for_and_the_words_that_start_the_server() {
         let folder = Path::new("/work/shop");
         let exe = Path::new("/usr/local/bin/amenbo");
         let read: serde_json::Value =
@@ -116,10 +167,37 @@ mod tests {
         assert_eq!(read["author"]["name"], "Amenbo");
         assert_eq!(read["server"]["type"], "binary");
         assert_eq!(read["server"]["mcp_config"]["command"], "/usr/local/bin/amenbo");
+        // The folder is not written out here: the setting holds it, and the placeholder is where the
+        // host puts what the setting holds — one argv per folder, in this position.
         assert_eq!(
             read["server"]["mcp_config"]["args"],
-            serde_json::json!(["mcp", "--dir", "/work/shop"])
+            serde_json::json!(["mcp", "--dir", "${user_config.folders}"])
         );
+    }
+
+    /// The setting the folders live in, and the value it opens with. The shape is what a host reads
+    /// the field's affordance off — a folder picker that takes several — and the opening value is the
+    /// choice the reader already made, so installing is the whole of what they do.
+    #[test]
+    fn the_folders_are_a_setting_that_opens_on_the_project_the_reader_chose() {
+        let folder = Path::new("/work/shop");
+        let exe = Path::new("/usr/local/bin/amenbo");
+        let read: serde_json::Value =
+            serde_json::from_str(&manifest(&server(folder, exe))).expect("valid JSON");
+        let declared = &read["user_config"]["folders"];
+
+        assert_eq!(declared["type"], "directory");
+        assert_eq!(declared["multiple"], true, "a set, not a folder");
+        assert_eq!(declared["default"], serde_json::json!(["/work/shop"]));
+        assert!(
+            declared["title"].as_str().is_some_and(|t| !t.is_empty())
+                && declared["description"].as_str().is_some_and(|d| !d.is_empty()),
+            "the reader edits this field on a screen, so it is named there: {declared}",
+        );
+        // Writing `required` is what stops the host enabling the extension on its own, however full
+        // the field looks — and the reader is then sent to press save on a value they never typed
+        // (`AMB-T-3157`).
+        assert!(declared["required"].is_null(), "nothing here asks the reader to answer twice");
     }
 
     /// The file the reader saves is named after the server, and the server's name is the machine's —

@@ -1390,10 +1390,12 @@ impl Instructor {
             // another program.
             (Domain::Repo, "mcp-in-app") => format!(
                 "Take the file this road just offered into \"{}\"'s own settings — merging it with what \
-                 is already there — and start that app again. With it updated and signed in beforehand, \
-                 confirm amenbo stands among the servers it lists and the tool \"{}\" is under it. Shoot \
-                 that app's window yourself and keep the picture with this run: the shot taken here is \
-                 of amenbo, which is not where the answer is.",
+                 is already there — and start that app again. Answer nothing it does not ask you to: \
+                 the folders arrive with the file, and a build that made you fill them in is the miss \
+                 this step is watching for. With it updated and signed in beforehand, confirm amenbo \
+                 stands among the servers it lists and the tool \"{}\" is under it. Shoot that app's \
+                 window yourself and keep the picture with this run: the shot taken here is of amenbo, \
+                 which is not where the answer is.",
                 req(with, "app")?,
                 req(with, "tool")?
             ),

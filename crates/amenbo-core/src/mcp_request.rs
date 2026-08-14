@@ -11,8 +11,14 @@
 //! **Every app on this road can run a command**, which is why it is this road rather than a file
 //! ([`crate::mcp_apps`]): the AI in the app writes the settings its own app reads, and knows that
 //! document better than a generator does. What the request contributes is the part nobody in the app
-//! can know — where amenbo is installed, which folder this project is, and the name the entry has to
+//! can know — where amenbo is installed, which folders the reader chose, and the name the entry has to
 //! carry so a later read can tell it apart ([`crate::mcp::name`]).
+//!
+//! **The entry is put in place of the old one, not merged into it** (`AMB-D-681`). What the reader
+//! picked is a whole selection, so the request that carries it has to leave the file saying exactly
+//! that — a merge would make the result depend on what was set up before, and the second time round
+//! would not be the first. Every *other* server in the file still stays: it is this one entry that is
+//! overwritten, and that is what the wording asks for.
 //!
 //! **Taking it back out is a request too, and not the same one.** A removal names the entry and
 //! nothing else: there is no configuration to carry, and a reader who moved a project or finished with
@@ -66,38 +72,50 @@ pub fn entry(app: &McpApp, server: &Server) -> String {
     }
 }
 
-/// The request that adds amenbo to one app, for one project.
+/// The request that sets amenbo up in one app, for the folders the reader chose.
+///
+/// **It asks for the entry to be replaced, not added to.** What the reader picked on the screen is a
+/// whole selection, and a request that merged into the folders already written there would make the
+/// answer depend on what was set up before — the second time round would not be the first
+/// (`AMB-D-681`). Replacing says the same thing every time: what is in the file afterwards is what
+/// they chose. Everything *else* in that file still stays; it is this one entry that is overwritten.
 pub fn add(app: &McpApp, server: &Server) -> String {
     format!(
-        "Please add the Amenbo project \"{project}\" to {label} as an MCP server, so you can work its \
-         backlog from here.\n\
+        "Please set Amenbo up in {label} as an MCP server, so you can work its backlog from here.\n\
          \n\
-         Merge the entry below into `{settings}`. Keep every other server that file already holds, and \
-         create the file if it is not there. Change nothing else, and tell me what you changed.\n\
+         In `{settings}`, put the entry below in place of any server already named `{name}` — replace \
+         that entry whole, including the folders it lists, rather than adding to it. Keep every other \
+         server that file already holds, and create the file if it is not there. Change nothing else, \
+         and tell me what you changed.\n\
          \n\
          ```{format}\n\
          {entry}\n\
          ```\n\
          \n\
-         The server is bound to the folder it names, so it answers about that project and no other.",
-        project = server.project,
+         The server works in the folders it names and nowhere else, and each call it is sent says which \
+         one it is for.",
         label = app.label,
-        settings = settings(app, server.folder),
+        settings = settings(app, server),
+        name = crate::mcp::name(),
         format = app.format.as_str(),
         entry = entry(app, server),
     )
 }
 
 /// The request that takes it back out again.
+///
+/// It takes out the whole entry, which is the whole selection: there is no per-project half of it to
+/// remove, so a reader who wants to keep some of the folders is setting the app up again with those,
+/// not editing this one out in pieces.
 pub fn remove(app: &McpApp, server: &Server) -> String {
     format!(
-        "Please remove the Amenbo project \"{project}\" from {label}.\n\
+        "Please remove Amenbo from {label}.\n\
          \n\
-         In `{settings}`, delete the MCP server entry named `{name}` and nothing else — every other \
-         server in that file stays. Tell me what you changed.",
-        project = server.project,
+         In `{settings}`, delete the MCP server entry named `{name}` and nothing else — the whole \
+         entry goes, with every folder it lists, and every other server in that file stays. Tell me \
+         what you changed.",
         label = app.label,
-        settings = settings(app, server.folder),
+        settings = settings(app, server),
         name = crate::mcp::name(),
     )
 }
@@ -105,8 +123,11 @@ pub fn remove(app: &McpApp, server: &Server) -> String {
 /// The file the request names, written out in full where the machine will say where it is. A relative
 /// path would be read against wherever the AI happens to be standing, and half of these apps keep
 /// their settings nowhere near the folder.
-fn settings(app: &McpApp, folder: &std::path::Path) -> String {
-    match app.settings_path(folder) {
+///
+/// The apps that keep theirs *inside* a folder are named against the first of the server's
+/// ([`Server::settings_folder`]) — one file has one home, whatever the server reaches from it.
+fn settings(app: &McpApp, server: &Server) -> String {
+    match server.settings_folder().and_then(|folder| app.settings_path(folder)) {
         Some(path) => path.display().to_string(),
         // No home directory to resolve against — the only thing left to name is the path as the app's
         // own documentation writes it, which is better than naming nothing.
@@ -121,10 +142,14 @@ fn settings(app: &McpApp, folder: &std::path::Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
-    fn server<'a>(folder: &'a Path, exe: &'a Path) -> Server<'a> {
-        Server { project: "Shop", folder, exe }
+    fn one(folder: &str) -> Vec<PathBuf> {
+        vec![PathBuf::from(folder)]
+    }
+
+    fn server<'a>(folders: &'a [PathBuf], exe: &'a Path) -> Server<'a> {
+        Server { folders, exe }
     }
 
     fn app(id: &str) -> &'static McpApp {
@@ -135,11 +160,11 @@ mod tests {
     /// under it — and the word is the app's, not the family's.
     #[test]
     fn a_json_entry_hangs_under_the_word_that_app_uses() {
-        let folder = Path::new("/work/shop");
+        let folder = one("/work/shop");
         let exe = Path::new("/usr/local/bin/amenbo");
 
         let cursor: serde_json::Value =
-            serde_json::from_str(&entry(app("cursor"), &server(folder, exe))).expect("valid JSON");
+            serde_json::from_str(&entry(app("cursor"), &server(&folder, exe))).expect("valid JSON");
         assert_eq!(cursor["mcpServers"]["amenbo"]["command"], "/usr/local/bin/amenbo");
         assert_eq!(
             cursor["mcpServers"]["amenbo"]["args"],
@@ -147,7 +172,7 @@ mod tests {
         );
 
         let vscode: serde_json::Value =
-            serde_json::from_str(&entry(app("vscode"), &server(folder, exe))).expect("valid JSON");
+            serde_json::from_str(&entry(app("vscode"), &server(&folder, exe))).expect("valid JSON");
         assert!(vscode["mcpServers"].is_null(), "VS Code does not call it that");
         assert_eq!(vscode["servers"]["amenbo"]["command"], "/usr/local/bin/amenbo");
     }
@@ -157,7 +182,7 @@ mod tests {
     /// so that is the question, and the crate is free to lay a document out as it likes.
     #[test]
     fn a_toml_entry_is_a_table_named_after_the_server() {
-        let written = entry(app("codex-cli"), &server(Path::new("/work/shop"), Path::new("/bin/a")));
+        let written = entry(app("codex-cli"), &server(&one("/work/shop"), Path::new("/bin/a")));
         assert!(written.contains("[mcp_servers.amenbo]"), "the table is named: {written}");
 
         let read: toml::Value = toml::from_str(&written).expect("valid TOML");
@@ -176,8 +201,7 @@ mod tests {
         let written = entry(
             app("codex-cli"),
             &Server {
-                project: "Shop",
-                folder: Path::new(r"C:\work\shop"),
+                folders: &one(r"C:\work\shop"),
                 exe: Path::new(r"C:\Program Files\amenbo\amenbo.exe"),
             },
         );
@@ -192,24 +216,50 @@ mod tests {
     /// entry itself — fenced in the format that file is written in.
     #[test]
     fn the_request_names_the_file_and_keeps_what_is_in_it() {
-        let folder = Path::new("/work/shop");
+        let folder = one("/work/shop");
         let exe = Path::new("/usr/local/bin/amenbo");
-        let said = add(app("cursor"), &server(folder, exe));
+        let said = add(app("cursor"), &server(&folder, exe));
 
         assert!(said.contains("/work/shop/.cursor/mcp.json"), "{said}");
         assert!(said.contains("Keep every other server"), "{said}");
         assert!(said.contains("```json"), "{said}");
-        assert!(said.contains(&entry(app("cursor"), &server(folder, exe))), "{said}");
-        assert!(said.contains("Shop"), "the project is named: {said}");
+        assert!(said.contains(&entry(app("cursor"), &server(&folder, exe))), "{said}");
+    }
+
+    /// The selection travels whole, and the request says to put it in place of what is there. A word
+    /// that let the entry be added to would make the second setup depend on the first, which is the
+    /// one thing writing the whole selection is for.
+    #[test]
+    fn the_request_asks_for_the_entry_to_be_replaced_and_carries_every_folder() {
+        let folders = vec![PathBuf::from("/work/shop"), PathBuf::from("/work/greenhouse")];
+        let exe = Path::new("/usr/local/bin/amenbo");
+        let said = add(app("cursor"), &server(&folders, exe));
+
+        assert!(said.contains("in place of"), "the entry is replaced: {said}");
+        assert!(said.contains("rather than adding to it"), "and not added to: {said}");
+        assert!(said.contains("Keep every other server"), "the rest of the file stays: {said}");
+
+        let written: serde_json::Value =
+            serde_json::from_str(&entry(app("cursor"), &server(&folders, exe))).expect("valid JSON");
+        assert_eq!(
+            written["mcpServers"]["amenbo"]["args"],
+            serde_json::json!(["mcp", "--dir", "/work/shop", "/work/greenhouse"]),
+            "every folder the reader chose, under the one flag",
+        );
+
+        // And the removal takes the whole of it, since there is no per-folder half to take out.
+        let taken = remove(app("cursor"), &server(&folders, exe));
+        assert!(taken.contains("the whole entry goes"), "{taken}");
+        assert!(taken.contains("every folder it lists"), "{taken}");
     }
 
     /// A folder's settings are named against the folder, and the machine's are named where they are —
     /// a request that pointed a reader at a path relative to nothing would name a file they do not have.
     #[test]
     fn the_machines_settings_are_named_where_they_are() {
-        let folder = Path::new("/work/shop");
+        let folder = one("/work/shop");
         let exe = Path::new("/usr/local/bin/amenbo");
-        let said = add(app("codex-cli"), &server(folder, exe));
+        let said = add(app("codex-cli"), &server(&folder, exe));
 
         assert!(said.contains(".codex/config.toml"), "{said}");
         assert!(!said.contains("/work/shop/.codex"), "not under the project's folder: {said}");
@@ -220,9 +270,9 @@ mod tests {
     /// that the other servers in the file are left alone.
     #[test]
     fn a_removal_names_the_entry_and_carries_no_document() {
-        let folder = Path::new("/work/shop");
+        let folder = one("/work/shop");
         let exe = Path::new("/usr/local/bin/amenbo");
-        let said = remove(app("cursor"), &server(folder, exe));
+        let said = remove(app("cursor"), &server(&folder, exe));
 
         assert!(said.contains("`amenbo`"), "{said}");
         assert!(said.contains("/work/shop/.cursor/mcp.json"), "{said}");
@@ -234,14 +284,14 @@ mod tests {
     /// be a row a face draws a button beside that does nothing.
     #[test]
     fn every_listed_app_can_be_asked_both_ways() {
-        let folder = Path::new("/work/shop");
+        let folder = one("/work/shop");
         let exe = Path::new("/usr/local/bin/amenbo");
         for app in crate::mcp_apps::MCP_APPS {
-            let added = add(app, &server(folder, exe));
-            let removed = remove(app, &server(folder, exe));
+            let added = add(app, &server(&folder, exe));
+            let removed = remove(app, &server(&folder, exe));
             assert!(added.contains(app.label), "the add names {}", app.id);
             assert!(
-                added.contains(&entry(app, &server(folder, exe))),
+                added.contains(&entry(app, &server(&folder, exe))),
                 "the add carries the entry for {}",
                 app.id
             );

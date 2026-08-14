@@ -48,8 +48,10 @@ pub fn probe(server: &Server) -> Vec<Setup> {
 
 /// One app's answer, read from its own settings.
 pub fn read(app: &McpApp, server: &Server) -> Setup {
-    let entry =
-        app.settings_path(server.folder).and_then(|path| args_of(app, &path, crate::mcp::name()));
+    let entry = server
+        .settings_folder()
+        .and_then(|folder| app.settings_path(folder))
+        .and_then(|path| args_of(app, &path, crate::mcp::name()));
     Setup {
         id: app.id,
         label: app.label,
@@ -102,8 +104,8 @@ mod tests {
         dir
     }
 
-    fn server<'a>(folder: &'a Path, exe: &'a Path) -> Server<'a> {
-        Server { project: "Shop", folder, exe }
+    fn server<'a>(folders: &'a [PathBuf], exe: &'a Path) -> Server<'a> {
+        Server { folders, exe }
     }
 
     fn write(path: &Path, text: &str) {
@@ -127,7 +129,7 @@ mod tests {
                "args":["mcp","--dir","/work/elsewhere"]}}}"#,
         );
 
-        let found = read(app("cursor"), &server(&dir, exe));
+        let found = read(app("cursor"), &server(std::slice::from_ref(&dir), exe));
         assert!(found.set);
         // The folder the entry names, which is not the folder the settings were found beside — the
         // difference is the whole reason it is read back rather than assumed.
@@ -148,7 +150,7 @@ mod tests {
                "something-else":{"command":"b","args":[]}}}"#,
         );
 
-        assert!(!read(app("cursor"), &server(&dir, exe)).set);
+        assert!(!read(app("cursor"), &server(std::slice::from_ref(&dir), exe)).set);
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -165,7 +167,7 @@ mod tests {
                "mcpServers":{"amenbo":{"command":"a","args":["mcp","--dir","/nowhere"]}}}"#,
         );
 
-        let found = read(app("vscode"), &server(&dir, exe));
+        let found = read(app("vscode"), &server(std::slice::from_ref(&dir), exe));
         assert_eq!(found.folder.as_deref(), Some(Path::new("/work/shop")));
 
         std::fs::remove_dir_all(&dir).ok();
@@ -204,11 +206,11 @@ mod tests {
         let dir = scratch("broken");
         let exe = Path::new("/usr/local/bin/amenbo");
 
-        let nothing = read(app("cursor"), &server(&dir, exe));
+        let nothing = read(app("cursor"), &server(std::slice::from_ref(&dir), exe));
         assert!(!nothing.set && nothing.folder.is_none(), "nothing on disk");
 
         write(&dir.join(".cursor/mcp.json"), "{ this is not JSON");
-        let broken = read(app("cursor"), &server(&dir, exe));
+        let broken = read(app("cursor"), &server(std::slice::from_ref(&dir), exe));
         assert!(!broken.set && broken.folder.is_none(), "nothing that parses");
 
         std::fs::remove_dir_all(&dir).ok();
@@ -222,7 +224,7 @@ mod tests {
         let exe = Path::new("/usr/local/bin/amenbo");
         write(&dir.join(".cursor/mcp.json"), r#"{"mcpServers":{"amenbo":{"command":"a","args":["mcp"]}}}"#);
 
-        let found = read(app("cursor"), &server(&dir, exe));
+        let found = read(app("cursor"), &server(std::slice::from_ref(&dir), exe));
         assert!(found.set, "the entry is there");
         assert_eq!(found.folder, None, "and it names no folder");
 
@@ -236,7 +238,7 @@ mod tests {
     fn every_listed_app_is_answered_for() {
         let dir = scratch("all");
         let exe = Path::new("/usr/local/bin/amenbo");
-        let answers = probe(&server(&dir, exe));
+        let answers = probe(&server(std::slice::from_ref(&dir), exe));
 
         assert_eq!(answers.len(), MCP_APPS.len());
         for (answer, app) in answers.iter().zip(MCP_APPS) {

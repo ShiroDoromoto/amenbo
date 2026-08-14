@@ -3606,23 +3606,22 @@ pub fn agent_hook_requests(project_id: i64) -> Result<AgentHookRequestsDto, CmdE
     Ok(AgentHookRequestsDto { tools, dirs })
 }
 
-/// This project's own server, and the folder it is bound to — the two things every MCP face needs and
-/// neither of them is on screen.
+/// The folder a server is given for this project — the one thing every MCP face needs and is not on
+/// screen.
 ///
-/// The folder is the first this project has bound. A server answers about the project rather than
-/// about the folder (the amenbo it starts works the project out from where it stands), so where a
+/// It is the first this project has bound. A server answers about the folder it is sent to rather than
+/// about a project (the amenbo it starts works the project out from where it stands), so where a
 /// project has several, any one of them reaches the same backlog — and the one named is written into
 /// the text the reader is handed, so nothing about which is silent.
-fn mcp_server_of(
+fn mcp_folder_of(
     store: &amenbo_core::store::Store,
     project_id: i64,
-) -> Result<Option<(String, std::path::PathBuf)>, CmdError> {
-    let Some(project) = store.project(project_id)? else { return Ok(None) };
-    let registry = store.bindings();
-    let Some(dir) = registry.dirs_for_project(project_id).into_iter().next() else {
+) -> Result<Option<std::path::PathBuf>, CmdError> {
+    if store.project(project_id)?.is_none() {
         return Ok(None);
-    };
-    Ok(Some((project.name, std::path::PathBuf::from(dir))))
+    }
+    let registry = store.bindings();
+    Ok(registry.dirs_for_project(project_id).into_iter().next().map(std::path::PathBuf::from))
 }
 
 /// The amenbo a host will run: the command shipped beside this build's own binary.
@@ -3666,11 +3665,11 @@ pub fn mcp_apps(project_id: i64) -> Result<Vec<McpAppDto>, CmdError> {
     use amenbo_core::{mcp::Server, mcp_apps, mcp_probe, mcp_request};
 
     let store = open_store_read()?;
-    let Some((name, folder)) = mcp_server_of(&store, project_id)? else {
+    let Some(folder) = mcp_folder_of(&store, project_id)? else {
         return Ok(Vec::new());
     };
     let exe = mcp_exe();
-    let server = Server { project: &name, folder: &folder, exe: &exe };
+    let server = Server { folders: std::slice::from_ref(&folder), exe: &exe };
 
     Ok(mcp_apps::MCP_APPS
         .iter()
@@ -3704,7 +3703,7 @@ pub fn mcp_bundle_write(project_id: i64, into_dir: String) -> Result<String, Cmd
     use amenbo_core::{mcp::Server, mcp_bundle};
 
     let store = open_store_read()?;
-    let Some((name, folder)) = mcp_server_of(&store, project_id)? else {
+    let Some(folder) = mcp_folder_of(&store, project_id)? else {
         return Err(CmdError::coded(
             "mcp.no_folder",
             "this project has no folder for a server to be bound to",
@@ -3712,7 +3711,7 @@ pub fn mcp_bundle_write(project_id: i64, into_dir: String) -> Result<String, Cmd
         ));
     };
     let exe = mcp_exe();
-    let server = Server { project: &name, folder: &folder, exe: &exe };
+    let server = Server { folders: std::slice::from_ref(&folder), exe: &exe };
     let written = mcp_bundle::write_into(&server, std::path::Path::new(&into_dir))
         .map_err(|e| CmdError::coded("mcp.bundle_write", e.to_string(), serde_json::Value::Null))?;
     Ok(written.display().to_string())

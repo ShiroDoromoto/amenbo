@@ -66,7 +66,7 @@ pub fn file_name() -> String {
 /// It is a list whatever it holds, because the field is one: a host reading a bare string where a
 /// list was declared has a shape to reconcile that nobody meant it to have.
 fn folders(server: &Server) -> Vec<String> {
-    vec![server.folder.display().to_string()]
+    server.folders.iter().map(|folder| folder.display().to_string()).collect()
 }
 
 /// The manifest document, as it sits at the archive's root.
@@ -77,12 +77,10 @@ pub fn manifest(server: &Server) -> String {
         "version": crate::agent::VERSION,
         // The product's name as a person reads it (`AMB-D-633`) — this line is the one part of the
         // document a reader sees, and the lowercase spelling is the command's and the identifier's.
-        "description": format!(
-            "Work the Amenbo project \"{}\" from this app — its backlog, its decisions and the way \
-             to use them, for the folder {}.",
-            server.project,
-            server.folder.display()
-        ),
+        // The folders are named below rather than here: they are a setting the reader can change, and
+        // a description repeating them would go stale the first time they do.
+        "description": "Work your Amenbo projects from this app — their backlogs, their decisions \
+                        and the way to use them, for the folders set below.",
         "author": { "name": "Amenbo" },
         // The one place this app differs from every other: the folders the server works in are the
         // host's to keep, not amenbo's (`AMB-D-681`). What is declared here is the field they live
@@ -147,18 +145,22 @@ pub fn write_into(server: &Server, dir: &Path) -> std::io::Result<PathBuf> {
 mod tests {
     use super::*;
 
-    fn server<'a>(folder: &'a Path, exe: &'a Path) -> Server<'a> {
-        Server { project: "Shop", folder, exe }
+    fn one(folder: &str) -> Vec<PathBuf> {
+        vec![PathBuf::from(folder)]
+    }
+
+    fn server<'a>(folders: &'a [PathBuf], exe: &'a Path) -> Server<'a> {
+        Server { folders, exe }
     }
 
     /// The fields a host refuses a manifest for want of, and the arguments that start the server —
     /// the whole of what this document is for.
     #[test]
     fn the_manifest_carries_what_a_host_asks_for_and_the_words_that_start_the_server() {
-        let folder = Path::new("/work/shop");
+        let folder = one("/work/shop");
         let exe = Path::new("/usr/local/bin/amenbo");
         let read: serde_json::Value =
-            serde_json::from_str(&manifest(&server(folder, exe))).expect("valid JSON");
+            serde_json::from_str(&manifest(&server(&folder, exe))).expect("valid JSON");
 
         for field in ["manifest_version", "name", "version", "description", "author", "server"] {
             assert!(!read[field].is_null(), "the manifest says nothing about `{field}`");
@@ -180,10 +182,10 @@ mod tests {
     /// choice the reader already made, so installing is the whole of what they do.
     #[test]
     fn the_folders_are_a_setting_that_opens_on_the_project_the_reader_chose() {
-        let folder = Path::new("/work/shop");
+        let folder = one("/work/shop");
         let exe = Path::new("/usr/local/bin/amenbo");
         let read: serde_json::Value =
-            serde_json::from_str(&manifest(&server(folder, exe))).expect("valid JSON");
+            serde_json::from_str(&manifest(&server(&folder, exe))).expect("valid JSON");
         let declared = &read["user_config"]["folders"];
 
         assert_eq!(declared["type"], "directory");
@@ -215,9 +217,9 @@ mod tests {
     fn the_archive_holds_the_manifest_at_its_root() {
         let dir = std::env::temp_dir().join(format!("amenbo-mcpb-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("a directory to write into");
-        let folder = Path::new("/work/shop");
+        let folder = one("/work/shop");
         let exe = Path::new("/usr/local/bin/amenbo");
-        let written = write_into(&server(folder, exe), &dir).expect("the bundle is written");
+        let written = write_into(&server(&folder, exe), &dir).expect("the bundle is written");
 
         assert_eq!(written.file_name().and_then(|n| n.to_str()), Some("amenbo.mcpb"));
         let mut archive =
@@ -230,7 +232,7 @@ mod tests {
             &mut held,
         )
         .expect("readable");
-        assert_eq!(held, manifest(&server(folder, exe)));
+        assert_eq!(held, manifest(&server(&folder, exe)));
 
         std::fs::remove_dir_all(&dir).ok();
     }

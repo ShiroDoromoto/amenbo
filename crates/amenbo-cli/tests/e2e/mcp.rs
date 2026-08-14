@@ -96,7 +96,7 @@ fn a_bound_and_an_unbound_folder(cli: &Cli) -> (std::path::PathBuf, std::path::P
     (bound, unbound)
 }
 
-/// The handshake, the listing, and the two tools — the whole of a session a host actually runs.
+/// The handshake, the listing, and the reading tools — the whole of a session a host actually runs.
 #[test]
 fn a_host_shakes_hands_lists_the_tools_and_calls_them() {
     let cli = Cli::new();
@@ -118,7 +118,7 @@ fn a_host_shakes_hands_lists_the_tools_and_calls_them() {
         .iter()
         .filter_map(|t| t["name"].as_str())
         .collect();
-    assert_eq!(names, vec!["agent", "agent_command"]);
+    assert_eq!(names, vec!["agent", "agent_command", "run"]);
 
     // `agent` answers with the entry point, and with the part of it only a **bound** folder has: the
     // server was started somewhere else, so this could only have been read where `--dir` pointed.
@@ -157,6 +157,96 @@ fn what_amenbo_refuses_reaches_the_caller_as_amenbo_wrote_it() {
     server.stop();
 }
 
+/// `run` types the caller's own words at amenbo, in the folder the server was given — and the facet it
+/// types is this server's, whatever the caller wrote (`AMB-D-668`).
+#[test]
+fn run_reaches_the_bound_folder_and_the_facet_is_never_the_caller_s() {
+    let cli = Cli::new();
+    let (bound, unbound) = a_bound_and_an_unbound_folder(&cli);
+    let mut server = Server::start(&cli.home, &unbound, &bound);
+
+    // A write, with the caller naming the person as the actor. It lands as the AI's: an AI reads and
+    // writes only inside the project its folder is bound to, and passing `human` through would take
+    // both of those away.
+    let result = server.call(
+        1,
+        "run",
+        json!({ "args": ["task", "add", "--title", "over the wire", "--json", "--actor", "human"] }),
+    );
+    assert_eq!(result["isError"], false, "{result}");
+    let added: Value = serde_json::from_str(&text(&result)).expect("amenbo's own JSON");
+    assert_eq!(added["acted_facet"], "ai", "the server names the facet, not the caller: {added}");
+    let id = added["task"]["ref"].as_str().expect("the new task's ref").to_string();
+
+    // And the task is in the bound folder's project — the server's own folder is bound to nothing, so an
+    // AI standing there would have reached no project at all.
+    let result = server.call(2, "run", json!({ "args": ["task", "list", "--json"] }));
+    assert_eq!(result["isError"], false, "{result}");
+    let listed: Value = serde_json::from_str(&text(&result)).expect("amenbo's own JSON");
+    let refs: Vec<&str> =
+        listed["tasks"].as_array().expect("tasks").iter().filter_map(|t| t["ref"].as_str()).collect();
+    assert!(refs.contains(&id.as_str()), "the write and the read are the same project: {refs:?}");
+
+    server.stop();
+}
+
+/// `bind` would re-point the folder this server was given at another project, which is the one thing its
+/// shape rests on (`AMB-D-666`). It is refused here, and the pointer stays where it was.
+#[test]
+fn bind_is_refused_and_the_folder_still_points_where_it_did() {
+    let cli = Cli::new();
+    let (bound, unbound) = a_bound_and_an_unbound_folder(&cli);
+    let elsewhere = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+        .env("AMENBO_HOME", &cli.home)
+        .env("AMENBO_UPDATE_CHECK", "0")
+        .current_dir(&bound)
+        .args(["project", "add", "--name", "Elsewhere", "--dir", &unbound.to_string_lossy(), "--json", "--actor", "human"])
+        .output()
+        .expect("failed to raise the other project");
+    assert_eq!(exit_code(&elsewhere), 0, "{}", String::from_utf8_lossy(&elsewhere.stderr));
+
+    let before = std::fs::read_to_string(bound.join(".amenbo")).expect("the pointer");
+    let mut server = Server::start(&cli.home, &unbound, &bound);
+    let result = server.call(1, "run", json!({ "args": ["bind", "--project", "Elsewhere"] }));
+    assert_eq!(result["isError"], true, "bind is not served here: {result}");
+    assert!(
+        text(&result).contains("bind"),
+        "the refusal names what was refused: {}",
+        text(&result),
+    );
+    server.stop();
+
+    assert_eq!(
+        std::fs::read_to_string(bound.join(".amenbo")).expect("the pointer"),
+        before,
+        "nothing was written: the folder still belongs to the project it was given for",
+    );
+}
+
+/// Nothing is added to the caller's words beyond the facet — `--yes` least of all, so a destructive
+/// command still stops at the confirmation a person is the one to give.
+#[test]
+fn a_destructive_command_still_waits_for_the_confirmation() {
+    let cli = Cli::new();
+    let (bound, unbound) = a_bound_and_an_unbound_folder(&cli);
+    let mut server = Server::start(&cli.home, &unbound, &bound);
+
+    let added: Value = serde_json::from_str(&text(&server.call(
+        1,
+        "run",
+        json!({ "args": ["task", "add", "--title", "to be deleted", "--json"] }),
+    )))
+    .expect("amenbo's own JSON");
+    let id = added["task"]["ref"].as_str().expect("the new task's ref").to_string();
+
+    let result = server.call(2, "run", json!({ "args": ["task", "delete", &id, "--json"] }));
+    assert_eq!(result["isError"], true, "a destructive command is not waved through: {result}");
+    let refusal: Value = serde_json::from_str(&text(&result)).expect("amenbo's own JSON");
+    assert_eq!(refusal["error"]["code"], "confirmation_required");
+
+    server.stop();
+}
+
 /// The caller's own mistakes are the protocol's, not a tool's: nothing is run for them.
 #[test]
 fn a_call_that_cannot_be_shaped_is_a_protocol_fault() {
@@ -164,8 +254,8 @@ fn a_call_that_cannot_be_shaped_is_a_protocol_fault() {
     let (bound, unbound) = a_bound_and_an_unbound_folder(&cli);
     let mut server = Server::start(&cli.home, &unbound, &bound);
 
-    let reply = server.ask(1, "tools/call", json!({ "name": "run", "arguments": {} }));
-    assert_eq!(reply["error"]["code"], -32602, "this build serves no `run`: {reply}");
+    let reply = server.ask(1, "tools/call", json!({ "name": "typo", "arguments": {} }));
+    assert_eq!(reply["error"]["code"], -32602, "no tool goes by that name: {reply}");
     let reply = server.ask(2, "tools/call", json!({ "name": "agent_command", "arguments": {} }));
     assert_eq!(reply["error"]["code"], -32602, "`agent_command` needs a command: {reply}");
     let reply = server.ask(3, "resources/list", json!({}));

@@ -296,6 +296,48 @@ pub fn probe(dir: &Path, cmd: &str) -> Vec<Wiring> {
         .collect()
 }
 
+/// The files a folder leaves standing instructions for an AI in, whichever one opens it — the second
+/// sign that an AI is worked with here (`AMB-D-680`).
+///
+/// They are kept out of the catalog on purpose. A [`Harness`] row's [`home`](Harness::home) says *which*
+/// provider a folder uses, because that is what the request it is handed is written for, and `AGENTS.md`
+/// is shared by several vendors: folding it in would leave a notice unable to say whose text to offer.
+/// Here the question is only whether anybody is working with an AI in this folder, and for that the file
+/// answers without naming anyone.
+const INSTRUCTIONS: &[&str] = &["CLAUDE.md", "AGENTS.md"];
+
+/// Whether this folder shows any sign of an AI being worked with in it (`AMB-D-680`): a provider's own
+/// directory ([`Wiring::traced`], read off `found` rather than the disk a second time), or standing
+/// instructions of the reader's own ([`instructed`]).
+///
+/// Either is enough — a folder holding `.claude` and nothing written down is worked in, and so is one
+/// holding the reverse — so this is the two read together and never a list of who.
+///
+/// It exists for one judgment: a folder reached over MCP, showing none of this, is one nothing opens a
+/// shell in, and a session-start hook there would never fire (`AMB-D-680`). Nothing else asks it, and
+/// the answer is deliberately generous — a report withheld is a setup the reader never learns is
+/// unfinished, so a sign that is only half a sign still counts.
+pub fn ai_in_use(dir: &Path, found: &[Wiring]) -> bool {
+    found.iter().any(|one| one.traced) || INSTRUCTIONS.iter().any(|name| instructed(&dir.join(name)))
+}
+
+/// Whether an instruction file holds a word the **reader** put there.
+///
+/// Its being on disk says nothing on its own: binding a folder writes amenbo's own managed block into
+/// both of these files ([`crate::agents::upsert_into_dir`]), and every folder this is asked about is
+/// bound — so a rule reading their presence would never once fire. What counts is content outside that
+/// block, or a file amenbo never wrote into at all.
+fn instructed(path: &Path) -> bool {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return false;
+    };
+    match crate::agents::strip_managed(&text) {
+        // Nothing of amenbo's in it, so the whole file is the reader's.
+        None => !text.trim().is_empty(),
+        Some(theirs) => !theirs.trim().is_empty(),
+    }
+}
+
 /// The first of a harness's [`places`](Harness::places) whose text carries the wiring, as a path relative
 /// to `dir`.
 fn wired_at(dir: &Path, harness: &Harness, cmd: &str) -> Option<PathBuf> {
@@ -561,6 +603,31 @@ mod tests {
         }
         let ids: std::collections::BTreeSet<_> = HARNESSES.iter().map(|h| h.id).collect();
         assert_eq!(ids.len(), HARNESSES.len(), "two rows answer to one id");
+    }
+
+    /// The two signs that an AI is worked with in a folder, each enough on its own (`AMB-D-680`) — and a
+    /// folder holding neither, which is the one a session-start hook would never fire in.
+    #[test]
+    fn a_folder_is_in_use_where_it_traces_a_provider_or_instructs_an_ai() {
+        let dir = folder("in-use", "notes.txt", "nothing here is addressed to an AI");
+        assert!(!ai_in_use(&dir, &probe(&dir, "amenbo")), "a folder with only a reader's own files");
+
+        // What binding wrote, and nothing else. It is on disk in every folder this is ever asked about,
+        // so counting it would leave the rule unable to fire at all.
+        let block = crate::agents::upsert_managed(None, &crate::agents::managed_block_body("English", "amenbo"));
+        std::fs::write(dir.join("AGENTS.md"), &block).unwrap();
+        assert!(!ai_in_use(&dir, &probe(&dir, "amenbo")), "amenbo's own block is not a sign of anyone");
+
+        // A word of the reader's beside it is. `AGENTS.md` is the case the catalog cannot carry —
+        // several vendors read it — and the case this has to answer.
+        std::fs::write(dir.join("AGENTS.md"), format!("# how to work here\n\n{block}")).unwrap();
+        assert!(ai_in_use(&dir, &probe(&dir, "amenbo")), "instructions are a sign, whoever reads them");
+
+        // And the trace on its own, once they are gone.
+        std::fs::remove_file(dir.join("AGENTS.md")).unwrap();
+        assert!(!ai_in_use(&dir, &probe(&dir, "amenbo")), "back to nothing");
+        std::fs::create_dir_all(dir.join(find("codex-cli").unwrap().home)).unwrap();
+        assert!(ai_in_use(&dir, &probe(&dir, "amenbo")), "a provider's own directory is the other");
     }
 
     /// The first string in `value` that runs a command, whatever key its provider hangs it on.

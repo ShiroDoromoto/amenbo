@@ -29,6 +29,7 @@ use serde_json::{json, Value};
 use amenbo_core::agent::VERSION;
 use amenbo_core::config::Paths;
 
+use crate::output::CliError;
 use crate::{flag_before_the_name, FACET_FLAG};
 
 /// The protocol revisions this server can speak, newest first. A caller naming one of these is
@@ -106,6 +107,33 @@ impl CallAmenbo for SelfCall {
             }
         }
     }
+}
+
+/// `amenbo mcp --dir <path>` — serve one folder over MCP until the host closes the stream
+/// (`AMB-D-665`, `AMB-D-666`).
+///
+/// The one thing decided here is the folder, and it is decided once: a path that names no directory is
+/// refused now, on the terminal, rather than as a spawn failure inside every tool call for the life of
+/// the server. Whether that folder is bound, whether this build can read its store, whether it is a
+/// worktree nobody should work in — none of those are asked here. They are the child's to answer, in
+/// the folder it runs in, so the host reads amenbo's own words instead of a second opinion this process
+/// formed about a folder it never opened.
+///
+/// It writes nothing on stdout of its own: that stream is the protocol's.
+pub(crate) fn mcp_cmd(dir: &str) -> Result<i32, CliError> {
+    let path = std::path::PathBuf::from(dir);
+    if !path.is_dir() {
+        return Err(CliError {
+            code: "invalid_value",
+            message: format!("--dir '{dir}' is not a folder, so there is nowhere to serve."),
+            hint: Some(format!(
+                "Name the folder the project is worked in — the one holding its `.amenbo` — in the host's own settings: `{} mcp --dir <path>`.",
+                Paths::command_name()
+            )),
+            exit: 2,
+        });
+    }
+    Ok(serve(&path))
 }
 
 /// Serve the folder until the host closes the stream. The return value is this process's exit code.

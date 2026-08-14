@@ -33,7 +33,7 @@ vi.mock("../core/mutations", () => ({
   openLatestInstaller: () => Promise.resolve(),
 }));
 
-import { HookSetupBanner } from "./AppShell";
+import { HookSetupBanner } from "./HookSetupBanner";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

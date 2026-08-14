@@ -53,7 +53,7 @@ vi.mock("../core/mutations", () => ({
   openLatestInstaller: () => Promise.resolve(),
 }));
 
-import { HealthBanner } from "./AppShell";
+import { HealthBanner } from "./HealthBanner";
 import { doctorText } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

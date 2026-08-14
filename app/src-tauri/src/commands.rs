@@ -3593,9 +3593,10 @@ pub fn agent_hook_project_wiring(project_id: i64) -> Result<Vec<AgentHookWiringD
 /// than of a project. There is no second way of reading it: an entry amenbo would not report as set up
 /// is not one this may act on either.
 ///
-/// **The entry has to name this folder**, and not merely be there. Most of the catalog keeps one
-/// settings file for the whole machine, so an entry a reader wrote for some other project sits in the
-/// same file as this one's would — and taken as "set up", it would silence the report for every
+/// **The entry has to name this folder**, and not merely be there — which is why the folders it reaches
+/// are read rather than [`Setup::set`](amenbo_core::mcp_probe::Setup::set). Most of the catalog keeps
+/// one settings file for the whole machine, so an entry a reader wrote for some other project sits in
+/// the same file as this one's would, and "there is an entry" would silence the report for every
 /// traceless folder on the device. `AMB-D-680` says which way to fall when the answer is unclear: a
 /// notice shown to somebody who did not need it is noise they can close, and one withheld is a setup
 /// they never learn is unfinished.
@@ -3605,7 +3606,7 @@ fn mcp_reaches(dir: &std::path::Path) -> bool {
     let folders = [dir.to_path_buf()];
     let exe = mcp_exe();
     let server = Server { folders: &folders, exe: &exe };
-    mcp_probe::probe(&server).iter().any(|found| found.set && found.folder.as_deref() == Some(dir))
+    mcp_probe::probe(&server).iter().any(|found| found.folders.iter().any(|at| at == dir))
 }
 
 /// The request for any tool in the catalog, whatever this project has already wired (`AMB-D-670`).
@@ -3708,7 +3709,9 @@ pub fn mcp_apps(project_id: i64) -> Result<Vec<McpAppDto>, CmdError> {
             label: app.label.to_string(),
             writes_file: app.amenbo_writes,
             configured: found.set,
-            folder: found.folder.map(|at| at.display().to_string()),
+            // The first of the folders that entry reaches. This screen is one project's, so it
+            // draws one folder; the app-scoped screen is what shows the set (`AMB-T-3162`).
+            folder: found.folders.first().map(|at| at.display().to_string()),
             add_request: match app.amenbo_writes {
                 true => String::new(),
                 false => mcp_request::add(app, &server),
@@ -8323,14 +8326,13 @@ mod tests {
         // An entry as an app that keeps its settings inside the folder writes one. `.mcp.json` is the
         // catalog's one place that is neither a harness's own directory nor inside one, so what silences
         // the report here is this rule rather than a trace the entry brought with it.
-        let mcp_entry = |dir: &std::path::Path, bound_to: &std::path::Path| {
+        let mcp_entry = |dir: &std::path::Path, bound_to: &[&std::path::Path]| {
+            let mut args = vec!["mcp".to_string(), "--dir".to_string()];
+            args.extend(bound_to.iter().map(|at| at.to_string_lossy().to_string()));
             let mut servers = serde_json::Map::new();
             servers.insert(
                 amenbo_core::mcp::name().to_string(),
-                serde_json::json!({
-                    "command": "amenbo",
-                    "args": ["mcp", "--dir", bound_to.to_string_lossy()],
-                }),
+                serde_json::json!({ "command": "amenbo", "args": args }),
             );
             let document = serde_json::json!({ "mcpServers": servers });
             std::fs::write(dir.join(".mcp.json"), document.to_string()).unwrap();
@@ -8338,7 +8340,9 @@ mod tests {
 
         let only = new_project("MCPからだけ届くPJ");
         let only_dir = bound(only, "mcp-only");
-        mcp_entry(&only_dir, &only_dir);
+        // Named second in an entry that carries two folders — one server reaches a set of them, and a
+        // folder is no less reached for not being the one the reader started from.
+        mcp_entry(&only_dir, &[&base.join("somebody-elses-folder"), &only_dir]);
         assert!(
             agent_hook_project_wiring(only).unwrap().is_empty(),
             "a hook nothing would ever run is not work left",
@@ -8359,7 +8363,7 @@ mod tests {
         // A folder that says which provider it uses is worked in too, and waits on that one.
         let traced = new_project("MCPもシェルも使うPJ");
         let traced_dir = bound(traced, "mcp-traced");
-        mcp_entry(&traced_dir, &traced_dir);
+        mcp_entry(&traced_dir, &[&traced_dir]);
         claude_folder(&traced_dir, false);
         assert_eq!(
             agent_hook_project_wiring(traced)
@@ -8376,7 +8380,7 @@ mod tests {
         // would silence every traceless folder on the device.
         let elsewhere = new_project("隣のフォルダのエントリしか無いPJ");
         let elsewhere_dir = bound(elsewhere, "mcp-elsewhere");
-        mcp_entry(&elsewhere_dir, &base.join("somebody-elses-folder"));
+        mcp_entry(&elsewhere_dir, &[&base.join("somebody-elses-folder")]);
         assert!(
             !agent_hook_project_wiring(elsewhere).unwrap().is_empty(),
             "an entry about another folder says nothing about this one",

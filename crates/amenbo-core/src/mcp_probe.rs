@@ -5,11 +5,18 @@
 //! file the reader opens ([`crate::mcp_bundle`]) and a request they hand their AI
 //! ([`crate::mcp_request`]); this is the third question, asked of what came of either.
 //!
-//! **Why the folder and not only the answer.** "Set up" on its own leaves the one thing a reader most
-//! needs unsaid: set up *for which folder*. An entry binds the server to the folder written in it, and
+//! **Why the folders and not only the answer.** "Set up" on its own leaves the one thing a reader most
+//! needs unsaid: set up *for which folder*. An entry binds the server to the folders written in it, and
 //! a project is worked in whichever folder it is bound to today — so an app pointed at a folder nobody
 //! works in reads exactly like one pointed at the right folder. What is read back is therefore the
-//! folder the entry names, and the answer is that folder or nothing.
+//! folders those entries name, and the answer is those or none.
+//!
+//! **Every folder is asked, not one.** Half the listed apps keep their settings *inside* a folder, so
+//! an entry written beside one project cannot be seen from another — and a face that lists apps rather
+//! than projects has no one folder to ask from ([`crate::mcp_apps`], `AMB-D-681`). So a read takes the
+//! folders it is given, asks each app's file under each of them, and answers with the union. An app
+//! whose settings are the machine's is asked once however many folders arrive: the folder is not read
+//! in resolving that path, and asking again per folder would be one file read over and over.
 //!
 //! **What is read is the entry amenbo would have written**, found by the name every road writes it
 //! under ([`crate::mcp::name`]). An app holding some other MCP server is not holding this one,
@@ -48,19 +55,19 @@ const EXTENSIONS: &str = "Claude Extensions";
 /// after it. The two are read together, in that order (see [`extension`]).
 const EXTENSION_SETTINGS: &str = "Claude Extensions Settings";
 
-/// What one app's settings say about one project.
+/// What one app's settings say, across the folders it was asked about.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Setup {
     /// The app this answers for ([`McpApp::id`]).
     pub id: &'static str,
     /// The app's own name, so a face can draw this row without a second lookup.
     pub label: &'static str,
-    /// Whether that app holds an entry for this project's server at all.
+    /// Whether that app holds an entry for amenbo's server at all.
     pub set: bool,
-    /// The folder that entry binds the server to. It is asked apart from [`set`](Setup::set) because
-    /// the two can disagree: an entry someone edited by hand may name no folder, and a row saying
-    /// "set up" with nothing after it is still the truth.
-    pub folder: Option<PathBuf>,
+    /// Every folder those entries reach, in the order they were read, without repeats. It is asked
+    /// apart from [`set`](Setup::set) because the two can disagree: an entry someone edited by hand
+    /// may name no folder, and a row saying "set up" with nothing after it is still the truth.
+    pub folders: Vec<PathBuf>,
     /// The entries this app still holds under a name amenbo used to write, by name
     /// ([`crate::mcp::is_superseded_name`]). Empty for a reader who never set amenbo up under the old
     /// scheme, which is every reader who arrived after `AMB-D-679`.
@@ -75,50 +82,92 @@ pub struct Stale {
     /// of these apart from the entry in use.
     pub name: String,
     /// The folder it binds its server to, where it names one at all — read for the same reason
-    /// [`Setup::folder`] is, since which project a reader is being offered to clear away is a question
-    /// only the folder answers.
+    /// [`Setup::folders`] is, since which project a reader is being offered to clear away is a
+    /// question only the folder answers. One folder rather than a set: an entry written under the old
+    /// scheme was one project's, which is what the name it is filed under says.
     pub folder: Option<PathBuf>,
+    /// The folder whose settings hold it, for an app that keeps its settings inside one — `None`
+    /// where the settings are the machine's. It is what a removal has to name the file by: the same
+    /// old entry can sit in two readers' folders, and a request pointing at the wrong one asks for a
+    /// line that is not there.
+    pub at: Option<PathBuf>,
 }
 
-/// Every listed app's answer for this project, in catalog order ([`MCP_APPS`]).
+/// Every listed app's answer, in catalog order ([`MCP_APPS`]).
 pub fn probe(server: &Server) -> Vec<Setup> {
     MCP_APPS.iter().map(|app| read(app, server)).collect()
 }
 
-/// One app's answer, read from its own settings.
+/// One app's answer, read across every folder the server was given.
+///
+/// **Every folder is asked, not the first.** An app that keeps its settings inside a folder keeps a
+/// different file per folder, so an entry written beside one project is invisible from another — and
+/// a face that lists apps rather than projects has no one folder to ask from. What comes back is
+/// therefore the union: set up if any of those files holds the entry, and every folder those entries
+/// reach.
 pub fn read(app: &McpApp, server: &Server) -> Setup {
     let name = crate::mcp::name();
-    let entries = server
-        .settings_folder()
-        .and_then(|folder| app.settings_path(folder))
-        .and_then(|path| entries(app, &path))
-        .unwrap_or_default();
-    let current = entries.iter().find(|(filed, _)| filed == name);
+    let mut set = false;
+    let mut folders: Vec<PathBuf> = Vec::new();
+    let mut stale: Vec<Stale> = Vec::new();
 
-    let mut stale: Vec<Stale> = entries
-        .iter()
-        .filter(|(filed, _)| crate::mcp::is_superseded_name(filed))
-        .map(|(filed, args)| Stale { name: filed.clone(), folder: bound_folder(args) })
-        .collect();
+    for (at, path) in settings_files(app, server) {
+        for (filed, args) in entries(app, &path).unwrap_or_default() {
+            if filed == name {
+                set = true;
+                for folder in bound_folders(&args) {
+                    if !folders.contains(&folder) {
+                        folders.push(folder);
+                    }
+                }
+            } else if crate::mcp::is_superseded_name(&filed) {
+                stale.push(Stale {
+                    name: filed,
+                    folder: bound_folders(&args).into_iter().next(),
+                    at: at.clone(),
+                });
+            }
+        }
+    }
     // A settings document is a map, so the order they came out in is the parser's rather than the
-    // reader's; sorted, a row that lists two of them lists them the same way twice running.
-    stale.sort_by(|a, b| a.name.cmp(&b.name));
+    // reader's; sorted, a row that lists two of them lists them the same way twice running. The
+    // folder is part of the ordering because one name can now come back from two files.
+    stale.sort_by(|a, b| (&a.name, &a.at).cmp(&(&b.name, &b.at)));
 
     // And what the app holds as an extension of its own, for the one app that takes a bundle. It is
-    // asked second and answers only where the settings file said nothing: a reader who has both has
+    // asked second and answers only where the settings files said nothing: a reader who has both has
     // written one of them by hand, and their own entry is the one they will look for.
-    let held = app.extensions_dir().and_then(|dir| extension(&dir)).filter(|_| current.is_none());
+    let held = app.extensions_dir().and_then(|dir| extension(&dir)).filter(|_| !set);
 
     Setup {
         id: app.id,
         label: app.label,
-        set: current.is_some() || held.is_some(),
-        folder: match current {
-            Some((_, args)) => bound_folder(args),
-            None => held.and_then(|folders| folders.into_iter().next()),
-        },
+        set: set || held.is_some(),
+        folders: held.unwrap_or(folders),
         stale,
     }
+}
+
+/// The settings files to ask this app about, each with the folder it sits in.
+///
+/// An app that keeps its settings inside a folder is asked once per folder; one that keeps a single
+/// file for the machine is asked once, whatever it was given — the folder is ignored in resolving
+/// that path, which is what makes it the machine's, and asking again per folder would be the same
+/// file read over and over. The folder travels with the path because a removal has to name the file,
+/// and for a folder's own settings the folder is the only thing that tells two of them apart.
+fn settings_files(app: &McpApp, server: &Server) -> Vec<(Option<PathBuf>, PathBuf)> {
+    if app.place.device_wide() {
+        // The folder is not read; anything resolves the same path.
+        return app.settings_path(Path::new("")).into_iter().map(|path| (None, path)).collect();
+    }
+    let mut found: Vec<(Option<PathBuf>, PathBuf)> = Vec::new();
+    for folder in server.folders {
+        let Some(path) = app.settings_path(folder) else { continue };
+        if !found.iter().any(|(_, seen)| seen == &path) {
+            found.push((Some(folder.clone()), path));
+        }
+    }
+    found
 }
 
 /// The folders amenbo's own extension is set up for, or `None` where this app is not holding one.
@@ -214,10 +263,12 @@ fn words<T>(values: &[T], word: impl Fn(&T) -> Option<&str>) -> Vec<String> {
     values.iter().filter_map(|v| word(v).map(str::to_string)).collect()
 }
 
-/// The folder the arguments bind the server to — whatever follows [`DIR_FLAG`].
-fn bound_folder(args: &[String]) -> Option<PathBuf> {
-    let flag = args.iter().position(|arg| arg == DIR_FLAG)?;
-    args.get(flag + 1).map(PathBuf::from)
+/// The folders the arguments bind the server to — everything following [`DIR_FLAG`], up to the next
+/// flag. One flag carries them all (`AMB-D-679`), so where the words stop is where a word beginning
+/// with a dash starts, or where the line ends.
+fn bound_folders(args: &[String]) -> Vec<PathBuf> {
+    let Some(flag) = args.iter().position(|arg| arg == DIR_FLAG) else { return Vec::new() };
+    args[flag + 1..].iter().take_while(|arg| !arg.starts_with('-')).map(PathBuf::from).collect()
 }
 
 #[cfg(test)]
@@ -347,7 +398,7 @@ mod tests {
         assert!(found.set);
         // The folder the entry names, which is not the folder the settings were found beside — the
         // difference is the whole reason it is read back rather than assumed.
-        assert_eq!(found.folder.as_deref(), Some(Path::new("/work/elsewhere")));
+        assert_eq!(found.folders, vec![PathBuf::from("/work/elsewhere")]);
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -389,12 +440,12 @@ mod tests {
 
         let found = read(app("cursor"), &server(std::slice::from_ref(&dir), exe));
         assert!(found.set, "the entry in use is there");
-        assert_eq!(found.folder.as_deref(), Some(Path::new("/work/shop")));
+        assert_eq!(found.folders, vec![PathBuf::from("/work/shop")]);
         assert_eq!(
             found.stale,
             vec![
-                Stale { name: "amenbo-greenhouse".into(), folder: Some(PathBuf::from("/work/g")) },
-                Stale { name: "amenbo-shop".into(), folder: Some(PathBuf::from("/work/shop")) },
+                Stale { name: "amenbo-greenhouse".into(), folder: Some(PathBuf::from("/work/g")), at: Some(dir.clone()) },
+                Stale { name: "amenbo-shop".into(), folder: Some(PathBuf::from("/work/shop")), at: Some(dir.clone()) },
             ],
             "both old entries, in a settled order"
         );
@@ -416,10 +467,113 @@ mod tests {
 
         let found = read(app("cursor"), &server(std::slice::from_ref(&dir), exe));
         assert!(!found.set, "not set up");
-        assert_eq!(found.folder, None);
+        assert_eq!(found.folders, Vec::<PathBuf>::new());
         assert_eq!(found.stale.len(), 1, "and one entry to clear");
 
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The whole of what asking every folder buys: an entry written beside the second project is
+    /// found, and it is found *because* the second folder was asked. A read that stopped at the first
+    /// would say this app was not set up at all.
+    #[test]
+    fn an_entry_beside_any_of_the_folders_is_found() {
+        let first = scratch("sweep-first");
+        let second = scratch("sweep-second");
+        let exe = Path::new("/usr/local/bin/amenbo");
+        write(
+            &second.join(".cursor/mcp.json"),
+            r#"{"mcpServers":{"amenbo":{"command":"a","args":["mcp","--dir","/work/greenhouse"]}}}"#,
+        );
+
+        let folders = vec![first.clone(), second.clone()];
+        let found = read(app("cursor"), &server(&folders, exe));
+        assert!(found.set, "the second folder holds it");
+        assert_eq!(found.folders, vec![PathBuf::from("/work/greenhouse")]);
+
+        // And the first alone still says nothing, which is what the sweep is standing against.
+        assert!(!read(app("cursor"), &server(std::slice::from_ref(&first), exe)).set);
+
+        std::fs::remove_dir_all(&first).ok();
+        std::fs::remove_dir_all(&second).ok();
+    }
+
+    /// Two folders, two entries, and the folders they reach gathered without repeats — including the
+    /// several one entry can carry under the single flag (`AMB-D-679`).
+    #[test]
+    fn the_folders_of_every_entry_are_gathered_once_each() {
+        let first = scratch("union-first");
+        let second = scratch("union-second");
+        let exe = Path::new("/usr/local/bin/amenbo");
+        write(
+            &first.join(".cursor/mcp.json"),
+            r#"{"mcpServers":{"amenbo":{"command":"a","args":["mcp","--dir","/work/shop","/work/g"]}}}"#,
+        );
+        write(
+            &second.join(".cursor/mcp.json"),
+            r#"{"mcpServers":{"amenbo":{"command":"a","args":["mcp","--dir","/work/g","--json"]}}}"#,
+        );
+
+        let folders = vec![first.clone(), second.clone()];
+        let found = read(app("cursor"), &server(&folders, exe));
+        assert_eq!(
+            found.folders,
+            vec![PathBuf::from("/work/shop"), PathBuf::from("/work/g")],
+            "both files' folders, in reading order, the shared one named once",
+        );
+
+        std::fs::remove_dir_all(&first).ok();
+        std::fs::remove_dir_all(&second).ok();
+    }
+
+    /// An old entry is answered with the folder whose settings hold it, not only the folder it names.
+    /// A removal has to name the file, and the same old entry can sit in two of a reader's folders.
+    #[test]
+    fn an_old_entry_says_which_folders_settings_hold_it() {
+        let first = scratch("stale-first");
+        let second = scratch("stale-second");
+        let exe = Path::new("/usr/local/bin/amenbo");
+        for dir in [&first, &second] {
+            write(
+                &dir.join(".cursor/mcp.json"),
+                r#"{"mcpServers":{"amenbo-shop":{"command":"a","args":["mcp","--dir","/work/shop"]}}}"#,
+            );
+        }
+
+        let folders = vec![first.clone(), second.clone()];
+        let found = read(app("cursor"), &server(&folders, exe));
+        assert_eq!(
+            found.stale.iter().map(|old| old.at.clone()).collect::<Vec<_>>(),
+            vec![Some(first.clone()), Some(second.clone())],
+            "one row per file it was found in",
+        );
+
+        std::fs::remove_dir_all(&first).ok();
+        std::fs::remove_dir_all(&second).ok();
+    }
+
+    /// An app whose settings are the machine's is one file however many folders arrive — so it is
+    /// asked once, and its entry is not counted twice.
+    #[test]
+    fn the_machines_own_settings_are_asked_once_whatever_arrives() {
+        let one = scratch("device-one");
+        let two = scratch("device-two");
+        let folders = vec![one.clone(), two.clone()];
+        let server = server(&folders, Path::new("/bin/a"));
+
+        let asked = settings_files(app("codex-cli"), &server);
+        assert_eq!(asked.len(), 1, "the machine's one file: {asked:?}");
+        assert_eq!(asked[0].0, None, "and no folder is claimed for it");
+
+        let asked = settings_files(app("cursor"), &server);
+        assert_eq!(
+            asked.iter().map(|(at, _)| at.clone()).collect::<Vec<_>>(),
+            vec![Some(one.clone()), Some(two.clone())],
+            "a folder's own settings are asked per folder",
+        );
+
+        std::fs::remove_dir_all(&one).ok();
+        std::fs::remove_dir_all(&two).ok();
     }
 
     /// The one app that does not call it `mcpServers`. Its settings are read under its own word, so an
@@ -435,7 +589,7 @@ mod tests {
         );
 
         let found = read(app("vscode"), &server(std::slice::from_ref(&dir), exe));
-        assert_eq!(found.folder.as_deref(), Some(Path::new("/work/shop")));
+        assert_eq!(found.folders, vec![PathBuf::from("/work/shop")]);
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -462,7 +616,7 @@ mod tests {
         let read = entries(app("codex-cli"), &settings).expect("the document parses");
         let found = &read.iter().find(|(name, _)| name == "amenbo").expect("the entry is found").1;
         assert_eq!(found, &["mcp", "--dir", "/work/shop"]);
-        assert_eq!(bound_folder(found).as_deref(), Some(Path::new("/work/shop")));
+        assert_eq!(bound_folders(found), vec![PathBuf::from("/work/shop")]);
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -475,11 +629,11 @@ mod tests {
         let exe = Path::new("/usr/local/bin/amenbo");
 
         let nothing = read(app("cursor"), &server(std::slice::from_ref(&dir), exe));
-        assert!(!nothing.set && nothing.folder.is_none(), "nothing on disk");
+        assert!(!nothing.set && nothing.folders.is_empty(), "nothing on disk");
 
         write(&dir.join(".cursor/mcp.json"), "{ this is not JSON");
         let broken = read(app("cursor"), &server(std::slice::from_ref(&dir), exe));
-        assert!(!broken.set && broken.folder.is_none(), "nothing that parses");
+        assert!(!broken.set && broken.folders.is_empty(), "nothing that parses");
 
         std::fs::remove_dir_all(&dir).ok();
     }
@@ -494,7 +648,7 @@ mod tests {
 
         let found = read(app("cursor"), &server(std::slice::from_ref(&dir), exe));
         assert!(found.set, "the entry is there");
-        assert_eq!(found.folder, None, "and it names no folder");
+        assert_eq!(found.folders, Vec::<PathBuf>::new(), "and it names no folder");
 
         std::fs::remove_dir_all(&dir).ok();
     }

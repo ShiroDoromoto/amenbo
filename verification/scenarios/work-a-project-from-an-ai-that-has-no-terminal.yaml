@@ -25,7 +25,11 @@ description: >
 given:
   # The two projects the server will answer about, and the folders that say so. A server is told
   # folders and works each project out from the one a call names, so the folders are the whole of what
-  # the road hands over.
+  # the road hands over. Raising the project is the whole of it: creating one links the folder it
+  # names in the same act, so the folder is already pointing when the server is told about it — and a
+  # second `folder init` on it would be refused (`init_pointer_exists`) for asking to raise a project
+  # where one already stands. It is also what keeps the names the road reads back: a project made here
+  # is called what it is called, where a folder that raised its own would be named after itself.
   - type: action
     domain: project
     op: create
@@ -34,22 +38,10 @@ given:
       dir: greenhouse
 
   - type: action
-    domain: folder
-    op: init
-    with:
-      dir: greenhouse
-
-  - type: action
     domain: project
     op: create
     with:
       name: Orchard
-      dir: orchard
-
-  - type: action
-    domain: folder
-    op: init
-    with:
       dir: orchard
 
 steps_cli:
@@ -120,7 +112,11 @@ steps_cli:
       ok: true
 
   # And the record says who acted. Read back through the same door, because a road about a server is
-  # about what the server's own calls leave behind.
+  # about what the server's own calls leave behind — and read off the timeline, which carries the act
+  # and its author together and is reachable without naming the thing that was written. A board read
+  # would not answer this at all: a filing is two moves and this one has taken the first, so no board
+  # holds it yet; and the axis that sounds like the question (`ai:`) is who the work is *for*, which
+  # would say `no` whatever the server wrote.
   - type: action
     domain: mcp
     op: call
@@ -128,16 +124,22 @@ steps_cli:
       tool: run
       dir: greenhouse
       args:
-        - "task"
-        - "list"
-        - "--filter"
-        - "ai:true"
+        - "activity"
+        - "--json"
 
   - type: assert
     domain: mcp
     op: answered
     with:
       contains: SCENARIO — filed from an AI with no terminal
+
+  # The facet the caller wrote was `human`; the author the timeline kept is an AI. That substitution is
+  # the server's whole claim about who it is speaking for.
+  - type: assert
+    domain: mcp
+    op: answered
+    with:
+      contains: '"kind": "ai"'
 
   # The other folder of the set, over the same connection. What comes back is the other project's own
   # board — which is what the naming buys, and what says the folder decides where a call lands rather

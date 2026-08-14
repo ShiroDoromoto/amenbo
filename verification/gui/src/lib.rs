@@ -478,6 +478,12 @@ impl Instructor {
     /// report stands on names no folder anywhere else, so finding one on that shot is finding it in the
     /// list.
     ///
+    /// `mcp-app` is judged on the folder its entry names, and only where the step names one: a path is
+    /// the reader's own and the fold draws no other, so a row that lost it reads as the miss it is. The
+    /// row read without one is a `Review`, and so is `mcp-road` beside it — "set up", "not set up" and
+    /// the label on a button are all words of the interface, and which of them is standing is not
+    /// something the presence of text can settle.
+    ///
     /// `ai-launch-answer` is the third of them and a `Review`, for the reason `plugin config`'s state
     /// is: all three of its answers — the yes, the no, and the never asked — are drawn as words of the
     /// interface, and which of them is standing is not something the presence of text can settle.
@@ -567,6 +573,13 @@ impl Instructor {
                 Some(Expectation { text: arg_str(with, "paste_into")?.to_string(), present: present(with) })
             }
             (Domain::Repo, "ai-launch-folder") => {
+                Some(Expectation { text: arg_str(with, "dir")?.to_string(), present: true })
+            }
+            // The folder an app's entry names, where the step names one. It is the reader's own path and
+            // the fold draws no other, so a row that had lost it reads as the miss it is — while the
+            // words on either side of it ("set up", "not set up") are the interface's own and settle
+            // nothing.
+            (Domain::Repo, "mcp-app") => {
                 Some(Expectation { text: arg_str(with, "dir")?.to_string(), present: true })
             }
             _ => None,
@@ -903,6 +916,15 @@ impl Instructor {
                 "In this project's own settings, press the button that takes the text for \"{}\".",
                 req(with, "tool")?
             ),
+            // The fold that holds the other way in. It is named by what is behind it rather than by its
+            // label, the label being a word of the interface — and the line says the apps come up with
+            // it, since a fold that opened onto nothing is the state every assert after this reads
+            // against.
+            (Domain::Repo, "mcp-open") => {
+                "On the screen standing now, open the folded offer to reach this project from an AI whose \
+                 host cannot open a folder — the apps it lists come up with it."
+                    .to_string()
+            }
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -1318,6 +1340,40 @@ impl Instructor {
                  not the reading — a button shut and drawn like a live one is the state this closes."
                     .to_string()
             }
+            // One app's row in the fold. The two halves are said in one line because a reader reads them
+            // in one glance — the app is set up, and for this folder — and the folder is where the eye
+            // is sent: it is the reader's own path, and the screen has no other reason to draw one.
+            (Domain::Repo, "mcp-app") => match (set(with), with.get("dir")) {
+                (true, Some(_)) => format!(
+                    "Confirm the row for \"{}\" reads as already set up, naming \"{}\" as the folder its entry reaches.",
+                    req(with, "app")?,
+                    req(with, "dir")?
+                ),
+                (true, None) => format!(
+                    "Confirm the row for \"{}\" reads as already set up.",
+                    req(with, "app")?
+                ),
+                // Nothing is named after it: what a row not set up says about a folder is nothing, and a
+                // line naming one would send the eye looking for a path that is right to be missing.
+                (false, _) => format!(
+                    "Confirm the row for \"{}\" reads as not set up, with no folder named beside it.",
+                    req(with, "app")?
+                ),
+            },
+            // Which road that row offers. The line names the road by what it does rather than by the
+            // words on the button, so an eye closing it is held to the two being different offers and not
+            // to one build's wording of them.
+            (Domain::Repo, "mcp-road") => match req(with, "road")? {
+                "file" => format!(
+                    "Confirm the row for \"{}\" offers a file to be written and opened — amenbo's own, not this app's settings — and offers no request to hand an AI.",
+                    req(with, "app")?
+                ),
+                "request" => format!(
+                    "Confirm the row for \"{}\" offers a request to hand this app's own AI, which makes the edit — and offers no file to be written.",
+                    req(with, "app")?
+                ),
+                other => return Err(format!("assert `mcp-road` does not know the road `{other}`")),
+            },
             // Which folders that one text is still waiting on. The line says "under" on purpose: what is
             // under test is a list standing beneath a single request, so a screen carrying the request
             // once per folder is the miss it catches — and a road naming several folders writes a step
@@ -1503,6 +1559,13 @@ fn official(with: &Args) -> bool {
 /// always said out loud, so an unsaid one is a step asking that something is there.
 fn present(with: &Args) -> bool {
     with.get("present").and_then(|v| v.as_bool()).unwrap_or(true)
+}
+
+/// Whether a step says the app it names already reaches this project. The op requires the key, so the
+/// default is only what an unlinted step falls back to — and it falls back to the half a fresh machine
+/// is in, nothing being set up until something sets it up.
+fn set(with: &Args) -> bool {
+    with.get("set").and_then(|v| v.as_bool()).unwrap_or(false)
 }
 
 /// Whether the axis a step names is the one the board is cut along. Said out loud by the road, since
@@ -2955,6 +3018,70 @@ steps_gui:
         // The tool's name is written the catalog's way and drawn the reader's way; the fold is what
         // leaves those the same words.
         assert!(fold("This folder looks like Claude Code's.").contains(&fold("claude-code")));
+    }
+
+    /// The other way in, read behind its fold: the folder an app's entry names is the reading, and the
+    /// two rows either side of it are the two roads. A row read with no folder named is a `Review` — the
+    /// words that say whether an app is set up are the interface's own, and so is the label on the
+    /// button that says which road it offers.
+    #[test]
+    fn the_folder_an_apps_entry_names_is_what_the_mcp_row_is_read_by() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: repo
+    op: mcp-open
+  - type: assert
+    domain: repo
+    op: mcp-app
+    with: { app: claude-code, set: true, dir: /Users/reader/greenhouse }
+  - type: assert
+    domain: repo
+    op: mcp-app
+    with: { app: claude-desktop, set: false }
+  - type: assert
+    domain: repo
+    op: mcp-road
+    with: { app: claude-desktop, road: file }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let steps = s.steps(Driver::Gui);
+        let lines: Vec<String> = steps.iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("folded"), "got: {}", lines[0]);
+        assert!(
+            lines[1].contains("\"/Users/reader/greenhouse\"") && lines[1].contains("already set up"),
+            "got: {}",
+            lines[1]
+        );
+        assert!(lines[2].contains("not set up") && lines[2].contains("no folder"), "got: {}", lines[2]);
+        assert!(lines[3].contains("file") && lines[3].contains("no request"), "got: {}", lines[3]);
+
+        let folder = ins.expectation(&steps[1]).expect("the folder is what only this row draws");
+        assert_eq!(folder, Expectation { text: "/Users/reader/greenhouse".to_string(), present: true });
+        // The row with no folder to read, and the road beside it: both are the interface's own words.
+        assert!(ins.expectation(&steps[2]).is_none(), "a row with no folder named is an eye's to close");
+        assert!(ins.expectation(&steps[3]).is_none(), "a button's label is an eye's to close");
+    }
+
+    /// A road amenbo has no such thing as is refused where it is written, not met halfway through a run.
+    #[test]
+    fn an_mcp_road_the_screen_does_not_offer_is_refused() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: repo
+    op: mcp-road
+    with: { app: claude-desktop, road: whistle }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let err = ins.render(&s.steps(Driver::Gui)[0]).expect_err("no such road");
+        assert!(err.contains("whistle"), "got: {err}");
     }
 
     /// The same road in a folder that names no tool: the pick is what carries the screen from one

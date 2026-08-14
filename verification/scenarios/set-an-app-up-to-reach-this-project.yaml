@@ -1,0 +1,133 @@
+# MCP takes a setting per project, and the reader it is for is the one whose AI cannot open a folder at
+# all. Everything about that is folded away on the project's own settings, because most readers never
+# need it — and behind the fold the apps are listed, never asked about: which one the reader uses is not
+# remembered and not guessed, since they change tools and a remembered answer is wrong by the next day.
+#
+# What *is* read off disk is the other question — whether an app already holds this project — and that
+# is a fact about the settings rather than a preference about the reader. It is drawn with the folder
+# that entry names, because set up for *which* folder is the half a reader cannot work out: an entry
+# pointing at a folder nobody works in is drawn exactly like one pointing at the right folder.
+#
+# And one road per row. The app that cannot run a command is handed a file to open; every other app has
+# an AI of its own, which is given the request and does the merge. Which of the two a row draws is the
+# catalog's word, so a build that folded them into one button would be offering half its readers a road
+# their app cannot walk.
+#
+# The road is the screen's alone. A terminal reaches this project by standing in its folder, so there is
+# no list of apps there, nothing folded, and no row to read a state off.
+#
+# The world is declared below: one project bound to the folder named there, an ordinary card on its
+# board, and that folder already carrying one app's own settings with amenbo's entry in them. That last
+# is written out here rather than asked of the build under test, which is the opposite of what
+# `wire-ai` does one road over, and for a reason: nothing the shipped CLI hands over carries this text —
+# both faces that produce it are the screen's — and the name the entry is found under is a compatibility
+# surface in its own right, sitting in files readers' own AIs wrote. A build that renamed it would stop
+# recognising every entry already out there, and this road going red is that being said out loud.
+id: set-an-app-up-to-reach-this-project
+title: The project's own settings say which apps already reach it, for which folder, and hand each one the road its app can walk
+description: >
+  The reader wants an AI that cannot open a folder to reach this project. The project's own settings
+  carry the offer, folded away; opened, it lists the apps amenbo knows. One of them already holds this
+  project and says so with the folder its entry names — a folder that is not this project's, which is
+  exactly why the folder is drawn at all. The rest are not set up, and each row offers the one road its
+  app can walk: a request for the apps that have an AI of their own, a file for the one that cannot run
+  a command.
+
+  What this road stands against is a fold that lists apps and says nothing about them: "set up" with no
+  folder under it, or one button drawn for every row.
+given:
+  # The project and the folder it is bound to. A project with no folder has nowhere to point a server,
+  # and the fold draws nothing at all — so the folder is the premise the whole road stands on.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: workspace
+
+  # An ordinary card, so the road arrives at a board with work on it rather than at the first loop.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: Order the spring seed trays
+    as: card
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: card
+
+  # One app already reaching this project: the entry a reader's own AI would have written, under the
+  # name amenbo answers to. The folder it names is deliberately not the folder these settings sit in —
+  # an entry can name any folder, and reading back the one it names is the whole reason the screen
+  # draws it.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: workspace
+      path: .mcp.json
+      content: |
+        {
+          "mcpServers": {
+            "amenbo-greenhouse": {
+              "command": "/usr/local/bin/amenbo",
+              "args": ["mcp", "--dir", "/Users/reader/greenhouse"]
+            }
+          }
+        }
+
+steps_gui:
+  - type: action
+    domain: project
+    op: open-settings
+    with:
+      project: Greenhouse
+
+  # Folded until it is asked for. Opening it is the step, because everything read after this is read
+  # against the screen it opens onto.
+  - type: action
+    domain: repo
+    op: mcp-open
+
+  # The app that already holds this project, and the folder its entry reaches. The path is the reading:
+  # it is the reader's own, the screen draws no other, and a build that dropped it would leave a row
+  # saying "set up" about nobody knows what.
+  - type: assert
+    domain: repo
+    op: mcp-app
+    with:
+      app: claude-code
+      set: true
+      dir: /Users/reader/greenhouse
+
+  # And the road that row offers. This app has an AI of its own, so what it is handed is the request —
+  # the AI makes the edit, which it does better than any generator, merging with what is already in the
+  # file and saying what it changed.
+  - type: assert
+    domain: repo
+    op: mcp-road
+    with:
+      app: claude-code
+      road: request
+
+  # The row beside it, on the same screen: an app this machine's settings say nothing about. Nothing is
+  # named after it, a folder being what an entry has and this one has none.
+  - type: assert
+    domain: repo
+    op: mcp-app
+    with:
+      app: claude-desktop
+      set: false
+
+  # And the other road, which is why this app is the one to read it on: it cannot run a command, so
+  # there is no AI in it to hand a request to and a file is the only way in. Two rows on one screen
+  # offering two different things is what says the road is the catalog's word and not the screen's.
+  - type: assert
+    domain: repo
+    op: mcp-road
+    with:
+      app: claude-desktop
+      road: file

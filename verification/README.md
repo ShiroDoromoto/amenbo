@@ -378,6 +378,9 @@ wrote one language keeping it unmarked, and the row nobody described at all fall
 repository's README — `see-a-tasks-classification-on-the-board` walks what a card says of how its task
 is filed, on a board whose world was classified from a terminal: the value drawn for the axis its
 project put on the card, and nothing at all from the axis beside it that did not ask —
+`set-an-app-up-to-reach-this-project` walks the fold that holds the other way in — the app already reaching this
+project and the folder its entry names, beside the app reaching nothing, each row offering the one road its app can
+walk —
 and `be-offered-a-start-at-login`
 walks the one thing on screen nobody went and asked for — an offer that comes up on its own once the app has been come
 back to, and the answer that takes it away.
@@ -717,6 +720,13 @@ shape the box takes while no side is chosen and there is no grammar to read the 
 the button takes while there is no answer left to clear. Both are read off how the control is drawn, not
 off what it does when used: one shut in the build and painted like a live one is one a reader still
 reaches for.
+
+Opening the fold that offers the other way in, and reading an app's row behind it (`repo mcp-open` /
+`mcp-app` / `mcp-road`), are one road's for a reason of their own: what the fold is for is the reader whose
+AI cannot open a folder at all, and a terminal standing in that folder is the reader who never needed it.
+There is nothing folded there, no list of apps, and no row for one to be read off — the two faces that
+draw them are the screen's, and a terminal that grew one would be a road of its own rather than this one
+written out again.
 
 Reading what a plugin's own check said about its settings (`plugin checked`) is one road's for a reason of
 its own: the verdict's sentences are the author's and are drawn on the settings form, while a terminal

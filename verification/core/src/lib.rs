@@ -525,6 +525,15 @@ const REGISTRY: &[OpSpec] = &[
     // state this pair exists for, the reader who wired one tool and then moved to another.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-request-pick", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-request-copy", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
+    // The other way in for an AI whose host cannot open a folder at all, which is folded away until it
+    // is asked for. Most readers never need it — somebody working from a terminal has amenbo already —
+    // so the offer is one line to walk past, and everything about it is behind this one move.
+    //
+    // Opening it is a step of the road rather than something the operator does on the way, and for the
+    // reason every other move on a screen road is: the screen it opens onto is what the asserts after
+    // it are read against, and a fold nobody opened leaves them read against the screen in front of it.
+    // A screen road alone, the fold being the screen's own — a terminal has nothing folded.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "mcp-open", required: &[], refs: &[], strings: &[], binds: false },
     // A plugin's life on this machine. `install` fetches it from the catalog and `enable` opens its
     // gate — two separate acts on purpose, since an installed plugin that never fires is the normal
     // state. `run` calls the command face: `command` is the word the plugin's own face takes, `task`
@@ -998,6 +1007,31 @@ const REGISTRY: &[OpSpec] = &[
     // read where nothing is being reported, which is a state `ai-launch-notice` cannot be asked in: its
     // own line names a report, and `present: false` there is the absence rather than a way in.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-request", required: &["tool", "paste_into"], refs: &[], strings: &["tool", "paste_into"], binds: false },
+    // One app's row in the fold `mcp-open` opens: whether that app already reaches this project, and
+    // the folder its entry names when it does.
+    //
+    // The folder is a second word rather than part of the first because the two are separately true:
+    // an app is set up for *some* folder, and which one is the half a reader cannot work out — an entry
+    // pointing at a folder nobody works in is drawn exactly like one pointing at the right folder. A row
+    // saying "set up" with nothing after it is still the truth, so `dir` is named only where the road is
+    // about which folder was named.
+    //
+    // `set` alone is a `Review`: both answers are words of the interface, and which of them is standing
+    // is not something the presence of text can settle. Named with a `dir`, the folder is the reading —
+    // it is the reader's own path, which the interface has no word of its own for.
+    OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "mcp-app", required: &["app", "set"], refs: &[], strings: &["app", "dir"], binds: false },
+    // Which of the two roads that same row offers: the file amenbo writes for the one app that cannot
+    // run a command, or the request handed to the AI every other app has of its own. One row draws one
+    // of them, and which it is is the catalog's word rather than the screen's.
+    //
+    // It is read rather than pressed because pressing is where the road would end anyway — a request
+    // goes to the clipboard, which no shot reads back, and a file goes wherever the reader picks. What
+    // is under test is that the two rows are not offered the same thing, which is what a build folding
+    // both roads into one button would break in silence.
+    //
+    // A `Review`: what separates the two is the label on a button, and a label is a word of the
+    // interface.
+    OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "mcp-road", required: &["app", "road"], refs: &[], strings: &["app", "road"], binds: false },
     // A project as it is read back: one row's fields, and whether it is in the listing at all (and
     // where). `archived: true` asks the listing that carries the archived ones.
     OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },

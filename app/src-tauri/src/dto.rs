@@ -1059,13 +1059,38 @@ pub struct AgentHookRequestsDto {
     pub(crate) dirs: Vec<String>,
 }
 
-/// One app this project could be reached from over MCP, as a screen draws its row (`AMB-D-671`,
-/// `AMB-D-672`, `AMB-D-673`).
+/// Everything the screen that connects an AI draws (`AMB-D-681`): the projects a server can be
+/// pointed at, and one row per app.
 ///
-/// The two texts travel with the row for the reason the harness request does: the surface both shows
-/// one and copies it, and a button that had to go and ask first could hand over an empty clipboard
-/// with no second chance to notice. They are empty for the app amenbo writes a file for — there is no
-/// request to give anybody there, and the button beside it writes the file instead.
+/// The two are asked for together because the screen reads them against each other — a row's ticks
+/// are the projects whose folder that app already reaches, and neither half says that on its own.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct McpSetupDto {
+    /// The projects that can be reached at all: the ones with a folder bound. A project with none
+    /// has nowhere to point a server, and a tick beside it would write an entry naming nothing.
+    pub(crate) projects: Vec<McpProjectDto>,
+    /// Every app amenbo knows, in the catalog's order.
+    pub(crate) apps: Vec<McpAppDto>,
+}
+
+/// One project a reader can let an app reach.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct McpProjectDto {
+    #[ts(type = "number")]
+    pub(crate) id: i64,
+    /// Its name as its owner wrote it — what the tick is labelled with.
+    pub(crate) name: String,
+    /// The folder a server would be pointed at. It is drawn beside the name because two projects can
+    /// read alike and their folders never do, and because it is what the entry will actually carry.
+    pub(crate) folder: String,
+}
+
+/// One app amenbo can be reached from over MCP, as a screen draws its row (`AMB-D-672`,
+/// `AMB-D-673`, `AMB-D-681`).
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -1077,15 +1102,45 @@ pub struct McpAppDto {
     /// Whether amenbo writes this one a file to open, rather than handing over a request
     /// (`AMB-D-672`). It is what decides which button the row draws.
     pub(crate) writes_file: bool,
-    /// Whether this app already holds this project's server (`AMB-D-673`).
+    /// Whether this app already holds amenbo's server (`AMB-D-673`).
     pub(crate) configured: bool,
-    /// The folder that entry binds the server to, when it names one. Shown beside "set up", because
-    /// set up for *which* folder is the half a reader cannot work out for themselves.
+    /// The folders those entries reach. Shown beside "set up", because set up for *which* folders is
+    /// the half a reader cannot work out for themselves — and it is what the row's ticks open on.
+    pub(crate) folders: Vec<String>,
+    /// The entries this app still holds under a name amenbo used to write (`AMB-D-679`), each with
+    /// the request that clears it. They are drawn apart from the row's own state: an old entry is not
+    /// this app being set up, it is something to take away.
+    pub(crate) stale: Vec<McpStaleDto>,
+}
+
+/// One entry left behind under a name amenbo no longer writes, as a row offers to clear it.
+///
+/// The request travels with it for the reason [`McpRequestDto`]'s do not have to: nothing the reader
+/// picks changes it, so it is settled the moment the row is drawn.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct McpStaleDto {
+    /// The name it is filed under — what tells two of these apart, and what the request names.
+    pub(crate) name: String,
+    /// The folder its arguments bind it to, where it names one.
     pub(crate) folder: Option<String>,
-    /// The request that asks the reader's AI to add it, and the one that asks for it to be taken back
-    /// out. Empty where amenbo writes the file.
-    pub(crate) add_request: String,
+    /// The request that asks the reader's AI to delete it and nothing else.
     pub(crate) remove_request: String,
+}
+
+/// The two texts a row hands over, for the projects ticked on it right now.
+///
+/// They are fetched as the ticks move rather than when a button is pressed: the surface both shows a
+/// text and copies it, and a button that had to go and ask first could hand over an empty clipboard
+/// with no second chance to notice. Empty for the app amenbo writes a file for — there is no request
+/// to give anybody there, and the button beside it writes the file instead.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct McpRequestDto {
+    pub(crate) add: String,
+    pub(crate) remove: String,
 }
 
 /// What [`repair_pointers`](crate::commands::repair_pointers) returns: how many folders were fixed, and how many were left waiting on

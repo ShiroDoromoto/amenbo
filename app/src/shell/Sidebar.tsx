@@ -147,6 +147,9 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
           // tasks, and this asks where a word is written across tasks and decisions both (`AMB-D-449`).
           { id: "search", icon: "🔍", label: t("nav.search") },
           { id: "commands", icon: "📖", label: t("nav.commands") },
+          // Connecting an AI is an app-level setting, not a project's (`AMB-D-681`), so it lives
+          // here rather than folded into each project's own screen.
+          { id: "mcp", icon: "🔗", label: t("nav.mcp") },
           { id: "settings", icon: "⚙", label: t("nav.settings") },
           { id: "onboarding", icon: "🪿", label: t("nav.onboarding") },
         ] as const).map((it) => {

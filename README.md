@@ -675,16 +675,21 @@ would let the AI re-point the folder it was given and step outside it, which is 
 whole shape this rests on. Nothing else is added — `--yes` least of all, so a
 destructive command still stops at the confirmation you are the one to give.
 
-**Set it up from the desktop app.** The project creation screen and the project
-settings screen both carry it, folded away until you want it. Each app is listed
-with whether it already holds this project and which folder it holds it for. One
-of them cannot run a command at all, so for that one amenbo writes a file you
-open and the app takes the server from it; every other app has an AI of its own,
-which is handed the request and does the merge — the same way `agent-hook snippet`
-does. The settings themselves are deliberately not reproduced here — each host
-spells them differently and revises that format on its own schedule. What is
-stable is the line the server is started with, for anyone who keeps their settings
-by hand:
+**Set it up from the desktop app, under "Connect an AI".** The screen is the
+app's rather than the project's, because a server is one per app: each app is
+listed with whether it already holds one and which folders it reaches, and you
+tick the projects that app may reach. Pressing the button writes the whole
+selection, so the second time round is the same move as the first. The project
+creation and settings screens carry a folded line pointing at that screen, which
+is where a reader who has just made a project meets it.
+
+One app cannot run a command at all, so for that one amenbo writes a file you open
+and the app takes the server from it — with your selection baked in as the value
+its own settings open on; every other app has an AI of its own, which is handed the
+request and does the merge, the same way `agent-hook snippet` does. The settings
+themselves are deliberately not reproduced here — each host spells them differently
+and revises that format on its own schedule. What is stable is the line the server
+is started with, for anyone who keeps their settings by hand:
 
 ```sh
 amenbo mcp --dir /path/to/a/folder /path/to/another

@@ -25,7 +25,7 @@ import type { Nav } from "../shell/AppShell";
 // The project that was created, handed to the done step: id = where the board opens, name = the heading, dir = the linked folder or null.
 type Created = { id: number; name: string; dir: string | null };
 
-export function NewProjectScreen({ onCreated, onCancel }: { onCreated: (nav: Nav) => void; onCancel: () => void }) {
+export function NewProjectScreen({ onCreated, onCancel, onOpenMcp }: { onCreated: (nav: Nav) => void; onCancel: () => void; onOpenMcp: () => void }) {
   const [name, setName] = useState("");
   const [dir, setDir] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -59,7 +59,13 @@ export function NewProjectScreen({ onCreated, onCancel }: { onCreated: (nav: Nav
   };
 
   if (created) {
-    return <DoneStep created={created} onOpenBoard={() => onCreated({ type: "project", id: String(created.id) })} />;
+    return (
+      <DoneStep
+        created={created}
+        onOpenBoard={() => onCreated({ type: "project", id: String(created.id) })}
+        onOpenMcp={onOpenMcp}
+      />
+    );
   }
 
   return (
@@ -116,8 +122,8 @@ export function NewProjectScreen({ onCreated, onCancel }: { onCreated: (nav: Nav
  * a terminal or a file manager would be a no-op there anyway — so the step is the heading and the way
  * on to the board.
  */
-function DoneStep({ created, onOpenBoard }: { created: Created; onOpenBoard: () => void }) {
-  const { id, name, dir } = created;
+function DoneStep({ created, onOpenBoard, onOpenMcp }: { created: Created; onOpenBoard: () => void; onOpenMcp: () => void }) {
+  const { name, dir } = created;
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // What is copied is meant to be pasted into a terminal, so it has to be the command this build installs.
@@ -154,7 +160,7 @@ function DoneStep({ created, onOpenBoard }: { created: Created; onOpenBoard: () 
             {/* The offer for the reader whose AI cannot open that folder at all (`AMB-D-671`). It sits
                 after the first loop because that is the road for everyone else, and folded because
                 most readers are on it. */}
-            <McpSetup projectId={id} />
+            <McpSetup onOpen={onOpenMcp} />
             <div className="newproj__next">
               <span className="newproj__label">{t("newproj.moreTitle")}</span>
               <div className="newproj__nextrow">

@@ -680,6 +680,16 @@ button.feed__target:hover { color: var(--c-accent); }
 .mcp__state { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); font-size: var(--fs-sm); }
 .mcp__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .mcp__saved { font-size: var(--fs-xs); overflow-wrap: anywhere; }
+/* Which projects a row may reach: a tick apiece, each with the folder that would be written into
+   the entry. The folder is the longer half, so a project wraps as a block rather than letting one
+   path push the column wide. */
+.mcp__pick { display: flex; flex-direction: column; gap: var(--s-1); }
+.mcp__project { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); font-size: var(--fs-sm); }
+/* What an older amenbo left, set below the row it belongs to and marked down: it is something to
+   take away rather than part of what this app is set up for. */
+.mcp__stale { display: flex; flex-direction: column; gap: var(--s-1); font-size: var(--fs-sm); }
+.mcp__staleRow { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); }
+.mcp__empty { font-size: var(--fs-sm); color: var(--c-text-muted); }
 /* Copy, no, close — in that order, and wrapping rather than shrinking, since the row is narrow enough for
    three buttons to meet the edge in a language that spells them out. */
 .agenthookrow__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }

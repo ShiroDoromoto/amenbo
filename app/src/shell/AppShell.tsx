@@ -23,6 +23,7 @@ import { HookConsentModal } from "../screens/HookConsentModal";
 import { NudgeHost } from "../screens/NudgeHost";
 import { NewProjectScreen } from "../screens/NewProjectScreen";
 import { ProjectSettingsScreen } from "../screens/ProjectSettingsScreen";
+import { McpAppsScreen } from "../screens/McpAppsScreen";
 import { TaskDetailPane } from "../screens/TaskDetailPane";
 import { DecisionDetailPane } from "../screens/DecisionDetailPane";
 import { TaskComposePane } from "../screens/TaskComposePane";
@@ -356,6 +357,7 @@ export function AppShell() {
               projectId={Number(nav.id)}
               onBack={() => navTo({ type: "project", id: nav.id })}
               onGone={goToFirstProject}
+              onOpenMcp={() => navTo({ type: "view", id: "mcp" })}
             />
           )}
           {nav.type === "view" && LIST_VIEWS.includes(nav.id) && (
@@ -381,10 +383,15 @@ export function AppShell() {
             />
           )}
           {nav.type === "view" && nav.id === "pluginsInstalled" && <PluginInstalledScreen />}
+          {nav.type === "view" && nav.id === "mcp" && <McpAppsScreen />}
           {nav.type === "view" && nav.id === "settings" && <SettingsScreen />}
           {nav.type === "view" && nav.id === "onboarding" && <OnboardingScreen onNav={navTo} />}
           {nav.type === "view" && nav.id === "newProject" && (
-            <NewProjectScreen onCreated={navTo} onCancel={goBack} />
+            <NewProjectScreen
+              onCreated={navTo}
+              onCancel={goBack}
+              onOpenMcp={() => navTo({ type: "view", id: "mcp" })}
+            />
           )}
         </div>
 

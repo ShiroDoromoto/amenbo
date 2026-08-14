@@ -15,7 +15,7 @@ import { type AttachTargetType } from "./reads";
 import { guessLang, t, tf, type CmdError, type CmdErrorPart } from "./i18n";
 import { isClosed } from "./status";
 import type { ActivityItem, Facet, Priority, Status, TaskCard } from "../mock/types";
-import type { ActivityTargetDto, AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, McpAppDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
+import type { ActivityTargetDto, AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, McpRequestDto, McpSetupDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
 import { taskRef } from "./idref";
 
 /**
@@ -701,31 +701,42 @@ export async function fetchAgentHookRequests(projectId: number): Promise<AgentHo
 }
 
 /**
- * Every app this project could be reached from over MCP, with what each one already holds
- * (`AMB-D-671`, `AMB-D-673`).
+ * The projects an app can be let reach, and every app with what it already holds (`AMB-D-673`,
+ * `AMB-D-681`).
  *
- * Read when the project changes rather than on every store tick: what it reads is settings files on
- * other apps' disks, which nothing amenbo does can move. A project with no folder bound to it answers
- * with nothing — there is nowhere to point a server — and so does the browser iteration, where there
- * is no app on this machine to ask about.
+ * Read when the screen opens rather than on every store tick: what it reads is settings files on
+ * other apps' disks, which nothing amenbo does can move. The browser iteration answers with nothing —
+ * there is no app on this machine to ask about.
  */
-export async function fetchMcpApps(projectId: number): Promise<McpAppDto[]> {
-  if (!inTauri()) return [];
-  return await invoke<McpAppDto[]>("mcp_apps", { projectId });
+export async function fetchMcpSetup(): Promise<McpSetupDto | null> {
+  if (!inTauri()) return null;
+  return await invoke<McpSetupDto>("mcp_setup");
 }
 
 /**
- * Write this project's bundle into a folder the reader picks, and hand back where it landed
- * (`AMB-D-672`). `null` is the picker having been closed without one.
+ * The two texts one app's row hands over, for the projects ticked on it.
+ *
+ * Fetched as the ticks move rather than when a button is pressed: copying is a synchronous move on a
+ * text the row is already holding, and a button that had to go and ask first could hand over an empty
+ * clipboard with no second chance to notice.
+ */
+export async function fetchMcpRequest(app: string, projectIds: number[]): Promise<McpRequestDto> {
+  if (!inTauri()) return { add: "", remove: "" };
+  return await invoke<McpRequestDto>("mcp_request_for", { app, projectIds });
+}
+
+/**
+ * Write the bundle for the projects ticked into a folder the reader picks, and hand back where it
+ * landed (`AMB-D-672`). `null` is the picker having been closed without one.
  *
  * The folder is asked for rather than chosen here: what happens to this file next is that the reader
  * opens it, so it has to land somewhere they will find it again.
  */
-export async function saveMcpBundle(projectId: number): Promise<string | null> {
+export async function saveMcpBundle(projectIds: number[]): Promise<string | null> {
   if (!inTauri()) return null;
   const into = await pickFolder();
   if (into === null) return null;
-  return await invoke<string>("mcp_bundle_write", { projectId, intoDir: into });
+  return await invoke<string>("mcp_bundle_write", { projectIds, intoDir: into });
 }
 
 /**

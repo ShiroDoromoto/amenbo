@@ -98,7 +98,7 @@ function folder(over: Partial<BoundFolderDto> = {}): BoundFolderDto {
 async function render(folders: BoundFolderDto[]) {
   hoisted.folders = folders;
   await act(async () => {
-    root.render(createElement(ProjectSettingsScreen, { projectId: 1, onBack: () => {}, onGone: () => {} }));
+    root.render(createElement(ProjectSettingsScreen, { projectId: 1, onBack: () => {}, onGone: () => {}, onOpenMcp: () => {} }));
     await new Promise((r) => setTimeout(r, 0));
   });
 }

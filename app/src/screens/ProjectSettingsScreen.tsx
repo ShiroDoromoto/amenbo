@@ -24,8 +24,8 @@ const VIEWS: View[] = ["list", "board", "calendar", "timeline"];
 // onBack: back to the board (after saving, or on giving up). onGone: called after an operation that removes this
 // project from the list (archive/delete), so AppShell can escape to the next destination (the first project, or onboarding).
 export function ProjectSettingsScreen({
-  projectId, onBack, onGone,
-}: { projectId: number; onBack: () => void; onGone: () => void }) {
+  projectId, onBack, onGone, onOpenMcp,
+}: { projectId: number; onBack: () => void; onGone: () => void; onOpenMcp: () => void }) {
   const [loaded, setLoaded] = useState<ProjectSettingsDto | null>(null);
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
@@ -161,7 +161,7 @@ export function ProjectSettingsScreen({
 
         {inTauri() && <FoldersSection projectId={projectId} />}
 
-        {inTauri() && <HarnessSection projectId={projectId} />}
+        {inTauri() && <HarnessSection projectId={projectId} onOpenMcp={onOpenMcp} />}
 
         {inTauri() && <PluginsSection projectId={projectId} />}
 
@@ -344,7 +344,7 @@ function FoldersSection({ projectId }: { projectId: number }) {
  * text is put on the same section rather than another screen, because it is the same subject; it just
  * hangs on nothing.
  */
-function HarnessSection({ projectId }: { projectId: number }) {
+function HarnessSection({ projectId, onOpenMcp }: { projectId: number; onOpenMcp: () => void }) {
   // undefined while the record is being read, null for a project that has never been asked.
   const [answer, setAnswer] = useState<boolean | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
@@ -411,7 +411,7 @@ function HarnessSection({ projectId }: { projectId: number }) {
         {/* The other way in, for the AI that cannot open a folder at all (`AMB-D-671`). Same section
             because it is the same subject — how this project is reached from an AI — and folded, since
             the road above it is the one most readers are on. */}
-        <McpSetup projectId={projectId} />
+        <McpSetup onOpen={onOpenMcp} />
 
         {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
 

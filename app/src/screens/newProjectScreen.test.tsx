@@ -46,7 +46,7 @@ let root: Root;
 
 const render = () =>
   act(async () => {
-    root.render(createElement(NewProjectScreen, { onCreated: () => {}, onCancel: () => {} }));
+    root.render(createElement(NewProjectScreen, { onCreated: () => {}, onCancel: () => {}, onOpenMcp: () => {} }));
   });
 
 function button(label: string): HTMLButtonElement {

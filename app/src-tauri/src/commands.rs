@@ -3606,24 +3606,6 @@ pub fn agent_hook_requests(project_id: i64) -> Result<AgentHookRequestsDto, CmdE
     Ok(AgentHookRequestsDto { tools, dirs })
 }
 
-/// The folder a server is given for this project — the one thing every MCP face needs and is not on
-/// screen.
-///
-/// It is the first this project has bound. A server answers about the folder it is sent to rather than
-/// about a project (the amenbo it starts works the project out from where it stands), so where a
-/// project has several, any one of them reaches the same backlog — and the one named is written into
-/// the text the reader is handed, so nothing about which is silent.
-fn mcp_folder_of(
-    store: &amenbo_core::store::Store,
-    project_id: i64,
-) -> Result<Option<std::path::PathBuf>, CmdError> {
-    if store.project(project_id)?.is_none() {
-        return Ok(None);
-    }
-    let registry = store.bindings();
-    Ok(registry.dirs_for_project(project_id).into_iter().next().map(std::path::PathBuf::from))
-}
-
 /// The amenbo a host will run: the command shipped beside this build's own binary.
 ///
 /// A bundle and a request both name a path rather than a command word, because the host that runs it
@@ -3653,67 +3635,153 @@ fn mcp_exe() -> std::path::PathBuf {
     std::path::PathBuf::from(named)
 }
 
-/// Every app this project could be reached from, in catalog order, with what each one already holds
-/// (`AMB-D-673`).
+/// The folders every project a server could be pointed at is worked in, in the store's own order.
 ///
-/// The list is the same whichever screen asks — the one that just made a project and the one that
-/// looks after an old one (`AMB-D-671`) — so it is one command rather than two. A project with no
-/// folder bound to it has nowhere to point a server, and answers with nothing rather than with rows
-/// nobody can act on.
+/// One folder per project — the first it has bound. A server answers about the folder it is sent to
+/// rather than about a project (the amenbo it starts works the project out from where it stands), so
+/// where a project has several, any one of them reaches the same backlog; the one named is written
+/// into the text the reader is handed, so nothing about which is silent. A project with none is not
+/// here at all: there is nowhere to point a server, and a row offering to would write an entry naming
+/// nothing.
+fn mcp_projects(
+    store: &amenbo_core::store::Store,
+) -> Result<Vec<(i64, String, std::path::PathBuf)>, CmdError> {
+    let registry = store.bindings();
+    let read_model = store.read_model();
+    Ok(amenbo_core::store_engine::read::project_overview(read_model.conn(), store.reach())?
+        .into_iter()
+        .filter_map(|project| {
+            let dir = registry.dirs_for_project(project.id).into_iter().next()?;
+            Some((project.id, project.name, std::path::PathBuf::from(dir)))
+        })
+        .collect())
+}
+
+/// The folders a set of projects is worked in, for the selection a row was ticked with.
+///
+/// A project the store no longer holds is dropped rather than refused: the screen and the store move
+/// apart the moment somebody deletes one in another window, and a request built from what is left is
+/// the answer that still means something.
+fn mcp_folders_of(
+    store: &amenbo_core::store::Store,
+    project_ids: &[i64],
+) -> Result<Vec<std::path::PathBuf>, CmdError> {
+    let known = mcp_projects(store)?;
+    Ok(project_ids
+        .iter()
+        .filter_map(|id| known.iter().find(|(known, _, _)| known == id))
+        .map(|(_, _, folder)| folder.clone())
+        .collect())
+}
+
+/// Everything the screen that connects an AI draws (`AMB-D-681`): the projects that can be reached,
+/// and every app in catalog order with what it already holds (`AMB-D-673`).
+///
+/// It asks about **every** project's folder, not one — half the listed apps keep their settings inside
+/// a folder, so an entry written beside one project cannot be seen from another
+/// ([`amenbo_core::mcp_probe`]).
 #[tauri::command]
-pub fn mcp_apps(project_id: i64) -> Result<Vec<McpAppDto>, CmdError> {
+pub fn mcp_setup() -> Result<McpSetupDto, CmdError> {
     use amenbo_core::{mcp::Server, mcp_apps, mcp_probe, mcp_request};
 
     let store = open_store_read()?;
-    let Some(folder) = mcp_folder_of(&store, project_id)? else {
-        return Ok(Vec::new());
-    };
+    let projects = mcp_projects(&store)?;
+    let folders: Vec<std::path::PathBuf> =
+        projects.iter().map(|(_, _, folder)| folder.clone()).collect();
     let exe = mcp_exe();
-    let server = Server { folders: std::slice::from_ref(&folder), exe: &exe };
+    let asking = Server { folders: &folders, exe: &exe };
 
-    Ok(mcp_apps::MCP_APPS
+    let apps = mcp_apps::MCP_APPS
         .iter()
-        .zip(mcp_probe::probe(&server))
+        .zip(mcp_probe::probe(&asking))
         .map(|(app, found)| McpAppDto {
             app: app.id.to_string(),
             label: app.label.to_string(),
             writes_file: app.amenbo_writes,
             configured: found.set,
-            // The first of the folders that entry reaches. This screen is one project's, so it
-            // draws one folder; the app-scoped screen is what shows the set (`AMB-T-3162`).
-            folder: found.folders.first().map(|at| at.display().to_string()),
-            add_request: match app.amenbo_writes {
-                true => String::new(),
-                false => mcp_request::add(app, &server),
-            },
-            remove_request: match app.amenbo_writes {
-                true => String::new(),
-                false => mcp_request::remove(app, &server),
-            },
+            folders: found.folders.iter().map(|at| at.display().to_string()).collect(),
+            stale: found
+                .stale
+                .into_iter()
+                .map(|old| {
+                    // The request has to name the file the old entry actually sits in, which for an
+                    // app that keeps its settings inside a folder is the folder it was found in.
+                    let at: Vec<std::path::PathBuf> = old.at.into_iter().collect();
+                    let where_it_is = Server { folders: &at, exe: &exe };
+                    McpStaleDto {
+                        remove_request: mcp_request::remove_stale(app, &where_it_is, &old.name),
+                        name: old.name,
+                        folder: old.folder.map(|at| at.display().to_string()),
+                    }
+                })
+                .collect(),
         })
-        .collect())
+        .collect();
+
+    Ok(McpSetupDto {
+        projects: projects
+            .into_iter()
+            .map(|(id, name, folder)| McpProjectDto {
+                id,
+                name,
+                folder: folder.display().to_string(),
+            })
+            .collect(),
+        apps,
+    })
 }
 
-/// Write this project's bundle into `into_dir`, and hand back the file that was written
+/// The two texts one app's row hands over, for the projects ticked on it (`AMB-D-681`).
+///
+/// The whole selection is what they carry, every time: the request asks for the entry to be replaced
+/// rather than added to, so the second time round is the same move as the first. An empty selection
+/// still answers — with the request to take the entry out, which is what "none of them" means.
+#[tauri::command]
+pub fn mcp_request_for(app: String, project_ids: Vec<i64>) -> Result<McpRequestDto, CmdError> {
+    use amenbo_core::{mcp::Server, mcp_apps, mcp_request};
+
+    let Some(app) = mcp_apps::find(&app) else {
+        return Err(CmdError::coded(
+            "mcp.no_app",
+            "no app is listed under that name",
+            serde_json::Value::Null,
+        ));
+    };
+    if app.amenbo_writes {
+        // Nothing to hand anybody: this one takes a file, and the button beside it writes one.
+        return Ok(McpRequestDto { add: String::new(), remove: String::new() });
+    }
+    let store = open_store_read()?;
+    let folders = mcp_folders_of(&store, &project_ids)?;
+    let exe = mcp_exe();
+    let server = Server { folders: &folders, exe: &exe };
+    Ok(McpRequestDto {
+        add: mcp_request::add(app, &server),
+        remove: mcp_request::remove(app, &server),
+    })
+}
+
+/// Write the bundle for the projects ticked into `into_dir`, and hand back the file that was written
 /// (`AMB-D-672`).
 ///
 /// The folder is the reader's to choose, asked for on the surface: what happens to this file next is
 /// that they open it, so it has to land somewhere they can find. amenbo writes nothing into the app's
 /// own settings — the file is the hand-over, and the app is the thing that reads it.
 #[tauri::command]
-pub fn mcp_bundle_write(project_id: i64, into_dir: String) -> Result<String, CmdError> {
+pub fn mcp_bundle_write(project_ids: Vec<i64>, into_dir: String) -> Result<String, CmdError> {
     use amenbo_core::{mcp::Server, mcp_bundle};
 
     let store = open_store_read()?;
-    let Some(folder) = mcp_folder_of(&store, project_id)? else {
+    let folders = mcp_folders_of(&store, &project_ids)?;
+    if folders.is_empty() {
         return Err(CmdError::coded(
             "mcp.no_folder",
-            "this project has no folder for a server to be bound to",
+            "no project was chosen for a server to be pointed at",
             serde_json::Value::Null,
         ));
-    };
+    }
     let exe = mcp_exe();
-    let server = Server { folders: std::slice::from_ref(&folder), exe: &exe };
+    let server = Server { folders: &folders, exe: &exe };
     let written = mcp_bundle::write_into(&server, std::path::Path::new(&into_dir))
         .map_err(|e| CmdError::coded("mcp.bundle_write", e.to_string(), serde_json::Value::Null))?;
     Ok(written.display().to_string())

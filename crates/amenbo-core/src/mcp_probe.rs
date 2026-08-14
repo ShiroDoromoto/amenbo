@@ -12,7 +12,7 @@
 //! folder the entry names, and the answer is that folder or nothing.
 //!
 //! **What is read is the entry amenbo would have written**, found by the name every road writes it
-//! under ([`crate::mcp::Server::name`]). An app holding some other MCP server is not holding this one,
+//! under ([`crate::mcp::name`]). An app holding some other MCP server is not holding this one,
 //! and a reader who wrote their own entry by hand under that name is a reader who set it up.
 //!
 //! **Every failure is "not set up".** A settings file that is missing, unreadable, or does not parse
@@ -48,7 +48,8 @@ pub fn probe(server: &Server) -> Vec<Setup> {
 
 /// One app's answer, read from its own settings.
 pub fn read(app: &McpApp, server: &Server) -> Setup {
-    let entry = app.settings_path(server.folder).and_then(|path| args_of(app, &path, &server.name()));
+    let entry =
+        app.settings_path(server.folder).and_then(|path| args_of(app, &path, crate::mcp::name()));
     Setup {
         id: app.id,
         label: app.label,
@@ -102,7 +103,7 @@ mod tests {
     }
 
     fn server<'a>(folder: &'a Path, exe: &'a Path) -> Server<'a> {
-        Server { slug: "shop", project: "Shop", folder, exe }
+        Server { project: "Shop", folder, exe }
     }
 
     fn write(path: &Path, text: &str) {
@@ -122,7 +123,7 @@ mod tests {
         let exe = Path::new("/usr/local/bin/amenbo");
         write(
             &dir.join(".cursor/mcp.json"),
-            r#"{"mcpServers":{"amenbo-shop":{"command":"/usr/local/bin/amenbo",
+            r#"{"mcpServers":{"amenbo":{"command":"/usr/local/bin/amenbo",
                "args":["mcp","--dir","/work/elsewhere"]}}}"#,
         );
 
@@ -135,10 +136,10 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// Another app's entry is not this one's, and neither is another project's — the name is what the
-    /// answer turns on.
+    /// Somebody else's server is not this one, however close its name reads — the name is what the
+    /// answer turns on, and it is matched whole.
     #[test]
-    fn an_entry_under_another_name_is_not_this_project() {
+    fn an_entry_under_another_name_is_not_this_one() {
         let dir = scratch("names");
         let exe = Path::new("/usr/local/bin/amenbo");
         write(
@@ -160,8 +161,8 @@ mod tests {
         let exe = Path::new("/usr/local/bin/amenbo");
         write(
             &dir.join(".vscode/mcp.json"),
-            r#"{"servers":{"amenbo-shop":{"command":"a","args":["mcp","--dir","/work/shop"]}},
-               "mcpServers":{"amenbo-shop":{"command":"a","args":["mcp","--dir","/nowhere"]}}}"#,
+            r#"{"servers":{"amenbo":{"command":"a","args":["mcp","--dir","/work/shop"]}},
+               "mcpServers":{"amenbo":{"command":"a","args":["mcp","--dir","/nowhere"]}}}"#,
         );
 
         let found = read(app("vscode"), &server(&dir, exe));
@@ -184,12 +185,12 @@ mod tests {
              [mcp_servers.other]\n\
              command = \"elsewhere\"\n\
              \n\
-             [mcp_servers.\"amenbo-shop\"]\n\
+             [mcp_servers.\"amenbo\"]\n\
              command = \"/usr/local/bin/amenbo\"\n\
              args = [\n  \"mcp\",\n  \"--dir\",\n  \"/work/shop\",   # the folder\n]\n",
         );
 
-        let found = args_of(app("codex-cli"), &settings, "amenbo-shop").expect("the entry is found");
+        let found = args_of(app("codex-cli"), &settings, "amenbo").expect("the entry is found");
         assert_eq!(found, vec!["mcp", "--dir", "/work/shop"]);
         assert_eq!(bound_folder(&found).as_deref(), Some(Path::new("/work/shop")));
 
@@ -219,7 +220,7 @@ mod tests {
     fn an_entry_that_names_no_folder_is_still_set_up() {
         let dir = scratch("nodir");
         let exe = Path::new("/usr/local/bin/amenbo");
-        write(&dir.join(".cursor/mcp.json"), r#"{"mcpServers":{"amenbo-shop":{"command":"a","args":["mcp"]}}}"#);
+        write(&dir.join(".cursor/mcp.json"), r#"{"mcpServers":{"amenbo":{"command":"a","args":["mcp"]}}}"#);
 
         let found = read(app("cursor"), &server(&dir, exe));
         assert!(found.set, "the entry is there");

@@ -3616,14 +3616,13 @@ pub fn agent_hook_requests(project_id: i64) -> Result<AgentHookRequestsDto, CmdE
 fn mcp_server_of(
     store: &amenbo_core::store::Store,
     project_id: i64,
-) -> Result<Option<(String, String, std::path::PathBuf)>, CmdError> {
+) -> Result<Option<(String, std::path::PathBuf)>, CmdError> {
     let Some(project) = store.project(project_id)? else { return Ok(None) };
-    let Some(slug) = project.slug else { return Ok(None) };
     let registry = store.bindings();
     let Some(dir) = registry.dirs_for_project(project_id).into_iter().next() else {
         return Ok(None);
     };
-    Ok(Some((slug, project.name, std::path::PathBuf::from(dir))))
+    Ok(Some((project.name, std::path::PathBuf::from(dir))))
 }
 
 /// The amenbo a host will run: the command shipped beside this build's own binary.
@@ -3633,13 +3632,26 @@ fn mcp_server_of(
 /// to the app's binary, so that is where it is looked for; where it is not found — an unusual install,
 /// or a run out of a build tree — the command's own name is the best that can be said, and a reader
 /// whose `PATH` carries it is still reached.
+///
+/// Two names are tried beside the binary, because two different questions have the same answer on
+/// production and part company on the dev channel: what this build's CLI is **called**
+/// (`command_name` — `amenbo-dev` there) and what the file in the bundle is **named**
+/// (`sidecar_file_name` — always `amenbo`). Production answers `amenbo` to both and stops at the
+/// first, so nothing about it changes; a dev build misses on the first and finds its sidecar on the
+/// second, instead of falling through to a bare word no host can start.
 fn mcp_exe() -> std::path::PathBuf {
     let cmd = amenbo_core::config::Paths::command_name();
     let named = if cfg!(windows) { format!("{cmd}.exe") } else { cmd.to_string() };
-    match std::env::current_exe().ok().and_then(|exe| exe.parent().map(|at| at.join(&named))) {
-        Some(beside) if beside.is_file() => beside,
-        _ => std::path::PathBuf::from(named),
+    let beside = std::env::current_exe().ok().and_then(|exe| exe.parent().map(|at| at.to_path_buf()));
+    if let Some(at) = beside {
+        for name in [named.as_str(), amenbo_core::config::Paths::sidecar_file_name()] {
+            let file = at.join(name);
+            if file.is_file() {
+                return file;
+            }
+        }
     }
+    std::path::PathBuf::from(named)
 }
 
 /// Every app this project could be reached from, in catalog order, with what each one already holds
@@ -3654,11 +3666,11 @@ pub fn mcp_apps(project_id: i64) -> Result<Vec<McpAppDto>, CmdError> {
     use amenbo_core::{mcp::Server, mcp_apps, mcp_probe, mcp_request};
 
     let store = open_store_read()?;
-    let Some((slug, name, folder)) = mcp_server_of(&store, project_id)? else {
+    let Some((name, folder)) = mcp_server_of(&store, project_id)? else {
         return Ok(Vec::new());
     };
     let exe = mcp_exe();
-    let server = Server { slug: &slug, project: &name, folder: &folder, exe: &exe };
+    let server = Server { project: &name, folder: &folder, exe: &exe };
 
     Ok(mcp_apps::MCP_APPS
         .iter()
@@ -3692,7 +3704,7 @@ pub fn mcp_bundle_write(project_id: i64, into_dir: String) -> Result<String, Cmd
     use amenbo_core::{mcp::Server, mcp_bundle};
 
     let store = open_store_read()?;
-    let Some((slug, name, folder)) = mcp_server_of(&store, project_id)? else {
+    let Some((name, folder)) = mcp_server_of(&store, project_id)? else {
         return Err(CmdError::coded(
             "mcp.no_folder",
             "this project has no folder for a server to be bound to",
@@ -3700,7 +3712,7 @@ pub fn mcp_bundle_write(project_id: i64, into_dir: String) -> Result<String, Cmd
         ));
     };
     let exe = mcp_exe();
-    let server = Server { slug: &slug, project: &name, folder: &folder, exe: &exe };
+    let server = Server { project: &name, folder: &folder, exe: &exe };
     let written = mcp_bundle::write_into(&server, std::path::Path::new(&into_dir))
         .map_err(|e| CmdError::coded("mcp.bundle_write", e.to_string(), serde_json::Value::Null))?;
     Ok(written.display().to_string())

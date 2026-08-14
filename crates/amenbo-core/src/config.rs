@@ -166,6 +166,25 @@ impl Paths {
         }
     }
 
+    /// The name the CLI file carries **inside the app's bundle**, without an extension. It is not a
+    /// channel fact at all: Tauri bundles the sidecar under the stem `bundle.externalBin` names
+    /// (`binaries/amenbo`), and that config is one file for every build, so a dev bundle ships
+    /// `amenbo` beside its GUI exactly as production does. `guards/check-sidecar-name.sh` is what
+    /// keeps this constant and that config saying the same word.
+    pub const SIDECAR_NAME: &'static str = "amenbo";
+
+    /// That stem as the file name this platform's bundle actually holds — the thing to look for beside
+    /// the running binary when something needs the CLI as a **path** rather than as a command word
+    /// (an MCP host is not a shell and has no `PATH` of the reader's to resolve one in).
+    ///
+    /// Distinct from [`command_name`](Self::command_name) on purpose: that answers what to **type**,
+    /// which the dev channel spells `amenbo-dev`, while nothing of that name is ever written into a
+    /// bundle. Asking the typing question about a file is how a dev build ends up looking for
+    /// `Contents/MacOS/amenbo-dev` and finding nothing.
+    pub fn sidecar_file_name() -> &'static str {
+        if cfg!(windows) { "amenbo.exe" } else { Self::SIDECAR_NAME }
+    }
+
     /// The naming rule [`is_dev_channel`](Self::is_dev_channel) applies, taking the name as an
     /// argument so the rule can be pinned by a table: the channel of a running binary is fixed at
     /// compile time, so a test cannot vary it. `amenbo-dev-ish` is not a task instance — only the
@@ -1032,6 +1051,16 @@ mod tests {
         assert_eq!(Paths::command_name_for("amenbo-dev-2134"), "amenbo-dev");
         // Not the dev channel, so production's CLI — the same fallback `APP_NAME` itself takes.
         assert_eq!(Paths::command_name_for("amenbo-devish"), "amenbo");
+    }
+
+    /// The file in the bundle keeps its stem whatever extension the platform hangs off it, so the two
+    /// cannot drift into naming different files. The word itself is held against the bundle config by
+    /// `guards/check-sidecar-name.sh`; what a test can see from in here is only that the pair agree.
+    #[test]
+    fn the_bundled_file_is_the_sidecar_name_with_this_platform_s_extension() {
+        let file = Paths::sidecar_file_name();
+        assert_eq!(file.trim_end_matches(".exe"), Paths::SIDECAR_NAME);
+        assert_eq!(file.ends_with(".exe"), cfg!(windows), "only Windows carries the extension");
     }
 
     /// What each channel calls itself on screen. Production says nothing at all — the one case that

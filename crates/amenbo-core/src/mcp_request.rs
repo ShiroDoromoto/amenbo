@@ -12,7 +12,7 @@
 //! ([`crate::mcp_apps`]): the AI in the app writes the settings its own app reads, and knows that
 //! document better than a generator does. What the request contributes is the part nobody in the app
 //! can know — where amenbo is installed, which folder this project is, and the name the entry has to
-//! carry so a later read can tell it apart ([`crate::mcp::Server`]).
+//! carry so a later read can tell it apart ([`crate::mcp::name`]).
 //!
 //! **Taking it back out is a request too, and not the same one.** A removal names the entry and
 //! nothing else: there is no configuration to carry, and a reader who moved a project or finished with
@@ -38,7 +38,7 @@ pub fn entry(app: &McpApp, server: &Server) -> String {
             // carry it.
             let mut servers = serde_json::Map::new();
             servers.insert(
-                server.name(),
+                crate::mcp::name().to_string(),
                 serde_json::json!({ "command": server.command(), "args": server.args() }),
             );
             let mut document = serde_json::Map::new();
@@ -58,7 +58,7 @@ pub fn entry(app: &McpApp, server: &Server) -> String {
                 toml::Value::Array(server.args().into_iter().map(toml::Value::String).collect()),
             );
             let mut servers = toml::Table::new();
-            servers.insert(server.name(), toml::Value::Table(entry));
+            servers.insert(crate::mcp::name().to_string(), toml::Value::Table(entry));
             let mut document = toml::Table::new();
             document.insert(app.servers_key.to_string(), toml::Value::Table(servers));
             toml::to_string(&document).unwrap_or_default().trim_end().to_string()
@@ -98,7 +98,7 @@ pub fn remove(app: &McpApp, server: &Server) -> String {
         project = server.project,
         label = app.label,
         settings = settings(app, server.folder),
-        name = server.name(),
+        name = crate::mcp::name(),
     )
 }
 
@@ -124,7 +124,7 @@ mod tests {
     use std::path::Path;
 
     fn server<'a>(folder: &'a Path, exe: &'a Path) -> Server<'a> {
-        Server { slug: "shop", project: "Shop", folder, exe }
+        Server { project: "Shop", folder, exe }
     }
 
     fn app(id: &str) -> &'static McpApp {
@@ -140,16 +140,16 @@ mod tests {
 
         let cursor: serde_json::Value =
             serde_json::from_str(&entry(app("cursor"), &server(folder, exe))).expect("valid JSON");
-        assert_eq!(cursor["mcpServers"]["amenbo-shop"]["command"], "/usr/local/bin/amenbo");
+        assert_eq!(cursor["mcpServers"]["amenbo"]["command"], "/usr/local/bin/amenbo");
         assert_eq!(
-            cursor["mcpServers"]["amenbo-shop"]["args"],
+            cursor["mcpServers"]["amenbo"]["args"],
             serde_json::json!(["mcp", "--dir", "/work/shop"])
         );
 
         let vscode: serde_json::Value =
             serde_json::from_str(&entry(app("vscode"), &server(folder, exe))).expect("valid JSON");
         assert!(vscode["mcpServers"].is_null(), "VS Code does not call it that");
-        assert_eq!(vscode["servers"]["amenbo-shop"]["command"], "/usr/local/bin/amenbo");
+        assert_eq!(vscode["servers"]["amenbo"]["command"], "/usr/local/bin/amenbo");
     }
 
     /// The one app whose settings are TOML: a table named after the entry, with the same two keys. It
@@ -158,10 +158,10 @@ mod tests {
     #[test]
     fn a_toml_entry_is_a_table_named_after_the_server() {
         let written = entry(app("codex-cli"), &server(Path::new("/work/shop"), Path::new("/bin/a")));
-        assert!(written.contains("[mcp_servers.amenbo-shop]"), "the table is named: {written}");
+        assert!(written.contains("[mcp_servers.amenbo]"), "the table is named: {written}");
 
         let read: toml::Value = toml::from_str(&written).expect("valid TOML");
-        let entry = &read["mcp_servers"]["amenbo-shop"];
+        let entry = &read["mcp_servers"]["amenbo"];
         assert_eq!(entry["command"].as_str(), Some("/bin/a"));
         assert_eq!(
             entry["args"].as_array().expect("a list").iter().filter_map(|v| v.as_str()).collect::<Vec<_>>(),
@@ -176,7 +176,6 @@ mod tests {
         let written = entry(
             app("codex-cli"),
             &Server {
-                slug: "shop",
                 project: "Shop",
                 folder: Path::new(r"C:\work\shop"),
                 exe: Path::new(r"C:\Program Files\amenbo\amenbo.exe"),
@@ -184,7 +183,7 @@ mod tests {
         );
 
         let read: toml::Value = toml::from_str(&written).expect("valid TOML");
-        let entry = &read["mcp_servers"]["amenbo-shop"];
+        let entry = &read["mcp_servers"]["amenbo"];
         assert_eq!(entry["command"].as_str(), Some(r"C:\Program Files\amenbo\amenbo.exe"));
         assert_eq!(entry["args"][2].as_str(), Some(r"C:\work\shop"));
     }
@@ -225,7 +224,7 @@ mod tests {
         let exe = Path::new("/usr/local/bin/amenbo");
         let said = remove(app("cursor"), &server(folder, exe));
 
-        assert!(said.contains("amenbo-shop"), "{said}");
+        assert!(said.contains("`amenbo`"), "{said}");
         assert!(said.contains("/work/shop/.cursor/mcp.json"), "{said}");
         assert!(!said.contains("```"), "there is nothing to fence: {said}");
         assert!(said.contains("stays"), "{said}");
@@ -241,8 +240,12 @@ mod tests {
             let added = add(app, &server(folder, exe));
             let removed = remove(app, &server(folder, exe));
             assert!(added.contains(app.label), "the add names {}", app.id);
-            assert!(added.contains("amenbo-shop"), "the add carries the name for {}", app.id);
-            assert!(removed.contains("amenbo-shop"), "the removal names it for {}", app.id);
+            assert!(
+                added.contains(&entry(app, &server(folder, exe))),
+                "the add carries the entry for {}",
+                app.id
+            );
+            assert!(removed.contains("`amenbo`"), "the removal names it for {}", app.id);
         }
     }
 }

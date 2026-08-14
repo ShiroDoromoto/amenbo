@@ -41,7 +41,7 @@ avatar?: string, };
  * The whole catalog and this project's folders — what the settings screen's "take the request" face is
  * drawn from (`AMB-D-670`).
  *
- * **Two lists, not rows.** [`agent_hook_project_wiring`] answers with the tools a folder is waiting on,
+ * **Two lists, not rows.** [`agent_hook_project_wiring`](crate::commands::agent_hook_project_wiring) answers with the tools a folder is waiting on,
  * so its unit is a pairing and a tool nothing waits for is left out. This one is the reader coming to
  * fetch text, so the tool is theirs to pick out of the whole catalog and the folders are the same
  * wherever they paste it — pairing them would be inventing an order the reader already knows.
@@ -127,7 +127,7 @@ export type AttachmentDto = { id: number, kind: "blob" | "url", blobHash: string
 present: boolean, createdByKind: "human" | "ai" | null, };
 
 /**
- * What [`run_backup`] returns: the camelCase DTO of core's
+ * What [`run_backup`](crate::commands::run_backup) returns: the camelCase DTO of core's
  * [`amenbo_core::archive::BackupReport`].
  */
 export type BackupReportDto = { 
@@ -158,7 +158,7 @@ export type BoundFolderDto = { path: string, exists: boolean, mismatch: SlugMism
 
 /**
  * The payload of the `data-progress` event: the camelCase DTO of core's
- * [`amenbo_core::progress::Progress`]. `phase` is the stable string from [`phase_str`], which the
+ * [`amenbo_core::progress::Progress`]. `phase` is the stable string from `phase_str`, which the
  * GUI localizes. The startup migration ([`crate::migrate`]) reports itself in the same shape — one
  * way of showing progress is enough.
  */
@@ -326,7 +326,7 @@ toKind?: string,
 tasks?: number, decisions?: number, };
 
 /**
- * What [`run_export`] returns: the directory it wrote to, how big it is, and how many attachments
+ * What [`run_export`](crate::commands::run_export) returns: the directory it wrote to, how big it is, and how many attachments
  * were carried out.
  */
 export type ExportReportDto = { path: string, 
@@ -566,7 +566,7 @@ export type PlainRefDto = { id: string, name: string, };
  * ask for before it can run.
  *
  * `cmd` is not shown to anyone: it is the name the press hands back, and the only thing amenbo will
- * raise a call by ([`plugin_settings_action`]). What is drawn is the label, plain — no Markdown and no
+ * raise a call by ([`plugin_settings_action`](crate::commands::plugin_settings_action)). What is drawn is the label, plain — no Markdown and no
  * link, like every other author string on this screen (`AMB-D-656`).
  */
 export type PluginActionDto = { 
@@ -947,7 +947,7 @@ featured: boolean,
 addedAt?: string, };
 
 /**
- * Where a gate ended up, and what closing it threw away (`AMB-D-399`) — what [`plugin_set_enabled`]
+ * Where a gate ended up, and what closing it threw away (`AMB-D-399`) — what [`plugin_set_enabled`](crate::commands::plugin_set_enabled)
  * answers with.
  *
  * The count is here because the discard is real and invisible: disabling a plugin drops whatever was
@@ -1017,7 +1017,7 @@ incompatibleReason?: string,
 /**
  * The settings the author declared, in that order — the schema alone. Empty for a plugin that
  * declares none, which is the form's own answer to whether there is anything to configure. What is
- * held for a key is one project's (`AMB-D-434`) and comes from [`plugin_config_read`].
+ * held for a key is one project's (`AMB-D-434`) and comes from [`plugin_config_read`](crate::commands::plugin_config_read).
  */
 config: Array<PluginWantedSettingDto>, 
 /**
@@ -1153,7 +1153,7 @@ hold?: "incompatible" | "settings",
 missing: Array<string>, };
 
 /**
- * How one plugin fared in [`plugin_update_apply_all`] — a failure is a row, not the end of the run.
+ * How one plugin fared in [`plugin_update_apply_all`](crate::commands::plugin_update_apply_all) — a failure is a row, not the end of the run.
  */
 export type PluginUpdateOutcomeDto = { 
 /**
@@ -1197,7 +1197,7 @@ catalog: PluginCatalogReadDto, };
  *
  * This is what the market shows **before** anything is installed (`AMB-D-385`), and it is also what an
  * installed row carries: a value belongs to one project (`AMB-D-434`), and neither of those faces is
- * standing in one. What is held is read for a named project, through [`plugin_config_read`].
+ * standing in one. What is held is read for a named project, through [`plugin_config_read`](crate::commands::plugin_config_read).
  */
 export type PluginWantedSettingDto = { 
 /**
@@ -1260,7 +1260,7 @@ options: Array<PluginConfigOptionDto>,
 defaultValue?: string, };
 
 /**
- * What [`repair_pointers`] returns: how many folders were fixed, and how many were left waiting on
+ * What [`repair_pointers`](crate::commands::repair_pointers) returns: how many folders were fixed, and how many were left waiting on
  * a human's judgement.
  */
 export type PointerRepairDto = { 
@@ -1356,7 +1356,7 @@ export type RefTargetDto = { kind: "task" | "decision",
 id: number, };
 
 /**
- * What [`run_restore`] returns: the camelCase DTO of core's
+ * What [`run_restore`](crate::commands::run_restore) returns: the camelCase DTO of core's
  * [`amenbo_core::archive::RestoreReport`].
  */
 export type RestoreReportDto = { 

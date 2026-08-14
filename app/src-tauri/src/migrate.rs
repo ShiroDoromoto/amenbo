@@ -21,7 +21,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 use ts_rs::TS;
 
-use crate::commands::DataProgressDto;
+use crate::dto::DataProgressDto;
 use crate::error::CmdError;
 
 /// Stage transitions, carrying the whole [`MigrationStatusDto`]. The window may well mount *after* one of

@@ -43,7 +43,7 @@ strays=$(git grep -nE '^[[:space:]]*ts-rs[[:space:]]*=' -- '*Cargo.toml' ":(excl
 if [ -n "$strays" ]; then
     echo "✗ ts derive: a manifest outside $home depends on ts-rs." >&2
     echo "$strays" >&2
-    echo "  Shape the type in the GUI crate's command layer instead — a generator in another crate" >&2
+    echo "  Declare the type in the GUI crate's own DTO module instead — a generator in another crate" >&2
     echo "  moves bindings.ts on changes the GUI's own gates never see." >&2
     exit 1
 fi

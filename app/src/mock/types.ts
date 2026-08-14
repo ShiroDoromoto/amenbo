@@ -1,5 +1,5 @@
 // Domain types for the GUI. The wire shapes are generated from the Rust DTOs in
-// `app/src-tauri/src/commands.rs` by ts-rs; this file re-exports them under the app-facing names (and
+// `app/src-tauri/src/dto.rs` by ts-rs; this file re-exports them under the app-facing names (and
 // extends the few that carry client-only fields), so a Rust-side rename/add/remove is a TypeScript
 // error here rather than a runtime `undefined`. Regenerate with `cargo test` in `app/src-tauri` (the
 // derive plants an `export_bindings_*` test that writes `app/src/bindings/bindings.ts`).

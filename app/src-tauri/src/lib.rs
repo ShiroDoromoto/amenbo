@@ -9,6 +9,7 @@ mod autostart;
 mod blobproto;
 mod commands;
 mod diag;
+mod dto;
 mod error;
 #[cfg(target_os = "macos")]
 mod macos_notify;

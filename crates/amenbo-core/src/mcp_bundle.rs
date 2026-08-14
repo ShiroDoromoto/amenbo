@@ -16,8 +16,9 @@
 //!
 //! **One bundle per project, and the name is what keeps them apart.** A server is bound to one folder,
 //! so a machine working two projects wants two of these — and a host keeps its extensions under the
-//! name the manifest gives. The project's slug is already unique on this machine
-//! ([`crate::slug`]), so it is what the name is built from.
+//! name the manifest gives. That name is [`crate::mcp::Server`]'s, shared with every other road a
+//! server is set up by: a bundle and a request that named one thing differently would leave a project
+//! set up twice under two names.
 //!
 //! **The manifest carries the required fields and nothing else.** Every optional word is one more
 //! thing a host may read differently than the version of the spec it was written against, and none of
@@ -27,6 +28,8 @@
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
+
+use crate::mcp::Server;
 
 /// The name of the one document inside the archive, at its root — the whole of the layout an `.mcpb`
 /// is held to.
@@ -39,92 +42,62 @@ pub const EXTENSION: &str = "mcpb";
 /// The spec version the manifest below is written against.
 const MANIFEST_VERSION: &str = "0.3";
 
-/// One project's server, as a bundle names it.
-pub struct Bundle<'a> {
-    /// The project's slug — unique on this machine, which is what makes the bundle's own name unique
-    /// among the ones a host is holding.
-    pub slug: &'a str,
-    /// The project's name as its owner wrote it, for the line a reader sees beside the extension.
-    pub project: &'a str,
-    /// The folder the server is bound to. It is written into the arguments rather than asked for at
-    /// install time: the reader is setting up a project they are already standing in, and a question
-    /// asked here would be one they have answered already.
-    pub folder: &'a Path,
-    /// The installed amenbo binary the host will run. The caller resolves it — the GUI knows where the
-    /// command it ships sits, and a bundle written against whatever binary happened to be running
-    /// would name the wrong one from inside an app.
-    pub exe: &'a Path,
+/// What to call the file the reader saves. It is the server's own name, so a bundle written again for
+/// the same project lands on the file it landed on before.
+pub fn file_name(server: &Server) -> String {
+    format!("{}.{EXTENSION}", server.name())
 }
 
-impl Bundle<'_> {
-    /// The machine-readable name the host files this extension under. Two projects give two names, and
-    /// the same project gives the same one — so writing a bundle again replaces the extension rather
-    /// than standing a second one beside it.
-    ///
-    /// It opens with this build's own command name rather than the product's, for the same reason the
-    /// channels are three different commands: a bundle written by a dev build names the dev binary,
-    /// and one landing on the production build's name would put that binary behind the extension the
-    /// reader already had.
-    pub fn name(&self) -> String {
-        format!("{}-{}", crate::config::Paths::command_name(), self.slug)
-    }
-
-    /// What to call the file the reader saves.
-    pub fn file_name(&self) -> String {
-        format!("{}.{EXTENSION}", self.name())
-    }
-
-    /// The manifest document, as it sits at the archive's root.
-    pub fn manifest(&self) -> String {
-        let document = serde_json::json!({
-            "manifest_version": MANIFEST_VERSION,
-            "name": self.name(),
-            "version": crate::agent::VERSION,
-            // The product's name as a person reads it (`AMB-D-633`) — this line is the one part of the
-            // document a reader sees, and the lowercase spelling is the command's and the identifier's.
-            "description": format!(
-                "Work the Amenbo project \"{}\" from this app — its backlog, its decisions and the way \
-                 to use them, for the folder {}.",
-                self.project,
-                self.folder.display()
-            ),
-            "author": { "name": "Amenbo" },
-            "server": {
-                "type": "binary",
-                // The entry point of a bundle that carries no code is the binary it points at. It is
-                // the same path the command below names, and it is absolute for the same reason: there
-                // is nothing inside the archive for a relative one to reach.
-                "entry_point": self.exe.display().to_string(),
-                "mcp_config": {
-                    "command": self.exe.display().to_string(),
-                    "args": ["mcp", "--dir", self.folder.display().to_string()],
-                },
+/// The manifest document, as it sits at the archive's root.
+pub fn manifest(server: &Server) -> String {
+    let document = serde_json::json!({
+        "manifest_version": MANIFEST_VERSION,
+        "name": server.name(),
+        "version": crate::agent::VERSION,
+        // The product's name as a person reads it (`AMB-D-633`) — this line is the one part of the
+        // document a reader sees, and the lowercase spelling is the command's and the identifier's.
+        "description": format!(
+            "Work the Amenbo project \"{}\" from this app — its backlog, its decisions and the way \
+             to use them, for the folder {}.",
+            server.project,
+            server.folder.display()
+        ),
+        "author": { "name": "Amenbo" },
+        "server": {
+            "type": "binary",
+            // The entry point of a bundle that carries no code is the binary it points at. It is
+            // the same path the command below names, and it is absolute for the same reason: there
+            // is nothing inside the archive for a relative one to reach.
+            "entry_point": server.command(),
+            "mcp_config": {
+                "command": server.command(),
+                "args": server.args(),
             },
-        });
-        serde_json::to_string_pretty(&document).unwrap_or_else(|_| document.to_string())
-    }
+        },
+    });
+    serde_json::to_string_pretty(&document).unwrap_or_else(|_| document.to_string())
+}
 
-    /// Write the bundle into `dir`, and hand back the file that was written.
-    ///
-    /// The archive holds the manifest and nothing else, which is what a bundle carrying no code is.
-    pub fn write_into(&self, dir: &Path) -> std::io::Result<PathBuf> {
-        let path = dir.join(self.file_name());
-        let mut archive = zip::ZipWriter::new(std::fs::File::create(&path)?);
-        archive
-            .start_file(MANIFEST, zip::write::SimpleFileOptions::default())
-            .map_err(std::io::Error::other)?;
-        archive.write_all(self.manifest().as_bytes())?;
-        archive.finish().map_err(std::io::Error::other)?;
-        Ok(path)
-    }
+/// Write the bundle into `dir`, and hand back the file that was written.
+///
+/// The archive holds the manifest and nothing else, which is what a bundle carrying no code is.
+pub fn write_into(server: &Server, dir: &Path) -> std::io::Result<PathBuf> {
+    let path = dir.join(file_name(server));
+    let mut archive = zip::ZipWriter::new(std::fs::File::create(&path)?);
+    archive
+        .start_file(MANIFEST, zip::write::SimpleFileOptions::default())
+        .map_err(std::io::Error::other)?;
+    archive.write_all(manifest(server).as_bytes())?;
+    archive.finish().map_err(std::io::Error::other)?;
+    Ok(path)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn bundle<'a>(folder: &'a Path, exe: &'a Path) -> Bundle<'a> {
-        Bundle { slug: "shop", project: "Shop", folder, exe }
+    fn server<'a>(folder: &'a Path, exe: &'a Path) -> Server<'a> {
+        Server { slug: "shop", project: "Shop", folder, exe }
     }
 
     /// The fields a host refuses a manifest for want of, and the arguments that bind the server to one
@@ -134,7 +107,7 @@ mod tests {
         let folder = Path::new("/work/shop");
         let exe = Path::new("/usr/local/bin/amenbo");
         let read: serde_json::Value =
-            serde_json::from_str(&bundle(folder, exe).manifest()).expect("valid JSON");
+            serde_json::from_str(&manifest(&server(folder, exe))).expect("valid JSON");
 
         for field in ["manifest_version", "name", "version", "description", "author", "server"] {
             assert!(!read[field].is_null(), "the manifest says nothing about `{field}`");
@@ -149,19 +122,17 @@ mod tests {
         );
     }
 
-    /// Two projects on one machine are two extensions, and a host keeps them apart by the name the
-    /// manifest gives. Writing the same project again is the same name, which is how a bundle written
-    /// twice replaces itself rather than piling up.
+    /// The file the reader saves is named after the server, so a bundle written twice for one project
+    /// lands where the first one did rather than piling a second file up beside it.
     #[test]
-    fn a_projects_name_is_its_own_and_stays_the_same() {
+    fn the_file_is_named_after_the_server() {
         let folder = Path::new("/work/shop");
         let exe = Path::new("/usr/local/bin/amenbo");
-        let shop = bundle(folder, exe);
-        let other = Bundle { slug: "greenhouse", ..bundle(folder, exe) };
-
-        assert_ne!(shop.name(), other.name());
-        assert_eq!(shop.name(), bundle(folder, exe).name());
-        assert_eq!(shop.file_name(), "amenbo-shop.mcpb");
+        assert_eq!(file_name(&server(folder, exe)), "amenbo-shop.mcpb");
+        assert_ne!(
+            file_name(&server(folder, exe)),
+            file_name(&Server { slug: "greenhouse", ..server(folder, exe) })
+        );
     }
 
     /// What a host opens: an archive with the manifest at its root, and the same document that was
@@ -173,7 +144,7 @@ mod tests {
         std::fs::create_dir_all(&dir).expect("a directory to write into");
         let folder = Path::new("/work/shop");
         let exe = Path::new("/usr/local/bin/amenbo");
-        let written = bundle(folder, exe).write_into(&dir).expect("the bundle is written");
+        let written = write_into(&server(folder, exe), &dir).expect("the bundle is written");
 
         assert_eq!(written.file_name().and_then(|n| n.to_str()), Some("amenbo-shop.mcpb"));
         let mut archive =
@@ -186,7 +157,7 @@ mod tests {
             &mut held,
         )
         .expect("readable");
-        assert_eq!(held, bundle(folder, exe).manifest());
+        assert_eq!(held, manifest(&server(folder, exe)));
 
         std::fs::remove_dir_all(&dir).ok();
     }

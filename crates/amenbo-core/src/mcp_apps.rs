@@ -9,10 +9,11 @@
 //! file out, wording the request that asks an AI to write it, and saying which apps are already set
 //! up), and none of them may grow a branch per app.
 //!
-//! **What a row does not carry is the settings' shape.** The documents have nothing in common — where
-//! the servers sit in them, what a server entry is called, whether it is an object or a table — so
-//! the row says the format and stops. The faces that write a document carry their own text, the way
-//! [`crate::harness`] carries a template per row.
+//! **What a row carries of the settings' shape is the one word the apps disagree on.** An entry is a
+//! command and its arguments wherever it is written; what differs is where the entries hang — one app
+//! calls that place `mcpServers`, another `servers`, and the one written in TOML names a table
+//! `mcp_servers`. So the row says the format and that word, and the document itself is derived from
+//! the two ([`crate::mcp_request`]).
 
 use std::path::{Path, PathBuf};
 
@@ -91,6 +92,13 @@ pub struct McpApp {
     pub place: Place,
     /// What that file is written in.
     pub format: Format,
+    /// What this app calls the place its MCP servers are kept, inside that file. In a JSON document it
+    /// is the object the entries hang under; in a TOML one it is the table each entry is named beneath
+    /// (`[mcp_servers.<name>]`).
+    ///
+    /// The apps agree on nearly everything about that entry — a command and its arguments — and
+    /// disagree about this one word, which is why it is the one part of the document a row carries.
+    pub servers_key: &'static str,
     /// Whether amenbo writes the settings out for this app, rather than wording a request that asks
     /// the reader's AI to write them (`AMB-D-672`).
     ///
@@ -123,6 +131,7 @@ pub static MCP_APPS: &[McpApp] = &[
         // than three.
         place: Place::Settings("Claude/claude_desktop_config.json"),
         format: Format::Json,
+        servers_key: "mcpServers",
         amenbo_writes: true,
     },
     McpApp {
@@ -130,6 +139,7 @@ pub static MCP_APPS: &[McpApp] = &[
         label: "Claude Code",
         place: Place::Folder(".mcp.json"),
         format: Format::Json,
+        servers_key: "mcpServers",
         amenbo_writes: false,
     },
     McpApp {
@@ -137,6 +147,7 @@ pub static MCP_APPS: &[McpApp] = &[
         label: "Cursor",
         place: Place::Folder(".cursor/mcp.json"),
         format: Format::Json,
+        servers_key: "mcpServers",
         amenbo_writes: false,
     },
     McpApp {
@@ -144,6 +155,9 @@ pub static MCP_APPS: &[McpApp] = &[
         label: "VS Code",
         place: Place::Folder(".vscode/mcp.json"),
         format: Format::Json,
+        // The one JSON app that does not call it `mcpServers`. Its own documentation writes `servers`
+        // and names no second spelling, so this is the word rather than the family's.
+        servers_key: "servers",
         amenbo_writes: false,
     },
     McpApp {
@@ -153,6 +167,8 @@ pub static MCP_APPS: &[McpApp] = &[
         label: "Codex CLI",
         place: Place::Home(".codex/config.toml"),
         format: Format::Toml,
+        // A table rather than an object: an entry is written `[mcp_servers.<name>]`.
+        servers_key: "mcp_servers",
         amenbo_writes: false,
     },
     McpApp {
@@ -160,6 +176,7 @@ pub static MCP_APPS: &[McpApp] = &[
         label: "Gemini CLI",
         place: Place::Folder(".gemini/settings.json"),
         format: Format::Json,
+        servers_key: "mcpServers",
         amenbo_writes: false,
     },
 ];

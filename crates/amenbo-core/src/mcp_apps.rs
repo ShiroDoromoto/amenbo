@@ -179,6 +179,21 @@ pub static MCP_APPS: &[McpApp] = &[
         servers_key: "mcpServers",
         amenbo_writes: false,
     },
+    McpApp {
+        id: "antigravity",
+        // Where a reader who moved off Gemini CLI arrives: the same house, and one file the editor and
+        // the command both read, so it is one row for two faces the way `codex-cli` is.
+        label: "Antigravity",
+        // The machine's own, and only that. The workspace file its documentation names is read and
+        // never started — the entry is found, no child comes up — so a row pointing there would offer
+        // a road that goes nowhere. One file per machine is no trouble for a folder-per-server rule:
+        // the folder rides in the entry's own arguments, and projects show up as entries beside each
+        // other.
+        place: Place::Home(".gemini/config/mcp_config.json"),
+        format: Format::Json,
+        servers_key: "mcpServers",
+        amenbo_writes: false,
+    },
 ];
 
 /// The app with this [`id`](McpApp::id), or `None` when nothing lists it.

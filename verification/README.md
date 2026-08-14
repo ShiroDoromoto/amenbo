@@ -570,6 +570,14 @@ nobody has answered both hold no chosen value, and only the second follows the a
 And it takes `holds:` on a screen road for the plainest reading of all — a typed line standing in the box a
 form draws it in, which is what a road asks after something that could have taken it away. That one is the
 screen's alone, `equals` being how the same value is read where there is no box.
+Both it and the `plugin config-set` beside it take `project:`, the crossing the value is held at — a
+setting belongs to one, and a terminal says which by standing in a folder bound to it, so the driver
+stands in that project's folder before it types. Naming none is the folder the run itself works from,
+which answers to the project amenbo raised for it; a premise that leaves it out while the road reads
+the value at a crossing of its own writes somewhere neither road then looks. That word is the
+terminal's alone — on screen the row the settings are opened inside has already answered it, and the
+GUI harness turns it away — and it travels as a word rather than as a binding, so a test over the
+scenario set holds it to a project something raised, the way the one that opens a project is held.
 A `listed` assert asks whether the task is in the listing; give it
 `position: first` / `last` instead of `present:` when what is under test is the order the store
 keeps, which is the only place a reorder is visible. Its neighbour `narrowed` asks the question a

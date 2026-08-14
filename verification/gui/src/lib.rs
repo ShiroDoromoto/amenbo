@@ -806,6 +806,7 @@ impl Instructor {
             (Domain::Plugin, "config-set") => {
                 let name = req(with, "name")?;
                 let key = req(with, "key")?;
+                refuse_named_crossing(with, "config-set")?;
                 match req(with, "value")? {
                     "" => format!(
                         "In the settings for \"{name}\", press the button under \"{key}\" that empties it."
@@ -1339,6 +1340,7 @@ impl Instructor {
             (Domain::Plugin, "config") => {
                 let name = req(with, "name")?;
                 let key = req(with, "key")?;
+                refuse_named_crossing(with, "config")?;
                 // A field whose value the plugin wrote back. What is read here is an
                 // absence — no box, no button — so the value has to be standing there while it is read:
                 // an empty field would draw neither of them either, and would say nothing about whether
@@ -1422,6 +1424,25 @@ fn unmapped(domain: Domain, op: &str) -> String {
 
 fn arg_str<'a>(with: &'a Args, key: &str) -> Option<&'a str> {
     with.get(key).and_then(|v| v.as_str())
+}
+
+/// The word a settings step down the other pipe has to carry, turned away here rather than quietly
+/// passing over.
+///
+/// A setting is held per crossing, and a terminal says which crossing by standing in a folder bound to
+/// it — so `project` is how a road there names one. On screen the settings are opened inside the row
+/// where the plugin crosses the project, and that row has already answered the question; a step naming
+/// it again would either be asking for a second picker there is none of, or telling a form to write
+/// somewhere the operator was never sent. Ignoring the word would hide both.
+fn refuse_named_crossing(with: &Args, op: &str) -> Result<(), String> {
+    match arg_str(with, "project") {
+        None => Ok(()),
+        Some(project) => Err(format!(
+            "`project: {project}` is how a terminal says which crossing a setting is held at, so it \
+             belongs on a `steps_cli` road — on screen the row the settings are opened inside has \
+             already answered it, and `{op}` here is about the form standing in that row"
+        )),
+    }
 }
 
 /// The words on screen for what an action made — what a later step's `target:` has to be read back
@@ -3231,6 +3252,38 @@ steps_gui:
         );
         let said = Instructor::new().render(&carded(true)).unwrap();
         assert!(said.contains("heading"), "and the line says where the word will be standing: {said}");
+    }
+
+    /// The crossing a setting is held at, named on a screen road — refused rather than passed over. A
+    /// terminal answers that question by where it is typed and has to be told; a form is opened inside
+    /// the row that already answered it, so the word can only mean a second picker there is none of.
+    /// Silence here would leave a road looking green while writing and reading somewhere else.
+    #[test]
+    fn a_screen_road_naming_the_crossing_a_setting_sits_at_is_refused() {
+        let with = || -> Args {
+            [
+                ("name".to_string(), serde_yaml::Value::from("worktree")),
+                ("key".to_string(), serde_yaml::Value::from("worker_url")),
+                ("project".to_string(), serde_yaml::Value::from("Greenhouse")),
+                ("value".to_string(), serde_yaml::Value::from("https://example.test/board")),
+                ("equals".to_string(), serde_yaml::Value::from("https://example.test/board")),
+                ("readonly".to_string(), serde_yaml::Value::from(true)),
+            ]
+            .into_iter()
+            .collect()
+        };
+        let wrote = Step::Action {
+            domain: Domain::Plugin,
+            op: "config-set".to_string(),
+            with: with(),
+            bind: None,
+        };
+        let read = Step::Assert { domain: Domain::Plugin, op: "config".to_string(), with: with() };
+        for step in [wrote, read] {
+            let err = Instructor::new().render(&step).unwrap_err();
+            assert!(err.contains("Greenhouse"), "the refusal names what was written: {err}");
+            assert!(err.contains("steps_cli"), "and where it belongs instead: {err}");
+        }
     }
 
     #[test]

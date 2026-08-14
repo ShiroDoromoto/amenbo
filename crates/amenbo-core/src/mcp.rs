@@ -12,6 +12,11 @@
 
 use std::path::Path;
 
+/// The word that binds a server to its folder. It is written into an entry by whatever sets one up and
+/// read back out of one by whatever asks whether a project is already set up ([`crate::mcp_probe`]), so
+/// the two say it once between them rather than once each.
+pub const DIR_FLAG: &str = "--dir";
+
 /// amenbo, as one project's MCP server.
 pub struct Server<'a> {
     /// The project's slug — unique on this machine (`crate::slug`), which is what makes the server's
@@ -43,7 +48,7 @@ impl Server<'_> {
 
     /// The arguments that start it, after the command itself: the server, bound to its folder.
     pub fn args(&self) -> Vec<String> {
-        vec!["mcp".to_string(), "--dir".to_string(), self.folder.display().to_string()]
+        vec!["mcp".to_string(), DIR_FLAG.to_string(), self.folder.display().to_string()]
     }
 
     /// The command, as a host writes it down — an absolute path, because the host is not a shell and

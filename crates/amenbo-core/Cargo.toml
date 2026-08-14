@@ -93,6 +93,12 @@ pulldown-cmark = { version = "0.13", default-features = false }
 # off keeps only Deflate (the method wharfy writes and a bundle is read with), dropping the
 # aes/bzip2/zstd/time extras.
 zip = { version = "8", default-features = false, features = ["deflate"] }
+# TOML, read and written, for the one app whose MCP settings are a `config.toml` (`mcp_apps`). Reading
+# is the half that needs a parser rather than a scan: what is being read is a person's own hand-edited
+# configuration, where a quoted key, an inline table, a comment or a wrapped array is ordinary — and a
+# near-miss there does not fail, it quietly reports a project as not set up. Writing goes through the
+# same crate so the two directions are one grammar rather than two. Pure Rust, no build script.
+toml = "1"
 
 [target.'cfg(windows)'.dependencies]
 # The one question the updater asks the OS: which machine is this, whatever the running binary was

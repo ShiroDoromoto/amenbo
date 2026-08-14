@@ -46,16 +46,23 @@ pub fn entry(app: &McpApp, server: &Server) -> String {
             let document = serde_json::Value::Object(document);
             serde_json::to_string_pretty(&document).unwrap_or_else(|_| document.to_string())
         }
-        // Written out rather than rendered by a TOML writer: this is one table with two keys, and the
-        // document is text a reader reads as much as it is data. A dependency for it would be a
-        // serialiser earning its place on three lines.
-        Format::Toml => format!(
-            "[{key}.{name}]\ncommand = {command}\nargs = [{args}]",
-            key = app.servers_key,
-            name = server.name(),
-            command = quoted(&server.command()),
-            args = server.args().iter().map(|a| quoted(a)).collect::<Vec<_>>().join(", "),
-        ),
+        // The same shape one tier over, through the crate that reads these files back in
+        // `mcp_probe`: a folder called `C:\work` or one with a quote in its name would otherwise hand
+        // a reader a document their app cannot parse, and writing the escape by hand beside a parser
+        // that knows it is two implementations of one grammar.
+        Format::Toml => {
+            let mut entry = toml::Table::new();
+            entry.insert("command".to_string(), toml::Value::String(server.command()));
+            entry.insert(
+                "args".to_string(),
+                toml::Value::Array(server.args().into_iter().map(toml::Value::String).collect()),
+            );
+            let mut servers = toml::Table::new();
+            servers.insert(server.name(), toml::Value::Table(entry));
+            let mut document = toml::Table::new();
+            document.insert(app.servers_key.to_string(), toml::Value::Table(servers));
+            toml::to_string(&document).unwrap_or_default().trim_end().to_string()
+        }
     }
 }
 
@@ -111,26 +118,6 @@ fn settings(app: &McpApp, folder: &std::path::Path) -> String {
     }
 }
 
-/// `text` as a TOML basic string. Nothing in a path or an argument needs escaping today — which is
-/// exactly why this is here: a folder called `C:\work` or one with a quote in its name would otherwise
-/// hand a reader a document their app cannot parse.
-fn quoted(text: &str) -> String {
-    let mut out = String::with_capacity(text.len() + 2);
-    out.push('"');
-    for ch in text.chars() {
-        match ch {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            _ => out.push(ch),
-        }
-    }
-    out.push('"');
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -165,18 +152,25 @@ mod tests {
         assert_eq!(vscode["servers"]["amenbo-shop"]["command"], "/usr/local/bin/amenbo");
     }
 
-    /// The one app whose settings are TOML: a table named after the entry, with the same two keys.
+    /// The one app whose settings are TOML: a table named after the entry, with the same two keys. It
+    /// is read back rather than compared as text — what the reader's app does with this is parse it,
+    /// so that is the question, and the crate is free to lay a document out as it likes.
     #[test]
     fn a_toml_entry_is_a_table_named_after_the_server() {
         let written = entry(app("codex-cli"), &server(Path::new("/work/shop"), Path::new("/bin/a")));
+        assert!(written.contains("[mcp_servers.amenbo-shop]"), "the table is named: {written}");
+
+        let read: toml::Value = toml::from_str(&written).expect("valid TOML");
+        let entry = &read["mcp_servers"]["amenbo-shop"];
+        assert_eq!(entry["command"].as_str(), Some("/bin/a"));
         assert_eq!(
-            written,
-            "[mcp_servers.amenbo-shop]\ncommand = \"/bin/a\"\nargs = [\"mcp\", \"--dir\", \"/work/shop\"]"
+            entry["args"].as_array().expect("a list").iter().filter_map(|v| v.as_str()).collect::<Vec<_>>(),
+            vec!["mcp", "--dir", "/work/shop"]
         );
     }
 
     /// A Windows path carries the one character TOML reads as an escape. The document has to survive
-    /// it, which is the whole reason the value goes through a quoting step at all.
+    /// it, which is why the value goes through a writer rather than being quoted by hand.
     #[test]
     fn a_path_with_a_backslash_survives_the_toml() {
         let written = entry(
@@ -188,8 +182,11 @@ mod tests {
                 exe: Path::new(r"C:\Program Files\amenbo\amenbo.exe"),
             },
         );
-        assert!(written.contains(r#"command = "C:\\Program Files\\amenbo\\amenbo.exe""#), "{written}");
-        assert!(written.contains(r#""C:\\work\\shop""#), "{written}");
+
+        let read: toml::Value = toml::from_str(&written).expect("valid TOML");
+        let entry = &read["mcp_servers"]["amenbo-shop"];
+        assert_eq!(entry["command"].as_str(), Some(r"C:\Program Files\amenbo\amenbo.exe"));
+        assert_eq!(entry["args"][2].as_str(), Some(r"C:\work\shop"));
     }
 
     /// What the request has to say to be acted on: which file, that the rest of it stays, and the

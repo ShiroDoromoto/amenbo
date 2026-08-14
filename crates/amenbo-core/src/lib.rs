@@ -29,6 +29,7 @@ pub mod lint;
 pub mod mcp;
 pub mod mcp_apps;
 pub mod mcp_bundle;
+pub mod mcp_probe;
 pub mod mcp_request;
 pub mod migrate;
 pub mod model;

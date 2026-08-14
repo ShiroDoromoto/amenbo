@@ -402,9 +402,12 @@ pub enum Command {
     /// Which project the folder belongs to is the `.amenbo` pointer's answer there, exactly as it is
     /// for a person typing in it.
     ///
-    /// One server, one folder (`AMB-D-666`): a host that wants two projects writes two entries. This
-    /// build serves the two reading tools — `agent`, the whole of how to work here, and
-    /// `agent_command`, one command's spec.
+    /// One server, one folder (`AMB-D-666`): a host that wants two projects writes two entries.
+    ///
+    /// Three tools (`AMB-D-667`): `agent`, the whole of how to work here; `agent_command`, one
+    /// command's spec; and `run`, which types the caller's own words. Two things are named rather than
+    /// passed through — the facet is this server's to declare (`AMB-D-668`), and `bind` and `init` are
+    /// refused, either of them being a way for an AI to re-point the folder it was given.
     Mcp {
         /// the folder this server works in — every tool call runs there. The project is whatever its
         /// `.amenbo` points at

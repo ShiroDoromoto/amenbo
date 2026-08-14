@@ -12,9 +12,13 @@
 //! caller sends can move it. That is what keeps `--project`, which is a person's word and not an AI's,
 //! out of reach from this side.
 //!
-//! This build carries the two reading tools alone — `agent` and `agent_command`. Neither writes, so
-//! there is nothing here for a facet to name and nothing to shape the caller's own arguments against;
-//! `run`, which takes both on, is its own step.
+//! Three tools (`AMB-D-667`): `agent` and `agent_command`, which read the spec, and `run`, which
+//! carries the caller's own words to any of amenbo's commands. Passing them through is what keeps
+//! `amenbo agent` the single description of what can be typed — one command per typed tool would put
+//! that description in two places and spend a host's tool budget on it. What passing through costs is
+//! that everything is allowed unless it is named, and two things are named: the facet is the server's
+//! to declare (`AMB-D-668`), and `bind` / `init` are refused, since either would let an AI re-point the
+//! folder it was given and step outside it (`AMB-D-666`).
 
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
@@ -24,6 +28,8 @@ use serde_json::{json, Value};
 
 use amenbo_core::agent::VERSION;
 use amenbo_core::config::Paths;
+
+use crate::{flag_before_the_name, FACET_FLAG};
 
 /// The protocol revisions this server can speak, newest first. A caller naming one of these is
 /// answered in its own revision; anything else is answered in the newest, which is what the spec's
@@ -37,6 +43,15 @@ const PARSE_ERROR: i64 = -32700;
 const INVALID_REQUEST: i64 = -32600;
 const METHOD_NOT_FOUND: i64 = -32601;
 const INVALID_PARAMS: i64 = -32602;
+
+/// The facet this server declares for every call it makes, whatever the caller wrote (`AMB-D-668`).
+const OUR_FACET: &str = "ai";
+
+/// The commands `run` will not carry, whatever the caller writes (`AMB-D-667`). Both place the
+/// `.amenbo` pointer, and this server's whole shape is one folder named by the person who configured
+/// it (`AMB-D-666`) — a pointer the AI may rewrite is that shape undone. There is no flag to get past
+/// this: a person who wants either types it in the folder itself.
+const REFUSED: &[&str] = &["bind", "init"];
 
 /// What one run of the child left behind: whether it succeeded, and the text to hand back.
 pub struct Ran {
@@ -170,7 +185,7 @@ fn initialize(params: &Value) -> Value {
         // Tools, and nothing else: no resources, no prompts, and no list that changes under the host.
         "capabilities": { "tools": { "listChanged": false } },
         "serverInfo": { "name": Paths::command_name(), "version": VERSION },
-        "instructions": "Call `agent` first and follow what it says — it is how work is done in this folder, in full. `agent_command` pulls one command's flags, arguments and examples when you are about to use it.",
+        "instructions": "Call `agent` first and follow what it says — it is how work is done in this folder, in full. `agent_command` pulls one command's flags, arguments and examples when you are about to use it, and `run` types it.",
     })
 }
 
@@ -198,30 +213,55 @@ fn tools() -> Value {
                 "additionalProperties": false,
             },
         },
+        {
+            "name": "run",
+            "description": "Run an amenbo command in this folder and hand back exactly what it wrote. The words are the ones you would type after `amenbo`, one per array element — pull the command's spec with `agent_command` first rather than guessing a flag. Add `--json` yourself where you want machine-readable output. Do not pass `--actor`: this server declares the facet, and one you write is dropped. `bind` and `init` are refused here — ask the person to run either in the folder itself.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "args": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "the command and its flags, one word per element, as they would be typed after `amenbo` — for example [\"task\", \"list\", \"--filter\", \"status:todo\", \"--json\"]. Empty runs amenbo with no arguments, which is today's work",
+                    },
+                },
+                "required": ["args"],
+                "additionalProperties": false,
+            },
+        },
     ])
 }
 
+/// What a tool call comes to: a command line to run, or a refusal to hand back without running one.
+enum Shaped {
+    Run(Vec<String>),
+    Refused(String),
+}
+
 /// Run one tool call. `Err` is a protocol fault — a tool nobody serves, an argument that is not there —
-/// which is the caller's mistake to correct. A tool that ran and was refused comes back as `Ok` with
-/// `isError`, so the refusal reaches the model in amenbo's own words.
+/// which is the caller's mistake to correct. Everything the model is meant to *read* comes back as `Ok`
+/// with `isError`: amenbo's own refusal, and this server's, which the model has to see in order to hand
+/// it to the person instead of trying again.
 fn call(params: &Value, caller: &dyn CallAmenbo) -> Result<Value, (i64, String)> {
     let name = params
         .get("name")
         .and_then(Value::as_str)
         .ok_or_else(|| (INVALID_PARAMS, "A tool call must name a tool.".to_string()))?;
     let args = params.get("arguments").unwrap_or(&Value::Null);
-    let argv = argv_for(name, args)?;
-    let ran = caller.call(&argv);
+    let ran = match argv_for(name, args)? {
+        Shaped::Run(argv) => caller.call(&argv),
+        Shaped::Refused(why) => Ran { ok: false, text: why },
+    };
     Ok(json!({
         "content": [{ "type": "text", "text": ran.text }],
         "isError": !ran.ok,
     }))
 }
 
-/// What one tool call becomes on the command line. Everything a tool takes is named here — a caller's
-/// arguments never reach the child as they arrived, which is what keeps this build's two tools to the
-/// reading they are.
-fn argv_for(name: &str, args: &Value) -> Result<Vec<String>, (i64, String)> {
+/// What one tool call becomes on the command line. The two reading tools name every word themselves, so
+/// nothing a caller wrote reaches the child; `run` is the one that carries the caller's own words, and
+/// what it does to them is [`shape`].
+fn argv_for(name: &str, args: &Value) -> Result<Shaped, (i64, String)> {
     let line: Vec<&str> = match name {
         "agent" => vec!["agent", "--json"],
         "agent_command" => {
@@ -233,11 +273,116 @@ fn argv_for(name: &str, args: &Value) -> Result<Vec<String>, (i64, String)> {
                 .ok_or_else(|| {
                     (INVALID_PARAMS, "agent_command takes `command`: the name of the command to describe.".to_string())
                 })?;
-            return Ok(["agent", "--command", command, "--json"].iter().map(|a| (*a).to_string()).collect());
+            vec!["agent", "--command", command, "--json"]
+        }
+        "run" => {
+            let words = args
+                .get("args")
+                .and_then(Value::as_array)
+                .ok_or_else(|| (INVALID_PARAMS, "run takes `args`: the words to type after amenbo, one per element.".to_string()))?
+                .iter()
+                .map(|w| w.as_str().map(str::to_string))
+                .collect::<Option<Vec<String>>>()
+                .ok_or_else(|| (INVALID_PARAMS, "run takes `args` as strings — one word per element, not a single line.".to_string()))?;
+            return Ok(shape(&words));
         }
         other => return Err((INVALID_PARAMS, format!("No tool named '{other}'."))),
     };
-    Ok(line.iter().map(|a| (*a).to_string()).collect())
+    Ok(Shaped::Run(line.iter().map(|a| (*a).to_string()).collect()))
+}
+
+/// Turn the caller's own words into the command line the child is run with (`AMB-D-667`).
+///
+/// Two things happen to them and nothing else does. The facet the caller wrote is dropped and this
+/// server's is put at the front (`AMB-D-668`) — a caller that could write `--actor human` would have its
+/// writes recorded as the person's and its reach widened past the bound project, so the value is never
+/// the caller's to choose. And `bind` / `init` are refused outright.
+///
+/// Where the caller's words stop being amenbo's is [`read_line`]'s answer: after `plugin run <name>`
+/// every word is the plugin's (`AMB-D-346`), and a `--actor` standing there is a word on the plugin's
+/// own face, not a facet for amenbo. Taking it away would quietly break a call amenbo never read.
+fn shape(words: &[String]) -> Shaped {
+    let line = read_line(words);
+    if let Some(refused) = line.subcommand.as_deref().filter(|s| REFUSED.contains(s)) {
+        return Shaped::Refused(format!(
+            "`{refused}` is not served over MCP: it writes the pointer that says which project this folder is, and this server was given one folder to work in. Ask the person to run `{} {refused} …` in the folder itself.",
+            Paths::command_name()
+        ));
+    }
+    let mut argv = vec![FACET_FLAG.to_string(), OUR_FACET.to_string()];
+    argv.extend(without_the_callers_facet(words, line.plugin_tail));
+    Shaped::Run(argv)
+}
+
+/// How the caller's line reads to the parser: the subcommand it names, and where its words stop being
+/// amenbo's own.
+struct Line {
+    /// The first word that is not one of amenbo's flags — `None` for a line that is all flags, which is
+    /// amenbo with no command (today's work).
+    subcommand: Option<String>,
+    /// Everything from here on belongs to a plugin; `words.len()` when nothing does.
+    plugin_tail: usize,
+}
+
+/// Walk the caller's words the way the parser will: over amenbo's own flags, to the subcommand, and — on
+/// the one path that leads there — past `plugin run` to the plugin's name.
+fn read_line(words: &[String]) -> Line {
+    let mut i = 0;
+    let mut subcommand = None;
+    let mut path = ["plugin", "run"].iter();
+    let mut step = path.next();
+    while let Some(word) = words.get(i) {
+        if let Some(takes_value) = flag_before_the_name(word) {
+            i += if takes_value { 2 } else { 1 };
+            continue;
+        }
+        if subcommand.is_none() {
+            subcommand = Some(word.clone());
+        }
+        match step {
+            Some(expected) if word == *expected => {
+                i += 1;
+                step = path.next();
+            }
+            // Any other word means this line goes somewhere else entirely, and all of it is amenbo's.
+            _ => break,
+        }
+        if step.is_none() {
+            // `plugin run` is complete. Amenbo's own flags may still stand ahead of the name, and the
+            // name itself is amenbo's to read; everything after it is the plugin's.
+            while let Some(takes_value) = words.get(i).and_then(|w| flag_before_the_name(w)) {
+                i += if takes_value { 2 } else { 1 };
+            }
+            return Line { subcommand, plugin_tail: words.len().min(i + 1) };
+        }
+    }
+    Line { subcommand, plugin_tail: words.len() }
+}
+
+/// The caller's words with every facet of theirs taken out of amenbo's own half of the line.
+fn without_the_callers_facet(words: &[String], plugin_tail: usize) -> Vec<String> {
+    let mut kept = Vec::with_capacity(words.len());
+    let mut i = 0;
+    while let Some(word) = words.get(i) {
+        if i >= plugin_tail {
+            kept.push(word.clone());
+            i += 1;
+            continue;
+        }
+        let head = word.split_once('=').map_or(word.as_str(), |(k, _)| k);
+        if head != FACET_FLAG {
+            kept.push(word.clone());
+            i += 1;
+            continue;
+        }
+        i += 1;
+        // `--actor ai` is two words unless it was written as one. A flag standing where the value should
+        // be is somebody else's to report, so it is left where it is rather than eaten.
+        if !word.contains('=') && words.get(i).is_some_and(|v| !v.starts_with('-')) {
+            i += 1;
+        }
+    }
+    kept
 }
 
 fn reply(id: Value, result: Value) -> Value {
@@ -309,13 +454,25 @@ mod tests {
         assert_eq!(out["result"]["protocolVersion"], PROTOCOL_VERSIONS[0]);
     }
 
+    /// The words `run` was handed, as the child would have been given them.
+    fn ran(args: &[&str]) -> Vec<String> {
+        let caller = Recorder::new();
+        let call = json!({
+            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": { "name": "run", "arguments": { "args": args } },
+        });
+        let out = ask(&call.to_string(), &caller);
+        assert_eq!(out["result"]["isError"], false, "{out}");
+        caller.last()
+    }
+
     #[test]
-    fn the_listing_carries_the_two_reading_tools() {
+    fn the_listing_carries_the_three_tools() {
         let caller = Recorder::new();
         let out = ask(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#, &caller);
         let tools = out["result"]["tools"].as_array().expect("tools is an array");
         let names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
-        assert_eq!(names, vec!["agent", "agent_command"], "this build serves the reading two");
+        assert_eq!(names, vec!["agent", "agent_command", "run"], "the three the decision names");
         for tool in tools {
             assert!(
                 tool["description"].as_str().is_some_and(|d| !d.is_empty()),
@@ -356,11 +513,134 @@ mod tests {
     }
 
     #[test]
+    fn run_carries_the_caller_s_own_words_and_names_the_facet_itself() {
+        assert_eq!(
+            ran(&["task", "list", "--filter", "status:todo", "--json"]),
+            vec!["--actor", "ai", "task", "list", "--filter", "status:todo", "--json"],
+        );
+    }
+
+    /// The whole of the facet rule: whatever the caller wrote is dropped, and this server's stands in
+    /// its place. A caller that could write `human` would have its writes recorded as the person's.
+    #[test]
+    fn a_facet_the_caller_wrote_never_survives() {
+        for written in [
+            vec!["--actor", "human", "task", "add", "--title", "x"],
+            vec!["task", "add", "--title", "x", "--actor", "human"],
+            vec!["--actor=human", "task", "add", "--title", "x"],
+            vec!["--actor", "ai", "task", "add", "--title", "x"],
+        ] {
+            let argv = ran(&written);
+            assert_eq!(&argv[..2], ["--actor", "ai"], "the facet is named once, at the front: {argv:?}");
+            assert_eq!(
+                argv.iter().filter(|w| w.starts_with(FACET_FLAG)).count(),
+                1,
+                "no facet of the caller's is left anywhere: {argv:?}",
+            );
+            assert!(argv.contains(&"--title".to_string()), "the rest of the line is untouched: {argv:?}");
+        }
+    }
+
+    /// A `--actor` with a flag where its value should be is somebody else's to report — eating the next
+    /// word would turn a bad line into a different command.
+    #[test]
+    fn a_facet_with_no_value_does_not_swallow_what_follows() {
+        assert_eq!(ran(&["--actor", "--json", "status"]), vec!["--actor", "ai", "--json", "status"]);
+    }
+
+    /// After `plugin run <name>` every word is the plugin's (`AMB-D-346`) — including one spelled like
+    /// amenbo's facet, which amenbo never reads there.
+    #[test]
+    fn a_word_of_the_plugin_s_own_is_left_alone() {
+        assert_eq!(
+            ran(&["plugin", "run", "worktree", "start", "3127", "--actor", "human"]),
+            vec!["--actor", "ai", "plugin", "run", "worktree", "start", "3127", "--actor", "human"],
+        );
+        // Amenbo's own flags may stand ahead of the name, and one there is still amenbo's.
+        assert_eq!(
+            ran(&["plugin", "run", "--json", "worktree", "--actor", "human"]),
+            vec!["--actor", "ai", "plugin", "run", "--json", "worktree", "--actor", "human"],
+        );
+        // The path has to be complete: `plugin list` hands nothing to anybody.
+        assert_eq!(
+            ran(&["plugin", "list", "--actor", "human"]),
+            vec!["--actor", "ai", "plugin", "list"],
+        );
+    }
+
+    #[test]
+    fn run_with_no_words_is_amenbo_with_no_command() {
+        assert_eq!(ran(&[]), vec!["--actor", "ai"]);
+    }
+
+    /// Neither may be reached from here: both write the pointer that says which project this folder is,
+    /// and the server was given one folder to work in.
+    #[test]
+    fn bind_and_init_are_refused_and_nothing_is_run() {
+        for line in [
+            vec!["bind", "--project", "somewhere-else"],
+            vec!["init", "--name", "mine"],
+            vec!["--json", "bind", "--project", "somewhere-else"],
+        ] {
+            let caller = Recorder::new();
+            let call = json!({
+                "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                "params": { "name": "run", "arguments": { "args": line } },
+            });
+            let out = ask(&call.to_string(), &caller);
+            assert!(out.get("error").is_none(), "the refusal is the tool's answer, to be read: {out}");
+            assert_eq!(out["result"]["isError"], true, "{out}");
+            assert!(
+                out["result"]["content"][0]["text"].as_str().is_some_and(|t| t.contains(line[0]) || t.contains("bind")),
+                "the refusal names what was refused: {out}",
+            );
+            assert!(caller.seen.borrow().is_empty(), "nothing is run for a refused line");
+        }
+    }
+
+    /// A word that merely reads like one of the two is not one: only the command position is.
+    #[test]
+    fn a_refused_name_written_somewhere_else_is_just_a_word() {
+        assert_eq!(
+            ran(&["task", "add", "--title", "bind"]),
+            vec!["--actor", "ai", "task", "add", "--title", "bind"],
+        );
+    }
+
+    #[test]
+    fn run_without_words_to_run_is_the_caller_s_mistake() {
+        let caller = Recorder::new();
+        let out = ask(r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"run","arguments":{}}}"#, &caller);
+        assert_eq!(out["error"]["code"], INVALID_PARAMS);
+        // One line where a list belongs is the mistake worth naming: it would otherwise be run as a
+        // single word nobody answers to.
+        let out = ask(
+            r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"run","arguments":{"args":"task list"}}}"#,
+            &caller,
+        );
+        assert_eq!(out["error"]["code"], INVALID_PARAMS);
+        let out = ask(
+            r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"run","arguments":{"args":["task",2]}}}"#,
+            &caller,
+        );
+        assert_eq!(out["error"]["code"], INVALID_PARAMS);
+        assert!(caller.seen.borrow().is_empty(), "nothing is run for a call that cannot be shaped");
+    }
+
+    /// `--yes` is never added (`AMB-D-667`): a destructive command asked for over MCP stops at amenbo's
+    /// own confirmation, which is what makes it the person's to give.
+    #[test]
+    fn nothing_is_added_beyond_the_facet() {
+        let argv = ran(&["project", "delete", "AMB-P-1"]);
+        assert_eq!(argv, vec!["--actor", "ai", "project", "delete", "AMB-P-1"]);
+    }
+
+    #[test]
     fn a_tool_nobody_serves_is_refused_by_name() {
         let caller = Recorder::new();
-        let out = ask(r#"{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"run","arguments":{}}}"#, &caller);
+        let out = ask(r#"{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"typo","arguments":{}}}"#, &caller);
         assert_eq!(out["error"]["code"], INVALID_PARAMS);
-        assert!(out["error"]["message"].as_str().is_some_and(|m| m.contains("run")), "the refusal names it");
+        assert!(out["error"]["message"].as_str().is_some_and(|m| m.contains("typo")), "the refusal names it");
         assert!(caller.seen.borrow().is_empty());
     }
 

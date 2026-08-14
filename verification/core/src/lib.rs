@@ -489,6 +489,21 @@ const REGISTRY: &[OpSpec] = &[
     // inside it. That is also what lets this stand a world up — a road that opens on a folder somebody
     // already wired has no other way to arrive there, the wiring being a file and not a record.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "wire-ai", required: &["tool"], refs: &[], strings: &["tool", "dir"], binds: false },
+    // An app already reaching a folder over MCP — the state a folder nothing opens a shell in is in,
+    // and the one thing that tells it apart from a folder nobody has set up yet. `app` is the app by
+    // the name the build's own catalog answers to, and where it lands follows `write-file`'s rule:
+    // the run's own folder unless the step names one a `folder` step bound.
+    //
+    // **Only an app whose settings live inside the folder may be named**, and the driver refuses the
+    // rest. Most of the catalog keeps one file for the whole machine — the operator's own — and a run
+    // that wrote into it would be setting the person driving it up as a side effect of a road.
+    //
+    // Unlike `wire-ai` this cannot ask the build for what to write: the entry an app is set up from is
+    // handed over on screen, and the one app amenbo writes a file for takes a bundle a person opens.
+    // So the shape is the driver's, and it drifts the safe way round — an entry the build no longer
+    // reads leaves the folder unreached, which turns the road that says the report went red rather
+    // than green.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "mcp-reach", required: &["app"], refs: &[], strings: &["app", "dir"], binds: false },
     // The moves the same road is made of on screen, where the report stands on the project's own board and
     // carries every button there is. The copy is the handing over itself — it puts the text on the
     // clipboard, which no screenshot reads, so the road ends at the press and what the text says is held
@@ -1546,6 +1561,10 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // would put the launch command's own name in the scenario, which is the one thing the build under
     // test is supposed to say. This asks that build for its own text and makes the edit with it.
     (Domain::Repo, "wire-ai"),
+    // And a folder an app already reaches over MCP, which is the same kind of world by a different
+    // road: what reaches it is an entry in a settings file, so nothing in the store arrives there
+    // either. A screen road that opens on such a folder has no other way to be standing in one.
+    (Domain::Repo, "mcp-reach"),
     // A catalog registered and a plugin already on the machine. Both are worlds a screen only reads:
     // the browsing view draws rows a catalog served, and a plugin's row is there once one is
     // installed. Standing a catalog of the run's own comes with them, since a catalog is trusted on

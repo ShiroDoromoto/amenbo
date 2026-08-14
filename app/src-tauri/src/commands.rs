@@ -3541,7 +3541,9 @@ pub fn agent_hook_consent_clear(project_id: i64) -> Result<(), CmdError> {
 /// catalog — it appears under every tool, and whichever one the reader picks is the one they are handed.
 ///
 /// A folder that is not there is skipped: nothing can be pasted into it, so a row naming it would be one
-/// the reader cannot end. What silences the report otherwise is core's
+/// the reader cannot end. So is one reached over MCP with no sign of an AI being worked with in it
+/// ([`mcp_reaches`], [`amenbo_core::harness::ai_in_use`]) — the hook this asks for runs in a shell, and
+/// nothing there opens one (`AMB-D-680`). What silences the report otherwise is core's
 /// ([`amenbo_core::harness::setup_notice`]) — a refusal, or the wiring landing. A standing yes is not
 /// among them: consent is not wiring.
 ///
@@ -3562,7 +3564,14 @@ pub fn agent_hook_project_wiring(project_id: i64) -> Result<Vec<AgentHookWiringD
         if !path.is_dir() {
             continue;
         }
-        let Some(notice) = harness::setup_notice(&harness::probe(path, cmd), consent) else {
+        let found = harness::probe(path, cmd);
+        // Asked in this order because the cheap half answers nearly every folder: a folder anybody works
+        // an AI in is reported whatever MCP holds, and only a traceless one is worth reading settings
+        // files for.
+        if !harness::ai_in_use(path, &found) && mcp_reaches(path) {
+            continue;
+        }
+        let Some(notice) = harness::setup_notice(&found, consent) else {
             continue;
         };
         for one in harness::offered(&notice) {
@@ -3577,6 +3586,27 @@ pub fn agent_hook_project_wiring(project_id: i64) -> Result<Vec<AgentHookWiringD
         .filter(|(_, dirs)| !dirs.is_empty())
         .map(|(one, dirs)| AgentHookWiringDto { tool: agent_hook_tool(one, cmd), dirs })
         .collect())
+}
+
+/// Whether an app already reaches **this folder** over MCP (`AMB-D-680`) — the same read-back the
+/// settings screen draws its rows from ([`amenbo_core::mcp_probe`]), asked here of one folder rather
+/// than of a project. There is no second way of reading it: an entry amenbo would not report as set up
+/// is not one this may act on either.
+///
+/// **The entry has to name this folder**, and not merely be there — which is why the folders it reaches
+/// are read rather than [`Setup::set`](amenbo_core::mcp_probe::Setup::set). Most of the catalog keeps
+/// one settings file for the whole machine, so an entry a reader wrote for some other project sits in
+/// the same file as this one's would, and "there is an entry" would silence the report for every
+/// traceless folder on the device. `AMB-D-680` says which way to fall when the answer is unclear: a
+/// notice shown to somebody who did not need it is noise they can close, and one withheld is a setup
+/// they never learn is unfinished.
+fn mcp_reaches(dir: &std::path::Path) -> bool {
+    use amenbo_core::{mcp::Server, mcp_probe};
+
+    let folders = [dir.to_path_buf()];
+    let exe = mcp_exe();
+    let server = Server { folders: &folders, exe: &exe };
+    mcp_probe::probe(&server).iter().any(|found| found.folders.iter().any(|at| at == dir))
 }
 
 /// The request for any tool in the catalog, whatever this project has already wired (`AMB-D-670`).
@@ -8317,6 +8347,111 @@ mod tests {
         assert!(
             agent_hook_project_wiring(refused).unwrap().is_empty(),
             "a no is silence, not a standing row",
+        );
+
+        let _ = std::fs::remove_dir_all(&tmp);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// A folder an app reaches over MCP, showing no sign that an AI is worked with in it, is not counted
+    /// as waiting on the session-start hook (`AMB-D-680`). What that hook wires is a shell command, and
+    /// nothing opens a shell there — the same duty is already done by the server's own `agent` tool.
+    ///
+    /// The three folders below are the three ways out of it, and each one is a way the report stands:
+    /// the folder says which provider it uses, it leaves instructions for whichever AI opens it, or the
+    /// entry is not about this folder at all.
+    #[test]
+    fn a_folder_reached_only_over_mcp_is_not_waiting_on_the_hook() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("app-agenthookmcp-home");
+        let base = amenbo_scratch::scratch("app-agenthookmcp-dirs");
+        let _ = std::fs::remove_dir_all(&tmp);
+        let _ = std::fs::remove_dir_all(&base);
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        let new_project = |name: &str| -> i64 {
+            let mut store = Store::open().unwrap();
+            store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: name.into(),
+                    view: View::Board,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap()
+                .id
+        };
+        // Bound the way the GUI binds one — which writes amenbo's own managed block into this folder's
+        // `CLAUDE.md` and `AGENTS.md`. That is the state every folder here starts in, and it is not a
+        // sign of anyone: what follows is about what the reader adds to it.
+        let bound = |project: i64, leaf: &str| -> std::path::PathBuf {
+            let d = base.join(leaf);
+            std::fs::create_dir_all(&d).unwrap();
+            let d = std::fs::canonicalize(&d).unwrap();
+            project_bind_folder(project, d.to_string_lossy().to_string()).unwrap();
+            d
+        };
+        // An entry as an app that keeps its settings inside the folder writes one. `.mcp.json` is the
+        // catalog's one place that is neither a harness's own directory nor inside one, so what silences
+        // the report here is this rule rather than a trace the entry brought with it.
+        let mcp_entry = |dir: &std::path::Path, bound_to: &[&std::path::Path]| {
+            let mut args = vec!["mcp".to_string(), "--dir".to_string()];
+            args.extend(bound_to.iter().map(|at| at.to_string_lossy().to_string()));
+            let mut servers = serde_json::Map::new();
+            servers.insert(
+                amenbo_core::mcp::name().to_string(),
+                serde_json::json!({ "command": "amenbo", "args": args }),
+            );
+            let document = serde_json::json!({ "mcpServers": servers });
+            std::fs::write(dir.join(".mcp.json"), document.to_string()).unwrap();
+        };
+
+        let only = new_project("MCPからだけ届くPJ");
+        let only_dir = bound(only, "mcp-only");
+        // Named second in an entry that carries two folders — one server reaches a set of them, and a
+        // folder is no less reached for not being the one the reader started from.
+        mcp_entry(&only_dir, &[&base.join("somebody-elses-folder"), &only_dir]);
+        assert!(
+            agent_hook_project_wiring(only).unwrap().is_empty(),
+            "a hook nothing would ever run is not work left",
+        );
+
+        // The same folder, once the reader has written instructions of their own beside amenbo's block.
+        // That is an AI being worked with here, so the report is back — and it is the whole catalog, the
+        // folder still pointing at no one provider.
+        let claude = only_dir.join("CLAUDE.md");
+        let managed = std::fs::read_to_string(&claude).unwrap();
+        std::fs::write(&claude, format!("# how to work here\n\n{managed}")).unwrap();
+        assert_eq!(
+            agent_hook_project_wiring(only).unwrap().len(),
+            amenbo_core::harness::HARNESSES.len(),
+            "a folder that instructs an AI is worked in, whatever else reaches it",
+        );
+
+        // A folder that says which provider it uses is worked in too, and waits on that one.
+        let traced = new_project("MCPもシェルも使うPJ");
+        let traced_dir = bound(traced, "mcp-traced");
+        mcp_entry(&traced_dir, &[&traced_dir]);
+        claude_folder(&traced_dir, false);
+        assert_eq!(
+            agent_hook_project_wiring(traced)
+                .unwrap()
+                .iter()
+                .map(|one| one.tool.tool.as_str())
+                .collect::<Vec<_>>(),
+            ["claude-code"],
+            "a traced folder waits on its provider, MCP or no MCP",
+        );
+
+        // And an entry that names some other folder is not this folder's. Most of the catalog keeps one
+        // settings file for the whole machine, so reading "an entry exists" as "this folder is reached"
+        // would silence every traceless folder on the device.
+        let elsewhere = new_project("隣のフォルダのエントリしか無いPJ");
+        let elsewhere_dir = bound(elsewhere, "mcp-elsewhere");
+        mcp_entry(&elsewhere_dir, &[&base.join("somebody-elses-folder")]);
+        assert!(
+            !agent_hook_project_wiring(elsewhere).unwrap().is_empty(),
+            "an entry about another folder says nothing about this one",
         );
 
         let _ = std::fs::remove_dir_all(&tmp);

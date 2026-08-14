@@ -1,0 +1,139 @@
+# The report on a project's board asks for a session-start hook, and what a hook wires is a shell
+# command. An AI that reaches a folder over MCP has no shell and never opens the folder, so that hook
+# could not fire for it — and the same duty is already done by the server's own `agent` tool. Asking
+# anyway is a setup that cannot be finished, standing on a board that has no other way to be rid of it.
+#
+# Whether it is asked turns on two reads of one folder, and neither leaves a record: an entry in an
+# app's settings, and whether anything in the folder says an AI is worked with there. Nothing in the
+# store reaches either, which is why the world below is written rather than seeded — and why this is
+# only ever true of a folder somebody set up, never of a fresh one.
+#
+# The screen is the only place this is visible. A terminal is a shell by definition, so the same
+# judgement has nothing to be about there, and the report a board carries has no line in a terminal to
+# be absent from.
+#
+# The world is two projects, each with a folder of its own, differing in one thing. One is reached over
+# MCP and shows no sign of an AI being worked with in it — amenbo's own managed block is in it, as it
+# is in every folder amenbo bound, and that is not a sign of anybody. The other carries a provider's
+# directory with settings that do nothing about amenbo, which is where every reader starts. A card on
+# each board spends the first loop, so a board with no report on it is a board the report left rather
+# than one the first loop is standing on. The answer is left where a fresh store leaves it, never
+# given: a refusal would silence the report too, and this road needs it silent for the one reason
+# under test.
+id: not-be-asked-to-wire-a-folder-only-mcp-reaches
+title: A folder an app already reaches over MCP is not asked to start its AI on amenbo at session start
+description: >
+  The reader set an app up to reach one of their folders over MCP, and works in another from a
+  terminal. Both are bound to amenbo, and only one of them can run a session-start hook at all.
+
+  The road reads the two boards against each other. The folder that shows a provider it uses is
+  reported, by name, with the file the text goes into — the state everyone starts in. The folder only
+  MCP reaches carries no report at all: nothing names a tool there and nothing names a file, because
+  there is no hand there to paste one.
+
+  Reading them apart is the whole of it. A build that lost this asks the MCP reader to finish a setup
+  that has nothing to finish, and a build that overreached goes quiet on the reader who does open a
+  shell — who never learns their folder is unwired, the report being the only place it is said.
+given:
+  # The folder a terminal AI works in: the provider's own directory, with settings that do nothing
+  # about amenbo. This is the state the report exists for, and the road's control.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse
+    as: shell
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: .claude/settings.json
+      content: |
+        {
+          "permissions": {
+            "allow": []
+          }
+        }
+
+  # And the folder an app reaches over MCP, with nothing in it that says an AI is worked with there.
+  # Nothing else separates the two.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Seed Store
+      dir: seed-store
+    as: reached
+
+  - type: action
+    domain: repo
+    op: mcp-reach
+    with:
+      dir: seed-store
+      app: claude-code
+
+  # A card apiece, so each board draws its columns rather than the first loop.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: Order the spring seed trays
+      project: shell
+    as: shell-card
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: shell-card
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: Count what is left in the seed drawer
+      project: reached
+    as: reached-card
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: reached-card
+
+steps_gui:
+  # The board of the folder a terminal works in, which is what the report is for. It names the provider
+  # the folder traces and the file the text goes into — and this is also what proves the screen under
+  # the next step is one a report is drawn on at all.
+  - type: action
+    domain: project
+    op: open
+    with:
+      project: Greenhouse
+
+  - type: assert
+    domain: repo
+    op: ai-launch-notice
+    with:
+      tool: claude-code
+      paste_into: .claude/settings.json
+      present: true
+
+  # And the board of the folder only MCP reaches. Same build, same screen, one card on it — and no
+  # report, because there is nothing here that a session-start hook could be wired into.
+  - type: action
+    domain: project
+    op: open
+    with:
+      project: Seed Store
+
+  - type: assert
+    domain: repo
+    op: ai-launch-notice
+    with:
+      tool: claude-code
+      paste_into: .claude/settings.json
+      present: false

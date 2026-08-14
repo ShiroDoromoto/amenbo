@@ -111,6 +111,56 @@ impl Driver<'_> {
                 std::fs::write(&full, configuration).map_err(|e| format!("could not write {into}: {e}"))?;
                 Ok(Outcome::action(format!("made the edit {tool}'s text asks for, in {into}")))
             }
+            // An app already reaching this folder over MCP. amenbo hands that entry over on screen, and
+            // the one app it writes a file for takes a bundle a person opens — so there is nothing to
+            // ask the build for here, and the shape below is the driver's own. What that costs is
+            // drift, and it costs it the safe way round: an entry the build no longer reads leaves the
+            // folder unreached, so a road that says the report about wiring went comes out red.
+            //
+            // Only an app that keeps its settings inside the folder is named. The rest keep one file
+            // for the whole machine, which belongs to whoever is driving this run.
+            "mcp-reach" => {
+                let app = req_str(with, "app")?;
+                let (place, servers) = match app {
+                    "claude-code" => (".mcp.json", "mcpServers"),
+                    "vscode" => (".vscode/mcp.json", "servers"),
+                    other => {
+                        return Err(format!(
+                            "`app: {other}` keeps its MCP settings somewhere other than this folder — \
+                             name one that keeps them inside it (claude-code, vscode)"
+                        ))
+                    }
+                };
+                // Where it lands is `write-file`'s rule, said by `dir:` and never by the path: the run's
+                // own folder, or one a `folder` step bound.
+                let folder = match with.get("dir") {
+                    Some(_) => self.folder(with)?,
+                    None => self.session.cwd.clone(),
+                };
+                let full = folder.join(self.inside(place)?);
+                // The folder the entry binds the server to, canonical: that is the form amenbo records
+                // a binding in, and the two have to be the same word for the entry to be read as this
+                // folder's.
+                let folder = std::fs::canonicalize(&folder).unwrap_or(folder);
+                let entry = serde_json::json!({
+                    "command": "amenbo",
+                    "args": ["mcp", "--dir", folder.to_string_lossy()],
+                });
+                // Filed under the launch command's own name, which is what amenbo looks for. This
+                // harness drives a release build and refuses anything else, so that name is `amenbo`
+                // here — a dev build files its own, and is never what is under test.
+                let mut entries = serde_json::Map::new();
+                entries.insert("amenbo".to_string(), entry);
+                let mut document = serde_json::Map::new();
+                document.insert(servers.to_string(), serde_json::Value::Object(entries));
+                let document = serde_json::Value::Object(document);
+                if let Some(dir) = full.parent() {
+                    std::fs::create_dir_all(dir).map_err(|e| format!("could not make {}: {e}", dir.display()))?;
+                }
+                std::fs::write(&full, document.to_string())
+                    .map_err(|e| format!("could not write {place}: {e}"))?;
+                Ok(Outcome::action(format!("set {app} up to reach {} over MCP", folder.display())))
+            }
             verb @ ("hooks-install" | "hooks-uninstall") => {
                 let sub = verb.trim_start_matches("hooks-");
                 self.run_json(&["hooks", sub, "--yes", "--json"])?;

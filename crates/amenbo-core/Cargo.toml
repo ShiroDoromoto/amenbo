@@ -84,13 +84,17 @@ self-replace = "1"
 # implementing backtick runs, fence kinds and link syntax — the edges where a near-miss silently calls a
 # live ref dead. Pure Rust, no build script, and the parser rustdoc itself reads doc comments with.
 pulldown-cmark = { version = "0.13", default-features = false }
-
-# The Windows CLI archive is a `.zip` (mac/linux ship a gzip'd tar), so on Windows the self-update
-# extractor un-deflates the zip and streams out its `amenbo.exe` entry — the counterpart to the
-# `flate2`+`tar` path used everywhere else. Windows-only: no other platform ships a zip. Default
-# features off keeps only Deflate (the method wharfy writes), dropping the aes/bzip2/zstd/time extras.
-[target.'cfg(windows)'.dependencies]
+# Zip, on both sides of it, for two jobs that have the container in common and nothing else.
+# Reading: the Windows CLI archive is a `.zip` (mac/linux ship a gzip'd tar), so on Windows the
+# self-update extractor un-deflates it and streams out its `amenbo.exe` entry — the counterpart to the
+# `flate2`+`tar` path used everywhere else. Writing: an `.mcpb` bundle *is* a zip, and it is written on
+# whichever machine the reader is setting a project up from (`mcp_bundle`), so this half is on every
+# platform — which is why the dependency is here rather than under `cfg(windows)`. Default features
+# off keeps only Deflate (the method wharfy writes and a bundle is read with), dropping the
+# aes/bzip2/zstd/time extras.
 zip = { version = "8", default-features = false, features = ["deflate"] }
+
+[target.'cfg(windows)'.dependencies]
 # The one question the updater asks the OS: which machine is this, whatever the running binary was
 # built for (`IsWow64Process2`, plus the pseudo-handle it takes and the machine constants it answers
 # with). Windows-only — macOS is asked through `libc` and Linux is not asked at all. Two features, so

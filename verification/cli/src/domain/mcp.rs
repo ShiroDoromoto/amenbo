@@ -278,9 +278,13 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("amenbo-verify-mcp-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("a directory to write into");
         let path = dir.join(format!("server-{nth}.sh"));
+        // The last thing it does is take a question and go, whatever it answered before that: a
+        // stand-in that simply exited would race the request being written, and a write that lost
+        // that race is a broken pipe rather than the silence this is about.
         let script = answers
             .iter()
             .map(|answer| format!("read -r _line\nprintf '%s\\n' '{answer}'"))
+            .chain(std::iter::once("read -r _line".to_string()))
             .collect::<Vec<_>>()
             .join("\n");
         std::fs::write(&path, format!("#!/bin/sh\n{script}\n")).expect("written");
@@ -335,7 +339,7 @@ mod tests {
         assert!(refused.contains("no such method"), "the reason travels: {refused}");
     }
 
-    /// A server that goes down mid-conversation is said so, rather than read as an empty answer —
+    /// A server that takes the question and goes is said so, rather than read as an empty answer —
     /// which would pass an assert about something nobody was told.
     #[test]
     fn a_server_that_closed_its_stream_is_not_an_empty_answer() {

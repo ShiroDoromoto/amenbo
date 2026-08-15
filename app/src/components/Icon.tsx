@@ -34,7 +34,8 @@ export type IconName =
   | "goose"
   | "chevronRight"
   | "chevronDown"
-  | "plus";
+  | "plus"
+  | "warn";
 
 const ART: Record<IconName, ReactNode> = {
   // An envelope — the inbox smart view.
@@ -105,6 +106,14 @@ const ART: Record<IconName, ReactNode> = {
   chevronDown: <path d="M5.6 9.4 12 15.8l6.4-6.4" />,
   // A plus — adding one more of what the section holds.
   plus: <path d="M12 4.8v14.4M4.8 12h14.4" />,
+  // A triangle round a bang — something went wrong, or is about to. The bang's dot is a
+  // zero-length stroke, which the round cap draws as a circle: at 16px a drawn dot closes up.
+  warn: (
+    <>
+      <path d="M12 3.4 21.8 20.6H2.2L12 3.4z" />
+      <path d="M12 9.4v4.6M12 17.4h.01" />
+    </>
+  ),
 };
 
 /**

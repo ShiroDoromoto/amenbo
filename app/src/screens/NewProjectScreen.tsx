@@ -19,6 +19,7 @@ import { useCliCommandName } from "../core/cliCommand";
 import { createProject, pickFolder, revealFolder } from "../core/mutations";
 import { inTauri } from "../core/snapshot";
 import { errText, t, tf } from "../core/i18n";
+import { ErrorNote } from "../components/ErrorNote";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import type { Nav } from "../shell/AppShell";
 
@@ -104,7 +105,7 @@ export function NewProjectScreen({ onCreated, onCancel, onOpenMcp }: { onCreated
           </div>
         )}
 
-        {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
+        {error && <ErrorNote>{error}</ErrorNote>}
 
         <div className="newproj__actions">
           <button className="btn btn--primary" onClick={() => void create()} disabled={!canCreate}>{t("newproj.create")}</button>
@@ -175,7 +176,7 @@ function DoneStep({ created, onOpenBoard, onOpenMcp }: { created: Created; onOpe
           </>
         )}
 
-        {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
+        {error && <ErrorNote>{error}</ErrorNote>}
 
         <div className="newproj__actions">
           <button className="btn btn--primary" autoFocus onClick={onOpenBoard}>{t("newproj.openBoard")}</button>

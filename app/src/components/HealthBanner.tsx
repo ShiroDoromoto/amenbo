@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { getSnapshot, inTauri, subscribe } from "../core/snapshot";
+import { Icon } from "./Icon";
 import { doctorText, t, tn } from "../core/i18n";
 import { fetchPointerIssues, repairPointers } from "../core/mutations";
 import type { DoctorIssueDto } from "../bindings/bindings";
@@ -57,7 +58,7 @@ export function HealthBanner() {
   }
   return (
     <div className="healthbanner" role="alert">
-      <span className="healthbanner__icon" aria-hidden>⚠</span>
+      <Icon name="warn" size="lg" />
       <div className="healthbanner__body">
         <div className="healthbanner__title">{t("health.title")}</div>
         {lines.map((message, i) => (

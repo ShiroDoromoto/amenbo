@@ -15,6 +15,8 @@ import { usePluginInstalls } from "../core/pluginInstalls";
 import { inTauri } from "../core/snapshot";
 import { confirmDialog } from "../core/dialog";
 import { errText, t, tf, viewLabel } from "../core/i18n";
+import { ErrorNote } from "../components/ErrorNote";
+import { Icon } from "../components/Icon";
 import type { AgentHookRequestsDto, BoundFolderDto, ProjectSettingsDto } from "../bindings/bindings";
 import { asTyped } from "../core/keys";
 
@@ -149,7 +151,7 @@ export function ProjectSettingsScreen({
               </select>
             </div>
 
-            {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
+            {error && <ErrorNote>{error}</ErrorNote>}
 
             <div className="newproj__actions">
               <button className="btn btn--primary" onClick={() => void save()} disabled={!canSave}>
@@ -282,38 +284,44 @@ function FoldersSection({ projectId }: { projectId: number }) {
           <div key={f.path} className="newproj__field">
             <div className="newproj__folder">
               <code className="newproj__path">{f.path}</code>
-              <span className={f.exists && !f.pointerMissing && !f.foreign ? "faint" : "newproj__error"}>
-                {!f.exists
-                  ? `⚠ ${t("projset.folderStale")}`
-                  : f.pointerMissing
-                    ? `⚠ ${t("projset.folderNoPointer")}`
-                    : f.foreign
-                      ? `⚠ ${t("projset.folderOtherStore")}`
-                      : `· ${t("projset.aiReady")}`}
-              </span>
+              {/* The state of the folder, in the row's own voice — it wears the note's look and its
+                  mark, but not its `role`: what is wrong is announced once, by the hint below, and a
+                  reader hearing the same fault twice learns nothing the second time. */}
+              {f.exists && !f.pointerMissing && !f.foreign ? (
+                <span className="faint">· {t("projset.aiReady")}</span>
+              ) : (
+                <span className="errornote">
+                  <Icon name="warn" />
+                  {!f.exists
+                    ? t("projset.folderStale")
+                    : f.pointerMissing
+                      ? t("projset.folderNoPointer")
+                      : t("projset.folderOtherStore")}
+                </span>
+              )}
             </div>
             {f.pointerMissing && (
-              <div className="newproj__error" role="alert">⚠ {t("projset.folderNoPointerHint")}</div>
+              <ErrorNote>{t("projset.folderNoPointerHint")}</ErrorNote>
             )}
             {f.foreign && (
-              <div className="newproj__error" role="alert">
-                ⚠ {tf("projset.folderOtherStoreHint", {
+              <ErrorNote>
+                {tf("projset.folderOtherStoreHint", {
                   recorded: f.foreign.recorded,
                   running: f.foreign.running,
                 })}
-              </div>
+              </ErrorNote>
             )}
             {f.mismatch && (
-              <div className="newproj__error" role="alert">
-                ⚠ {tf("projset.folderElsewhere", {
+              <ErrorNote>
+                {tf("projset.folderElsewhere", {
                   recorded: f.mismatch.recorded,
                   projectId: f.mismatch.projectId,
                   actual: f.mismatch.actual ?? t("projset.folderNoSlug"),
                 })}
-              </div>
+              </ErrorNote>
             )}
             {f.legacy && (
-              <div className="newproj__error" role="alert">⚠ {t("projset.folderLegacyPointer")}</div>
+              <ErrorNote>{t("projset.folderLegacyPointer")}</ErrorNote>
             )}
             <div className="newproj__nextrow">
               {f.exists && <button className="btn" onClick={() => void terminal(f.path)} disabled={busy}>⌨️ {t("newproj.openTerminal")}</button>}
@@ -324,7 +332,7 @@ function FoldersSection({ projectId }: { projectId: number }) {
           </div>
         ))}
 
-        {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
+        {error && <ErrorNote>{error}</ErrorNote>}
 
         <div className="newproj__nextrow">
           <button className="btn" onClick={() => void add()} disabled={busy}>📂 {t("projset.addFolder")}</button>
@@ -428,7 +436,7 @@ function HarnessSection({ projectId, onOpenMcp }: { projectId: number; onOpenMcp
             the road above it is the one most readers are on. */}
         <McpSetup onOpen={onOpenMcp} />
 
-        {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
+        {error && <ErrorNote>{error}</ErrorNote>}
 
         <div className="newproj__nextrow">
           {/* Nothing to clear where nothing was answered, and the state row above says so. */}

@@ -75,7 +75,7 @@ describe("CommentRow edit", () => {
     await flush();
     expect(onEdit).toHaveBeenCalledWith("edited");
     expect(container.querySelector(".compose__input"), "box closed on success").toBeNull();
-    expect(container.querySelector(".newproj__error")).toBeNull();
+    expect(container.querySelector(".errornote")).toBeNull();
   });
 
   it("keeps the box open with the draft and shows the error when the edit is refused", async () => {
@@ -86,7 +86,7 @@ describe("CommentRow edit", () => {
     act(() => container.querySelector<HTMLButtonElement>(".btn--primary")!.click());
     await flush();
     expect(container.querySelector<HTMLTextAreaElement>(".compose__input")?.value, "box still open, draft kept").toBe("edited");
-    expect(container.querySelector(".newproj__error")?.textContent).toContain("refused");
+    expect(container.querySelector(".errornote")?.textContent).toContain("refused");
   });
 });
 
@@ -98,7 +98,7 @@ describe("CommentRow remove", () => {
     act(() => removeBtn()!.click());
     await flush();
     expect(onRemove).toHaveBeenCalledOnce();
-    expect(container.querySelector(".newproj__error")?.textContent).toContain("refused");
+    expect(container.querySelector(".errornote")?.textContent).toContain("refused");
   });
 
   it("does not call onRemove when the confirm is declined", async () => {
@@ -108,6 +108,6 @@ describe("CommentRow remove", () => {
     act(() => removeBtn()!.click());
     await flush();
     expect(onRemove).not.toHaveBeenCalled();
-    expect(container.querySelector(".newproj__error")).toBeNull();
+    expect(container.querySelector(".errornote")).toBeNull();
   });
 });

@@ -3,6 +3,8 @@ import { Markdown } from "../components/Markdown";
 import { Attachments } from "../components/Attachments";
 import { Commits } from "../components/Commits";
 import { CommentRow } from "../components/CommentRow";
+import { ErrorNote } from "../components/ErrorNote";
+import { Icon } from "../components/Icon";
 import { useStore } from "../store/store";
 import { dataAdapter } from "../mock/adapter";
 import { getSnapshot, inTauri } from "../core/snapshot";
@@ -361,7 +363,7 @@ export function TaskDetailPane({
                         title={unsettled ? t("detail.premiseUnsettled") : undefined}
                         onClick={() => onSelectDecision?.(d.id)}
                       >
-                        {unsettled && "⚠ "}{d.ref ?? ""} {d.name ?? t("dec.unknownName")}
+                        {unsettled && <><Icon name="warn" />{" "}</>}{d.ref ?? ""} {d.name ?? t("dec.unknownName")}
                       </button>
                     </span>
                   );
@@ -463,7 +465,7 @@ export function TaskDetailPane({
                   if (isEnterSubmit(e) && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void submitComment(); }
                 }}
               />
-              {commentError && <div className="newproj__error" role="alert">⚠ {commentError}</div>}
+              {commentError && <ErrorNote>{commentError}</ErrorNote>}
               <div className="compose__actions">
                 <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.commentHint")}</span>
                 <button className="btn btn--primary" disabled={!comment.trim()} onClick={() => void submitComment()}>{t("detail.send")}</button>

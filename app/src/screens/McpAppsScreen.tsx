@@ -23,6 +23,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchMcpRequest, fetchMcpSetup, saveMcpBundle } from "../core/mutations";
 import { errText, t, tf } from "../core/i18n";
+import { ErrorNote } from "../components/ErrorNote";
 import type { McpAppDto, McpProjectDto, McpSetupDto } from "../bindings/bindings";
 
 // A burst of returns is one re-read, on the window the reconcile triggers already use (`core/snapshot.ts`).
@@ -102,10 +103,10 @@ export function McpAppsScreen({ pick = null }: { pick?: number | null }) {
             {/* Said in amenbo's words with the door's own beneath, as the app says it elsewhere: the
                 first line is what happened, the second is the only part that says why. */}
             {unread && (
-              <div className="newproj__error" role="alert">
-                ⚠ {t("app.loadError")}
+              <ErrorNote>
+                {t("app.loadError")}
                 <div className="faint">{unread}</div>
-              </div>
+              </ErrorNote>
             )}
 
             {/* A project with no folder bound has nowhere to point a server, so a screen with none of
@@ -302,7 +303,7 @@ function McpAppRow({
               </button>
             )}
           </div>
-          {failed && <div className="newproj__error" role="alert">⚠ {failed}</div>}
+          {failed && <ErrorNote>{failed}</ErrorNote>}
           {saved && <div className="mcp__saved">{tf("mcp.written", { path: saved })}</div>}
 
           {/* What an older amenbo left behind (`AMB-D-679`), drawn apart from the row's own state: an

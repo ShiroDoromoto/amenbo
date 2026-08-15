@@ -15,6 +15,8 @@ import { confirmDialog } from "../core/dialog";
 import { isClosed } from "../core/status";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { errText, formatNumber, statusLabel, t, tf } from "../core/i18n";
+import { ErrorNote } from "../components/ErrorNote";
+import { Icon } from "../components/Icon";
 import { decisionRef } from "../core/idref";
 
 // Colour of the status badge — keep it matching DecisionsScreen's statusColor. The badge says the status
@@ -190,7 +192,7 @@ export function DecisionDetailPane({
           {d.status === "accepted" && (
             <div className="faint" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>{t("dec.editAcceptedHint")}</div>
           )}
-          {editError && <div className="newproj__error" role="alert">⚠ {editError}</div>}
+          {editError && <ErrorNote>{editError}</ErrorNote>}
           <div className="compose__actions">
             <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.notesHint")}</span>
             <span>
@@ -260,7 +262,7 @@ export function DecisionDetailPane({
                 if (e.key === "Escape") { setConfirming(null); setReason(""); setError(null); }
               }}
             />
-            {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
+            {error && <ErrorNote>{error}</ErrorNote>}
             <div className="compose__actions">
               <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.commentHint")}</span>
               <span>
@@ -286,7 +288,7 @@ export function DecisionDetailPane({
           <div style={{ display: "flex", gap: 8 }}>
             <button className="feed__action" onClick={() => void runReopen()}>{t("dec.reopen")}</button>
           </div>
-          {reopenError && <div className="newproj__error" role="alert">⚠ {reopenError}</div>}
+          {reopenError && <ErrorNote>{reopenError}</ErrorNote>}
         </div>
       )}
 
@@ -332,7 +334,7 @@ export function DecisionDetailPane({
                   if (isEnterSubmit(e) && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void submitComment(); }
                 }}
               />
-              {commentError && <div className="newproj__error" role="alert">⚠ {commentError}</div>}
+              {commentError && <ErrorNote>{commentError}</ErrorNote>}
               <div className="compose__actions">
                 <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.commentHint")}</span>
                 <button className="btn btn--primary" disabled={!comment.trim()} onClick={() => void submitComment()}>{t("detail.send")}</button>
@@ -382,7 +384,7 @@ function DecisionEdges({ d, onOpenDecision }: {
           </button>
           {r.staleBy && (
             <span style={{ marginLeft: 6, color: "#c0504d" }}>
-              ⚠ {tf("dec.premiseStale", { premise: r.target.ref ?? decisionRef(r.target.id), by: r.staleBy })}
+              <Icon name="warn" /> {tf("dec.premiseStale", { premise: r.target.ref ?? decisionRef(r.target.id), by: r.staleBy })}
             </span>
           )}
           {inTauri() && (
@@ -396,7 +398,7 @@ function DecisionEdges({ d, onOpenDecision }: {
           )}
         </div>
       ))}
-      {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
+      {error && <ErrorNote>{error}</ErrorNote>}
       {inTauri() && d.project && <DecisionEdgeCompose d={d} projectId={Number(d.project.id)} />}
     </div>
   );
@@ -470,9 +472,9 @@ function DecisionEdgeCompose({ d, projectId }: { d: Decision; projectId: number 
         <button className="btn" onClick={() => { setOpen(false); setQuery(""); }}>{t("dec.edge.cancel")}</button>
       </div>
       {promotesToAccepted(d, kind) && (
-        <div style={{ fontSize: "var(--fs-sm)", color: "#c0504d" }}>⚠ {t("dec.edge.supersedeAccepts")}</div>
+        <div style={{ fontSize: "var(--fs-sm)", color: "#c0504d" }}><Icon name="warn" /> {t("dec.edge.supersedeAccepts")}</div>
       )}
-      {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
+      {error && <ErrorNote>{error}</ErrorNote>}
       {candidates.length === 0 ? (
         <div className="faint" style={{ fontSize: "var(--fs-sm)" }}>{t("dec.edge.noCandidates")}</div>
       ) : (

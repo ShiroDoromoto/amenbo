@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { inTauri } from "../core/snapshot";
+import { Icon } from "./Icon";
 import { t, tn } from "../core/i18n";
 import { fetchOrphanBindings, forgetOrphanBindings } from "../core/mutations";
 
@@ -55,7 +56,7 @@ export function OrphanBindingBanner() {
 
   return (
     <div className="healthbanner managedblock-banner" role="alert">
-      <span className="healthbanner__icon" aria-hidden>⚠</span>
+      <Icon name="warn" size="lg" />
       <div className="healthbanner__body">
         <div className="healthbanner__title">{t("orphanBinding.title")}</div>
         <div className="healthbanner__line">{tn("orphanBinding.hint", dirs.length)}</div>

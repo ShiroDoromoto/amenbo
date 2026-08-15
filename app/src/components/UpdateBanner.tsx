@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { getSnapshot, inTauri, subscribe } from "../core/snapshot";
+import { Icon } from "./Icon";
 import { dismissUpdate, isUpdateDismissed, sessionDismissCovers, type SessionDismiss } from "../core/updateDismissed";
 import { t, tf } from "../core/i18n";
 import { openLatestInstaller, installUpdate, restartApp } from "../core/mutations";
@@ -129,7 +130,7 @@ export function UpdateCheckFeedback({
   const failed = state === "error";
   return (
     <div className="healthbanner" role="status">
-      <span className="healthbanner__icon" aria-hidden>{failed ? "⚠" : "✓"}</span>
+      {failed ? <Icon name="warn" size="lg" /> : <span className="healthbanner__icon" aria-hidden>✓</span>}
       <div className="healthbanner__body">
         <div className="healthbanner__title">
           {failed ? t("update.checkFailed") : tf("update.upToDate", { version: appVersion })}

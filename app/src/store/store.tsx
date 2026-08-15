@@ -6,6 +6,7 @@ import { markTaskSeen } from "../core/readReceipts";
 import { archiveInboxItem, unarchiveInboxItem } from "../core/inboxArchive";
 import { errText } from "../core/i18n";
 import { subscribeNotice } from "../core/notice";
+import { Icon } from "../components/Icon";
 import type { ActivityItem, Facet, Priority, Status } from "../mock/types";
 
 /**
@@ -163,7 +164,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       {children}
       {notice && (
         <div className="toast toast--warn" role="alert" onClick={() => setNotice(null)}>
-          ⚠ {notice}
+          <Icon name="warn" /> {notice}
         </div>
       )}
     </Ctx.Provider>

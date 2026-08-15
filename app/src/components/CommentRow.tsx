@@ -112,7 +112,7 @@ export function CommentRow({ id, author, at, editedAt, text, target, onEdit, onR
           <Markdown>{text}</Markdown>
         </div>
       )}
-      {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
+      {error && <div className="errortext" role="alert">⚠ {error}</div>}
       {inTauri() && <Attachments target={target} targetId={id} compact />}
     </div>
   );

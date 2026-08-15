@@ -82,7 +82,7 @@ export function Commits({ taskId }: { taskId: number }) {
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void submit(); } }}
         />
-        {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
+        {error && <div className="errortext" role="alert">⚠ {error}</div>}
         <div className="compose__actions">
           <span />
           <button className="btn btn--primary" disabled={busy || !draft.trim()} onClick={() => void submit()}>

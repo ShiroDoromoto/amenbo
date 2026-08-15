@@ -190,7 +190,7 @@ export function DecisionDetailPane({
           {d.status === "accepted" && (
             <div className="faint" style={{ fontSize: "var(--fs-sm)", marginTop: 4 }}>{t("dec.editAcceptedHint")}</div>
           )}
-          {editError && <div className="newproj__error" role="alert">⚠ {editError}</div>}
+          {editError && <div className="errortext" role="alert">⚠ {editError}</div>}
           <div className="compose__actions">
             <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.notesHint")}</span>
             <span>
@@ -260,7 +260,7 @@ export function DecisionDetailPane({
                 if (e.key === "Escape") { setConfirming(null); setReason(""); setError(null); }
               }}
             />
-            {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
+            {error && <div className="errortext" role="alert">⚠ {error}</div>}
             <div className="compose__actions">
               <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.commentHint")}</span>
               <span>
@@ -286,7 +286,7 @@ export function DecisionDetailPane({
           <div style={{ display: "flex", gap: 8 }}>
             <button className="feed__action" onClick={() => void runReopen()}>{t("dec.reopen")}</button>
           </div>
-          {reopenError && <div className="newproj__error" role="alert">⚠ {reopenError}</div>}
+          {reopenError && <div className="errortext" role="alert">⚠ {reopenError}</div>}
         </div>
       )}
 
@@ -332,7 +332,7 @@ export function DecisionDetailPane({
                   if (isEnterSubmit(e) && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void submitComment(); }
                 }}
               />
-              {commentError && <div className="newproj__error" role="alert">⚠ {commentError}</div>}
+              {commentError && <div className="errortext" role="alert">⚠ {commentError}</div>}
               <div className="compose__actions">
                 <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.commentHint")}</span>
                 <button className="btn btn--primary" disabled={!comment.trim()} onClick={() => void submitComment()}>{t("detail.send")}</button>
@@ -396,7 +396,7 @@ function DecisionEdges({ d, onOpenDecision }: {
           )}
         </div>
       ))}
-      {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
+      {error && <div className="errortext" role="alert">⚠ {error}</div>}
       {inTauri() && d.project && <DecisionEdgeCompose d={d} projectId={Number(d.project.id)} />}
     </div>
   );
@@ -472,7 +472,7 @@ function DecisionEdgeCompose({ d, projectId }: { d: Decision; projectId: number 
       {promotesToAccepted(d, kind) && (
         <div style={{ fontSize: "var(--fs-sm)", color: "#c0504d" }}>⚠ {t("dec.edge.supersedeAccepts")}</div>
       )}
-      {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
+      {error && <div className="errortext" role="alert">⚠ {error}</div>}
       {candidates.length === 0 ? (
         <div className="faint" style={{ fontSize: "var(--fs-sm)" }}>{t("dec.edge.noCandidates")}</div>
       ) : (

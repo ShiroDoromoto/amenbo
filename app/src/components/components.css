@@ -710,7 +710,9 @@ button.feed__target:hover { color: var(--c-accent); }
    take away rather than part of what this app is set up for. */
 .mcp__stale { display: flex; flex-direction: column; gap: var(--s-1); font-size: var(--fs-sm); }
 .mcp__staleRow { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); }
-.mcp__empty { font-size: var(--fs-sm); color: var(--c-text-muted); }
+/* The card with no rows in it, either way round: nothing to set up, or nothing read yet. Both are one
+   muted line where the rows would be, so the wait does not read as the answer. */
+.mcp__empty, .mcp__loading { font-size: var(--fs-sm); color: var(--c-text-muted); }
 /* Copy, no, close — in that order, and wrapping rather than shrinking, since the row is narrow enough for
    three buttons to meet the edge in a language that spells them out. */
 .agenthookrow__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }

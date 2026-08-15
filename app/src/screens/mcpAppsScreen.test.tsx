@@ -8,7 +8,9 @@
 // travels**, the texts following the ticks rather than the button; **the two roads are one per row**,
 // the app that cannot run a command getting a file and the rest a request; **an old entry is drawn
 // apart** from the row's own state, since it is something to take away rather than this app being set
-// up; and that a machine with no folder anywhere says so rather than drawing rows nobody can act on.
+// up; that a machine with no folder anywhere says so rather than drawing rows nobody can act on; and
+// that **reading, unread and empty are three answers** (`AMB-D-690`), a write that failed being said on
+// the row whose button wrote rather than once on top of eight identical rows.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -25,6 +27,12 @@ const hoisted = vi.hoisted(() => ({
   written: [] as number[][],
   /** Where the write says the file landed, or `null` for a picker that was closed. */
   writtenTo: "/w/downloads/amenbo.mcpb" as string | null,
+  /** Set it to hold the read open — the moment the screen is reading and has nothing yet. */
+  stall: false,
+  /** Set it to make the read fail with these words instead of answering. */
+  readFails: null as string | null,
+  /** Set it to make the bundle write fail with these words instead of landing. */
+  writeFails: null as string | null,
 }));
 
 vi.mock("../core/snapshot", async (importOriginal) => {
@@ -34,6 +42,8 @@ vi.mock("../core/snapshot", async (importOriginal) => {
 vi.mock("../core/mutations", () => ({
   fetchMcpSetup: () => {
     hoisted.reads += 1;
+    if (hoisted.stall) return new Promise(() => {});
+    if (hoisted.readFails !== null) return Promise.reject(new Error(hoisted.readFails));
     return Promise.resolve(hoisted.setup);
   },
   fetchMcpRequest: (app: string, projectIds: number[]) => {
@@ -45,6 +55,7 @@ vi.mock("../core/mutations", () => ({
   },
   saveMcpBundle: (projectIds: number[]) => {
     hoisted.written.push(projectIds);
+    if (hoisted.writeFails !== null) return Promise.reject(new Error(hoisted.writeFails));
     return Promise.resolve(hoisted.writtenTo);
   },
 }));
@@ -115,6 +126,9 @@ beforeEach(() => {
   hoisted.asked = [];
   hoisted.written = [];
   hoisted.writtenTo = "/w/downloads/amenbo.mcpb";
+  hoisted.stall = false;
+  hoisted.readFails = null;
+  hoisted.writeFails = null;
   clipboard = [];
   Object.defineProperty(navigator, "clipboard", {
     configurable: true,
@@ -349,6 +363,64 @@ describe("the screen where an AI is connected", () => {
     await openRow();
     await act(async () => { ticks()[0].click(); });
     await act(async () => { button(t("mcp.write")).click(); });
+    expect(container.querySelector(".mcp__saved")).toBeNull();
+  });
+
+  // The wait has a line of its own, because a card standing empty is the answer a machine with nothing
+  // set up gives — a reader who arrives mid-read and reads that presses nothing and leaves.
+  it("says it is reading, and stops saying it once the answer is in", async () => {
+    const clock = fakeClock();
+    try {
+      hoisted.stall = true;
+      await render({ projects: [SHOP], apps: [app()] });
+
+      expect(container.textContent).toContain(t("app.loading"));
+      expect(rows()).toHaveLength(0);
+
+      hoisted.stall = false;
+      clock.advance(2000);
+      await act(async () => { window.dispatchEvent(new Event("focus")); });
+
+      expect(container.textContent).not.toContain(t("app.loading"));
+      expect(rows()).toHaveLength(1);
+    } finally {
+      clock.restore();
+    }
+  });
+
+  // A read that fails is a third answer again: the reader is told the list is unread, in the door's own
+  // words, rather than left in front of a card that reads as a machine with nothing on it.
+  it("says the list could not be read, rather than standing empty", async () => {
+    hoisted.readFails = "the store is locked";
+    await render({ projects: [SHOP], apps: [app()] });
+
+    const said = container.querySelector(".settings__body > .newproj__error");
+    expect(said?.textContent).toContain(t("app.loadError"));
+    expect(said?.textContent).toContain("the store is locked"); // the door's own words, under amenbo's
+    expect(container.textContent).not.toContain(t("app.loading"));
+    expect(rows()).toHaveLength(0);
+  });
+
+  it("puts a write that failed on the row that wrote it", async () => {
+    await render({
+      projects: [SHOP],
+      apps: [app({ app: "claude-desktop", label: "Claude Desktop", writesFile: true }), app()],
+    });
+
+    await openRow();
+    await act(async () => { ticks()[0].click(); });
+    await act(async () => { button(t("mcp.write")).click(); });
+    expect(container.textContent).toContain(tf("mcp.written", { path: "/w/downloads/amenbo.mcpb" }));
+
+    hoisted.writeFails = "no room on the disk";
+    await act(async () => { button(t("mcp.write")).click(); });
+
+    // On that row, and nowhere else: every row draws the same button, so one message on top of the
+    // screen names none of them.
+    expect(rows()[0].textContent).toContain("no room on the disk");
+    expect(rows()[1].textContent).not.toContain("no room on the disk");
+    expect(container.querySelector(".settings__body > .newproj__error")).toBeNull();
+    // And where the last write landed is not left standing beside the one that did not.
     expect(container.querySelector(".mcp__saved")).toBeNull();
   });
 });

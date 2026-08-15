@@ -222,6 +222,23 @@ pub static MCP_APPS: &[McpApp] = &[
         amenbo_writes: false,
         extensions: None,
     },
+    McpApp {
+        id: "github-copilot",
+        // The same token and the same name the harness catalog carries, which is the point of both
+        // being one vocabulary: a reader who set their hooks up here meets the same word when they
+        // come to connect it.
+        label: "GitHub Copilot CLI",
+        // The machine's, out of the two this app reads. Its other road is the folder's own `.mcp.json`
+        // — the very file `claude-code` above already names, under the very same word — and a row
+        // pointing there would put two apps on one entry: setting either up would have the read that
+        // asks which apps are configured answer both, and taking one back out would take the other
+        // with it. The home file is this app's alone, so it is the one the row names (`AMB-T-3178`).
+        place: Place::Home(".copilot/mcp-config.json"),
+        format: Format::Json,
+        servers_key: "mcpServers",
+        amenbo_writes: false,
+        extensions: None,
+    },
 ];
 
 /// The app with this [`id`](McpApp::id), or `None` when nothing lists it.

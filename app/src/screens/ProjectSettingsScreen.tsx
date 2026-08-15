@@ -116,7 +116,7 @@ export function ProjectSettingsScreen({
           {loaded.archived && <span className="faint"> · {t("projset.archivedBadge")}</span>}
         </span>
         <div className="topbar__spacer" />
-        <button className="btn" onClick={onBack} disabled={busy}>{t("projset.back")}</button>
+        <button className="btn" onClick={onBack} disabled={busy}>← {t("projset.back")}</button>
       </div>
 
       <div className="settings">
@@ -153,7 +153,7 @@ export function ProjectSettingsScreen({
 
             <div className="newproj__actions">
               <button className="btn btn--primary" onClick={() => void save()} disabled={!canSave}>
-                {busy ? t("projset.saving") : saved ? t("projset.saved") : t("projset.save")}
+                {busy ? t("projset.saving") : saved ? `✓ ${t("projset.saved")}` : t("projset.save")}
               </button>
             </div>
           </div>
@@ -199,6 +199,11 @@ export function ProjectSettingsScreen({
  * each time. A row whose `.amenbo` slug disagrees with the store on disk (a pointer that came from somewhere else),
  * and a pointer still in the pre-migration legacy format, are both warned about with the reason, alongside a relink
  * that rewrites the pointer at this project in the current format (the equivalent of `bind --project`).
+ *
+ * A pointer another store wrote (`foreign`, `AMB-D-685`) takes the "AI-ready" badge away rather than merely adding a
+ * warning beneath it: the CLI refuses to run in that folder at all, so a row that went on calling itself ready would
+ * be saying the opposite of what the folder does. The relink is offered there too — it is this build claiming the
+ * folder for itself, which is one of the two ways out the CLI names.
  */
 function FoldersSection({ projectId }: { projectId: number }) {
   const [folders, setFolders] = useState<BoundFolderDto[] | null>(null);
@@ -277,16 +282,26 @@ function FoldersSection({ projectId }: { projectId: number }) {
           <div key={f.path} className="newproj__field">
             <div className="newproj__folder">
               <code className="newproj__path">{f.path}</code>
-              <span className={f.exists && !f.pointerMissing ? "faint" : "newproj__error"}>
+              <span className={f.exists && !f.pointerMissing && !f.foreign ? "faint" : "newproj__error"}>
                 {!f.exists
                   ? `⚠ ${t("projset.folderStale")}`
                   : f.pointerMissing
                     ? `⚠ ${t("projset.folderNoPointer")}`
-                    : `· ${t("projset.aiReady")}`}
+                    : f.foreign
+                      ? `⚠ ${t("projset.folderOtherStore")}`
+                      : `· ${t("projset.aiReady")}`}
               </span>
             </div>
             {f.pointerMissing && (
               <div className="newproj__error" role="alert">⚠ {t("projset.folderNoPointerHint")}</div>
+            )}
+            {f.foreign && (
+              <div className="newproj__error" role="alert">
+                ⚠ {tf("projset.folderOtherStoreHint", {
+                  recorded: f.foreign.recorded,
+                  running: f.foreign.running,
+                })}
+              </div>
             )}
             {f.mismatch && (
               <div className="newproj__error" role="alert">
@@ -303,7 +318,7 @@ function FoldersSection({ projectId }: { projectId: number }) {
             <div className="newproj__nextrow">
               {f.exists && <button className="btn" onClick={() => void terminal(f.path)} disabled={busy}>⌨️ {t("newproj.openTerminal")}</button>}
               {f.exists && <button className="btn" onClick={() => void reveal(f.path)} disabled={busy}>📂 {t("newproj.openFinder")}</button>}
-              {f.exists && (f.mismatch || f.legacy || f.pointerMissing) && <button className="btn" onClick={() => void relink(f.path)} disabled={busy}>🔗 {t("projset.relink")}</button>}
+              {f.exists && (f.mismatch || f.legacy || f.pointerMissing || f.foreign) && <button className="btn" onClick={() => void relink(f.path)} disabled={busy}>🔗 {t("projset.relink")}</button>}
               <button className="btn btn--danger" onClick={() => void unbind(f.path)} disabled={busy}>{t("projset.unbind")}</button>
             </div>
           </div>

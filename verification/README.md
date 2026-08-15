@@ -473,7 +473,12 @@ which is what an assert there is written against.
 A few ops exist to put something **wrong**, because a repair cannot be shown working over a store
 where there is nothing to repair — and a sweep that sweeps nothing looks exactly like one that works.
 `folder legacy-pointer` leaves a bound folder's `.amenbo` in the shape an older build wrote, which is
-what `store doctor-fix` puts right. `plugin stale-manifest` leaves an installed plugin recording a
+what `store doctor-fix` puts right. `folder foreign-pointer` leaves one claimed by another store,
+which is what the guard in front of every read refuses — a build stamps its own name as it writes, so
+the one store that cannot leave another's pointer is the build under test. It is the run's own
+pointer with a different name on it, which is the fixture worth making: every other field agrees, and
+a pointer whose id and slug both check out is the one nothing but the name can turn away.
+`plugin stale-manifest` leaves an installed plugin recording a
 build the catalog has moved past, which is what `plugin update` puts right — the catalog publishes one
 build, and an asset is trusted only by the key of the catalog that served it, so there is no second
 build to install first and no way to sign one into existence. Three of the `plugin declare-…` ops put a setting into what an
@@ -659,6 +664,12 @@ The list holds one premise that is not a record at all. `store worn-in` stands u
 time — how much amenbo has been used on this device — which is the one world a road can only be given:
 every other premise is something somebody could have done a moment before the run, and this one is
 something they could only have done over days.
+
+`folder foreign-pointer` is on the list for the neighbouring reason: not that nobody could have done
+it a moment before, but that nobody under test could have done it at all. A build stamps its own name
+as it writes a pointer, so the one store that cannot leave another's is the one being driven, and on
+screen there is not even a command to try it with. Both roads that read the claim — the terminal's
+refusal, the row the screen lists the folder as — therefore open on it.
 
 **A premise that does not stand ends that scenario, red, on the line that failed, and the road is not
 walked at all.** Judging a road against a world half built says nothing about the road — every line it

@@ -574,6 +574,13 @@ impl Instructor {
             (Domain::Folder, "ways-in") | (Domain::Folder, "none-linked") => {
                 Some(Expectation { text: arg_str(with, "absent")?.to_string(), present: false })
             }
+            // The store the folder belongs to, read off the row that lists it. It is the one word on
+            // that row a reader can act on — where the terminal names it in a refusal, the screen has
+            // no refusal to name it in — and it is a store's name rather than a word of the
+            // interface's, so a reading finds it on this row alone whatever language the screen is in.
+            (Domain::Folder, "claimed") => {
+                Some(Expectation { text: arg_str(with, "store")?.to_string(), present: true })
+            }
             (Domain::Repo, "ai-launch-notice") | (Domain::Repo, "ai-launch-request") => {
                 Some(Expectation { text: arg_str(with, "paste_into")?.to_string(), present: present(with) })
             }
@@ -1311,6 +1318,17 @@ impl Instructor {
             (Domain::Folder, "open-existing") => format!(
                 "Confirm the open card asks which project to link the folder to — with \"{}\", one of the projects on this device, chosen in it.",
                 req(with, "project")?
+            ),
+            // What the terminal road meets as a refusal, the screen meets as a row. There is no
+            // command to turn away here — the interface holds the store open the whole time — so the
+            // line the two roads share is the folder being named as another store's, and the row
+            // saying it is what stands in for the refusal. The half worth spelling out is the badge:
+            // a row that went on calling itself ready to be worked in would be saying the opposite of
+            // what happens to anyone who walks in there.
+            (Domain::Folder, "claimed") => format!(
+                "Confirm the linked-folder list carries the folder the road calls \"{}\" as another store's — it names \"{}\" as the store the folder belongs to, and does not call the folder ready for an AI to work in.",
+                req(with, "dir")?,
+                req(with, "store")?
             ),
             (Domain::Repo, "ai-launch-notice") => match present(with) {
                 true => format!(

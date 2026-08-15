@@ -154,6 +154,10 @@ pub struct ArchivedProjectDto {
 /// points at this project, yet an AI started in that folder will not resolve here (it walks up to a
 /// parent, or falls back to `init` recovery). Exclusive with the other two (no pointer, nothing to
 /// inspect inside it), and the fix is the same relink.
+/// `foreign` is the one finding that says the folder is **refused** rather than merely suspect
+/// ([`ForeignStoreDto`], `AMB-D-685`): the pointer names another store, so a command run there stops
+/// before it reads anything. The row would otherwise look healthy, which is the whole reason it is
+/// carried here — and the fix is again the same relink, this build claiming the folder for itself.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -163,6 +167,24 @@ pub struct BoundFolderDto {
     pub(crate) mismatch: Option<SlugMismatchDto>,
     pub(crate) legacy: bool,
     pub(crate) pointer_missing: bool,
+    pub(crate) foreign: Option<ForeignStoreDto>,
+}
+
+/// That folder's `.amenbo` was written by a build of another channel
+/// ([`amenbo_core::binding::DirBinding::mismatched_store`]) — production against `amenbo-dev`, or a
+/// throwaway `amenbo-dev-<task>`. The CLI refuses outright there (`pointer_other_store`); the GUI,
+/// having no cwd to be refused in, says so on the row instead. Both names travel, because the
+/// sentence needs the pair: whose the folder is, and who is looking at it. `running` is the same for
+/// every row of a listing (it is this build's own name) and is repeated on each rather than read from
+/// a second call — the row then holds everything its wording needs, the way [`SlugMismatchDto`] does.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct ForeignStoreDto {
+    /// The store name written in the folder's `.amenbo`.
+    pub(crate) recorded: String,
+    /// The store name of the build that is listing it.
+    pub(crate) running: String,
 }
 
 /// The slug in `.amenbo` disagrees with what the store actually holds

@@ -103,7 +103,7 @@ export function PluginDetail({ entry, install, onOpenInstalled, onClose }: {
           {loading && <span className="faint">{t("plugins.factsLoading")}</span>}
           {facts?.stars != null && <span>★ {formatNumber(facts.stars)}</span>}
           {facts?.downloads != null && (
-            <span>{tf("plugins.downloads", { count: facts.downloads })}</span>
+            <span>⬇ {tf("plugins.downloads", { count: facts.downloads })}</span>
           )}
         </div>
         {/* Three different silences, and they are not the same news: too many requests means wait, a

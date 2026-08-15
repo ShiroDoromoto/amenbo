@@ -27,7 +27,7 @@ import { useBoundFolders, type BoundFolders } from "./boundFolders";
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const folder = (path: string, exists: boolean): BoundFolderDto =>
-  ({ path, exists, mismatch: null, legacy: false, pointerMissing: false });
+  ({ path, exists, mismatch: null, legacy: false, pointerMissing: false, foreign: null });
 
 let container: HTMLDivElement;
 let root: Root;

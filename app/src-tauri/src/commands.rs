@@ -2479,6 +2479,13 @@ pub fn project_delete(project_id: i64) -> Result<WriteAck, CmdError> {
 /// back as `legacy` on the same row: in the CLI, running a command in that folder lets
 /// `resolve_upward` upgrade it automatically, but the GUI has no cwd and so the upgrade never gets
 /// its chance. We surface it here and steer the user to a relink.
+///
+/// A pointer another store wrote comes back as `foreign` (`AMB-D-685`). It is read out of the
+/// folder's own `.amenbo`, exactly as `mismatch` is, and not through
+/// [`amenbo_core::binding::foreign_pointer`]: that one answers for a *starting point* and walks
+/// upward, so a row whose own pointer is missing would be handed an ancestor's verdict and reported
+/// as another store's when nothing here says so. The judgement itself is core's either way
+/// ([`amenbo_core::binding::DirBinding::mismatched_store`]).
 #[tauri::command]
 pub fn project_bound_folders(project_id: i64) -> Result<Vec<BoundFolderDto>, CmdError> {
     let store = open_store_read()?;
@@ -2498,9 +2505,13 @@ pub fn project_bound_folders(project_id: i64) -> Result<Vec<BoundFolderDto>, Cmd
                     recorded: m.recorded,
                     actual: m.actual,
                 });
+            let foreign = pointer.as_ref().and_then(|b| b.mismatched_store()).map(|recorded| ForeignStoreDto {
+                recorded: recorded.to_string(),
+                running: amenbo_core::config::Paths::APP_NAME.to_string(),
+            });
             let legacy = amenbo_core::binding::is_legacy_pointer(path);
             let pointer_missing = amenbo_core::binding::is_pointer_missing(path);
-            BoundFolderDto { path: dir.to_string(), exists, mismatch, legacy, pointer_missing }
+            BoundFolderDto { path: dir.to_string(), exists, mismatch, legacy, pointer_missing, foreign }
         })
         .collect())
 }
@@ -7087,6 +7098,7 @@ mod tests {
         assert!(row.mismatch.is_none(), "a pointer written by bind matches the store");
         assert!(!row.legacy, "a pointer written by bind is the current format");
         assert!(!row.pointer_missing, "the pointer is there");
+        assert!(row.foreign.is_none(), "a pointer written by bind names the store that wrote it");
 
         amenbo_core::binding::DirBinding::new(Some(project_id), Some("wharfy".into())).write(&dir).unwrap();
         let row = project_bound_folders(project_id).unwrap().remove(0);
@@ -7097,11 +7109,33 @@ mod tests {
         assert!(!row.legacy, "a mismatched pointer is still the current format");
         assert!(row.exists, "the folder is listed as before — the mismatch does not hide it");
 
+        // A pointer another channel's build wrote: the CLI refuses to run in that folder at all
+        // (`pointer_other_store`), so the row has to say so rather than look healthy (`AMB-D-685`).
+        amenbo_core::binding::DirBinding {
+            v: amenbo_core::binding::POINTER_VERSION,
+            store: Some("amenbo-dev".into()),
+            project_id: Some(project_id),
+            slug: slug.clone(),
+        }
+        .write(&dir)
+        .unwrap();
+        let row = project_bound_folders(project_id).unwrap().remove(0);
+        let foreign = row.foreign.expect("a pointer naming another store is reported");
+        assert_eq!(foreign.recorded, "amenbo-dev", "the row carries the store the pointer names");
+        assert_eq!(
+            foreign.running,
+            amenbo_core::config::Paths::APP_NAME,
+            "and the store of the build listing it — the sentence needs both names"
+        );
+        assert!(row.mismatch.is_none(), "the slug agrees; it is the store that does not");
+        assert!(row.exists, "the folder is listed as before — being another store's does not hide it");
+
         std::fs::write(dir.join(".amenbo"), r#"{"v":1,"project_id":"01LEGACY","slug":"wharfy"}"#).unwrap();
         let row = project_bound_folders(project_id).unwrap().remove(0);
         assert!(row.legacy, "a pointer whose project_id cannot be read is reported as legacy");
         assert!(row.mismatch.is_none(), "with no readable id there is nothing to check the slug against");
         assert!(!row.pointer_missing, "the pointer is there — it is just old");
+        assert!(row.foreign.is_none(), "a pointer that predates the store field is read, not refused");
 
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::remove_dir_all(&dir);

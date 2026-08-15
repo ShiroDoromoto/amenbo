@@ -76,6 +76,8 @@ export const ko: Translation = {
     "projset.folderNoSlug": "(이름 없음)", "projset.relink": "다시 연결",
     "projset.folderLegacyPointer": "이 폴더의 .amenbo는 이전 형식이라 어느 프로젝트를 가리키는지 읽을 수 없습니다. 다시 연결하면 현재 형식으로 고쳐 씁니다.",
     "projset.folderNoPointer": "연결 안 됨", "projset.folderNoPointerHint": "이 폴더에는 .amenbo가 없어서, 여기서 실행한 AI는 이 프로젝트로 이어지지 않습니다. 다시 연결하면 포인터를 되돌려 놓습니다.",
+    "projset.folderOtherStore": "다른 저장소",
+    "projset.folderOtherStoreHint": "이 폴더의 .amenbo는 “{recorded}”의 것이고, 이 빌드는 “{running}”입니다. 거기서 실행한 명령은 거부되므로, 여기서 실행한 AI는 이 프로젝트로 이어지지 않습니다. 다시 연결하면 폴더를 “{running}”에 넘깁니다.",
     "projset.harness": "AI를 amenbo로 시작하기",
     "projset.harnessHint": "이 프로젝트의 작업을 AI가 amenbo로 처리할지 물었을 때 한 답입니다. 답을 지우면 다음에 이 프로젝트를 열 때 다시 알립니다.",
     "projset.harnessAnswer": "답",

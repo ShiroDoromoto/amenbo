@@ -76,6 +76,8 @@ export const de: Translation = {
     "projset.folderNoSlug": "(ohne Namen)", "projset.relink": "Neu verknüpfen",
     "projset.folderLegacyPointer": "Die .amenbo dieses Ordners liegt im alten Format von vor der Migration, deshalb lässt sich nicht lesen, welches Projekt sie nennt. Neu verknüpfen schreibt sie im aktuellen Format um.",
     "projset.folderNoPointer": "nicht verknüpft", "projset.folderNoPointerHint": "Dieser Ordner hat keine .amenbo, deshalb kommt eine hier gestartete KI nicht bei diesem Projekt an. Neu verknüpfen setzt den Zeiger zurück.",
+    "projset.folderOtherStore": "anderer Speicher",
+    "projset.folderOtherStoreHint": "Die .amenbo dieses Ordners gehört zu „{recorded}“, dieser Build ist aber „{running}“. Ein Befehl dort wird abgewiesen, und eine hier gestartete KI kommt nicht bei diesem Projekt an. Neu verknüpfen übergibt den Ordner an „{running}“.",
     "projset.harness": "Deine KI mit amenbo starten",
     "projset.harnessHint": "Was dieses Projekt geantwortet hat, als gefragt wurde, ob deine KI die Arbeit mit amenbo führen soll. Wenn du die Antwort löschst, wird beim nächsten Öffnen dieses Projekts wieder darauf hingewiesen.",
     "projset.harnessAnswer": "Antwort",

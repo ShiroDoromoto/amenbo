@@ -76,6 +76,8 @@ export const ja: Translation = {
     "projset.folderNoSlug": "（名前なし）", "projset.relink": "再リンク",
     "projset.folderLegacyPointer": "このフォルダの .amenbo は移行前の古い形式で、どのプロジェクトを指しているか読めません。再リンクで今の形式に置き直せます。",
     "projset.folderNoPointer": "紐付けが切れています", "projset.folderNoPointerHint": "このフォルダに .amenbo がありません。ここで起動した AI はこのプロジェクトに解決しません。再リンクでポインタを置き直せます。",
+    "projset.folderOtherStore": "別ストアのもの",
+    "projset.folderOtherStoreHint": "このフォルダの .amenbo は「{recorded}」のものです。こちらは「{running}」なので、ここで打ったコマンドは拒否され、ここで起動した AI もこのプロジェクトには届きません。再リンクすると、このフォルダを「{running}」に渡せます。",
     "projset.harness": "AI に amenbo で回させるか",
     "projset.harnessHint": "このプロジェクトが「作業を AI に amenbo で回させるか」と訊かれたときの答えです。答えを消すと、次にこのプロジェクトを開いたときにまた知らせます。",
     "projset.harnessAnswer": "答え",

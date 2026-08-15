@@ -79,6 +79,8 @@ export const th: Translation = {
     "projset.folderNoSlug": "(ไม่มีชื่อ)", "projset.relink": "ผูกใหม่",
     "projset.folderLegacyPointer": "ไฟล์ .amenbo ของโฟลเดอร์นี้ยังเป็นรูปแบบเก่าก่อนย้ายข้อมูล จึงอ่านไม่ได้ว่ามันระบุโปรเจกต์ไหน ผูกใหม่เพื่อเขียนเป็นรูปแบบปัจจุบัน",
     "projset.folderNoPointer": "ยังไม่ได้ผูก", "projset.folderNoPointerHint": "โฟลเดอร์นี้ไม่มี .amenbo AI ที่เปิดที่นี่จึงไปไม่ถึงโปรเจกต์นี้ ผูกใหม่เพื่อเขียนตัวชี้กลับเข้าไป",
+    "projset.folderOtherStore": "คนละที่เก็บ",
+    "projset.folderOtherStoreHint": "ไฟล์ .amenbo ของโฟลเดอร์นี้เป็นของ “{recorded}” ส่วนบิลด์นี้คือ “{running}” คำสั่งที่รันในโฟลเดอร์นั้นจะถูกปฏิเสธ AI ที่เปิดที่นี่จึงไปไม่ถึงโปรเจกต์นี้ ผูกใหม่เพื่อมอบโฟลเดอร์นี้ให้ “{running}”",
     "projset.harness": "ให้ AI เริ่มงานด้วย amenbo",
     "projset.harnessHint": "คำตอบของโปรเจกต์นี้ ตอนที่ถามว่าจะให้ AI ดูแลงานด้วย amenbo ไหม ถ้าล้างคำตอบ ครั้งต่อไปที่เปิดโปรเจกต์นี้จะแจ้งอีกครั้ง",
     "projset.harnessAnswer": "คำตอบ",

@@ -79,6 +79,8 @@ export const it: Translation = {
     "projset.folderNoSlug": "(senza nome)", "projset.relink": "Ricollega",
     "projset.folderLegacyPointer": "Il .amenbo di questa cartella è nel vecchio formato precedente alla migrazione, quindi non si legge quale progetto nomina. Ricollegala per riscriverlo nel formato attuale.",
     "projset.folderNoPointer": "non collegata", "projset.folderNoPointerHint": "Questa cartella non ha .amenbo, quindi un'IA avviata qui non arriva a questo progetto. Ricollegala per rimettere il puntatore.",
+    "projset.folderOtherStore": "altro archivio",
+    "projset.folderOtherStoreHint": "Il .amenbo di questa cartella appartiene a «{recorded}», mentre questa build è «{running}». Lì ogni comando viene rifiutato, quindi un'IA avviata qui non arriva a questo progetto. Ricollegala per affidare la cartella a «{running}».",
     "projset.harness": "Avviare la tua IA con amenbo",
     "projset.harnessHint": "Che cosa ha risposto questo progetto quando gli è stato chiesto se la tua IA dovesse portare avanti il lavoro con amenbo. Cancellando la risposta, l'avviso torna alla prossima apertura del progetto.",
     "projset.harnessAnswer": "Risposta",

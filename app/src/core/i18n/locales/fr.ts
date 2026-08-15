@@ -79,6 +79,8 @@ export const fr: Translation = {
     "projset.folderNoSlug": "(sans nom)", "projset.relink": "Relier",
     "projset.folderLegacyPointer": "Le .amenbo de ce dossier est dans l'ancien format d'avant la migration, on ne peut donc pas lire quel projet il nomme. Reliez-le pour le réécrire dans le format actuel.",
     "projset.folderNoPointer": "non lié", "projset.folderNoPointerHint": "Ce dossier n'a pas de .amenbo : une IA lancée ici n'aboutit donc pas à ce projet. Reliez-le pour remettre le pointeur.",
+    "projset.folderOtherStore": "autre stockage",
+    "projset.folderOtherStoreHint": "Le .amenbo de ce dossier appartient à « {recorded} », alors que cette version est « {running} ». Une commande lancée là-bas est refusée, et une IA démarrée ici n'aboutit pas à ce projet. Reliez-le pour confier le dossier à « {running} ».",
     "projset.harness": "Lancer votre IA avec amenbo",
     "projset.harnessHint": "Ce que ce projet a répondu lorsqu'on lui a demandé si votre IA devait gérer le travail avec amenbo. Effacer la réponse fait revenir l'avis à la prochaine ouverture de ce projet.",
     "projset.harnessAnswer": "Réponse",

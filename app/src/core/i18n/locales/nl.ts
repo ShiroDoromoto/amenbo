@@ -76,6 +76,8 @@ export const nl: Translation = {
     "projset.folderNoSlug": "(geen naam)", "projset.relink": "Opnieuw koppelen",
     "projset.folderLegacyPointer": "De .amenbo van deze map staat nog in de oude vorm van vóór de migratie, dus welk project hij noemt is niet te lezen. Koppel opnieuw om hem in de huidige vorm te schrijven.",
     "projset.folderNoPointer": "niet gekoppeld", "projset.folderNoPointerHint": "Deze map heeft geen .amenbo, dus een AI die hier start komt niet bij dit project uit. Koppel opnieuw om de verwijzing terug te schrijven.",
+    "projset.folderOtherStore": "andere opslag",
+    "projset.folderOtherStoreHint": "De .amenbo van deze map hoort bij “{recorded}”, en deze build is “{running}”. Een opdracht daar wordt geweigerd, dus een AI die hier start komt niet bij dit project uit. Koppel opnieuw om de map aan “{running}” te geven.",
     "projset.harness": "Je AI met amenbo starten",
     "projset.harnessHint": "Wat dit project heeft geantwoord toen werd gevraagd of je AI het werk in amenbo moet bijhouden. Als je het antwoord wist, komt de melding terug zodra je dit project weer opent.",
     "projset.harnessAnswer": "Antwoord",

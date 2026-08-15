@@ -76,6 +76,8 @@ export const tr: Translation = {
     "projset.folderNoSlug": "(adsız)", "projset.relink": "Yeniden bağla",
     "projset.folderLegacyPointer": "Bu klasörün .amenbo dosyası taşımadan önceki eski biçimde, bu yüzden hangi projeyi andığı okunamıyor. Yeniden bağlayınca güncel biçimde yazılır.",
     "projset.folderNoPointer": "bağlı değil", "projset.folderNoPointerHint": "Bu klasörde .amenbo yok, dolayısıyla burada başlatılan yapay zekâ bu projeye ulaşmaz. Yeniden bağlayınca işaretçi geri yazılır.",
+    "projset.folderOtherStore": "başka depo",
+    "projset.folderOtherStoreHint": "Bu klasörün .amenbo dosyası “{recorded}” deposuna ait, bu yapı ise “{running}”. Orada çalıştırılan komut reddedilir, dolayısıyla burada başlatılan yapay zekâ bu projeye ulaşmaz. Klasörü “{running}” yapısına vermek için yeniden bağlayın.",
     "projset.harness": "Yapay zekânızı amenbo ile başlatmak",
     "projset.harnessHint": "Bu projeye, işi yapay zekânızın amenbo ile yürütüp yürütmeyeceği sorulduğunda verilen yanıt. Yanıtı silerseniz, bu projeyi bir dahaki açışınızda bildirim yeniden görünür.",
     "projset.harnessAnswer": "Yanıt",

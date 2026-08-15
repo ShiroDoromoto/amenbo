@@ -79,6 +79,8 @@ export const pl: Translation = {
     "projset.folderNoSlug": "(bez nazwy)", "projset.relink": "Podepnij ponownie",
     "projset.folderLegacyPointer": "Plik .amenbo tego folderu jest w starym formacie sprzed migracji, więc nie da się odczytać, jaki projekt wskazuje. Podepnij ponownie, żeby zapisać go w obecnym formacie.",
     "projset.folderNoPointer": "niepodpięty", "projset.folderNoPointerHint": "Ten folder nie ma .amenbo, więc uruchomiona tu SI nie trafia do tego projektu. Podepnij ponownie, żeby przywrócić wskaźnik.",
+    "projset.folderOtherStore": "inny magazyn",
+    "projset.folderOtherStoreHint": "Plik .amenbo tego folderu należy do „{recorded}”, a ta kompilacja to „{running}”. Polecenie wydane tam zostanie odrzucone, więc uruchomiona tu SI nie trafia do tego projektu. Podepnij ponownie, żeby oddać folder „{running}”.",
     "projset.harness": "Uruchamianie AI przez amenbo",
     "projset.harnessHint": "Co ten projekt odpowiedział, gdy padło pytanie, czy praca ma iść przez AI w amenbo. Skasowanie odpowiedzi sprawia, że powiadomienie wróci przy następnym otwarciu projektu.",
     "projset.harnessAnswer": "Odpowiedź",

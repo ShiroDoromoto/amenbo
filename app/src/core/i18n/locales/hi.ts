@@ -76,6 +76,8 @@ export const hi: Translation = {
     "projset.folderNoSlug": "(नाम नहीं)", "projset.relink": "दोबारा जोड़ें",
     "projset.folderLegacyPointer": "इस फ़ोल्डर का .amenbo पुराने, माइग्रेशन-पूर्व प्रारूप में है, इसलिए वह किस प्रोजेक्ट का नाम लेता है यह पढ़ा नहीं जा सकता। दोबारा जोड़ने पर वह मौजूदा प्रारूप में लिख दिया जाएगा।",
     "projset.folderNoPointer": "जुड़ा नहीं है", "projset.folderNoPointerHint": "इस फ़ोल्डर में .amenbo नहीं है, इसलिए यहाँ चलाया गया AI इस प्रोजेक्ट तक नहीं पहुँचता। दोबारा जोड़ने पर सूचक वापस लिख दिया जाएगा।",
+    "projset.folderOtherStore": "दूसरा स्टोर",
+    "projset.folderOtherStoreHint": "इस फ़ोल्डर का .amenbo “{recorded}” का है, जबकि यह बिल्ड “{running}” है। वहाँ चलाई गई कमांड ठुकरा दी जाती है, इसलिए यहाँ चलाया गया AI इस प्रोजेक्ट तक नहीं पहुँचता। फ़ोल्डर को “{running}” को सौंपने के लिए दोबारा जोड़ें।",
     "projset.harness": "अपने AI को amenbo पर शुरू करना",
     "projset.harnessHint": "जब इस प्रोजेक्ट से पूछा गया कि काम आपका AI amenbo में चलाए या नहीं, तब का जवाब। जवाब मिटाने पर, अगली बार यह प्रोजेक्ट खोलते ही सूचना फिर दिखेगी।",
     "projset.harnessAnswer": "जवाब",

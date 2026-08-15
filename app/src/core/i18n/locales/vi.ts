@@ -79,6 +79,8 @@ export const vi: Translation = {
     "projset.folderNoSlug": "(không tên)", "projset.relink": "Gắn lại",
     "projset.folderLegacyPointer": "File .amenbo của thư mục này còn ở định dạng cũ trước khi chuyển đổi, nên không đọc được nó gọi tên dự án nào. Gắn lại để ghi nó theo định dạng hiện tại.",
     "projset.folderNoPointer": "chưa gắn", "projset.folderNoPointerHint": "Thư mục này không có .amenbo, nên AI chạy ở đây không dẫn tới dự án này. Gắn lại để ghi con trỏ trở lại.",
+    "projset.folderOtherStore": "kho khác",
+    "projset.folderOtherStoreHint": "Tệp .amenbo của thư mục này thuộc về “{recorded}”, còn bản dựng này là “{running}”. Lệnh chạy ở đó sẽ bị từ chối, nên AI chạy ở đây không dẫn tới dự án này. Gắn lại để giao thư mục cho “{running}”.",
     "projset.harness": "Khởi động AI của bạn với amenbo",
     "projset.harnessHint": "Câu trả lời của dự án này khi được hỏi có để AI lo công việc bằng amenbo hay không. Xoá câu trả lời thì lần mở dự án tới sẽ báo lại.",
     "projset.harnessAnswer": "Câu trả lời",

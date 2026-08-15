@@ -79,6 +79,8 @@ export const id: Translation = {
     "projset.folderNoSlug": "(tanpa nama)", "projset.relink": "Tautkan ulang",
     "projset.folderLegacyPointer": "File .amenbo di folder ini masih berformat lama sebelum migrasi, jadi proyek mana yang disebutnya tidak bisa dibaca. Tautkan ulang untuk menulisnya dalam format sekarang.",
     "projset.folderNoPointer": "tidak tertaut", "projset.folderNoPointerHint": "Folder ini tidak punya .amenbo, jadi AI yang dijalankan di sini tidak sampai ke proyek ini. Tautkan ulang untuk menulis penunjuknya kembali.",
+    "projset.folderOtherStore": "penyimpanan lain",
+    "projset.folderOtherStoreHint": "File .amenbo folder ini milik “{recorded}”, sedangkan build ini “{running}”. Perintah yang dijalankan di sana ditolak, jadi AI yang dijalankan di sini tidak sampai ke proyek ini. Tautkan ulang untuk menyerahkan folder ini ke “{running}”.",
     "projset.harness": "Menjalankan AI Anda lewat amenbo",
     "projset.harnessHint": "Jawaban proyek ini ketika ditanya apakah AI Anda menjalankan pekerjaannya lewat amenbo. Menghapus jawaban membuat pemberitahuannya muncul lagi saat proyek ini dibuka berikutnya.",
     "projset.harnessAnswer": "Jawaban",

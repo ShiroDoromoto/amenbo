@@ -77,6 +77,8 @@ export const zhHans: Translation = {
     "projset.folderNoSlug": "（无名称）", "projset.relink": "重新关联",
     "projset.folderLegacyPointer": "这个文件夹的 .amenbo 是迁移前的旧格式，读不出它指向哪个项目。重新关联可用当前格式改写它。",
     "projset.folderNoPointer": "未关联", "projset.folderNoPointerHint": "这个文件夹没有 .amenbo，所以在这里启动的 AI 不会解析到这个项目。重新关联可以把指针写回去。",
+    "projset.folderOtherStore": "属于其他存储",
+    "projset.folderOtherStoreHint": "这个文件夹的 .amenbo 属于“{recorded}”，而当前这个版本是“{running}”。在那里执行的命令会被拒绝，所以在这里启动的 AI 也到不了这个项目。重新关联可以把文件夹交给“{running}”。",
     "projset.harness": "让 AI 用 amenbo 打理这个项目",
     "projset.harnessHint": "这个项目在被问到「要不要让 AI 用 amenbo 打理活儿」时的回答。清掉回答后，下次打开这个项目会再提醒一次。",
     "projset.harnessAnswer": "回答",

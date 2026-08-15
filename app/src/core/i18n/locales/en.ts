@@ -88,6 +88,8 @@ const ui = {
   "projset.folderNoSlug": "(no name)", "projset.relink": "Re-link",
   "projset.folderLegacyPointer": "This folder's .amenbo is in the old pre-migration format, so which project it names can't be read. Re-link to rewrite it in the current format.",
   "projset.folderNoPointer": "not linked", "projset.folderNoPointerHint": "This folder has no .amenbo, so an AI launched here does not resolve to this project. Re-link to write the pointer back.",
+  "projset.folderOtherStore": "other store",
+  "projset.folderOtherStoreHint": "This folder's .amenbo belongs to “{recorded}”, and this build is “{running}”. A command run there is refused, so an AI launched here does not reach this project. Re-link to hand the folder to “{running}”.",
   "projset.harness": "Starting your AI on amenbo",
   "projset.harnessHint": "What this project answered when it was asked to have its AI run this work on amenbo. Clearing the answer puts the notice back the next time you open this project.",
   "projset.harnessAnswer": "Answer",

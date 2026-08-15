@@ -38,7 +38,7 @@ import { currentLang, t } from "../core/i18n";
 import { Icon } from "../components/Icon";
 
 /**
- * `projectSettings` is the settings screen, carrying the project id in `id`. Reached from the ⚙ in the board toolbar.
+ * `projectSettings` is the settings screen, carrying the project id in `id`. Reached from the gear in the board toolbar.
  *
  * `pick` is the project a screen should arrive already holding — the one the creation screen just
  * raised, carried into the MCP screen so its rows open on it (`AMB-D-684`). It is part of where you
@@ -153,7 +153,7 @@ export function AppShell() {
     document.addEventListener("pointerup", onUp);
   }, []);
   // Whether the right pane (detail / compose) holds unsaved input. Each pane reports it through onDirtyChange, and
-  // it guards against data loss before an outside click or the ✕ closes the pane (a ref, so we read the latest value
+  // it guards against data loss before an outside click or the cross closes the pane (a ref, so we read the latest value
   // without adding a subscription).
   const rightDirtyRef = useRef(false);
   const setRightDirty = useCallback((dirty: boolean) => { rightDirtyRef.current = dirty; }, []);
@@ -231,7 +231,7 @@ export function AppShell() {
   }, [navTo]);
   const goBack = useCallback(async () => { if (await guardDirty()) back(); }, [back, guardDirty]);
   const goForward = useCallback(async () => { if (await guardDirty()) forward(); }, [forward, guardDirty]);
-  // Closing via a click on blank space (outside a row or card), the ✕, or Cancel. With unsaved input we interpose the discard confirmation and close only on OK.
+  // Closing via a click on blank space (outside a row or card), the cross, or Cancel. With unsaved input we interpose the discard confirmation and close only on OK.
   const requestCloseRight = async () => {
     if (!(await guardDirty())) return;
     closeRight();

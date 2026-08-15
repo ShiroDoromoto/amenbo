@@ -13,6 +13,7 @@ import {
 import { pluginDesc } from "../core/pluginText";
 import { subscribeOutsideStore } from "../core/snapshot";
 import { DismissButton } from "./DismissButton";
+import { Icon } from "./Icon";
 
 /**
  * "Some of your plugins have a newer build" — said once, under the top bar, with the button that takes it
@@ -30,7 +31,7 @@ import { DismissButton } from "./DismissButton";
  * installed screen and not here — the window is there to keep the automatic triggers cheap, and a press is
  * not one of them.
  *
- * The ✕ dismisses the **builds** currently offered, persisted (`core/pluginUpdates`): the same offer stays
+ * The cross dismisses the **builds** currently offered, persisted (`core/pluginUpdates`): the same offer stays
  * quiet across launches, and a plugin whose catalog entry moves again comes back on its own.
  */
 export function PluginUpdateBanner({ onOpenInstalled }: {
@@ -89,7 +90,7 @@ export function PluginUpdateBanner({ onOpenInstalled }: {
 
   return (
     <div className="healthbanner" role="status">
-      <span className="healthbanner__icon" aria-hidden>🧩</span>
+      <Icon name="puzzle" size="lg" />
       <div className="healthbanner__body">
         <div className="healthbanner__title">
           {tn("plugins.updates.title", pending.length)}

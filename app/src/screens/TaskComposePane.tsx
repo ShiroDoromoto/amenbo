@@ -4,7 +4,7 @@ import { t } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 
 // Creating a new task in the right pane: enter a title plus notes (Markdown) and create it. Where it is created is
-// chosen by the caller (the ＋ in a column header). A task only gets placed in a project; classification (assigning
+// chosen by the caller (the plus in a column header). A task only gets placed in a project; classification (assigning
 // it to a dimension) is added afterwards from the task detail.
 export function TaskComposePane({
   projectId, label, onCreated, onCancel, onDirtyChange,
@@ -15,7 +15,7 @@ export function TaskComposePane({
   /** Hands over the id of the task just created (the parent switches the right pane to its detail). null if it cannot be obtained. */
   onCreated: (newId: number | null) => void;
   onCancel: () => void;
-  // Reports to the parent (AppShell) whether there is unsaved input. Used by the discard guard on an outside click or the ✕.
+  // Reports to the parent (AppShell) whether there is unsaved input. Used by the discard guard on an outside click or the cross.
   onDirtyChange?: (dirty: boolean) => void;
 }) {
   const store = useStore();

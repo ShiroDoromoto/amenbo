@@ -261,7 +261,7 @@ export function BoardScreen({
         className={`decisionsbtn ${tab === "decisions" ? "decisionsbtn--active" : ""}`}
         onClick={() => setTab("decisions")}
       >
-        ⚖ {t("nav.decisions")}
+        <Icon name="scales" /> {t("nav.decisions")}
         {project.proposedDecisionCount ? <span className="decisionsbtn__count">{project.proposedDecisionCount}</span> : null}
       </button>
       <div className="topbar__spacer" />
@@ -279,7 +279,7 @@ export function BoardScreen({
         </button>
       )}
       <button className="btn" title={t("projset.title")} aria-label={t("projset.title")} onClick={onOpenSettings}>
-        <span className="btn__glyph" aria-hidden="true">⚙</span>
+        <Icon name="gear" />
       </button>
     </div>
   );
@@ -348,7 +348,7 @@ export function BoardScreen({
             ))}
             <AddDimension onAdd={(name) => store.addDimension(projectId, name)} />
             {projectDims.length >= 1 && (
-              <button className="filterchip" onClick={() => setDimMgrOpen(true)}>⚙ {t("board.manageDimensions")}</button>
+              <button className="filterchip" onClick={() => setDimMgrOpen(true)}><Icon name="gear" /> {t("board.manageDimensions")}</button>
             )}
           </div>
         )}
@@ -417,7 +417,7 @@ export function BoardScreen({
                 onSelectTask={onSelectTask}
                 onStatus={setStatusAnimated}
                 onSeeAllList={() => setView("list")}
-                // Only the todo column offers "add". The ＋ in the column head composes in the right pane and
+                // Only the todo column offers "add". The plus in the column head composes in the right pane and
                 // adds the task directly under the project (a dimension value is assigned later, from the detail).
                 onAdd={st === "todo"
                   ? () => onComposeTask({ projectId, label: project.name })
@@ -542,7 +542,7 @@ function AddDimension({ onAdd }: { onAdd: (name: string) => void }) {
       onBlur={() => { commit(); setAdding(false); }}
     />
   ) : (
-    <button className="filterchip" onClick={() => setAdding(true)}>＋ {t("board.addDimension")}</button>
+    <button className="filterchip" onClick={() => setAdding(true)}><Icon name="plus" /> {t("board.addDimension")}</button>
   );
 }
 
@@ -563,7 +563,7 @@ function AddDimensionValue({ onAdd }: { onAdd: (name: string) => void }) {
       onBlur={() => { commit(); setAdding(false); }}
     />
   ) : (
-    <button className="board__addcol" onClick={() => setAdding(true)}>＋ {t("board.addDimensionValue")}</button>
+    <button className="board__addcol" onClick={() => setAdding(true)}><Icon name="plus" /> {t("board.addDimensionValue")}</button>
   );
 }
 
@@ -632,7 +632,7 @@ const Column = memo(function Column({
         <span className="column__count">{count ?? (overflow ? overflow.total : cards.length)}</span>
         {note && <span className="column__note">{note}</span>}
         {onAdd && (
-          <button className="column__addbtn" title={t("card.addTaskTip")} onClick={onAdd}>＋</button>
+          <button className="column__addbtn" title={t("card.addTaskTip")} onClick={onAdd}><Icon name="plus" /></button>
         )}
       </div>
       {shownCards.map((t) => (

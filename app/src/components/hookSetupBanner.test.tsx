@@ -145,7 +145,7 @@ describe("lint setup banner", () => {
   });
 
   // Two banners, two dismisses: closing one must leave the other. They were sharing one dismiss flag, so a
-  // single ✕ hid both — the bug this pins.
+  // single cross hid both — the bug this pins.
   it("dismisses each banner on its own — closing one leaves the other", async () => {
     hoisted.notices = [notice({ unwired: ["commit-msg"], restored: ["pre-commit"] })];
     await render(true);
@@ -165,7 +165,7 @@ describe("lint setup banner", () => {
     expect(left[0].textContent).toContain("pre-commit");
   });
 
-  it("lists every unfinished repository, and ✕ dismisses the banner for the session", async () => {
+  it("lists every unfinished repository, and the cross dismisses the banner for the session", async () => {
     hoisted.notices = [notice(), notice({ projectName: "案件Y", dir: "/w/案件Y" })];
     await render(true);
 

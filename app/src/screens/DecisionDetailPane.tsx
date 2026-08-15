@@ -446,7 +446,7 @@ function DecisionEdgeCompose({ d, projectId }: { d: Decision; projectId: number 
   if (!open) {
     return (
       <button className="feed__action" style={{ marginTop: 6 }} onClick={() => setOpen(true)}>
-        ＋ {t("dec.edge.add")}
+        <Icon name="plus" /> {t("dec.edge.add")}
       </button>
     );
   }

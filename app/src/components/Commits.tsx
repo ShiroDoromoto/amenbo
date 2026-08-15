@@ -27,7 +27,7 @@ function CopyButton({ sha }: { sha: string }) {
   };
   return (
     <button className="feed__action" title={t("commit.copy")} onClick={() => void onCopy()}>
-      {copied ? t("commit.copied") : "⧉"}
+      {copied ? t("commit.copied") : <Icon name="clipboard" />}
     </button>
   );
 }

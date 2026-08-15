@@ -68,7 +68,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
   border-bottom: 1px solid var(--c-border);
   font-size: var(--fs-sm);
 }
-.healthbanner__icon { font-size: var(--fs-lg); line-height: 1.2; }
 .healthbanner__body { flex: 1; min-width: 0; }
 .healthbanner__title { font-weight: var(--fw-bold); }
 .healthbanner__line { font-size: var(--fs-xs); opacity: 0.95; word-break: break-word; }

@@ -94,7 +94,7 @@ export function PluginMarketScreen({ onOpenInstalled }: {
   return (
     <>
       <div className="filterbar">
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>🧩 {t("plugins.market")}</span>
+        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}><Icon name="puzzle" /> {t("plugins.market")}</span>
         <input
           {...asTyped}
           className="board__search"

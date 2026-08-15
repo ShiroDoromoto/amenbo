@@ -8,6 +8,7 @@ import { decisionRef } from "../core/idref";
 import { parseRefQuery } from "../core/filters";
 import { asTyped } from "../core/keys";
 import { ErrorNote } from "../components/ErrorNote";
+import { Icon } from "../components/Icon";
 
 // The list of decision records. A decision is a first-class entity that keeps "why we went with X"
 // (edited in place to refine, superseded to overturn), and it lives on a plane of its own, apart from
@@ -76,7 +77,7 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
   return (
     <>
       <div className="filterbar">
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>⚖ {t("dec.title")}</span>
+        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}><Icon name="scales" /> {t("dec.title")}</span>
         <input
           {...asTyped}
           className="board__search"
@@ -113,7 +114,7 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
           </select>
         </label>
         <span className="topbar__spacer" style={{ flex: 1 }} />
-        <button className="feed__action" onClick={() => setComposing((v) => !v)}>＋ {t("dec.new")}</button>
+        <button className="feed__action" onClick={() => setComposing((v) => !v)}><Icon name="plus" /> {t("dec.new")}</button>
       </div>
 
       <div style={{ padding: 12, overflowY: "auto" }}>

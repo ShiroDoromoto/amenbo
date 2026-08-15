@@ -25,7 +25,7 @@ function updatePhaseHint(progress: UpdateProgress | null): string {
 // downloads + minisign-verifies + installs the newer signed build (`installUpdate`), then the banner offers a restart
 // to apply it. Both the apply and the restart are user actions — nothing updates in the background. If the updater
 // manifest offers nothing (or the update errors), it falls back to opening the all-in-one installer in the browser,
-// so the user is never stuck. The ✕ dismisses it per version (core/updateDismissed): the version dismissed stays quiet
+// so the user is never stuck. The cross dismisses it per version (core/updateDismissed): the version dismissed stays quiet
 // across launches, and the banner returns on its own once a newer one is offered.
 type UpdateStage = "idle" | "working" | "ready";
 export function UpdateBanner({ recheck }: { recheck: number }) {
@@ -72,7 +72,7 @@ export function UpdateBanner({ recheck }: { recheck: number }) {
 
   return (
     <div className="healthbanner" role="alert">
-      <span className="healthbanner__icon" aria-hidden>⬆</span>
+      <Icon name="arrowUp" size="lg" />
       <div className="healthbanner__body">
         <div className="healthbanner__title">{t("update.title")}{vs.newerVersion ? ` (${vs.newerVersion})` : ""}</div>
         <div className="healthbanner__hint">
@@ -124,7 +124,7 @@ export function UpdateCheckFeedback({
   if (state === "checking") {
     return (
       <div className="healthbanner" role="status">
-        <span className="healthbanner__icon" aria-hidden>⟳</span>
+        <Icon name="refresh" size="lg" />
         <div className="healthbanner__body">
           <div className="healthbanner__title">{t("update.checking")}</div>
         </div>

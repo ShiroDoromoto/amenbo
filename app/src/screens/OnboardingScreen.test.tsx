@@ -109,7 +109,10 @@ describe("the two ways in", () => {
     await render();
     for (const [label, go] of [["onboard.createLabel", "onboard.createGo"], ["onboard.openLabel", "noFolder.btn"]]) {
       expect(t(go), `${go} is a key some dictionary holds`).not.toBe(go);
-      expect(button(t(label))?.querySelector(".onboard__go")?.textContent).toBe(`${t(go)} →`);
+      const go_line = button(t(label))?.querySelector(".onboard__go");
+      expect(go_line?.textContent?.trim()).toBe(t(go));
+      // What says "this leads on" is a mark, so the words beside it carry none of that job.
+      expect(go_line?.querySelector("svg")?.getAttribute("data-icon")).toBe("chevronRight");
     }
   });
 

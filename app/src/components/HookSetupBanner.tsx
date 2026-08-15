@@ -27,7 +27,7 @@ import { DismissButton } from "./DismissButton";
 // hooks in the same breath says one thing twice. That order is what the notice is read after, too: `hook_offer`'s
 // sweep has installed a yes's hooks and healed damaged blocks by then, so `unwired` names only what is still
 // missing and `restored` names what the sweep just put back. A recorded "no" and an opted-out repository are
-// both silent here (core decides), so this cannot become noise to tune out. Dismissible with the ✕ for the
+// both silent here (core decides), so this cannot become noise to tune out. Dismissible with the cross for the
 // session. Outside Tauri (in the browser) it is always empty, hence hidden.
 export function HookSetupBanner({ asked }: { asked: boolean }) {
   const [notices, setNotices] = useState<HookNoticeDto[]>([]);

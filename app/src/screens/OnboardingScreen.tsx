@@ -24,7 +24,7 @@ export function OnboardingScreen({ onNav }: { onNav: (nav: Nav) => void }) {
   return (
     <div className="onboard">
       <div className="onboard__hero">
-        <div className="placeholder__big"><Icon name="goose" size="lg" /></div>
+        <Icon name="goose" size="lg" />
         <h2>{t("onboard.welcome")}</h2>
         <p className="muted">{t("onboard.tagline")}</p>
         <div className="onboard__actions">
@@ -81,7 +81,7 @@ function NavCard({ icon, label, hint, go, onClick }: { icon: IconName; label: st
       <span className="onboard__action-body">
         <span className="onboard__action-label">{label}</span>
         <span className="onboard__action-hint">{hint}</span>
-        <span className="onboard__go">{go} →</span>
+        <span className="onboard__go">{go} <Icon name="chevronRight" /></span>
       </span>
     </button>
   );
@@ -109,7 +109,7 @@ function BindCard({ projects, onBound }: { projects: Project[]; onBound: (id: nu
         <span className="onboard__action-body">
           <span className="onboard__action-label">{t("onboard.openLabel")}</span>
           <span className="onboard__action-hint">{t("onboard.openHint")}</span>
-          <span className="onboard__go">{t("noFolder.btn")} →</span>
+          <span className="onboard__go">{t("noFolder.btn")} <Icon name="chevronRight" /></span>
         </span>
       </button>
     );

@@ -19,8 +19,10 @@ const edited: Array<[number, number]> = [];
 // The reply button carries a mark rather than a character, so it is found by which mark it drew.
 const replyButtons = () =>
   Array.from(container.querySelectorAll("button")).filter((b) => b.querySelector('svg[data-icon="reply"]'));
-const targetButtons = () =>
-  Array.from(container.querySelectorAll("button")).filter((b) => b.textContent?.startsWith("→"));
+const targetButtons = () => Array.from(container.querySelectorAll<HTMLButtonElement>("button.feed__target"));
+// The rows whose target is gone: named, and with nothing to press.
+const goneTargets = () =>
+  Array.from(container.querySelectorAll(".feed__target--gone")).map((e) => e.textContent?.trim());
 
 // Outside Tauri, so the snapshot comes from the mock fixtures: one comment plus a system row.
 beforeAll(async () => {
@@ -68,18 +70,18 @@ describe("ActivityFeed target buttons", () => {
 
   it("a row aimed at a deleted task (task.deleted) is not a clickable button", () => {
     expect(targetButtons().some((x) => x.textContent?.includes("重複していた下書き"))).toBe(false);
-    expect(container.textContent).toContain("→ 重複していた下書き");
+    expect(goneTargets()).toContain("重複していた下書き");
   });
 
   it("a row aimed at a project (project.deleted) is not a clickable button", () => {
     expect(targetButtons().some((x) => x.textContent?.includes("旧サイト"))).toBe(false);
-    expect(container.textContent).toContain("→ 旧サイト（統合前）");
+    expect(goneTargets()).toContain("旧サイト（統合前）");
   });
 
   // A row aimed at a *deleted* decision (decision.deleted) has nothing to open, exactly like a deleted task.
   it("a row aimed at a deleted decision is not a clickable button", () => {
     expect(targetButtons().some((x) => x.textContent?.includes("旧方針の決定"))).toBe(false);
-    expect(container.textContent).toContain("→ 旧方針の決定");
+    expect(goneTargets()).toContain("旧方針の決定");
   });
 
   // A live decision does have somewhere to go. It must open as a *decision*: the two numbering spaces overlap, so

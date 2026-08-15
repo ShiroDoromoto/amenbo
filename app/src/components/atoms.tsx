@@ -44,9 +44,6 @@ const PRIORITY_COLOR: Record<Priority, string> = {
 export function facetColor(kind: "human" | "ai") {
   return kind === "ai" ? "var(--c-ai)" : "var(--c-human)";
 }
-export function facetGlyph(kind: "human" | "ai") {
-  return kind === "ai" ? "🤖" : "👤";
-}
 
 /** A distinct identicon seed per facet. The two facets (human / ai) seed off their kind, so they render as different
  * glyphs — tellable apart with no badge, even with no AI icon set. */
@@ -58,7 +55,7 @@ export function identiconSeed(actor: Actor) {
 // otherwise a deterministic identicon seeded per facet so human and AI read as distinct
 // without any upload, server, or badge. The facet is conveyed by the ring colour
 // (--c-human / --c-ai); the registered AI face or the AI-seeded identicon carries the AI
-// identity, so no 🤖 glyph is layered on. Faces come from config and only ride on the
+// identity, so no robot glyph is layered on. Faces come from config and only ride on the
 // roster actor (facet_actor keeps assignee/author DTOs face-less to stay light), so
 // when the given actor has no avatar of its own we resolve it by kind from the roster.
 export function FacetAvatar({ actor, showName }: { actor: Actor; showName?: boolean }) {
@@ -201,7 +198,7 @@ export function PriorityDot({ priority }: { priority: Priority | null }) {
   if (!priority) return null;
   return (
     <span className="chip" style={{ color: PRIORITY_COLOR[priority] }}>
-      ● {priorityLabel(priority)}
+      <Icon name="dot" /> {priorityLabel(priority)}
     </span>
   );
 }

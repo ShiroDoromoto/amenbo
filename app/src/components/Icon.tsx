@@ -64,7 +64,10 @@ export type IconName =
   | "keyboard"
   | "clipboard"
   | "rocket"
-  | "star";
+  | "star"
+  | "person"
+  | "robot"
+  | "dot";
 
 const ART: Record<IconName, ReactNode> = {
   // An envelope — the inbox smart view.
@@ -327,6 +330,29 @@ const ART: Record<IconName, ReactNode> = {
   star: (
     <path d="M12 3.2l2.7 5.5 6.1.9-4.4 4.3 1 6-5.4-2.8-5.4 2.8 1-6L3.2 9.6l6.1-.9z" />
   ),
+
+  // ----- the two facets, where the settings screen asks what each of them is called -----
+  // A head and shoulders — the person. Everywhere else a facet is drawn as its avatar
+  // (`FacetAvatar`), which is a picture of *this* human; this is the kind itself.
+  person: (
+    <>
+      <circle cx="12" cy="7.8" r="3.9" />
+      <path d="M4.6 20.6c0-3.9 3.3-6.2 7.4-6.2s7.4 2.3 7.4 6.2" />
+    </>
+  ),
+  // A head with an aerial — that person's AI. It is told from the human by its outline
+  // (a box against a circle), which is what carries the pair at 16px.
+  robot: (
+    <>
+      <rect x="3.6" y="7.6" width="16.8" height="12" rx="2.6" />
+      <path d="M12 3.4v4.2" />
+      <path d="M8.8 12.6v1.8M15.2 12.6v1.8" />
+    </>
+  ),
+  // A filled disc — the priority a task carries, which is read off the colour it is drawn in.
+  // It is the one entry that is filled rather than stroked, so `.icon[data-icon="dot"]`
+  // (`components.css`) turns the convention round for it.
+  dot: <circle cx="12" cy="12" r="5.4" />,
 };
 
 /**

@@ -50,9 +50,6 @@
   --measure-prose: 40rem; /* reading-width cap for detail-pane body text (~40 CJK chars) */
   --fs-lg: 17px;
   --fs-xl: 20px;
-  /* display (decorative glyphs / emoji, not body text) */
-  --fs-display-md: 36px;
-  --fs-display-lg: 44px;
   --fw-normal: 400;
   --fw-medium: 550;
   --fw-bold: 680;

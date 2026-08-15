@@ -19,6 +19,7 @@ import {
 } from "../core/pluginUpdates";
 import { pluginDesc } from "../core/pluginText";
 import { getSnapshot, subscribe } from "../core/snapshot";
+import { Icon } from "../components/Icon";
 
 // What this machine holds — the "manage what you have" half of the plugin section (`AMB-D-356`), beside
 // the market's "find one".
@@ -54,7 +55,7 @@ export function PluginInstalledScreen() {
   return (
     <>
       <div className="filterbar">
-        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>🧩 {t("plugins.installed")}</span>
+        <span className="faint" style={{ fontSize: "var(--fs-xs)" }}><Icon name="puzzle" /> {t("plugins.installed")}</span>
         <span className="topbar__spacer" style={{ flex: 1 }} />
         {/* Ahead of the verdict, not after it: a reader who takes "up to date" at face value has already
             stopped reading by the time a footnote arrives. */}

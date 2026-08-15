@@ -13,6 +13,9 @@
 }
 .icon--md { width: var(--icon-md); height: var(--icon-md); }
 .icon--lg { width: var(--icon-lg); height: var(--icon-lg); }
+/* The one mark that is a shape rather than a drawing: the priority disc says which priority by the
+   colour it is filled with, so for it alone the outline convention is turned round. */
+.icon[data-icon="dot"] { fill: currentColor; stroke: none; }
 
 /* ---------- atoms ---------- */
 .facet { display: inline-flex; align-items: center; gap: var(--s-1); }
@@ -463,10 +466,6 @@
    that wants a different fade overrides it, but none may leave the disabled state invisible. */
 .btn:disabled { opacity: 0.5; cursor: default; }
 .btn--primary { background: var(--c-accent); color: #fff; border-color: var(--c-accent); }
-/* For a button that is a single glyph. line-height: 0 leaves the line box at the parent's
-   strut (the body size) and scales only the glyph, so the button's dimensions do not
-   change. */
-.btn__glyph { font-size: 1.25em; line-height: 0; }
 /* The assignee picker: a small custom dropdown that puts a FacetAvatar on each facet,
    which a native <select> cannot draw. The trigger keeps the .btn look and fits the
    avatar, the name and the caret on one line. */
@@ -578,7 +577,6 @@ button.feed__target:hover { color: var(--c-accent); }
 
 /* ---------- empty / placeholder ---------- */
 .placeholder { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s-3); color: var(--c-text-faint); }
-.placeholder__big { font-size: var(--fs-display-md); }
 
 /* ---------- list (smart views) ---------- */
 .list { display: flex; flex-direction: column; }

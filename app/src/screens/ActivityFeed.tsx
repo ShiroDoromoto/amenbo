@@ -167,10 +167,10 @@ export function ActivityFeed({
                   <span>{agoLabel(it.at)}{it.editedAt && <span className="faint"> · {t("comment.edited")} {agoLabel(it.editedAt)}</span>}</span>
                   {open ? (
                     <button className="feed__target" onClick={open}>
-                      → {targetTitle(it.target.title)}
+                      <Icon name="chevronRight" /> {targetTitle(it.target.title)}
                     </button>
                   ) : (
-                    <span className="feed__target feed__target--gone">→ {targetTitle(it.target.title)}</span>
+                    <span className="feed__target feed__target--gone"><Icon name="chevronRight" /> {targetTitle(it.target.title)}</span>
                   )}
                   {actsOn && (
                     <button

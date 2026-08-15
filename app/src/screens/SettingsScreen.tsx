@@ -143,7 +143,7 @@ function NameSetting() {
       <span className="settings__k">{t("settings.facetNames")}</span>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ minWidth: 24 }}>👤</span>
+          <Icon name="person" />
           <input
             {...asTyped}
             className="btn"
@@ -156,7 +156,7 @@ function NameSetting() {
           />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ minWidth: 24 }}>🤖</span>
+          <Icon name="robot" />
           <input
             {...asTyped}
             className="btn"

@@ -110,7 +110,7 @@ describe("TaskDetailPane finishing a creation", () => {
 });
 
 describe("TaskDetailPane targeted edit", () => {
-  it("the comment named by ✎ becomes an edit box carrying its body text", async () => {
+  it("the comment named by the pencil becomes an edit box carrying its body text", async () => {
     render({ taskId: 1, editCommentAt: { commentId: 2, nonce: 1 } });
     await settle();
 

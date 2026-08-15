@@ -27,7 +27,7 @@ export function TimelineView({ tasks, selectedTaskId, onSelectTask }: {
   if (m.rows.length === 0 && m.noDue.length === 0) {
     return (
       <div className="placeholder">
-        <div className="placeholder__big"><Icon name="calendar" size="lg" /></div>
+        <Icon name="calendar" size="lg" />
         <div>{t("cal.empty")}</div>
       </div>
     );

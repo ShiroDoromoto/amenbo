@@ -69,7 +69,7 @@ export function ListScreen({
 
       {total === 0 ? (
         <div className="placeholder">
-          <div className="placeholder__big"><Icon name="check" size="lg" /></div>
+          <Icon name="check" size="lg" />
           <div>{archived ? t("list.emptyArchived") : viewId === "inbox" ? t("list.emptyInbox") : t("list.empty")}</div>
         </div>
       ) : (

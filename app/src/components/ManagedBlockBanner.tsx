@@ -12,7 +12,7 @@ import { DismissButton } from "./DismissButton";
 // (`stale_managed_blocks`) finds stale folders, we offer a line under the TopBar that resyncs them in one click (the
 // `resync_managed_blocks` path, the same one CLI `sync-guide` takes). The only side effect is rewriting the md on
 // disk (low churn, language label preserved, nothing outside the markers touched); the store is untouched, so no
-// snapshot refetch. Detected once at startup, dismissible with the ✕ for the session. Outside Tauri (in the browser)
+// snapshot refetch. Detected once at startup, dismissible with the cross for the session. Outside Tauri (in the browser)
 // it is always empty, hence hidden.
 export function ManagedBlockBanner() {
   const [stale, setStale] = useState<StaleBlockDto[]>([]);

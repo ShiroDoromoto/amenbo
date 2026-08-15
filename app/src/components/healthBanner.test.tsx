@@ -128,7 +128,7 @@ describe("startup health banner", () => {
     expect(container.querySelector(".healthbanner")).not.toBeNull();
     expect(lines()).toHaveLength(1);
 
-    // ✕ dismisses it for this session only; the next launch evaluates everything again.
+    // the cross dismisses it for this session only; the next launch evaluates everything again.
     await act(async () => {
       container.querySelector<HTMLButtonElement>(".healthbanner__close")!.click();
     });

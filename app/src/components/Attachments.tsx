@@ -203,7 +203,7 @@ export function Attachments({ target, targetId, compact = false }: {
       <div className="detail__section-h">
         {t("attach.section")}
         <button className="feed__action" style={{ marginLeft: 8 }} disabled={busy} onClick={onPick}>
-          ＋ {t("attach.add")}
+          <Icon name="plus" /> {t("attach.add")}
         </button>
       </div>
       <div

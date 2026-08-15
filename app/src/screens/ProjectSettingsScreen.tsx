@@ -52,7 +52,7 @@ export function ProjectSettingsScreen({
 
   if (!loaded) {
     return (
-      <div className="board__toolbar"><span className="board__title">⚙ {t("projset.title")}</span></div>
+      <div className="board__toolbar"><span className="board__title"><Icon name="gear" size="md" /> {t("projset.title")}</span></div>
     );
   }
 
@@ -114,7 +114,7 @@ export function ProjectSettingsScreen({
     <>
       <div className="board__toolbar">
         <span className="board__title">
-          ⚙ {t("projset.title")}
+          <Icon name="gear" size="md" /> {t("projset.title")}
           {loaded.archived && <span className="faint"> · {t("projset.archivedBadge")}</span>}
         </span>
         <div className="topbar__spacer" />

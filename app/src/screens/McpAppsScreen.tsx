@@ -250,7 +250,7 @@ function McpAppRow({
             {app.folders.map((at) => <code className="path" key={at}>{at}</code>)}
           </span>
         </span>
-        <span className="faint" aria-hidden="true">{open ? "⌄" : "›"}</span>
+        <span className="faint"><Icon name={open ? "chevronDown" : "chevronRight"} /></span>
       </button>
 
       {open && (

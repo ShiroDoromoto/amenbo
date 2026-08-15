@@ -53,7 +53,7 @@ export function TaskDetailPane({
 }: {
   taskId: number;
   onDeleted?: () => void;
-  /** Report unsaved input to the parent (AppShell), which guards against discarding it on outside-click / ✕. */
+  /** Report unsaved input to the parent (AppShell), which guards against discarding it on outside-click / cross. */
   onDirtyChange?: (dirty: boolean) => void;
   onSelectDecision?: (id: number) => void;
   /** Nonce that focuses the comment box when opened via the reply arrow in the activity feed. Every increment re-focuses, so you can reply to the same task again and again. undefined = an ordinary selection. */
@@ -379,7 +379,7 @@ export function TaskDetailPane({
               {t("detail.notes")}
               {!editingNotes && (
                 <button className="feed__action" style={{ marginLeft: 8 }} onClick={startEditNotes}>
-                  {task.notes ? t("detail.edit") : `＋ ${t("detail.add")}`}
+                  {task.notes ? t("detail.edit") : <><Icon name="plus" /> {t("detail.add")}</>}
                 </button>
               )}
             </div>

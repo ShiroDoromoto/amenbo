@@ -9,7 +9,7 @@ import { DismissButton } from "./DismissButton";
 // them from the index in one click (the same core path as CLI `doctor --fix`, `forget_orphan_dirs`). The GUI's folder
 // list is a reverse lookup per project, so a row with no claimant never shows up there. This drops the index row and
 // nothing more — it touches neither the folder's contents nor its `.amenbo`. Detected once at startup, dismissible
-// with the ✕ for the session. Outside Tauri (in the browser) it is always empty, hence hidden.
+// with the cross for the session. Outside Tauri (in the browser) it is always empty, hence hidden.
 export function OrphanBindingBanner() {
   const [dirs, setDirs] = useState<string[]>([]);
   const [dismissed, setDismissed] = useState(false);

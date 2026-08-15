@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The activity feed's ✎ / ✕ are wrapped in `inTauri()`, so bare jsdom (i.e. the browser-mock path) never renders
+// The activity feed's pencil / cross are wrapped in `inTauri()`, so bare jsdom (i.e. the browser-mock path) never renders
 // them — ActivityFeed.test.tsx's net cannot catch either one. These tests pretend to be inside the Tauri shell.
 // The receiving end (the detail pane opening the named comment for editing) lives in TaskDetailPane.test.tsx.
 import { act, createElement } from "react";
@@ -90,7 +90,7 @@ afterEach(() => {
   container.remove();
 });
 
-describe("ActivityFeed ✎ / ✕ (Tauri only)", () => {
+describe("ActivityFeed pencil / cross (Tauri only)", () => {
   it("appears on every comment row, and on no system row", () => {
     // The fixtures hold two comments — one on a task, one on a live decision. A system row, and a row addressed to a
     // project or to something deleted, has no thread left to edit or delete in.
@@ -98,12 +98,12 @@ describe("ActivityFeed ✎ / ✕ (Tauri only)", () => {
     expect(removeButtons()).toHaveLength(2);
   });
 
-  it("✎ hands \"this comment of this task\" to the detail pane (does not edit inline)", () => {
+  it("the pencil hands \"this comment of this task\" to the detail pane (does not edit inline)", () => {
     act(() => editButtons()[0].click());
     expect(edited).toEqual([[1, 2]]);
   });
 
-  it("✕ deletes after confirmation (hard delete)", async () => {
+  it("the cross deletes after confirmation (hard delete)", async () => {
     await act(async () => {
       removeButtons()[0].click();
     });
@@ -124,7 +124,7 @@ describe("ActivityFeed ✎ / ✕ (Tauri only)", () => {
     expect(hoisted.removed).toEqual([]); // never through the task-side write
   });
 
-  it("does not delete when the ✕ confirmation is canceled", async () => {
+  it("does not delete when the cross confirmation is canceled", async () => {
     hoisted.confirmAnswer = false;
     await act(async () => {
       removeButtons()[0].click();

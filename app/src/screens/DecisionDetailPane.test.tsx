@@ -487,7 +487,7 @@ describe("editing the title and body in place", () => {
   });
 });
 
-// The receiving end of the activity feed's "↩ reply" and "✎" on a decision-comment row: the feed only names the
+// The receiving end of the activity feed's reply arrow and pencil on a decision-comment row: the feed only names the
 // decision and the comment, and it is this pane that has to land on the right box. The task-side twin of these
 // lives in TaskDetailPane.test.tsx.
 describe("DecisionDetailPane reply / edit focus", () => {
@@ -516,7 +516,7 @@ describe("DecisionDetailPane reply / edit focus", () => {
     expect(document.activeElement).toBe(commentBox());
   });
 
-  it("✎ opens that comment's editor, and no other's", () => {
+  it("the pencil opens that comment's editor, and no other's", () => {
     hoisted.decisions.set(1, decision(1));
     hoisted.comments.push(
       { id: 7, author: { kind: "human", name: "私" }, ago: "1分前", text: "先の一言" },

@@ -53,7 +53,7 @@ export function ManagedBlockBanner() {
   if (done) {
     return (
       <div className="healthbanner managedblock-banner" role="status">
-        <span className="healthbanner__icon" aria-hidden>✓</span>
+        <Icon name="check" size="lg" />
         <div className="healthbanner__body">
           <div className="healthbanner__title">{t("managedBlock.done")}</div>
         </div>

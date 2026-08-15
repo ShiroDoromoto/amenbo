@@ -49,7 +49,7 @@ export function HealthBanner() {
     if (repaired === 0) return null;
     return (
       <div className="healthbanner" role="status">
-        <span className="healthbanner__icon" aria-hidden>✓</span>
+        <Icon name="check" size="lg" />
         <div className="healthbanner__body">
           <div className="healthbanner__title">{tn("health.repaired", repaired)}</div>
         </div>

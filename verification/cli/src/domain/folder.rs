@@ -56,6 +56,27 @@ impl Driver<'_> {
                     .map_err(|e| format!("could not write {}: {e}", pointer.display()))?;
                 Ok(Outcome::action(format!("left {} pointing the way an older build did", dir.display())))
             }
+            // Leave the folder claimed by another store: this run's own pointer, with a different
+            // store's name stamped on it. Copied rather than hand-written, and that is the whole
+            // fixture — every other field then *agrees*, which is the state a store name exists to
+            // catch. The id is a live key in this store and the slug beside it is that project's, so
+            // the cross-check that would otherwise notice a stray pointer says nothing, and a build
+            // reading it would go quietly to work under a number that means something here too.
+            //
+            // Written from outside the folder, the way `legacy-pointer` is: a build run inside brings
+            // a pointer forward to its own shape, so a visit would take the claim off before the guard
+            // under test ever met it.
+            "foreign-pointer" => {
+                let dir = self.folder(with)?;
+                let by = req_str(with, "store")?;
+                let ours = self.session.cwd.join(".amenbo");
+                let text = std::fs::read_to_string(&ours)
+                    .map_err(|e| format!("could not read the run's own pointer at {}: {e}", ours.display()))?;
+                let claimed = dir.join(".amenbo");
+                std::fs::write(&claimed, claimed_by(&text, by)?)
+                    .map_err(|e| format!("could not write {}: {e}", claimed.display()))?;
+                Ok(Outcome::action(format!("left {} claimed by {by}, everything but the name agreeing", dir.display())))
+            }
             "sync-guide" => {
                 let dir = self.folder(with)?;
                 let path = dir.to_string_lossy().into_owned();
@@ -265,6 +286,38 @@ impl Driver<'_> {
                     ),
                 ))
             }
+            // Work in a folder another store claimed. `status` is what a reader types when they walk
+            // in and ask what there is to do — an ordinary read, which is the point: the guard stands
+            // in front of everything that would resolve the pointer, so an extraordinary command would
+            // be the weaker witness.
+            //
+            // Three ways this comes out red, and they are one verdict: the command went through (the
+            // regression this exists to catch), it stopped for some other reason, or it stopped
+            // without saying whose folder this is — a reader turned away with no store named has
+            // nothing to act on.
+            "claimed" => {
+                let dir = self.folder(with)?;
+                let by = req_str(with, "store")?;
+                Ok(match self.refusal_in(&dir, &["status", "--json"]) {
+                    Ok(err) => {
+                        let code = err["code"].as_str().unwrap_or_default();
+                        let said = err["message"].as_str().unwrap_or_default();
+                        let pass = code == "pointer_other_store" && said.contains(by);
+                        Outcome::assert(
+                            pass,
+                            format!(
+                                "work in {} stopped with `{code}`, saying: {said} (expected the pointer guard, naming {by}, {})",
+                                dir.display(),
+                                if pass { "as expected" } else { "MISMATCH" }
+                            ),
+                        )
+                    }
+                    Err(why) => Outcome::assert(
+                        false,
+                        format!("work in {} was not turned away (MISMATCH): {why}", dir.display()),
+                    ),
+                })
+            }
             _ => Err(unmapped(Domain::Folder, op)),
         }
     }
@@ -328,6 +381,17 @@ fn vanished_bindings(hint: &str) -> Vec<(i64, String)> {
         .collect()
 }
 
+/// The same pointer, claimed by another store. Only the one field is written: the fixture is worth
+/// making precisely because everything else stays as the build under test wrote it, so a pointer
+/// rebuilt from parts here — a version this build does not write, a field it has since added — would
+/// be turned away for a reason the road is not about.
+fn claimed_by(pointer: &str, store: &str) -> Result<String, String> {
+    let mut v: serde_json::Value =
+        serde_json::from_str(pointer).map_err(|e| format!("the run's own pointer is not JSON ({e}): {pointer}"))?;
+    v["store"] = serde_json::Value::String(store.to_string());
+    Ok(v.to_string())
+}
+
 /// A path as a note names it, and what to write where there is none to name.
 fn show(path: Option<&Path>) -> String {
     path.map_or_else(|| "nothing".to_string(), |p| p.display().to_string())
@@ -388,6 +452,27 @@ mod tests {
         // A build that stopped offering them leaves nothing to read, which is a road that stops
         // rather than one that re-points a number it guessed.
         assert!(vanished_bindings("the linked project directory was not found: /work/gone").is_empty());
+    }
+
+    /// A pointer another store claimed: the one this build wrote, with one name changed and nothing
+    /// else touched. What makes it the fixture is what it keeps — the id is a live key here and the
+    /// slug is that project's, so every check but the name agrees — and a build that wrote no name at
+    /// all is claimed all the same, since the field is added rather than replaced.
+    #[test]
+    fn a_claimed_pointer_keeps_everything_this_build_wrote_but_the_store_it_names() {
+        let ours = r#"{"v":2,"project_id":4,"slug":"greenhouse","store":"amenbo"}"#;
+        let claimed: serde_json::Value = serde_json::from_str(&claimed_by(ours, "amenbo-dev").unwrap()).unwrap();
+        assert_eq!(claimed["store"], "amenbo-dev");
+        assert_eq!(claimed["project_id"], 4, "the id is a live key in the store that is refusing");
+        assert_eq!(claimed["slug"], "greenhouse", "and the cross-check beside it agrees too");
+        assert_eq!(claimed["v"], 2, "written in the shape this build reads");
+
+        let older = claimed_by(r#"{"v":1,"project_id":4}"#, "amenbo-dev").unwrap();
+        assert!(older.contains("amenbo-dev"), "a pointer that named no store is claimed by adding one");
+
+        // A pointer that could not be read is the run's own gone wrong, which is a failure to report
+        // rather than a folder to leave half claimed.
+        assert!(claimed_by("not json", "amenbo-dev").is_err());
     }
 
     /// A folder that moved is the same folder: what was lying in it — the pointer above all — is

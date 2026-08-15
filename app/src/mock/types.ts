@@ -57,7 +57,5 @@ export type ActivityItem = ActivityItemDto & {
 
 export interface SmartView {
   id: string;
-  label: string;
-  icon: string;
   count?: number;
 }

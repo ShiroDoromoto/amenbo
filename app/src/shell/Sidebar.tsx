@@ -4,7 +4,12 @@ import { useInboxCount } from "../core/mailbox";
 import { useArchivedProjects } from "../core/reads";
 import { useStore } from "../store/store";
 import { t } from "../core/i18n";
+import { Icon, type IconName } from "../components/Icon";
 import type { Nav } from "./AppShell";
+
+// Which icon each smart view is drawn with. The views arrive as ids alone, so the drawing
+// is decided here rather than travelling with the data (`AMB-D-689`).
+const VIEW_ICON: Record<string, IconName> = { inbox: "inbox", activity: "activity" };
 
 /**
  * The left sidebar (smart views, projects, other, and the collapsed archive). Reordering a project drags and drops
@@ -66,7 +71,7 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
           const alert = v.id === "inbox";
           return (
             <button key={v.id} className={`navitem ${isActive(n) ? "navitem--active" : ""}`} onClick={() => onNav(n)}>
-              <span style={{ width: 16, textAlign: "center" }}>{v.icon}</span>
+              {VIEW_ICON[v.id] ? <Icon name={VIEW_ICON[v.id]} /> : null}
               {t(`smartview.${v.id}`)}
               {count ? <span className={`navitem__count ${alert ? "navitem__count--alert" : ""}`}>{count}</span> : null}
             </button>
@@ -111,7 +116,7 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
           const n: Nav = { type: "view", id: "newProject" };
           return (
             <button className={`navitem navitem--muted ${isActive(n) ? "navitem--active" : ""}`} onClick={() => onNav(n)}>
-              <span style={{ width: 16, textAlign: "center" }}>＋</span>
+              <Icon name="plus" />
               {t("side.newProject")}
             </button>
           );
@@ -123,8 +128,8 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
       <div className="sidebar__group">
         <div className="sidebar__label">{t("side.plugins")}</div>
         {([
-          { id: "plugins", icon: "🧩", label: t("plugins.market") },
-          { id: "pluginsInstalled", icon: "🔌", label: t("plugins.installed") },
+          { id: "plugins", icon: "puzzle", label: t("plugins.market") },
+          { id: "pluginsInstalled", icon: "plug", label: t("plugins.installed") },
         ] as const).map((item) => {
           const n: Nav = { type: "view", id: item.id };
           return (
@@ -133,7 +138,7 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
               className={`navitem ${isActive(n) ? "navitem--active" : ""}`}
               onClick={() => onNav(n)}
             >
-              <span style={{ width: 16, textAlign: "center" }}>{item.icon}</span>
+              <Icon name={item.icon} />
               {item.label}
             </button>
           );
@@ -145,18 +150,18 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
         {([
           // Search sits here rather than among the smart views: a smart view is a standing selection of
           // tasks, and this asks where a word is written across tasks and decisions both (`AMB-D-449`).
-          { id: "search", icon: "🔍", label: t("nav.search") },
-          { id: "commands", icon: "📖", label: t("nav.commands") },
+          { id: "search", icon: "search", label: t("nav.search") },
+          { id: "commands", icon: "book", label: t("nav.commands") },
           // Connecting an AI is an app-level setting, not a project's (`AMB-D-681`), so it lives
           // here rather than folded into each project's own screen.
-          { id: "mcp", icon: "🔗", label: t("nav.mcp") },
-          { id: "settings", icon: "⚙", label: t("nav.settings") },
-          { id: "onboarding", icon: "🪿", label: t("nav.onboarding") },
+          { id: "mcp", icon: "link", label: t("nav.mcp") },
+          { id: "settings", icon: "gear", label: t("nav.settings") },
+          { id: "onboarding", icon: "goose", label: t("nav.onboarding") },
         ] as const).map((it) => {
           const n: Nav = { type: "view", id: it.id };
           return (
             <button key={it.id} className={`navitem ${isActive(n) ? "navitem--active" : ""}`} onClick={() => onNav(n)}>
-              <span style={{ width: 16, textAlign: "center" }}>{it.icon}</span>{it.label}
+              <Icon name={it.icon} />{it.label}
             </button>
           );
         })}
@@ -169,7 +174,7 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
             aria-expanded={archivedOpen}
             onClick={() => setArchivedOpen((v) => !v)}
           >
-            <span style={{ width: 16, textAlign: "center" }}>{archivedOpen ? "▾" : "▸"}</span>
+            <Icon name={archivedOpen ? "chevronDown" : "chevronRight"} />
             {t("side.archived")}
             <span className="navitem__count">{archived.length}</span>
           </button>

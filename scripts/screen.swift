@@ -266,10 +266,10 @@ func appElements(pid: Int) -> [Element] {
 /// name — the ones whose name holds it.
 ///
 /// Partial is needed because the name an element answers to is not the label a person reads off the
-/// screen. An emoji in front of the words is part of it (`🪿 はじめに` for the sidebar item that
-/// reads はじめに), and a card folds every line it shows into one string. Neither is knowable before
-/// looking, so an exact-only match sends every caller through a full listing to copy a name out of,
-/// for a thing it can already see.
+/// screen: a card folds every line it shows into one string, and a glyph still drawn as text in
+/// front of the words is part of the name too. Neither is knowable before looking, so an exact-only
+/// match sends every caller through a full listing to copy a name out of, for a thing it can
+/// already see.
 ///
 /// Exact first, and not merely as an optimization: a whole name is the caller saying which one, and
 /// a screen where one name is also a part of another (a column called 未着手, over cards whose names

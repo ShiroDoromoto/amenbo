@@ -463,7 +463,7 @@ export function TaskDetailPane({
                   if (isEnterSubmit(e) && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void submitComment(); }
                 }}
               />
-              {commentError && <div className="newproj__error" role="alert">⚠ {commentError}</div>}
+              {commentError && <div className="errortext" role="alert">⚠ {commentError}</div>}
               <div className="compose__actions">
                 <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("detail.commentHint")}</span>
                 <button className="btn btn--primary" disabled={!comment.trim()} onClick={() => void submitComment()}>{t("detail.send")}</button>

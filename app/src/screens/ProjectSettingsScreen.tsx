@@ -124,11 +124,11 @@ export function ProjectSettingsScreen({
           <div className="settings__h">{t("projset.general")}</div>
           <div className="settings__body newproj">
             <label className="newproj__field">
-              <span className="newproj__label">{t("projset.nameLabel")}</span>
+              <span className="fieldlabel">{t("projset.nameLabel")}</span>
               <input {...asTyped} className="newproj__input" value={name} onChange={(e) => setName(e.target.value)} />
             </label>
             <label className="newproj__field">
-              <span className="newproj__label">{t("projset.notesLabel")}</span>
+              <span className="fieldlabel">{t("projset.notesLabel")}</span>
               <textarea
                 {...asTyped}
                 className="newproj__input"
@@ -149,7 +149,7 @@ export function ProjectSettingsScreen({
               </select>
             </div>
 
-            {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
+            {error && <div className="errortext" role="alert">⚠ {error}</div>}
 
             <div className="newproj__actions">
               <button className="btn btn--primary" onClick={() => void save()} disabled={!canSave}>
@@ -169,7 +169,7 @@ export function ProjectSettingsScreen({
           <div className="settings__h">{t("projset.danger")}</div>
           <div className="settings__body newproj">
             <div className="newproj__field">
-              <span className="newproj__hint">{t("projset.archiveHint")}</span>
+              <span className="hint">{t("projset.archiveHint")}</span>
               <div className="newproj__nextrow">
                 <button className="btn" onClick={() => void toggleArchive()} disabled={busy}>
                   {loaded.archived ? t("projset.unarchive") : t("projset.archive")}
@@ -177,7 +177,7 @@ export function ProjectSettingsScreen({
               </div>
             </div>
             <div className="newproj__field">
-              <span className="newproj__hint">{t("projset.deleteHint")}</span>
+              <span className="hint">{t("projset.deleteHint")}</span>
               <div className="newproj__nextrow">
                 <button className="btn btn--danger" onClick={() => void remove()} disabled={busy}>
                   🗑 {t("projset.delete")}
@@ -272,7 +272,7 @@ function FoldersSection({ projectId }: { projectId: number }) {
     <div className="settings__section">
       <div className="settings__h">{t("projset.folders")}</div>
       <div className="settings__body newproj">
-        <span className="newproj__hint">{t("projset.foldersHint")}</span>
+        <span className="hint">{t("projset.foldersHint")}</span>
 
         {folders && folders.length === 0 && (
           <span className="faint">{t("projset.noFolders")}</span>
@@ -281,8 +281,8 @@ function FoldersSection({ projectId }: { projectId: number }) {
         {folders?.map((f) => (
           <div key={f.path} className="newproj__field">
             <div className="newproj__folder">
-              <code className="newproj__path">{f.path}</code>
-              <span className={f.exists && !f.pointerMissing && !f.foreign ? "faint" : "newproj__error"}>
+              <code className="path">{f.path}</code>
+              <span className={f.exists && !f.pointerMissing && !f.foreign ? "faint" : "errortext"}>
                 {!f.exists
                   ? `⚠ ${t("projset.folderStale")}`
                   : f.pointerMissing
@@ -293,10 +293,10 @@ function FoldersSection({ projectId }: { projectId: number }) {
               </span>
             </div>
             {f.pointerMissing && (
-              <div className="newproj__error" role="alert">⚠ {t("projset.folderNoPointerHint")}</div>
+              <div className="errortext" role="alert">⚠ {t("projset.folderNoPointerHint")}</div>
             )}
             {f.foreign && (
-              <div className="newproj__error" role="alert">
+              <div className="errortext" role="alert">
                 ⚠ {tf("projset.folderOtherStoreHint", {
                   recorded: f.foreign.recorded,
                   running: f.foreign.running,
@@ -304,7 +304,7 @@ function FoldersSection({ projectId }: { projectId: number }) {
               </div>
             )}
             {f.mismatch && (
-              <div className="newproj__error" role="alert">
+              <div className="errortext" role="alert">
                 ⚠ {tf("projset.folderElsewhere", {
                   recorded: f.mismatch.recorded,
                   projectId: f.mismatch.projectId,
@@ -313,7 +313,7 @@ function FoldersSection({ projectId }: { projectId: number }) {
               </div>
             )}
             {f.legacy && (
-              <div className="newproj__error" role="alert">⚠ {t("projset.folderLegacyPointer")}</div>
+              <div className="errortext" role="alert">⚠ {t("projset.folderLegacyPointer")}</div>
             )}
             <div className="newproj__nextrow">
               {f.exists && <button className="btn" onClick={() => void terminal(f.path)} disabled={busy}>⌨️ {t("newproj.openTerminal")}</button>}
@@ -324,7 +324,7 @@ function FoldersSection({ projectId }: { projectId: number }) {
           </div>
         ))}
 
-        {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
+        {error && <div className="errortext" role="alert">⚠ {error}</div>}
 
         <div className="newproj__nextrow">
           <button className="btn" onClick={() => void add()} disabled={busy}>📂 {t("projset.addFolder")}</button>
@@ -392,7 +392,7 @@ function HarnessSection({ projectId, onOpenMcp }: { projectId: number; onOpenMcp
     <div className="settings__section">
       <div className="settings__h">{t("projset.harness")}</div>
       <div className="settings__body newproj">
-        <span className="newproj__hint">{t("projset.harnessHint")}</span>
+        <span className="hint">{t("projset.harnessHint")}</span>
 
         {answer !== undefined && (
           <div className="settings__row">
@@ -428,7 +428,7 @@ function HarnessSection({ projectId, onOpenMcp }: { projectId: number; onOpenMcp
             the road above it is the one most readers are on. */}
         <McpSetup onOpen={onOpenMcp} />
 
-        {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
+        {error && <div className="errortext" role="alert">⚠ {error}</div>}
 
         <div className="newproj__nextrow">
           {/* Nothing to clear where nothing was answered, and the state row above says so. */}
@@ -489,7 +489,7 @@ function HarnessRequest({ projectId }: { projectId: number }) {
     <div className="settings__row">
       <span className="settings__k">{t("projset.harnessRequest")}</span>
       <div className="harnessreq">
-        <span className="newproj__hint">{t("projset.harnessRequestHint")}</span>
+        <span className="hint">{t("projset.harnessRequestHint")}</span>
         <select
           className="harnessreq__pick"
           aria-label={t("agentHookWiring.pick")}
@@ -500,12 +500,12 @@ function HarnessRequest({ projectId }: { projectId: number }) {
             <option key={one.tool} value={one.tool}>{one.label}</option>
           ))}
         </select>
-        <span className="newproj__hint">
+        <span className="hint">
           {tf("agentHookWiring.what", { tool: tool.label, file: tool.pasteInto })}
         </span>
         {/* Where to paste it. A project with nothing bound has nowhere, and that is said rather than left
             as a heading over an empty list — the folder section above is where it is answered. */}
-        <span className="newproj__hint">
+        <span className="hint">
           {catalog.dirs.length > 0 ? t("projset.harnessRequestDirs") : t("projset.noFolders")}
         </span>
         {catalog.dirs.length > 0 && (
@@ -567,7 +567,7 @@ function PluginsSection({ projectId }: { projectId: number }) {
     <div className="settings__section">
       <div className="settings__h">{t("projset.plugins")}</div>
       <div className="settings__body newproj">
-        <span className="newproj__hint">{t("projset.pluginsHint")}</span>
+        <span className="hint">{t("projset.pluginsHint")}</span>
 
         {installs.length === 0 && <span className="faint">{t("plugins.emptyInstalled")}</span>}
         {/* Judged on what this project *could* cross: with only the device's own installed there is no
@@ -593,7 +593,7 @@ function PluginsSection({ projectId }: { projectId: number }) {
             the whole machine shares, so it stays where its single row is. */}
         {deviceWide.length > 0 && (
           <>
-            <span className="newproj__hint">{t("projset.pluginsDevice")}</span>
+            <span className="hint">{t("projset.pluginsDevice")}</span>
             {deviceWide.map((i) => (
               <div className="pluggate" key={i.name}>
                 <span className="chip">{i.name}</span>

@@ -124,16 +124,16 @@ export function ProjectSettingsScreen({
       <div className="settings">
         <div className="settings__section">
           <div className="settings__h">{t("projset.general")}</div>
-          <div className="settings__body newproj">
-            <label className="newproj__field">
+          <div className="settings__form">
+            <label className="field">
               <span className="fieldlabel">{t("projset.nameLabel")}</span>
-              <input {...asTyped} className="newproj__input" value={name} onChange={(e) => setName(e.target.value)} />
+              <input {...asTyped} className="textinput" value={name} onChange={(e) => setName(e.target.value)} />
             </label>
-            <label className="newproj__field">
+            <label className="field">
               <span className="fieldlabel">{t("projset.notesLabel")}</span>
               <textarea
                 {...asTyped}
-                className="newproj__input"
+                className="textinput"
                 rows={4}
                 value={notes}
                 placeholder={t("projset.notesPh")}
@@ -153,7 +153,7 @@ export function ProjectSettingsScreen({
 
             {error && <ErrorNote>{error}</ErrorNote>}
 
-            <div className="newproj__actions">
+            <div className="actions">
               <button className="btn btn--primary" onClick={() => void save()} disabled={!canSave}>
                 {busy ? t("projset.saving") : saved ? `✓ ${t("projset.saved")}` : t("projset.save")}
               </button>
@@ -169,18 +169,18 @@ export function ProjectSettingsScreen({
 
         <div className="settings__section">
           <div className="settings__h">{t("projset.danger")}</div>
-          <div className="settings__body newproj">
-            <div className="newproj__field">
+          <div className="settings__form">
+            <div className="field">
               <span className="hint">{t("projset.archiveHint")}</span>
-              <div className="newproj__nextrow">
+              <div className="buttonrow">
                 <button className="btn" onClick={() => void toggleArchive()} disabled={busy}>
                   {loaded.archived ? t("projset.unarchive") : t("projset.archive")}
                 </button>
               </div>
             </div>
-            <div className="newproj__field">
+            <div className="field">
               <span className="hint">{t("projset.deleteHint")}</span>
-              <div className="newproj__nextrow">
+              <div className="buttonrow">
                 <button className="btn btn--danger" onClick={() => void remove()} disabled={busy}>
                   🗑 {t("projset.delete")}
                 </button>
@@ -273,7 +273,7 @@ function FoldersSection({ projectId }: { projectId: number }) {
   return (
     <div className="settings__section">
       <div className="settings__h">{t("projset.folders")}</div>
-      <div className="settings__body newproj">
+      <div className="settings__form">
         <span className="hint">{t("projset.foldersHint")}</span>
 
         {folders && folders.length === 0 && (
@@ -281,8 +281,8 @@ function FoldersSection({ projectId }: { projectId: number }) {
         )}
 
         {folders?.map((f) => (
-          <div key={f.path} className="newproj__field">
-            <div className="newproj__folder">
+          <div key={f.path} className="field">
+            <div className="folderrow">
               <code className="path">{f.path}</code>
               {/* The state of the folder, in the row's own voice — it wears the note's look and its
                   mark, but not its `role`: what is wrong is announced once, by the hint below, and a
@@ -323,7 +323,7 @@ function FoldersSection({ projectId }: { projectId: number }) {
             {f.legacy && (
               <ErrorNote>{t("projset.folderLegacyPointer")}</ErrorNote>
             )}
-            <div className="newproj__nextrow">
+            <div className="buttonrow">
               {f.exists && <button className="btn" onClick={() => void terminal(f.path)} disabled={busy}>⌨️ {t("newproj.openTerminal")}</button>}
               {f.exists && <button className="btn" onClick={() => void reveal(f.path)} disabled={busy}>📂 {t("newproj.openFinder")}</button>}
               {f.exists && (f.mismatch || f.legacy || f.pointerMissing || f.foreign) && <button className="btn" onClick={() => void relink(f.path)} disabled={busy}>🔗 {t("projset.relink")}</button>}
@@ -334,7 +334,7 @@ function FoldersSection({ projectId }: { projectId: number }) {
 
         {error && <ErrorNote>{error}</ErrorNote>}
 
-        <div className="newproj__nextrow">
+        <div className="buttonrow">
           <button className="btn" onClick={() => void add()} disabled={busy}>📂 {t("projset.addFolder")}</button>
         </div>
       </div>
@@ -399,7 +399,7 @@ function HarnessSection({ projectId, onOpenMcp }: { projectId: number; onOpenMcp
   return (
     <div className="settings__section">
       <div className="settings__h">{t("projset.harness")}</div>
-      <div className="settings__body newproj">
+      <div className="settings__form">
         <span className="hint">{t("projset.harnessHint")}</span>
 
         {answer !== undefined && (
@@ -438,7 +438,7 @@ function HarnessSection({ projectId, onOpenMcp }: { projectId: number; onOpenMcp
 
         {error && <ErrorNote>{error}</ErrorNote>}
 
-        <div className="newproj__nextrow">
+        <div className="buttonrow">
           {/* Nothing to clear where nothing was answered, and the state row above says so. */}
           <button className="btn" onClick={() => void clear()} disabled={busy || answer === undefined || answer === null}>
             {t("projset.harnessClear")}
@@ -522,7 +522,7 @@ function HarnessRequest({ projectId }: { projectId: number }) {
           </ul>
         )}
         <pre className="agenthookrow__request">{tool.request}</pre>
-        <div className="newproj__nextrow">
+        <div className="buttonrow">
           <button className="btn" onClick={() => void copy()}>
             {copied ? t("agentHookWiring.copied") : t("agentHookWiring.copy")}
           </button>
@@ -574,7 +574,7 @@ function PluginsSection({ projectId }: { projectId: number }) {
   return (
     <div className="settings__section">
       <div className="settings__h">{t("projset.plugins")}</div>
-      <div className="settings__body newproj">
+      <div className="settings__form">
         <span className="hint">{t("projset.pluginsHint")}</span>
 
         {installs.length === 0 && <span className="faint">{t("plugins.emptyInstalled")}</span>}
@@ -615,7 +615,7 @@ function PluginsSection({ projectId }: { projectId: number }) {
         )}
 
         {rest.length > 0 && (
-          <div className="newproj__nextrow">
+          <div className="buttonrow">
             <select
               className="btn"
               value=""

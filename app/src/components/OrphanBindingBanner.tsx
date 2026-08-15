@@ -45,7 +45,9 @@ export function OrphanBindingBanner() {
 
   if (done) {
     return (
-      <div className="healthbanner managedblock-banner" role="status">
+      // The offer is spent — nothing is being handed to the reader any more — so the band drops to the
+      // quiet one and reads as the receipt it is, the same way the integrity check's does.
+      <div className="healthbanner" role="status">
         <Icon name="check" size="lg" />
         <div className="healthbanner__body">
           <div className="healthbanner__title">{t("orphanBinding.done")}</div>
@@ -56,7 +58,7 @@ export function OrphanBindingBanner() {
   }
 
   return (
-    <div className="healthbanner managedblock-banner" role="alert">
+    <div className="healthbanner healthbanner--offer" role="alert">
       <Icon name="warning" size="lg" />
       <div className="healthbanner__body">
         <div className="healthbanner__title">{t("orphanBinding.title")}</div>

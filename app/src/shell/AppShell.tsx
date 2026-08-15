@@ -322,13 +322,19 @@ export function AppShell() {
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={toggleSidebar}
       />
-      <UpdateBanner recheck={updateRecheck} />
-      <UpdateCheckFeedback state={updateCheck} onDismiss={() => setUpdateCheck(null)} />
-      <PluginUpdateBanner onOpenInstalled={() => navTo({ type: "view", id: "pluginsInstalled" })} />
-      <HealthBanner />
-      <ManagedBlockBanner />
-      <OrphanBindingBanner />
-      <HookSetupBanner asked={hooksAsked} />
+      {/* Every band the app can raise, stacked in one place. They share a row of the shell rather than
+          claiming one each: the grid needs a definite row per child, and news does not arrive one item
+          at a time — an update and a broken pointer can stand together, and each further band would
+          otherwise have to be given a row of its own before it could be added. */}
+      <div className="shell__banners">
+        <UpdateBanner recheck={updateRecheck} />
+        <UpdateCheckFeedback state={updateCheck} onDismiss={() => setUpdateCheck(null)} />
+        <PluginUpdateBanner onOpenInstalled={() => navTo({ type: "view", id: "pluginsInstalled" })} />
+        <HealthBanner />
+        <ManagedBlockBanner />
+        <OrphanBindingBanner />
+        <HookSetupBanner asked={hooksAsked} />
+      </div>
       <div
         className={`shell__body ${showRight ? "" : "shell__body--no-right"}${sidebarCollapsed ? " shell__body--sidebar-collapsed" : ""}`}
         style={{ "--rightpane-w": `${rightWidth}px`, "--sidebar-w": `${sidebarWidth}px` } as CSSProperties}

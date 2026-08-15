@@ -56,7 +56,7 @@ export function HookSetupBanner({ asked }: { asked: boolean }) {
   return (
     <>
       {showUnwired && (
-        <div className="healthbanner managedblock-banner" role="alert">
+        <div className="healthbanner healthbanner--offer" role="alert">
           <Icon name="warning" size="lg" />
           <div className="healthbanner__body">
             <div className="healthbanner__title">{t("hookSetup.title")}</div>
@@ -71,7 +71,7 @@ export function HookSetupBanner({ asked }: { asked: boolean }) {
         </div>
       )}
       {showRestored && (
-        <div className="healthbanner managedblock-banner" role="alert">
+        <div className="healthbanner healthbanner--offer" role="alert">
           <Icon name="warning" size="lg" />
           <div className="healthbanner__body">
             <div className="healthbanner__title">{t("hookRestored.title")}</div>

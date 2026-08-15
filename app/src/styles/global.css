@@ -13,23 +13,23 @@ button { font: inherit; color: inherit; cursor: pointer; }
 ::-webkit-scrollbar-thumb { background: var(--c-border-strong); border-radius: 6px; border: 2px solid var(--c-bg); }
 
 /* ---------- app shell grid ---------- */
-/* Rows: topbar / health banner / body. The banner rows are auto, so when HealthBanner
-   renders nothing (return null with no issue) the track collapses to 0. Direct children
-   get an explicit grid-row because otherwise auto-placement would shift the body row and
-   crush it as the child count changes between 2 and 3 with the banner's presence. */
+/* Rows: topbar / the bands / body. Each child is given its row outright, because a child placed by
+   auto-placement moves as the ones before it come and go, and every band here renders conditionally.
+   That is also why there is one band row and not a row per banner: a grid child with no row of its
+   own does not stack under a sibling that has one — it is put in a column beside it, and the columns
+   it invents squeeze the whole app into the first one. The bands stack inside their row instead, so a
+   banner can be added without the shell being told about it. The row is auto, so with every band
+   silent the wrapper is empty, has no height, and the track collapses to 0. */
 .shell {
   height: 100%;
   display: grid;
-  grid-template-rows: var(--topbar-h) auto auto 1fr;
+  grid-template-rows: var(--topbar-h) auto 1fr;
 }
 .shell > .topbar { grid-row: 1; }
-.shell > .healthbanner { grid-row: 2; }
-/* The re-sync affordance for an outdated managed block. It takes a row of its own,
-   independent of the health banner, so either one being null leaves the other in place
-   (each row collapses to auto=0). It inherits `.healthbanner`'s look and overrides only
-   the row to 3 (same specificity, so the later rule wins). */
-.shell > .managedblock-banner { grid-row: 3; }
-.shell > .shell__body { grid-row: 4; }
+.shell > .shell__banners { grid-row: 2; }
+.shell > .shell__body { grid-row: 3; }
+/* One band under the last, in the order they are written. */
+.shell__banners { display: flex; flex-direction: column; min-width: 0; }
 /* 2 rows x 3 columns. The header row (the project header) spans the full width of main
    plus the right pane (col 2-3), and the row below places main and the right pane side by
    side, so the right pane sits under the project header. The sidebar spans both rows on
@@ -89,7 +89,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 /* The two steps that fill the band, and the accent one beside them: an offer is not a step on the
    ladder — nothing is wrong, the reader is being handed something. */
-.healthbanner--stop, .healthbanner--heed, .managedblock-banner {
+.healthbanner--stop, .healthbanner--heed, .healthbanner--offer {
   --banner-ink: #fff;
   --banner-tint: rgba(0, 0, 0, 0.18);
   --banner-tint-hover: rgba(0, 0, 0, 0.3);
@@ -102,7 +102,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .healthbanner--heed { --banner-ground: var(--c-heed); }
 /* The re-sync affordance for an outdated managed block, and the rest of the guidance the app offers
    rather than warns about. Accent, so it reads as an offer wherever it stands beside a step. */
-.managedblock-banner { --banner-ground: var(--c-accent); }
+.healthbanner--offer { --banner-ground: var(--c-accent); }
 .healthbanner__body { flex: 1; min-width: 0; }
 .healthbanner__title { font-weight: var(--fw-bold); }
 .healthbanner__line { font-size: var(--fs-xs); opacity: 0.95; word-break: break-word; }

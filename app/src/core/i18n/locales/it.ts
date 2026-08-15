@@ -502,6 +502,7 @@ export const it: Translation = {
     "mcp.copied": "Copiato",
     "mcp.written": "Salvato in {path}: aprilo per aggiungere il server.",
     "mcp.projects": "Progetti che questa app può raggiungere",
+    "mcp.handover": "I progetti selezionati sono esattamente il contenuto della richiesta e del file. Consegnandolo, la voce di questa app viene sostituita per intero, comprese le cartelle che già raggiunge.",
     "mcp.noProjects": "Nessun progetto ha ancora una cartella, quindi non c'è dove puntare un server.",
     "mcp.stale": "Lasciato da un amenbo precedente",
     "app.crashTitle": "Qualcosa è andato storto",

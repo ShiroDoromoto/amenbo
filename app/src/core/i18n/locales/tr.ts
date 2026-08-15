@@ -480,6 +480,7 @@ export const tr: Translation = {
     "mcp.copied": "Kopyalandı",
     "mcp.written": "{path} konumuna kaydedildi — sunucuyu eklemek için açın.",
     "mcp.projects": "Bu uygulamanın ulaşabileceği projeler",
+    "mcp.handover": "İşaretlediğiniz projeler, isteğin ve dosyanın içeriğinin ta kendisidir. Verdiğinizde bu uygulamanın kaydı, hâlihazırda eriştiği klasörlerle birlikte bütünüyle değişir.",
     "mcp.noProjects": "Henüz hiçbir projenin klasörü yok, bu yüzden bir sunucunun gösterebileceği yer yok.",
     "mcp.stale": "Daha eski bir amenbo'dan kalma",
     "app.crashTitle": "Bir şeyler ters gitti",

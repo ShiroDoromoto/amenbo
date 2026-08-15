@@ -490,6 +490,7 @@ export const de: Translation = {
     "mcp.copied": "Kopiert",
     "mcp.written": "Unter {path} gespeichert — zum Hinzufügen des Servers öffnen.",
     "mcp.projects": "Projekte, die diese App erreichen darf",
+    "mcp.handover": "Die angehakten Projekte sind genau der Inhalt der Anfrage und der Datei. Beim Übergeben wird der Eintrag dieser App vollständig ersetzt — samt der Ordner, die sie bereits erreicht.",
     "mcp.noProjects": "Noch hat kein Projekt einen Ordner, also gibt es nichts, worauf ein Server zeigen könnte.",
     "mcp.stale": "Von einem älteren amenbo hinterlassen",
     "app.crashTitle": "Etwas ist schiefgelaufen",

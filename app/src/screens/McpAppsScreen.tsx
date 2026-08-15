@@ -17,6 +17,9 @@
 // **It wears the same shell as every other screen** (`AMB-D-690`): the heading in a `board__toolbar`
 // band on top, the body inside a `settings__section` card. The heading says what the sidebar entrance
 // says, so a reader who pressed "connect via MCP" arrives at that name rather than at another one.
+//
+// **Reading, unread and empty are three answers, not one** (`AMB-D-690`). Each says its own line, and
+// a failure says it where it happened: the read's on the card, a write's on the row whose button wrote.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchMcpRequest, fetchMcpSetup, saveMcpBundle } from "../core/mutations";
 import { errText, t, tf } from "../core/i18n";
@@ -33,7 +36,10 @@ const REREAD_THROTTLE_MS = 1500;
  */
 export function McpAppsScreen({ pick = null }: { pick?: number | null }) {
   const [setup, setSetup] = useState<McpSetupDto | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // The read that failed, in its own words (`AMB-D-690`). A list nobody could read is not a list with
+  // nothing in it, and neither is the moment before the answer — three answers a card standing empty
+  // cannot tell apart, which is why each says its own line.
+  const [unread, setUnread] = useState<string | null>(null);
   // Which app is open, at most one (`AMB-D-690`). It starts closed even where the screen was walked in
   // holding a project: what that project is ticked in is a row the reader opens, and guessing one of
   // eight for them would put a selection in front of them they did not ask to see.
@@ -44,8 +50,10 @@ export function McpAppsScreen({ pick = null }: { pick?: number | null }) {
     lastReadAt.current = Date.now();
     let alive = true;
     fetchMcpSetup()
-      .then((read) => { if (alive) setSetup(read); })
-      .catch(() => {}); // A list that could not be read is not a fault to report on this screen.
+      .then((read) => { if (alive) { setSetup(read); setUnread(null); } })
+      // A re-read that failed keeps the rows it last read: they are stale, but they are what the
+      // screen knows, and the line above them says the newer answer never came.
+      .catch((e) => { if (alive) setUnread(errText(e)); });
     return () => { alive = false; };
   }, []);
 
@@ -84,7 +92,21 @@ export function McpAppsScreen({ pick = null }: { pick?: number | null }) {
         <div className="settings__section">
           <div className="settings__body">
             <span className="newproj__hint">{t("mcp.hint")}</span>
-            {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
+
+            {/* The wait says it is a wait. Until the first read answers there is nothing to draw, and
+                a card standing empty is read as an answer — that this machine has no apps to set up. */}
+            {setup === null && unread === null && (
+              <div className="mcp__loading">{t("app.loading")}</div>
+            )}
+
+            {/* Said in amenbo's words with the door's own beneath, as the app says it elsewhere: the
+                first line is what happened, the second is the only part that says why. */}
+            {unread && (
+              <div className="newproj__error" role="alert">
+                ⚠ {t("app.loadError")}
+                <div className="faint">{unread}</div>
+              </div>
+            )}
 
             {/* A project with no folder bound has nowhere to point a server, so a screen with none of
                 them says that rather than drawing rows whose ticks would write an entry naming
@@ -103,7 +125,6 @@ export function McpAppsScreen({ pick = null }: { pick?: number | null }) {
                     pick={pick}
                     open={open === app.app}
                     onToggle={() => setOpen((was) => (was === app.app ? null : app.app))}
-                    onError={setError}
                     onWritten={load}
                   />
                 ))}
@@ -135,6 +156,10 @@ export function McpAppsScreen({ pick = null }: { pick?: number | null }) {
  *
  * The row keeps its own ticks whether it is open or shut, so a reader who folded one away and came back
  * to it finds the selection they left rather than one rebuilt from the settings.
+ *
+ * **A write that failed is said here** (`AMB-D-690`), beside the button that failed. Eight rows draw
+ * the same two buttons, so one message on top of the screen names none of them — and the row that has
+ * it is also the row holding the ticks the reader would change before pressing again.
  */
 function McpAppRow({
   app,
@@ -142,7 +167,6 @@ function McpAppRow({
   pick,
   open,
   onToggle,
-  onError,
   onWritten,
 }: {
   app: McpAppDto;
@@ -150,7 +174,6 @@ function McpAppRow({
   pick: number | null;
   open: boolean;
   onToggle: () => void;
-  onError: (message: string | null) => void;
   onWritten: () => void;
 }) {
   // Which projects this app may reach. It opens on the ones whose folder its entry already names —
@@ -164,10 +187,11 @@ function McpAppRow({
   const [picked, setPicked] = useState<number[]>(reached);
   const [texts, setTexts] = useState<{ add: string; remove: string }>({ add: "", remove: "" });
   // Which text was last copied, by what it was — copying the removal after the addition should not
-  // leave the first button still saying it was copied.
+  // leave the addition's notice standing beside a button nobody pressed.
   const [copied, setCopied] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
+  const [failed, setFailed] = useState<string | null>(null);
 
   // The texts follow the ticks rather than the button, so copying is a synchronous move on something
   // the row is already holding.
@@ -185,7 +209,6 @@ function McpAppRow({
   const copy = async (which: string, text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      onError(null);
       setCopied(which);
       setTimeout(() => setCopied(null), 1200);
     } catch { /* where the clipboard is unavailable, quietly skip */ }
@@ -196,7 +219,10 @@ function McpAppRow({
   // move and a file nobody can find is one nobody opens.
   const save = async () => {
     setBusy(true);
-    onError(null);
+    // Both are what the last press left, and this press is not it: a place a file once landed, still
+    // said beside a write that has just failed, reads as this write having landed there.
+    setFailed(null);
+    setSaved(null);
     try {
       const at = await saveMcpBundle(picked);
       if (at !== null) {
@@ -204,7 +230,7 @@ function McpAppRow({
         onWritten();
       }
     } catch (e) {
-      onError(errText(e));
+      setFailed(errText(e));
     } finally {
       setBusy(false);
     }
@@ -242,24 +268,42 @@ function McpAppRow({
             ))}
           </div>
 
+          {/* What the ticks above amount to, said beside the button that acts on them: they are not a
+              filter on this screen, they are the contents of what is about to be handed over, and
+              handing it over replaces rather than adds. Both halves are the reader's to know before
+              they press, and neither is recoverable from the button's own word. */}
+          <span className="newproj__hint">{t("mcp.handover")}</span>
+
           <div className="mcp__actions">
+            {/* Nothing ticked is nothing to hand over, on both roads alike: the file names no folder,
+                and the request carries a `--dir` with no value after it, which an AI writes into the
+                settings as an entry that cannot run. The two used to answer the same emptiness
+                differently — one shut, one live. */}
             {app.writesFile ? (
               <button className="btn" disabled={busy || picked.length === 0} onClick={() => void save()}>
                 {t("mcp.write")}
               </button>
             ) : (
-              <button className="btn" onClick={() => void copy("add", texts.add)}>
-                {copied === "add" ? t("mcp.copied") : t("mcp.copyAdd")}
+              <button
+                className="btn"
+                disabled={picked.length === 0}
+                onClick={() => void copy("add", texts.add)}
+              >
+                {t("mcp.copyAdd")}
               </button>
             )}
             {/* Offered only where there is something to remove: a request to delete an entry nobody
-                has would send a reader looking through a file for a line that is not in it. */}
+                has would send a reader looking through a file for a line that is not in it. It is not
+                shut on an empty selection, the ticks being no part of it — what it asks for is the
+                whole entry gone, and a reader taking amenbo out has nothing to tick first. */}
             {app.configured && !app.writesFile && (
               <button className="btn" onClick={() => void copy("remove", texts.remove)}>
-                {copied === "remove" ? t("mcp.copied") : t("mcp.copyRemove")}
+                {t("mcp.copyRemove")}
               </button>
             )}
+            {!app.writesFile && <Copied on={copied === "add" || copied === "remove"} />}
           </div>
+          {failed && <div className="newproj__error" role="alert">⚠ {failed}</div>}
           {saved && <div className="mcp__saved">{tf("mcp.written", { path: saved })}</div>}
 
           {/* What an older amenbo left behind (`AMB-D-679`), drawn apart from the row's own state: an
@@ -272,8 +316,9 @@ function McpAppRow({
                   <code className="newproj__path">{old.name}</code>
                   {old.folder && <code className="newproj__path">{old.folder}</code>}
                   <button className="btn" onClick={() => void copy(old.name, old.removeRequest)}>
-                    {copied === old.name ? t("mcp.copied") : t("mcp.copyRemove")}
+                    {t("mcp.copyRemove")}
                   </button>
+                  <Copied on={copied === old.name} />
                 </div>
               ))}
             </div>
@@ -282,4 +327,19 @@ function McpAppRow({
       )}
     </li>
   );
+}
+
+/**
+ * That a copy went through, said beside the button instead of in it (`AMB-D-690`).
+ *
+ * A button that renames itself to "copied" is a button that has stopped saying what it does, in the
+ * one moment a reader is looking at it to decide whether to press it again — and it changes width
+ * doing so, taking the next button along with it. So the word lands outside, and after the buttons
+ * rather than between them: the space it takes when it appears is space none of them was standing in.
+ *
+ * It is a live region because nothing else marks the move — the clipboard is silent, and the button
+ * the reader pressed now looks exactly as it did before.
+ */
+function Copied({ on }: { on: boolean }) {
+  return <span className="mcp__copied" role="status">{on ? t("mcp.copied") : ""}</span>;
 }

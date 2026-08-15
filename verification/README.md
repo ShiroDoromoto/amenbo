@@ -733,17 +733,19 @@ it, so asking a word where it is written is one command there and there is nothi
 hit through to the record it points at, and reading which record that opened (`task open-hit` /
 `task opened`), is the same kind again: a terminal prints its hits as text, and the ref is typed into
 `show` rather than pressed. Reading the cross-cutting search's narrowing box as one that cannot be typed
-into at all (`task narrowing-shut`), and the button a consent is taken back with as one that cannot be
-pressed (`repo ai-launch-consent-clear-shut`), are the last of them: a flag either arrives on a command
+into at all (`task narrowing-shut`), the button a consent is taken back with as one that cannot be
+pressed (`repo ai-launch-consent-clear-shut`), and the button an app's row hands its road over with while
+nothing is ticked on it (`repo mcp-road-shut`), are the last of them: a flag either arrives on a command
 line or it does not, so only a screen holds a control a reader can see, reach and not use — which is the
-shape the box takes while no side is chosen and there is no grammar to read the words in, and the shape
-the button takes while there is no answer left to clear. Both are read off how the control is drawn, not
-off what it does when used: one shut in the build and painted like a live one is one a reader still
-reaches for.
+shape the box takes while no side is chosen and there is no grammar to read the words in, the shape the
+button takes while there is no answer left to clear, and the shape either road's button takes while the
+row has no folder to hand over. All three are read off how the control is drawn, not off what it does
+when used: one shut in the build and painted like a live one is one a reader still reaches for.
 
 Opening the fold that offers the other way in, and reading an app's row behind it (`repo mcp-open` /
-`mcp-app` / `mcp-road`), are one road's for a reason of their own: what the fold is for is the reader whose
-AI cannot open a folder at all, and a terminal standing in that folder is the reader who never needed it.
+`mcp-app` / `mcp-road` / `mcp-road-shut`), are one road's for a reason of their own: what the fold is for
+is the reader whose AI cannot open a folder at all, and a terminal standing in that folder is the reader
+who never needed it.
 There is nothing folded there, no list of apps, and no row for one to be read off — the two faces that
 draw them are the screen's, and a terminal that grew one would be a road of its own rather than this one
 written out again.

@@ -478,6 +478,7 @@ export const ko: Translation = {
     "mcp.copied": "복사했습니다",
     "mcp.written": "{path}에 저장했습니다. 열면 서버가 추가됩니다.",
     "mcp.projects": "이 앱이 닿아도 되는 프로젝트",
+    "mcp.handover": "체크한 프로젝트가 곧 요청문과 파일의 내용입니다. 건네면 이 앱의 설정은 지금 닿아 있는 폴더까지 통째로 바뀝니다.",
     "mcp.noProjects": "아직 폴더가 있는 프로젝트가 없어서 서버를 가리킬 곳이 없습니다.",
     "mcp.stale": "예전 amenbo가 남긴 것",
     "app.crashTitle": "문제가 생겼습니다",

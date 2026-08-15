@@ -705,7 +705,11 @@ button.feed__target:hover { color: var(--c-accent); }
 .mcp__headtext { display: flex; flex-direction: column; gap: var(--s-1); flex: 1; min-width: 0; }
 .mcp__name { font-weight: var(--fw-bold); font-size: var(--fs-sm); }
 .mcp__state { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); font-size: var(--fs-sm); }
-.mcp__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.mcp__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+/* That a copy went through, said beside the buttons rather than inside one (`AMB-D-690`). It is drawn
+   after them, so the space it takes when it appears is space nothing else was standing in — a button
+   never moves out from under the pointer that has just pressed it. */
+.mcp__copied { font-size: var(--fs-sm); color: var(--c-text-muted); }
 .mcp__saved { font-size: var(--fs-xs); overflow-wrap: anywhere; }
 /* Which projects a row may reach: a tick apiece, each with the folder that would be written into
    the entry. The folder is the longer half, so a project wraps as a block rather than letting one
@@ -716,7 +720,9 @@ button.feed__target:hover { color: var(--c-accent); }
    take away rather than part of what this app is set up for. */
 .mcp__stale { display: flex; flex-direction: column; gap: var(--s-1); font-size: var(--fs-sm); }
 .mcp__staleRow { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); }
-.mcp__empty { font-size: var(--fs-sm); color: var(--c-text-muted); }
+/* The card with no rows in it, either way round: nothing to set up, or nothing read yet. Both are one
+   muted line where the rows would be, so the wait does not read as the answer. */
+.mcp__empty, .mcp__loading { font-size: var(--fs-sm); color: var(--c-text-muted); }
 /* Copy, no, close — in that order, and wrapping rather than shrinking, since the row is narrow enough for
    three buttons to meet the edge in a language that spells them out. */
 .agenthookrow__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }

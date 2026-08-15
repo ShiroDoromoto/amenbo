@@ -10,6 +10,7 @@ import { pushNotice } from "../core/notice";
 import { STATUS_ALL } from "../core/status";
 import { taskRef } from "../core/idref";
 import { Identicon } from "./identicon";
+import { Icon } from "./Icon";
 
 /**
  * The chip a task is called by. The id is the conversational number itself, so what we show and what we copy are the
@@ -214,22 +215,23 @@ export function PriorityDot({ priority }: { priority: Priority | null }) {
 export function DueChip({ due }: { due: string | null }) {
   if (!due) return null;
   const cls = `due--${dueKind(due, todayStr())}`;
-  return <span className={`chip due ${cls}`}>🗓 {dueLabel(due)}</span>;
+  return <span className={`chip due ${cls}`}><Icon name="calendar" /> {dueLabel(due)}</span>;
 }
 
 /**
  * The chip that names, in the list itself, the premises blocking a reservation (`ready === false`) before anyone
- * tries to start. ⛔ = an unfinished dependency blocker; ⚠ = a decision not yet settled as grounds; ⏳ = a declared
- * start day that has not come; ✎ = the creation is not finished (`AMB-D-555`: a task still being written is on the
- * board like any other, and what keeps it from being picked up is the premise, not being hidden). The fourth one
+ * tries to start. A barred circle = an unfinished dependency blocker; a warning triangle = a decision not yet
+ * settled as grounds; an hourglass = a declared start day that has not come; a pencil = the creation is not
+ * finished (`AMB-D-555`: a task still being written is on the board like any other, and what keeps it from
+ * being picked up is the premise, not being hidden). The fourth one
  * carries a word rather than a count — there is nothing to count, and "still being created" is the whole fact.
  * Every `ready === false` has at least one of the four, so the chip row is never empty
  * where a reason exists — an unexplained "cannot start" reads as no reason at all. The reason a
  * reservation was refused only ever appears in a toast that vanishes in 4 seconds, so this is the one permanent place
  * it is visible before starting. It is a derived inability to start, on a different axis from a stop a person
- * declared (`status = blocked`), so it speaks in glyphs rather than colour and never blends into the status colour
- * range. `compact` is for the dense surfaces where the chip shares one line with a row
- * label (calendar, timeline): it drops the count and the chip background and leaves just the glyph (the tooltip names
+ * declared (`status = blocked`), so it speaks in marks rather than colour and never blends into the status
+ * colour range. `compact` is for the dense surfaces where the chip shares one line with a row
+ * label (calendar, timeline): it drops the count and the chip background and leaves just the mark (the tooltip names
  * what is blocking).
  */
 export function BlockedChips({ task, compact = false }: { task: TaskCard; compact?: boolean }) {
@@ -248,7 +250,7 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
           title={tf("block.deps", { names })}
           aria-label={tf("block.deps", { names })}
         >
-          {compact ? "⛔" : `⛔ ${formatNumber(deps.length)}`}
+          <Icon name="blocked" />{compact ? null : ` ${formatNumber(deps.length)}`}
         </span>
       )}
       {decisions.length > 0 && (
@@ -258,7 +260,7 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
           title={tf("block.decisions", { refs })}
           aria-label={tf("block.decisions", { refs })}
         >
-          {compact ? "⚠" : `⚠ ${formatNumber(decisions.length)}`}
+          <Icon name="warning" />{compact ? null : ` ${formatNumber(decisions.length)}`}
         </span>
       )}
       {task.notStartedUntil && (
@@ -269,7 +271,7 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
           aria-label={tf("block.notStarted", { date: task.notStartedUntil })}
         >
           {/* The date, not a count: one start day is never plural, and the day itself is the fact. */}
-          {compact ? "⏳" : `⏳ ${task.notStartedUntil}`}
+          <Icon name="hourglass" />{compact ? null : ` ${task.notStartedUntil}`}
         </span>
       )}
       {task.draft && (
@@ -279,7 +281,7 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
           title={t("block.draft")}
           aria-label={t("block.draft")}
         >
-          {compact ? "✎" : `✎ ${t("chip.draft")}`}
+          <Icon name="pencil" />{compact ? null : ` ${t("chip.draft")}`}
         </span>
       )}
     </>
@@ -311,9 +313,9 @@ export function premiseChangeDetail(pc: PremiseChangeDto): string {
  * The holder-side surface of `AMB-D-366` and `AMB-D-373`: a chip on the row of a task whose premises shifted
  * **after it was reserved** — a blocker or an unsettled decision pinned on since it went `in_progress`, or a
  * decision that was already linked and has stopped being settled — each silently withdrawing readiness.
- * 🔔 = "something changed under your reservation"; the tooltip names what. It sits beside
+ * A bell = "something changed under your reservation"; the tooltip names what. It sits beside
  * {@link BlockedChips} but reads a different axis — not "why it cannot start" (a live derivation for anyone)
- * but "what changed since *you* took it" (only the holder is at risk) — so it speaks in its own glyph. Core
+ * but "what changed since *you* took it" (only the holder is at risk) — so it speaks in its own mark. Core
  * only ever fills `premiseChange` for an `in_progress` task that actually acquired one, so the chip draws
  * exactly when it matters and nothing renders otherwise. `compact` drops the count for the dense surfaces,
  * matching `BlockedChips`.
@@ -326,7 +328,7 @@ export function PremiseChangedChip({ task, compact = false }: { task: TaskCard; 
   const cls = compact ? "chip--blockglyph" : "chip chip--premise";
   return (
     <span className={cls} role="img" title={tf("premise.changed", { detail })} aria-label={tf("premise.changed", { detail })}>
-      {compact ? "🔔" : `🔔 ${formatNumber(count)}`}
+      <Icon name="bell" />{compact ? null : ` ${formatNumber(count)}`}
     </span>
   );
 }
@@ -336,9 +338,9 @@ export function PremiseChangedChip({ task, compact = false }: { task: TaskCard; 
  * moved under the holder, each a chip that navigates to it. It reads a different axis from `blockedBy` (why
  * anyone cannot start it) — here it is what changed since *this* holder took it — so it is its own field,
  * permanent beside the transient toast the safety net fires at status change. The two decision axes are drawn
- * apart: ⚠ for a premise **pinned on** after the reservation, 🔓 for one already linked whose settlement
- * **came off** (`AMB-D-373`) — one glyph for both would leave the reader unable to tell which to go and look
- * at. It lives here rather than in the pane so the axes it draws stay tied to the chip's, and adding one
+ * apart: a warning triangle for a premise **pinned on** after the reservation, an open padlock for one
+ * already linked whose settlement **came off** (`AMB-D-373`) — one mark for both would leave the reader
+ * unable to tell which to go and look at. It lives here rather than in the pane so the axes it draws stay tied to the chip's, and adding one
  * cannot again land in a single surface.
  */
 export function PremiseChangedField({ pc, onSelectTask, onSelectDecision }: {
@@ -350,7 +352,7 @@ export function PremiseChangedField({ pc, onSelectTask, onSelectDecision }: {
     <div className="detail__field">
       <span className="detail__flabel">{t("detail.premiseChanged")}</span>
       <span title={t("detail.premiseChangedHint")}>
-        🔔{" "}
+        <Icon name="bell" />{" "}
         {pc.addedBlockers.map((b) => (
           <button
             type="button"
@@ -360,7 +362,7 @@ export function PremiseChangedField({ pc, onSelectTask, onSelectDecision }: {
             title={t("detail.premiseAdded")}
             onClick={() => onSelectTask?.(b.id)}
           >
-            ⛔ {b.name}
+            <Icon name="blocked" /> {b.name}
           </button>
         ))}
         {pc.addedDecisions.map((d) => (
@@ -372,7 +374,7 @@ export function PremiseChangedField({ pc, onSelectTask, onSelectDecision }: {
             title={t("detail.premiseAdded")}
             onClick={() => onSelectDecision?.(d.id)}
           >
-            ⚠ {premiseDecisionName(d)}
+            <Icon name="warning" /> {premiseDecisionName(d)}
           </button>
         ))}
         {pc.reopenedDecisions.map((d) => (
@@ -384,7 +386,7 @@ export function PremiseChangedField({ pc, onSelectTask, onSelectDecision }: {
             title={t("detail.premiseReopened")}
             onClick={() => onSelectDecision?.(d.id)}
           >
-            🔓 {premiseDecisionName(d)}
+            <Icon name="unlock" /> {premiseDecisionName(d)}
           </button>
         ))}
       </span>

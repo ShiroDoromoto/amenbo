@@ -1,5 +1,6 @@
 import { useState, useSyncExternalStore } from "react";
 import { PriorityDot } from "../components/atoms";
+import { Icon, type IconName } from "../components/Icon";
 import { agoLabel, errText, isPriority, isStatus, statusLabel, t, tf } from "../core/i18n";
 import { parseRef } from "../core/idref";
 import { SEARCH_PAGE, useSearch, type SearchFace, type SearchHit, type SearchKind } from "../core/reads";
@@ -200,13 +201,13 @@ export function SearchScreen({
   );
 }
 
-/** The emoji beside a face. Decoration that does not depend on the language, so it stays out of the dictionary. */
-const FACE_GLYPH: Record<SearchFace, string> = {
-  title: "📌",
-  body: "📄",
-  comment: "💬",
-  label: "🏷",
-  attachment: "📎",
+/** The mark beside a face. Decoration that does not depend on the language, so it stays out of the dictionary. */
+const FACE_ICON: Record<SearchFace, IconName> = {
+  title: "pin",
+  body: "document",
+  comment: "comment",
+  label: "tag",
+  attachment: "paperclip",
 };
 
 /**
@@ -214,12 +215,17 @@ const FACE_GLYPH: Record<SearchFace, string> = {
  * (`AMB-D-565`). Which record and which of its faces are two questions, and one emoji answering both is
  * what left the side legible only in the ref — where a reader had to spell `AMB-T-` out to find it.
  *
- * `⚖` is the decision's mark everywhere else on the screen, so it is the decision's here too.
+ * The scales are the decision's mark everywhere else on the screen, so they are the decision's here too.
+ *
+ * Both marks were once drawn in different kinds of glyph — one text-like, one a colour emoji — and it was that
+ * difference in kind that made the pair read as two axes rather than one cluster. Drawn to one convention
+ * (`AMB-D-686`) that difference is gone, so the reading is carried instead by the face's mark being the quieter
+ * of the two, set apart from the record's (`.srch__face`).
  */
-const KIND_GLYPH = { task: "☑", decision: "⚖" } as const;
+const KIND_ICON = { task: "checkSquare", decision: "scales" } as const satisfies Record<string, IconName>;
 
 /** Which side a hit is on. The wire carries a bare string, and everything but `task` is the other side. */
-function sideOf(hit: SearchHit): keyof typeof KIND_GLYPH {
+function sideOf(hit: SearchHit): keyof typeof KIND_ICON {
   return hit.kind === "task" ? "task" : "decision";
 }
 
@@ -259,8 +265,8 @@ function HitRow({
   return (
     <div className="feed__item">
       <span className="srch__face">
-        <span title={t(targetKey(hit))}>{KIND_GLYPH[sideOf(hit)]}</span>
-        <span title={t(`search.face.${hit.face}`)}>{FACE_GLYPH[hit.face]}</span>
+        <span title={t(targetKey(hit))}><Icon name={KIND_ICON[sideOf(hit)]} /></span>
+        <span className="srch__facemark" title={t(`search.face.${hit.face}`)}><Icon name={FACE_ICON[hit.face]} /></span>
       </span>
       <div className="feed__body">
         <div className="feed__line">
@@ -306,7 +312,7 @@ function statusWord(status: string, task: boolean): string {
  *
  * Each side says what it has: a task its status, its priority and what it is filed under, a decision its
  * status, which is all there is. The placements are written `axis=value`, the way the narrowing box above
- * takes them, so a row that came back on 🏷 can be typed straight back in as `dim:axis=value`.
+ * takes them, so a row that came back on the tag can be typed straight back in as `dim:axis=value`.
  *
  * **The line clips rather than wraps.** A task can be filed on any number of axes, and a row that grew
  * with them would push the excerpt — what the reader came here for — down the page a hit at a time.
@@ -324,7 +330,7 @@ function Standing({ hit }: { hit: SearchHit }) {
       {priority !== undefined && isPriority(priority) && <PriorityDot priority={priority} />}
       {labels.map((l) => (
         <span key={`${l.axis}=${l.value}`} className="chip srch__filed">
-          {FACE_GLYPH.label} {l.axis}={l.value}
+          <Icon name={FACE_ICON.label} /> {l.axis}={l.value}
         </span>
       ))}
     </div>

@@ -34,7 +34,21 @@ export type IconName =
   | "goose"
   | "chevronRight"
   | "chevronDown"
-  | "plus";
+  | "plus"
+  | "blocked"
+  | "warning"
+  | "hourglass"
+  | "pencil"
+  | "bell"
+  | "unlock"
+  | "calendar"
+  | "pin"
+  | "document"
+  | "comment"
+  | "tag"
+  | "paperclip"
+  | "checkSquare"
+  | "scales";
 
 const ART: Record<IconName, ReactNode> = {
   // An envelope — the inbox smart view.
@@ -105,6 +119,105 @@ const ART: Record<IconName, ReactNode> = {
   chevronDown: <path d="M5.6 9.4 12 15.8l6.4-6.4" />,
   // A plus — adding one more of what the section holds.
   plus: <path d="M12 4.8v14.4M4.8 12h14.4" />,
+
+  // ----- the marks that say why a task cannot be started, and what moved under its holder -----
+  // A barred circle — a dependency that is not finished yet.
+  blocked: (
+    <>
+      <circle cx="12" cy="12" r="8.4" />
+      <path d="M6.6 12h10.8" />
+    </>
+  ),
+  // A warning triangle — grounds that are not settled.
+  warning: (
+    <>
+      <path d="M12.9 4.3l8.6 14.9a1 1 0 0 1-.9 1.5H3.4a1 1 0 0 1-.9-1.5l8.6-14.9a1 1 0 0 1 1.8 0z" />
+      <path d="M12 9.8v4.4M12 17.4v.1" />
+    </>
+  ),
+  // An hourglass — a start day that has not come.
+  hourglass: (
+    <>
+      <path d="M6.6 3.4h10.8M6.6 20.6h10.8" />
+      <path d="M7.4 3.4c0 4 4.6 4.6 4.6 8.6s-4.6 4.6-4.6 8.6" />
+      <path d="M16.6 3.4c0 4-4.6 4.6-4.6 8.6s4.6 4.6 4.6 8.6" />
+    </>
+  ),
+  // A pencil — a task still being written.
+  pencil: (
+    <>
+      <path d="M4 20h4l11-11a3 3 0 0 0-4-4L4 16v4z" />
+      <path d="M14.4 6.6 17.4 9.6" />
+    </>
+  ),
+  // A bell — a premise that moved after the task was reserved.
+  bell: (
+    <>
+      <path d="M18 8.8a6 6 0 1 0-12 0c0 6.2-2.4 7.8-2.4 7.8h16.8S18 15 18 8.8z" />
+      <path d="M10.3 20.4a2 2 0 0 0 3.4 0" />
+    </>
+  ),
+  // An open padlock — grounds that were settled and have stopped being so.
+  unlock: (
+    <>
+      <rect x="4.2" y="10.6" width="15.6" height="10" rx="2" />
+      <path d="M8.2 10.6V6.9a3.8 3.8 0 0 1 7.2-1.7" />
+    </>
+  ),
+  // A calendar — the day a task is due.
+  calendar: (
+    <>
+      <rect x="3.2" y="5.4" width="17.6" height="15.4" rx="2" />
+      <path d="M3.2 10.2h17.6M8 3.2v4.2M16 3.2v4.2" />
+    </>
+  ),
+
+  // ----- the marks a search hit is read by: which record, and which of its faces -----
+  // A ticked box — the hit is on a task.
+  checkSquare: (
+    <>
+      <rect x="3.4" y="3.4" width="17.2" height="17.2" rx="2.4" />
+      <path d="M7.8 12.2 10.9 15.3 16.4 9.2" />
+    </>
+  ),
+  // A pair of scales — the hit is on a decision. The same mark the decisions screen uses.
+  scales: (
+    <>
+      <path d="M12 3.4v17.4M7.4 20.8h9.2" />
+      <path d="M3.2 7.4H5c2 0 5-1 7-2 2 1 5 2 7 2h1.8" />
+      <path d="M2.2 16.2 5 8.4l2.8 7.8a4.6 4.6 0 0 1-5.6 0z" />
+      <path d="M16.2 16.2 19 8.4l2.8 7.8a4.6 4.6 0 0 1-5.6 0z" />
+    </>
+  ),
+  // A pushpin — the words are in the record's title.
+  pin: (
+    <>
+      <path d="M9.4 3.2h5.2v6.3l3 3.4v1.5H6.4v-1.5l3-3.4V3.2z" />
+      <path d="M12 14.4v6.4" />
+    </>
+  ),
+  // A sheet — the words are in the record's body.
+  document: (
+    <>
+      <path d="M13.6 3.2H7a2 2 0 0 0-2 2v13.6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.6z" />
+      <path d="M13.6 3.2v5.4H19M8.6 13.2h6.8M8.6 16.8h4.6" />
+    </>
+  ),
+  // A bubble — the words are in a remark on the record.
+  comment: (
+    <path d="M12 4.2c-4.7 0-8.5 3.2-8.5 7.2 0 2 .9 3.8 2.4 5.1L4.6 20.4l4.5-1.7c.9.3 1.9.4 2.9.4 4.7 0 8.5-3.2 8.5-7.2S16.7 4.2 12 4.2z" />
+  ),
+  // A tag — the words are in a value the record is filed under.
+  tag: (
+    <>
+      <path d="M2.6 4.6a2 2 0 0 1 2-2h6.6a2 2 0 0 1 1.4.6l8.2 8.2a2 2 0 0 1 0 2.8l-6.6 6.6a2 2 0 0 1-2.8 0L3.2 12.6a2 2 0 0 1-.6-1.4V4.6z" />
+      <circle cx="7.3" cy="7.3" r="1.2" />
+    </>
+  ),
+  // A paperclip — the words are in the name of something hung on the record.
+  paperclip: (
+    <path d="M20.6 11.2 12 19.8a5.4 5.4 0 0 1-7.6-7.6l8.6-8.6a3.6 3.6 0 0 1 5.1 5.1l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l8-8" />
+  ),
 };
 
 /**
@@ -116,6 +229,9 @@ export function Icon({ name, size = "sm", label }: { name: IconName; size?: Icon
   return (
     <svg
       className={`icon icon--${size}`}
+      // Which mark this is, in the markup. An icon carries no text, so without it a reader of the
+      // DOM — a test, or anyone looking at what a row actually drew — has only path data to go on.
+      data-icon={name}
       viewBox="0 0 24 24"
       xmlns="http://www.w3.org/2000/svg"
       role={label ? "img" : undefined}

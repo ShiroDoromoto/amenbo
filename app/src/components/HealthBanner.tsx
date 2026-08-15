@@ -4,6 +4,7 @@ import { Icon } from "./Icon";
 import { doctorText, t, tn } from "../core/i18n";
 import { fetchPointerIssues, repairPointers } from "../core/mutations";
 import type { DoctorIssueDto } from "../bindings/bindings";
+import { DismissButton } from "./DismissButton";
 
 // The banner speaks for two layers. What is inside the store (`startupHealth`) is carried by the snapshot on every
 // tick, but issues with a bound folder's `.amenbo` (legacy format, or gone) are asked of core exactly once at startup
@@ -52,7 +53,7 @@ export function HealthBanner() {
         <div className="healthbanner__body">
           <div className="healthbanner__title">{tn("health.repaired", repaired)}</div>
         </div>
-        <button className="healthbanner__close" onClick={() => setDismissed(true)}>✕ {t("health.dismiss")}</button>
+        <DismissButton onClick={() => setDismissed(true)} />
       </div>
     );
   }
@@ -71,7 +72,7 @@ export function HealthBanner() {
           {busy ? t("health.repairing") : t("health.repair")}
         </button>
       )}
-      <button className="healthbanner__close" onClick={() => setDismissed(true)} disabled={busy}>✕ {t("health.dismiss")}</button>
+      <DismissButton onClick={() => setDismissed(true)} disabled={busy} />
     </div>
   );
 }

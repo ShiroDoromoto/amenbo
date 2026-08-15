@@ -8,6 +8,7 @@ import { asTyped, isEnterSubmit } from "../core/keys";
 import { confirmDialog } from "../core/dialog";
 import { agoLabel, t, errText } from "../core/i18n";
 import { ErrorNote } from "./ErrorNote";
+import { Icon } from "./Icon";
 
 /**
  * One comment row in a timeline. Tasks and decision records draw the body from different places (activity vs.
@@ -80,7 +81,7 @@ export function CommentRow({ id, author, at, editedAt, text, target, onEdit, onR
         {inTauri() && !editing && (
           <>
             <button className="feed__action comment__act" title={t("comment.edit")} onClick={startEdit}>✎</button>
-            <button className="feed__action comment__rm" title={t("comment.remove")} onClick={() => void remove()}>✕</button>
+            <button className="feed__action comment__rm" title={t("comment.remove")} onClick={() => void remove()}><Icon name="close" /></button>
           </>
         )}
       </div>

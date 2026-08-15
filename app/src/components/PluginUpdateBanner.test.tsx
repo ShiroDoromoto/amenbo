@@ -48,11 +48,12 @@ const offer = (over: Partial<PluginUpdate> & { name: string }): PluginUpdate => 
   ...over,
 });
 
-// Exact, minus the ✕ the close button leads with: "update" is a prefix of "update all", and a loose match
-// would have the two tests about them pass on each other's button.
+// Matched exactly: "update" is a prefix of "update all", and a loose match would have the two tests
+// about them pass on each other's button. The mark a button leads with is drawn rather than typed, so
+// it is not in the text this reads.
 const button = (label: string) =>
   Array.from(container.querySelectorAll("button")).find(
-    (b) => (b.textContent ?? "").replace("✕", "").trim() === label,
+    (b) => (b.textContent ?? "").trim() === label,
   );
 
 beforeEach(() => {

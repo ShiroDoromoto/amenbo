@@ -200,7 +200,7 @@ export function ActivityFeed({
                         title={t("comment.remove")}
                         onClick={() => void remove(it, actsOn)}
                       >
-                        ✕
+                        <Icon name="close" />
                       </button>
                     </>
                   )}

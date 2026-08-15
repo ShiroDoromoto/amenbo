@@ -4,6 +4,7 @@ import { Icon } from "./Icon";
 import { t, tn } from "../core/i18n";
 import { fetchStaleManagedBlocks, resyncManagedBlocks } from "../core/mutations";
 import type { StaleBlockDto } from "../bindings/bindings";
+import { DismissButton } from "./DismissButton";
 
 // After a binary update, a bound folder's CLAUDE.md/AGENTS.md can be left holding an older version of the managed
 // block. The CLI fixes itself by following along whenever it starts in that folder, but the GUI starts in no folder
@@ -56,7 +57,7 @@ export function ManagedBlockBanner() {
         <div className="healthbanner__body">
           <div className="healthbanner__title">{t("managedBlock.done")}</div>
         </div>
-        <button className="healthbanner__close" onClick={() => setDismissed(true)}>✕ {t("health.dismiss")}</button>
+        <DismissButton onClick={() => setDismissed(true)} />
       </div>
     );
   }
@@ -71,7 +72,7 @@ export function ManagedBlockBanner() {
       <button className="healthbanner__action" onClick={onResync} disabled={busy}>
         {busy ? t("managedBlock.resyncing") : t("managedBlock.resync")}
       </button>
-      <button className="healthbanner__close" onClick={() => setDismissed(true)} disabled={busy}>✕ {t("health.dismiss")}</button>
+      <DismissButton onClick={() => setDismissed(true)} disabled={busy} />
     </div>
   );
 }

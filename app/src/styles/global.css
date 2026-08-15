@@ -74,7 +74,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .healthbanner__line { font-size: var(--fs-xs); opacity: 0.95; word-break: break-word; }
 .healthbanner__hint { font-size: var(--fs-xs); opacity: 0.85; margin-top: var(--s-1); }
 .healthbanner__close {
-  flex: none; color: #fff; background: rgba(0, 0, 0, 0.18);
+  flex: none; display: inline-flex; align-items: center; gap: var(--s-1);
+  color: #fff; background: rgba(0, 0, 0, 0.18);
   border: none; border-radius: var(--r-sm); padding: var(--s-1) var(--s-2);
   font-size: var(--fs-xs); cursor: pointer;
 }

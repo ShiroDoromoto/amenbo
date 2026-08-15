@@ -35,6 +35,7 @@ import { clampSidebarWidth, getSidebarWidth, setSidebarWidth } from "../core/sid
 import { getSidebarCollapsed, setSidebarCollapsed } from "../core/sidebarCollapsed";
 import { RefNavProvider } from "../core/refNav";
 import { currentLang, t } from "../core/i18n";
+import { Icon } from "../components/Icon";
 
 /**
  * `projectSettings` is the settings screen, carrying the project id in `id`. Reached from the ⚙ in the board toolbar.
@@ -469,7 +470,7 @@ export function AppShell() {
 function PaneHeader({ onClose }: { onClose: () => void }) {
   return (
     <div style={{ display: "flex", justifyContent: "flex-end", padding: "4px 8px", borderBottom: "1px solid var(--c-border)" }}>
-      <button className="feed__action" onClick={onClose}>✕ {t("pane.close")}</button>
+      <button className="feed__action" onClick={onClose}><Icon name="close" /> {t("pane.close")}</button>
     </div>
   );
 }

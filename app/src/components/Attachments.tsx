@@ -20,6 +20,7 @@ import { confirmDialog } from "../core/dialog";
 import { previewKind } from "../core/attachmentView";
 import { Markdown } from "./Markdown";
 import { formatNumber, t, tf } from "../core/i18n";
+import { Icon } from "./Icon";
 
 // A size a reader can take in: the largest unit the byte count fills, to one decimal while that
 // decimal still says something. The digits go through `Intl` because the separator is the locale's —
@@ -171,7 +172,7 @@ export function Attachments({ target, targetId, compact = false }: {
             ⬇
           </button>
         )}
-        <button className="feed__action attach__rm" title={t("attach.remove")} onClick={() => void onRemove(a)}>✕</button>
+        <button className="feed__action attach__rm" title={t("attach.remove")} onClick={() => void onRemove(a)}><Icon name="close" /></button>
       </div>
       <AttachmentBody a={a} />
     </div>

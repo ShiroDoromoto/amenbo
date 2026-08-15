@@ -3,6 +3,7 @@ import { inTauri } from "../core/snapshot";
 import { Icon } from "./Icon";
 import { t, tn } from "../core/i18n";
 import { fetchOrphanBindings, forgetOrphanBindings } from "../core/mutations";
+import { DismissButton } from "./DismissButton";
 
 // Point out the bound-folder wreckage a deleted project left in the index (rows no live project claims) and forget
 // them from the index in one click (the same core path as CLI `doctor --fix`, `forget_orphan_dirs`). The GUI's folder
@@ -49,7 +50,7 @@ export function OrphanBindingBanner() {
         <div className="healthbanner__body">
           <div className="healthbanner__title">{t("orphanBinding.done")}</div>
         </div>
-        <button className="healthbanner__close" onClick={() => setDismissed(true)}>✕ {t("health.dismiss")}</button>
+        <DismissButton onClick={() => setDismissed(true)} />
       </div>
     );
   }
@@ -64,7 +65,7 @@ export function OrphanBindingBanner() {
       <button className="healthbanner__action" onClick={onForget} disabled={busy}>
         {busy ? t("orphanBinding.forgetting") : t("orphanBinding.forget")}
       </button>
-      <button className="healthbanner__close" onClick={() => setDismissed(true)} disabled={busy}>✕ {t("health.dismiss")}</button>
+      <DismissButton onClick={() => setDismissed(true)} disabled={busy} />
     </div>
   );
 }

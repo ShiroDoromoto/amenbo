@@ -4,6 +4,7 @@ import { Icon } from "./Icon";
 import { t, tf } from "../core/i18n";
 import { fetchHookNotices } from "../core/mutations";
 import type { HookNoticeDto } from "../bindings/bindings";
+import { DismissButton } from "./DismissButton";
 
 // The GUI's channel for what core's `hooks::setup_notice` found — the same report the CLI puts in its `--json`
 // field and on stderr. It tells and stops nothing, and it takes no answer either, which is what keeps it apart
@@ -66,7 +67,7 @@ export function HookSetupBanner({ asked }: { asked: boolean }) {
               </div>
             ))}
           </div>
-          <button className="healthbanner__close" onClick={() => setUnwiredDismissed(true)}>✕ {t("health.dismiss")}</button>
+          <DismissButton onClick={() => setUnwiredDismissed(true)} />
         </div>
       )}
       {showRestored && (
@@ -81,7 +82,7 @@ export function HookSetupBanner({ asked }: { asked: boolean }) {
               </div>
             ))}
           </div>
-          <button className="healthbanner__close" onClick={() => setRestoredDismissed(true)}>✕ {t("health.dismiss")}</button>
+          <DismissButton onClick={() => setRestoredDismissed(true)} />
         </div>
       )}
     </>

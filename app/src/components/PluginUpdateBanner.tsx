@@ -12,6 +12,7 @@ import {
 } from "../core/pluginUpdates";
 import { pluginDesc } from "../core/pluginText";
 import { subscribeOutsideStore } from "../core/snapshot";
+import { DismissButton } from "./DismissButton";
 
 /**
  * "Some of your plugins have a newer build" — said once, under the top bar, with the button that takes it
@@ -134,15 +135,12 @@ export function PluginUpdateBanner({ onOpenInstalled }: {
         </button>
       )}
       {!busy && (
-        <button
-          className="healthbanner__close"
+        <DismissButton
           onClick={() => {
             dismissPluginUpdates(updates);
             setResult(null);
           }}
-        >
-          ✕ {t("health.dismiss")}
-        </button>
+        />
       )}
     </div>
   );

@@ -5,6 +5,7 @@ import { dismissUpdate, isUpdateDismissed, sessionDismissCovers, type SessionDis
 import { t, tf } from "../core/i18n";
 import { openLatestInstaller, installUpdate, restartApp } from "../core/mutations";
 import type { UpdateProgress } from "../core/mutations";
+import { DismissButton } from "./DismissButton";
 
 // One line for the phase the in-app update is in — the hint that replaces `update.hint` while it runs. A download with
 // a known size shows a percentage; without one (the manifest carried no length) it is just "Downloading…".
@@ -91,7 +92,10 @@ export function UpdateBanner({ recheck }: { recheck: number }) {
       )}
       {/* No dismiss while the download/install is running — walking away mid-swap is exactly what we do not offer. */}
       {stage !== "working" && (
-        <button className="healthbanner__close" onClick={() => { dismissUpdate(vs.newerVersion); setDismissed(vs.newerVersion); }}>✕ {t("update.dismiss")}</button>
+        <DismissButton
+          onClick={() => { dismissUpdate(vs.newerVersion); setDismissed(vs.newerVersion); }}
+          label={t("update.dismiss")}
+        />
       )}
     </div>
   );
@@ -136,7 +140,7 @@ export function UpdateCheckFeedback({
           {failed ? t("update.checkFailed") : tf("update.upToDate", { version: appVersion })}
         </div>
       </div>
-      <button className="healthbanner__close" onClick={onDismiss}>✕ {t("health.dismiss")}</button>
+      <DismissButton onClick={onDismiss} />
     </div>
   );
 }

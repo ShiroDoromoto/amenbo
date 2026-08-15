@@ -42,6 +42,8 @@ export type IconName =
   | "arrowDown"
   | "reply"
   | "clock"
+  | "close"
+  | "error"
   | "blocked"
   | "warning"
   | "hourglass"
@@ -255,6 +257,16 @@ const ART: Record<IconName, ReactNode> = {
       <circle cx="12" cy="13.6" r="7.6" />
       <path d="M12 9.4v4.2l2.8 1.7" />
       <path d="M9.6 2.6h4.8M12 2.6v3.4" />
+    </>
+  ),
+  // A cross — the move that puts something away: a banner dismissed, a pane shut, a row taken off.
+  close: <path d="M5.8 5.8 18.2 18.2M18.2 5.8 5.8 18.2" />,
+  // A cross inside a circle — a fault, as against the triangle's warning. The two are read side by
+  // side in one list, so they are told apart by their outline before either is read.
+  error: (
+    <>
+      <circle cx="12" cy="12" r="8.4" />
+      <path d="M9.2 9.2 14.8 14.8M14.8 9.2 9.2 14.8" />
     </>
   ),
 };

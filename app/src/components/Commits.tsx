@@ -11,6 +11,7 @@ import { confirmDialog } from "../core/dialog";
 import { errText, t, tf } from "../core/i18n";
 import { asTyped } from "../core/keys";
 import { ErrorNote } from "./ErrorNote";
+import { Icon } from "./Icon";
 
 /** Copy a SHA to the clipboard, flipping a "copied" hint for a moment. Best-effort — a clipboard failure is silent. */
 function CopyButton({ sha }: { sha: string }) {
@@ -69,7 +70,7 @@ export function Commits({ taskId }: { taskId: number }) {
             <div className="commits__item" key={c.id}>
               <code className="commits__sha" title={c.sha}>{c.sha}</code>
               <CopyButton sha={c.sha} />
-              <button className="feed__action" title={t("commit.remove")} onClick={() => void onRemove(c)}>✕</button>
+              <button className="feed__action" title={t("commit.remove")} onClick={() => void onRemove(c)}><Icon name="close" /></button>
             </div>
           ))}
         </div>

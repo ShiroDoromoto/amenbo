@@ -17,6 +17,7 @@ import { DataProgressModal } from "../components/DataProgressModal";
 import { facetColor, FacetAvatar, identiconSeed } from "../components/atoms";
 import { getThemePref, setThemePref, type ThemePref } from "../core/theme";
 import { asTyped, isEnterSubmit } from "../core/keys";
+import { Icon } from "../components/Icon";
 
 // Settings: profile, appearance, AI policy, developer, and data (export and backup). The store is a
 // single local one, so there is no section for sharing, syncing, keys or members.
@@ -500,7 +501,7 @@ function DoctorSetting() {
                 return (
                   <span key={i} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                     <span style={{ color: iss.severity === "error" ? "var(--c-blocked)" : undefined }}>
-                      {iss.severity === "error" ? "✕" : "⚠"} {message}
+                      <Icon name={iss.severity === "error" ? "error" : "warning"} /> {message}
                     </span>
                     {repair && (
                       <span>

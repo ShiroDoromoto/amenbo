@@ -88,6 +88,12 @@ function button(label: string): HTMLButtonElement {
 const buttons = () => [...container.querySelectorAll("button")].map((b) => b.textContent ?? "");
 const rows = () => [...container.querySelectorAll(".mcp__app")];
 const ticks = () => [...container.querySelectorAll<HTMLInputElement>(".mcp__project input")];
+const heads = () => [...container.querySelectorAll<HTMLButtonElement>(".mcp__head")];
+
+/** Open the row at `at`, the rows being folded to start with (`AMB-D-690`). */
+async function openRow(at = 0) {
+  await act(async () => { heads()[at].click(); });
+}
 
 /**
  * A clock the test moves. The screen throttles a burst of returns on `Date.now`, so a test that wants
@@ -143,17 +149,70 @@ describe("the screen where an AI is connected", () => {
     expect(container.querySelector(".settings__section .mcp__apps")).not.toBeNull();
   });
 
+  // Folded, one at a time (`AMB-D-690`). Eight apps each holding the whole column of projects is the
+  // page this replaces, so what a second row opening has to do is close the first — otherwise the
+  // reader is back to reading the same column twice over.
+  it("keeps the rows folded, and opens one at a time", async () => {
+    await render({
+      projects: [SHOP, GREENHOUSE],
+      apps: [app(), app({ app: "vscode", label: "VS Code" })],
+    });
+
+    expect(rows()).toHaveLength(2);
+    expect(ticks()).toHaveLength(0);
+    expect(heads().map((h) => h.getAttribute("aria-expanded"))).toEqual(["false", "false"]);
+
+    await openRow(0);
+    expect(heads().map((h) => h.getAttribute("aria-expanded"))).toEqual(["true", "false"]);
+    expect(ticks()).toHaveLength(2); // one row's worth, not both rows'
+
+    await openRow(1);
+    expect(heads().map((h) => h.getAttribute("aria-expanded"))).toEqual(["false", "true"]);
+    expect(ticks()).toHaveLength(2);
+
+    // And pressing the open one shuts it: the reader who opened a row by mistake folds it away again.
+    await openRow(1);
+    expect(heads().map((h) => h.getAttribute("aria-expanded"))).toEqual(["false", "false"]);
+    expect(ticks()).toHaveLength(0);
+  });
+
+  // A row keeps the ticks it was given while it is shut. Rebuilding them off the settings on the way
+  // back would quietly drop what the reader chose and never wrote.
+  it("keeps a row's ticks while it is folded away", async () => {
+    await render({ projects: [SHOP, GREENHOUSE], apps: [app()] });
+
+    await openRow();
+    await act(async () => { ticks()[1].click(); });
+    expect(ticks().map((box) => box.checked)).toEqual([false, true]);
+
+    await openRow(); // shut
+    await openRow(); // and back
+    expect(ticks().map((box) => box.checked)).toEqual([false, true]);
+  });
+
+  // Arriving from a project that was just made ticks that project, but opens nothing: which app to set
+  // up is the reader's question, and there are eight of them to pick from.
+  it("opens no row where the screen was walked in holding a project", async () => {
+    await render({ projects: [SHOP, GREENHOUSE], apps: [app()] }, SHOP.id);
+
+    expect(heads().map((h) => h.getAttribute("aria-expanded"))).toEqual(["false"]);
+    expect(ticks()).toHaveLength(0);
+  });
+
   it("opens each row's ticks on the projects that app already reaches", async () => {
     await render({
       projects: [SHOP, GREENHOUSE],
       apps: [app({ configured: true, folders: ["/w/greenhouse"] })],
     });
 
-    expect(ticks().map((box) => box.checked)).toEqual([false, true]);
-    // And the folder is drawn beside the answer: set up for *which* folder is the half a reader
-    // cannot work out for themselves.
+    // The folder is drawn beside the answer while the row is still folded: set up for *which* folder
+    // is the half a reader cannot work out for themselves, and it is what the list is scanned by.
     expect(container.textContent).toContain(t("mcp.configured"));
     expect(container.textContent).toContain("/w/greenhouse");
+    expect(ticks()).toHaveLength(0);
+
+    await openRow();
+    expect(ticks().map((box) => box.checked)).toEqual([false, true]);
     // The text is asked for the selection the row opened on, not for an empty one.
     expect(hoisted.asked).toEqual(["cursor:2"]);
   });
@@ -167,6 +226,7 @@ describe("the screen where an AI is connected", () => {
       SHOP.id,
     );
 
+    await openRow();
     expect(ticks().map((box) => box.checked)).toEqual([true, true]);
     expect(hoisted.asked).toEqual(["cursor:2,1"]);
   });
@@ -176,6 +236,7 @@ describe("the screen where an AI is connected", () => {
   it("ignores a project it was walked in holding that has no folder here", async () => {
     await render({ projects: [SHOP], apps: [app()] }, 99);
 
+    await openRow();
     expect(ticks().map((box) => box.checked)).toEqual([false]);
     expect(hoisted.asked).toEqual(["cursor:"]);
   });
@@ -184,6 +245,7 @@ describe("the screen where an AI is connected", () => {
     await render({ projects: [SHOP, GREENHOUSE], apps: [app()] });
     expect(hoisted.asked).toEqual(["cursor:"]); // nothing ticked is still an answer
 
+    await openRow();
     await act(async () => { ticks()[0].click(); });
     await act(async () => { ticks()[1].click(); });
     expect(hoisted.asked).toEqual(["cursor:", "cursor:1", "cursor:1,2"]);
@@ -198,6 +260,7 @@ describe("the screen where an AI is connected", () => {
       apps: [app({ app: "claude-desktop", label: "Claude Desktop", writesFile: true }), app()],
     });
 
+    await openRow();
     expect(buttons()).toContain(t("mcp.write"));
     // Nothing ticked is nothing to write: a bundle naming no folder reaches no project.
     expect(button(t("mcp.write")).disabled).toBe(true);
@@ -216,6 +279,8 @@ describe("the screen where an AI is connected", () => {
 
     // Not set up — an old entry is not this app holding the server amenbo writes today.
     expect(container.textContent).toContain(t("mcp.unconfigured"));
+
+    await openRow();
     expect(container.textContent).toContain(t("mcp.stale"));
     expect(container.textContent).toContain("amenbo-shop");
 
@@ -227,6 +292,8 @@ describe("the screen where an AI is connected", () => {
     await render({ projects: [SHOP], apps: [app()] });
 
     expect(container.textContent).toContain(t("mcp.unconfigured"));
+
+    await openRow();
     expect(buttons()).not.toContain(t("mcp.copyRemove"));
   });
 
@@ -279,6 +346,7 @@ describe("the screen where an AI is connected", () => {
     hoisted.writtenTo = null;
     await render({ projects: [SHOP], apps: [app({ writesFile: true })] });
 
+    await openRow();
     await act(async () => { ticks()[0].click(); });
     await act(async () => { button(t("mcp.write")).click(); });
     expect(container.querySelector(".mcp__saved")).toBeNull();

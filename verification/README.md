@@ -665,6 +665,12 @@ time — how much amenbo has been used on this device — which is the one world
 every other premise is something somebody could have done a moment before the run, and this one is
 something they could only have done over days.
 
+`folder foreign-pointer` is on the list for the neighbouring reason: not that nobody could have done
+it a moment before, but that nobody under test could have done it at all. A build stamps its own name
+as it writes a pointer, so the one store that cannot leave another's is the one being driven, and on
+screen there is not even a command to try it with. Both roads that read the claim — the terminal's
+refusal, the row the screen lists the folder as — therefore open on it.
+
 **A premise that does not stand ends that scenario, red, on the line that failed, and the road is not
 walked at all.** Judging a road against a world half built says nothing about the road — every line it
 then wrote, passing or failing, would be about the wrong thing. It is that scenario's failure and not

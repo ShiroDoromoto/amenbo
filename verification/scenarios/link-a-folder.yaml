@@ -25,6 +25,12 @@
 # answered by the write that comes after it. And the refusal says which store the folder belongs to,
 # because being turned away only helps a reader who is then told where to go.
 #
+# The screen meets that same folder with nothing to be turned away from — the interface holds its own
+# store open the whole time — so what stands in for the refusal there is the row that lists the
+# folder: it names the store the folder belongs to, and stops calling it one an AI can be started in.
+# A row that went on saying ready would have the screen saying the opposite of what happens to
+# whoever walks in, which is the one way a reader ends up trusting a folder nothing of theirs reaches.
+#
 # ── What only the screen road ever says ──────────────────────────────────────────────────────────
 # A reader arriving with no folder linked yet is offered two ways in: raise a project, or open one
 # this device already holds. Both are the interface's own to carry out — raising goes to a screen of
@@ -62,7 +68,8 @@ description: >
   turned away from it by name. On screen the road is the way in that never passes through a terminal:
   two cards and nothing to paste anywhere, the second asking which of this device's projects the
   folder is to be linked to — the step it takes before the folder picker — then the folder itself,
-  and the board that opens with the first loop waiting on it.
+  and the board that opens with the first loop waiting on it, and finally that project's own settings,
+  where a folder another store claimed is listed as that store's rather than as one to start an AI in.
 given:
   # The project the card lists and the reader answers with. It is the screen road's alone — the road
   # from a terminal raises its own — but a premise stands before both, and a project more on the device
@@ -72,6 +79,26 @@ given:
     op: create
     with:
       name: Greenhouse
+    as: greenhouse
+
+  # A folder already on that project's list when the app opens, and claimed by another store before
+  # it did. It is a premise rather than a step for the reason the terminal road's is written from
+  # outside the folder: a build run in there brings the pointer forward to its own shape, and there is
+  # no move on screen that leaves one behind either. The road reads it where a reader would meet it —
+  # in the list of the project's folders — having no command to be turned away from.
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: orchard
+      project: greenhouse
+
+  - type: action
+    domain: folder
+    op: foreign-pointer
+    with:
+      dir: orchard
+      store: amenbo-dev
 
 steps_cli:
   # `init` in an unclaimed folder raises a project there and points the folder at it. The binding it
@@ -246,3 +273,19 @@ steps_gui:
     op: first-loop
     with:
       hands_over: agent --json
+
+  # And onto the face that lists what the project is linked to, where the folder claimed before the
+  # app opened is waiting. The move is a step of its own so the arrival is shot: the row is read off
+  # that shot, not taken on trust that the road got to the right screen.
+  - type: action
+    domain: project
+    op: open-settings
+    with:
+      project: Greenhouse
+
+  - type: assert
+    domain: folder
+    op: claimed
+    with:
+      dir: orchard
+      store: amenbo-dev

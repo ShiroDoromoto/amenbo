@@ -64,7 +64,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .healthbanner {
   display: flex; align-items: flex-start; gap: var(--s-3);
   padding: var(--s-2) var(--s-4);
-  background: var(--c-warn); color: #fff;
+  background: var(--c-heed); color: #fff;
   border-bottom: 1px solid var(--c-border);
   font-size: var(--fs-sm);
 }
@@ -89,7 +89,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .healthbanner__action:hover { background: rgba(255, 255, 255, 0.85); }
 .healthbanner__action:disabled { opacity: 0.6; cursor: default; }
 /* The re-sync affordance for an outdated managed block. It wears the accent colour
-   (guidance plus an action) to stay distinct from the integrity error's warning colour. */
+   (guidance plus an action) to stay distinct from the integrity banner's heed step. */
 .managedblock-banner { background: var(--c-accent); }
 /* The text the copy button hands over, shown rather than hidden behind it: it asks an AI of the
    reader's to edit a file of theirs, so it is read before it is handed on. Capped and scrolled, so a
@@ -154,13 +154,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
   }
 }
 /* Which build this window is (`DEV`, `DEV AMB-T-<id>`) — never present on a shipped one. It sits
-   right against the brand it qualifies, and wears the warning colour so it is legible in a cropped
+   right against the brand it qualifies, and wears the heed step so it is legible in a cropped
    screenshot, which is the one place the window title cannot answer the question. Monospace keeps
    the task ref reading as a ref. */
 .topbar__envbadge {
   font-family: var(--font-mono);
   font-size: var(--fs-xs); font-weight: var(--fw-bold); letter-spacing: 0.04em;
-  color: #fff; background: var(--c-warn);
+  color: #fff; background: var(--c-heed);
   border-radius: var(--r-sm); padding: 1px var(--s-2);
   white-space: nowrap;
 }
@@ -234,8 +234,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .navitem--active .navitem__count { background: var(--c-surface); }
 /* The inbox's needs-attention badge: the accent colour carries "unread / needs a look". */
-.navitem__count--alert { background: var(--c-accent); color: var(--c-on-accent, #fff); font-weight: var(--fw-medium); }
-.navitem--active .navitem__count--alert { background: var(--c-accent); color: var(--c-on-accent, #fff); }
+.navitem__count--alert { background: var(--c-accent); color: #fff; font-weight: var(--fw-medium); }
+.navitem--active .navitem__count--alert { background: var(--c-accent); color: #fff; }
 .navitem--muted { color: var(--c-text-faint); font-size: var(--fs-sm); cursor: pointer; }
 
 /* ---------- main ---------- */
@@ -276,3 +276,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .muted { color: var(--c-text-muted); }
 .faint { color: var(--c-text-faint); }
+/* The step a mark takes, set on the thing the mark sits in rather than on the mark: an icon draws in
+   `currentColor` (`AMB-D-686`), so it is the chip, the row or the line that decides what it asks of
+   the reader. Two classes and not three — the third step asks nothing, and a mark that asks nothing
+   takes the tone of the words it stands in (`.muted` / `.faint`) or a colour of its own. */
+.step-stop { color: var(--c-stop); }
+.step-heed { color: var(--c-heed); }

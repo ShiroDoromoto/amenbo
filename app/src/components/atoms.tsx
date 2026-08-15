@@ -225,9 +225,15 @@ export function DueChip({ due }: { due: string | null }) {
  * Every `ready === false` has at least one of the four, so the chip row is never empty
  * where a reason exists — an unexplained "cannot start" reads as no reason at all. The reason a
  * reservation was refused only ever appears in a toast that vanishes in 4 seconds, so this is the one permanent place
- * it is visible before starting. It is a derived inability to start, on a different axis from a stop a person
- * declared (`status = blocked`), so it speaks in marks rather than colour and never blends into the status
- * colour range. `compact` is for the dense surfaces where the chip shares one line with a row
+ * it is visible before starting.
+ *
+ * **The four are not one step.** Two of them nobody can pass without going and doing something else first — an
+ * unfinished blocker, a decision nobody has ruled on — and two resolve on their own or where the reader stands: a
+ * start day comes, and a creation is ended by whoever reads it. Drawn on one step they read as one refusal, and the
+ * reader who can act is told the same thing as the reader who can only wait. It stays clear of the step a person
+ * declared (`status = blocked`), which is the heed one: a premise nobody can pass is drawn above it, not in it.
+ *
+ * `compact` is for the dense surfaces where the chip shares one line with a row
  * label (calendar, timeline): it drops the count and the chip background and leaves just the mark (the tooltip names
  * what is blocking).
  */
@@ -237,12 +243,14 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
   if (task.ready) return null;
   const names = deps.map((b) => `${taskRef(b.id)} ${b.name}`).join(", ");
   const refs = decisions.map((d) => `${d.ref ?? ""} ${d.name}`.trim()).join(", ");
-  const cls = compact ? "chip--blockglyph" : "chip chip--block";
+  const shape = compact ? "chip--blockglyph" : "chip chip--block";
+  const stop = `${shape} step-stop`;
+  const heed = `${shape} step-heed`;
   return (
     <>
       {deps.length > 0 && (
         <span
-          className={cls}
+          className={stop}
           role="img"
           title={tf("block.deps", { names })}
           aria-label={tf("block.deps", { names })}
@@ -252,7 +260,7 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
       )}
       {decisions.length > 0 && (
         <span
-          className={cls}
+          className={stop}
           role="img"
           title={tf("block.decisions", { refs })}
           aria-label={tf("block.decisions", { refs })}
@@ -262,7 +270,7 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
       )}
       {task.notStartedUntil && (
         <span
-          className={cls}
+          className={heed}
           role="img"
           title={tf("block.notStarted", { date: task.notStartedUntil })}
           aria-label={tf("block.notStarted", { date: task.notStartedUntil })}
@@ -273,7 +281,7 @@ export function BlockedChips({ task, compact = false }: { task: TaskCard; compac
       )}
       {task.draft && (
         <span
-          className={cls}
+          className={heed}
           role="img"
           title={t("block.draft")}
           aria-label={t("block.draft")}
@@ -322,7 +330,7 @@ export function PremiseChangedChip({ task, compact = false }: { task: TaskCard; 
   if (!pc) return null;
   const detail = premiseChangeDetail(pc);
   const count = pc.addedBlockers.length + pc.addedDecisions.length + pc.reopenedDecisions.length;
-  const cls = compact ? "chip--blockglyph" : "chip chip--premise";
+  const cls = `${compact ? "chip--blockglyph" : "chip chip--premise"} step-heed`;
   return (
     <span className={cls} role="img" title={tf("premise.changed", { detail })} aria-label={tf("premise.changed", { detail })}>
       <Icon name="bell" />{compact ? null : ` ${formatNumber(count)}`}
@@ -348,7 +356,9 @@ export function PremiseChangedField({ pc, onSelectTask, onSelectDecision }: {
   return (
     <div className="detail__field">
       <span className="detail__flabel">{t("detail.premiseChanged")}</span>
-      <span title={t("detail.premiseChangedHint")}>
+      {/* The step is set once, on the field: the bell and every chip under it are the one piece of news, and
+          the chips draw in `color: inherit` so they take it (turning accent on hover, being ways in). */}
+      <span className="step-heed" title={t("detail.premiseChangedHint")}>
         <Icon name="bell" />{" "}
         {pc.addedBlockers.map((b) => (
           <button

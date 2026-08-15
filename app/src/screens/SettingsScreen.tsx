@@ -510,7 +510,9 @@ function DoctorSetting() {
                 const repair = doctorRepair(iss);
                 return (
                   <span key={i} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    <span style={{ color: iss.severity === "error" ? "var(--c-blocked)" : undefined }}>
+                    {/* The line the mark sits in is what carries the step: a fault stops the reader, a
+                        warning is theirs to know while everything keeps working. */}
+                    <span className={iss.severity === "error" ? "step-stop" : "step-heed"}>
                       <Icon name={iss.severity === "error" ? "error" : "warning"} /> {message}
                     </span>
                     {repair && (

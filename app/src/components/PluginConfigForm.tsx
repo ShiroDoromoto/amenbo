@@ -248,7 +248,7 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
             ) : f.defaultValue != null ? (
               <span className="chip">{t("plugins.cfg.default")}</span>
             ) : (
-              <span className={f.required ? "chip chip--warn" : "chip"}>
+              <span className={f.required ? "chip chip--heed" : "chip"}>
                 {t("plugins.cfg.unset")}
               </span>
             )}

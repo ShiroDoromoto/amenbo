@@ -1,6 +1,6 @@
 // What went wrong, said where the reader was working (`AMB-D-686`).
 //
-// **One shape, drawn once.** A note is three things at once — the mark, the danger colour, and
+// **One shape, drawn once.** A note is three things at once — the mark, the stop step, and
 // `role="alert"` so a reader who is not looking at that corner is told anyway — and they are worth
 // nothing apart: a note that keeps the look and loses the role is silent to the reader who most needs
 // it, and nothing on screen says so. Holding them in one component is what keeps them together, and it

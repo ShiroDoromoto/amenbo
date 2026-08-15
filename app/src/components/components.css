@@ -49,19 +49,21 @@
 /* What went wrong, said where it went wrong (`components/ErrorNote.tsx`). One row, mark then words:
    it aligns at the top rather than the middle so the mark stays beside the first line of a message
    long enough to wrap, and the colour is set here rather than on the mark, the icon drawing in
-   `currentColor`. The quiet one is for a note standing among settings rows, so it takes their size. */
+   `currentColor`. The quiet one is for a note standing among settings rows, so it takes their size —
+   and only their size: a failure is a stop wherever it is read, and this one wore the heed step by
+   drift, leaving the loud and the quiet form of one message on two different steps. */
 .errortext {
   display: flex; align-items: flex-start; gap: var(--s-1);
-  color: var(--c-danger, #c0392b); font-size: var(--fs-sm);
+  color: var(--c-stop); font-size: var(--fs-sm);
 }
-.errortext--quiet { color: var(--c-blocked); font-size: inherit; }
+.errortext--quiet { font-size: inherit; }
 /* And what went through, said where it went through (`components/DoneNote.tsx`) — the same row as
    the note above it, in the colour of a thing that worked. It sets no size of its own: this one is
    read in fine print on one screen and at the size of the row on another, and the mark follows the
    words either way. A message long enough to hold a path keeps its line breaks and breaks the path. */
 .donetext {
   display: inline-flex; align-items: flex-start; gap: var(--s-1);
-  color: var(--c-ok, #2e9e6b); white-space: pre-wrap; overflow-wrap: anywhere;
+  color: var(--c-done); white-space: pre-wrap; overflow-wrap: anywhere;
 }
 /* One thing being filled in: what it is above, what it is filled in with below. */
 .field { display: flex; flex-direction: column; gap: var(--s-2); }
@@ -164,7 +166,7 @@
   max-width: 80%; padding: var(--s-3) var(--s-4); border-radius: var(--r-md);
   font-size: var(--fs-sm); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); cursor: pointer;
 }
-.toast--warn { color: #fff; background: var(--c-warn); }
+.toast--warn { color: #fff; background: var(--c-heed); }
 
 /* ---------- card ---------- */
 .card {
@@ -309,9 +311,11 @@
    defaults to keep the chip's look, and turns accent on hover to show it can be pressed. */
 .chip--link { border: 0; cursor: pointer; color: inherit; font-family: inherit; line-height: inherit; }
 .chip--link:hover { background: var(--c-border-strong); color: var(--c-accent); }
-/* The chip for a premise that holds a reserve back (ready===false). It is a different axis
-   from the human-declared status=blocked and its --c-blocked, so it borrows none of that
-   colour and speaks through its glyph and spacing alone — the two must not be confused. */
+/* The chip for a premise that holds a reserve back (ready===false). It carries the shape alone: which
+   step it takes is decided per premise where it is drawn (`atoms.tsx`), an unfinished blocker being a
+   stop and a start day still ahead a heed. It stays clear of the human-declared status=blocked and its
+   --c-blocked, which is the heed step in the status range — the two must not be confused, and what
+   keeps them apart is that a premise nobody can pass is drawn one step above it. */
 .chip--block { white-space: nowrap; cursor: default; }
 .chip--official { background: var(--c-accent); color: #fff; }
 /* The index's recommendation, which sits beside the trust badge rather than on its ladder. Outlined
@@ -327,9 +331,9 @@
   padding: 0 calc(var(--s-2) - 1px);
 }
 /* A chip that reports a state the user did not choose and would want to act on — an installed plugin
-   this build cannot speak to, which is handed no event however its switch stands (`AMB-D-359`). Warn
-   coloured, not error: nothing is broken, it simply does not fire. */
-.chip--warn { color: var(--c-warn); border: 1px solid var(--c-warn); background: transparent; }
+   this build cannot speak to, which is handed no event however its switch stands (`AMB-D-359`). The
+   heed step, not the stop one: nothing is broken, it simply does not fire. */
+.chip--heed { color: var(--c-heed); border: 1px solid var(--c-heed); background: transparent; }
 /* The value a card carries on an axis its owner put on the card (`AMB-D-650`). Muted, because it states
    what the task is and not that anything is wrong with it — the chips it shares the card with report
    trouble, and a classification must not be read as one of those. */
@@ -364,7 +368,7 @@
    own lines above it by a rule, because it is a different document answering a different question. */
 .plugdet__wants { border-top: 1px solid var(--c-border); margin-top: var(--s-3); padding-top: var(--s-3); display: flex; flex-direction: column; gap: var(--s-1); }
 .plugdet__figures { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; margin: var(--s-3) 0; font-size: var(--fs-sm); }
-.plugdet__note { color: var(--c-warn); font-size: var(--fs-xs); margin-bottom: var(--s-2); }
+.plugdet__note { color: var(--c-heed); font-size: var(--fs-xs); margin-bottom: var(--s-2); }
 /* Install, then enable — the two acts, on one line, wrapping rather than pushing the README down. */
 .plugdet__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; margin-bottom: var(--s-3); }
 /* One plugin's switch, wherever it is drawn — the market's detail and the installed list share the
@@ -374,7 +378,7 @@
 /* One project × plugin crossing (`AMB-D-447`): its line, and the settings it opens underneath. Ruled off
    from the next crossing, since two rows of chips and buttons otherwise read as one. */
 .plugcross { border-left: 2px solid var(--c-border); padding-left: var(--s-3); margin-bottom: var(--s-2); }
-.pluggate__note { flex-basis: 100%; color: var(--c-warn); font-size: var(--fs-xs); }
+.pluggate__note { flex-basis: 100%; color: var(--c-heed); font-size: var(--fs-xs); }
 /* The settings a plugin's author declared (`AMB-D-356`), drawn as a form amenbo generates. Set inside a
    frame of its own: it is a place to type, not another control on the row's line. */
 .plugcfg { flex-basis: 100%; border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-bg); padding: var(--s-3); margin-bottom: var(--s-3); font-size: var(--fs-sm); }
@@ -402,8 +406,9 @@
 .plugdet__readme { border-top: 1px solid var(--c-border); padding-top: var(--s-3); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .plugdet__foot { border-top: 1px solid var(--c-border); margin-top: var(--s-4); padding-top: var(--s-2); font-size: var(--fs-xs); }
 /* Holder-side surface of `AMB-D-366`: premises pinned on after a task was reserved. A different axis from
-   --block (why anyone cannot start it) — this is what changed since *you* took it — so it speaks through its
-   own bell mark and, like --block, borrows no status colour. */
+   --block (why anyone cannot start it) — this is what changed since *you* took it — so it speaks through
+   its own bell mark. Like --block it carries the shape alone and takes its step where it is drawn:
+   the heed one, the work in hand still moving and the news being that the ground under it shifted. */
 .chip--premise { white-space: nowrap; cursor: default; }
 /* The mark-only form of the same block, for dense surfaces (a calendar chip, a timeline's
    row label). It shares a line with the title, so it drops the chip background and the
@@ -489,8 +494,8 @@
 .apick__menu--scroll { max-height: 240px; overflow-y: auto; }
 /* The button for a destructive operation (delete): a restrained red outline that fills in
    on hover. */
-.btn--danger { color: var(--c-danger, #c0392b); border-color: var(--c-danger, #c0392b); background: transparent; }
-.btn--danger:hover:not(:disabled) { background: var(--c-danger, #c0392b); color: #fff; }
+.btn--danger { color: var(--c-stop); border-color: var(--c-stop); background: transparent; }
+.btn--danger:hover:not(:disabled) { background: var(--c-stop); color: #fff; }
 .detail__danger { margin-top: var(--s-3); display: flex; justify-content: flex-end; }
 .notes { background: var(--c-surface-sunken); border-radius: var(--r-md); padding: var(--s-4); font-size: var(--fs-body); line-height: 1.7; white-space: pre-wrap; max-width: var(--measure-prose); }
 /* Notes rendered as Markdown are a run of block elements, so pre-wrap comes back off (this
@@ -528,7 +533,10 @@ button.feed__target:hover { color: var(--c-accent); }
 .cmdcat__detail { margin-top: var(--s-2); padding-left: var(--s-3); display: flex; flex-direction: column; gap: 2px; }
 .cmdcat__opt { font-size: var(--fs-xs); display: flex; gap: var(--s-2); align-items: baseline; flex-wrap: wrap; }
 .cmdcat__opt code { font-family: var(--font-mono); color: var(--c-accent-text); }
-.cmdcat__req { font-size: var(--fs-xs); color: var(--c-danger, #c6791f); }
+/* Which of a command's arguments cannot be left out. It is a fact about the flag and not a fault, so
+   it takes the heed step — the one the fallback under it always meant, the token in front having
+   quietly resolved to the stop red. */
+.cmdcat__req { font-size: var(--fs-xs); color: var(--c-heed); }
 .cmdcat__examples { margin-top: var(--s-2); display: flex; flex-direction: column; gap: 2px; }
 .cmdcat__example { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--c-text-faint); }
 
@@ -573,7 +581,7 @@ button.feed__target:hover { color: var(--c-accent); }
   background: var(--c-accent-weak); color: var(--c-text);
   border-radius: 2px; padding: 0 1px;
 }
-.srch__error { color: var(--c-danger, #c0392b); font-size: var(--fs-sm); }
+.srch__error { color: var(--c-stop); font-size: var(--fs-sm); }
 
 /* ---------- empty / placeholder ---------- */
 .placeholder { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s-3); color: var(--c-text-faint); }
@@ -682,7 +690,7 @@ button.feed__target:hover { color: var(--c-accent); }
 /* On a board the loop is the only thing on the surface, so it gets the surface's own margin and a
    width it can be read across (inside the creation screen the column already caps it). */
 .board__firstloop { padding: var(--s-5); max-width: 720px; }
-.firstloop__error { color: var(--c-danger, #c0392b); font-size: var(--fs-sm); }
+.firstloop__error { color: var(--c-stop); font-size: var(--fs-sm); }
 
 /* ---------- the standing row for folders whose AI is not started on amenbo ---------- */
 /* It sits on the project's surface rather than across the top of the app, so it wears the surface's own
@@ -765,13 +773,13 @@ button.feed__target:hover { color: var(--c-accent); }
 /* Copy, no, close — in that order, and wrapping rather than shrinking, since the row is narrow enough for
    three buttons to meet the edge in a language that spells them out. */
 .agenthookrow__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
-.agenthookrow__error { font-size: var(--fs-sm); color: var(--c-danger); }
-/* The board's warning band: the same shape as the wiring row above, marked in the warning colour rather
+.agenthookrow__error { font-size: var(--fs-sm); color: var(--c-stop); }
+/* The board's warning band: the same shape as the wiring row above, marked on the heed step rather
    than the accent, because a project with no folder is short of something rather than offered something. */
 .boardwarn {
   display: flex; flex-direction: column; gap: var(--s-2);
   margin: var(--s-4) var(--s-5) 0; padding: var(--s-4);
-  border: 1px solid var(--c-border); border-left: 3px solid var(--c-warn); border-radius: var(--r-md);
+  border: 1px solid var(--c-border); border-left: 3px solid var(--c-heed); border-radius: var(--r-md);
   background: var(--c-surface); max-width: 720px;
 }
 .boardwarn__title { font-weight: var(--fw-bold); font-size: var(--fs-md); }
@@ -816,7 +824,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .onboard__field { display: flex; flex-direction: column; gap: var(--s-1); margin-top: var(--s-2); }
 .onboard__select { padding: var(--s-2); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface); color: var(--c-text); }
 .onboard__actionrow { display: flex; gap: var(--s-2); flex-wrap: wrap; }
-.onboard__error { color: var(--c-danger); font-size: var(--fs-xs); }
+.onboard__error { color: var(--c-stop); font-size: var(--fs-xs); }
 /* The heading of the reference section. */
 .onboard__stepshead { margin-bottom: var(--s-2); }
 .onboard__stepstitle { margin: 0 0 var(--s-1); }
@@ -850,7 +858,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .hookconsent__slotsTitle { font-weight: var(--fw-bold); font-size: var(--fs-xs); margin-bottom: var(--s-2); }
 .hookconsent__slots ul { margin: 0; padding-left: var(--s-5); }
 .hookconsent__guidance { margin: var(--s-2) 0 0; padding: var(--s-2); background: var(--c-surface-2); border-radius: var(--r-md); font-size: var(--fs-xs); white-space: pre-wrap; word-break: break-all; }
-.hookconsent__error { color: var(--c-danger); font-size: var(--fs-xs); margin-bottom: var(--s-3); }
+.hookconsent__error { color: var(--c-stop); font-size: var(--fs-xs); margin-bottom: var(--s-3); }
 .hookconsent__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
 .hookconsent__action { padding: var(--s-3) var(--s-4); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface-2); cursor: pointer; }
 .hookconsent__action--yes { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
@@ -865,7 +873,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .nudge__modal { width: min(460px, 100%); max-height: 82vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
 .nudge__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); margin-bottom: var(--s-3); }
 .nudge__why { margin-bottom: var(--s-4); }
-.nudge__error { color: var(--c-danger); font-size: var(--fs-xs); margin-bottom: var(--s-3); }
+.nudge__error { color: var(--c-stop); font-size: var(--fs-xs); margin-bottom: var(--s-3); }
 .nudge__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
 .nudge__action { padding: var(--s-2) var(--s-4); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface-2); color: var(--c-text); cursor: pointer; }
 .nudge__action--yes { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
@@ -906,7 +914,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .dimmgr__open { background: transparent; border: 1px dashed var(--c-border); border-radius: var(--r-sm); padding: 0 var(--s-1); color: var(--c-text-muted); font-size: var(--fs-xs); cursor: pointer; }
 .dimmgr__open:hover { border-color: var(--c-accent); color: var(--c-accent); }
 .dimmgr__current { border-radius: 999px; padding: 0 var(--s-2); background: var(--c-accent); color: #fff; font-size: var(--fs-xs); }
-.dimmgr__danger { color: var(--c-danger, #c0392b); }
+.dimmgr__danger { color: var(--c-stop); }
 .dimmgr__adddim { align-self: flex-start; }
 .dimmgr__ordered { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--c-text-muted); cursor: pointer; white-space: nowrap; }
 .dimmgr__reorder { display: inline-flex; gap: 1px; margin-right: 2px; }
@@ -982,7 +990,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .tl__rel { font-size: var(--fs-2xs); color: var(--c-text-muted); text-align: right; white-space: nowrap; }
 
 /* The restart gate for a store that has been overtaken (RestartGate). */
-.restart__error { margin-bottom: var(--s-3); padding: var(--s-3); border: 1px solid var(--c-blocked); border-radius: var(--r-md); color: var(--c-blocked); font-size: var(--fs-xs); }
+.restart__error { margin-bottom: var(--s-3); padding: var(--s-3); border: 1px solid var(--c-stop); border-radius: var(--r-md); color: var(--c-stop); font-size: var(--fs-xs); }
 .restart__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
 /* The way out when restarting is not the answer: secondary to the button, but always present. */
 .restart__stuck { margin-top: var(--s-4); padding-top: var(--s-3); border-top: 1px solid var(--c-border); font-size: var(--fs-xs); }

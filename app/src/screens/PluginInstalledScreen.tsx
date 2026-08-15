@@ -81,7 +81,7 @@ export function PluginInstalledScreen() {
 
       <div style={{ padding: 12, overflowY: "auto" }}>
         {error != null && (
-          <div style={{ color: "var(--c-warn)", padding: "var(--s-2) 0" }}>{t("plugins.installsError")}</div>
+          <div style={{ color: "var(--c-heed)", padding: "var(--s-2) 0" }}>{t("plugins.installsError")}</div>
         )}
         {/* The receipt outlives the row it is about: what an uninstall took can only be said once the
             plugin is gone from the list, so it is said here rather than where the row was. */}
@@ -210,7 +210,7 @@ function InstalledRow({ install, update, projects, onRemoved }: {
           {!install.compatible ? (
             <>
               {" "}
-              <span className="chip chip--warn">
+              <span className="chip chip--heed">
                 {t(firing ? "plugins.notFiring" : "plugins.incompatibleChip")}
               </span>
             </>

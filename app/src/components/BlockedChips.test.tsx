@@ -108,6 +108,24 @@ describe("BlockedChips", () => {
     render(card({ status: "in_progress", ready: false, blockedBy: [{ id: 2, name: "先行" }] }));
     expect(chips()).toHaveLength(1);
   });
+
+  it("draws the two nobody can pass on the stop step, and the two that resolve themselves on the heed one", () => {
+    render(card({
+      ready: false,
+      blockedBy: [{ id: 2, name: "先行" }],
+      blockedByDecisions: [{ id: 159, name: "根拠", ref: "D-159" }],
+      notStartedUntil: "2026-08-01",
+      draft: true,
+    }));
+    const stepOf = (mark: string) => {
+      const chip = chips().find((c) => markOf(c) === mark);
+      return chip?.className.split(" ").find((c) => c.startsWith("step-"));
+    };
+    expect(stepOf("blocked")).toBe("step-stop");
+    expect(stepOf("warning")).toBe("step-stop");
+    expect(stepOf("hourglass")).toBe("step-heed");
+    expect(stepOf("pencil")).toBe("step-heed");
+  });
 });
 
 describe("BlockedChips compact", () => {

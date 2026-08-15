@@ -157,10 +157,10 @@ export function PluginMarketScreen({ onOpenInstalled }: {
 
       <div style={{ padding: 12, overflowY: "auto" }}>
         {error != null && (
-          <div style={{ color: "var(--c-warn)", padding: "var(--s-2) 0" }}>{t("plugins.error")}</div>
+          <div style={{ color: "var(--c-heed)", padding: "var(--s-2) 0" }}>{t("plugins.error")}</div>
         )}
         {unreachable.length > 0 && (
-          <div style={{ color: "var(--c-warn)", padding: "var(--s-2) 0" }}>
+          <div style={{ color: "var(--c-heed)", padding: "var(--s-2) 0" }}>
             {tn("plugins.unreachable", unreachable.length)}
             <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{unreachable.join(" / ")}</div>
           </div>
@@ -320,7 +320,7 @@ function CatalogSources({ catalog }: { catalog: PluginCatalog }) {
           </button>
         </div>
       )}
-      {error && <div style={{ color: "var(--c-warn)", fontSize: "var(--fs-xs)" }}>{error}</div>}
+      {error && <div style={{ color: "var(--c-heed)", fontSize: "var(--fs-xs)" }}>{error}</div>}
       <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("plugins.sourcesNote")}</div>
     </div>
   );

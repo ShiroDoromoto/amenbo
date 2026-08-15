@@ -19,24 +19,38 @@
   /* ----- semantic ----- */
   --c-human: #3b6bd6; /* human */
   --c-ai: #8a4fd0;    /* AI */
-  --c-warn: #c6791f;
-  --c-danger: #c0392b;
+
+  /* ----- the step a mark takes -----
+     What a colour says is what the mark asks of its reader — not what happened to produce it.
+     Named after the event instead (blocked, warning, notice, error, stale, outdated) the names
+     multiply without end, and the reader is handed a different colour for every word we happened
+     to use. Asked what it wants of them, everything on screen answers one of three things.
+
+     The colour is set by the thing the mark sits in — a chip, a row, a banner. The drawing itself
+     is `currentColor` (`AMB-D-686`), so one mark takes whichever step it is put on: the same
+     warning triangle is a stop beside a failure and a heed beside an unsettled premise.
+
+     A mark that carries a colour of its own is already off the ladder, having nothing to ask:
+     `--c-done` on something that went through, the accent on a way in. */
+  --c-stop: #c0392b;              /* nothing moves until a hand is put to it */
+  --c-heed: #c6791f;              /* it moves — know this while it does */
+  --c-plain: var(--c-text-faint); /* nothing is asked */
 
   /* status */
-  --c-todo: #9b958a;
+  --c-todo: var(--c-plain);
   --c-progress: #0e7c7b;
   --c-done: #2fae66;
-  --c-blocked: #c6791f;
+  --c-blocked: var(--c-heed);
 
   /* priority */
-  --c-pri-high: #c0392b;
-  --c-pri-med: #c6791f;
-  --c-pri-low: #9b958a;
+  --c-pri-high: var(--c-stop);
+  --c-pri-med: var(--c-heed);
+  --c-pri-low: var(--c-plain);
 
   /* due */
-  --c-due-overdue: #c0392b;
-  --c-due-today: #c6791f;
-  --c-due-future: #6f6a5e;
+  --c-due-overdue: var(--c-stop);
+  --c-due-today: var(--c-heed);
+  --c-due-future: var(--c-text-muted);
 
   /* ----- typography ----- */
   --font: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
@@ -109,21 +123,14 @@
 
   --c-human: #6f97ec;
   --c-ai: #b083ea;
-  --c-warn: #e0a04a;
-  --c-danger: #e06155;
 
-  --c-todo: #7d786e;
+  /* The two steps that hold a value of their own; the third and everything derived from the
+     three follow from the light side, which names them once. */
+  --c-stop: #e06155;
+  --c-heed: #e0a04a;
+
   --c-progress: #2ba6a4;
   --c-done: #46c97e;
-  --c-blocked: #e0a04a;
-
-  --c-pri-high: #e06155;
-  --c-pri-med: #e0a04a;
-  --c-pri-low: #7d786e;
-
-  --c-due-overdue: #e06155;
-  --c-due-today: #e0a04a;
-  --c-due-future: #a8a399;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);

@@ -3777,9 +3777,16 @@ pub fn mcp_setup() -> Result<McpSetupDto, CmdError> {
 /// The whole selection is what they carry, every time: the request asks for the entry to be replaced
 /// rather than added to, so the second time round is the same move as the first. An empty selection
 /// still answers — with the request to take the entry out, which is what "none of them" means.
+///
+/// **The two are addressed to different files.** What the add names is where the entry is to be
+/// written, which the ticks decide. What the removal names is where the entry already is, which they do
+/// not: a reader who unticks one folder and ticks another is asking for the entry they have to go, and
+/// a request built from the new ticks would send their AI to a file that entry was never in. So the
+/// removal is addressed off the read-back ([`amenbo_core::mcp_probe::Setup::at`]), asked of every
+/// project's folder the way the screen asks it.
 #[tauri::command]
 pub fn mcp_request_for(app: String, project_ids: Vec<i64>) -> Result<McpRequestDto, CmdError> {
-    use amenbo_core::{mcp::Server, mcp_apps, mcp_request};
+    use amenbo_core::{mcp::Server, mcp_apps, mcp_probe, mcp_request};
 
     let Some(app) = mcp_apps::find(&app) else {
         return Err(CmdError::coded(
@@ -3793,12 +3800,25 @@ pub fn mcp_request_for(app: String, project_ids: Vec<i64>) -> Result<McpRequestD
         return Ok(McpRequestDto { add: String::new(), remove: String::new() });
     }
     let store = open_store_read()?;
-    let folders = mcp_folders_of(&store, &project_ids)?;
+    let ticked = mcp_folders_of(&store, &project_ids)?;
     let exe = mcp_exe();
-    let server = Server { folders: &folders, exe: &exe };
+    let chosen = Server { folders: &ticked, exe: &exe };
+
+    // Where the entry actually sits, read across every project's folder — an entry written beside one
+    // project cannot be seen from another, so asking only the ticked ones would miss the very folder
+    // the reader has just unticked.
+    let everywhere: Vec<std::path::PathBuf> =
+        mcp_projects(&store)?.into_iter().map(|(_, _, folder)| folder).collect();
+    let holding = mcp_probe::read(app, &Server { folders: &everywhere, exe: &exe }).at;
+    // Nothing held anywhere is either an app that is not set up — whose row draws no removal at all —
+    // or one whose settings are the machine's, where the folder is not read in resolving that path.
+    // Either way the ticks are as good an answer as there is.
+    let holding = if holding.is_empty() { ticked.clone() } else { holding };
+    let standing = Server { folders: &holding, exe: &exe };
+
     Ok(McpRequestDto {
-        add: mcp_request::add(app, &server),
-        remove: mcp_request::remove(app, &server),
+        add: mcp_request::add(app, &chosen),
+        remove: mcp_request::remove(app, &standing),
     })
 }
 
@@ -8487,6 +8507,73 @@ mod tests {
             !agent_hook_project_wiring(elsewhere).unwrap().is_empty(),
             "an entry about another folder says nothing about this one",
         );
+
+        let _ = std::fs::remove_dir_all(&tmp);
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    /// The removal a row hands over is addressed to the file the entry is actually in, and does not
+    /// move with what is ticked. Unticking one project and ticking another is the very move that asks
+    /// for the entry already there to go: a request built from the new ticks would send the reader's AI
+    /// to a file that entry was never written into, and they would be told there was nothing to delete.
+    ///
+    /// The add is read beside it, because the two are addressed to different files on purpose — what is
+    /// ticked is where the entry is to be written next, and that half must keep following the ticks.
+    #[test]
+    fn a_removal_names_the_file_the_entry_is_in_whatever_is_ticked() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("app-mcpremove-home");
+        let base = amenbo_scratch::scratch("app-mcpremove-dirs");
+        let _ = std::fs::remove_dir_all(&tmp);
+        let _ = std::fs::remove_dir_all(&base);
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        let new_project = |name: &str| -> i64 {
+            let mut store = Store::open().unwrap();
+            store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: name.into(),
+                    view: View::Board,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap()
+                .id
+        };
+        let bound = |project: i64, leaf: &str| -> std::path::PathBuf {
+            let d = base.join(leaf);
+            std::fs::create_dir_all(&d).unwrap();
+            let d = std::fs::canonicalize(&d).unwrap();
+            project_bind_folder(project, d.to_string_lossy().to_string()).unwrap();
+            d
+        };
+
+        let greenhouse = new_project("温室");
+        let greenhouse_dir = bound(greenhouse, "greenhouse");
+        let shop = new_project("店");
+        let shop_dir = bound(shop, "shop");
+
+        // The entry, in the folder of the project that is about to be unticked — written the way an
+        // app that keeps its settings inside a folder holds one, and naming a folder that is not the
+        // one it sits in, so the file it is in cannot be mistaken for the folder it reaches.
+        let mut servers = serde_json::Map::new();
+        servers.insert(
+            amenbo_core::mcp::name().to_string(),
+            serde_json::json!({"command": "amenbo", "args": ["mcp", "--dir", "/work/elsewhere"]}),
+        );
+        let entry = serde_json::json!({ "mcpServers": servers });
+        std::fs::write(greenhouse_dir.join(".mcp.json"), entry.to_string()).unwrap();
+
+        let said = mcp_request_for("claude-code".to_string(), vec![shop]).unwrap();
+        let holds = greenhouse_dir.join(".mcp.json").display().to_string();
+        let ticked = shop_dir.join(".mcp.json").display().to_string();
+        assert!(said.add.contains(&ticked), "the add is written where the ticks say: {}", said.add);
+        assert!(said.remove.contains(&holds), "the removal names the file it is in: {}", said.remove);
+        assert!(!said.remove.contains(&ticked), "and not the ticked one: {}", said.remove);
+
+        // Nothing ticked at all is the plainest way to ask for it to go, and it is addressed the same.
+        let none = mcp_request_for("claude-code".to_string(), Vec::new()).unwrap();
+        assert!(none.remove.contains(&holds), "{}", none.remove);
 
         let _ = std::fs::remove_dir_all(&tmp);
         let _ = std::fs::remove_dir_all(&base);

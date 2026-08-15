@@ -22,6 +22,7 @@ import { errText, t, tf } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import type { Nav } from "../shell/AppShell";
 import { ErrorNote } from "../components/ErrorNote";
+import { Icon } from "../components/Icon";
 
 // The project that was created, handed to the done step: id = where the board opens, name = the heading, dir = the linked folder or null.
 type Created = { id: number; name: string; dir: string | null };
@@ -72,7 +73,7 @@ export function NewProjectScreen({ onCreated, onCancel, onOpenMcp }: { onCreated
   return (
     <>
       <div className="board__toolbar">
-        <span className="board__title">🆕 {t("newproj.title")}</span>
+        <span className="board__title"><Icon name="plus" size="md" /> {t("newproj.title")}</span>
       </div>
       <div className="newproj">
         <label className="field">
@@ -100,7 +101,7 @@ export function NewProjectScreen({ onCreated, onCancel, onOpenMcp }: { onCreated
                 <button className="btn" onClick={() => void chooseFolder()} disabled={busy}>{t("newproj.changeFolder")}</button>
               </div>
             ) : (
-              <button className="btn" onClick={() => void chooseFolder()} disabled={busy}>📂 {t("newproj.chooseFolder")}</button>
+              <button className="btn" onClick={() => void chooseFolder()} disabled={busy}><Icon name="folder" /> {t("newproj.chooseFolder")}</button>
             )}
           </div>
         )}
@@ -145,7 +146,7 @@ function DoneStep({ created, onOpenBoard, onOpenMcp }: { created: Created; onOpe
   return (
     <>
       <div className="board__toolbar">
-        <span className="board__title">✅ {tf("newproj.doneTitle", { name })}</span>
+        <span className="board__title"><Icon name="check" size="md" /> {tf("newproj.doneTitle", { name })}</span>
       </div>
       <div className="newproj">
         {dir && (
@@ -161,16 +162,16 @@ function DoneStep({ created, onOpenBoard, onOpenMcp }: { created: Created; onOpe
             <div className="newproj__next">
               <span className="fieldlabel">{t("newproj.moreTitle")}</span>
               <div className="buttonrow">
-                <button className="btn" onClick={() => void reveal()}>📂 {t("newproj.openFinder")}</button>
+                <button className="btn" onClick={() => void reveal()}><Icon name="folder" /> {t("newproj.openFinder")}</button>
                 <button className="btn" onClick={() => void copyStatus()}>
-                  {copied ? `✓ ${t("newproj.copied")}` : `📋 ${tf("newproj.copyStatus", { cmd: cli })}`}
+                  {copied ? `✓ ${t("newproj.copied")}` : <><Icon name="clipboard" /> {tf("newproj.copyStatus", { cmd: cli })}</>}
                 </button>
                 {/* One line out to where an AI is connected, rather than a second place to hand the
                     request over from (`AMB-D-684`). It is named and not conditioned: the fold it
                     replaced asked the reader whether their AI can open a folder, which is the one
                     thing they cannot answer having just made the project. The project goes with it,
                     so the screen opens holding the one they came from. */}
-                <button className="btn" onClick={() => onOpenMcp(id)}>🔗 {t("nav.mcp")}</button>
+                <button className="btn" onClick={() => onOpenMcp(id)}><Icon name="link" /> {t("nav.mcp")}</button>
               </div>
             </div>
           </>

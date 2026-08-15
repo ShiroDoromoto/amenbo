@@ -38,13 +38,13 @@ const COMMENT_PAGE = 20; // Bounded memory: how many comments render initially (
 /**
  * The detail pane for one task. Opening it marks the task seen (a comment arriving while you look at it may as
  * well count as read). Comments are fetched per-task and only the newest `commentLimit` of them render — but a
- * row named by "✎" that falls outside the window (i.e. is old) would be a dead button, so the window is widened
+ * row named by the pencil that falls outside the window (i.e. is old) would be a dead button, so the window is widened
  * far enough to include it. Editing a comment does not change the comment count, so the refetch effect (keyed on
  * commentCount) never fires; the writer therefore re-reads this task's activity itself. Resolving the numbers in
  * body links (`AMB-T-<n>`) and assigning dimension values both take the primary project as their context, because
  * that is where the axes live. A dimension assignment updates this pane's map optimistically, so the selects
  * answer without waiting for the round trip; the board redraws the chips on its cards off the write's own ack,
- * which is why nothing here reaches for them. Focusing the comment box for "↩ reply" cannot happen at request
+ * which is why nothing here reaches for them. Focusing the comment box for the reply arrow cannot happen at request
  * time — the textarea may not be rendered yet — so it sets a flag and lands the focus on the render that
  * produces it.
  */
@@ -56,9 +56,9 @@ export function TaskDetailPane({
   /** Report unsaved input to the parent (AppShell), which guards against discarding it on outside-click / ✕. */
   onDirtyChange?: (dirty: boolean) => void;
   onSelectDecision?: (id: number) => void;
-  /** Nonce that focuses the comment box when opened via "↩ reply" in the activity feed. Every increment re-focuses, so you can reply to the same task again and again. undefined = an ordinary selection. */
+  /** Nonce that focuses the comment box when opened via the reply arrow in the activity feed. Every increment re-focuses, so you can reply to the same task again and again. undefined = an ordinary selection. */
   focusCommentAt?: number;
-  /** The comment to open in edit mode when opened via "✎" in the activity feed. The nonce lets the same comment be re-opened; if it is an old comment, the render window (commentLimit) widens to reach its row. */
+  /** The comment to open in edit mode when opened via the pencil in the activity feed. The nonce lets the same comment be re-opened; if it is an old comment, the render window (commentLimit) widens to reach its row. */
   editCommentAt?: { commentId: number; nonce: number };
 }) {
   const store = useStore();
@@ -307,7 +307,7 @@ export function TaskDetailPane({
                     style={{ marginRight: 4 }}
                     onClick={() => refNav.selectTask?.(b.id)}
                   >
-                    ⛔ {b.name}
+                    <Icon name="blocked" /> {b.name}
                   </button>
                 ))}
               </span>
@@ -319,7 +319,7 @@ export function TaskDetailPane({
             <div className="detail__field">
               <span className="detail__flabel">{t("detail.notStarted")}</span>
               <span title={tf("block.notStarted", { date: task.notStartedUntil })}>
-                ⏳ {task.notStartedUntil}
+                <Icon name="hourglass" /> {task.notStartedUntil}
               </span>
             </div>
           )}
@@ -331,7 +331,7 @@ export function TaskDetailPane({
             <div className="detail__field">
               <span className="detail__flabel">{t("detail.draft")}</span>
               <span title={t("block.draft")}>
-                ✎ {t("chip.draft")}
+                <Icon name="pencil" /> {t("chip.draft")}
                 <button className="btn" style={{ marginLeft: 6 }} onClick={() => store.finishCreating(taskId)}>
                   {t("detail.finishCreating")}
                 </button>
@@ -426,7 +426,7 @@ export function TaskDetailPane({
           <div className="detail__sep" />
 
           <div>
-            <div className="detail__section-h">{t("detail.activityCategory")} · 💬 {task.comments}</div>
+            <div className="detail__section-h">{t("detail.activityCategory")} · <Icon name="comment" size="md" /> {task.comments}</div>
             {comments.length === 0 ? (
               <div className="faint" style={{ marginTop: 6, fontSize: "var(--fs-sm)" }}>{t("detail.noComments")}</div>
             ) : (
@@ -477,7 +477,7 @@ export function TaskDetailPane({
             {t("detail.created")}: {task.createdBy ? tf("facet.named", { name: task.createdBy.name, facet: t(task.createdBy.kind === "ai" ? "facet.ai" : "facet.human") }) : "—"} · id {task.id} · {t("detail.restoreHint")}
           </div>
           <div className="detail__danger">
-            <button className="btn btn--danger" onClick={removeTask} title={t("detail.deleteTip")}>🗑 {t("detail.delete")}</button>
+            <button className="btn btn--danger" onClick={removeTask} title={t("detail.deleteTip")}><Icon name="trash" /> {t("detail.delete")}</button>
           </div>
         </div>
       )}
@@ -548,7 +548,7 @@ function AssigneePicker({
         onClick={() => setOpen((o) => !o)}
       >
         {current ? <FacetAvatar actor={current} showName /> : <span className="faint">{t("detail.unassigned")}</span>}
-        <span className="apick__caret" aria-hidden="true">▾</span>
+        <span className="apick__caret"><Icon name="chevronDown" /></span>
       </button>
       {open && (
         <ul className="apick__menu" role="listbox">

@@ -43,9 +43,9 @@ export function DecisionDetailPane({
   onOpenTask?: (id: number) => void;
   /** Opens the decision on the other end of an edge — superseded, amended or built on (mirrors onOpenTask). */
   onOpenDecision?: (id: number) => void;
-  /** Nonce that focuses the comment box when opened via "↩ reply" in the activity feed. Every increment re-focuses, so you can reply to the same decision again and again. undefined = an ordinary selection. */
+  /** Nonce that focuses the comment box when opened via the reply arrow in the activity feed. Every increment re-focuses, so you can reply to the same decision again and again. undefined = an ordinary selection. */
   focusCommentAt?: number;
-  /** The comment to open in edit mode when opened via "✎" in the activity feed. The nonce lets the same comment be re-opened. The thread is drawn whole here, so unlike the task pane there is no window to widen first. */
+  /** The comment to open in edit mode when opened via the pencil in the activity feed. The nonce lets the same comment be re-opened. The thread is drawn whole here, so unlike the task pane there is no window to widen first. */
   editCommentAt?: { commentId: number; nonce: number };
 }) {
   const d = useDecision(decisionId);
@@ -65,7 +65,7 @@ export function DecisionDetailPane({
   const [bodyDraft, setBodyDraft] = useState("");
   const [editError, setEditError] = useState<string | null>(null);
   const [editBusy, setEditBusy] = useState(false);
-  // "↩ reply" from the activity feed. The focus cannot land at request time — the textarea is not rendered until
+  // The reply arrow from the activity feed. The focus cannot land at request time — the textarea is not rendered until
   // the decision has loaded — so the ask is held as a flag and spent on the render that produces the box.
   const commentRef = useRef<HTMLTextAreaElement>(null);
   const pendingCommentFocus = useRef(false);
@@ -300,7 +300,7 @@ export function DecisionDetailPane({
           <div className="detail__sep" />
 
           <div>
-            <div className="detail__section-h">{t("dec.comments")} · 💬 {formatNumber(comments.length)}</div>
+            <div className="detail__section-h">{t("dec.comments")} · <Icon name="comment" size="md" /> {formatNumber(comments.length)}</div>
             {comments.length === 0 ? (
               <div className="faint" style={{ marginTop: 6, fontSize: "var(--fs-sm)" }}>{t("detail.noComments")}</div>
             ) : (

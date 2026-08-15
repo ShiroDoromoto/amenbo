@@ -118,7 +118,7 @@ export function ProjectSettingsScreen({
           {loaded.archived && <span className="faint"> · {t("projset.archivedBadge")}</span>}
         </span>
         <div className="topbar__spacer" />
-        <button className="btn" onClick={onBack} disabled={busy}>← {t("projset.back")}</button>
+        <button className="btn" onClick={onBack} disabled={busy}><Icon name="chevronLeft" /> {t("projset.back")}</button>
       </div>
 
       <div className="settings">
@@ -182,7 +182,7 @@ export function ProjectSettingsScreen({
               <span className="hint">{t("projset.deleteHint")}</span>
               <div className="buttonrow">
                 <button className="btn btn--danger" onClick={() => void remove()} disabled={busy}>
-                  🗑 {t("projset.delete")}
+                  <Icon name="trash" /> {t("projset.delete")}
                 </button>
               </div>
             </div>
@@ -324,9 +324,9 @@ function FoldersSection({ projectId }: { projectId: number }) {
               <ErrorNote>{t("projset.folderLegacyPointer")}</ErrorNote>
             )}
             <div className="buttonrow">
-              {f.exists && <button className="btn" onClick={() => void terminal(f.path)} disabled={busy}>⌨️ {t("newproj.openTerminal")}</button>}
-              {f.exists && <button className="btn" onClick={() => void reveal(f.path)} disabled={busy}>📂 {t("newproj.openFinder")}</button>}
-              {f.exists && (f.mismatch || f.legacy || f.pointerMissing || f.foreign) && <button className="btn" onClick={() => void relink(f.path)} disabled={busy}>🔗 {t("projset.relink")}</button>}
+              {f.exists && <button className="btn" onClick={() => void terminal(f.path)} disabled={busy}><Icon name="keyboard" /> {t("newproj.openTerminal")}</button>}
+              {f.exists && <button className="btn" onClick={() => void reveal(f.path)} disabled={busy}><Icon name="folder" /> {t("newproj.openFinder")}</button>}
+              {f.exists && (f.mismatch || f.legacy || f.pointerMissing || f.foreign) && <button className="btn" onClick={() => void relink(f.path)} disabled={busy}><Icon name="link" /> {t("projset.relink")}</button>}
               <button className="btn btn--danger" onClick={() => void unbind(f.path)} disabled={busy}>{t("projset.unbind")}</button>
             </div>
           </div>
@@ -335,7 +335,7 @@ function FoldersSection({ projectId }: { projectId: number }) {
         {error && <ErrorNote>{error}</ErrorNote>}
 
         <div className="buttonrow">
-          <button className="btn" onClick={() => void add()} disabled={busy}>📂 {t("projset.addFolder")}</button>
+          <button className="btn" onClick={() => void add()} disabled={busy}><Icon name="folder" /> {t("projset.addFolder")}</button>
         </div>
       </div>
     </div>

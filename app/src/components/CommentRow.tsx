@@ -13,7 +13,7 @@ import { Icon } from "./Icon";
 /**
  * One comment row in a timeline. Tasks and decision records draw the body from different places (activity vs.
  * decision_comment) and attach to different targets, but the row looks the same and offers the same actions
- * (edit ✎, delete ✕, attachments), so it is defined once, here. Editing rewrites the body in place — it is not a
+ * (edit, delete, attachments), so it is defined once, here. Editing rewrites the body in place — it is not a
  * repost, so the id, the position in the thread and the attachments all survive. Deletion is physical and cannot
  * be undone, so it always goes through a confirm dialog (editing merely overwrites, and does not). An edited
  * comment gets an "edited, <when>" mark on its meta line. No revision history is kept by design, which makes
@@ -80,7 +80,7 @@ export function CommentRow({ id, author, at, editedAt, text, target, onEdit, onR
         </span>
         {inTauri() && !editing && (
           <>
-            <button className="feed__action comment__act" title={t("comment.edit")} onClick={startEdit}>✎</button>
+            <button className="feed__action comment__act" title={t("comment.edit")} onClick={startEdit}><Icon name="pencil" /></button>
             <button className="feed__action comment__rm" title={t("comment.remove")} onClick={() => void remove()}><Icon name="close" /></button>
           </>
         )}

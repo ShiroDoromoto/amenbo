@@ -57,7 +57,14 @@ export type IconName =
   | "tag"
   | "paperclip"
   | "checkSquare"
-  | "scales";
+  | "scales"
+  | "check"
+  | "folder"
+  | "trash"
+  | "keyboard"
+  | "clipboard"
+  | "rocket"
+  | "star";
 
 const ART: Record<IconName, ReactNode> = {
   // An envelope — the inbox smart view.
@@ -261,6 +268,9 @@ const ART: Record<IconName, ReactNode> = {
   ),
   // A cross — the move that puts something away: a banner dismissed, a pane shut, a row taken off.
   close: <path d="M5.8 5.8 18.2 18.2M18.2 5.8 5.8 18.2" />,
+  // A tick — the thing came off: a project made, a text on the clipboard. It answers the cross rather
+  // than the circle's fault, both being what a move left behind rather than what a record is.
+  check: <path d="M4.6 12.6 9.6 17.6 19.4 6.8" />,
   // A cross inside a circle — a fault, as against the triangle's warning. The two are read side by
   // side in one list, so they are told apart by their outline before either is read.
   error: (
@@ -268,6 +278,54 @@ const ART: Record<IconName, ReactNode> = {
       <circle cx="12" cy="12" r="8.4" />
       <path d="M9.2 9.2 14.8 14.8M14.8 9.2 9.2 14.8" />
     </>
+  ),
+
+  // ----- the marks on the moves the reader makes on their own machine, outside the store -----
+  // A folder — the one thing on disk amenbo asks for. Choosing one, opening one in the file
+  // manager and re-linking one are the same object under three verbs, so they are the one mark.
+  folder: (
+    <path d="M2.8 6.6a2 2 0 0 1 2-2h4.1l2.3 2.7h8a2 2 0 0 1 2 2v9.1a2 2 0 0 1-2 2H4.8a2 2 0 0 1-2-2V6.6z" />
+  ),
+  // A bin — deleting the record for good. It is the one mark that is never undone, so it is drawn
+  // as the container rather than as a cross: a cross is dismissal, which puts nothing away for ever.
+  trash: (
+    <>
+      <path d="M4.2 6.6h15.6" />
+      <path d="M9.6 6.6V4.5a1.3 1.3 0 0 1 1.3-1.3h2.2a1.3 1.3 0 0 1 1.3 1.3v2.1" />
+      <path d="M6.4 6.6l.9 12.7a1.6 1.6 0 0 0 1.6 1.5h6.2a1.6 1.6 0 0 0 1.6-1.5l.9-12.7" />
+      <path d="M10.2 10.4v6.6M13.8 10.4v6.6" />
+    </>
+  ),
+  // A keyboard — opening a terminal already inside the folder. What it points at is the typing that
+  // follows, which is the whole of what the button hands over.
+  keyboard: (
+    <>
+      <rect x="2.4" y="6.4" width="19.2" height="11.2" rx="2" />
+      <path d="M6 10.4h2M11 10.4h2M16 10.4h2" />
+      <path d="M8 14.2h8" />
+    </>
+  ),
+  // A clipboard — text copied for pasting somewhere amenbo cannot reach: a shell, or the reader's
+  // own AI. The clip is what separates it from the plain sheet the search hits use.
+  clipboard: (
+    <>
+      <rect x="5.2" y="4.6" width="13.6" height="16" rx="2" />
+      <rect x="9" y="2.6" width="6" height="3.8" rx="1.2" />
+    </>
+  ),
+  // A rocket — the first loop, which is the one push that gets a new project moving.
+  rocket: (
+    <>
+      <path d="M12 2.8c2.7 2.6 4.1 5.9 4.1 9.6v3.2H7.9v-3.2c0-3.7 1.4-7 4.1-9.6z" />
+      <circle cx="12" cy="10.2" r="1.8" />
+      <path d="M7.9 12.8 4.6 16v3.4l3.3-2.2M16.1 12.8l3.3 3.2v3.4l-3.3-2.2" />
+      <path d="M10.3 18.6 12 21.4l1.7-2.8" />
+    </>
+  ),
+  // A star — how many people have starred a plugin's repository on GitHub. It counts something
+  // outside amenbo, which is why it sits beside the download figure and not among the record marks.
+  star: (
+    <path d="M12 3.2l2.7 5.5 6.1.9-4.4 4.3 1 6-5.4-2.8-5.4 2.8 1-6L3.2 9.6l6.1-.9z" />
   ),
 };
 

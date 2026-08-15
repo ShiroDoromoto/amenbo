@@ -18,7 +18,7 @@ export function LinkFolderNotice({ onLinkFolder }: { onLinkFolder: () => void })
       <div className="boardwarn__title"><Icon name="warning" /> {t("noFolder.title")}</div>
       <div className="boardwarn__what">{t("noFolder.hint")}</div>
       <div className="boardwarn__actions">
-        <button className="btn" onClick={onLinkFolder}>📂 {t("noFolder.btn")}</button>
+        <button className="btn" onClick={onLinkFolder}><Icon name="folder" /> {t("noFolder.btn")}</button>
       </div>
     </div>
   );

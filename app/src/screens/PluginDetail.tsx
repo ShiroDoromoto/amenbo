@@ -14,6 +14,7 @@ import {
 } from "../core/pluginCatalog";
 import { installPlugin, type PluginInstall } from "../core/pluginInstalls";
 import { pluginAbout, pluginDesc, settingLabel } from "../core/pluginText";
+import { Icon } from "../components/Icon";
 
 // The one plugin a user opened (`AMB-D-347`).
 //
@@ -101,9 +102,9 @@ export function PluginDetail({ entry, install, onOpenInstalled, onClose }: {
             {tf("plugins.openRepo", { repo: entry.repo })}
           </button>
           {loading && <span className="faint">{t("plugins.factsLoading")}</span>}
-          {facts?.stars != null && <span>★ {formatNumber(facts.stars)}</span>}
+          {facts?.stars != null && <span><Icon name="star" /> {formatNumber(facts.stars)}</span>}
           {facts?.downloads != null && (
-            <span>⬇ {tf("plugins.downloads", { count: facts.downloads })}</span>
+            <span><Icon name="arrowDown" /> {tf("plugins.downloads", { count: facts.downloads })}</span>
           )}
         </div>
         {/* Three different silences, and they are not the same news: too many requests means wait, a

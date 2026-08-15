@@ -32,6 +32,7 @@ import { BOARD_FLIP, useBoardFlip } from "./boardFlip";
 import { BOARD_COLUMN_CAP } from "./boardLayout";
 import { cardChips, type CardChip } from "./cardChips";
 import { ErrorNote } from "../components/ErrorNote";
+import { Icon } from "../components/Icon";
 
 type View = "list" | "board" | "calendar" | "timeline";
 const VIEWS: View[] = ["list", "board", "calendar", "timeline"];
@@ -72,7 +73,7 @@ const DONE_COLUMN_CAP = 20;
  * `#<n>` / `T-<n>`) it narrows to that number without asking core at all; anything else goes to `task_search`
  * ({@link useTaskSearchIds}) and comes back as the ids to narrow the page by. It has to: the word index spans
  * five faces — title, notes, raw comment bodies, the labels the task was placed on, and the names of what is
- * attached to it — and a card carries only the first two (a comment is a 💬 count here, not a body). The term
+ * attached to it — and a card carries only the first two (a comment is a count here, not a body). The term
  * goes over structurally rather than through this page's filter, so a phrase survives the trip: the filter
  * grammar carries no words, and splits on whitespace besides.
  *
@@ -273,7 +274,7 @@ export function BoardScreen({
           aria-expanded={filtersOpen}
           onClick={() => setFiltersOpen((open) => !open)}
         >
-          🔍 {t("board.filters")}
+          <Icon name="search" /> {t("board.filters")}
           {narrowedAxes > 0 && <span className="filtertoggle__count">{narrowedAxes}</span>}
         </button>
       )}
@@ -734,7 +735,7 @@ const TaskCardView = memo(function TaskCardView({
       )}
 
       <div className="card__footer">
-        {task.comments > 0 && <span>💬 {task.comments}</span>}
+        {task.comments > 0 && <span><Icon name="comment" /> {task.comments}</span>}
         <TaskIdChip id={task.id} />
         <span className="card__spacer" />
         <StatusSelect id={task.id} status={task.status} onStatus={onStatus} premiseChange={task.premiseChange} />

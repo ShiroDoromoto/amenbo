@@ -16,6 +16,7 @@ import { useCliCommandName } from "../core/cliCommand";
 import { formatAheadDetail } from "../core/formatAhead";
 import { currentLang, normalizeLang, t, tf } from "../core/i18n";
 import { inTauri } from "../core/snapshot";
+import { Icon } from "../components/Icon";
 
 /**
  * The gate that announces the overtaking — a store too new to open. When this is noticed at startup the snapshot
@@ -57,7 +58,7 @@ export function RestartGate() {
     <div className="setup__overlay">
       <div className="setup__modal">
         <div className="setup__hero">
-          <div className="setup__goose">🪿</div>
+          <div className="setup__goose"><Icon name="goose" size="lg" /></div>
           <h2>{t("restart.title", lang)}</h2>
           <p className="muted">{t("restart.intro", lang)}</p>
         </div>

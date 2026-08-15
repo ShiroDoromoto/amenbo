@@ -43,7 +43,9 @@ describe("the warning about a project with no folder", () => {
     await render();
 
     const buttons = [...container.querySelectorAll("button")];
-    expect(buttons.map((b) => b.textContent)).toEqual([`📂 ${t("noFolder.btn")}`]);
+    expect(buttons.map((b) => b.textContent?.trim())).toEqual([t("noFolder.btn")]);
+    // The move is named by a mark as well as by its words, and the mark is the folder it asks for.
+    expect(buttons[0].querySelector("svg")?.getAttribute("data-icon")).toBe("folder");
 
     await act(async () => { buttons[0].click(); });
     expect(asked).toBe(1);

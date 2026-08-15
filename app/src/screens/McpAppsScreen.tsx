@@ -25,6 +25,7 @@ import { fetchMcpRequest, fetchMcpSetup, saveMcpBundle } from "../core/mutations
 import { errText, t, tf } from "../core/i18n";
 import type { McpAppDto, McpProjectDto, McpSetupDto } from "../bindings/bindings";
 import { ErrorNote } from "../components/ErrorNote";
+import { Icon } from "../components/Icon";
 
 // A burst of returns is one re-read, on the window the reconcile triggers already use (`core/snapshot.ts`).
 const REREAD_THROTTLE_MS = 1500;
@@ -86,7 +87,7 @@ export function McpAppsScreen({ pick = null }: { pick?: number | null }) {
   return (
     <>
       <div className="board__toolbar">
-        <span className="board__title">🔗 {t("mcp.title")}</span>
+        <span className="board__title"><Icon name="link" size="md" /> {t("mcp.title")}</span>
       </div>
 
       <div className="settings">

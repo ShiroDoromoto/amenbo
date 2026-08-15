@@ -17,6 +17,7 @@ import { useCliCommandName } from "../core/cliCommand";
 import { errText, t, tf } from "../core/i18n";
 import { ErrorNote } from "./ErrorNote";
 import { openTerminal } from "../core/mutations";
+import { Icon } from "./Icon";
 
 /**
  * The whole flow, for a folder that is linked — `dir` is that folder.
@@ -57,18 +58,18 @@ export function FirstLoop({ dir }: { dir: string }) {
   return (
     <div className="firstloop">
       <div className="firstloop__head">
-        <span className="firstloop__title">🚀 {t("firstloop.title")}</span>
+        <span className="firstloop__title"><Icon name="rocket" size="md" /> {t("firstloop.title")}</span>
         <span className="firstloop__intro muted">{t("firstloop.intro")}</span>
       </div>
 
       <Step n={1} title={t("firstloop.s1title")} hint={t("firstloop.s1hint")}>
-        <button className="btn" onClick={() => void terminal()}>⌨️ {t("firstloop.s1btn")}</button>
+        <button className="btn" onClick={() => void terminal()}><Icon name="keyboard" /> {t("firstloop.s1btn")}</button>
         {noTerminal && (
           <div className="firstloop__fallback">
             <div className="firstloop__stephint muted">{t("firstloop.s1fallback")}</div>
             <p className="firstloop__path">{dir}</p>
             <button className="btn" onClick={() => void copy(dir, "path")}>
-              {copied === "path" ? `✓ ${t("firstloop.copied")}` : `📋 ${t("firstloop.s1fallbackbtn")}`}
+              {copied === "path" ? `✓ ${t("firstloop.copied")}` : <><Icon name="clipboard" /> {t("firstloop.s1fallbackbtn")}</>}
             </button>
           </div>
         )}
@@ -77,7 +78,7 @@ export function FirstLoop({ dir }: { dir: string }) {
       <Step n={2} title={t("firstloop.s2title")} hint={t("firstloop.s2hint")}>
         <p className="firstloop__prompt">{prompt}</p>
         <button className="btn" onClick={() => void copy(prompt, "prompt")}>
-          {copied === "prompt" ? `✓ ${t("firstloop.copied")}` : `📋 ${t("firstloop.s2btn")}`}
+          {copied === "prompt" ? `✓ ${t("firstloop.copied")}` : <><Icon name="clipboard" /> {t("firstloop.s2btn")}</>}
         </button>
       </Step>
 

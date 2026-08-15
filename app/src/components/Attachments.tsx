@@ -43,7 +43,7 @@ function AttachmentBody({ a }: { a: Attachment }) {
   if (a.kind === "url") {
     return (
       <div className="attach__url">
-        🔗 <a href={a.url ?? "#"} onClick={(e) => { e.preventDefault(); if (a.url) void openAttachment(a.url); }}>
+        <Icon name="link" /> <a href={a.url ?? "#"} onClick={(e) => { e.preventDefault(); if (a.url) void openAttachment(a.url); }}>
           {a.filename || a.url}
         </a>
       </div>
@@ -120,7 +120,7 @@ function CsvTable({ text, sep }: { text: string; sep: string }) {
 /**
  * The attachment view, used both on the body of a task or decision record (`compact` omitted) and
  * under a single comment (`compact`). The compact form is the space-saving one that slots in beneath
- * a comment: it drops the "Attachments" heading and folds into a 📎 add button, so it reads as
+ * a comment: it drops the "Attachments" heading and folds into a paperclip add button, so it reads as
  * distinct from a body attachment — by its nesting and by the absent heading — and attachments can be
  * followed along the comment timeline.
  */
@@ -158,7 +158,7 @@ export function Attachments({ target, targetId, compact = false }: {
     <div className="attach__item" key={a.id}>
       <div className="attach__head">
         <span className="attach__name" title={a.filename ?? a.url ?? ""}>
-          {a.kind === "url" ? "🔗" : "📎"} {a.filename || a.url || "(no name)"}
+          <Icon name={a.kind === "url" ? "link" : "paperclip"} /> {a.filename || a.url || "(no name)"}
         </span>
         <span className="attach__meta faint">
           {a.kind === "blob" ? humanSize(a.sizeBytes) : t("attach.link")}
@@ -169,7 +169,7 @@ export function Attachments({ target, targetId, compact = false }: {
             title={t("attach.download")}
             onClick={() => void saveAttachment(a.blobHash!, a.filename)}
           >
-            ⬇
+            <Icon name="arrowDown" />
           </button>
         )}
         <button className="feed__action attach__rm" title={t("attach.remove")} onClick={() => void onRemove(a)}><Icon name="close" /></button>
@@ -191,7 +191,7 @@ export function Attachments({ target, targetId, compact = false }: {
           <div className="faint attach__drophint">{t("attach.dropActive")}</div>
         ) : (
           <button className="feed__action attach__compactadd" disabled={busy} onClick={onPick}>
-            📎 {t("attach.add")}
+            <Icon name="paperclip" /> {t("attach.add")}
           </button>
         )}
       </div>

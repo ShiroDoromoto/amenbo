@@ -12,6 +12,7 @@ import { ErrorNote } from "../components/ErrorNote";
 import { dataAdapter } from "../mock/adapter";
 import type { Project } from "../mock/types";
 import type { Nav } from "../shell/AppShell";
+import { Icon, type IconName } from "../components/Icon";
 
 export function OnboardingScreen({ onNav }: { onNav: (nav: Nav) => void }) {
   // Linking needs both a project to link to and a folder picker, so the card is offered only where
@@ -23,12 +24,12 @@ export function OnboardingScreen({ onNav }: { onNav: (nav: Nav) => void }) {
   return (
     <div className="onboard">
       <div className="onboard__hero">
-        <div className="placeholder__big">🪿</div>
+        <div className="placeholder__big"><Icon name="goose" size="lg" /></div>
         <h2>{t("onboard.welcome")}</h2>
         <p className="muted">{t("onboard.tagline")}</p>
         <div className="onboard__actions">
           <NavCard
-            icon="🆕"
+            icon="plus"
             label={t("onboard.createLabel")}
             hint={t("onboard.createHint")}
             go={t("onboard.createGo")}
@@ -73,10 +74,10 @@ function steps(cli: string): { title: string; cmd?: string; body: React.ReactNod
 }
 
 /** The create card: the primary action, which navigates to a GUI screen (NewProjectScreen). */
-function NavCard({ icon, label, hint, go, onClick }: { icon: string; label: string; hint: string; go: string; onClick: () => void }) {
+function NavCard({ icon, label, hint, go, onClick }: { icon: IconName; label: string; hint: string; go: string; onClick: () => void }) {
   return (
     <button className="onboard__action onboard__action--primary" onClick={onClick}>
-      <span className="onboard__action-icon">{icon}</span>
+      <Icon name={icon} size="lg" />
       <span className="onboard__action-body">
         <span className="onboard__action-label">{label}</span>
         <span className="onboard__action-hint">{hint}</span>
@@ -104,7 +105,7 @@ function BindCard({ projects, onBound }: { projects: Project[]; onBound: (id: nu
     // offers: both end in the same move, and one wording for it is one thing to learn.
     return (
       <button className="onboard__action" onClick={() => setOpen(true)}>
-        <span className="onboard__action-icon">📂</span>
+        <Icon name="folder" size="lg" />
         <span className="onboard__action-body">
           <span className="onboard__action-label">{t("onboard.openLabel")}</span>
           <span className="onboard__action-hint">{t("onboard.openHint")}</span>
@@ -132,7 +133,7 @@ function BindCard({ projects, onBound }: { projects: Project[]; onBound: (id: nu
 
   return (
     <div className="onboard__action onboard__action--open">
-      <span className="onboard__action-icon">📂</span>
+      <Icon name="folder" size="lg" />
       <div className="onboard__action-body">
         <span className="onboard__action-label">{t("onboard.openLabel")}</span>
         <span className="onboard__action-hint">{t("onboard.openHint")}</span>
@@ -152,7 +153,7 @@ function BindCard({ projects, onBound }: { projects: Project[]; onBound: (id: nu
         {error && <ErrorNote>{error}</ErrorNote>}
         <div className="onboard__actionrow">
           <button className="btn btn--primary" onClick={() => void link()} disabled={busy}>
-            📂 {t("newproj.chooseFolder")}
+            <Icon name="folder" /> {t("newproj.chooseFolder")}
           </button>
           <button className="btn" onClick={() => setOpen(false)} disabled={busy}>{t("newproj.cancel")}</button>
         </div>

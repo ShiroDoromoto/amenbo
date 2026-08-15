@@ -464,7 +464,7 @@
    avatar, the name and the caret on one line. */
 .apick { position: relative; display: inline-block; }
 .apick__trigger { display: inline-flex; align-items: center; gap: var(--s-2); cursor: pointer; }
-.apick__caret { font-size: var(--fs-xs); color: var(--c-text-muted, #888); }
+.apick__caret { color: var(--c-text-muted, #888); }
 .apick__menu {
   position: absolute; top: calc(100% + 2px); left: 0; z-index: 20; margin: 0; padding: var(--s-1);
   list-style: none; min-width: 100%; background: var(--c-surface);
@@ -795,7 +795,6 @@ button.feed__target:hover { color: var(--c-accent); }
   padding: var(--s-3); cursor: pointer; transition: border-color 0.15s, background 0.15s;
 }
 .onboard__action:hover { border-color: var(--c-accent); background: var(--c-surface-sunken); }
-.onboard__action-icon { font-size: var(--fs-xl); line-height: 1; }
 .onboard__action-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .onboard__action-label { font-weight: var(--fw-bold); display: flex; align-items: center; gap: var(--s-2); }
 .onboard__action-hint { font-size: var(--fs-xs); color: var(--c-text-muted); }

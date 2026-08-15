@@ -148,7 +148,7 @@ export function useDecisionSearchIds(
  * The ids of a project's tasks matching `text` — the board's search, and the task twin of
  * {@link useDecisionSearchIds}.
  *
- * The board holds a page of the project's tasks, but a card carries no comment body (only the 💬 count),
+ * The board holds a page of the project's tasks, but a card carries no comment body (only the count),
  * no label and no attachment name, so a client-side substring match reaches two of the five faces the word
  * index carries. The typed text therefore goes to `task_search` — the same match the read-model runs — and
  * comes back as the ids to narrow what the screen already holds by. It goes as a term rather than through

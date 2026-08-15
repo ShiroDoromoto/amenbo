@@ -23,6 +23,7 @@ import { currentLang, errLabel, normalizeLang, t, tn, tf, type Lang } from "../c
 import { invoke } from "../core/ipc";
 import { listenMigrationChanged, listenMigrationProgress, mib, migrationStatus, retryMigration } from "../core/migration";
 import { inTauri } from "../core/snapshot";
+import { Icon } from "../components/Icon";
 
 export function MigrationScreen({
   initial,
@@ -74,7 +75,7 @@ export function MigrationScreen({
     <div className="setup__overlay">
       <div className="setup__modal setup__modal--wide">
         <div className="setup__hero">
-          <div className="setup__goose">🪿</div>
+          <div className="setup__goose"><Icon name="goose" size="lg" /></div>
           <h2>{t(status.stage === "done" ? "migrate.doneTitle" : "migrate.title", lang)}</h2>
           <p className="muted">
             {status.stage === "done" && status.report

@@ -31,6 +31,7 @@ import { answerAgentHookOffer, fetchAgentHookProjectWiring } from "../core/mutat
 import { errText, t, tf, tn } from "../core/i18n";
 import { ErrorNote } from "../components/ErrorNote";
 import type { AgentHookWiringDto } from "../bindings/bindings";
+import { Icon } from "../components/Icon";
 
 /** What a project still has to wire, and the row's way of saying a refusal has landed. */
 export type AgentHookWiring = {
@@ -128,7 +129,7 @@ export function AgentHookWiringRow({ projectId, wiring }: { projectId: number; w
 
   return (
     <div className="agenthookrow">
-      <div className="agenthookrow__title">🔌 {t("agentHookWiring.title")}</div>
+      <div className="agenthookrow__title"><Icon name="plug" size="md" /> {t("agentHookWiring.title")}</div>
       {/* Only where there is a choice to make. With one tool waiting, the folders have already said which
           one they are, and a picker holding a single value asks a question with no other answer. */}
       {waiting.length > 1 && (

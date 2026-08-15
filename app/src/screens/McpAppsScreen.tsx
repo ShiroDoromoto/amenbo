@@ -24,6 +24,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchMcpRequest, fetchMcpSetup, saveMcpBundle } from "../core/mutations";
 import { errText, t, tf } from "../core/i18n";
 import type { McpAppDto, McpProjectDto, McpSetupDto } from "../bindings/bindings";
+import { ErrorNote } from "../components/ErrorNote";
 
 // A burst of returns is one re-read, on the window the reconcile triggers already use (`core/snapshot.ts`).
 const REREAD_THROTTLE_MS = 1500;
@@ -91,7 +92,7 @@ export function McpAppsScreen({ pick = null }: { pick?: number | null }) {
       <div className="settings">
         <div className="settings__section">
           <div className="settings__body">
-            <span className="newproj__hint">{t("mcp.hint")}</span>
+            <span className="hint">{t("mcp.hint")}</span>
 
             {/* The wait says it is a wait. Until the first read answers there is nothing to draw, and
                 a card standing empty is read as an answer — that this machine has no apps to set up. */}
@@ -102,10 +103,10 @@ export function McpAppsScreen({ pick = null }: { pick?: number | null }) {
             {/* Said in amenbo's words with the door's own beneath, as the app says it elsewhere: the
                 first line is what happened, the second is the only part that says why. */}
             {unread && (
-              <div className="newproj__error" role="alert">
-                ⚠ {t("app.loadError")}
+              <ErrorNote>
+                {t("app.loadError")}
                 <div className="faint">{unread}</div>
-              </div>
+              </ErrorNote>
             )}
 
             {/* A project with no folder bound has nowhere to point a server, so a screen with none of
@@ -245,7 +246,7 @@ function McpAppRow({
           <span className="mcp__name">{app.label}</span>
           <span className={app.configured ? "mcp__state" : "mcp__state faint"}>
             {app.configured ? t("mcp.configured") : t("mcp.unconfigured")}
-            {app.folders.map((at) => <code className="newproj__path" key={at}>{at}</code>)}
+            {app.folders.map((at) => <code className="path" key={at}>{at}</code>)}
           </span>
         </span>
         <span className="faint" aria-hidden="true">{open ? "⌄" : "›"}</span>
@@ -254,7 +255,7 @@ function McpAppRow({
       {open && (
         <>
           <div className="mcp__pick">
-            <div className="newproj__label">{t("mcp.projects")}</div>
+            <div className="fieldlabel">{t("mcp.projects")}</div>
             {projects.map((project) => (
               <label className="mcp__project" key={project.id}>
                 <input
@@ -263,7 +264,7 @@ function McpAppRow({
                   onChange={() => toggle(project.id)}
                 />
                 {project.name}
-                <code className="newproj__path">{project.folder}</code>
+                <code className="path">{project.folder}</code>
               </label>
             ))}
           </div>
@@ -272,7 +273,7 @@ function McpAppRow({
               filter on this screen, they are the contents of what is about to be handed over, and
               handing it over replaces rather than adds. Both halves are the reader's to know before
               they press, and neither is recoverable from the button's own word. */}
-          <span className="newproj__hint">{t("mcp.handover")}</span>
+          <span className="hint">{t("mcp.handover")}</span>
 
           <div className="mcp__actions">
             {/* Nothing ticked is nothing to hand over, on both roads alike: the file names no folder,
@@ -303,18 +304,18 @@ function McpAppRow({
             )}
             {!app.writesFile && <Copied on={copied === "add" || copied === "remove"} />}
           </div>
-          {failed && <div className="newproj__error" role="alert">⚠ {failed}</div>}
+          {failed && <ErrorNote>{failed}</ErrorNote>}
           {saved && <div className="mcp__saved">{tf("mcp.written", { path: saved })}</div>}
 
           {/* What an older amenbo left behind (`AMB-D-679`), drawn apart from the row's own state: an
               old entry is not this app being set up, it is something to take away. */}
           {app.stale.length > 0 && (
             <div className="mcp__stale">
-              <div className="newproj__label">{t("mcp.stale")}</div>
+              <div className="fieldlabel">{t("mcp.stale")}</div>
               {app.stale.map((old) => (
                 <div className="mcp__staleRow" key={old.name}>
-                  <code className="newproj__path">{old.name}</code>
-                  {old.folder && <code className="newproj__path">{old.folder}</code>}
+                  <code className="path">{old.name}</code>
+                  {old.folder && <code className="path">{old.folder}</code>}
                   <button className="btn" onClick={() => void copy(old.name, old.removeRequest)}>
                     {t("mcp.copyRemove")}
                   </button>

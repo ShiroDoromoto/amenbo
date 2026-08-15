@@ -3,6 +3,7 @@ import { useCliCommandName } from "../core/cliCommand";
 import { t } from "../core/i18n";
 import { useAgentSpec, type CommandSpec } from "../core/reads";
 import { asTyped } from "../core/keys";
+import { Icon } from "../components/Icon";
 
 // The command catalogue: a reference screen for browsing the spec from `amenbo agent --json` (whose
 // source of truth is core::agent). Commands are grouped by capability, and each one expands to its
@@ -96,7 +97,7 @@ function CommandRow({ cli, cmd, open, onToggle }: { cli: string; cmd: CommandSpe
         <button className="feed__line feed__action cmdcat__head" onClick={onToggle}>
           <code className="palette__cmd">{cli} {cmd.name}</code>{" "}
           <span className="muted">{cmd.summary}</span>
-          <span className="faint"> {open ? "⌄" : "›"}</span>
+          <span className="faint"> <Icon name={open ? "chevronDown" : "chevronRight"} /></span>
         </button>
         {open && (args.length > 0 || flags.length > 0 || examples.length > 0) && (
           <div className="cmdcat__detail">

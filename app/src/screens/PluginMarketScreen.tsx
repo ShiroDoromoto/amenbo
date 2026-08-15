@@ -11,6 +11,7 @@ import { pluginDesc } from "../core/pluginText";
 import { refreshPluginUpdates } from "../core/pluginUpdates";
 import { PluginDetail } from "./PluginDetail";
 import { asTyped } from "../core/keys";
+import { Icon } from "../components/Icon";
 
 // The plugin market — the "find one" half of the plugin section (`AMB-D-356`); managing what is
 // installed is its own surface. The catalog arrives once as a merged list (`AMB-D-347`) and
@@ -145,7 +146,7 @@ export function PluginMarketScreen({ onOpenInstalled }: {
         </label>
         <span className="topbar__spacer" style={{ flex: 1 }} />
         <button className="feed__action" onClick={() => setSourcesOpen((v) => !v)}>
-          {tf("plugins.sources", { count: catalog.sources.length })} {sourcesOpen ? "⌄" : "›"}
+          {tf("plugins.sources", { count: catalog.sources.length })} <Icon name={sourcesOpen ? "chevronDown" : "chevronRight"} />
         </button>
         <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
           {tf("plugins.count", { shown: shown.length, total: catalog.entries.length })}

@@ -7,6 +7,7 @@ import { useStore } from "../store/store";
 import { todayStr } from "../core/calendar";
 import { currentTimeAxisValueId, isTimeAxis } from "../core/timeAxis";
 import type { DimensionDto, DimensionValueDto } from "../bindings/bindings";
+import { Icon } from "../components/Icon";
 
 // The management panel for classification (unified dimensions), reached from the board's axis bar as a modal of its
 // own. It exposes renaming a dimension, editing its notes and removing it; renaming and removing its values; the
@@ -152,7 +153,7 @@ function ValueRow({ value, store, ordered, timeAxis, current, onMoveUp, onMoveDo
             aria-label={t("dimmgr.moveUp")}
             title={t("dimmgr.moveUp")}
           >
-            ↑
+            <Icon name="arrowUp" />
           </button>
           <button
             className="dimmgr__movebtn"
@@ -161,7 +162,7 @@ function ValueRow({ value, store, ordered, timeAxis, current, onMoveUp, onMoveDo
             aria-label={t("dimmgr.moveDown")}
             title={t("dimmgr.moveDown")}
           >
-            ↓
+            <Icon name="arrowDown" />
           </button>
         </span>
       )}

@@ -31,6 +31,7 @@ import { DimensionManager } from "./DimensionManager";
 import { BOARD_FLIP, useBoardFlip } from "./boardFlip";
 import { BOARD_COLUMN_CAP } from "./boardLayout";
 import { cardChips, type CardChip } from "./cardChips";
+import { ErrorNote } from "../components/ErrorNote";
 
 type View = "list" | "board" | "calendar" | "timeline";
 const VIEWS: View[] = ["list", "board", "calendar", "timeline"];
@@ -322,9 +323,9 @@ export function BoardScreen({
         {/* A search that could not run narrows nothing, and narrowing nothing looks exactly like a word
             that matched everything. Say which it was, next to the box that asked. */}
         {searchError != null && (
-          <span className="faint" role="alert" style={{ fontSize: "var(--fs-xs)" }}>
-            ⚠ {t("board.searchFailed")} — {errText(searchError)}
-          </span>
+          <ErrorNote tone="quiet">
+            {t("board.searchFailed")} — {errText(searchError)}
+          </ErrorNote>
         )}
         {view === "board" && (
           <div className="groupby">

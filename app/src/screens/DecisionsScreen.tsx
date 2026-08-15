@@ -7,6 +7,7 @@ import { errText, formatDay, t, tf } from "../core/i18n";
 import { decisionRef } from "../core/idref";
 import { parseRefQuery } from "../core/filters";
 import { asTyped } from "../core/keys";
+import { ErrorNote } from "../components/ErrorNote";
 
 // The list of decision records. A decision is a first-class entity that keeps "why we went with X"
 // (edited in place to refine, superseded to overturn), and it lives on a plane of its own, apart from
@@ -88,9 +89,9 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
         {/* A search that could not run narrows nothing, and narrowing nothing looks exactly like a word
             that matched everything. Say which it was, next to the box that asked. */}
         {searchError != null && (
-          <span className="faint" role="alert" style={{ fontSize: "var(--fs-xs)" }}>
-            ⚠ {t("dec.searchFailed")} — {errText(searchError)}
-          </span>
+          <ErrorNote tone="quiet">
+            {t("dec.searchFailed")} — {errText(searchError)}
+          </ErrorNote>
         )}
         <label style={{ fontSize: "var(--fs-xs)" }}>
           {t("board.filter")}{" "}

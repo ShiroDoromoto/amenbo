@@ -10,6 +10,7 @@ import { addTaskCommit, removeTaskCommit } from "../core/mutations";
 import { confirmDialog } from "../core/dialog";
 import { errText, t, tf } from "../core/i18n";
 import { asTyped } from "../core/keys";
+import { ErrorNote } from "./ErrorNote";
 
 /** Copy a SHA to the clipboard, flipping a "copied" hint for a moment. Best-effort — a clipboard failure is silent. */
 function CopyButton({ sha }: { sha: string }) {
@@ -82,7 +83,7 @@ export function Commits({ taskId }: { taskId: number }) {
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void submit(); } }}
         />
-        {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
+        {error && <ErrorNote>{error}</ErrorNote>}
         <div className="compose__actions">
           <span />
           <button className="btn btn--primary" disabled={busy || !draft.trim()} onClick={() => void submit()}>

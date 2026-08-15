@@ -105,7 +105,7 @@ async function render(folders: BoundFolderDto[]) {
 
 /** Find a row by path (a row is the `.newproj__field` that holds a `.newproj__folder`). */
 function row(path: string): HTMLElement {
-  const code = Array.from(container.querySelectorAll("code.newproj__path")).find((c) => c.textContent === path);
+  const code = Array.from(container.querySelectorAll("code.path")).find((c) => c.textContent === path);
   return code!.closest(".newproj__field") as HTMLElement;
 }
 const warnings = (r: HTMLElement) => Array.from(r.querySelectorAll("[role=alert]")).map((e) => e.textContent ?? "");
@@ -148,7 +148,7 @@ describe("invariants held by the rows of the linked-folder list", () => {
     await render([folder({ mismatch: { projectId: 1, recorded: "old-name", actual: "検証PJ" } })]);
     const r = row("/w/one");
     expect(warnings(r)).toEqual([
-      `⚠ ${tf("projset.folderElsewhere", { recorded: "old-name", projectId: 1, actual: "検証PJ" })}`,
+      `${tf("projset.folderElsewhere", { recorded: "old-name", projectId: 1, actual: "検証PJ" })}`,
     ]);
     expect(button(r, t("projset.relink"))).toBeDefined();
   });
@@ -161,7 +161,7 @@ describe("invariants held by the rows of the linked-folder list", () => {
   it("a legacy-format pointer says it is legacy and guides toward relinking", async () => {
     await render([folder({ legacy: true })]);
     const r = row("/w/one");
-    expect(warnings(r)).toEqual([`⚠ ${t("projset.folderLegacyPointer")}`]);
+    expect(warnings(r)).toEqual([`${t("projset.folderLegacyPointer")}`]);
     expect(button(r, t("projset.relink"))).toBeDefined();
   });
 
@@ -170,7 +170,7 @@ describe("invariants held by the rows of the linked-folder list", () => {
     const r = row("/w/one");
     expect(r.textContent).not.toContain(t("projset.aiReady"));
     expect(r.textContent).toContain(t("projset.folderNoPointer"));
-    expect(warnings(r)).toEqual([`⚠ ${t("projset.folderNoPointerHint")}`]);
+    expect(warnings(r)).toEqual([`${t("projset.folderNoPointerHint")}`]);
     expect(button(r, t("projset.relink"))).toBeDefined();
   });
 
@@ -181,7 +181,7 @@ describe("invariants held by the rows of the linked-folder list", () => {
     expect(r.textContent).toContain(t("projset.folderOtherStore"));
     // Both names are in the sentence: whose the folder is, and who is looking at it.
     expect(warnings(r)).toEqual([
-      `⚠ ${tf("projset.folderOtherStoreHint", { recorded: "amenbo-dev", running: "amenbo" })}`,
+      `${tf("projset.folderOtherStoreHint", { recorded: "amenbo-dev", running: "amenbo" })}`,
     ]);
     // Claiming the folder for this build is one of the two ways out (the other is to run the build it belongs to).
     expect(button(r, t("projset.relink"))).toBeDefined();
@@ -208,7 +208,7 @@ describe("invariants held by the rows of the linked-folder list", () => {
   it("when broken and healthy rows are mixed, each mark appears only on its own row", async () => {
     await render([folder(), folder({ path: "/w/two", legacy: true })]);
     expect(warnings(row("/w/one"))).toEqual([]);
-    expect(warnings(row("/w/two"))).toEqual([`⚠ ${t("projset.folderLegacyPointer")}`]);
+    expect(warnings(row("/w/two"))).toEqual([`${t("projset.folderLegacyPointer")}`]);
   });
 });
 

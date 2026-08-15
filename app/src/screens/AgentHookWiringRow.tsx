@@ -29,6 +29,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { answerAgentHookOffer, fetchAgentHookProjectWiring } from "../core/mutations";
 import { errText, t, tf, tn } from "../core/i18n";
+import { ErrorNote } from "../components/ErrorNote";
 import type { AgentHookWiringDto } from "../bindings/bindings";
 
 /** What a project still has to wire, and the row's way of saying a refusal has landed. */
@@ -153,7 +154,7 @@ export function AgentHookWiringRow({ projectId, wiring }: { projectId: number; w
       </ul>
       <pre className="agenthookrow__request">{row.tool.request}</pre>
 
-      {error && <div className="agenthookrow__error" role="alert">⚠ {error}</div>}
+      {error && <ErrorNote>{error}</ErrorNote>}
 
       <div className="agenthookrow__actions">
         <button className="btn" onClick={() => void copy()}>

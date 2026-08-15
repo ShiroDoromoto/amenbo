@@ -647,6 +647,47 @@ fn doctor_and_project_show_flag_a_bound_folder_whose_pointer_vanished() {
     std::fs::remove_dir_all(&ext).unwrap();
 }
 
+/// A bound folder whose `.amenbo` was written by a build of another channel is carried on
+/// `bound_folders` as `foreign` (`AMB-D-685`), with both store names — the one that claimed the folder
+/// and the one listing it. Standing in that folder is refused outright (`pointer_other_store`), so a
+/// listing that stayed silent about it would show the folder as healthy right up until someone walks
+/// into it. This is the CLI half of what the GUI's folder list shows on the same row.
+#[test]
+fn project_show_flags_a_bound_folder_another_store_wrote() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let pid = id_str(&cli.json(&["project", "add", "--name", "別ストアPJ", "--json"])["project"]["id"]);
+
+    let ext = amenbo_scratch::scratch("fs");
+    let ext_str = ext.to_string_lossy().to_string();
+    cli.run(&["bind", "--project", &pid, "--dir", &ext_str]);
+    let ext_canon = std::fs::canonicalize(&ext).unwrap().to_string_lossy().to_string();
+    let folder_entry = |v: &Value| -> Value {
+        v["bound_folders"].as_array().unwrap().iter()
+            .find(|f| f["path"].as_str() == Some(ext_canon.as_str()))
+            .expect("bound folder is listed")
+            .clone()
+    };
+
+    let bound = folder_entry(&cli.json(&["project", "show", &pid, "--json"]));
+    assert_eq!(bound["foreign"], Value::Null, "the pointer bind just wrote names this very store: {bound}");
+
+    // Hand the folder to another channel by rewriting the one field that decides it — the rest of the
+    // pointer (the id, the slug) stays right, which is the whole point: nothing else can catch this.
+    let mut pointer: Value = serde_json::from_str(&std::fs::read_to_string(ext.join(".amenbo")).unwrap()).unwrap();
+    pointer["store"] = Value::String("amenbo-dev".into());
+    std::fs::write(ext.join(".amenbo"), pointer.to_string()).unwrap();
+
+    let taken = folder_entry(&cli.json(&["project", "show", &pid, "--json"]));
+    assert_eq!(taken["foreign"]["recorded"], "amenbo-dev", "the row names the store that holds the folder: {taken}");
+    assert_eq!(taken["foreign"]["running"], "amenbo", "and the store of the build that is listing it: {taken}");
+    assert_eq!(taken["exists"], true, "the folder is listed as before — being another store's does not hide it: {taken}");
+    assert_eq!(taken["mismatch"], Value::Null, "the slug still agrees; it is the store that does not: {taken}");
+    assert_eq!(taken["pointer_missing"], false, "the pointer is there — it just belongs elsewhere: {taken}");
+
+    std::fs::remove_dir_all(&ext).unwrap();
+}
+
 /// The human success output of init/bind states a capability and a next step rather than reporting
 /// machinery; the files placed are a light parenthetical, and the JSON envelope — the contract — is unchanged.
 #[test]

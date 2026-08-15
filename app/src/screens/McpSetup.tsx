@@ -21,7 +21,10 @@ export function McpSetup({ onOpen }: { onOpen: () => void }) {
 
   return (
     <div className="mcp">
-      <div className="newproj__label">{t("mcp.title")}</div>
+      {/* Its own line, not the MCP screen's heading: this one names the subject a reader is thinking
+          about here — one project, reached from an AI — while the heading over there names the road
+          the sidebar sends them down. */}
+      <div className="newproj__label">{t("mcp.setupTitle")}</div>
       {/* A disclosure rather than a link straight out: what is behind it is one sentence saying why
           the road leaves this screen, and a reader who never wanted it never reads that either. */}
       <button className="btn mcp__toggle" aria-expanded={open} onClick={() => setOpen(!open)}>

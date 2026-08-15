@@ -690,6 +690,13 @@ button.feed__target:hover { color: var(--c-accent); }
   display: flex; flex-direction: column; gap: var(--s-1);
   padding: var(--s-2) var(--s-3); border-radius: var(--r-sm); background: var(--c-surface-sunken);
 }
+/* The folded row, and the whole of what opens it. It reads as the row itself rather than as a control
+   on it: no border, no fill, and the chevron alone off to the right saying there is more under it. */
+.mcp__head {
+  display: flex; align-items: flex-start; gap: var(--s-2);
+  width: 100%; padding: 0; border: none; background: none; text-align: left;
+}
+.mcp__headtext { display: flex; flex-direction: column; gap: var(--s-1); flex: 1; min-width: 0; }
 .mcp__name { font-weight: var(--fw-bold); font-size: var(--fs-sm); }
 .mcp__state { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); font-size: var(--fs-sm); }
 .mcp__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }

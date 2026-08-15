@@ -88,6 +88,8 @@ const ui = {
   "projset.folderNoSlug": "(no name)", "projset.relink": "Re-link",
   "projset.folderLegacyPointer": "This folder's .amenbo is in the old pre-migration format, so which project it names can't be read. Re-link to rewrite it in the current format.",
   "projset.folderNoPointer": "not linked", "projset.folderNoPointerHint": "This folder has no .amenbo, so an AI launched here does not resolve to this project. Re-link to write the pointer back.",
+  "projset.folderOtherStore": "other store",
+  "projset.folderOtherStoreHint": "This folder's .amenbo belongs to “{recorded}”, and this build is “{running}”. A command run there is refused, so an AI launched here does not reach this project. Re-link to hand the folder to “{running}”.",
   "projset.harness": "Starting your AI on amenbo",
   "projset.harnessHint": "What this project answered when it was asked to have its AI run this work on amenbo. Clearing the answer puts the notice back the next time you open this project.",
   "projset.harnessAnswer": "Answer",
@@ -506,7 +508,11 @@ const ui = {
   // The other way in: an AI whose host cannot open a folder reaches this project over MCP instead
   // (`AMB-D-671`, `AMB-D-672`, `AMB-D-673`). Folded away on both the creation and the settings screen,
   // because the reader who has amenbo on the command line needs none of it.
-  "mcp.title": "Reach your projects from an AI",
+  // The MCP screen's own heading, said the way the sidebar entrance says it (`nav.mcp`) so the name a
+  // reader pressed is the name they arrive at (`AMB-D-690`); `mcp.setupTitle` is the line on a
+  // project's settings screen, which names the subject there rather than that road.
+  "mcp.title": "Connect via MCP",
+  "mcp.setupTitle": "Reach your projects from an AI",
   "mcp.open": "Connect over MCP (for an AI that cannot open a folder)",
   "mcp.hint": "An app reaches the projects you choose for it, through one server. Choose them once per app — amenbo writes the whole choice each time.",
   "mcp.configured": "Set up",

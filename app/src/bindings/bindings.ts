@@ -153,8 +153,12 @@ bytes: number, };
  * points at this project, yet an AI started in that folder will not resolve here (it walks up to a
  * parent, or falls back to `init` recovery). Exclusive with the other two (no pointer, nothing to
  * inspect inside it), and the fix is the same relink.
+ * `foreign` is the one finding that says the folder is **refused** rather than merely suspect
+ * ([`ForeignStoreDto`], `AMB-D-685`): the pointer names another store, so a command run there stops
+ * before it reads anything. The row would otherwise look healthy, which is the whole reason it is
+ * carried here — and the fix is again the same relink, this build claiming the folder for itself.
  */
-export type BoundFolderDto = { path: string, exists: boolean, mismatch: SlugMismatchDto | null, legacy: boolean, pointerMissing: boolean, };
+export type BoundFolderDto = { path: string, exists: boolean, mismatch: SlugMismatchDto | null, legacy: boolean, pointerMissing: boolean, foreign: ForeignStoreDto | null, };
 
 /**
  * The payload of the `data-progress` event: the camelCase DTO of core's
@@ -345,6 +349,25 @@ attachments: number,
  * them silently).
  */
 missing: number, };
+
+/**
+ * That folder's `.amenbo` was written by a build of another channel
+ * ([`amenbo_core::binding::DirBinding::mismatched_store`]) — production against `amenbo-dev`, or a
+ * throwaway `amenbo-dev-<task>`. The CLI refuses outright there (`pointer_other_store`); the GUI,
+ * having no cwd to be refused in, says so on the row instead. Both names travel, because the
+ * sentence needs the pair: whose the folder is, and who is looking at it. `running` is the same for
+ * every row of a listing (it is this build's own name) and is repeated on each rather than read from
+ * a second call — the row then holds everything its wording needs, the way [`SlugMismatchDto`] does.
+ */
+export type ForeignStoreDto = { 
+/**
+ * The store name written in the folder's `.amenbo`.
+ */
+recorded: string, 
+/**
+ * The store name of the build that is listing it.
+ */
+running: string, };
 
 /**
  * One bound repository the banner has something to say about — the raw material for its wording, never

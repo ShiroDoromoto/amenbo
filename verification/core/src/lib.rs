@@ -1207,6 +1207,11 @@ const REGISTRY: &[OpSpec] = &[
     //
     // `dir` is the folder the question is asked from, so this follows that folder's `foreign-pointer`,
     // and `store` is the name that has to be in what comes back.
+    //
+    // On screen there is no command to turn away — the interface holds its own store open the whole
+    // time — so what answers for the same line is the row that lists the folder: it names the store
+    // the folder belongs to, and stops calling the folder one an AI can be started in. The two roads
+    // meet at the naming, which is the half a reader can act on either way.
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "claimed", required: &["dir", "store"], refs: &[], strings: &["dir", "store"], binds: false },
     // The warning a project with no folder linked carries on its own board, and the one move that ends
     // it standing beside it. How much work the board holds is not part of the question: a project
@@ -1597,6 +1602,12 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     (Domain::Folder, "init"),
     (Domain::Folder, "bind"),
     (Domain::Folder, "unbind"),
+    // And one of those folders already claimed by another store. It is here for the same reason
+    // `store worn-in` is: no road reaches this world, whichever face is walking it. A build stamps
+    // its own name as it writes a pointer, so the one store that cannot leave another's is the one
+    // under test — and on screen there is not even a command to try it with. A road that reads the
+    // claim has to open on it.
+    (Domain::Folder, "foreign-pointer"),
     // A file already lying in one of those folders. What a folder traces is read off its contents and
     // recorded nowhere, so a bound folder that already carries a provider's settings — the state every
     // road about wiring an AI starts from — is a world no amount of store seeding reaches.

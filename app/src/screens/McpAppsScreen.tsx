@@ -13,6 +13,10 @@
 // **Two roads, one per row** (`AMB-D-672`). The app that cannot run a command is handed a file to
 // open; the rest have an AI of their own, which is given the request and does the merge. Which button
 // a row draws is the catalog's word, not this screen's.
+//
+// **It wears the same shell as every other screen** (`AMB-D-690`): the heading in a `board__toolbar`
+// band on top, the body inside a `settings__section` card. The heading says what the sidebar entrance
+// says, so a reader who pressed "connect via MCP" arrives at that name rather than at another one.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchMcpRequest, fetchMcpSetup, saveMcpBundle } from "../core/mutations";
 import { errText, t, tf } from "../core/i18n";
@@ -30,6 +34,10 @@ const REREAD_THROTTLE_MS = 1500;
 export function McpAppsScreen({ pick = null }: { pick?: number | null }) {
   const [setup, setSetup] = useState<McpSetupDto | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Which app is open, at most one (`AMB-D-690`). It starts closed even where the screen was walked in
+  // holding a project: what that project is ticked in is a row the reader opens, and guessing one of
+  // eight for them would put a selection in front of them they did not ask to see.
+  const [open, setOpen] = useState<string | null>(null);
   const lastReadAt = useRef(0);
 
   const load = useCallback(() => {
@@ -67,32 +75,44 @@ export function McpAppsScreen({ pick = null }: { pick?: number | null }) {
   }, [load]);
 
   return (
-    <div className="settings mcp">
-      <div className="settings__h">{t("mcp.title")}</div>
-      <span className="newproj__hint">{t("mcp.hint")}</span>
-      {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
+    <>
+      <div className="board__toolbar">
+        <span className="board__title">🔗 {t("mcp.title")}</span>
+      </div>
 
-      {/* A project with no folder bound has nowhere to point a server, so a screen with none of them
-          says that rather than drawing rows whose ticks would write an entry naming nothing. */}
-      {setup && setup.projects.length === 0 && (
-        <div className="mcp__empty">{t("mcp.noProjects")}</div>
-      )}
+      <div className="settings">
+        <div className="settings__section">
+          <div className="settings__body">
+            <span className="newproj__hint">{t("mcp.hint")}</span>
+            {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
 
-      {setup && setup.projects.length > 0 && (
-        <ul className="mcp__apps">
-          {setup.apps.map((app) => (
-            <McpAppRow
-              key={app.app}
-              app={app}
-              projects={setup.projects}
-              pick={pick}
-              onError={setError}
-              onWritten={load}
-            />
-          ))}
-        </ul>
-      )}
-    </div>
+            {/* A project with no folder bound has nowhere to point a server, so a screen with none of
+                them says that rather than drawing rows whose ticks would write an entry naming
+                nothing. */}
+            {setup && setup.projects.length === 0 && (
+              <div className="mcp__empty">{t("mcp.noProjects")}</div>
+            )}
+
+            {setup && setup.projects.length > 0 && (
+              <ul className="mcp__apps">
+                {setup.apps.map((app) => (
+                  <McpAppRow
+                    key={app.app}
+                    app={app}
+                    projects={setup.projects}
+                    pick={pick}
+                    open={open === app.app}
+                    onToggle={() => setOpen((was) => (was === app.app ? null : app.app))}
+                    onError={setError}
+                    onWritten={load}
+                  />
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -106,17 +126,30 @@ export function McpAppsScreen({ pick = null }: { pick?: number | null }) {
  * **The folders are drawn beside "set up" and not instead of it.** Set up for *which* folders is the
  * half a reader cannot work out for themselves, and an entry someone edited into naming none is still
  * an entry — so the two are said separately (`AMB-D-673`).
+ *
+ * **Folded, and what shows folded is the reading** (`AMB-D-690`): the app's name, whether it is set up,
+ * and the folders it reaches now. That is the whole of what a reader scanning the list is after, and it
+ * is the same three things the row would be judged by open. Choosing is behind the fold, because the
+ * choice is one app's and the list is eight of them — every row unfolded put the same column of
+ * projects on the screen once per app, which is a page with nowhere to read.
+ *
+ * The row keeps its own ticks whether it is open or shut, so a reader who folded one away and came back
+ * to it finds the selection they left rather than one rebuilt from the settings.
  */
 function McpAppRow({
   app,
   projects,
   pick,
+  open,
+  onToggle,
   onError,
   onWritten,
 }: {
   app: McpAppDto;
   projects: McpProjectDto[];
   pick: number | null;
+  open: boolean;
+  onToggle: () => void;
   onError: (message: string | null) => void;
   onWritten: () => void;
 }) {
@@ -179,62 +212,73 @@ function McpAppRow({
 
   return (
     <li className="mcp__app">
-      <div className="mcp__name">{app.label}</div>
-      <div className={app.configured ? "mcp__state" : "mcp__state faint"}>
-        {app.configured ? t("mcp.configured") : t("mcp.unconfigured")}
-        {app.folders.map((at) => <code className="newproj__path" key={at}>{at}</code>)}
-      </div>
+      {/* The whole folded row is what opens it: the three things it says are also the reason to open
+          it, so there is nothing beside them for a separate control to point at. */}
+      <button className="mcp__head" aria-expanded={open} onClick={onToggle}>
+        <span className="mcp__headtext">
+          <span className="mcp__name">{app.label}</span>
+          <span className={app.configured ? "mcp__state" : "mcp__state faint"}>
+            {app.configured ? t("mcp.configured") : t("mcp.unconfigured")}
+            {app.folders.map((at) => <code className="newproj__path" key={at}>{at}</code>)}
+          </span>
+        </span>
+        <span className="faint" aria-hidden="true">{open ? "⌄" : "›"}</span>
+      </button>
 
-      <div className="mcp__pick">
-        <div className="newproj__label">{t("mcp.projects")}</div>
-        {projects.map((project) => (
-          <label className="mcp__project" key={project.id}>
-            <input
-              type="checkbox"
-              checked={picked.includes(project.id)}
-              onChange={() => toggle(project.id)}
-            />
-            {project.name}
-            <code className="newproj__path">{project.folder}</code>
-          </label>
-        ))}
-      </div>
+      {open && (
+        <>
+          <div className="mcp__pick">
+            <div className="newproj__label">{t("mcp.projects")}</div>
+            {projects.map((project) => (
+              <label className="mcp__project" key={project.id}>
+                <input
+                  type="checkbox"
+                  checked={picked.includes(project.id)}
+                  onChange={() => toggle(project.id)}
+                />
+                {project.name}
+                <code className="newproj__path">{project.folder}</code>
+              </label>
+            ))}
+          </div>
 
-      <div className="mcp__actions">
-        {app.writesFile ? (
-          <button className="btn" disabled={busy || picked.length === 0} onClick={() => void save()}>
-            {t("mcp.write")}
-          </button>
-        ) : (
-          <button className="btn" onClick={() => void copy("add", texts.add)}>
-            {copied === "add" ? t("mcp.copied") : t("mcp.copyAdd")}
-          </button>
-        )}
-        {/* Offered only where there is something to remove: a request to delete an entry nobody has
-            would send a reader looking through a file for a line that is not in it. */}
-        {app.configured && !app.writesFile && (
-          <button className="btn" onClick={() => void copy("remove", texts.remove)}>
-            {copied === "remove" ? t("mcp.copied") : t("mcp.copyRemove")}
-          </button>
-        )}
-      </div>
-      {saved && <div className="mcp__saved">{tf("mcp.written", { path: saved })}</div>}
-
-      {/* What an older amenbo left behind (`AMB-D-679`), drawn apart from the row's own state: an old
-          entry is not this app being set up, it is something to take away. */}
-      {app.stale.length > 0 && (
-        <div className="mcp__stale">
-          <div className="newproj__label">{t("mcp.stale")}</div>
-          {app.stale.map((old) => (
-            <div className="mcp__staleRow" key={old.name}>
-              <code className="newproj__path">{old.name}</code>
-              {old.folder && <code className="newproj__path">{old.folder}</code>}
-              <button className="btn" onClick={() => void copy(old.name, old.removeRequest)}>
-                {copied === old.name ? t("mcp.copied") : t("mcp.copyRemove")}
+          <div className="mcp__actions">
+            {app.writesFile ? (
+              <button className="btn" disabled={busy || picked.length === 0} onClick={() => void save()}>
+                {t("mcp.write")}
               </button>
+            ) : (
+              <button className="btn" onClick={() => void copy("add", texts.add)}>
+                {copied === "add" ? t("mcp.copied") : t("mcp.copyAdd")}
+              </button>
+            )}
+            {/* Offered only where there is something to remove: a request to delete an entry nobody
+                has would send a reader looking through a file for a line that is not in it. */}
+            {app.configured && !app.writesFile && (
+              <button className="btn" onClick={() => void copy("remove", texts.remove)}>
+                {copied === "remove" ? t("mcp.copied") : t("mcp.copyRemove")}
+              </button>
+            )}
+          </div>
+          {saved && <div className="mcp__saved">{tf("mcp.written", { path: saved })}</div>}
+
+          {/* What an older amenbo left behind (`AMB-D-679`), drawn apart from the row's own state: an
+              old entry is not this app being set up, it is something to take away. */}
+          {app.stale.length > 0 && (
+            <div className="mcp__stale">
+              <div className="newproj__label">{t("mcp.stale")}</div>
+              {app.stale.map((old) => (
+                <div className="mcp__staleRow" key={old.name}>
+                  <code className="newproj__path">{old.name}</code>
+                  {old.folder && <code className="newproj__path">{old.folder}</code>}
+                  <button className="btn" onClick={() => void copy(old.name, old.removeRequest)}>
+                    {copied === old.name ? t("mcp.copied") : t("mcp.copyRemove")}
+                  </button>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
     </li>
   );

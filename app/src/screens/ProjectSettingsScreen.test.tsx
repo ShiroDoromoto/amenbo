@@ -91,7 +91,7 @@ let root: Root;
 
 /** One folder with nothing wrong with it: it exists, it has a pointer, and nothing disagrees. */
 function folder(over: Partial<BoundFolderDto> = {}): BoundFolderDto {
-  return { path: "/w/one", exists: true, mismatch: null, legacy: false, pointerMissing: false, ...over };
+  return { path: "/w/one", exists: true, mismatch: null, legacy: false, pointerMissing: false, foreign: null, ...over };
 }
 
 /** Render the screen and wait until the folder list has hydrated (`fetchBoundFolders`). */
@@ -171,6 +171,19 @@ describe("invariants held by the rows of the linked-folder list", () => {
     expect(r.textContent).not.toContain(t("projset.aiReady"));
     expect(r.textContent).toContain(t("projset.folderNoPointer"));
     expect(warnings(r)).toEqual([`⚠ ${t("projset.folderNoPointerHint")}`]);
+    expect(button(r, t("projset.relink"))).toBeDefined();
+  });
+
+  it("a row another store's pointer claims does not claim \"AI-ready\" — the CLI is refused there", async () => {
+    await render([folder({ foreign: { recorded: "amenbo-dev", running: "amenbo" } })]);
+    const r = row("/w/one");
+    expect(r.textContent).not.toContain(t("projset.aiReady"));
+    expect(r.textContent).toContain(t("projset.folderOtherStore"));
+    // Both names are in the sentence: whose the folder is, and who is looking at it.
+    expect(warnings(r)).toEqual([
+      `⚠ ${tf("projset.folderOtherStoreHint", { recorded: "amenbo-dev", running: "amenbo" })}`,
+    ]);
+    // Claiming the folder for this build is one of the two ways out (the other is to run the build it belongs to).
     expect(button(r, t("projset.relink"))).toBeDefined();
   });
 

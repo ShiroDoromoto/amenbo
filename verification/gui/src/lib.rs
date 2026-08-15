@@ -574,6 +574,13 @@ impl Instructor {
             (Domain::Folder, "ways-in") | (Domain::Folder, "none-linked") => {
                 Some(Expectation { text: arg_str(with, "absent")?.to_string(), present: false })
             }
+            // The store the folder belongs to, read off the row that lists it. It is the one word on
+            // that row a reader can act on — where the terminal names it in a refusal, the screen has
+            // no refusal to name it in — and it is a store's name rather than a word of the
+            // interface's, so a reading finds it on this row alone whatever language the screen is in.
+            (Domain::Folder, "claimed") => {
+                Some(Expectation { text: arg_str(with, "store")?.to_string(), present: true })
+            }
             (Domain::Repo, "ai-launch-notice") | (Domain::Repo, "ai-launch-request") => {
                 Some(Expectation { text: arg_str(with, "paste_into")?.to_string(), present: present(with) })
             }
@@ -927,19 +934,22 @@ impl Instructor {
             // against.
             (Domain::Repo, "mcp-open") => {
                 "Open the screen where an AI is connected — the one that lists the apps amenbo knows, \
-                 with the projects each of them may reach. Open it again where the road has already \
-                 been on it: what a row says has to be read now, not remembered from before the road \
-                 left."
+                 each row folded to its name, whether it is set up, and the folders it reaches. Open it \
+                 again where the road has already been on it: what a row says has to be read now, not \
+                 remembered from before the road left, and it comes back with every row folded."
                     .to_string()
             }
-            // Ticking a row and taking its road. Every project that is to be ticked is named, and the
-            // rest are said to be left clear, because what goes out is the whole selection and not the
-            // difference — an operator who added to what was already ticked would be walking the move
-            // this screen exists to have taken away.
+            // Ticking a row and taking its road. The row is said to be open, the rows standing folded
+            // and the ticks being what is under one — said as a state rather than as a press, because
+            // the step before it may have opened that row already and a second press on the head would
+            // fold it shut. Every project that is to be ticked is named, and the rest are said to be
+            // left clear, because what goes out is the whole selection and not the difference — an
+            // operator who added to what was already ticked would be walking the move this screen
+            // exists to have taken away.
             (Domain::Repo, "mcp-choose") => format!(
-                "On the row for \"{}\", tick exactly these projects and leave every other one clear:{}. \
-                 Then take the one road that row offers — press its button, and where it asks where to \
-                 put a file, put it somewhere you can find again.",
+                "With the row for \"{}\" open, tick exactly these projects on it and leave every other \
+                 one clear:{}. Then take the one road that row offers — press its button, and where it \
+                 asks where to put a file, put it somewhere you can find again.",
                 req(with, "app")?,
                 names(with, "projects")?
             ),
@@ -1312,6 +1322,17 @@ impl Instructor {
                 "Confirm the open card asks which project to link the folder to — with \"{}\", one of the projects on this device, chosen in it.",
                 req(with, "project")?
             ),
+            // What the terminal road meets as a refusal, the screen meets as a row. There is no
+            // command to turn away here — the interface holds the store open the whole time — so the
+            // line the two roads share is the folder being named as another store's, and the row
+            // saying it is what stands in for the refusal. The half worth spelling out is the badge:
+            // a row that went on calling itself ready to be worked in would be saying the opposite of
+            // what happens to anyone who walks in there.
+            (Domain::Folder, "claimed") => format!(
+                "Confirm the linked-folder list carries the folder the road calls \"{}\" as another store's — it names \"{}\" as the store the folder belongs to, and does not call the folder ready for an AI to work in.",
+                req(with, "dir")?,
+                req(with, "store")?
+            ),
             (Domain::Repo, "ai-launch-notice") => match present(with) {
                 true => format!(
                     "Confirm the project's board carries the report about starting its folders' AI on amenbo, with nothing asked and nothing over it: \"{}\" is named, with \"{}\" as the file its text goes into.",
@@ -1380,16 +1401,18 @@ impl Instructor {
                     req(with, "app")?
                 ),
             },
-            // Which road that row offers. The line names the road by what it does rather than by the
-            // words on the button, so an eye closing it is held to the two being different offers and not
-            // to one build's wording of them.
+            // Which road that row offers. The road is under the fold, so the line asks for the row
+            // open — an operator reading a folded one would close this on an absence the screen is
+            // right to have. It names the road by what it does rather than by the words on the button,
+            // so an eye closing it is held to the two being different offers and not to one build's
+            // wording of them.
             (Domain::Repo, "mcp-road") => match req(with, "road")? {
                 "file" => format!(
-                    "Confirm the row for \"{}\" offers a file to be written and opened — amenbo's own, not this app's settings — and offers no request to hand an AI.",
+                    "With the row for \"{}\" open, confirm it offers a file to be written and opened — amenbo's own, not this app's settings — and offers no request to hand an AI.",
                     req(with, "app")?
                 ),
                 "request" => format!(
-                    "Confirm the row for \"{}\" offers a request to hand this app's own AI, which makes the edit — and offers no file to be written.",
+                    "With the row for \"{}\" open, confirm it offers a request to hand this app's own AI, which makes the edit — and offers no file to be written.",
                     req(with, "app")?
                 ),
                 other => return Err(format!("assert `mcp-road` does not know the road `{other}`")),
@@ -1595,8 +1618,11 @@ fn names(with: &Args, key: &str) -> Result<String, String> {
 fn ticked(with: &Args) -> Result<String, String> {
     match with.get("projects") {
         None => Ok(String::new()),
+        // The ticks are under the fold, unlike the two halves the row says folded — so a step asking
+        // for them asks for that row open. Nothing is said about shutting it again: the screen comes
+        // back folded whenever it is opened afresh, which `mcp-open` already carries.
         Some(_) => Ok(format!(
-            " Confirm the projects ticked on that row are exactly these, and no others:{}.",
+            " With that row open, confirm the projects ticked on it are exactly these, and no others:{}.",
             names(with, "projects")?
         )),
     }

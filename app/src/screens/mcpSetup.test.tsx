@@ -51,7 +51,7 @@ describe("the line that points at where an AI is connected", () => {
   it("is folded: what is behind it is one sentence and one way on", async () => {
     await render();
 
-    expect(container.textContent).toContain(t("mcp.title"));
+    expect(container.textContent).toContain(t("mcp.setupTitle"));
     expect(container.textContent).not.toContain(t("mcp.hint"));
 
     await act(async () => { button(t("mcp.open")).click(); });

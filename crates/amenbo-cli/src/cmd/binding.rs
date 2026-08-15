@@ -276,10 +276,13 @@ fn recover_lost_pointer(
 /// The project→folders reverse lookup, as a JSON array. Lists the folders recorded in the registry (the
 /// binding table of the consolidated store) in ascending order, each with its absolute path and what
 /// inspecting it found. An absolute path goes stale when the folder is moved or renamed, so `exists=false`
-/// is a cleanup candidate. The inspection carries the same three findings as the GUI's folder list
+/// is a cleanup candidate. The inspection carries the same four findings as the GUI's folder list
 /// (`BoundFolderDto`): `legacy` (an old-format pointer), `pointer_missing` (the folder is there but the
-/// `.amenbo` is not), and `mismatch` (the pointer's slug disagrees with the store — it belongs to another
-/// one). Every one of those judgements goes through core's shared path.
+/// `.amenbo` is not), `mismatch` (the pointer's slug disagrees with the store — it belongs to another
+/// one), and `foreign` (the pointer names another store outright, so this build is refused there —
+/// `AMB-D-685`). Every one of those judgements goes through core's shared path, and each is read from
+/// the folder's **own** pointer: a listed folder is not a starting point to resolve from, so nothing
+/// here walks upward into an ancestor's `.amenbo`.
 pub(crate) fn bound_folders_json(store: &Store, project_id: i64) -> serde_json::Value {
     use amenbo_core::binding;
     let folders: Vec<serde_json::Value> = store
@@ -288,15 +291,21 @@ pub(crate) fn bound_folders_json(store: &Store, project_id: i64) -> serde_json::
         .into_iter()
         .map(|dir| {
             let path = std::path::Path::new(dir);
-            let mismatch = binding::read_pointer(path)
-                .and_then(|b| binding::slug_mismatch(store, &b))
+            let pointer = binding::read_pointer(path);
+            let mismatch = pointer
+                .as_ref()
+                .and_then(|b| binding::slug_mismatch(store, b))
                 .map(|m| json!({ "project_id": m.project_id, "recorded": m.recorded, "actual": m.actual }));
+            let foreign = pointer.as_ref().and_then(|b| b.mismatched_store()).map(|recorded| {
+                json!({ "recorded": recorded, "running": Paths::APP_NAME })
+            });
             json!({
                 "path": dir,
                 "exists": path.is_dir(),
                 "legacy": binding::is_legacy_pointer(path),
                 "pointer_missing": binding::is_pointer_missing(path),
                 "mismatch": mismatch,
+                "foreign": foreign,
             })
         })
         .collect();

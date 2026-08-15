@@ -2,10 +2,12 @@
 /* The container every inline SVG icon is drawn in (`components/Icon.tsx`). The stroke
    convention lives here rather than on each icon so that what an icon carries is its
    geometry alone; the colour is `currentColor`, which is what lets one drawing serve
-   both themes. `flex: none` keeps the box from being squeezed by the text beside it. */
+   both themes. `flex: none` keeps the box from being squeezed by the text beside it, and
+   `inline-block` lets one sit in a run of text as well as in a flex row — a flex parent
+   blockifies it anyway, so one rule serves both. */
 .icon {
   width: var(--icon-sm); height: var(--icon-sm); flex: none;
-  display: block; overflow: visible;
+  display: inline-block; vertical-align: -0.18em; overflow: visible;
   fill: none; stroke: currentColor;
   stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round;
 }
@@ -350,12 +352,12 @@
 .plugdet__foot { border-top: 1px solid var(--c-border); margin-top: var(--s-4); padding-top: var(--s-2); font-size: var(--fs-xs); }
 /* Holder-side surface of `AMB-D-366`: premises pinned on after a task was reserved. A different axis from
    --block (why anyone cannot start it) — this is what changed since *you* took it — so it speaks through its
-   own 🔔 glyph and, like --block, borrows no status colour. */
+   own bell mark and, like --block, borrows no status colour. */
 .chip--premise { white-space: nowrap; cursor: default; }
-/* The glyph-only form of the same block, for dense surfaces (a calendar chip, a timeline's
+/* The mark-only form of the same block, for dense surfaces (a calendar chip, a timeline's
    row label). It shares a line with the title, so it drops the chip background and the
-   count and borrows the width of a single character. */
-.chip--blockglyph { flex: none; font-size: var(--fs-2xs); cursor: default; margin-right: 2px; }
+   count and stands on the icon's own width. */
+.chip--blockglyph { flex: none; cursor: default; margin-right: 2px; }
 /* ---------- detail pane ---------- */
 .detail { display: flex; flex-direction: column; }
 .detail__tabs { display: flex; gap: var(--s-1); padding: var(--s-3) var(--s-4); border-bottom: 1px solid var(--c-border); }
@@ -494,8 +496,12 @@ button.feed__target:hover { color: var(--c-accent); }
 .srch__label { flex: none; font-size: var(--fs-xs); }
 .srch__note { flex: 0 1 auto; min-width: 0; font-size: var(--fs-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Two marks, not one: the side the record is on, then the face the words landed on. They sit together
-   because they name the same hit, and apart because they answer different questions (`AMB-D-565`). */
-.srch__face { flex: none; width: 38px; text-align: center; white-space: nowrap; letter-spacing: 1px; }
+   because they name the same hit, and apart because they answer different questions (`AMB-D-565`).
+   Telling them apart was once the glyphs' own doing — one text-like, one a colour emoji. Drawn to one
+   convention (`AMB-D-686`) that is gone, so the pair is held apart here instead: a gap between them,
+   and the face's mark the quieter of the two. */
+.srch__face { flex: none; width: 42px; display: inline-flex; justify-content: center; align-items: center; gap: 4px; }
+.srch__facemark { color: var(--c-text-faint); display: inline-flex; }
 .srch__ref { font-family: var(--font-mono); }
 /* What the record itself is, under the ref (`AMB-D-567`). One line, clipped: a task can be filed on any
    number of axes, and the excerpt below is what the reader came for — so the placements give way, never

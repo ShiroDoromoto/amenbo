@@ -29,6 +29,8 @@ const change = (over: Partial<PremiseChangeDto> = {}): PremiseChangeDto => ({
 
 const chips = () => Array.from(container.querySelectorAll(".chip--premise"));
 const glyphs = () => Array.from(container.querySelectorAll(".chip--blockglyph"));
+// Which mark an element drew. The icons carry no text, so the name is read off the svg itself.
+const markOf = (el: Element) => el.querySelector("svg")?.getAttribute("data-icon");
 
 beforeEach(() => {
   container = document.createElement("div");
@@ -47,7 +49,7 @@ describe("PremiseChangedChip", () => {
     expect(chips()).toHaveLength(0);
   });
 
-  it("shows 🔔 with a count and names the added blockers and decisions in the tooltip", () => {
+  it("shows a bell with a count and names the added blockers and decisions in the tooltip", () => {
     act(() => root.render(createElement(PremiseChangedChip, { task: card({
       status: "in_progress",
       premiseChange: change({
@@ -56,7 +58,7 @@ describe("PremiseChangedChip", () => {
       }),
     }) })));
     expect(chips()).toHaveLength(1);
-    expect(chips()[0].textContent).toContain("🔔");
+    expect(markOf(chips()[0])).toBe("bell");
     expect(chips()[0].textContent).toContain("2"); // one blocker + one decision
     expect(chips()[0].getAttribute("title")).toContain("AMB-T-2 後付けブロッカー");
     expect(chips()[0].getAttribute("title")).toContain("D-159");
@@ -89,14 +91,15 @@ describe("PremiseChangedChip", () => {
     expect(title.indexOf("D-159")).toBeLessThan(title.indexOf(t("premise.noLongerSettled")));
   });
 
-  it("compact drops the count and shows only the glyph, tooltip still names what changed", () => {
+  it("compact drops the count and shows only the mark, tooltip still names what changed", () => {
     act(() => root.render(createElement(PremiseChangedChip, { task: card({
       status: "in_progress",
       premiseChange: change({ addedBlockers: [{ id: 2, name: "後付け" }] }),
     }), compact: true })));
     expect(chips()).toHaveLength(0);
     expect(glyphs()).toHaveLength(1);
-    expect(glyphs()[0].textContent).toBe("🔔");
+    expect(markOf(glyphs()[0])).toBe("bell");
+    expect(glyphs()[0].textContent).toBe("");
     expect(glyphs()[0].getAttribute("title")).toContain("AMB-T-2 後付け");
   });
 });
@@ -115,11 +118,15 @@ describe("PremiseChangedField (the detail pane's spelled-out surface)", () => {
       onSelectDecision: (id: number) => opened.push(id),
     })));
     const labels = fieldChips().map((c) => c.textContent ?? "");
+    const marks = fieldChips().map(markOf);
     expect(labels).toHaveLength(3);
-    expect(labels[0]).toContain("⛔ 後付けブロッカー");
-    expect(labels[1]).toContain("⚠ D-159 後から張られた決定");
+    expect(marks[0]).toBe("blocked");
+    expect(labels[0]).toContain("後付けブロッカー");
+    expect(marks[1]).toBe("warning");
+    expect(labels[1]).toContain("D-159 後から張られた決定");
     // The axis the pane used to drop entirely: the link is older, the settlement is what went away.
-    expect(labels[2]).toContain("🔓 D-373 開き直った決定");
+    expect(marks[2]).toBe("unlock");
+    expect(labels[2]).toContain("D-373 開き直った決定");
     act(() => { (fieldChips()[2] as HTMLButtonElement).click(); });
     expect(opened).toEqual([373]);
   });

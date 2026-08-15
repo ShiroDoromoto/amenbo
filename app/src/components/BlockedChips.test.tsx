@@ -22,6 +22,8 @@ function card(over: Partial<TaskCard>): TaskCard {
 
 const chips = () => Array.from(container.querySelectorAll(".chip--block"));
 const glyphs = () => Array.from(container.querySelectorAll(".chip--blockglyph"));
+// Which mark a chip drew. The icons carry no text, so the name is read off the svg itself.
+const markOf = (el: Element) => el.querySelector("svg")?.getAttribute("data-icon");
 const render = (task: TaskCard) => act(() => root.render(createElement(BlockedChips, { task })));
 const renderCompact = (task: TaskCard) =>
   act(() => root.render(createElement(BlockedChips, { task, compact: true })));
@@ -43,41 +45,41 @@ describe("BlockedChips", () => {
     expect(chips()).toHaveLength(0);
   });
 
-  it("shows incomplete blockers as ⛔ with a count and names them in the tooltip", () => {
+  it("shows incomplete blockers as a barred circle with a count and names them in the tooltip", () => {
     render(card({
       ready: false,
       blockedBy: [{ id: 2, name: "先行A" }, { id: 3, name: "先行B" }],
     }));
     expect(chips()).toHaveLength(1);
-    expect(chips()[0].textContent).toContain("⛔");
+    expect(markOf(chips()[0])).toBe("blocked");
     expect(chips()[0].textContent).toContain("2");
     expect(chips()[0].getAttribute("title")).toContain("AMB-T-2 先行A");
     expect(chips()[0].getAttribute("title")).toContain("AMB-T-3 先行B");
     expect(chips()[0].getAttribute("aria-label")).toContain("AMB-T-3 先行B");
   });
 
-  it("shows unsettled basis decisions separately as ⚠ and names the ref", () => {
+  it("shows unsettled basis decisions separately as a warning triangle and names the ref", () => {
     render(card({
       ready: false,
       blockedByDecisions: [{ id: 159, name: "ready を書き込み層で強制", ref: "D-159" }],
     }));
     expect(chips()).toHaveLength(1);
-    expect(chips()[0].textContent).toContain("⚠");
+    expect(markOf(chips()[0])).toBe("warning");
     expect(chips()[0].getAttribute("title")).toContain("D-159");
   });
 
-  it("shows a start day that has not come as ⏳, carrying the day itself rather than a count", () => {
+  it("shows a start day that has not come as an hourglass, carrying the day itself rather than a count", () => {
     render(card({ ready: false, notStartedUntil: "2026-08-01" }));
     expect(chips()).toHaveLength(1);
-    expect(chips()[0].textContent).toContain("⏳");
+    expect(markOf(chips()[0])).toBe("hourglass");
     expect(chips()[0].textContent).toContain("2026-08-01");
     expect(chips()[0].getAttribute("title")).toContain("2026-08-01");
   });
 
-  it("shows an unfinished creation as ✎, naming the state rather than a count", () => {
+  it("shows an unfinished creation as a pencil, naming the state rather than a count", () => {
     render(card({ ready: false, draft: true }));
     expect(chips()).toHaveLength(1);
-    expect(chips()[0].textContent).toContain("✎");
+    expect(markOf(chips()[0])).toBe("pencil");
     expect(chips()[0].textContent).toContain("Being created");
     expect(chips()[0].getAttribute("title")).toContain("finish creating it first");
   });
@@ -109,37 +111,40 @@ describe("BlockedChips", () => {
 });
 
 describe("BlockedChips compact", () => {
-  it("shows only the glyph, with no count or chip background", () => {
+  it("shows only the mark, with no count or chip background", () => {
     renderCompact(card({
       ready: false,
       blockedBy: [{ id: 2, name: "先行A" }, { id: 3, name: "先行B" }],
     }));
     expect(chips()).toHaveLength(0);
     expect(glyphs()).toHaveLength(1);
-    expect(glyphs()[0].textContent).toBe("⛔");
+    expect(markOf(glyphs()[0])).toBe("blocked");
+    expect(glyphs()[0].textContent).toBe("");
   });
 
-  it("even glyph-only, the tooltip names what is blocking", () => {
+  it("even mark-only, the tooltip names what is blocking", () => {
     renderCompact(card({
       ready: false,
       blockedByDecisions: [{ id: 159, name: "根拠", ref: "D-159" }],
     }));
-    expect(glyphs()[0].textContent).toBe("⚠");
+    expect(markOf(glyphs()[0])).toBe("warning");
     expect(glyphs()[0].getAttribute("title")).toContain("D-159");
     expect(glyphs()[0].getAttribute("aria-label")).toContain("D-159");
   });
 
-  it("drops the date and keeps the glyph, with the day still in the tooltip", () => {
+  it("drops the date and keeps the mark, with the day still in the tooltip", () => {
     renderCompact(card({ ready: false, notStartedUntil: "2026-08-01" }));
     expect(chips()).toHaveLength(0);
-    expect(glyphs()[0].textContent).toBe("⏳");
+    expect(markOf(glyphs()[0])).toBe("hourglass");
+    expect(glyphs()[0].textContent).toBe("");
     expect(glyphs()[0].getAttribute("title")).toContain("2026-08-01");
   });
 
-  it("drops the word and keeps the glyph for an unfinished creation", () => {
+  it("drops the word and keeps the mark for an unfinished creation", () => {
     renderCompact(card({ ready: false, draft: true }));
     expect(chips()).toHaveLength(0);
-    expect(glyphs()[0].textContent).toBe("✎");
+    expect(markOf(glyphs()[0])).toBe("pencil");
+    expect(glyphs()[0].textContent).toBe("");
     expect(glyphs()[0].getAttribute("title")).toContain("finish creating it first");
   });
 

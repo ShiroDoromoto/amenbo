@@ -100,7 +100,7 @@ const ui = {
   "projset.harnessRequestHint": "Pick the tool you work with and copy the text for it. It is here whether or not this project is wired already.",
   "projset.harnessRequestDirs": "Paste it into these folders:",
   "nav.settings": "Settings", "nav.onboarding": "Get started",
-  "nav.decisions": "Decisions", "nav.commands": "Commands", "nav.mcp": "Connect an AI", "nav.search": "Search",
+  "nav.decisions": "Decisions", "nav.commands": "Commands", "nav.mcp": "Connect via MCP", "nav.search": "Search",
   "dec.title": "Decision records",
   "dec.empty": "No decisions yet", "dec.new": "Record a decision", "dec.newTitlePh": "Decision title",
   "dec.newBodyPh": "Conclusion + rationale (don't paste raw discussion)", "dec.add": "Record", "dec.cancel": "Cancel",

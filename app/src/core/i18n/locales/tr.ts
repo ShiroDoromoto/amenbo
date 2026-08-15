@@ -88,7 +88,7 @@ export const tr: Translation = {
     "projset.harnessRequestHint": "Kullandığın aracı seç ve metnini kopyala. Bu proje ayarlanmış olsa da olmasa da burada durur.",
     "projset.harnessRequestDirs": "Şu klasörlere yapıştır:",
     "nav.settings": "Ayarlar", "nav.onboarding": "Başlangıç",
-    "nav.decisions": "Kararlar", "nav.commands": "Komutlar", "nav.mcp": "Yapay zekâ bağla", "nav.search": "Arama",
+    "nav.decisions": "Kararlar", "nav.commands": "Komutlar", "nav.mcp": "MCP ile bağlan", "nav.search": "Arama",
     "dec.title": "Karar kayıtları",
     "dec.empty": "Henüz karar yok", "dec.new": "Karar kaydet", "dec.newTitlePh": "Karar başlığı",
     "dec.newBodyPh": "Sonuç + gerekçe (tartışmanın ham hâlini yapıştırmayın)", "dec.add": "Kaydet", "dec.cancel": "Vazgeç",

@@ -88,7 +88,7 @@ export const ko: Translation = {
     "projset.harnessRequestHint": "쓰는 도구를 고르면 그 도구용 텍스트가 나옵니다. 이미 설정된 프로젝트에서도 받을 수 있습니다.",
     "projset.harnessRequestDirs": "붙여 넣을 폴더:",
     "nav.settings": "설정", "nav.onboarding": "시작하기",
-    "nav.decisions": "결정", "nav.commands": "명령", "nav.mcp": "AI 연결", "nav.search": "검색",
+    "nav.decisions": "결정", "nav.commands": "명령", "nav.mcp": "MCP로 연결", "nav.search": "검색",
     "dec.title": "결정 기록",
     "dec.empty": "아직 결정이 없습니다", "dec.new": "결정 기록하기", "dec.newTitlePh": "결정 제목",
     "dec.newBodyPh": "결론 + 근거(논의 원문을 붙여넣지 마세요)", "dec.add": "기록", "dec.cancel": "취소",

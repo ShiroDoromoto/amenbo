@@ -88,7 +88,7 @@ export const nl: Translation = {
     "projset.harnessRequestHint": "Kies het gereedschap dat je gebruikt en kopieer de tekst ervan. Die staat hier, of dit project al is ingesteld of niet.",
     "projset.harnessRequestDirs": "Plak hem in deze mappen:",
     "nav.settings": "Instellingen", "nav.onboarding": "Aan de slag",
-    "nav.decisions": "Besluiten", "nav.commands": "Commando's", "nav.mcp": "Een AI verbinden", "nav.search": "Zoeken",
+    "nav.decisions": "Besluiten", "nav.commands": "Commando's", "nav.mcp": "Verbinden via MCP", "nav.search": "Zoeken",
     "dec.title": "Besluitenregister",
     "dec.empty": "Nog geen besluiten", "dec.new": "Besluit vastleggen", "dec.newTitlePh": "Titel van het besluit",
     "dec.newBodyPh": "Conclusie + onderbouwing (plak geen rauwe discussie)", "dec.add": "Vastleggen", "dec.cancel": "Annuleren",

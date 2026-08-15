@@ -91,7 +91,7 @@ export const th: Translation = {
     "projset.harnessRequestHint": "เลือกเครื่องมือที่คุณใช้แล้วคัดลอกข้อความของมัน ข้อความอยู่ที่นี่เสมอ ไม่ว่าโปรเจกต์นี้จะตั้งค่าไว้แล้วหรือยัง",
     "projset.harnessRequestDirs": "วางลงในโฟลเดอร์เหล่านี้:",
     "nav.settings": "ตั้งค่า", "nav.onboarding": "เริ่มต้นใช้งาน",
-    "nav.decisions": "การตัดสินใจ", "nav.commands": "คำสั่ง", "nav.mcp": "เชื่อม AI", "nav.search": "ค้นหา",
+    "nav.decisions": "การตัดสินใจ", "nav.commands": "คำสั่ง", "nav.mcp": "เชื่อมต่อผ่าน MCP", "nav.search": "ค้นหา",
     "dec.title": "บันทึกการตัดสินใจ",
     "dec.empty": "ยังไม่มีการตัดสินใจ", "dec.new": "บันทึกการตัดสินใจ", "dec.newTitlePh": "ชื่อการตัดสินใจ",
     "dec.newBodyPh": "ข้อสรุป + เหตุผล (อย่าวางบทสนทนาดิบ)", "dec.add": "บันทึก", "dec.cancel": "ยกเลิก",

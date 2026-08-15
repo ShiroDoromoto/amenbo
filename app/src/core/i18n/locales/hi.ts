@@ -88,7 +88,7 @@ export const hi: Translation = {
     "projset.harnessRequestHint": "जिस टूल से आप काम करते हैं उसे चुनें और उसका टेक्स्ट कॉपी करें। यह प्रोजेक्ट पहले से सेट हो या न हो, यह यहाँ मिलेगा।",
     "projset.harnessRequestDirs": "इसे इन फ़ोल्डरों में चिपकाएँ:",
     "nav.settings": "सेटिंग", "nav.onboarding": "शुरू करें",
-    "nav.decisions": "निर्णय", "nav.commands": "कमांड", "nav.mcp": "AI जोड़ें", "nav.search": "खोज",
+    "nav.decisions": "निर्णय", "nav.commands": "कमांड", "nav.mcp": "MCP से जोड़ें", "nav.search": "खोज",
     "dec.title": "निर्णय अभिलेख",
     "dec.empty": "अभी कोई निर्णय नहीं", "dec.new": "निर्णय दर्ज करें", "dec.newTitlePh": "निर्णय का शीर्षक",
     "dec.newBodyPh": "निष्कर्ष + आधार (चर्चा जैसी है वैसी न चिपकाएँ)", "dec.add": "दर्ज करें", "dec.cancel": "रद्द करें",

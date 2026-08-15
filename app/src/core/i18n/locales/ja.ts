@@ -88,7 +88,7 @@ export const ja: Translation = {
     "projset.harnessRequestHint": "使っているツールを選ぶと、そのツール用のテキストが出ます。もう設定してあっても受け取れます。",
     "projset.harnessRequestDirs": "貼り先のフォルダ:",
     "nav.settings": "設定", "nav.onboarding": "はじめに",
-    "nav.decisions": "決定記録", "nav.commands": "コマンド集", "nav.mcp": "AI をつなぐ", "nav.search": "検索",
+    "nav.decisions": "決定記録", "nav.commands": "コマンド集", "nav.mcp": "MCP でつなぐ", "nav.search": "検索",
     "dec.title": "決定記録",
     "dec.empty": "まだ決定はありません", "dec.new": "決定を記録", "dec.newTitlePh": "決定のタイトル",
     "dec.newBodyPh": "結論と根拠（議論の生ログは貼らない）", "dec.add": "記録する", "dec.cancel": "やめる",

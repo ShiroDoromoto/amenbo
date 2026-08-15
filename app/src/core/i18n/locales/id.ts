@@ -91,7 +91,7 @@ export const id: Translation = {
     "projset.harnessRequestHint": "Pilih alat yang Anda pakai lalu salin teksnya. Teks ini ada di sini, entah proyek ini sudah disetel atau belum.",
     "projset.harnessRequestDirs": "Tempelkan ke folder berikut:",
     "nav.settings": "Pengaturan", "nav.onboarding": "Mulai",
-    "nav.decisions": "Keputusan", "nav.commands": "Perintah", "nav.mcp": "Hubungkan AI", "nav.search": "Cari",
+    "nav.decisions": "Keputusan", "nav.commands": "Perintah", "nav.mcp": "Hubungkan lewat MCP", "nav.search": "Cari",
     "dec.title": "Catatan keputusan",
     "dec.empty": "Belum ada keputusan", "dec.new": "Catat keputusan", "dec.newTitlePh": "Judul keputusan",
     "dec.newBodyPh": "Kesimpulan + alasan (jangan tempelkan diskusi mentah)", "dec.add": "Catat", "dec.cancel": "Batal",

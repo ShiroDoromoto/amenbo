@@ -91,7 +91,7 @@ export const vi: Translation = {
     "projset.harnessRequestHint": "Chọn công cụ bạn dùng rồi sao chép đoạn văn bản của nó. Nó luôn ở đây, dù dự án đã được cấu hình hay chưa.",
     "projset.harnessRequestDirs": "Dán vào các thư mục sau:",
     "nav.settings": "Cài đặt", "nav.onboarding": "Bắt đầu",
-    "nav.decisions": "Quyết định", "nav.commands": "Lệnh", "nav.mcp": "Kết nối AI", "nav.search": "Tìm kiếm",
+    "nav.decisions": "Quyết định", "nav.commands": "Lệnh", "nav.mcp": "Kết nối qua MCP", "nav.search": "Tìm kiếm",
     "dec.title": "Sổ quyết định",
     "dec.empty": "Chưa có quyết định nào", "dec.new": "Ghi một quyết định", "dec.newTitlePh": "Tiêu đề quyết định",
     "dec.newBodyPh": "Kết luận + căn cứ (đừng dán nguyên cuộc thảo luận)", "dec.add": "Ghi", "dec.cancel": "Huỷ",

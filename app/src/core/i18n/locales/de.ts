@@ -88,7 +88,7 @@ export const de: Translation = {
     "projset.harnessRequestHint": "Wähle das Werkzeug, mit dem du arbeitest, und kopiere seinen Text. Er ist hier, ob dieses Projekt schon eingerichtet ist oder nicht.",
     "projset.harnessRequestDirs": "Füge ihn in diese Ordner ein:",
     "nav.settings": "Einstellungen", "nav.onboarding": "Loslegen",
-    "nav.decisions": "Entscheidungen", "nav.commands": "Befehle", "nav.mcp": "KI verbinden", "nav.search": "Suche",
+    "nav.decisions": "Entscheidungen", "nav.commands": "Befehle", "nav.mcp": "Über MCP verbinden", "nav.search": "Suche",
     "dec.title": "Entscheidungsprotokoll",
     "dec.empty": "Noch keine Entscheidungen", "dec.new": "Entscheidung festhalten", "dec.newTitlePh": "Titel der Entscheidung",
     "dec.newBodyPh": "Ergebnis + Begründung (keine rohe Diskussion einfügen)", "dec.add": "Festhalten", "dec.cancel": "Abbrechen",

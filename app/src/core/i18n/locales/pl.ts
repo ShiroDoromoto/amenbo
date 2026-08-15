@@ -91,7 +91,7 @@ export const pl: Translation = {
     "projset.harnessRequestHint": "Wybierz narzędzie, którego używasz, i skopiuj jego tekst. Jest tu niezależnie od tego, czy projekt jest już skonfigurowany.",
     "projset.harnessRequestDirs": "Wklej go do tych folderów:",
     "nav.settings": "Ustawienia", "nav.onboarding": "Zacznij",
-    "nav.decisions": "Decyzje", "nav.commands": "Polecenia", "nav.mcp": "Podłącz AI", "nav.search": "Szukaj",
+    "nav.decisions": "Decyzje", "nav.commands": "Polecenia", "nav.mcp": "Połącz przez MCP", "nav.search": "Szukaj",
     "dec.title": "Zapisy decyzji",
     "dec.empty": "Nie ma jeszcze decyzji", "dec.new": "Zapisz decyzję", "dec.newTitlePh": "Tytuł decyzji",
     "dec.newBodyPh": "Wniosek + uzasadnienie (nie wklejaj surowej dyskusji)", "dec.add": "Zapisz", "dec.cancel": "Anuluj",

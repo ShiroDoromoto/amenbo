@@ -89,7 +89,7 @@ export const zhHans: Translation = {
     "projset.harnessRequestHint": "选择你在用的工具，复制它对应的文本。无论这个项目是否已经配置好，这里都能取。",
     "projset.harnessRequestDirs": "贴到这些文件夹:",
     "nav.settings": "设置", "nav.onboarding": "开始使用",
-    "nav.decisions": "决策", "nav.commands": "命令", "nav.mcp": "连接 AI", "nav.search": "搜索",
+    "nav.decisions": "决策", "nav.commands": "命令", "nav.mcp": "通过 MCP 连接", "nav.search": "搜索",
     "dec.title": "决策记录",
     "dec.empty": "还没有决策", "dec.new": "记录一条决策", "dec.newTitlePh": "决策标题",
     "dec.newBodyPh": "结论＋依据（不要粘贴原始讨论）", "dec.add": "记录", "dec.cancel": "取消",

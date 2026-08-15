@@ -92,7 +92,7 @@ export const ptBR: Translation = {
     "projset.harnessRequestHint": "Escolha a ferramenta que você usa e copie o texto dela. Ele fica aqui, esteja o projeto já configurado ou não.",
     "projset.harnessRequestDirs": "Cole nestas pastas:",
     "nav.settings": "Configurações", "nav.onboarding": "Começar",
-    "nav.decisions": "Decisões", "nav.commands": "Comandos", "nav.mcp": "Conectar uma IA", "nav.search": "Busca",
+    "nav.decisions": "Decisões", "nav.commands": "Comandos", "nav.mcp": "Conectar por MCP", "nav.search": "Busca",
     "dec.title": "Registro de decisões",
     "dec.empty": "Ainda não há decisões", "dec.new": "Registrar uma decisão", "dec.newTitlePh": "Título da decisão",
     "dec.newBodyPh": "Conclusão + motivos (não cole a discussão crua)", "dec.add": "Registrar", "dec.cancel": "Cancelar",

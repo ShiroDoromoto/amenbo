@@ -91,7 +91,7 @@ export const ru: Translation = {
     "projset.harnessRequestHint": "Выберите инструмент, которым пользуетесь, и скопируйте его текст. Он здесь, настроен проект или нет.",
     "projset.harnessRequestDirs": "Вставьте его в эти папки:",
     "nav.settings": "Настройки", "nav.onboarding": "Начало работы",
-    "nav.decisions": "Решения", "nav.commands": "Команды", "nav.mcp": "Подключить ИИ", "nav.search": "Поиск",
+    "nav.decisions": "Решения", "nav.commands": "Команды", "nav.mcp": "Подключение по MCP", "nav.search": "Поиск",
     "dec.title": "Журнал решений",
     "dec.empty": "Решений пока нет", "dec.new": "Записать решение", "dec.newTitlePh": "Заголовок решения",
     "dec.newBodyPh": "Вывод и обоснование (не вставляйте сырое обсуждение)", "dec.add": "Записать", "dec.cancel": "Отмена",

@@ -91,7 +91,7 @@ export const uk: Translation = {
     "projset.harnessRequestHint": "Виберіть інструмент, яким користуєтесь, і скопіюйте його текст. Він тут, налаштований проєкт чи ні.",
     "projset.harnessRequestDirs": "Вставте його в ці теки:",
     "nav.settings": "Налаштування", "nav.onboarding": "Початок",
-    "nav.decisions": "Рішення", "nav.commands": "Команди", "nav.mcp": "Підключити ШІ", "nav.search": "Пошук",
+    "nav.decisions": "Рішення", "nav.commands": "Команди", "nav.mcp": "Підключення через MCP", "nav.search": "Пошук",
     "dec.title": "Записи рішень",
     "dec.empty": "Рішень поки немає", "dec.new": "Записати рішення", "dec.newTitlePh": "Заголовок рішення",
     "dec.newBodyPh": "Висновок + підстави (не вставляйте сиру дискусію)", "dec.add": "Записати", "dec.cancel": "Скасувати",

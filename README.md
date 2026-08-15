@@ -675,7 +675,7 @@ would let the AI re-point the folder it was given and step outside it, which is 
 whole shape this rests on. Nothing else is added — `--yes` least of all, so a
 destructive command still stops at the confirmation you are the one to give.
 
-**Set it up from the desktop app, under "Connect an AI".** The screen is the
+**Set it up from the desktop app, under "Connect via MCP".** The screen is the
 app's rather than the project's, because a server is one per app: each app is
 listed with whether it already holds one and which folders it reaches, and you
 tick the projects that app may reach. Pressing the button writes the whole

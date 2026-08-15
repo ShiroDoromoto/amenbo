@@ -89,7 +89,7 @@ export const zhHant: Translation = {
     "projset.harnessRequestHint": "選擇你在用的工具，複製它對應的文字。不論這個專案是否已經設定好，這裡都能取。",
     "projset.harnessRequestDirs": "貼到這些資料夾:",
     "nav.settings": "設定", "nav.onboarding": "開始使用",
-    "nav.decisions": "決策", "nav.commands": "指令", "nav.mcp": "連接 AI", "nav.search": "搜尋",
+    "nav.decisions": "決策", "nav.commands": "指令", "nav.mcp": "透過 MCP 連線", "nav.search": "搜尋",
     "dec.title": "決策紀錄",
     "dec.empty": "還沒有決策", "dec.new": "記錄一則決策", "dec.newTitlePh": "決策標題",
     "dec.newBodyPh": "結論＋理由（不要貼原始討論）", "dec.add": "記錄", "dec.cancel": "取消",

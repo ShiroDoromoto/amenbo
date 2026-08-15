@@ -523,6 +523,10 @@ const ui = {
   "mcp.copied": "Copied",
   "mcp.written": "Saved to {path} — open it to add the server.",
   "mcp.projects": "Projects this app may reach",
+  // Said beside the button, because both halves are what a reader has to know before pressing it and
+  // neither is recoverable from its word: the ticks are the contents of what goes over, and what goes
+  // over replaces rather than adds (`AMB-D-690`).
+  "mcp.handover": "The projects you tick are what the request and the file are made of. Handing one over replaces this app's entry whole — the folders it already reaches included.",
   "mcp.noProjects": "No project has a folder yet, so there is nowhere to point a server.",
   "mcp.stale": "Left by an older amenbo",
   "app.crashTitle": "Something went wrong",

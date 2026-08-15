@@ -242,18 +242,34 @@ function McpAppRow({
             ))}
           </div>
 
+          {/* What the ticks above amount to, said beside the button that acts on them: they are not a
+              filter on this screen, they are the contents of what is about to be handed over, and
+              handing it over replaces rather than adds. Both halves are the reader's to know before
+              they press, and neither is recoverable from the button's own word. */}
+          <span className="newproj__hint">{t("mcp.handover")}</span>
+
           <div className="mcp__actions">
+            {/* Nothing ticked is nothing to hand over, on both roads alike: the file names no folder,
+                and the request carries a `--dir` with no value after it, which an AI writes into the
+                settings as an entry that cannot run. The two used to answer the same emptiness
+                differently — one shut, one live. */}
             {app.writesFile ? (
               <button className="btn" disabled={busy || picked.length === 0} onClick={() => void save()}>
                 {t("mcp.write")}
               </button>
             ) : (
-              <button className="btn" onClick={() => void copy("add", texts.add)}>
+              <button
+                className="btn"
+                disabled={picked.length === 0}
+                onClick={() => void copy("add", texts.add)}
+              >
                 {copied === "add" ? t("mcp.copied") : t("mcp.copyAdd")}
               </button>
             )}
             {/* Offered only where there is something to remove: a request to delete an entry nobody
-                has would send a reader looking through a file for a line that is not in it. */}
+                has would send a reader looking through a file for a line that is not in it. It is not
+                shut on an empty selection, the ticks being no part of it — what it asks for is the
+                whole entry gone, and a reader taking amenbo out has nothing to tick first. */}
             {app.configured && !app.writesFile && (
               <button className="btn" onClick={() => void copy("remove", texts.remove)}>
                 {copied === "remove" ? t("mcp.copied") : t("mcp.copyRemove")}

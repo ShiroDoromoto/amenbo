@@ -503,6 +503,7 @@ export const ptBR: Translation = {
     "mcp.copied": "Copiado",
     "mcp.written": "Salvo em {path} — abra para adicionar o servidor.",
     "mcp.projects": "Projetos que este aplicativo pode alcançar",
+    "mcp.handover": "Os projetos marcados são exatamente o conteúdo do pedido e do arquivo. Ao entregá-lo, a entrada deste aplicativo é substituída por inteiro, incluindo as pastas que ele já alcança.",
     "mcp.noProjects": "Nenhum projeto tem pasta ainda, então não há para onde apontar um servidor.",
     "mcp.stale": "Deixado por um amenbo mais antigo",
     "app.crashTitle": "Algo deu errado",

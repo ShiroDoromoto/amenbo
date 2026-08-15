@@ -480,6 +480,7 @@ export const nl: Translation = {
     "mcp.copied": "Gekopieerd",
     "mcp.written": "Opgeslagen in {path} — open het om de server toe te voegen.",
     "mcp.projects": "Projecten die deze app mag bereiken",
+    "mcp.handover": "De aangevinkte projecten zijn precies de inhoud van het verzoek en het bestand. Bij het overhandigen wordt de vermelding van deze app in zijn geheel vervangen, inclusief de mappen die hij al bereikt.",
     "mcp.noProjects": "Nog geen enkel project heeft een map, dus er is nergens om een server op te richten.",
     "mcp.stale": "Achtergelaten door een oudere amenbo",
     "app.crashTitle": "Er ging iets mis",

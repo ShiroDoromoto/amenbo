@@ -88,8 +88,12 @@ export function PluginUpdateBanner({ onOpenInstalled }: {
       };
     });
 
+  // An update being there asks nothing — it is the quiet band. It rises a step for the two things the
+  // reader has to go and settle: a build held back because it wants a decision, and a run that failed
+  // and is only said here. Neither is a fault in the store, so neither goes above the heed step.
+  const step = held.length > 0 || error || (result?.failed.length ?? 0) > 0 ? " healthbanner--heed" : "";
   return (
-    <div className="healthbanner" role="status">
+    <div className={`healthbanner${step}`} role="status">
       <Icon name="puzzle" size="lg" />
       <div className="healthbanner__body">
         <div className="healthbanner__title">

@@ -42,12 +42,18 @@ export function HealthBanner() {
     }
   };
 
-  const lines = [...health.issues, ...pointers].map((i) => doctorText(i).message);
+  const issues = [...health.issues, ...pointers];
+  const lines = issues.map((i) => doctorText(i).message);
+  // Which step the band takes is what the check found, not that it found something: a fault leaves the
+  // store not to be trusted until it is dealt with, where a warning is the reader's to know while
+  // everything keeps working. The two came out on one ground, which made the louder one worth nothing.
+  const step = issues.some((i) => i.severity === "error") ? "stop" : "heed";
   if (dismissed) return null;
   if (lines.length === 0) {
     // Right after a repair, and only then, stay up to say so (with nothing at all we never render).
     if (repaired === 0) return null;
     return (
+      // What was wrong is not wrong any more, so the band drops to the quiet one: it is a receipt.
       <div className="healthbanner" role="status">
         <Icon name="check" size="lg" />
         <div className="healthbanner__body">
@@ -58,8 +64,8 @@ export function HealthBanner() {
     );
   }
   return (
-    <div className="healthbanner" role="alert">
-      <Icon name="warning" size="lg" />
+    <div className={`healthbanner healthbanner--${step}`} role="alert">
+      <Icon name={step === "stop" ? "error" : "warning"} size="lg" />
       <div className="healthbanner__body">
         <div className="healthbanner__title">{t("health.title")}</div>
         {lines.map((message, i) => (

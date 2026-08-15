@@ -58,39 +58,71 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* The project header (the board's toolbar) is portalled in here; BoardScreen renders it. */
 .shell__header { grid-area: header; min-width: 0; }
 
-/* ---------- startup health banner ---------- */
-/* The read-only warning from the startup integrity check. It never repairs anything, so
-   the only control is the close button. */
+/* ---------- the band across the top of the app ---------- */
+/* One band, the app's news drawn in it — the integrity check, an update waiting, a folder that has
+   lost its pointer. What varies between them is the step the news takes (`AMB-T-3209`), and the band
+   is where it is set, its parts all reading it off the properties declared below.
+
+   The bare band is the quiet one: a notice, on the app's own surface, in the app's own ink. An update
+   being available asks nothing of the reader, and the whole of what a coloured ground buys is that it
+   cannot be scrolled past — spent on news, there is nothing left for the moment the store is actually
+   in trouble. That was the state of it: everything came out on one orange ground, and a reader who
+   learned to close the orange band learned to close the one that mattered.
+
+   The loud ones fill the band, and there the parts are cut out of the ground rather than laid on it:
+   `--banner-tint` for the patch a control sits on, and an action that swaps ink for ground. */
 .healthbanner {
+  --banner-ground: var(--c-surface-2);
+  --banner-ink: var(--c-text);
+  --banner-tint: var(--c-surface-sunken);
+  --banner-tint-hover: var(--c-border);
+  --banner-edge: var(--c-border-strong);
+  /* The one accented thing on a quiet band; the loud ones override the pair below. */
+  --banner-btn-ground: var(--c-accent);
+  --banner-btn-ink: #fff;
+
   display: flex; align-items: flex-start; gap: var(--s-3);
   padding: var(--s-2) var(--s-4);
-  background: var(--c-heed); color: #fff;
+  background: var(--banner-ground); color: var(--banner-ink);
   border-bottom: 1px solid var(--c-border);
   font-size: var(--fs-sm);
 }
+/* The two steps that fill the band, and the accent one beside them: an offer is not a step on the
+   ladder — nothing is wrong, the reader is being handed something. */
+.healthbanner--stop, .healthbanner--heed, .managedblock-banner {
+  --banner-ink: #fff;
+  --banner-tint: rgba(0, 0, 0, 0.18);
+  --banner-tint-hover: rgba(0, 0, 0, 0.3);
+  --banner-edge: rgba(255, 255, 255, 0.35);
+  --banner-btn-ground: #fff;
+  --banner-btn-ink: var(--banner-ground);
+  border-bottom-color: transparent;
+}
+.healthbanner--stop { --banner-ground: var(--c-stop); }
+.healthbanner--heed { --banner-ground: var(--c-heed); }
+/* The re-sync affordance for an outdated managed block, and the rest of the guidance the app offers
+   rather than warns about. Accent, so it reads as an offer wherever it stands beside a step. */
+.managedblock-banner { --banner-ground: var(--c-accent); }
 .healthbanner__body { flex: 1; min-width: 0; }
 .healthbanner__title { font-weight: var(--fw-bold); }
 .healthbanner__line { font-size: var(--fs-xs); opacity: 0.95; word-break: break-word; }
 .healthbanner__hint { font-size: var(--fs-xs); opacity: 0.85; margin-top: var(--s-1); }
 .healthbanner__close {
   flex: none; display: inline-flex; align-items: center; gap: var(--s-1);
-  color: #fff; background: rgba(0, 0, 0, 0.18);
+  color: var(--banner-ink); background: var(--banner-tint);
   border: none; border-radius: var(--r-sm); padding: var(--s-1) var(--s-2);
   font-size: var(--fs-xs); cursor: pointer;
 }
-.healthbanner__close:hover { background: rgba(0, 0, 0, 0.3); }
+.healthbanner__close:hover { background: var(--banner-tint-hover); }
 .healthbanner__close:disabled { opacity: 0.5; cursor: default; }
 /* The button that runs the action (re-sync). It outweighs the close button. */
 .healthbanner__action {
-  flex: none; color: var(--c-accent); background: #fff;
+  flex: none; color: var(--banner-btn-ink); background: var(--banner-btn-ground);
   border: none; border-radius: var(--r-sm); padding: var(--s-1) var(--s-3);
   font-size: var(--fs-xs); font-weight: var(--fw-bold); cursor: pointer;
 }
-.healthbanner__action:hover { background: rgba(255, 255, 255, 0.85); }
+.healthbanner__action:hover { opacity: 0.85; }
 .healthbanner__action:disabled { opacity: 0.6; cursor: default; }
-/* The re-sync affordance for an outdated managed block. It wears the accent colour
-   (guidance plus an action) to stay distinct from the integrity banner's heed step. */
-.managedblock-banner { background: var(--c-accent); }
 /* The text the copy button hands over, shown rather than hidden behind it: it asks an AI of the
    reader's to edit a file of theirs, so it is read before it is handed on. Capped and scrolled, so a
    banner cannot push the app off the screen. */
@@ -98,15 +130,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .agenthook__pick {
   margin: var(--s-1) 0;
   padding: var(--s-1) var(--s-2);
-  background: rgba(0, 0, 0, 0.18); color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.35); border-radius: var(--r-sm);
+  background: var(--banner-tint); color: var(--banner-ink);
+  border: 1px solid var(--banner-edge); border-radius: var(--r-sm);
   font-size: var(--fs-xs);
 }
 .agenthook__request {
   max-height: 11em; overflow: auto;
   margin: var(--s-1) 0 var(--s-2);
   padding: var(--s-2);
-  background: rgba(0, 0, 0, 0.18); border-radius: var(--r-sm);
+  background: var(--banner-tint); border-radius: var(--r-sm);
   font-size: var(--fs-xs); font-family: var(--font-mono);
   white-space: pre-wrap; word-break: break-word;
 }

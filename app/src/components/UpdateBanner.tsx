@@ -71,7 +71,10 @@ export function UpdateBanner({ recheck }: { recheck: number }) {
     : null;
 
   return (
-    <div className="healthbanner" role="alert">
+    // A version being available asks nothing: nothing is broken and nothing is waiting on the reader,
+    // so it is the quiet band and a status rather than an alert. It wore the same orange ground and the
+    // same `alert` as the integrity check, which is what made that one easy to close without reading.
+    <div className="healthbanner" role="status">
       <Icon name="arrowUp" size="lg" />
       <div className="healthbanner__body">
         <div className="healthbanner__title">{t("update.title")}{vs.newerVersion ? ` (${vs.newerVersion})` : ""}</div>
@@ -133,7 +136,9 @@ export function UpdateCheckFeedback({
   }
   const failed = state === "error";
   return (
-    <div className="healthbanner" role="status">
+    // Not having been able to ask is worth knowing — the reader asked and got no answer — where being up
+    // to date is the answer they wanted, and asks nothing.
+    <div className={failed ? "healthbanner healthbanner--heed" : "healthbanner"} role="status">
       {failed ? <Icon name="warning" size="lg" /> : <Icon name="check" size="lg" />}
       <div className="healthbanner__body">
         <div className="healthbanner__title">

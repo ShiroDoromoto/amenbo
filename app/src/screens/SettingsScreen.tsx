@@ -7,6 +7,7 @@ import {
   runExport, runRestore, setAutostart, setFacetNames, setLanguage, setFacetAvatar, setPerfLog, setUpdateCheck,
 } from "../core/mutations";
 import { ErrorNote } from "../components/ErrorNote";
+import { DoneNote } from "../components/DoneNote";
 import { useIsDevBuild } from "../core/devChannel";
 import { doctorRepair, groupDoctorIssues, type DoctorRepair } from "../core/doctorKinds";
 import { confirmDialog } from "../core/dialog";
@@ -259,6 +260,18 @@ function AvatarSetting() {
   );
 }
 
+/**
+ * What a move the reader pressed left behind, and whether it went through. The tick belongs to the
+ * second half alone: a transfer the reader cancelled themselves is neither something that worked nor
+ * something that failed, so it is said in the same place in the quieter voice.
+ */
+type Note = { text: string; done: boolean };
+
+function NoteLine({ note }: { note: Note | null }) {
+  if (!note) return null;
+  return note.done ? <DoneNote>{note.text}</DoneNote> : <span className="faint">{note.text}</span>;
+}
+
 /** Export, under Settings > Data. It writes everything out as a directory — `export.json` plus the
  *  attachments themselves (`attachments/`) — for moving to another tool. It is one-way: there is no
  *  way back in (the only road back into amenbo is restoring a backup). The GUI is a thin call on
@@ -269,7 +282,7 @@ function AvatarSetting() {
 function ExportImportSetting() {
   const [busy, setBusy] = useState<null | "export">(null);
   const [progress, setProgress] = useState<DataProgressDto | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<Note | null>(null);
   const [error, setError] = useState<string | null>(null);
   // While the user is cancelling, core's abort error is shown as a neutral message, not a red error.
   const cancelling = useRef(false);
@@ -283,14 +296,15 @@ function ExportImportSetting() {
     const unlisten = await listenDataProgress(setProgress);
     try {
       const r = await runExport(path);
-      setMsg(
-        `✓ ${tf("settings.exportDone", {
+      setMsg({
+        done: true,
+        text: tf("settings.exportDone", {
           kb: Math.max(1, Math.round(r.bytes / 1024)),
           attachments: r.attachments,
-        })}` + (r.missing > 0 ? tf("settings.exportMissing", { missing: r.missing }) : ""),
-      );
+        }) + (r.missing > 0 ? tf("settings.exportMissing", { missing: r.missing }) : ""),
+      });
     } catch (e) {
-      if (cancelling.current) setMsg(t("settings.transferCancelled"));
+      if (cancelling.current) setMsg({ done: false, text: t("settings.transferCancelled") });
       else setError(errText(e));
     } finally {
       unlisten(); setBusy(null); setProgress(null); cancelling.current = false;
@@ -305,7 +319,7 @@ function ExportImportSetting() {
           <button className="btn" disabled={busy !== null} onClick={() => void exportJson()}>{t("settings.exportJson")}</button>
         </div>
         <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.dataNote")}</span>
-        {msg && <span className="faint" style={{ color: "var(--c-ok, #2e9e6b)" }}>{msg}</span>}
+        <NoteLine note={msg} />
         {error && <ErrorNote tone="quiet">{error}</ErrorNote>}
       </div>
       {busy && <DataProgressModal progress={progress} onCancel={() => { cancelling.current = true; void cancelDataOp(); }} />}
@@ -326,7 +340,7 @@ function ExportImportSetting() {
  *  message rather than a red error, exactly as export does. */
 function BackupSetting() {
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<Note | null>(null);
   const [error, setError] = useState<string | null>(null);
   // The progress modal: null hides it. It mirrors the per-store progress while the work runs.
   const [progress, setProgress] = useState<DataProgressDto | null>(null);
@@ -341,9 +355,9 @@ function BackupSetting() {
     const unlisten = await listenDataProgress(setProgress);
     try {
       const r = await runBackup(path);
-      setMsg(`✓ ${tf("settings.backupDone", { kb: Math.max(1, Math.round(r.bytes / 1024)) })}`);
+      setMsg({ done: true, text: tf("settings.backupDone", { kb: Math.max(1, Math.round(r.bytes / 1024)) }) });
     } catch (e) {
-      if (cancelling.current) setMsg(t("settings.transferCancelled"));
+      if (cancelling.current) setMsg({ done: false, text: t("settings.transferCancelled") });
       else setError(errText(e));
     } finally {
       unlisten(); setBusy(false); setProgress(null); cancelling.current = false;
@@ -360,14 +374,14 @@ function BackupSetting() {
     const unlisten = await listenDataProgress(setProgress);
     try {
       const r = await runRestore(path);
-      const lines = [`✓ ${tf("settings.restoreDone", { attachments: r.blobs })}`];
+      const lines = [tf("settings.restoreDone", { attachments: r.blobs })];
       if (r.previousSavedTo) lines.push(tf("settings.restoreAside", { path: r.previousSavedTo }));
       if (r.superseded > 0) lines.push(tn("settings.restoreSwept", r.superseded));
       const m = r.migration;
       if (m) lines.push(tf("settings.restoreMigrated", { from: m.from, to: m.to, steps: m.applied.join(", ") }));
-      setMsg(lines.join("\n"));
+      setMsg({ done: true, text: lines.join("\n") });
     } catch (e) {
-      if (cancelling.current) setMsg(t("settings.transferCancelled"));
+      if (cancelling.current) setMsg({ done: false, text: t("settings.transferCancelled") });
       else setError(errText(e));
     } finally {
       unlisten(); setBusy(false); setProgress(null); cancelling.current = false;
@@ -383,14 +397,7 @@ function BackupSetting() {
           <button className="btn" disabled={busy} onClick={() => void restore()}>{t("settings.restoreBtn")}</button>
         </div>
         <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.backupNote")}</span>
-        {msg && (
-          <span
-            className="faint"
-            style={{ color: "var(--c-ok, #2e9e6b)", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}
-          >
-            {msg}
-          </span>
-        )}
+        <NoteLine note={msg} />
         {error && <ErrorNote tone="quiet">{error}</ErrorNote>}
       </div>
       {busy && (
@@ -416,7 +423,7 @@ function BackupSetting() {
 function DoctorSetting() {
   const [report, setReport] = useState<DoctorReportDto | null>(null);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<Note | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const check = async () => {
@@ -441,7 +448,7 @@ function DoctorSetting() {
     try {
       if (repair.action === "rebind") await bindFolder(repair.project, repair.dir);
       else await resyncManagedBlocks(repair.dir);
-      setMsg(`✓ ${t("settings.doctorRepairDone")}`);
+      setMsg({ done: true, text: t("settings.doctorRepairDone") });
       setReport(await fetchDoctorReport());
     } catch (e) {
       setError(errText(e));
@@ -461,9 +468,12 @@ function DoctorSetting() {
     try {
       const r = await runDoctorFix();
       const touched = r.reclaimedBlobs + r.forgottenBindings;
-      setMsg(touched === 0
-        ? `✓ ${t("settings.doctorFixNothing")}`
-        : `✓ ${tf("settings.doctorFixDone", { blobs: r.reclaimedBlobs, bindings: r.forgottenBindings })}`);
+      setMsg({
+        done: true,
+        text: touched === 0
+          ? t("settings.doctorFixNothing")
+          : tf("settings.doctorFixDone", { blobs: r.reclaimedBlobs, bindings: r.forgottenBindings }),
+      });
       setReport(await fetchDoctorReport()); // Check again to see what was fixed; anything the sweeps cannot fix stays.
     } catch (e) {
       setError(errText(e));
@@ -483,7 +493,7 @@ function DoctorSetting() {
           {report && (
             <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
               {report.issues.length === 0
-                ? `✓ ${t("settings.doctorClean")}`
+                ? <DoneNote>{t("settings.doctorClean")}</DoneNote>
                 : tf("settings.doctorFound", { errors: report.errors, warnings: report.warnings })}
             </span>
           )}
@@ -534,7 +544,7 @@ function DoctorSetting() {
           )}
         </div>
         <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.doctorFixNote")}</span>
-        {msg && <span className="faint" style={{ color: "var(--c-ok, #2e9e6b)" }}>{msg}</span>}
+        <NoteLine note={msg} />
         {error && <ErrorNote tone="quiet">{error}</ErrorNote>}
       </div>
     </div>

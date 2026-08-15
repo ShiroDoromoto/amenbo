@@ -6,6 +6,7 @@ import {
   BlockedChips, DueChip, FacetAvatar, PremiseChangedChip, PriorityDot, StatusSelect, TaskIdChip, TriggeredAtChip,
 } from "../components/atoms";
 import { Pager, PAGE_SIZE } from "../components/Pager";
+import { Icon } from "../components/Icon";
 import { useSmartView } from "../core/reads";
 import { t } from "../core/i18n";
 import { isClosed } from "../core/status";
@@ -68,7 +69,7 @@ export function ListScreen({
 
       {total === 0 ? (
         <div className="placeholder">
-          <div className="placeholder__big">✓</div>
+          <div className="placeholder__big"><Icon name="check" size="lg" /></div>
           <div>{archived ? t("list.emptyArchived") : viewId === "inbox" ? t("list.emptyInbox") : t("list.empty")}</div>
         </div>
       ) : (

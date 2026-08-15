@@ -15,6 +15,7 @@
 // nothing there for a folder to bind and the create goes through on a name alone.
 import { useState } from "react";
 import { FirstLoop } from "../components/FirstLoop";
+import { Icon } from "../components/Icon";
 import { useCliCommandName } from "../core/cliCommand";
 import { createProject, pickFolder, revealFolder } from "../core/mutations";
 import { inTauri } from "../core/snapshot";
@@ -163,7 +164,7 @@ function DoneStep({ created, onOpenBoard, onOpenMcp }: { created: Created; onOpe
               <div className="buttonrow">
                 <button className="btn" onClick={() => void reveal()}>📂 {t("newproj.openFinder")}</button>
                 <button className="btn" onClick={() => void copyStatus()}>
-                  {copied ? `✓ ${t("newproj.copied")}` : `📋 ${tf("newproj.copyStatus", { cmd: cli })}`}
+                  {copied ? <><Icon name="check" /> {t("newproj.copied")}</> : `📋 ${tf("newproj.copyStatus", { cmd: cli })}`}
                 </button>
                 {/* One line out to where an AI is connected, rather than a second place to hand the
                     request over from (`AMB-D-684`). It is named and not conditioned: the fold it

@@ -16,6 +16,7 @@ import { useState } from "react";
 import { useCliCommandName } from "../core/cliCommand";
 import { errText, t, tf } from "../core/i18n";
 import { ErrorNote } from "./ErrorNote";
+import { Icon } from "./Icon";
 import { openTerminal } from "../core/mutations";
 
 /**
@@ -68,7 +69,7 @@ export function FirstLoop({ dir }: { dir: string }) {
             <div className="firstloop__stephint muted">{t("firstloop.s1fallback")}</div>
             <p className="firstloop__path">{dir}</p>
             <button className="btn" onClick={() => void copy(dir, "path")}>
-              {copied === "path" ? `✓ ${t("firstloop.copied")}` : `📋 ${t("firstloop.s1fallbackbtn")}`}
+              {copied === "path" ? <><Icon name="check" /> {t("firstloop.copied")}</> : `📋 ${t("firstloop.s1fallbackbtn")}`}
             </button>
           </div>
         )}
@@ -77,7 +78,7 @@ export function FirstLoop({ dir }: { dir: string }) {
       <Step n={2} title={t("firstloop.s2title")} hint={t("firstloop.s2hint")}>
         <p className="firstloop__prompt">{prompt}</p>
         <button className="btn" onClick={() => void copy(prompt, "prompt")}>
-          {copied === "prompt" ? `✓ ${t("firstloop.copied")}` : `📋 ${t("firstloop.s2btn")}`}
+          {copied === "prompt" ? <><Icon name="check" /> {t("firstloop.copied")}</> : `📋 ${t("firstloop.s2btn")}`}
         </button>
       </Step>
 

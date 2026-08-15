@@ -403,6 +403,6 @@ export function TriggeredAtChip({ at }: { at?: string | null }) {
   if (!at) return null;
   const label = formatDayTime(new Date(at));
   if (!label) return null;
-  return <span className="chip" title={at}>⏱ {label}</span>;
+  return <span className="chip" title={at}><Icon name="clock" /> {label}</span>;
 }
 

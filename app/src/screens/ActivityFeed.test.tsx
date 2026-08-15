@@ -16,8 +16,9 @@ const openedTasks: number[] = [];
 const openedDecisions: number[] = [];
 const edited: Array<[number, number]> = [];
 
+// The reply button carries a mark rather than a character, so it is found by which mark it drew.
 const replyButtons = () =>
-  Array.from(container.querySelectorAll("button")).filter((b) => b.textContent?.startsWith("↩"));
+  Array.from(container.querySelectorAll("button")).filter((b) => b.querySelector('svg[data-icon="reply"]'));
 const targetButtons = () =>
   Array.from(container.querySelectorAll("button")).filter((b) => b.textContent?.startsWith("→"));
 

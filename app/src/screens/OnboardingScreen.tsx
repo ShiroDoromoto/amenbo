@@ -8,6 +8,7 @@ import { useCliCommandName } from "../core/cliCommand";
 import { errText, t, tf } from "../core/i18n";
 import { bindFolder, pickFolder } from "../core/mutations";
 import { inTauri } from "../core/snapshot";
+import { ErrorNote } from "../components/ErrorNote";
 import { dataAdapter } from "../mock/adapter";
 import type { Project } from "../mock/types";
 import type { Nav } from "../shell/AppShell";
@@ -148,7 +149,7 @@ function BindCard({ projects, onBound }: { projects: Project[]; onBound: (id: nu
             ))}
           </select>
         </label>
-        {error && <div className="onboard__error" role="alert">⚠ {error}</div>}
+        {error && <ErrorNote>{error}</ErrorNote>}
         <div className="onboard__actionrow">
           <button className="btn btn--primary" onClick={() => void link()} disabled={busy}>
             📂 {t("newproj.chooseFolder")}

@@ -6,6 +6,7 @@ import {
 import { monthLabel, t, tf, weekdayLabels } from "../core/i18n";
 import { BlockedChips } from "../components/atoms";
 import { isClosed } from "../core/status";
+import { Icon } from "../components/Icon";
 
 // How many tasks a single day cell will stack; the overflow becomes an "N more" line pointing at the
 // list/detail view. Keeps a month row from growing without bound.
@@ -40,9 +41,9 @@ export function CalendarView({ tasks, selectedTaskId, onSelectTask }: {
   return (
     <div className="cal">
       <div className="cal__head">
-        <button className="cal__nav" onClick={() => go(-1)} title={t("cal.prevMonth")}>◀</button>
+        <button className="cal__nav" onClick={() => go(-1)} title={t("cal.prevMonth")}><Icon name="chevronLeft" /></button>
         <span className="cal__month">{monthLabel(year, month)}</span>
-        <button className="cal__nav" onClick={() => go(1)} title={t("cal.nextMonth")}>▶</button>
+        <button className="cal__nav" onClick={() => go(1)} title={t("cal.nextMonth")}><Icon name="chevronRight" /></button>
         <button className="cal__todaybtn" onClick={goToday}>{t("cal.today")}</button>
       </div>
 

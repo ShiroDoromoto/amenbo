@@ -3,6 +3,7 @@
 // are read through this pager too.
 import { useEffect, useState } from "react";
 import { tf } from "../core/i18n";
+import { Icon } from "./Icon";
 
 /** Rows per page. The small views (today, inbox) effectively fit on a single one. */
 export const PAGE_SIZE = 50;
@@ -48,11 +49,11 @@ export function Pager({ page, pageCount, total, start, pageSize, onPage }: {
   return (
     <div className="pager">
       <button className="btn" disabled={page === 0} onClick={() => onPage(0)} aria-label="first">«</button>
-      <button className="btn" disabled={page === 0} onClick={() => onPage(page - 1)} aria-label="prev">‹</button>
+      <button className="btn" disabled={page === 0} onClick={() => onPage(page - 1)} aria-label="prev"><Icon name="chevronLeft" /></button>
       <span className="pager__info">
         {tf("pager.range", { from, to, total })} · {tf("pager.page", { page: page + 1, pages: pageCount })}
       </span>
-      <button className="btn" disabled={page >= pageCount - 1} onClick={() => onPage(page + 1)} aria-label="next">›</button>
+      <button className="btn" disabled={page >= pageCount - 1} onClick={() => onPage(page + 1)} aria-label="next"><Icon name="chevronRight" /></button>
       <button className="btn" disabled={page >= pageCount - 1} onClick={() => onPage(pageCount - 1)} aria-label="last">»</button>
     </div>
   );

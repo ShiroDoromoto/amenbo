@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { inTauri } from "../core/snapshot";
+import { Icon } from "./Icon";
 import { t, tn } from "../core/i18n";
 import { fetchStaleManagedBlocks, resyncManagedBlocks } from "../core/mutations";
 import type { StaleBlockDto } from "../bindings/bindings";
@@ -62,7 +63,7 @@ export function ManagedBlockBanner() {
 
   return (
     <div className="healthbanner managedblock-banner" role="alert">
-      <span className="healthbanner__icon" aria-hidden>⚠</span>
+      <Icon name="warning" size="lg" />
       <div className="healthbanner__body">
         <div className="healthbanner__title">{t("managedBlock.title")}</div>
         <div className="healthbanner__line">{tn("managedBlock.hint", folderCount)}</div>

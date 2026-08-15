@@ -7,6 +7,7 @@ import { inTauri } from "../core/snapshot";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { confirmDialog } from "../core/dialog";
 import { agoLabel, t, errText } from "../core/i18n";
+import { ErrorNote } from "./ErrorNote";
 
 /**
  * One comment row in a timeline. Tasks and decision records draw the body from different places (activity vs.
@@ -112,7 +113,7 @@ export function CommentRow({ id, author, at, editedAt, text, target, onEdit, onR
           <Markdown>{text}</Markdown>
         </div>
       )}
-      {error && <div className="errortext" role="alert">⚠ {error}</div>}
+      {error && <ErrorNote>{error}</ErrorNote>}
       {inTauri() && <Attachments target={target} targetId={id} compact />}
     </div>
   );

@@ -3,6 +3,7 @@ import { timelineModel, todayStr, relativeDays } from "../core/calendar";
 import { t, tf } from "../core/i18n";
 import { BlockedChips, PriorityDot } from "../components/atoms";
 import { isClosed } from "../core/status";
+import { Icon } from "../components/Icon";
 
 // Cap on the chips laid out in the no-due bucket (kept in step with the calendar).
 const NODUE_CAP = 24;
@@ -26,7 +27,7 @@ export function TimelineView({ tasks, selectedTaskId, onSelectTask }: {
   if (m.rows.length === 0 && m.noDue.length === 0) {
     return (
       <div className="placeholder">
-        <div className="placeholder__big">🗓</div>
+        <div className="placeholder__big"><Icon name="calendar" size="lg" /></div>
         <div>{t("cal.empty")}</div>
       </div>
     );

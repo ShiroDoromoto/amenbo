@@ -6,6 +6,7 @@ import {
   openLogsDir, pickBackupPath, pickExportPath, pickRestoreArchive, resyncManagedBlocks, runBackup, runDoctorFix,
   runExport, runRestore, setAutostart, setFacetNames, setLanguage, setFacetAvatar, setPerfLog, setUpdateCheck,
 } from "../core/mutations";
+import { ErrorNote } from "../components/ErrorNote";
 import { useIsDevBuild } from "../core/devChannel";
 import { doctorRepair, groupDoctorIssues, type DoctorRepair } from "../core/doctorKinds";
 import { confirmDialog } from "../core/dialog";
@@ -169,7 +170,7 @@ function NameSetting() {
           </button>
         </div>
         <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.facetNamesHint")}</span>
-        {error && <span className="faint" style={{ color: "var(--c-blocked)" }}>⚠ {error}</span>}
+        {error && <ErrorNote tone="quiet">{error}</ErrorNote>}
       </div>
     </div>
   );
@@ -235,7 +236,7 @@ function AvatarSlot({ kind }: { kind: "human" | "ai" }) {
             </button>
           )}
         </div>
-        {error && <span className="faint" style={{ color: "var(--c-blocked)" }}>⚠ {error}</span>}
+        {error && <ErrorNote tone="quiet">{error}</ErrorNote>}
       </div>
       <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={pick} />
     </div>
@@ -304,7 +305,7 @@ function ExportImportSetting() {
         </div>
         <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.dataNote")}</span>
         {msg && <span className="faint" style={{ color: "var(--c-ok, #2e9e6b)" }}>{msg}</span>}
-        {error && <span className="faint" style={{ color: "var(--c-blocked)" }}>⚠ {error}</span>}
+        {error && <ErrorNote tone="quiet">{error}</ErrorNote>}
       </div>
       {busy && <DataProgressModal progress={progress} onCancel={() => { cancelling.current = true; void cancelDataOp(); }} />}
     </div>
@@ -389,7 +390,7 @@ function BackupSetting() {
             {msg}
           </span>
         )}
-        {error && <span className="faint" style={{ color: "var(--c-blocked)" }}>⚠ {error}</span>}
+        {error && <ErrorNote tone="quiet">{error}</ErrorNote>}
       </div>
       {busy && (
         <DataProgressModal
@@ -533,7 +534,7 @@ function DoctorSetting() {
         </div>
         <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.doctorFixNote")}</span>
         {msg && <span className="faint" style={{ color: "var(--c-ok, #2e9e6b)" }}>{msg}</span>}
-        {error && <span className="faint" style={{ color: "var(--c-blocked)" }}>⚠ {error}</span>}
+        {error && <ErrorNote tone="quiet">{error}</ErrorNote>}
       </div>
     </div>
   );
@@ -655,7 +656,7 @@ function LogsSetting() {
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <div><button className="btn" onClick={() => void open()}>{t("settings.logsOpen")}</button></div>
         <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.logsNote")}</span>
-        {error && <span className="faint" style={{ color: "var(--c-blocked)" }}>⚠ {error}</span>}
+        {error && <ErrorNote tone="quiet">{error}</ErrorNote>}
       </div>
     </div>
   );

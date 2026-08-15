@@ -15,6 +15,7 @@
 import { useState } from "react";
 import { useCliCommandName } from "../core/cliCommand";
 import { errText, t, tf } from "../core/i18n";
+import { ErrorNote } from "./ErrorNote";
 import { openTerminal } from "../core/mutations";
 
 /**
@@ -82,7 +83,7 @@ export function FirstLoop({ dir }: { dir: string }) {
 
       <Step n={3} title={t("firstloop.s3title")} hint={t("firstloop.s3hint")} />
 
-      {error && <div className="firstloop__error" role="alert">⚠ {error}</div>}
+      {error && <ErrorNote>{error}</ErrorNote>}
     </div>
   );
 }

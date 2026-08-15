@@ -21,6 +21,7 @@ import { inTauri } from "../core/snapshot";
 import { errText, t, tf } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import type { Nav } from "../shell/AppShell";
+import { ErrorNote } from "../components/ErrorNote";
 
 // The project that was created, handed to the done step: id = where the board opens, name = the heading, dir = the linked folder or null.
 type Created = { id: number; name: string; dir: string | null };
@@ -104,7 +105,7 @@ export function NewProjectScreen({ onCreated, onCancel, onOpenMcp }: { onCreated
           </div>
         )}
 
-        {error && <div className="errortext" role="alert">⚠ {error}</div>}
+        {error && <ErrorNote>{error}</ErrorNote>}
 
         <div className="actions">
           <button className="btn btn--primary" onClick={() => void create()} disabled={!canCreate}>{t("newproj.create")}</button>
@@ -175,7 +176,7 @@ function DoneStep({ created, onOpenBoard, onOpenMcp }: { created: Created; onOpe
           </>
         )}
 
-        {error && <div className="errortext" role="alert">⚠ {error}</div>}
+        {error && <ErrorNote>{error}</ErrorNote>}
 
         <div className="actions">
           <button className="btn btn--primary" autoFocus onClick={onOpenBoard}>{t("newproj.openBoard")}</button>

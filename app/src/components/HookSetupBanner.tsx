@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { inTauri } from "../core/snapshot";
+import { Icon } from "./Icon";
 import { t, tf } from "../core/i18n";
 import { fetchHookNotices } from "../core/mutations";
 import type { HookNoticeDto } from "../bindings/bindings";
@@ -55,7 +56,7 @@ export function HookSetupBanner({ asked }: { asked: boolean }) {
     <>
       {showUnwired && (
         <div className="healthbanner managedblock-banner" role="alert">
-          <span className="healthbanner__icon" aria-hidden>⚠</span>
+          <Icon name="warning" size="lg" />
           <div className="healthbanner__body">
             <div className="healthbanner__title">{t("hookSetup.title")}</div>
             {unwired.map((n) => (
@@ -70,7 +71,7 @@ export function HookSetupBanner({ asked }: { asked: boolean }) {
       )}
       {showRestored && (
         <div className="healthbanner managedblock-banner" role="alert">
-          <span className="healthbanner__icon" aria-hidden>⚠</span>
+          <Icon name="warning" size="lg" />
           <div className="healthbanner__body">
             <div className="healthbanner__title">{t("hookRestored.title")}</div>
             {restored.map((n) => (

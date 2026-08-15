@@ -479,6 +479,7 @@ export const zhHans: Translation = {
     "mcp.copied": "已复制",
     "mcp.written": "已保存到 {path}，打开即可添加服务器。",
     "mcp.projects": "本应用可以访问的项目",
+    "mcp.handover": "勾选的项目就是请求文本和文件的内容。交出去后，这个应用的条目会被整个替换，包括它现在能到达的文件夹。",
     "mcp.noProjects": "还没有项目绑定文件夹，服务器没有可指向的地方。",
     "mcp.stale": "旧版 amenbo 留下的",
     "app.crashTitle": "出了点问题",

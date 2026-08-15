@@ -482,6 +482,7 @@ export const id: Translation = {
     "mcp.copied": "Tersalin",
     "mcp.written": "Disimpan di {path} — buka untuk menambahkan server.",
     "mcp.projects": "Proyek yang boleh dijangkau aplikasi ini",
+    "mcp.handover": "Proyek yang Anda centang adalah isi dari permintaan dan berkas itu. Menyerahkannya mengganti seluruh entri aplikasi ini, termasuk folder yang sudah dijangkaunya.",
     "mcp.noProjects": "Belum ada proyek yang punya folder, jadi tidak ada tujuan untuk server.",
     "mcp.stale": "Ditinggalkan amenbo versi lama",
     "app.crashTitle": "Ada yang tidak beres",

@@ -58,6 +58,15 @@
   --fw-bold: 680;
   --lh: 1.5;
 
+  /* ----- icon (the drawings themselves are in components/Icon.tsx) -----
+     Which step an icon takes follows from what it does, not from the screen it is on
+     (`AMB-D-687`): the same mark is drawn the same size wherever it appears. Three steps,
+     4px apart, because the five sizes they replace (10 / 12 / inherited / 17 / 20)
+     differed by accident rather than by intent. */
+  --icon-sm: 16px; /* nav, and marks set in a line of text */
+  --icon-md: 20px; /* headings and chips */
+  --icon-lg: 24px; /* banners and onboarding */
+
   /* ----- spacing ----- */
   --s-1: 4px;
   --s-2: 6px;

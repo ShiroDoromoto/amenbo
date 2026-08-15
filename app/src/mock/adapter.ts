@@ -27,10 +27,10 @@ export const dataAdapter = {
     return getSnapshot().activity;
   },
 
+  // The smart views, as ids and nothing else. What each is called comes from the
+  // translations and what it is drawn with from the sidebar (`AMB-D-689`), so neither
+  // belongs in the data.
   smartViews(): SmartView[] {
-    return [
-      { id: "inbox", label: "受信 @自分", icon: "✉" },
-      { id: "activity", label: "アクティビティ", icon: "≋" },
-    ];
+    return [{ id: "inbox" }, { id: "activity" }];
   },
 };

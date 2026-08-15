@@ -482,6 +482,7 @@ export const vi: Translation = {
     "mcp.copied": "Đã sao chép",
     "mcp.written": "Đã lưu vào {path} — mở tệp để thêm máy chủ.",
     "mcp.projects": "Những dự án ứng dụng này được truy cập",
+    "mcp.handover": "Những dự án bạn đánh dấu chính là nội dung của lời nhờ và của tệp. Khi trao đi, mục của ứng dụng này bị thay thế toàn bộ, kể cả các thư mục nó đang với tới.",
     "mcp.noProjects": "Chưa dự án nào có thư mục, nên không có chỗ để trỏ máy chủ tới.",
     "mcp.stale": "Do amenbo cũ để lại",
     "app.crashTitle": "Có gì đó trục trặc",

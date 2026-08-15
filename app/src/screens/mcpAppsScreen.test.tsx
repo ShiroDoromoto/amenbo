@@ -254,6 +254,39 @@ describe("the screen where an AI is connected", () => {
     expect(clipboard).toEqual(["add cursor for 1,2"]);
   });
 
+  // Nothing ticked is nothing to hand over, and the two roads used to say so differently: the file was
+  // already shut on it while the request went out carrying a `--dir` with no value, which the AI
+  // reading it writes into the settings as an entry that cannot run.
+  it("shuts the request on an empty selection, the way the file already was", async () => {
+    await render({ projects: [SHOP], apps: [app()] });
+    await openRow();
+
+    expect(button(t("mcp.copyAdd")).disabled).toBe(true);
+
+    await act(async () => { ticks()[0].click(); });
+    expect(button(t("mcp.copyAdd")).disabled).toBe(false);
+  });
+
+  // What the ticks amount to, said where the press happens: they are the contents of what goes over,
+  // and what goes over replaces rather than adds. Neither is readable off the button's own word.
+  it("says beside the button what the ticks are, and that handing them over replaces", async () => {
+    await render({ projects: [SHOP], apps: [app()] });
+
+    expect(container.textContent).not.toContain(t("mcp.handover"));
+    await openRow();
+    expect(container.textContent).toContain(t("mcp.handover"));
+  });
+
+  // The removal is not a selection: it asks for the whole entry gone, so an empty one is no reason to
+  // shut it — a reader taking amenbo back out has nothing to tick first.
+  it("leaves the removal live with nothing ticked", async () => {
+    await render({ projects: [SHOP], apps: [app({ configured: true, folders: ["/w/elsewhere"] })] });
+    await openRow();
+
+    expect(ticks().map((box) => box.checked)).toEqual([false]);
+    expect(button(t("mcp.copyRemove")).disabled).toBe(false);
+  });
+
   it("gives the app that cannot run a command a file, written for the projects ticked", async () => {
     await render({
       projects: [SHOP, GREENHOUSE],

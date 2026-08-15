@@ -479,6 +479,7 @@ export const zhHant: Translation = {
     "mcp.copied": "已複製",
     "mcp.written": "已儲存至 {path}，開啟即可新增伺服器。",
     "mcp.projects": "本應用程式可以存取的專案",
+    "mcp.handover": "勾選的專案就是請求文字與檔案的內容。交出去後，這個應用的項目會被整個取代，包括它現在能到達的資料夾。",
     "mcp.noProjects": "還沒有專案綁定資料夾，伺服器沒有可指向的地方。",
     "mcp.stale": "舊版 amenbo 留下的",
     "app.crashTitle": "出了點問題",

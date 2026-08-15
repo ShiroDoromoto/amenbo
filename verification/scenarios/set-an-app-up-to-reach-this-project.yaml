@@ -115,12 +115,33 @@ steps_gui:
       app: cursor
       set: false
 
+  # And what that row offers while nothing reaches it. An app no entry names opens on nothing ticked,
+  # and what is ticked is what goes over — so the request has nothing to carry and says so before it is
+  # pressed. Read here rather than on the row above, which opens on the folder it already reaches and is
+  # right to be live.
+  - type: assert
+    domain: repo
+    op: mcp-road-shut
+    with:
+      app: cursor
+      road: request
+
   # And the other road, which is why this app is the one to read it on: it cannot run a command, so
   # there is no AI in it to hand a request to and a file is the only way in. Two rows on one screen
   # offering two different things is what says the road is the catalog's word and not the screen's.
   - type: assert
     domain: repo
     op: mcp-road
+    with:
+      app: claude-desktop
+      road: file
+
+  # The same emptiness on the other road, before anything is ticked into it. Both roads answering it the
+  # same way is the reading: a build where one is shut and the other live is one that lets a folderless
+  # hand-over out down whichever road happens to be live.
+  - type: assert
+    domain: repo
+    op: mcp-road-shut
     with:
       app: claude-desktop
       road: file

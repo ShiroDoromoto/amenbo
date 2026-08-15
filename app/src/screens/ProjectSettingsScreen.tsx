@@ -155,7 +155,7 @@ export function ProjectSettingsScreen({
 
             <div className="actions">
               <button className="btn btn--primary" onClick={() => void save()} disabled={!canSave}>
-                {busy ? t("projset.saving") : saved ? `✓ ${t("projset.saved")}` : t("projset.save")}
+                {busy ? t("projset.saving") : saved ? <><Icon name="check" /> {t("projset.saved")}</> : t("projset.save")}
               </button>
             </div>
           </div>

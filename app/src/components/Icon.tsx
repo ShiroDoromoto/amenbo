@@ -43,6 +43,7 @@ export type IconName =
   | "reply"
   | "clock"
   | "close"
+  | "check"
   | "error"
   | "blocked"
   | "warning"
@@ -58,7 +59,6 @@ export type IconName =
   | "paperclip"
   | "checkSquare"
   | "scales"
-  | "check"
   | "folder"
   | "trash"
   | "keyboard"
@@ -268,9 +268,9 @@ const ART: Record<IconName, ReactNode> = {
   ),
   // A cross — the move that puts something away: a banner dismissed, a pane shut, a row taken off.
   close: <path d="M5.8 5.8 18.2 18.2M18.2 5.8 5.8 18.2" />,
-  // A tick — the thing came off: a project made, a text on the clipboard. It answers the cross rather
-  // than the circle's fault, both being what a move left behind rather than what a record is.
-  check: <path d="M4.6 12.6 9.6 17.6 19.4 6.8" />,
+  // A tick — what the reader asked for went through, and there is nothing left to do about it. It is
+  // the same stroke `checkSquare` carries inside its box, drawn out to the same margins as the rest.
+  check: <path d="M4.4 12.8 9.8 18.2 19.6 6.4" />,
   // A cross inside a circle — a fault, as against the triangle's warning. The two are read side by
   // side in one list, so they are told apart by their outline before either is read.
   error: (

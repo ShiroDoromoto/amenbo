@@ -52,6 +52,14 @@
   color: var(--c-danger, #c0392b); font-size: var(--fs-sm);
 }
 .errortext--quiet { color: var(--c-blocked); font-size: inherit; }
+/* And what went through, said where it went through (`components/DoneNote.tsx`) — the same row as
+   the note above it, in the colour of a thing that worked. It sets no size of its own: this one is
+   read in fine print on one screen and at the size of the row on another, and the mark follows the
+   words either way. A message long enough to hold a path keeps its line breaks and breaks the path. */
+.donetext {
+  display: inline-flex; align-items: flex-start; gap: var(--s-1);
+  color: var(--c-ok, #2e9e6b); white-space: pre-wrap; overflow-wrap: anywhere;
+}
 /* One thing being filled in: what it is above, what it is filled in with below. */
 .field { display: flex; flex-direction: column; gap: var(--s-2); }
 /* The box a reader types into. */

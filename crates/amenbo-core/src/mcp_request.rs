@@ -116,16 +116,31 @@ pub fn add(app: &McpApp, server: &Server) -> String {
 /// remove, so a reader who wants to keep some of the folders is setting the app up again with those,
 /// not editing this one out in pieces. The file it sat in is not part of that — it stays, emptied or
 /// not, because what else is written in it is none of this request's business.
+///
+/// **The `server` it is addressed with is not the one [`add`] takes.** What this names is where the
+/// entry already is, which a caller reads back off the settings themselves
+/// ([`crate::mcp_probe::Setup::at`]) — a selection someone is about to make says where an entry would
+/// go, and nothing about where the one they are asking to be rid of was written. Every folder it is
+/// handed is named, not the first: what is being taken out is one entry to the reader and one row on
+/// the screen, and a request that reached half of it would leave that row still reading "set up".
 pub fn remove(app: &McpApp, server: &Server) -> String {
+    let files = settings_all(app, server);
+    // One entry can be filed in more than one place, and the sentence has to read as English either
+    // way — a reader whose project is one folder must not be handed prose written for somebody else's
+    // two.
+    let (those_files, them, they) = match files.len() {
+        0 | 1 => ("that file", "it", "it"),
+        _ => ("those files", "them", "they"),
+    };
     format!(
         "Please remove Amenbo from {label}.\n\
          \n\
-         In `{settings}`, delete the MCP server entry named `{name}` and nothing else — the whole \
-         entry goes, with every folder it lists, and every other server in that file stays. Leave the \
-         file itself in place even if that entry was the last thing in it: it may hold settings that \
-         are not servers at all. Tell me what you changed.",
+         In {settings}, delete the MCP server entry named `{name}` and nothing else — the whole \
+         entry goes, with every folder it lists, and every other server in {those_files} stays. Leave \
+         {those_files} in place even if that entry was the last thing in {them}: {they} may hold \
+         settings that are not servers at all. Tell me what you changed.",
         label = app.label,
-        settings = settings(app, server),
+        settings = named(&files),
         name = crate::mcp::name(),
     )
 }
@@ -143,9 +158,9 @@ pub fn remove_stale(app: &McpApp, server: &Server, name: &str) -> String {
         "Please remove an Amenbo MCP server entry that an older Amenbo left behind, from {label}.\n\
          \n\
          In `{settings}`, delete the MCP server entry named `{name}` and nothing else — every other \
-         server in that file stays, the `{current}` entry Amenbo uses now included. Leave the file \
-         itself in place even if that entry was the last thing in it: it may hold settings that are \
-         not servers at all. Tell me what you changed.",
+         server in that file stays, the `{current}` entry Amenbo uses now included. Leave that file \
+         in place even if that entry was the last thing in it: it may hold settings that are not \
+         servers at all. Tell me what you changed.",
         label = app.label,
         settings = settings(app, server),
         current = crate::mcp::name(),
@@ -157,17 +172,56 @@ pub fn remove_stale(app: &McpApp, server: &Server, name: &str) -> String {
 /// their settings nowhere near the folder.
 ///
 /// The apps that keep theirs *inside* a folder are named against the first of the server's
-/// ([`Server::settings_folder`]) — one file has one home, whatever the server reaches from it.
+/// ([`Server::settings_folder`]) — a request that writes an entry writes it in one place, whatever the
+/// server reaches from there. What a request that takes one back out names is every file it is in
+/// ([`settings_all`]), which is not the same question.
 fn settings(app: &McpApp, server: &Server) -> String {
     match server.settings_folder().and_then(|folder| app.settings_path(folder)) {
         Some(path) => path.display().to_string(),
-        // No home directory to resolve against — the only thing left to name is the path as the app's
-        // own documentation writes it, which is better than naming nothing.
-        None => match app.place {
-            crate::mcp_apps::Place::Settings(p)
-            | crate::mcp_apps::Place::Home(p)
-            | crate::mcp_apps::Place::Folder(p) => p.to_string(),
-        },
+        None => documented(app),
+    }
+}
+
+/// Every file the request names, one per folder it was handed, without repeats.
+///
+/// **A removal names all of them, because an entry can be in all of them.** An app that keeps its
+/// settings inside a folder keeps a different file per folder, so a reader working two projects can
+/// have amenbo filed twice — and a request naming one of those would take out half of what it says it
+/// is taking out, leaving the row it was pressed on still reading "set up". The apps whose settings
+/// are the machine's resolve every folder to the same path, and the repeat is dropped rather than
+/// asked about: one file is one file however many folders arrive.
+fn settings_all(app: &McpApp, server: &Server) -> Vec<String> {
+    let mut named: Vec<String> = Vec::new();
+    for path in server.folders.iter().filter_map(|folder| app.settings_path(folder)) {
+        let path = path.display().to_string();
+        if !named.contains(&path) {
+            named.push(path);
+        }
+    }
+    if named.is_empty() {
+        named.push(documented(app));
+    }
+    named
+}
+
+/// The paths as one sentence names them — each in a code span, and joined the way a person reads a
+/// list out.
+fn named(files: &[String]) -> String {
+    let quoted: Vec<String> = files.iter().map(|path| format!("`{path}`")).collect();
+    match quoted.split_last() {
+        Some((last, [])) => last.clone(),
+        Some((last, first)) => format!("{} and {last}", first.join(", ")),
+        None => String::new(),
+    }
+}
+
+/// The path as the app's own documentation writes it — what there is left to say when there is no home
+/// directory to resolve one against, which is better than naming nothing.
+fn documented(app: &McpApp) -> String {
+    match app.place {
+        crate::mcp_apps::Place::Settings(p)
+        | crate::mcp_apps::Place::Home(p)
+        | crate::mcp_apps::Place::Folder(p) => p.to_string(),
     }
 }
 
@@ -312,6 +366,29 @@ mod tests {
         assert!(said.contains("stays"), "{said}");
     }
 
+    /// An entry filed in two folders' settings is two files to edit, and the removal names both. A
+    /// request that named the first would take out half of what the reader pressed one button for,
+    /// and the row would go on saying "set up" with no way to see why.
+    #[test]
+    fn a_removal_names_every_file_the_entry_is_filed_in() {
+        let folders = vec![PathBuf::from("/work/shop"), PathBuf::from("/work/greenhouse")];
+        let exe = Path::new("/usr/local/bin/amenbo");
+        let said = remove(app("cursor"), &server(&folders, exe));
+
+        assert!(said.contains("`/work/shop/.cursor/mcp.json`"), "{said}");
+        assert!(said.contains("`/work/greenhouse/.cursor/mcp.json`"), "{said}");
+        assert!(said.contains(" and `/work/greenhouse"), "read out as a list: {said}");
+        // And the sentence around them agrees with itself about how many there are.
+        assert!(said.contains("every other server in those files stays"), "{said}");
+        assert!(said.contains("the last thing in them: they may hold"), "{said}");
+
+        // The machine's own settings are one file however many folders arrive, so the same two
+        // folders name it once — and the singular comes back with it.
+        let one = remove(app("codex-cli"), &server(&folders, exe));
+        assert_eq!(one.matches(".codex/config.toml").count(), 1, "{one}");
+        assert!(one.contains("every other server in that file stays"), "{one}");
+    }
+
     /// Both removals say the container stays. An entry that was the last one in its file leaves a
     /// document an AI is free to read as rubbish, and some of these documents hold a session-start
     /// hook beside the servers — so the sentence is in the text rather than left to the model.
@@ -326,7 +403,7 @@ mod tests {
                 remove_stale(app, &server(&folder, exe), "amenbo-greenhouse"),
             ] {
                 assert!(
-                    said.contains("Leave the file itself in place"),
+                    said.contains("Leave that file in place"),
                     "the file stays for {}: {said}",
                     app.id
                 );

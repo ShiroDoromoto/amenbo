@@ -116,6 +116,11 @@ pub fn add(app: &McpApp, server: &Server) -> String {
 /// remove, so a reader who wants to keep some of the folders is setting the app up again with those,
 /// not editing this one out in pieces. The file it sat in is not part of that — it stays, emptied or
 /// not, because what else is written in it is none of this request's business.
+///
+/// **The `server` it is addressed with is not the one [`add`] takes.** What this names is where the
+/// entry already is, which a caller reads back off the settings themselves
+/// ([`crate::mcp_probe::Setup::at`]) — a selection someone is about to make says where an entry would
+/// go, and nothing about where the one they are asking to be rid of was written.
 pub fn remove(app: &McpApp, server: &Server) -> String {
     format!(
         "Please remove Amenbo from {label}.\n\

@@ -68,6 +68,16 @@ pub struct Setup {
     /// apart from [`set`](Setup::set) because the two can disagree: an entry someone edited by hand
     /// may name no folder, and a row saying "set up" with nothing after it is still the truth.
     pub folders: Vec<PathBuf>,
+    /// The folders whose settings *hold* that entry, in the order they were read, without repeats —
+    /// empty for an app whose settings are the machine's, where one file answers for every folder and
+    /// there is none to name.
+    ///
+    /// It is read apart from [`folders`](Setup::folders) for the reason [`Stale::at`] is: what a
+    /// removal has to name is the file the entry sits in, and an entry can name any folder it likes —
+    /// including one whose settings it is not in. Neither is it the folders a reader has ticked on the
+    /// screen: those say what would be written next, not where what is already there lives
+    /// ([`crate::mcp_request::remove`]).
+    pub at: Vec<PathBuf>,
     /// The entries this app still holds under a name amenbo used to write, by name
     /// ([`crate::mcp::is_superseded_name`]). Empty for a reader who never set amenbo up under the old
     /// scheme, which is every reader who arrived after `AMB-D-679`.
@@ -109,12 +119,16 @@ pub fn read(app: &McpApp, server: &Server) -> Setup {
     let name = crate::mcp::name();
     let mut set = false;
     let mut folders: Vec<PathBuf> = Vec::new();
+    let mut held_at: Vec<PathBuf> = Vec::new();
     let mut stale: Vec<Stale> = Vec::new();
 
     for (at, path) in settings_files(app, server) {
         for (filed, args) in entries(app, &path).unwrap_or_default() {
             if filed == name {
                 set = true;
+                if let Some(folder) = at.clone().filter(|folder| !held_at.contains(folder)) {
+                    held_at.push(folder);
+                }
                 for folder in bound_folders(&args) {
                     if !folders.contains(&folder) {
                         folders.push(folder);
@@ -144,6 +158,9 @@ pub fn read(app: &McpApp, server: &Server) -> Setup {
         label: app.label,
         set: set || held.is_some(),
         folders: held.unwrap_or(folders),
+        // An extension is not a settings file, so a reader set up that way has nothing here — which is
+        // the truth a removal needs, there being no file of theirs to name.
+        at: held_at,
         stale,
     }
 }
@@ -524,6 +541,32 @@ mod tests {
 
         std::fs::remove_dir_all(&first).ok();
         std::fs::remove_dir_all(&second).ok();
+    }
+
+    /// The entry in use is answered the same way, and for the same reason: what a removal has to name
+    /// is the file it sits in, which is not the folder it says it reaches. The two are deliberately
+    /// different here, since an entry that agreed with its own file would prove nothing.
+    #[test]
+    fn the_entry_in_use_says_which_folders_settings_hold_it() {
+        let holding = scratch("at-holding");
+        let bare = scratch("at-bare");
+        let exe = Path::new("/usr/local/bin/amenbo");
+        write(
+            &holding.join(".cursor/mcp.json"),
+            r#"{"mcpServers":{"amenbo":{"command":"a","args":["mcp","--dir","/work/elsewhere"]}}}"#,
+        );
+
+        let folders = vec![bare.clone(), holding.clone()];
+        let found = read(app("cursor"), &server(&folders, exe));
+        assert_eq!(found.folders, vec![PathBuf::from("/work/elsewhere")], "the folder it names");
+        assert_eq!(found.at, vec![holding.clone()], "and the folder its settings are in");
+
+        // The machine's own settings have no folder to be in, whatever arrives — a removal names that
+        // file by the path it always has.
+        assert!(read(app("codex-cli"), &server(&folders, exe)).at.is_empty());
+
+        std::fs::remove_dir_all(&holding).ok();
+        std::fs::remove_dir_all(&bare).ok();
     }
 
     /// An old entry is answered with the folder whose settings hold it, not only the folder it names.

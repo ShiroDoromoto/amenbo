@@ -428,6 +428,18 @@ const REGISTRY: &[OpSpec] = &[
     // does today writes one — it is the state a repair exists for, so a scenario about the repair has
     // to put the folder in it, the way `repo write-file` puts a file a person already had.
     OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "legacy-pointer", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
+    // A pointer another store's build left in that folder. A device carries one store per channel —
+    // what a release installs, the one a developer builds, the throwaway one a task is checked in —
+    // and a pointer's `project_id` is a primary key in the numbering of the store that wrote it. So a
+    // folder claimed by one channel and then read by another lands on whatever that other one happens
+    // to keep at the same key, which is a different project under the same number.
+    //
+    // Only another store can leave one, since a build stamps its own name as it writes: the state is
+    // out of reach from the build under test the way a `legacy-pointer` is, and for the same reason it
+    // is made here instead. `store` is the name the folder was claimed by, and the road wants one this
+    // build is not — claimed by the build's own name is a folder it is welcome in, which is every
+    // other road in this file.
+    OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "foreign-pointer", required: &["dir", "store"], refs: &[], strings: &["dir", "store"], binds: false },
     // A folder that went somewhere else. Renamed, moved, restored beside where it was — to the
     // registry they are one thing, since what it holds is a path and the path no longer leads
     // anywhere. `dir` is the folder as it stood and `to` where it stands now, and what is in it
@@ -1182,6 +1194,20 @@ const REGISTRY: &[OpSpec] = &[
     // new one was recorded under a new number. What tells the two apart is the answer saying which
     // row it was, and it says it once. So this has to **follow its `rebind`**.
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "repointed", required: &["dir", "previously"], refs: &[], strings: &["dir", "previously"], binds: false },
+    // A folder another store claimed, met from a build that is not that store: the work stops, and the
+    // answer names the store the folder belongs to — which binary to run instead is the reader's to
+    // know, and nothing else on screen or on the wire says it.
+    //
+    // Refusing is the line under test rather than the reading. What stood here before was a warning,
+    // and a warning is answered by the write that follows it: by the time anyone reads the sentence,
+    // the command has already gone to work in the wrong project. So the verdict is taken on the door
+    // being shut — the guard is asked before a store is opened at all — and the store's name is read
+    // off the refusal, since a refusal that will not say whose folder this is leaves the reader
+    // nowhere to go.
+    //
+    // `dir` is the folder the question is asked from, so this follows that folder's `foreign-pointer`,
+    // and `store` is the name that has to be in what comes back.
+    OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "claimed", required: &["dir", "store"], refs: &[], strings: &["dir", "store"], binds: false },
     // The warning a project with no folder linked carries on its own board, and the one move that ends
     // it standing beside it. How much work the board holds is not part of the question: a project
     // carrying forty cards and no folder is exactly the one nothing else on the screen speaks about, so

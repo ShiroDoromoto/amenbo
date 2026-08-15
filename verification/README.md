@@ -473,7 +473,12 @@ which is what an assert there is written against.
 A few ops exist to put something **wrong**, because a repair cannot be shown working over a store
 where there is nothing to repair — and a sweep that sweeps nothing looks exactly like one that works.
 `folder legacy-pointer` leaves a bound folder's `.amenbo` in the shape an older build wrote, which is
-what `store doctor-fix` puts right. `plugin stale-manifest` leaves an installed plugin recording a
+what `store doctor-fix` puts right. `folder foreign-pointer` leaves one claimed by another store,
+which is what the guard in front of every read refuses — a build stamps its own name as it writes, so
+the one store that cannot leave another's pointer is the build under test. It is the run's own
+pointer with a different name on it, which is the fixture worth making: every other field agrees, and
+a pointer whose id and slug both check out is the one nothing but the name can turn away.
+`plugin stale-manifest` leaves an installed plugin recording a
 build the catalog has moved past, which is what `plugin update` puts right — the catalog publishes one
 build, and an asset is trusted only by the key of the catalog that served it, so there is no second
 build to install first and no way to sign one into existence. Three of the `plugin declare-…` ops put a setting into what an

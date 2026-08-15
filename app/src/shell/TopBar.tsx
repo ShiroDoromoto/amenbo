@@ -3,6 +3,7 @@ import { BrandMark } from "../components/BrandMark";
 import { reconcile, subscribeStoreChangeReflected } from "../core/snapshot";
 import { fetchDevBadge, openExternalUrl } from "../core/mutations";
 import { t } from "../core/i18n";
+import { Icon } from "../components/Icon";
 
 /** The product page, opened in the default browser by clicking "Amenbo" in the TopBar. */
 const PRODUCT_URL = "https://amenbo.work/";
@@ -64,7 +65,7 @@ export function TopBar({
         aria-pressed={sidebarCollapsed}
         onClick={onToggleSidebar}
       >
-        ☰
+        <Icon name="menu" />
       </button>
       <span className="topbar__nav">
         <button
@@ -74,7 +75,7 @@ export function TopBar({
           disabled={!canBack}
           onClick={onBack}
         >
-          ‹
+          <Icon name="chevronLeft" />
         </button>
         <button
           className="topbar__navbtn"
@@ -83,7 +84,7 @@ export function TopBar({
           disabled={!canForward}
           onClick={onForward}
         >
-          ›
+          <Icon name="chevronRight" />
         </button>
       </span>
       <button
@@ -92,7 +93,7 @@ export function TopBar({
         aria-label={t("topbar.refresh")}
         onClick={() => void reconcile("manual")}
       >
-        ↻
+        <Icon name="refresh" />
       </button>
       <div className="topbar__spacer" />
       {devBadge && <span className="topbar__envbadge">{devBadge}</span>}

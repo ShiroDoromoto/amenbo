@@ -33,8 +33,15 @@ export type IconName =
   | "gear"
   | "goose"
   | "chevronRight"
+  | "chevronLeft"
   | "chevronDown"
   | "plus"
+  | "menu"
+  | "refresh"
+  | "arrowUp"
+  | "arrowDown"
+  | "reply"
+  | "clock"
   | "blocked"
   | "warning"
   | "hourglass"
@@ -114,8 +121,11 @@ const ART: Record<IconName, ReactNode> = {
       <path d="M8.7 17c-2.3-.6-4-1-6-.4 1.4 2.6 4.6 4.1 8.4 4.1 3.4 0 6.1-1.3 7.5-3.2-3.3.9-6.7.5-9.9-.5z" />
     </>
   ),
-  // The disclosure pair — a section folded shut, and the same one open.
+  // The disclosure pair — a section folded shut, and the same one open. The two sideways
+  // ones double as "the one before / the one after" wherever a screen pages or steps: going
+  // back a page, a month, or a step in history is the one movement, so it is the one mark.
   chevronRight: <path d="M9.4 5.6 15.8 12l-6.4 6.4" />,
+  chevronLeft: <path d="M14.6 5.6 8.2 12l6.4 6.4" />,
   chevronDown: <path d="M5.6 9.4 12 15.8l6.4-6.4" />,
   // A plus — adding one more of what the section holds.
   plus: <path d="M12 4.8v14.4M4.8 12h14.4" />,
@@ -217,6 +227,35 @@ const ART: Record<IconName, ReactNode> = {
   // A paperclip — the words are in the name of something hung on the record.
   paperclip: (
     <path d="M20.6 11.2 12 19.8a5.4 5.4 0 0 1-7.6-7.6l8.6-8.6a3.6 3.6 0 0 1 5.1 5.1l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6l8-8" />
+  ),
+
+  // ----- the marks on the frame of a screen, which point at a move rather than at a record -----
+  // Three rules — the sidebar, folded away and brought back.
+  menu: <path d="M3.6 6.8h16.8M3.6 12h16.8M3.6 17.2h16.8" />,
+  // An arrow come full circle — read this screen again from the store.
+  refresh: (
+    <>
+      <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+      <path d="M21 3v5h-5" />
+    </>
+  ),
+  // Up and down — moving one row past its neighbour in an ordered list.
+  arrowUp: <path d="M12 20.2V4.2M5.6 10.6 12 4.2l6.4 6.4" />,
+  arrowDown: <path d="M12 3.8v16M5.6 13.4 12 19.8l6.4-6.4" />,
+  // An arrow turning back on itself — answering the line it points at.
+  reply: (
+    <>
+      <path d="M9.4 6.4 3.6 12l5.8 5.6" />
+      <path d="M3.6 12h10.6a6 6 0 0 1 6 6v1.8" />
+    </>
+  ),
+  // A stopwatch — when the thing that put this in the inbox happened.
+  clock: (
+    <>
+      <circle cx="12" cy="13.6" r="7.6" />
+      <path d="M12 9.4v4.2l2.8 1.7" />
+      <path d="M9.6 2.6h4.8M12 2.6v3.4" />
+    </>
   ),
 };
 

@@ -14,6 +14,7 @@
 // line they can walk past.
 import { useState } from "react";
 import { t } from "../core/i18n";
+import { Icon } from "../components/Icon";
 
 /** `onOpen` takes the reader to the screen where apps are connected. */
 export function McpSetup({ onOpen }: { onOpen: () => void }) {
@@ -28,7 +29,7 @@ export function McpSetup({ onOpen }: { onOpen: () => void }) {
       {/* A disclosure rather than a link straight out: what is behind it is one sentence saying why
           the road leaves this screen, and a reader who never wanted it never reads that either. */}
       <button className="btn mcp__toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
-        {open ? "▾" : "▸"} {t("mcp.open")}
+        <Icon name={open ? "chevronDown" : "chevronRight"} /> {t("mcp.open")}
       </button>
 
       {open && (

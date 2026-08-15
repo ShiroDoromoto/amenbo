@@ -190,11 +190,11 @@ export function SearchScreen({
 
       {total > 0 && (
         <div className="pager">
-          <button className="btn" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - SEARCH_PAGE))} aria-label="prev">‹</button>
+          <button className="btn" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - SEARCH_PAGE))} aria-label="prev"><Icon name="chevronLeft" /></button>
           <span className="pager__info">
             {tf("pager.range", { from: shown === 0 ? 0 : offset + 1, to: offset + shown, total })}
           </span>
-          <button className="btn" disabled={offset + shown >= total} onClick={() => setOffset(offset + SEARCH_PAGE)} aria-label="next">›</button>
+          <button className="btn" disabled={offset + shown >= total} onClick={() => setOffset(offset + SEARCH_PAGE)} aria-label="next"><Icon name="chevronRight" /></button>
         </div>
       )}
     </>

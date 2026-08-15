@@ -79,6 +79,8 @@ const scope = () => container.querySelector<HTMLSelectElement>("select")!;
 const rows = () => Array.from(container.querySelectorAll(".feed__item"));
 const button = (label: string) =>
   Array.from(container.querySelectorAll("button")).find((b) => b.textContent === label)!;
+// The pager buttons carry a mark rather than a character, so they answer to their label instead.
+const labelled = (label: string) => container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
 const type = (el: HTMLInputElement, value: string) => {
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
   act(() => {
@@ -188,7 +190,7 @@ describe("the search screen", () => {
     render();
     type(inputs()[0], "search");
     press(button(t("search.run")));
-    press(button("›")); // walk forward a page…
+    press(labelled("next")); // walk forward a page…
     expect(lastAsked().offset).toBeGreaterThan(0);
     press(button(t("search.face.comment"))); // …then narrow the face
     expect(lastAsked()).toMatchObject({ text: "search", kind: null, face: "comment", offset: 0 });

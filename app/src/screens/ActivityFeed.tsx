@@ -11,6 +11,7 @@ import {
   type ActivityFacetFilter,
 } from "../core/activityFilter";
 import type { ActivityItem } from "../mock/types";
+import { Icon } from "../components/Icon";
 
 // Windowing: history runs to thousands of rows, so the DOM holds only the viewport plus overscan.
 // Row height varies (rows can wrap), but an estimated ROW_H with a generous OVERSCAN always fills the
@@ -160,7 +161,7 @@ export function ActivityFeed({
                 <div className="feed__line">
                   <strong>{it.author.name}</strong>{" "}
                   {it.kind === "comment" ? tf("comment.quoted", { text: it.text ?? "" }) : it.event && eventText(it.event, it.target.title)}
-                  {it.burstCount ? <span className="faint"> ⌄</span> : null}
+                  {it.burstCount ? <span className="faint"> <Icon name="chevronDown" /></span> : null}
                 </div>
                 <div className="feed__meta">
                   <span>{agoLabel(it.at)}{it.editedAt && <span className="faint"> · {t("comment.edited")} {agoLabel(it.editedAt)}</span>}</span>
@@ -178,7 +179,7 @@ export function ActivityFeed({
                         actsOn === "task" ? onReplyToTask(it.target.id) : onReplyToDecision(it.target.id)
                       }
                     >
-                      ↩ {t("activity.reply")}
+                      <Icon name="reply" /> {t("activity.reply")}
                     </button>
                   )}
                   {inTauri() && actsOn && (
@@ -192,7 +193,7 @@ export function ActivityFeed({
                             : onEditDecisionComment(it.target.id, it.id)
                         }
                       >
-                        ✎
+                        <Icon name="pencil" />
                       </button>
                       <button
                         className="feed__action"

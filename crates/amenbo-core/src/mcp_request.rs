@@ -26,6 +26,12 @@
 //! of them, because there are two entries to take out: the one amenbo writes today, and the one an
 //! older amenbo left under a name it no longer uses ([`remove_stale`], `AMB-D-679`).
 //!
+//! **What goes is the entry, never the file it sat in.** Both removals say so, because an AI told only
+//! that the entry goes decides for itself what to do with a document the entry emptied — and half of
+//! these files are not the servers' alone ([`crate::mcp_apps`]): a session-start hook
+//! ([`crate::harness::request`]) lives beside them in the same document. Deleting the file there takes
+//! out what nobody asked about, and the wording is what keeps that from being the model's call.
+//!
 //! English, like the request the harness hands over: the recipient is a model, and one text is one
 //! text to keep in step with.
 
@@ -108,14 +114,16 @@ pub fn add(app: &McpApp, server: &Server) -> String {
 ///
 /// It takes out the whole entry, which is the whole selection: there is no per-project half of it to
 /// remove, so a reader who wants to keep some of the folders is setting the app up again with those,
-/// not editing this one out in pieces.
+/// not editing this one out in pieces. The file it sat in is not part of that — it stays, emptied or
+/// not, because what else is written in it is none of this request's business.
 pub fn remove(app: &McpApp, server: &Server) -> String {
     format!(
         "Please remove Amenbo from {label}.\n\
          \n\
          In `{settings}`, delete the MCP server entry named `{name}` and nothing else — the whole \
-         entry goes, with every folder it lists, and every other server in that file stays. Tell me \
-         what you changed.",
+         entry goes, with every folder it lists, and every other server in that file stays. Leave the \
+         file itself in place even if that entry was the last thing in it: it may hold settings that \
+         are not servers at all. Tell me what you changed.",
         label = app.label,
         settings = settings(app, server),
         name = crate::mcp::name(),
@@ -135,8 +143,9 @@ pub fn remove_stale(app: &McpApp, server: &Server, name: &str) -> String {
         "Please remove an Amenbo MCP server entry that an older Amenbo left behind, from {label}.\n\
          \n\
          In `{settings}`, delete the MCP server entry named `{name}` and nothing else — every other \
-         server in that file stays, the `{current}` entry Amenbo uses now included. Tell me what you \
-         changed.",
+         server in that file stays, the `{current}` entry Amenbo uses now included. Leave the file \
+         itself in place even if that entry was the last thing in it: it may hold settings that are \
+         not servers at all. Tell me what you changed.",
         label = app.label,
         settings = settings(app, server),
         current = crate::mcp::name(),
@@ -301,6 +310,33 @@ mod tests {
         assert!(said.contains("/work/shop/.cursor/mcp.json"), "{said}");
         assert!(!said.contains("```"), "there is nothing to fence: {said}");
         assert!(said.contains("stays"), "{said}");
+    }
+
+    /// Both removals say the container stays. An entry that was the last one in its file leaves a
+    /// document an AI is free to read as rubbish, and some of these documents hold a session-start
+    /// hook beside the servers — so the sentence is in the text rather than left to the model.
+    #[test]
+    fn a_removal_leaves_the_file_standing_when_the_entry_was_the_last_one() {
+        let folder = one("/work/shop");
+        let exe = Path::new("/usr/local/bin/amenbo");
+
+        for app in crate::mcp_apps::MCP_APPS {
+            for said in [
+                remove(app, &server(&folder, exe)),
+                remove_stale(app, &server(&folder, exe), "amenbo-greenhouse"),
+            ] {
+                assert!(
+                    said.contains("Leave the file itself in place"),
+                    "the file stays for {}: {said}",
+                    app.id
+                );
+                assert!(
+                    said.contains("even if that entry was the last thing in it"),
+                    "emptied included for {}: {said}",
+                    app.id
+                );
+            }
+        }
     }
 
     /// Clearing out an old entry names that entry, and says which one is not to go with it. Without

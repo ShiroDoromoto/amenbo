@@ -684,6 +684,57 @@ fn refuse_a_nested_worktree(cmd: &Option<Command>) -> Result<(), CliError> {
     }
 }
 
+/// Refuse to read a `.amenbo` that another store's build wrote (`AMB-D-685`) — the third of the guards
+/// that ask what this directory is before anything is dispatched. The pointer's `project_id` is a
+/// primary key in the store that wrote it, so a build of another channel reading it lands on whatever
+/// its own store keeps at that key; a dev store is seeded by copying another one, so the slug
+/// cross-check agrees all the way and says nothing.
+///
+/// Only the pointer is read ([`amenbo_core::binding::foreign_pointer`]) and no store is opened, so the
+/// answer is the same wherever this sits in the dispatch — which is why it can sit at the top, ahead of
+/// the commands that answer without a store at all.
+///
+/// The commands that **write** a pointer are outside it, and that is the whole way out: `bind` and
+/// `project add --dir` claim the folder for this store, `init` raises a project in it. Refusing those
+/// would leave a text editor as the only way to release a folder — the same reason `unbind` (the other
+/// way out) is outside the nested-worktree guard. So are the faces that decide nothing by this
+/// directory: `version`, `update`, `lint`, the git hooks, `agent-hook`, `plugin validate`,
+/// `plugin-runner`, and `mcp` (whose child meets this guard in the folder its call named).
+fn refuse_a_pointer_from_another_store(cmd: &Option<Command>) -> Result<(), CliError> {
+    match pointer_store_guard_target(cmd).and_then(|dir| amenbo_core::binding::foreign_pointer(&dir)) {
+        Some(foreign) => Err(CliError::pointer_other_store(
+            &foreign.dir.to_string_lossy(),
+            &foreign.recorded,
+            foreign.running,
+        )),
+        None => Ok(()),
+    }
+}
+
+/// Which folder [`refuse_a_pointer_from_another_store`] asks about — always the one this command would
+/// resolve a pointer from, which is where it was typed, or `None` when the command is outside the guard.
+/// Unlike [`nested_guard_target`] a `--dir` never enters into it: every command that names one is a
+/// command that writes the pointer, and those are exactly the ones outside.
+fn pointer_store_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBuf> {
+    let out_of_reach = matches!(
+        cmd,
+        Some(Command::Version)
+            | Some(Command::Update { .. })
+            | Some(Command::Lint { .. })
+            | Some(Command::GithookPreCommit)
+            | Some(Command::GithookCommitMsg { .. })
+            | Some(Command::AgentHook { .. })
+            | Some(Command::PluginRunner { .. })
+            | Some(Command::Plugin { sub: PluginCmd::Validate { .. } })
+            | Some(Command::Mcp { .. })
+            | Some(Command::Unbind { .. })
+            | Some(Command::Bind { .. })
+            | Some(Command::Init { .. })
+            | Some(Command::Project { sub: ProjectCmd::Add { .. } })
+    );
+    (!out_of_reach).then(|| std::env::current_dir().ok()).flatten()
+}
+
 /// Is there a `.amenbo` pointer in the current directory (or above it)? An explicit AMENBO_HOME /
 /// AMENBO_PROJECT_DIR is the caller's business to allow for; this is nothing but the pointer search.
 fn pointer_present() -> bool {
@@ -743,6 +794,10 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     // upward walk this guard makes would judge a folder that decides nothing here.
     if plugin_window.is_none() {
         refuse_a_nested_worktree(&cli.command)?;
+        // And whether the pointer this directory offers is even ours to read (`AMB-D-685`). A plugin is
+        // outside it for the same reason: the store it works was named to it, so the folder its
+        // launcher happened to stand in decides nothing here.
+        refuse_a_pointer_from_another_store(&cli.command)?;
     }
     // Init creates the store itself, so do not open one first.
     match &cli.command {
@@ -1412,6 +1467,41 @@ mod tests {
             None,
             "a --dir that names no directory is `project add`'s to report, not this guard's",
         );
+    }
+
+    /// The pointer-store guard holds every command that would **read** this folder's pointer, and lets
+    /// through the three that write one — otherwise a folder another store claimed could only be
+    /// released with a text editor (`AMB-D-685`).
+    #[test]
+    fn the_pointer_store_guard_lets_through_the_commands_that_would_release_the_folder() {
+        use clap::Parser;
+        let parse = |args: &[&str]| Cli::try_parse_from(args).expect("parses").command;
+        let asks = |args: &[&str]| pointer_store_guard_target(&parse(args)).is_some();
+
+        for read in [
+            vec!["amenbo", "status"],
+            vec!["amenbo", "task", "list"],
+            vec!["amenbo", "agent"],
+            vec!["amenbo", "doctor"],
+        ] {
+            assert!(asks(&read), "a command that reads the pointer is held to the guard: {read:?}");
+        }
+        for way_out in [
+            vec!["amenbo", "bind", "--project", "7"],
+            vec!["amenbo", "init", "--name", "Alice"],
+            vec!["amenbo", "unbind"],
+            vec!["amenbo", "project", "add", "--name", "P", "--dir", "/tmp"],
+        ] {
+            assert!(!asks(&way_out), "the way out of a claimed folder is not refused: {way_out:?}");
+        }
+        for store_free in [
+            vec!["amenbo", "version"],
+            vec!["amenbo", "lint", "--stdin"],
+            vec!["amenbo", "agent-hook", "snippet", "cursor"],
+            vec!["amenbo", "mcp", "--dir", "/tmp"],
+        ] {
+            assert!(!asks(&store_free), "a face that decides nothing by this folder: {store_free:?}");
+        }
     }
 
     /// Every sub-command must be registered in `agent --json`, or an AI never learns it exists. amenbo is a

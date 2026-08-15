@@ -1,10 +1,12 @@
 //! Directory ↔ project bindings. **Local, never synced.**
 //!
 //! - `.amenbo` (the dir→project **pointer**): a marker dropped in the current directory (or found by
-//!   walking upward). Its `project_id` names the current project; there is only one store, so the
-//!   pointer plays no part in selecting one. **Store contents and secrets never live here** — it is a
-//!   small static JSON file, safe even inside an iCloud-synced tree. Several directories may point at
-//!   the same `project_id` (many-to-one).
+//!   walking upward). Its `project_id` names the current project **inside the store its `store` field
+//!   names** ([`DirBinding::store`]): a device holds one store per channel (production, `amenbo-dev`,
+//!   a throwaway `amenbo-dev-<task>`), and a folder belongs to one of them, so a binary of another
+//!   channel is refused here rather than reading the id as its own ([`foreign_pointer`], `AMB-D-685`).
+//!   **Store contents and secrets never live here** — it is a small static JSON file, safe even inside
+//!   an iCloud-synced tree. Several directories may point at the same `project_id` (many-to-one).
 //! - The binding registry ([`Registry`]: project→dirs and back): the local record behind "work on this
 //!   project in this folder". It lives in the consolidated store's `binding_project_dir` table
 //!   ([`crate::overview`]). If a recorded path has vanished we return `binding_stale` rather than
@@ -18,15 +20,37 @@ use serde::{Deserialize, Serialize};
 use crate::error::Result;
 use crate::store::Store;
 
+/// The shape this build writes into a `.amenbo`. It is the pointer's **own** version, not the managed
+/// block's ([`crate::agents::MANAGED_BLOCK_VERSION`]): a JSON schema and a block of prose change for
+/// different reasons, and sharing one number would have each of them rewrite the other for nothing.
+/// A pointer written in an older shape is brought up to this one where it is resolved
+/// ([`resolve_upward`]).
+///
+/// - `1` — `{v, project_id, slug}`: the store it belongs to is not written down.
+/// - `2` — `store` added (`AMB-D-685`).
+pub const POINTER_VERSION: u32 = 2;
+
 /// The contents of a `.amenbo` pointer.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DirBinding {
     pub v: u32,
+    /// The app-data store this pointer was written against ([`crate::config::Paths::APP_NAME`]) —
+    /// production `amenbo`, the shared `amenbo-dev`, or a throwaway `amenbo-dev-<task>`. **It is the
+    /// one field resolution refuses on**: `project_id` is a per-store primary key, so another
+    /// channel's build reading this pointer would land on whatever its own store happens to keep at
+    /// that key. The slug cross-check ([`DirBinding::slug`]) cannot catch it, since a dev store is
+    /// seeded by copying another one and carries the same ids and the same slugs.
+    /// `None` is a version-1 pointer, written before the field existed: it is **not** refused (nothing
+    /// says it belongs elsewhere), and [`resolve_upward`] fills it in only where this store can
+    /// confirm the pointer is its own.
+    #[serde(default)]
+    pub store: Option<String>,
     /// Primary key (INTEGER) of the bound project; `None` while it is still undecided (right after
     /// `init`, say). Exposing an internal primary key as an external identifier is safe here because
-    /// there is a single store and the key is stable — the one dangerous case, "export, take the data
-    /// into another environment, and the id now means something else", is exactly what the
-    /// [`DirBinding::slug`] cross-check catches. Unknown keys in the pointer are **skipped silently**
+    /// the key is stable inside the store that issued it — and the two ways it could stop meaning that
+    /// are each answered beside it: another channel's store by [`DirBinding::store`] (refused), and
+    /// "export, take the data into another environment, and the id now means something else" by the
+    /// [`DirBinding::slug`] cross-check (warned). Unknown keys in the pointer are **skipped silently**
     /// by serde's default: an old pointer still parses, and the stale keys disappear on the next write.
     #[serde(default, deserialize_with = "integer_id_or_none")]
     pub project_id: Option<i64>,
@@ -49,8 +73,33 @@ fn integer_id_or_none<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Re
 }
 
 impl DirBinding {
+    /// A pointer in the shape this build writes: it stamps **its own** store name, so the folder is
+    /// left naming the store whose binary claimed it.
     pub fn new(project_id: Option<i64>, slug: Option<String>) -> DirBinding {
-        DirBinding { v: 1, project_id, slug }
+        DirBinding {
+            v: POINTER_VERSION,
+            store: Some(crate::config::Paths::APP_NAME.to_string()),
+            project_id,
+            slug,
+        }
+    }
+
+    /// The store name recorded here when it is **not** the running binary's — the material for a
+    /// refusal. `None` covers both healthy cases: the names agree, or the pointer is a version-1 one
+    /// that records no store at all (there is nothing saying it belongs elsewhere, so it is read).
+    pub fn mismatched_store(&self) -> Option<&str> {
+        let recorded = self.store.as_deref()?;
+        (recorded != crate::config::Paths::APP_NAME).then_some(recorded)
+    }
+
+    /// Is this pointer written in an older shape than [`POINTER_VERSION`]? That is the question
+    /// [`resolve_upward`] branches on to rewrite it where it stands. It is **not**
+    /// [`is_legacy_pointer`], which asks something else entirely: that one is a pointer whose
+    /// `project_id` cannot be read at all, so it needs recovering through the registry before anything
+    /// can be written back, and `doctor` reports it as work. This one resolves perfectly well and
+    /// merely predates a field, so nobody is told about it — it simply follows.
+    pub fn outdated(&self) -> bool {
+        self.v < POINTER_VERSION
     }
 
     /// If the recorded slug disagrees with the real slug (`actual`) of the project `project_id` names,
@@ -137,6 +186,50 @@ pub fn slug_mismatch(store: &Store, binding: &DirBinding) -> Option<SlugMismatch
     Some(SlugMismatch { project_id, recorded, actual })
 }
 
+/// A `.amenbo` found above this directory that names **another store** — the folder was claimed by a
+/// build of a different channel (production against `amenbo-dev`, or a throwaway `amenbo-dev-<task>`),
+/// and its `project_id` is a key in that store's numbering, not in ours.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ForeignPointer {
+    /// The folder holding the pointer — the one to re-link, which is rarely the CWD.
+    pub dir: PathBuf,
+    /// The store name written in it.
+    pub recorded: String,
+    /// The store name of the binary that is refusing.
+    pub running: &'static str,
+}
+
+/// Refuse-or-pass, asked **before a store is opened**: does the pointer this invocation would resolve
+/// belong to another store (`AMB-D-685`)? `None` is "carry on" — the names agree, the pointer predates
+/// the field, or there is no pointer at all.
+///
+/// Only the pointer is read, so this answers the same in every command and needs nothing from app-data;
+/// what an id in it *would* have meant here is exactly what must not be worked out. It is asked of the
+/// nearest pointer upward, since that is the one resolution would take.
+pub fn foreign_pointer(start: &Path) -> Option<ForeignPointer> {
+    let (dir, binding) = find_upward(start)?;
+    Some(ForeignPointer {
+        dir,
+        recorded: binding.mismatched_store()?.to_string(),
+        running: crate::config::Paths::APP_NAME,
+    })
+}
+
+/// Does this store hold **positive evidence** that the pointer is its own — the project the id names is
+/// live here, and the slug written beside it is that project's? This is what a version-1 pointer has to
+/// clear before [`resolve_upward`] stamps this store's name onto it. A live id alone is not evidence:
+/// ids are per-store primary keys and a dev store is seeded from another one, so the first binary to
+/// walk into the folder would take it from the store it really belongs to. A pointer that cannot be
+/// confirmed is simply left in the old shape — nothing refuses it, and the next binary that *can*
+/// confirm it will finish the job.
+fn store_confirms(store: &Store, binding: &DirBinding) -> bool {
+    let Some(project_id) = binding.project_id else { return false };
+    let (Some(recorded), Ok(Some(project))) = (binding.slug.as_deref(), store.project(project_id)) else {
+        return false;
+    };
+    project.slug.as_deref() == Some(recorded)
+}
+
 /// Of the projects that the registry's reverse lookup ([`Registry::projects_for_dir`]) says claim this
 /// folder, only those that **still read back** from the store (ascending). A deleted project's rows are
 /// physically gone while its registry entry is only released by a best-effort teardown, so an entry can
@@ -162,7 +255,9 @@ pub fn live_projects_claiming(store: &Store, dir: &Path) -> Vec<i64> {
 /// answer **only when it lands on exactly one live project**; zero or several are returned as still
 /// undecided rather than silently picking a project (`doctor`'s [`legacy_pointers`] surfaces those).
 /// Once resolved, the pointer is rewritten in place into the current shape (`project_id` + `slug`), so
-/// it heals the next time amenbo runs in that folder. The write is best-effort: on a read-only
+/// it heals the next time amenbo runs in that folder. A pointer that resolves perfectly well but was
+/// written in an older shape ([`DirBinding::outdated`]) follows the same road for the same reason —
+/// that is how the store name reaches the pointers that predate it. The write is best-effort: on a read-only
 /// filesystem we resolve, give up quietly, and do not fail a read command. The compatibility read has
 /// no expiry date — folders cannot be enumerated, so there is no way to know that the last old pointer
 /// is gone, and the cost is bounded at a single reverse lookup taken only when `project_id` is `None`.
@@ -174,6 +269,17 @@ pub fn resolve_upward(store: &Store, start: &Path) -> Option<(PathBuf, DirBindin
     let (dir, binding) = find_upward(start)?;
     crate::agents::follow_stale_block(&dir, crate::config::Paths::command_name());
     if binding.project_id.is_some() {
+        // A pointer written in an older shape follows to the current one here, on the same occasion as
+        // the managed block above. **Comparing comes before writing**: a pointer that names another
+        // store is left exactly as it is (the CLI refused the invocation long before this, but nothing
+        // here relies on that), and one that names none is only stamped where this store can confirm
+        // the pointer is its own (store_confirms) — the other way round, the first binary to walk
+        // into the folder would take it from whoever it belongs to.
+        if binding.outdated() && binding.mismatched_store().is_none() && store_confirms(store, &binding) {
+            let upgraded = pointer_for(store, binding.project_id?);
+            let _ = upgraded.write(&dir);
+            return Some((dir, upgraded));
+        }
         return Some((dir, binding));
     }
     let [project_id] = live_projects_claiming(store, &dir)[..] else {
@@ -904,6 +1010,88 @@ mod tests {
         reg.record_project_ref(pid, dir.to_string_lossy());
         store.save_bindings(&reg).unwrap();
         assert!(legacy_pointers(&store).is_empty(), "a current-shape pointer does not show up in doctor");
+    }
+
+    /// A pointer another store's build wrote is refused where it is found, and the folder it names is
+    /// the one holding it (rarely the CWD). What agrees, and what predates the field, is read as
+    /// before — the refusal is for a name that disagrees, never for a name that is missing.
+    #[test]
+    fn a_pointer_written_by_another_store_is_refused_from_wherever_amenbo_runs() {
+        let running = crate::config::Paths::APP_NAME;
+        let root = tmp("foreign");
+        let nested = root.join("crates").join("amenbo-cli");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(
+            root.join(".amenbo"),
+            format!(r#"{{"v":2,"store":"{running}-dev-3185","project_id":7,"slug":"amenbo"}}"#),
+        )
+        .unwrap();
+
+        // Found by the upward walk, so running deep inside the tree is refused the same way, and the
+        // folder to re-link is the one that actually holds the pointer.
+        let foreign = foreign_pointer(&nested).expect("another store's pointer is refused");
+        assert_eq!(foreign.dir, root);
+        assert_eq!(foreign.recorded, format!("{running}-dev-3185"));
+        assert_eq!(foreign.running, running);
+
+        // This store's own name: nothing to refuse.
+        DirBinding::new(Some(7), Some("amenbo".into())).write(&root).unwrap();
+        assert!(foreign_pointer(&nested).is_none(), "a pointer this build wrote is its own to read");
+
+        // A version-1 pointer records no store, so nothing says it belongs elsewhere.
+        std::fs::write(root.join(".amenbo"), r#"{"v":1,"project_id":7,"slug":"amenbo"}"#).unwrap();
+        assert!(foreign_pointer(&nested).is_none(), "a pointer that predates the field is read, not refused");
+
+        // And a folder with no pointer at all has nothing to say either.
+        assert!(foreign_pointer(&tmp("foreign-bare")).is_none());
+    }
+
+    /// A version-1 pointer gains this store's name where amenbo runs in that folder — but **only where
+    /// this store can confirm the pointer is its own** (the id is live here and the slug beside it is
+    /// that project's). Ids are per-store primary keys, so taking a folder on a live id alone would let
+    /// the first binary to walk in claim what belongs to another store.
+    #[test]
+    fn a_version_1_pointer_is_stamped_with_this_store_only_where_this_store_can_confirm_it() {
+        let (store, pid) = store_with_project("stamp", "案件X");
+        let slug = store.project(pid).unwrap().unwrap().slug.expect("a project is given a slug");
+        let v1 = |dir: &Path, id: i64, recorded: &str| {
+            std::fs::write(
+                dir.join(".amenbo"),
+                format!(r#"{{"v":1,"project_id":{id},"slug":"{recorded}"}}"#),
+            )
+            .unwrap();
+        };
+
+        // Confirmed: the id is live here and the slug is that project's.
+        let mine = tmp("stamp-mine");
+        v1(&mine, pid, &slug);
+        let (_, upgraded) = resolve_upward(&store, &mine).expect("it resolves");
+        assert_eq!(upgraded.v, POINTER_VERSION);
+        assert_eq!(upgraded.store.as_deref(), Some(crate::config::Paths::APP_NAME));
+        assert_eq!(upgraded.project_id, Some(pid), "the binding itself is unchanged");
+        assert_eq!(read_pointer(&mine).unwrap().store.as_deref(), Some(crate::config::Paths::APP_NAME));
+
+        // The slug disagrees: this pointer came from somewhere else, so we take nothing.
+        let theirs = tmp("stamp-theirs");
+        v1(&theirs, pid, "wharfy");
+        let raw = std::fs::read_to_string(theirs.join(".amenbo")).unwrap();
+        assert_eq!(resolve_upward(&store, &theirs).unwrap().1.store, None, "unclaimed");
+        assert_eq!(std::fs::read_to_string(theirs.join(".amenbo")).unwrap(), raw, "and untouched on disk");
+
+        // The id names no project here: no evidence either, and nothing to write a slug from.
+        let absent = tmp("stamp-absent");
+        v1(&absent, pid + 999, &slug);
+        let raw = std::fs::read_to_string(absent.join(".amenbo")).unwrap();
+        assert_eq!(resolve_upward(&store, &absent).unwrap().1.store, None);
+        assert_eq!(std::fs::read_to_string(absent.join(".amenbo")).unwrap(), raw);
+
+        // Comparing comes before writing: a pointer naming another store keeps its name, whatever this
+        // store would have made of the id (the CLI refused the run long before this).
+        let foreign = tmp("stamp-foreign");
+        let raw = format!(r#"{{"v":1,"store":"somewhere-else","project_id":{pid},"slug":"{slug}"}}"#);
+        std::fs::write(foreign.join(".amenbo"), &raw).unwrap();
+        assert_eq!(resolve_upward(&store, &foreign).unwrap().1.store.as_deref(), Some("somewhere-else"));
+        assert_eq!(std::fs::read_to_string(foreign.join(".amenbo")).unwrap(), raw, "not claimed");
     }
 
     /// A deleted project is not an owner, so we never write back a pointer naming a project that is

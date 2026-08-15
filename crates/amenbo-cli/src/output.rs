@@ -60,6 +60,7 @@ pub enum CliErrorCode {
     ProjectDirBound,
     BindingNestedTree,
     NestedWorktree,
+    PointerOtherStore,
     UnbindNoBinding,
     FacetRequired,
     AiGuardrail,
@@ -84,6 +85,7 @@ impl CliErrorCode {
             CliErrorCode::ProjectDirBound => "project_dir_bound",
             CliErrorCode::BindingNestedTree => "binding_nested_tree",
             CliErrorCode::NestedWorktree => "nested_worktree",
+            CliErrorCode::PointerOtherStore => "pointer_other_store",
             CliErrorCode::UnbindNoBinding => "unbind_no_binding",
             CliErrorCode::FacetRequired => "facet_required",
             CliErrorCode::AiGuardrail => "ai_guardrail",
@@ -104,6 +106,7 @@ impl CliErrorCode {
         CliErrorCode::ProjectDirBound,
         CliErrorCode::BindingNestedTree,
         CliErrorCode::NestedWorktree,
+        CliErrorCode::PointerOtherStore,
         CliErrorCode::UnbindNoBinding,
         CliErrorCode::FacetRequired,
         CliErrorCode::AiGuardrail,
@@ -350,6 +353,30 @@ impl CliError {
             ),
             hint: Some(format!(
                 "Operate amenbo in the project folder itself ({bound_dir}). Cut worktrees outside it, where there is no binding to inherit."
+            )),
+            exit: 1,
+        }
+    }
+
+    /// Pointer-store guard: the `.amenbo` this invocation would resolve was written by a build of
+    /// another channel (`AMB-D-685`). Its `project_id` is a primary key in *that* store's numbering, so
+    /// reading it here lands on whatever this store happens to keep at the same key — and the slug
+    /// cross-check cannot catch it, a dev store being seeded by copying another one, ids, slugs and all.
+    /// Refusing beats warning for the reason [`CliError::nested_worktree`] gives: what a warning cannot
+    /// undo is the write that follows it.
+    ///
+    /// The way out is to claim the folder for this store (`bind`), or to run the build it already
+    /// belongs to. Both are named, because which one is right is the user's to know: a repository
+    /// opened with the wrong build wants the other binary, a folder handed over for good wants `bind`.
+    pub fn pointer_other_store(dir: &str, recorded: &str, running: &str) -> CliError {
+        CliError {
+            code: CliErrorCode::PointerOtherStore.as_str(),
+            message: format!(
+                "This folder's .amenbo ({dir}) belongs to {recorded}, and this is {running}. The project it names is {recorded}'s, so reading it here would land on a different project."
+            ),
+            hint: Some(format!(
+                "Run {recorded} here instead, or hand the folder to {running} with `{} bind --project <name or ID>`.",
+                Paths::command_name()
             )),
             exit: 1,
         }
@@ -722,6 +749,7 @@ mod tests {
             "project_dir_bound",
             "binding_nested_tree",
             "nested_worktree",
+            "pointer_other_store",
             "unbind_no_binding",
             "facet_required",
             "ai_guardrail",

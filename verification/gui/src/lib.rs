@@ -1417,6 +1417,28 @@ impl Instructor {
                 ),
                 other => return Err(format!("assert `mcp-road` does not know the road `{other}`")),
             },
+            // That road with nothing ticked to send down it. The line names how the button is drawn
+            // rather than what a press does, the way the other shut way out is read: a press that goes
+            // nowhere is not the reading, and a button shut while drawn like a live one is the state
+            // this closes. It says which button by what it does, since which one a row carries is the
+            // catalog's word.
+            (Domain::Repo, "mcp-road-shut") => {
+                let which = match req(with, "road")? {
+                    "file" => "writes the file",
+                    "request" => "takes the request",
+                    other => {
+                        return Err(format!("assert `mcp-road-shut` does not know the road `{other}`"))
+                    }
+                };
+                format!(
+                    "With the row for \"{}\" open and no project ticked on it, confirm the button that \
+                     {which} is drawn as one that cannot be pressed: faded beside the buttons on this \
+                     screen that can be, and answering the pointer with neither a hand cursor nor a \
+                     colour of its own. What is ticked is what goes over, so an empty row has nothing \
+                     to hand anybody — and a live button here hands one on.",
+                    req(with, "app")?
+                )
+            }
             // The file taken the rest of the way: into the app it was written for, and read there. The
             // line carries what the operator has to have in place before the step can be walked at all,
             // because none of it is amenbo's to stand up — an app that has not been updated, or has

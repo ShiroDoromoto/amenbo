@@ -1079,6 +1079,19 @@ const REGISTRY: &[OpSpec] = &[
     // A `Review`: what separates the two is the label on a button, and a label is a word of the
     // interface.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "mcp-road", required: &["app", "road"], refs: &[], strings: &["app", "road"], binds: false },
+    // That same road, read while the row has nothing ticked. What is ticked *is* what goes over — the
+    // file names those folders and the request carries them — so an empty selection has nothing to hand
+    // anybody, and the road has to say so before it is pressed rather than after: a request handed over
+    // naming no folder is written into another app's settings as an entry that cannot run, and by then
+    // it is in a file amenbo does not own.
+    //
+    // It takes `road` for the same reason `mcp-road` does: which button a row carries is the catalog's
+    // word, so the step names the one it means by what that button does.
+    //
+    // A `Review`, like the other way out drawn shut: what separates a shut button from a live one is
+    // paint, which leaves no text on a shot either way. A screen road alone — a button is a face, and
+    // the CLI has none.
+    OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "mcp-road-shut", required: &["app", "road"], refs: &[], strings: &["app", "road"], binds: false },
     // Ticking a row's projects and taking the road it offers — the one move on this screen that writes
     // anything. What goes out is the **whole** selection every time, so the step names every project
     // that is to be ticked and says the rest are to be left clear: a build that added to what was there

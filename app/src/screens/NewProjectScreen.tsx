@@ -19,9 +19,9 @@ import { useCliCommandName } from "../core/cliCommand";
 import { createProject, pickFolder, revealFolder } from "../core/mutations";
 import { inTauri } from "../core/snapshot";
 import { errText, t, tf } from "../core/i18n";
-import { ErrorNote } from "../components/ErrorNote";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import type { Nav } from "../shell/AppShell";
+import { ErrorNote } from "../components/ErrorNote";
 
 // The project that was created, handed to the done step: id = where the board opens, name = the heading, dir = the linked folder or null.
 type Created = { id: number; name: string; dir: string | null };
@@ -76,7 +76,7 @@ export function NewProjectScreen({ onCreated, onCancel, onOpenMcp }: { onCreated
       </div>
       <div className="newproj">
         <label className="newproj__field">
-          <span className="newproj__label">{t("newproj.nameLabel")}</span>
+          <span className="fieldlabel">{t("newproj.nameLabel")}</span>
           <input
             {...asTyped}
             className="newproj__input"
@@ -90,13 +90,13 @@ export function NewProjectScreen({ onCreated, onCancel, onOpenMcp }: { onCreated
 
         {inTauri() && (
           <div className="newproj__field">
-            <span className="newproj__label">{t("newproj.folderLabel")}</span>
-            <span className="newproj__hint">{t("newproj.folderHint")}</span>
+            <span className="fieldlabel">{t("newproj.folderLabel")}</span>
+            <span className="hint">{t("newproj.folderHint")}</span>
             {/* Changing the choice, but not undoing it: clearing would put the form back in the one
                 state it cannot be created from, which is not a move worth offering. */}
             {dir ? (
               <div className="newproj__folder">
-                <code className="newproj__path">{dir}</code>
+                <code className="path">{dir}</code>
                 <button className="btn" onClick={() => void chooseFolder()} disabled={busy}>{t("newproj.changeFolder")}</button>
               </div>
             ) : (
@@ -151,7 +151,7 @@ function DoneStep({ created, onOpenBoard, onOpenMcp }: { created: Created; onOpe
         {dir && (
           <div className="newproj__capability">
             <p>{t("newproj.doneCapability")}</p>
-            <code className="newproj__path">{dir}</code>
+            <code className="path">{dir}</code>
           </div>
         )}
 
@@ -159,7 +159,7 @@ function DoneStep({ created, onOpenBoard, onOpenMcp }: { created: Created; onOpe
           <>
             <FirstLoop dir={dir} />
             <div className="newproj__next">
-              <span className="newproj__label">{t("newproj.moreTitle")}</span>
+              <span className="fieldlabel">{t("newproj.moreTitle")}</span>
               <div className="newproj__nextrow">
                 <button className="btn" onClick={() => void reveal()}>📂 {t("newproj.openFinder")}</button>
                 <button className="btn" onClick={() => void copyStatus()}>

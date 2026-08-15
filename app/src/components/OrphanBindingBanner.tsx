@@ -56,7 +56,7 @@ export function OrphanBindingBanner() {
 
   return (
     <div className="healthbanner managedblock-banner" role="alert">
-      <Icon name="warn" size="lg" />
+      <Icon name="warning" size="lg" />
       <div className="healthbanner__body">
         <div className="healthbanner__title">{t("orphanBinding.title")}</div>
         <div className="healthbanner__line">{tn("orphanBinding.hint", dirs.length)}</div>

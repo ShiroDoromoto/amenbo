@@ -9,8 +9,8 @@ import { useTaskCommits, type TaskCommit } from "../core/reads";
 import { addTaskCommit, removeTaskCommit } from "../core/mutations";
 import { confirmDialog } from "../core/dialog";
 import { errText, t, tf } from "../core/i18n";
-import { ErrorNote } from "./ErrorNote";
 import { asTyped } from "../core/keys";
+import { ErrorNote } from "./ErrorNote";
 
 /** Copy a SHA to the clipboard, flipping a "copied" hint for a moment. Best-effort — a clipboard failure is silent. */
 function CopyButton({ sha }: { sha: string }) {

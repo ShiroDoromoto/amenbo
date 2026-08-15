@@ -427,7 +427,7 @@ describe("the screen where an AI is connected", () => {
     hoisted.readFails = "the store is locked";
     await render({ projects: [SHOP], apps: [app()] });
 
-    const said = container.querySelector(".settings__body > .errornote");
+    const said = container.querySelector(".settings__body > .errortext");
     expect(said?.textContent).toContain(t("app.loadError"));
     expect(said?.textContent).toContain("the store is locked"); // the door's own words, under amenbo's
     expect(container.textContent).not.toContain(t("app.loading"));
@@ -452,7 +452,7 @@ describe("the screen where an AI is connected", () => {
     // screen names none of them.
     expect(rows()[0].textContent).toContain("no room on the disk");
     expect(rows()[1].textContent).not.toContain("no room on the disk");
-    expect(container.querySelector(".settings__body > .errornote")).toBeNull();
+    expect(container.querySelector(".settings__body > .errortext")).toBeNull();
     // And where the last write landed is not left standing beside the one that did not.
     expect(container.querySelector(".mcp__saved")).toBeNull();
   });

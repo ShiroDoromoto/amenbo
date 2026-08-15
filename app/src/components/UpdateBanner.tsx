@@ -130,7 +130,7 @@ export function UpdateCheckFeedback({
   const failed = state === "error";
   return (
     <div className="healthbanner" role="status">
-      {failed ? <Icon name="warn" size="lg" /> : <span className="healthbanner__icon" aria-hidden>✓</span>}
+      {failed ? <Icon name="warning" size="lg" /> : <span className="healthbanner__icon" aria-hidden>✓</span>}
       <div className="healthbanner__body">
         <div className="healthbanner__title">
           {failed ? t("update.checkFailed") : tf("update.upToDate", { version: appVersion })}

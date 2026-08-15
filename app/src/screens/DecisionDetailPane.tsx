@@ -15,9 +15,9 @@ import { confirmDialog } from "../core/dialog";
 import { isClosed } from "../core/status";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { errText, formatNumber, statusLabel, t, tf } from "../core/i18n";
+import { decisionRef } from "../core/idref";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
-import { decisionRef } from "../core/idref";
 
 // Colour of the status badge — keep it matching DecisionsScreen's statusColor. The badge says the status
 // and nothing else (`AMB-D-410`); that this decision was overturned is an edge, and the edge list below
@@ -384,7 +384,7 @@ function DecisionEdges({ d, onOpenDecision }: {
           </button>
           {r.staleBy && (
             <span style={{ marginLeft: 6, color: "#c0504d" }}>
-              <Icon name="warn" /> {tf("dec.premiseStale", { premise: r.target.ref ?? decisionRef(r.target.id), by: r.staleBy })}
+              <Icon name="warning" /> {tf("dec.premiseStale", { premise: r.target.ref ?? decisionRef(r.target.id), by: r.staleBy })}
             </span>
           )}
           {inTauri() && (
@@ -472,7 +472,7 @@ function DecisionEdgeCompose({ d, projectId }: { d: Decision; projectId: number 
         <button className="btn" onClick={() => { setOpen(false); setQuery(""); }}>{t("dec.edge.cancel")}</button>
       </div>
       {promotesToAccepted(d, kind) && (
-        <div style={{ fontSize: "var(--fs-sm)", color: "#c0504d" }}><Icon name="warn" /> {t("dec.edge.supersedeAccepts")}</div>
+        <div style={{ fontSize: "var(--fs-sm)", color: "#c0504d" }}><Icon name="warning" /> {t("dec.edge.supersedeAccepts")}</div>
       )}
       {error && <ErrorNote>{error}</ErrorNote>}
       {candidates.length === 0 ? (

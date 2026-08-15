@@ -3,8 +3,6 @@ import { Markdown } from "../components/Markdown";
 import { Attachments } from "../components/Attachments";
 import { Commits } from "../components/Commits";
 import { CommentRow } from "../components/CommentRow";
-import { ErrorNote } from "../components/ErrorNote";
-import { Icon } from "../components/Icon";
 import { useStore } from "../store/store";
 import { dataAdapter } from "../mock/adapter";
 import { getSnapshot, inTauri } from "../core/snapshot";
@@ -19,6 +17,8 @@ import { agoLabel, errText, eventText, priorityLabel, t, tf } from "../core/i18n
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { useRefNav } from "../core/refNav";
 import type { Actor, ActivityItem, Facet, Placement, Priority, TaskCard } from "../mock/types";
+import { ErrorNote } from "../components/ErrorNote";
+import { Icon } from "../components/Icon";
 
 // The placement to display. The Tauri DTO already carries task.placement (name included); the mock
 // fallback builds one by resolving projectId against snapshot.projects.
@@ -363,7 +363,7 @@ export function TaskDetailPane({
                         title={unsettled ? t("detail.premiseUnsettled") : undefined}
                         onClick={() => onSelectDecision?.(d.id)}
                       >
-                        {unsettled && <><Icon name="warn" />{" "}</>}{d.ref ?? ""} {d.name ?? t("dec.unknownName")}
+                        {unsettled && <><Icon name="warning" />{" "}</>}{d.ref ?? ""} {d.name ?? t("dec.unknownName")}
                       </button>
                     </span>
                   );

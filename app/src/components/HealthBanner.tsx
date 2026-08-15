@@ -58,7 +58,7 @@ export function HealthBanner() {
   }
   return (
     <div className="healthbanner" role="alert">
-      <Icon name="warn" size="lg" />
+      <Icon name="warning" size="lg" />
       <div className="healthbanner__body">
         <div className="healthbanner__title">{t("health.title")}</div>
         {lines.map((message, i) => (

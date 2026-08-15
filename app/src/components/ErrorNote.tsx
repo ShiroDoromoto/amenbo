@@ -19,8 +19,8 @@ import { Icon } from "./Icon";
  */
 export function ErrorNote({ children, tone = "danger" }: { children: ReactNode; tone?: "danger" | "quiet" }) {
   return (
-    <div className={tone === "quiet" ? "errornote errornote--quiet" : "errornote"} role="alert">
-      <Icon name="warn" />
+    <div className={tone === "quiet" ? "errortext errortext--quiet" : "errortext"} role="alert">
+      <Icon name="warning" />
       <span>{children}</span>
     </div>
   );

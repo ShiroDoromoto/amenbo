@@ -15,7 +15,7 @@ import { Icon } from "../components/Icon";
 export function LinkFolderNotice({ onLinkFolder }: { onLinkFolder: () => void }) {
   return (
     <div className="boardwarn" role="status">
-      <div className="boardwarn__title"><Icon name="warn" /> {t("noFolder.title")}</div>
+      <div className="boardwarn__title"><Icon name="warning" /> {t("noFolder.title")}</div>
       <div className="boardwarn__what">{t("noFolder.hint")}</div>
       <div className="boardwarn__actions">
         <button className="btn" onClick={onLinkFolder}>📂 {t("noFolder.btn")}</button>

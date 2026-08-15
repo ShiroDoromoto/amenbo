@@ -56,7 +56,7 @@ export function HookSetupBanner({ asked }: { asked: boolean }) {
     <>
       {showUnwired && (
         <div className="healthbanner managedblock-banner" role="alert">
-          <Icon name="warn" size="lg" />
+          <Icon name="warning" size="lg" />
           <div className="healthbanner__body">
             <div className="healthbanner__title">{t("hookSetup.title")}</div>
             {unwired.map((n) => (
@@ -71,7 +71,7 @@ export function HookSetupBanner({ asked }: { asked: boolean }) {
       )}
       {showRestored && (
         <div className="healthbanner managedblock-banner" role="alert">
-          <Icon name="warn" size="lg" />
+          <Icon name="warning" size="lg" />
           <div className="healthbanner__body">
             <div className="healthbanner__title">{t("hookRestored.title")}</div>
             {restored.map((n) => (

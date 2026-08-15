@@ -15,10 +15,10 @@ import { usePluginInstalls } from "../core/pluginInstalls";
 import { inTauri } from "../core/snapshot";
 import { confirmDialog } from "../core/dialog";
 import { errText, t, tf, viewLabel } from "../core/i18n";
-import { ErrorNote } from "../components/ErrorNote";
-import { Icon } from "../components/Icon";
 import type { AgentHookRequestsDto, BoundFolderDto, ProjectSettingsDto } from "../bindings/bindings";
 import { asTyped } from "../core/keys";
+import { ErrorNote } from "../components/ErrorNote";
+import { Icon } from "../components/Icon";
 
 type View = ProjectSettingsDto["view"];
 const VIEWS: View[] = ["list", "board", "calendar", "timeline"];
@@ -126,11 +126,11 @@ export function ProjectSettingsScreen({
           <div className="settings__h">{t("projset.general")}</div>
           <div className="settings__body newproj">
             <label className="newproj__field">
-              <span className="newproj__label">{t("projset.nameLabel")}</span>
+              <span className="fieldlabel">{t("projset.nameLabel")}</span>
               <input {...asTyped} className="newproj__input" value={name} onChange={(e) => setName(e.target.value)} />
             </label>
             <label className="newproj__field">
-              <span className="newproj__label">{t("projset.notesLabel")}</span>
+              <span className="fieldlabel">{t("projset.notesLabel")}</span>
               <textarea
                 {...asTyped}
                 className="newproj__input"
@@ -171,7 +171,7 @@ export function ProjectSettingsScreen({
           <div className="settings__h">{t("projset.danger")}</div>
           <div className="settings__body newproj">
             <div className="newproj__field">
-              <span className="newproj__hint">{t("projset.archiveHint")}</span>
+              <span className="hint">{t("projset.archiveHint")}</span>
               <div className="newproj__nextrow">
                 <button className="btn" onClick={() => void toggleArchive()} disabled={busy}>
                   {loaded.archived ? t("projset.unarchive") : t("projset.archive")}
@@ -179,7 +179,7 @@ export function ProjectSettingsScreen({
               </div>
             </div>
             <div className="newproj__field">
-              <span className="newproj__hint">{t("projset.deleteHint")}</span>
+              <span className="hint">{t("projset.deleteHint")}</span>
               <div className="newproj__nextrow">
                 <button className="btn btn--danger" onClick={() => void remove()} disabled={busy}>
                   🗑 {t("projset.delete")}
@@ -274,7 +274,7 @@ function FoldersSection({ projectId }: { projectId: number }) {
     <div className="settings__section">
       <div className="settings__h">{t("projset.folders")}</div>
       <div className="settings__body newproj">
-        <span className="newproj__hint">{t("projset.foldersHint")}</span>
+        <span className="hint">{t("projset.foldersHint")}</span>
 
         {folders && folders.length === 0 && (
           <span className="faint">{t("projset.noFolders")}</span>
@@ -283,15 +283,15 @@ function FoldersSection({ projectId }: { projectId: number }) {
         {folders?.map((f) => (
           <div key={f.path} className="newproj__field">
             <div className="newproj__folder">
-              <code className="newproj__path">{f.path}</code>
+              <code className="path">{f.path}</code>
               {/* The state of the folder, in the row's own voice — it wears the note's look and its
                   mark, but not its `role`: what is wrong is announced once, by the hint below, and a
                   reader hearing the same fault twice learns nothing the second time. */}
               {f.exists && !f.pointerMissing && !f.foreign ? (
                 <span className="faint">· {t("projset.aiReady")}</span>
               ) : (
-                <span className="errornote">
-                  <Icon name="warn" />
+                <span className="errortext">
+                  <Icon name="warning" />
                   {!f.exists
                     ? t("projset.folderStale")
                     : f.pointerMissing
@@ -400,7 +400,7 @@ function HarnessSection({ projectId, onOpenMcp }: { projectId: number; onOpenMcp
     <div className="settings__section">
       <div className="settings__h">{t("projset.harness")}</div>
       <div className="settings__body newproj">
-        <span className="newproj__hint">{t("projset.harnessHint")}</span>
+        <span className="hint">{t("projset.harnessHint")}</span>
 
         {answer !== undefined && (
           <div className="settings__row">
@@ -497,7 +497,7 @@ function HarnessRequest({ projectId }: { projectId: number }) {
     <div className="settings__row">
       <span className="settings__k">{t("projset.harnessRequest")}</span>
       <div className="harnessreq">
-        <span className="newproj__hint">{t("projset.harnessRequestHint")}</span>
+        <span className="hint">{t("projset.harnessRequestHint")}</span>
         <select
           className="harnessreq__pick"
           aria-label={t("agentHookWiring.pick")}
@@ -508,12 +508,12 @@ function HarnessRequest({ projectId }: { projectId: number }) {
             <option key={one.tool} value={one.tool}>{one.label}</option>
           ))}
         </select>
-        <span className="newproj__hint">
+        <span className="hint">
           {tf("agentHookWiring.what", { tool: tool.label, file: tool.pasteInto })}
         </span>
         {/* Where to paste it. A project with nothing bound has nowhere, and that is said rather than left
             as a heading over an empty list — the folder section above is where it is answered. */}
-        <span className="newproj__hint">
+        <span className="hint">
           {catalog.dirs.length > 0 ? t("projset.harnessRequestDirs") : t("projset.noFolders")}
         </span>
         {catalog.dirs.length > 0 && (
@@ -575,7 +575,7 @@ function PluginsSection({ projectId }: { projectId: number }) {
     <div className="settings__section">
       <div className="settings__h">{t("projset.plugins")}</div>
       <div className="settings__body newproj">
-        <span className="newproj__hint">{t("projset.pluginsHint")}</span>
+        <span className="hint">{t("projset.pluginsHint")}</span>
 
         {installs.length === 0 && <span className="faint">{t("plugins.emptyInstalled")}</span>}
         {/* Judged on what this project *could* cross: with only the device's own installed there is no
@@ -601,7 +601,7 @@ function PluginsSection({ projectId }: { projectId: number }) {
             the whole machine shares, so it stays where its single row is. */}
         {deviceWide.length > 0 && (
           <>
-            <span className="newproj__hint">{t("projset.pluginsDevice")}</span>
+            <span className="hint">{t("projset.pluginsDevice")}</span>
             {deviceWide.map((i) => (
               <div className="pluggate" key={i.name}>
                 <span className="chip">{i.name}</span>

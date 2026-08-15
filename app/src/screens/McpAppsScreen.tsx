@@ -23,8 +23,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchMcpRequest, fetchMcpSetup, saveMcpBundle } from "../core/mutations";
 import { errText, t, tf } from "../core/i18n";
-import { ErrorNote } from "../components/ErrorNote";
 import type { McpAppDto, McpProjectDto, McpSetupDto } from "../bindings/bindings";
+import { ErrorNote } from "../components/ErrorNote";
 
 // A burst of returns is one re-read, on the window the reconcile triggers already use (`core/snapshot.ts`).
 const REREAD_THROTTLE_MS = 1500;
@@ -92,7 +92,7 @@ export function McpAppsScreen({ pick = null }: { pick?: number | null }) {
       <div className="settings">
         <div className="settings__section">
           <div className="settings__body">
-            <span className="newproj__hint">{t("mcp.hint")}</span>
+            <span className="hint">{t("mcp.hint")}</span>
 
             {/* The wait says it is a wait. Until the first read answers there is nothing to draw, and
                 a card standing empty is read as an answer — that this machine has no apps to set up. */}
@@ -188,7 +188,7 @@ function McpAppRow({
   const [picked, setPicked] = useState<number[]>(reached);
   const [texts, setTexts] = useState<{ add: string; remove: string }>({ add: "", remove: "" });
   // Which text was last copied, by what it was — copying the removal after the addition should not
-  // leave the first button still saying it was copied.
+  // leave the addition's notice standing beside a button nobody pressed.
   const [copied, setCopied] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
@@ -246,7 +246,7 @@ function McpAppRow({
           <span className="mcp__name">{app.label}</span>
           <span className={app.configured ? "mcp__state" : "mcp__state faint"}>
             {app.configured ? t("mcp.configured") : t("mcp.unconfigured")}
-            {app.folders.map((at) => <code className="newproj__path" key={at}>{at}</code>)}
+            {app.folders.map((at) => <code className="path" key={at}>{at}</code>)}
           </span>
         </span>
         <span className="faint" aria-hidden="true">{open ? "⌄" : "›"}</span>
@@ -255,7 +255,7 @@ function McpAppRow({
       {open && (
         <>
           <div className="mcp__pick">
-            <div className="newproj__label">{t("mcp.projects")}</div>
+            <div className="fieldlabel">{t("mcp.projects")}</div>
             {projects.map((project) => (
               <label className="mcp__project" key={project.id}>
                 <input
@@ -264,7 +264,7 @@ function McpAppRow({
                   onChange={() => toggle(project.id)}
                 />
                 {project.name}
-                <code className="newproj__path">{project.folder}</code>
+                <code className="path">{project.folder}</code>
               </label>
             ))}
           </div>
@@ -273,7 +273,7 @@ function McpAppRow({
               filter on this screen, they are the contents of what is about to be handed over, and
               handing it over replaces rather than adds. Both halves are the reader's to know before
               they press, and neither is recoverable from the button's own word. */}
-          <span className="newproj__hint">{t("mcp.handover")}</span>
+          <span className="hint">{t("mcp.handover")}</span>
 
           <div className="mcp__actions">
             {/* Nothing ticked is nothing to hand over, on both roads alike: the file names no folder,
@@ -290,7 +290,7 @@ function McpAppRow({
                 disabled={picked.length === 0}
                 onClick={() => void copy("add", texts.add)}
               >
-                {copied === "add" ? t("mcp.copied") : t("mcp.copyAdd")}
+                {t("mcp.copyAdd")}
               </button>
             )}
             {/* Offered only where there is something to remove: a request to delete an entry nobody
@@ -299,9 +299,10 @@ function McpAppRow({
                 whole entry gone, and a reader taking amenbo out has nothing to tick first. */}
             {app.configured && !app.writesFile && (
               <button className="btn" onClick={() => void copy("remove", texts.remove)}>
-                {copied === "remove" ? t("mcp.copied") : t("mcp.copyRemove")}
+                {t("mcp.copyRemove")}
               </button>
             )}
+            {!app.writesFile && <Copied on={copied === "add" || copied === "remove"} />}
           </div>
           {failed && <ErrorNote>{failed}</ErrorNote>}
           {saved && <div className="mcp__saved">{tf("mcp.written", { path: saved })}</div>}
@@ -310,14 +311,15 @@ function McpAppRow({
               old entry is not this app being set up, it is something to take away. */}
           {app.stale.length > 0 && (
             <div className="mcp__stale">
-              <div className="newproj__label">{t("mcp.stale")}</div>
+              <div className="fieldlabel">{t("mcp.stale")}</div>
               {app.stale.map((old) => (
                 <div className="mcp__staleRow" key={old.name}>
-                  <code className="newproj__path">{old.name}</code>
-                  {old.folder && <code className="newproj__path">{old.folder}</code>}
+                  <code className="path">{old.name}</code>
+                  {old.folder && <code className="path">{old.folder}</code>}
                   <button className="btn" onClick={() => void copy(old.name, old.removeRequest)}>
-                    {copied === old.name ? t("mcp.copied") : t("mcp.copyRemove")}
+                    {t("mcp.copyRemove")}
                   </button>
+                  <Copied on={copied === old.name} />
                 </div>
               ))}
             </div>
@@ -326,4 +328,19 @@ function McpAppRow({
       )}
     </li>
   );
+}
+
+/**
+ * That a copy went through, said beside the button instead of in it (`AMB-D-690`).
+ *
+ * A button that renames itself to "copied" is a button that has stopped saying what it does, in the
+ * one moment a reader is looking at it to decide whether to press it again — and it changes width
+ * doing so, taking the next button along with it. So the word lands outside, and after the buttons
+ * rather than between them: the space it takes when it appears is space none of them was standing in.
+ *
+ * It is a live region because nothing else marks the move — the clipboard is silent, and the button
+ * the reader pressed now looks exactly as it did before.
+ */
+function Copied({ on }: { on: boolean }) {
+  return <span className="mcp__copied" role="status">{on ? t("mcp.copied") : ""}</span>;
 }

@@ -105,7 +105,7 @@ async function render(folders: BoundFolderDto[]) {
 
 /** Find a row by path (a row is the `.newproj__field` that holds a `.newproj__folder`). */
 function row(path: string): HTMLElement {
-  const code = Array.from(container.querySelectorAll("code.newproj__path")).find((c) => c.textContent === path);
+  const code = Array.from(container.querySelectorAll("code.path")).find((c) => c.textContent === path);
   return code!.closest(".newproj__field") as HTMLElement;
 }
 const warnings = (r: HTMLElement) => Array.from(r.querySelectorAll("[role=alert]")).map((e) => e.textContent ?? "");

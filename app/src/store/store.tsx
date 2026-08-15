@@ -164,7 +164,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       {children}
       {notice && (
         <div className="toast toast--warn" role="alert" onClick={() => setNotice(null)}>
-          <Icon name="warn" /> {notice}
+          <Icon name="warning" /> {notice}
         </div>
       )}
     </Ctx.Provider>

@@ -29,7 +29,7 @@ describe("the note that says what went wrong", () => {
   it("carries the mark and the alert role together", async () => {
     await act(async () => { root.render(createElement(ErrorNote, { children: "the folder is gone" })); });
 
-    const note = container.querySelector(".errornote");
+    const note = container.querySelector(".errortext");
     expect(note?.getAttribute("role")).toBe("alert");
     expect(note?.textContent).toContain("the folder is gone");
     // Drawn, not typed: the mark is the icon set's, so it is one drawing for every note on every screen.
@@ -41,8 +41,8 @@ describe("the note that says what went wrong", () => {
       root.render(createElement(ErrorNote, { tone: "quiet", children: "the name could not be saved" }));
     });
 
-    const note = container.querySelector(".errornote");
-    expect(note?.classList.contains("errornote--quiet")).toBe(true);
+    const note = container.querySelector(".errortext");
+    expect(note?.classList.contains("errortext--quiet")).toBe(true);
     expect(note?.getAttribute("role")).toBe("alert"); // quieter to look at, said just as loudly
   });
 });

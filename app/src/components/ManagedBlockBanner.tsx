@@ -63,7 +63,7 @@ export function ManagedBlockBanner() {
 
   return (
     <div className="healthbanner managedblock-banner" role="alert">
-      <Icon name="warn" size="lg" />
+      <Icon name="warning" size="lg" />
       <div className="healthbanner__body">
         <div className="healthbanner__title">{t("managedBlock.title")}</div>
         <div className="healthbanner__line">{tn("managedBlock.hint", folderCount)}</div>

@@ -149,7 +149,7 @@ describe("raising a project on the desktop", () => {
     await act(async () => { createButton().click(); });
 
     // Nothing folded is left in its place, and the fold's own wording is gone with it.
-    expect(container.querySelector(".mcp__toggle")).toBeNull();
+    expect(container.querySelector(".mcpsetup__toggle")).toBeNull();
     expect(container.textContent).not.toContain(t("mcp.open"));
 
     await act(async () => { button(t("nav.mcp")).click(); });

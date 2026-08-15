@@ -15,8 +15,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { McpAppDto, McpProjectDto, McpSetupDto } from "../bindings/bindings";
 
 const hoisted = vi.hoisted(() => ({
-  /** What the screen's one read answers with. */
+  /** What the screen's read answers with — reassign it to stand for the world having moved on. */
   setup: null as McpSetupDto | null,
+  /** How many times the screen read it, which is what the re-read on return is counted by. */
+  reads: 0,
   /** Every request the rows asked for, as `app:ids` — evidence the texts follow the ticks. */
   asked: [] as string[],
   /** Every bundle write, by the projects ticked when the button was pressed. */
@@ -30,7 +32,10 @@ vi.mock("../core/snapshot", async (importOriginal) => {
   return { ...orig, inTauri: () => true, subscribe: () => () => {} };
 });
 vi.mock("../core/mutations", () => ({
-  fetchMcpSetup: () => Promise.resolve(hoisted.setup),
+  fetchMcpSetup: () => {
+    hoisted.reads += 1;
+    return Promise.resolve(hoisted.setup);
+  },
   fetchMcpRequest: (app: string, projectIds: number[]) => {
     hoisted.asked.push(`${app}:${projectIds.join(",")}`);
     return Promise.resolve({
@@ -84,8 +89,23 @@ const buttons = () => [...container.querySelectorAll("button")].map((b) => b.tex
 const rows = () => [...container.querySelectorAll(".mcp__app")];
 const ticks = () => [...container.querySelectorAll<HTMLInputElement>(".mcp__project input")];
 
+/**
+ * A clock the test moves. The screen throttles a burst of returns on `Date.now`, so a test that wants
+ * a second read has to be past that window — and only `Date` is stood in for, leaving React's own
+ * scheduling alone.
+ */
+function fakeClock() {
+  let at = Date.now();
+  const spy = vi.spyOn(Date, "now").mockImplementation(() => at);
+  return {
+    advance: (ms: number) => { at += ms; },
+    restore: () => spy.mockRestore(),
+  };
+}
+
 beforeEach(() => {
   hoisted.setup = null;
+  hoisted.reads = 0;
   hoisted.asked = [];
   hoisted.written = [];
   hoisted.writtenTo = "/w/downloads/amenbo.mcpb";
@@ -197,6 +217,50 @@ describe("the screen where an AI is connected", () => {
 
     expect(container.textContent).toContain(t("mcp.unconfigured"));
     expect(buttons()).not.toContain(t("mcp.copyRemove"));
+  });
+
+  // On the request road the writer is the other app's AI: `onWritten` never fires, and `mcp_probe`
+  // reads that app's settings file rather than the store, so no change feed carries it. Coming back to
+  // the window is the only moment the screen has to notice.
+  it("reads the screen again when the reader comes back to the window", async () => {
+    const clock = fakeClock();
+    try {
+      await render({ projects: [SHOP], apps: [app()] });
+      expect(hoisted.reads).toBe(1);
+      expect(container.textContent).toContain(t("mcp.unconfigured"));
+
+      // While the reader was away in the other app, its AI put the entry in place.
+      hoisted.setup = { projects: [SHOP], apps: [app({ configured: true, folders: ["/w/shop"] })] };
+
+      clock.advance(2000);
+      await act(async () => { window.dispatchEvent(new Event("focus")); });
+
+      expect(hoisted.reads).toBe(2);
+      expect(container.textContent).toContain(t("mcp.configured"));
+      expect(container.textContent).toContain("/w/shop");
+    } finally {
+      clock.restore();
+    }
+  });
+
+  // A window can come back by either event, and often by both at once — which is one return, not three.
+  it("folds a burst of returns into one re-read", async () => {
+    const clock = fakeClock();
+    try {
+      await render({ projects: [SHOP], apps: [app()] });
+      expect(hoisted.reads).toBe(1);
+
+      clock.advance(2000);
+      await act(async () => {
+        window.dispatchEvent(new Event("focus"));
+        document.dispatchEvent(new Event("visibilitychange"));
+        window.dispatchEvent(new Event("focus"));
+      });
+
+      expect(hoisted.reads).toBe(2);
+    } finally {
+      clock.restore();
+    }
   });
 
   // The picker closed without a folder is not a write: nothing landed, so nothing is said about where.

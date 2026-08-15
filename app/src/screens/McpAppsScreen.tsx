@@ -13,10 +13,13 @@
 // **Two roads, one per row** (`AMB-D-672`). The app that cannot run a command is handed a file to
 // open; the rest have an AI of their own, which is given the request and does the merge. Which button
 // a row draws is the catalog's word, not this screen's.
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchMcpRequest, fetchMcpSetup, saveMcpBundle } from "../core/mutations";
 import { errText, t, tf } from "../core/i18n";
 import type { McpAppDto, McpProjectDto, McpSetupDto } from "../bindings/bindings";
+
+// A burst of returns is one re-read, on the window the reconcile triggers already use (`core/snapshot.ts`).
+const REREAD_THROTTLE_MS = 1500;
 
 /**
  * `pick` is a project the screen arrives already holding — the one a reader just created and walked
@@ -27,8 +30,10 @@ import type { McpAppDto, McpProjectDto, McpSetupDto } from "../bindings/bindings
 export function McpAppsScreen({ pick = null }: { pick?: number | null }) {
   const [setup, setSetup] = useState<McpSetupDto | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const lastReadAt = useRef(0);
 
   const load = useCallback(() => {
+    lastReadAt.current = Date.now();
     let alive = true;
     fetchMcpSetup()
       .then((read) => { if (alive) setSetup(read); })
@@ -37,6 +42,29 @@ export function McpAppsScreen({ pick = null }: { pick?: number | null }) {
   }, []);
 
   useEffect(() => load(), [load]);
+
+  // Read it again when the reader comes back to the window. On the request road the writer is the
+  // other app's AI, so `onWritten` never fires here; and `mcp_probe` reads those settings files
+  // directly rather than the store, so `store-changed` does not carry the change either. Coming back
+  // is the only moment amenbo has, and one read then is enough — a row still saying "not set up" is
+  // read as a failure, and sends the reader to hand over the same request a second time. Both events
+  // are listened for, as `installReconcileTriggers` does, since a window can come back by either.
+  useEffect(() => {
+    let drop: (() => void) | null = null;
+    const onReturn = () => {
+      if (Date.now() - lastReadAt.current < REREAD_THROTTLE_MS) return;
+      drop?.();
+      drop = load();
+    };
+    const onVisible = () => { if (document.visibilityState === "visible") onReturn(); };
+    window.addEventListener("focus", onReturn);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", onReturn);
+      document.removeEventListener("visibilitychange", onVisible);
+      drop?.();
+    };
+  }, [load]);
 
   return (
     <div className="settings mcp">

@@ -7,14 +7,14 @@
 // board; it shows the done step.
 // Done step: "Created project X", what the folder enables and where it is, and then the first loop
 // (`FirstLoop`), which is what the reader is meant to do next. The rest (reveal the folder, copy
-// `amenbo status`) sits below it as a side offer. The primary action is "Open the board". This carries
-// the same information as the CLI's own init/bind success output.
+// `amenbo status`, the way out to where an AI is connected over MCP) sits below it as a side offer.
+// The primary action is "Open the board". This carries the same information as the CLI's own init/bind
+// success output.
 //
 // The browser iteration is another thing: it writes no store and offers no folder field, so there is
 // nothing there for a folder to bind and the create goes through on a name alone.
 import { useState } from "react";
 import { FirstLoop } from "../components/FirstLoop";
-import { McpSetup } from "./McpSetup";
 import { useCliCommandName } from "../core/cliCommand";
 import { createProject, pickFolder, revealFolder } from "../core/mutations";
 import { inTauri } from "../core/snapshot";
@@ -25,7 +25,7 @@ import type { Nav } from "../shell/AppShell";
 // The project that was created, handed to the done step: id = where the board opens, name = the heading, dir = the linked folder or null.
 type Created = { id: number; name: string; dir: string | null };
 
-export function NewProjectScreen({ onCreated, onCancel, onOpenMcp }: { onCreated: (nav: Nav) => void; onCancel: () => void; onOpenMcp: () => void }) {
+export function NewProjectScreen({ onCreated, onCancel, onOpenMcp }: { onCreated: (nav: Nav) => void; onCancel: () => void; onOpenMcp: (projectId: number) => void }) {
   const [name, setName] = useState("");
   const [dir, setDir] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -122,8 +122,8 @@ export function NewProjectScreen({ onCreated, onCancel, onOpenMcp }: { onCreated
  * a terminal or a file manager would be a no-op there anyway — so the step is the heading and the way
  * on to the board.
  */
-function DoneStep({ created, onOpenBoard, onOpenMcp }: { created: Created; onOpenBoard: () => void; onOpenMcp: () => void }) {
-  const { name, dir } = created;
+function DoneStep({ created, onOpenBoard, onOpenMcp }: { created: Created; onOpenBoard: () => void; onOpenMcp: (projectId: number) => void }) {
+  const { id, name, dir } = created;
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // What is copied is meant to be pasted into a terminal, so it has to be the command this build installs.
@@ -157,10 +157,6 @@ function DoneStep({ created, onOpenBoard, onOpenMcp }: { created: Created; onOpe
         {inTauri() && dir && (
           <>
             <FirstLoop dir={dir} />
-            {/* The offer for the reader whose AI cannot open that folder at all (`AMB-D-671`). It sits
-                after the first loop because that is the road for everyone else, and folded because
-                most readers are on it. */}
-            <McpSetup onOpen={onOpenMcp} />
             <div className="newproj__next">
               <span className="newproj__label">{t("newproj.moreTitle")}</span>
               <div className="newproj__nextrow">
@@ -168,6 +164,12 @@ function DoneStep({ created, onOpenBoard, onOpenMcp }: { created: Created; onOpe
                 <button className="btn" onClick={() => void copyStatus()}>
                   {copied ? t("newproj.copied") : `📋 ${tf("newproj.copyStatus", { cmd: cli })}`}
                 </button>
+                {/* One line out to where an AI is connected, rather than a second place to hand the
+                    request over from (`AMB-D-684`). It is named and not conditioned: the fold it
+                    replaced asked the reader whether their AI can open a folder, which is the one
+                    thing they cannot answer having just made the project. The project goes with it,
+                    so the screen opens holding the one they came from. */}
+                <button className="btn" onClick={() => onOpenMcp(id)}>🔗 {t("nav.mcp")}</button>
               </div>
             </div>
           </>

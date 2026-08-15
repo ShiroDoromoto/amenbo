@@ -18,7 +18,13 @@ import { fetchMcpRequest, fetchMcpSetup, saveMcpBundle } from "../core/mutations
 import { errText, t, tf } from "../core/i18n";
 import type { McpAppDto, McpProjectDto, McpSetupDto } from "../bindings/bindings";
 
-export function McpAppsScreen() {
+/**
+ * `pick` is a project the screen arrives already holding — the one a reader just created and walked
+ * here from (`AMB-D-684`). It is ticked on top of what each app already reaches rather than instead of
+ * it, so arriving this way never quietly drops a folder an app was set up for. Nothing is written
+ * until a row's own button is pressed, so a tick the reader did not mean costs an untick.
+ */
+export function McpAppsScreen({ pick = null }: { pick?: number | null }) {
   const [setup, setSetup] = useState<McpSetupDto | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,6 +57,7 @@ export function McpAppsScreen() {
               key={app.app}
               app={app}
               projects={setup.projects}
+              pick={pick}
               onError={setError}
               onWritten={load}
             />
@@ -75,20 +82,24 @@ export function McpAppsScreen() {
 function McpAppRow({
   app,
   projects,
+  pick,
   onError,
   onWritten,
 }: {
   app: McpAppDto;
   projects: McpProjectDto[];
+  pick: number | null;
   onError: (message: string | null) => void;
   onWritten: () => void;
 }) {
   // Which projects this app may reach. It opens on the ones whose folder its entry already names —
-  // matched on the folder, because that is what an entry carries and what a project is reached by.
-  const reached = useMemo(
-    () => projects.filter((p) => app.folders.includes(p.folder)).map((p) => p.id),
-    [app.folders, projects],
-  );
+  // matched on the folder, because that is what an entry carries and what a project is reached by —
+  // and on the project the reader walked in holding, if the screen knows one and it has a folder.
+  const reached = useMemo(() => {
+    const already = projects.filter((p) => app.folders.includes(p.folder)).map((p) => p.id);
+    const walkedIn = pick !== null && projects.some((p) => p.id === pick) && !already.includes(pick);
+    return walkedIn ? [...already, pick] : already;
+  }, [app.folders, projects, pick]);
   const [picked, setPicked] = useState<number[]>(reached);
   const [texts, setTexts] = useState<{ add: string; remove: string }>({ add: "", remove: "" });
   // Which text was last copied, by what it was — copying the removal after the addition should not

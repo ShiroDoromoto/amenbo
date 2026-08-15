@@ -29,6 +29,16 @@ describe("navReduce", () => {
     expect(s).toEqual({ stack: [L(v("x")), L(p("x"))], index: 1 });
   });
 
+  // The same screen reached holding a project, and then reached plain, are two places (`AMB-D-684`) —
+  // otherwise the second way in would be swallowed and leave the first one's project on the screen.
+  it("distinguishes a screen reached holding a project from the same one reached without", () => {
+    let s = start(L(v("mcp")));
+    s = push(s, L({ type: "view", id: "mcp", pick: 7 }));
+    s = push(s, L(v("mcp")));
+    expect(s.stack).toEqual([L(v("mcp")), L({ type: "view", id: "mcp", pick: 7 }), L(v("mcp"))]);
+    expect(s.index).toBe(2);
+  });
+
   it("treats a selection change on the same nav as a new location", () => {
     // Task → decision keeps the same Nav but is a different Location, so it gets its own history entry. This is what makes "task → decision → back" land on the original task.
     let s = start(L(p("proj"), task(1)));

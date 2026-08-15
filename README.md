@@ -679,9 +679,10 @@ destructive command still stops at the confirmation you are the one to give.
 app's rather than the project's, because a server is one per app: each app is
 listed with whether it already holds one and which folders it reaches, and you
 tick the projects that app may reach. Pressing the button writes the whole
-selection, so the second time round is the same move as the first. The project
-creation and settings screens carry a folded line pointing at that screen, which
-is where a reader who has just made a project meets it.
+selection, so the second time round is the same move as the first. A project's
+settings screen carries a folded line pointing at that screen; the screen that has
+just made one carries a plain line instead, and following it opens the screen with
+the project you came from already ticked.
 
 One app cannot run a command at all, so for that one amenbo writes a file you open
 and the app takes the server from it — with your selection baked in as the value

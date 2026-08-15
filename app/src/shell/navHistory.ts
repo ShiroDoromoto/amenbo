@@ -28,7 +28,10 @@ export type NavHistory = {
 export type NavState = { stack: Location[]; index: number };
 export type NavAction = { type: "push"; loc: Location } | { type: "back" } | { type: "forward" };
 
-const sameNav = (a: Nav, b: Nav) => a.type === b.type && a.id === b.id;
+// The project a screen arrives holding is part of where you are, so two ways into the same screen that
+// name different projects are two places — otherwise walking in from a creation and then from the
+// sidebar would leave the first one's project still on the screen.
+const sameNav = (a: Nav, b: Nav) => a.type === b.type && a.id === b.id && a.pick === b.pick;
 const sameSel = (a: Selection, b: Selection) =>
   a.type === b.type && (a.type === "none" || a.id === (b as { id: string | number }).id);
 const sameLocation = (a: Location | undefined, b: Location) =>

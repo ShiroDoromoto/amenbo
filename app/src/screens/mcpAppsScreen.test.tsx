@@ -68,10 +68,10 @@ function app(over: Partial<McpAppDto> = {}): McpAppDto {
   };
 }
 
-async function render(setup: McpSetupDto) {
+async function render(setup: McpSetupDto, pick: number | null = null) {
   hoisted.setup = setup;
   await act(async () => {
-    root.render(createElement(McpAppsScreen));
+    root.render(createElement(McpAppsScreen, { pick }));
   });
 }
 
@@ -125,6 +125,28 @@ describe("the screen where an AI is connected", () => {
     expect(container.textContent).toContain("/w/greenhouse");
     // The text is asked for the selection the row opened on, not for an empty one.
     expect(hoisted.asked).toEqual(["cursor:2"]);
+  });
+
+  // Walking in from a project that was just made (`AMB-D-684`): the row opens on that project *and* on
+  // what the app already reaches, since arriving this way is not a reason to drop a folder it was set
+  // up for.
+  it("ticks the project the reader walked in holding, on top of what the app already reaches", async () => {
+    await render(
+      { projects: [SHOP, GREENHOUSE], apps: [app({ configured: true, folders: ["/w/greenhouse"] })] },
+      SHOP.id,
+    );
+
+    expect(ticks().map((box) => box.checked)).toEqual([true, true]);
+    expect(hoisted.asked).toEqual(["cursor:2,1"]);
+  });
+
+  // A project with no folder is not on this screen at all, so a way in naming one has nothing to tick
+  // — and the row opens exactly as it would have without it.
+  it("ignores a project it was walked in holding that has no folder here", async () => {
+    await render({ projects: [SHOP], apps: [app()] }, 99);
+
+    expect(ticks().map((box) => box.checked)).toEqual([false]);
+    expect(hoisted.asked).toEqual(["cursor:"]);
   });
 
   it("carries the whole selection: the text follows the ticks, and copying hands over that text", async () => {

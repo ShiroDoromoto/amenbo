@@ -36,8 +36,15 @@ import { getSidebarCollapsed, setSidebarCollapsed } from "../core/sidebarCollaps
 import { RefNavProvider } from "../core/refNav";
 import { currentLang, t } from "../core/i18n";
 
-/** `projectSettings` is the settings screen, carrying the project id in `id`. Reached from the ⚙ in the board toolbar. */
-export type Nav = { type: "view" | "project" | "projectSettings"; id: string };
+/**
+ * `projectSettings` is the settings screen, carrying the project id in `id`. Reached from the ⚙ in the board toolbar.
+ *
+ * `pick` is the project a screen should arrive already holding — the one the creation screen just
+ * raised, carried into the MCP screen so its rows open on it (`AMB-D-684`). It is part of where you
+ * are rather than a message passed alongside, so ＜/＞ land back on the same screen holding the same
+ * project; a way in that names no project simply leaves it off.
+ */
+export type Nav = { type: "view" | "project" | "projectSettings"; id: string; pick?: number };
 
 /**
  * Where a new task gets created. A task only gets placed in a project; classification (assigning it to a
@@ -383,14 +390,14 @@ export function AppShell() {
             />
           )}
           {nav.type === "view" && nav.id === "pluginsInstalled" && <PluginInstalledScreen />}
-          {nav.type === "view" && nav.id === "mcp" && <McpAppsScreen />}
+          {nav.type === "view" && nav.id === "mcp" && <McpAppsScreen pick={nav.pick ?? null} />}
           {nav.type === "view" && nav.id === "settings" && <SettingsScreen />}
           {nav.type === "view" && nav.id === "onboarding" && <OnboardingScreen onNav={navTo} />}
           {nav.type === "view" && nav.id === "newProject" && (
             <NewProjectScreen
               onCreated={navTo}
               onCancel={goBack}
-              onOpenMcp={() => navTo({ type: "view", id: "mcp" })}
+              onOpenMcp={(projectId) => navTo({ type: "view", id: "mcp", pick: projectId })}
             />
           )}
         </div>

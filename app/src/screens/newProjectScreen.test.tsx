@@ -14,6 +14,8 @@ const hoisted = vi.hoisted(() => ({
   picked: null as string | null,
   /** Every create that reached the write layer, as `[name, dir]`. */
   created: [] as Array<[string, string | null]>,
+  /** Every walk out to the screen where an AI is connected, by the project handed over with it. */
+  opened: [] as number[],
 }));
 
 vi.mock("../core/snapshot", async (importOriginal) => {
@@ -30,10 +32,6 @@ vi.mock("../core/mutations", () => ({
   revealFolder: () => Promise.resolve(),
   openTerminal: () => Promise.resolve(),
   fetchCliCommandName: () => Promise.resolve("amenbo"),
-  // The folded MCP block on the done step reads this; nothing here is about it, so it offers no app
-  // and draws nothing.
-  fetchMcpApps: () => Promise.resolve([]),
-  saveMcpBundle: () => Promise.resolve(null),
 }));
 
 import { t } from "../core/i18n";
@@ -46,7 +44,11 @@ let root: Root;
 
 const render = () =>
   act(async () => {
-    root.render(createElement(NewProjectScreen, { onCreated: () => {}, onCancel: () => {}, onOpenMcp: () => {} }));
+    root.render(createElement(NewProjectScreen, {
+      onCreated: () => {},
+      onCancel: () => {},
+      onOpenMcp: (projectId: number) => { hoisted.opened.push(projectId); },
+    }));
   });
 
 function button(label: string): HTMLButtonElement {
@@ -69,6 +71,7 @@ async function name(value: string) {
 beforeEach(() => {
   hoisted.picked = null;
   hoisted.created.length = 0;
+  hoisted.opened.length = 0;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -133,5 +136,23 @@ describe("raising a project on the desktop", () => {
     await act(async () => { button(t("newproj.chooseFolder")).click(); });
 
     expect(createButton().disabled).toBe(true);
+  });
+
+  // What the done step offers for MCP is one line out and no second place to hand the request over
+  // from (`AMB-D-684`). The fold it replaced put a condition on it — whether the reader's AI can open
+  // a folder — which is the one thing they cannot answer having only now made the project.
+  it("sends the reader on to where an AI is connected, holding the project just made", async () => {
+    hoisted.picked = "/w/seedbed";
+    await render();
+    await name("Seedbed");
+    await act(async () => { button(t("newproj.chooseFolder")).click(); });
+    await act(async () => { createButton().click(); });
+
+    // Nothing folded is left in its place, and the fold's own wording is gone with it.
+    expect(container.querySelector(".mcp__toggle")).toBeNull();
+    expect(container.textContent).not.toContain(t("mcp.open"));
+
+    await act(async () => { button(t("nav.mcp")).click(); });
+    expect(hoisted.opened, "the project it just raised travels with the press").toEqual([1]);
   });
 });

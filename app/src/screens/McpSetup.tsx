@@ -1,10 +1,13 @@
-// The line on a project's own screens that says an AI can be connected, and where (`AMB-D-681`).
+// The line on a project's settings screen that says an AI can be connected, and where (`AMB-D-681`).
 //
-// It stands on two screens — the one that just made a project, and the one that looks after an old
-// one — because those are where a reader is thinking about a project at all. What it does **not** do
-// is set anything up: a server is one per app and reaches as many projects as the reader chose
-// (`AMB-D-679`), so the choosing happens once, on the screen this points at, rather than once per
+// It stands there because that is where a reader is thinking about one project at all. What it does
+// **not** do is set anything up: a server is one per app and reaches as many projects as the reader
+// chose (`AMB-D-679`), so the choosing happens once, on the screen this points at, rather than once per
 // project on a screen that would have to work out what the other projects had already asked for.
+//
+// **The screen that just made a project carries a plain line instead** (`AMB-D-684`): a reader who has
+// only now raised one cannot yet say whether their AI opens folders, so there is nothing there for a
+// fold to ask them.
 //
 // **Folded away, because most readers do not need it.** Somebody working from the command line has
 // amenbo already; the offer is for the reader whose AI cannot open a folder at all. Folded, it is a

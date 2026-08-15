@@ -202,15 +202,22 @@ pub(crate) fn binding_project(store: &Store) -> Option<i64> {
 /// only sign of it, so it goes on the surfaces every session passes through first: the location header of
 /// `status`/`whoami`, and what `bind` displays.
 pub(crate) fn slug_mismatch_warning(store: &Store, binding: &amenbo_core::binding::DirBinding) -> Option<String> {
-    let m = amenbo_core::binding::slug_mismatch(store, binding)?;
-    Some(format!(
-        "warning: this folder's .amenbo names project '{}', but {} is '{}' — the pointer looks \
-         like it came from another store. Re-link it with `{} bind --project <name or ID>`.",
-        Paths::command_name(),
-        m.recorded,
-        amenbo_core::idref::project(m.project_id),
-        m.actual.as_deref().unwrap_or("(no slug)")
-    ))
+    Some(slug_mismatch_sentence(&amenbo_core::binding::slug_mismatch(store, binding)?))
+}
+
+/// The sentence itself, made from the mismatch alone — so what it says can be read back without a store
+/// to stand it up in. Every slot is **named**: the four it holds are two slugs, a ref and a command
+/// name, and positional arguments let them be written in an order that reads perfectly well while
+/// saying something else entirely.
+fn slug_mismatch_sentence(m: &amenbo_core::binding::SlugMismatch) -> String {
+    format!(
+        "warning: this folder's .amenbo names project '{recorded}', but {project} is '{actual}' — the \
+         pointer looks like it came from another store. Re-link it with `{cmd} bind --project <name or ID>`.",
+        recorded = m.recorded,
+        project = amenbo_core::idref::project(m.project_id),
+        actual = m.actual.as_deref().unwrap_or("(no slug)"),
+        cmd = Paths::command_name(),
+    )
 }
 
 /// The project name shown alongside a binding. `None` when the id names no record — a `.amenbo` can go on
@@ -218,4 +225,38 @@ pub(crate) fn slug_mismatch_warning(store: &Store, binding: &amenbo_core::bindin
 pub(crate) fn project_name(store: &Store, project_id: Option<i64>) -> Result<Option<String>, CliError> {
     let Some(pid) = project_id else { return Ok(None) };
     Ok(store.project(pid).map_err(CliError::from)?.map(|p| p.name))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use amenbo_core::binding::SlugMismatch;
+
+    /// The warning names each side where the reader expects it: the slug the pointer carries as the
+    /// project it claims to name, the project its id really names, and that project's own slug. Getting
+    /// the three the wrong way round costs nothing at compile time and leaves a sentence that reads
+    /// fluently while telling the reader the opposite of what happened.
+    #[test]
+    fn the_slug_warning_puts_each_side_where_the_reader_expects_it() {
+        let w = slug_mismatch_sentence(&SlugMismatch {
+            project_id: 1,
+            recorded: "greenhouse".into(),
+            actual: Some("workshop".into()),
+        });
+        assert!(w.contains("names project 'greenhouse'"), "the slug the pointer carries: {w}");
+        assert!(w.contains("but AMB-P-1 is 'workshop'"), "and what that id really names: {w}");
+        assert!(
+            w.contains(&format!("`{} bind --project", Paths::command_name())),
+            "the way out is a command to type, not a slug: {w}",
+        );
+
+        // The project the id names may have no slug of its own, and the sentence still has to say which
+        // side is empty rather than leaving a blank pair of quotes.
+        let none = slug_mismatch_sentence(&SlugMismatch {
+            project_id: 2,
+            recorded: "greenhouse".into(),
+            actual: None,
+        });
+        assert!(none.contains("but AMB-P-2 is '(no slug)'"), "{none}");
+    }
 }

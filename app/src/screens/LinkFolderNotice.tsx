@@ -10,11 +10,12 @@
 //
 // It carries the one move that ends it, and nothing else: what it is short of is a folder.
 import { t } from "../core/i18n";
+import { Icon } from "../components/Icon";
 
 export function LinkFolderNotice({ onLinkFolder }: { onLinkFolder: () => void }) {
   return (
     <div className="boardwarn" role="status">
-      <div className="boardwarn__title">⚠ {t("noFolder.title")}</div>
+      <div className="boardwarn__title"><Icon name="warning" /> {t("noFolder.title")}</div>
       <div className="boardwarn__what">{t("noFolder.hint")}</div>
       <div className="boardwarn__actions">
         <button className="btn" onClick={onLinkFolder}>📂 {t("noFolder.btn")}</button>

@@ -43,8 +43,15 @@
   flex: 1; min-width: 0; padding: var(--s-2) var(--s-3); border-radius: var(--r-sm);
   background: var(--c-surface-sunken); font-size: var(--fs-sm); overflow-x: auto; white-space: nowrap;
 }
-/* What went wrong, said where it went wrong. */
-.errortext { color: var(--c-danger, #c0392b); font-size: var(--fs-sm); }
+/* What went wrong, said where it went wrong (`components/ErrorNote.tsx`). One row, mark then words:
+   it aligns at the top rather than the middle so the mark stays beside the first line of a message
+   long enough to wrap, and the colour is set here rather than on the mark, the icon drawing in
+   `currentColor`. The quiet one is for a note standing among settings rows, so it takes their size. */
+.errortext {
+  display: flex; align-items: flex-start; gap: var(--s-1);
+  color: var(--c-danger, #c0392b); font-size: var(--fs-sm);
+}
+.errortext--quiet { color: var(--c-blocked); font-size: inherit; }
 
 .due--overdue { color: var(--c-due-overdue); }
 .due--today { color: var(--c-due-today); }

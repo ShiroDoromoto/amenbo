@@ -22,9 +22,10 @@
 /.wharfy/
 /dist/
 
-# amenbo: the dir→store/project pointer (`.amenbo`). store_id points at machine-specific app-data, so
-# it is not committed (it is invalid on a clone). The store itself and the secrets are not here; they
-# live in app-data. `.amenbo-home/` is an unused legacy pointer dir, kept ignored defensively.
+# amenbo: the dir→project pointer (`.amenbo`). Its `project_id` is the primary key that project holds
+# in this machine's own store, so on a clone it names a different project or none at all — which is
+# why it is not committed. The store itself and the secrets are not here; they live in app-data.
+# `.amenbo-home/` is an unused legacy pointer dir, kept ignored defensively.
 .amenbo
 .amenbo-home/
 # AGENTS.md / CLAUDE.md are placed by the AI-agent environment of whoever clones this repo (`amenbo

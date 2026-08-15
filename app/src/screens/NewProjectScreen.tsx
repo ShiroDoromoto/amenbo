@@ -74,11 +74,11 @@ export function NewProjectScreen({ onCreated, onCancel, onOpenMcp }: { onCreated
         <span className="board__title">🆕 {t("newproj.title")}</span>
       </div>
       <div className="newproj">
-        <label className="newproj__field">
+        <label className="field">
           <span className="fieldlabel">{t("newproj.nameLabel")}</span>
           <input
             {...asTyped}
-            className="newproj__input"
+            className="textinput"
             autoFocus
             value={name}
             placeholder={t("side.newProjectPh")}
@@ -88,13 +88,13 @@ export function NewProjectScreen({ onCreated, onCancel, onOpenMcp }: { onCreated
         </label>
 
         {inTauri() && (
-          <div className="newproj__field">
+          <div className="field">
             <span className="fieldlabel">{t("newproj.folderLabel")}</span>
             <span className="hint">{t("newproj.folderHint")}</span>
             {/* Changing the choice, but not undoing it: clearing would put the form back in the one
                 state it cannot be created from, which is not a move worth offering. */}
             {dir ? (
-              <div className="newproj__folder">
+              <div className="folderrow">
                 <code className="path">{dir}</code>
                 <button className="btn" onClick={() => void chooseFolder()} disabled={busy}>{t("newproj.changeFolder")}</button>
               </div>
@@ -106,7 +106,7 @@ export function NewProjectScreen({ onCreated, onCancel, onOpenMcp }: { onCreated
 
         {error && <div className="errortext" role="alert">⚠ {error}</div>}
 
-        <div className="newproj__actions">
+        <div className="actions">
           <button className="btn btn--primary" onClick={() => void create()} disabled={!canCreate}>{t("newproj.create")}</button>
           <button className="btn" onClick={onCancel} disabled={busy}>{t("newproj.cancel")}</button>
         </div>
@@ -146,7 +146,7 @@ function DoneStep({ created, onOpenBoard, onOpenMcp }: { created: Created; onOpe
       <div className="board__toolbar">
         <span className="board__title">✅ {tf("newproj.doneTitle", { name })}</span>
       </div>
-      <div className="newproj newproj--done">
+      <div className="newproj">
         {dir && (
           <div className="newproj__capability">
             <p>{t("newproj.doneCapability")}</p>
@@ -159,7 +159,7 @@ function DoneStep({ created, onOpenBoard, onOpenMcp }: { created: Created; onOpe
             <FirstLoop dir={dir} />
             <div className="newproj__next">
               <span className="fieldlabel">{t("newproj.moreTitle")}</span>
-              <div className="newproj__nextrow">
+              <div className="buttonrow">
                 <button className="btn" onClick={() => void reveal()}>📂 {t("newproj.openFinder")}</button>
                 <button className="btn" onClick={() => void copyStatus()}>
                   {copied ? `✓ ${t("newproj.copied")}` : `📋 ${tf("newproj.copyStatus", { cmd: cli })}`}
@@ -177,7 +177,7 @@ function DoneStep({ created, onOpenBoard, onOpenMcp }: { created: Created; onOpe
 
         {error && <div className="errortext" role="alert">⚠ {error}</div>}
 
-        <div className="newproj__actions">
+        <div className="actions">
           <button className="btn btn--primary" autoFocus onClick={onOpenBoard}>{t("newproj.openBoard")}</button>
         </div>
       </div>

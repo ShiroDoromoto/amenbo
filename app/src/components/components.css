@@ -28,8 +28,8 @@
 .facet__name { font-size: var(--fs-sm); }
 
 
-/* Four pieces of writing that turn up on any screen, named for what they are rather than for the
-   screen they were first written on. They lived under `newproj__` while the creation screen was the
+/* The writing and the form parts that turn up on any screen, named for what they are rather than for
+   the screen they were first written on. They lived under `newproj__` while the creation screen was the
    only one drawing them, and every screen that wanted one after that borrowed the name — which left
    the creation screen's own block unsafe to touch, its rules being half the app's. A screen's block
    holds what only that screen has; this is where what several of them share belongs. */
@@ -45,6 +45,21 @@
 }
 /* What went wrong, said where it went wrong. */
 .errortext { color: var(--c-danger, #c0392b); font-size: var(--fs-sm); }
+/* One thing being filled in: what it is above, what it is filled in with below. */
+.field { display: flex; flex-direction: column; gap: var(--s-2); }
+/* The box a reader types into. */
+.textinput {
+  padding: var(--s-3); border: 1px solid var(--c-border); border-radius: var(--r-md);
+  font-size: var(--fs-md); background: var(--c-surface); color: var(--c-text); outline: none;
+}
+.textinput:focus { border-color: var(--c-accent); }
+/* A folder and what can be done with it, on one line while the line is wide enough for both. */
+.folderrow { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+/* The buttons a form is finished with, set apart from the fields above them. */
+.actions { display: flex; gap: var(--s-3); }
+/* Buttons offered beside something rather than under a form: closer together, and wrapping rather
+   than running off the edge, since a row of them is as long as the words a language spells them in. */
+.buttonrow { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 
 .due--overdue { color: var(--c-due-overdue); }
 .due--today { color: var(--c-due-today); }
@@ -599,6 +614,11 @@ button.feed__target:hover { color: var(--c-accent); }
 .settings__section { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); padding: var(--s-4); }
 .settings__h { font-weight: var(--fw-bold); margin-bottom: var(--s-3); }
 .settings__body { display: flex; flex-direction: column; gap: var(--s-2); }
+/* A section body holding a form rather than rows of fact: its own reading width, and the room between
+   fields that filling one in wants. It wore the creation screen's block for this, which is why that
+   screen's padding could not be touched without moving settings — the two look alike because a form
+   looks like a form, not because either is the other's. */
+.settings__form { padding: var(--s-5); max-width: 560px; display: flex; flex-direction: column; gap: var(--s-5); }
 .settings__row { display: flex; gap: var(--s-4); font-size: var(--fs-md); }
 .settings__k { width: 220px; flex: none; color: var(--c-text-muted); }
 /* Profile avatar preview: a 48px circular base (registered image or identicon). */
@@ -611,20 +631,11 @@ button.feed__target:hover { color: var(--c-accent); }
 
 /* ---------- new project (creation screen) ---------- */
 .newproj { padding: var(--s-5); max-width: 560px; display: flex; flex-direction: column; gap: var(--s-5); }
-.newproj__field { display: flex; flex-direction: column; gap: var(--s-2); }
-.newproj__input {
-  padding: var(--s-3); border: 1px solid var(--c-border); border-radius: var(--r-md);
-  font-size: var(--fs-md); background: var(--c-surface); color: var(--c-text); outline: none;
-}
-.newproj__input:focus { border-color: var(--c-accent); }
-.newproj__folder { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
-.newproj__actions { display: flex; gap: var(--s-3); }
 
 /* ---------- new-project completion step ---------- */
 .newproj__capability { display: flex; flex-direction: column; gap: var(--s-2); }
 .newproj__capability p { margin: 0; font-size: var(--fs-md); }
 .newproj__next { display: flex; flex-direction: column; gap: var(--s-2); }
-.newproj__nextrow { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 
 /* ---------- the first loop (ask an AI, see it land on the board) ---------- */
 .firstloop {

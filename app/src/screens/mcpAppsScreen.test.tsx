@@ -132,6 +132,17 @@ describe("the screen where an AI is connected", () => {
     expect(rows()).toHaveLength(0);
   });
 
+  // The same shell as every other screen (`AMB-D-690`): the heading in the band on top, the rows in a
+  // section card. The heading is held to the sidebar entrance's own words, because a reader who
+  // pressed "connect via MCP" arriving at a different name reads it as a different place.
+  it("wears the shell the other screens wear, under the name the reader pressed", async () => {
+    await render({ projects: [SHOP], apps: [app()] });
+
+    expect(t("mcp.title")).toBe(t("nav.mcp"));
+    expect(container.querySelector(".board__toolbar")?.textContent).toContain(t("mcp.title"));
+    expect(container.querySelector(".settings__section .mcp__apps")).not.toBeNull();
+  });
+
   it("opens each row's ticks on the projects that app already reaches", async () => {
     await render({
       projects: [SHOP, GREENHOUSE],

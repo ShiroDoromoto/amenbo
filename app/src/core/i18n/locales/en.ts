@@ -506,7 +506,11 @@ const ui = {
   // The other way in: an AI whose host cannot open a folder reaches this project over MCP instead
   // (`AMB-D-671`, `AMB-D-672`, `AMB-D-673`). Folded away on both the creation and the settings screen,
   // because the reader who has amenbo on the command line needs none of it.
-  "mcp.title": "Reach your projects from an AI",
+  // The MCP screen's own heading, said the way the sidebar entrance says it (`nav.mcp`) so the name a
+  // reader pressed is the name they arrive at (`AMB-D-690`); `mcp.setupTitle` is the line on a
+  // project's settings screen, which names the subject there rather than that road.
+  "mcp.title": "Connect via MCP",
+  "mcp.setupTitle": "Reach your projects from an AI",
   "mcp.open": "Connect over MCP (for an AI that cannot open a folder)",
   "mcp.hint": "An app reaches the projects you choose for it, through one server. Choose them once per app — amenbo writes the whole choice each time.",
   "mcp.configured": "Set up",

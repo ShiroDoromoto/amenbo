@@ -13,6 +13,10 @@
 // **Two roads, one per row** (`AMB-D-672`). The app that cannot run a command is handed a file to
 // open; the rest have an AI of their own, which is given the request and does the merge. Which button
 // a row draws is the catalog's word, not this screen's.
+//
+// **It wears the same shell as every other screen** (`AMB-D-690`): the heading in a `board__toolbar`
+// band on top, the body inside a `settings__section` card. The heading says what the sidebar entrance
+// says, so a reader who pressed "connect via MCP" arrives at that name rather than at another one.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchMcpRequest, fetchMcpSetup, saveMcpBundle } from "../core/mutations";
 import { errText, t, tf } from "../core/i18n";
@@ -67,32 +71,42 @@ export function McpAppsScreen({ pick = null }: { pick?: number | null }) {
   }, [load]);
 
   return (
-    <div className="settings mcp">
-      <div className="settings__h">{t("mcp.title")}</div>
-      <span className="newproj__hint">{t("mcp.hint")}</span>
-      {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
+    <>
+      <div className="board__toolbar">
+        <span className="board__title">🔗 {t("mcp.title")}</span>
+      </div>
 
-      {/* A project with no folder bound has nowhere to point a server, so a screen with none of them
-          says that rather than drawing rows whose ticks would write an entry naming nothing. */}
-      {setup && setup.projects.length === 0 && (
-        <div className="mcp__empty">{t("mcp.noProjects")}</div>
-      )}
+      <div className="settings">
+        <div className="settings__section">
+          <div className="settings__body">
+            <span className="newproj__hint">{t("mcp.hint")}</span>
+            {error && <div className="newproj__error" role="alert">⚠ {error}</div>}
 
-      {setup && setup.projects.length > 0 && (
-        <ul className="mcp__apps">
-          {setup.apps.map((app) => (
-            <McpAppRow
-              key={app.app}
-              app={app}
-              projects={setup.projects}
-              pick={pick}
-              onError={setError}
-              onWritten={load}
-            />
-          ))}
-        </ul>
-      )}
-    </div>
+            {/* A project with no folder bound has nowhere to point a server, so a screen with none of
+                them says that rather than drawing rows whose ticks would write an entry naming
+                nothing. */}
+            {setup && setup.projects.length === 0 && (
+              <div className="mcp__empty">{t("mcp.noProjects")}</div>
+            )}
+
+            {setup && setup.projects.length > 0 && (
+              <ul className="mcp__apps">
+                {setup.apps.map((app) => (
+                  <McpAppRow
+                    key={app.app}
+                    app={app}
+                    projects={setup.projects}
+                    pick={pick}
+                    onError={setError}
+                    onWritten={load}
+                  />
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 

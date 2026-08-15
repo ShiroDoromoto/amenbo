@@ -17,6 +17,14 @@
 # the kind of thing that can go missing with every test in the tree still green. The count it
 # publishes beside itself is what the road reads, since the state left behind is the same either way.
 #
+# One folder on that road is not this build's to read at all. A device carries a store per channel —
+# what a release installs, what a developer builds, the throwaway one a change is checked in — and a
+# pointer's project id is a key in the numbering of whichever store wrote it, so the same number names
+# a different project on the other side. A build that read a claimed folder would go quietly to work
+# in the wrong one, which is why what stands there is a refusal and not a warning: a warning is
+# answered by the write that comes after it. And the refusal says which store the folder belongs to,
+# because being turned away only helps a reader who is then told where to go.
+#
 # ── What only the screen road ever says ──────────────────────────────────────────────────────────
 # A reader arriving with no folder linked yet is offered two ways in: raise a project, or open one
 # this device already holds. Both are the interface's own to carry out — raising goes to a screen of
@@ -49,11 +57,12 @@ description: >
   `init` and read the pointer back from inside it, point a second folder at this run's own project
   with `bind` (the many-to-one relation a shared checkout rests on), resync that folder's guidance
   block and confirm a second pass finds nothing left to write, then unbind and confirm the folder
-  reaches nothing again, and finally take a project's folders off one at a time down to the last,
-  reading off each answer how many it has left. On screen the road is the way in that never passes
-  through a terminal: two cards and nothing to paste anywhere, the second asking which of this
-  device's projects the folder is to be linked to — the step it takes before the folder picker — then
-  the folder itself, and the board that opens with the first loop waiting on it.
+  reaches nothing again, take a project's folders off one at a time down to the last, reading off each
+  answer how many it has left, and finally walk into a folder another store has already claimed and be
+  turned away from it by name. On screen the road is the way in that never passes through a terminal:
+  two cards and nothing to paste anywhere, the second asking which of this device's projects the
+  folder is to be linked to — the step it takes before the folder picker — then the folder itself,
+  and the board that opens with the first loop waiting on it.
 given:
   # The project the card lists and the reader answers with. It is the screen road's alone — the road
   # from a terminal raises its own — but a premise stands before both, and a project more on the device
@@ -184,6 +193,24 @@ steps_cli:
     with:
       dir: standalone
       present: false
+
+  # A folder another store got to first. The pointer left there is this run's own with a different
+  # store's name on it, so its id is a live key here and its slug is that project's — everything
+  # agrees but the name, which is exactly the pointer no cross-check can catch and the only one that
+  # would land a build on a project it was never sent to.
+  - type: action
+    domain: folder
+    op: foreign-pointer
+    with:
+      dir: elsewhere
+      store: amenbo-dev
+
+  - type: assert
+    domain: folder
+    op: claimed
+    with:
+      dir: elsewhere
+      store: amenbo-dev
 
 steps_gui:
   - type: assert

@@ -282,10 +282,10 @@ function ExportImportSetting() {
     try {
       const r = await runExport(path);
       setMsg(
-        tf("settings.exportDone", {
+        `✓ ${tf("settings.exportDone", {
           kb: Math.max(1, Math.round(r.bytes / 1024)),
           attachments: r.attachments,
-        }) + (r.missing > 0 ? tf("settings.exportMissing", { missing: r.missing }) : ""),
+        })}` + (r.missing > 0 ? tf("settings.exportMissing", { missing: r.missing }) : ""),
       );
     } catch (e) {
       if (cancelling.current) setMsg(t("settings.transferCancelled"));
@@ -339,7 +339,7 @@ function BackupSetting() {
     const unlisten = await listenDataProgress(setProgress);
     try {
       const r = await runBackup(path);
-      setMsg(tf("settings.backupDone", { kb: Math.max(1, Math.round(r.bytes / 1024)) }));
+      setMsg(`✓ ${tf("settings.backupDone", { kb: Math.max(1, Math.round(r.bytes / 1024)) })}`);
     } catch (e) {
       if (cancelling.current) setMsg(t("settings.transferCancelled"));
       else setError(errText(e));
@@ -358,7 +358,7 @@ function BackupSetting() {
     const unlisten = await listenDataProgress(setProgress);
     try {
       const r = await runRestore(path);
-      const lines = [tf("settings.restoreDone", { attachments: r.blobs })];
+      const lines = [`✓ ${tf("settings.restoreDone", { attachments: r.blobs })}`];
       if (r.previousSavedTo) lines.push(tf("settings.restoreAside", { path: r.previousSavedTo }));
       if (r.superseded > 0) lines.push(tn("settings.restoreSwept", r.superseded));
       const m = r.migration;
@@ -439,7 +439,7 @@ function DoctorSetting() {
     try {
       if (repair.action === "rebind") await bindFolder(repair.project, repair.dir);
       else await resyncManagedBlocks(repair.dir);
-      setMsg(t("settings.doctorRepairDone"));
+      setMsg(`✓ ${t("settings.doctorRepairDone")}`);
       setReport(await fetchDoctorReport());
     } catch (e) {
       setError(errText(e));
@@ -460,8 +460,8 @@ function DoctorSetting() {
       const r = await runDoctorFix();
       const touched = r.reclaimedBlobs + r.forgottenBindings;
       setMsg(touched === 0
-        ? t("settings.doctorFixNothing")
-        : tf("settings.doctorFixDone", { blobs: r.reclaimedBlobs, bindings: r.forgottenBindings }));
+        ? `✓ ${t("settings.doctorFixNothing")}`
+        : `✓ ${tf("settings.doctorFixDone", { blobs: r.reclaimedBlobs, bindings: r.forgottenBindings })}`);
       setReport(await fetchDoctorReport()); // Check again to see what was fixed; anything the sweeps cannot fix stays.
     } catch (e) {
       setError(errText(e));
@@ -481,7 +481,7 @@ function DoctorSetting() {
           {report && (
             <span className="faint" style={{ fontSize: "var(--fs-xs)" }}>
               {report.issues.length === 0
-                ? t("settings.doctorClean")
+                ? `✓ ${t("settings.doctorClean")}`
                 : tf("settings.doctorFound", { errors: report.errors, warnings: report.warnings })}
             </span>
           )}

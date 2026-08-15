@@ -162,7 +162,7 @@ function DoneStep({ created, onOpenBoard, onOpenMcp }: { created: Created; onOpe
               <div className="newproj__nextrow">
                 <button className="btn" onClick={() => void reveal()}>📂 {t("newproj.openFinder")}</button>
                 <button className="btn" onClick={() => void copyStatus()}>
-                  {copied ? t("newproj.copied") : `📋 ${tf("newproj.copyStatus", { cmd: cli })}`}
+                  {copied ? `✓ ${t("newproj.copied")}` : `📋 ${tf("newproj.copyStatus", { cmd: cli })}`}
                 </button>
                 {/* One line out to where an AI is connected, rather than a second place to hand the
                     request over from (`AMB-D-684`). It is named and not conditioned: the fold it

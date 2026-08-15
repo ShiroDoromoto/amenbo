@@ -116,7 +116,7 @@ export function ProjectSettingsScreen({
           {loaded.archived && <span className="faint"> · {t("projset.archivedBadge")}</span>}
         </span>
         <div className="topbar__spacer" />
-        <button className="btn" onClick={onBack} disabled={busy}>{t("projset.back")}</button>
+        <button className="btn" onClick={onBack} disabled={busy}>← {t("projset.back")}</button>
       </div>
 
       <div className="settings">
@@ -153,7 +153,7 @@ export function ProjectSettingsScreen({
 
             <div className="newproj__actions">
               <button className="btn btn--primary" onClick={() => void save()} disabled={!canSave}>
-                {busy ? t("projset.saving") : saved ? t("projset.saved") : t("projset.save")}
+                {busy ? t("projset.saving") : saved ? `✓ ${t("projset.saved")}` : t("projset.save")}
               </button>
             </div>
           </div>

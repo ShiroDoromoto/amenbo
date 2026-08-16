@@ -17,9 +17,8 @@ name: _ci
 # stays on Linux, and the Rust jobs are mirrored onto the other two because the code they judge is
 # not: `target_os = "macos"` and `cfg(windows)` branches are invisible to a Linux compiler, so on
 # Linux alone they would ride into a release never having been built. The host crate is mirrored
-# onto both; the workspace onto macOS so far, its Windows leg being held back by failures of its
-# own (see the rust-macos job for what they are). Those mirrors build and test only — the
-# installers each OS ships stay in the release workflow.
+# onto both, and so is the workspace. Those mirrors build and test only — the installers each OS
+# ships stay in the release workflow.
 #
 # The path gate decides what a diff can have moved, and it can be wrong: a layer whose inputs are
 # not all listed, or a path listed under no layer at all, is skipped by a filter that believes it
@@ -184,18 +183,10 @@ jobs:
       - name: Doc links
         run: RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
 
-  # The `rust` job above, on the platform it cannot speak for. Twelve files in the workspace carry a
-  # `target_os = "macos"` branch; on Linux the compiler walks past every one of them, so nothing
-  # builds them on the way to a release. This job builds and tests them on every change that can
-  # reach them.
-  #
-  # There is no Windows leg here yet, and its absence is the one hole this net still has. The twelve
-  # `cfg(windows)` files in the workspace stay ungated, because turning the leg on surfaced failures
-  # that are not the leg's to fix. What is left of them is two places where the product itself
-  # behaves differently there, measured with the leg switched on: the folder path a binding records
-  # comes back in the verbatim `\\?\` form, so one store holds two spellings of the same kind of
-  # path, and a restore cannot replace a store file another connection holds open. Those are
-  # answered on their own, and the leg lands with them. The host crate's Windows side IS gated, by
+  # The `rust` job above, on the two platforms it cannot speak for. Twelve files in the workspace carry
+  # a `target_os = "macos"` branch and twelve a `cfg(windows)` one; on Linux the compiler walks past
+  # every one of them, so nothing builds them on the way to a release. This job builds and tests them
+  # on every change that can reach them. The host crate's other half is gated the same way, by
   # app-rust-mac-win below.
   #
   # It mirrors the `rust` job's clippy and test steps and stops there. The doc steps (doctests, doc
@@ -203,13 +194,29 @@ jobs:
   # rustdoc run would re-read what one has already judged. What that leaves out is a doc link
   # written inside a `cfg`-gated item — no platform but its own can resolve it — and that sliver is
   # accepted rather than paid for with a rustdoc run per OS on every change.
-  rust-macos:
-    name: cargo clippy + test (macOS)
-    runs-on: macos-latest
+  rust-mac-win:
+    name: cargo clippy + test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
+
+      # The store is SQLCipher-encrypted, so rusqlite's bundled-sqlcipher-vendored-openssl builds
+      # OpenSSL from source, and openssl-src configures it by shelling out to perl. On Windows the
+      # perl a step resolves may be MSYS2's, which lacks Locale::Maketext::Simple and dies in
+      # ./Configure — so name the runner's Strawberry Perl, which openssl-src reads ahead of PERL
+      # and PATH. A step rather than the job's `env` because the variable must be ABSENT on macOS,
+      # not empty: openssl-src takes an empty value as the program to run. Same reason, and the same
+      # wording, as app-rust-mac-win below — both jobs build this workspace.
+      - name: Name the runner's Strawberry Perl for the OpenSSL build
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: echo "OPENSSL_SRC_PERL=C:/Strawberry/perl/bin/perl.exe" >> $env:GITHUB_ENV
 
       - name: Show toolchain
         run: rustc --version && cargo clippy --version
@@ -527,8 +534,7 @@ jobs:
         run: RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path app/src-tauri/Cargo.toml --no-deps --document-private-items
 
   # The `app-rust` job above, on the two platforms it cannot speak for — the same argument as
-  # `rust-macos`, for the other tree, and here it reaches Windows as well. The host crate is where
-  # the OS branches are thickest: the
+  # `rust-mac-win`, for the other tree. The host crate is where the OS branches are thickest: the
   # menu, autostart, each platform's notifier, and the store watch that chooses between a kernel
   # watch and polling. Only the Linux side of any of it is built by the job above, and the Windows
   # side has never been built by a gate at all — the release workflow was the first thing to
@@ -759,7 +765,7 @@ jobs:
     needs:
       - changes
       - rust
-      - rust-macos
+      - rust-mac-win
       - verification
       - verification-macos
       - gui-web

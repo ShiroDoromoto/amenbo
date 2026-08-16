@@ -48,7 +48,7 @@ jobs:
           restore-keys: cargo-${{ runner.os }}-
 
       - name: Install cargo-nextest
-        uses: taiki-e/install-action@v2.85.11
+        uses: taiki-e/install-action@v2.85.13
         with:
           tool: cargo-nextest
 

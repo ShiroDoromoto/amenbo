@@ -5857,6 +5857,11 @@ mod tests {
     /// so it takes every later connection down with it: opens succeed, reads answer, writes come back
     /// `disk I/O error` — for the life of the process, which is why restarting the app was the only
     /// way out. Pinned here at the write open: the sidecars go, and the next write still lands.
+    ///
+    /// Unix only, because the scene this sets is one Windows will not let anyone build: a delete
+    /// there is refused outright while another handle holds the file open, so the sidecars cannot go
+    /// out from under a live connection and the orphan this guards against cannot arise.
+    #[cfg(unix)]
     #[test]
     fn a_write_survives_the_sidecars_being_cleared_under_the_watch_connection() {
         let _env = env_guard();

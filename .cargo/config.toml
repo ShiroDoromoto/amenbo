@@ -1,0 +1,18 @@
+# The main thread's stack, on the one platform that does not give it enough.
+#
+# Windows reserves 1 MB for the thread a process starts on; Linux and macOS give it 8. The CLI
+# builds its whole command tree — every subcommand, every argument — in one pass before it reads
+# the first word of what was typed, and a debug build's frames for that do not fit in 1 MB. What
+# comes out is not a diagnostic: the process dies with STATUS_STACK_OVERFLOW before main runs, so
+# every invocation of a debug build ends in a crash, whatever was asked of it.
+#
+# Reserving is not committing. The pages are address space until they are touched, so a run that
+# needs a page of stack still uses a page of stack; what changes is only how far it may go before
+# the kernel stops it. Reserve the same 8 MB the other two platforms hand out, so the same code
+# runs the same way on all three.
+#
+# Scoped to the MSVC toolchain because `/STACK` is that linker's spelling — a GNU-toolchain Windows
+# build (which nothing here does) would want `-Wl,--stack` instead, and would rather fail to match
+# this section than be handed a flag its linker cannot read.
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "link-arg=/STACK:8388608"]

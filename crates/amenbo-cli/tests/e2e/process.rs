@@ -3,8 +3,6 @@
 
 mod harness;
 
-use std::process::Command;
-
 use harness::*;
 
 #[test]
@@ -37,7 +35,7 @@ fn errors_and_exit_codes() {
 #[test]
 fn a_closed_pipe_ends_the_run_without_a_panic() {
     use std::os::unix::process::ExitStatusExt;
-    use std::process::Stdio;
+    use std::process::{Command, Stdio};
 
     let cli = Cli::new();
     cli.run(&["init", "--name", "tester"]);

@@ -1,0 +1,32 @@
+name: release-tag
+
+# The real path to a release: a `v*` tag push builds it. What gets built, and why building is
+# not shipping, is in _release.yml.
+#
+# The tag is the trigger and nothing else is. A merge or a branch push must never reach the
+# release body — the human/AI gate closes before the tag is pushed, and a second trigger here
+# would be a way past it.
+
+on:
+  push:
+    tags: ['v*']
+
+# A release must finish once started — never cancel an in-progress run. Group per ref so two
+# tags don't serialize against each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    uses: ./.github/workflows/_release.yml
+    # The aggregate job signs build provenance with the workflow's keyless OIDC identity and
+    # writes the prerelease. A called workflow can only narrow what it is granted, so the
+    # widest permission any job in the body takes has to be granted here.
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    # The mac signing/notary keys and the Tauri updater signing key. Without them the mac and
+    # Windows legs go red at the signing step.
+    secrets: inherit

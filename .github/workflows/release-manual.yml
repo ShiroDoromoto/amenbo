@@ -1,0 +1,25 @@
+name: release-manual
+
+# A re-run of the release body against a tag that already exists — for when a leg went red on
+# something outside the tree (a runner, a rate limit, a missing secret since supplied) and the
+# tag itself is sound. Dispatch it with the tag selected as the ref.
+#
+# It builds and prereleases exactly what release-tag.yml does (_release.yml is the one body), so
+# it is not a way past the gate: the gate closed when the tag was pushed. What it must never be
+# pointed at is a branch — the bytes would carry the release stamp without a tag to name them.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    uses: ./.github/workflows/_release.yml
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    secrets: inherit

@@ -31,7 +31,7 @@ verification/
 
 `core/`, `cli/` and `gui/` are members of this cargo workspace, outside the main workspace, so the
 root manifest's own clippy and tests never reach them. What does is a stage of its own on either
-side: CI's `verification` job, gated to changes under `verification/` (`.github/workflows/ci.yml`),
+side: CI's `verification` job, gated to changes under `verification/` (`.github/workflows/_ci.yml`),
 and `make gate-verification` locally, which `make gate` runs when this layer is what a change
 touched and `make test` runs unconditionally. Both are the same two lines:
 

@@ -16,7 +16,7 @@
 //! **The stamp closes it.** `AMENBO_BUILD=release` is set in the release workflow's environment and
 //! nowhere else — not in the Makefile, not in a plain `cargo build` — so it is present in exactly the
 //! binaries public CI produced. There is no other way a distributed amenbo is built: every artifact
-//! comes from `release.yml`, and the `script` channel ships those same bytes.
+//! comes from `_release.yml`, and the `script` channel ships those same bytes.
 //!
 //! **What the gate refuses is narrow**, and all four conditions must hold ([`refuses_migration`]): an
 //! unstamped build, pointed at the production channel, against the real app-data root, with no escape
@@ -109,7 +109,7 @@ mod tests {
     #[test]
     fn only_the_release_value_counts_as_a_stamp() {
         assert!(!is_release_build(), "a test binary is never a release artifact");
-        assert_eq!(RELEASE, "release", "the value release.yml sets");
+        assert_eq!(RELEASE, "release", "the value _release.yml sets");
     }
 
     /// An isolated store is never gated, whatever the build: this is the arm that keeps `make verify`,

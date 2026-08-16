@@ -1,0 +1,33 @@
+name: rot-gates-weekly
+
+# The time-driven half of the CI net. The gates in _rot-gates.yml break on their own: a new
+# RustSec advisory lands on a dependency nobody edited, the runner's linter installs a newer
+# version than the tree was written against, the catalog key's other copy is rotated in another
+# repository, or a shipped release loses its provenance. Nothing in a diff can predict any of it,
+# so a diff-driven trigger never fires for them — this leg runs them on a timer instead.
+#
+# It runs every one of them unconditionally (no `with:`, so every input keeps its default of true:
+# rot is not a function of the diff) and nothing else.
+#
+# Weekly, not nightly: an advisory only becomes real harm when a binary ships, and a release is
+# judged on its own merits when it is built. What this leg buys is finding out early instead of on
+# release day, and a week is soon enough for that.
+#
+# The manual leg of the same body is rot-gates-manual.yml — a separate file so that dispatching one
+# does not cancel the other's run.
+
+on:
+  schedule:
+    # Mondays at 07:00 UTC. An hour after scale-heavy-nightly.yml and an hour before
+    # ci-full-nightly.yml, so the three timed legs never contend for the same runners.
+    - cron: '0 7 * * 1'
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  rot-gates:
+    uses: ./.github/workflows/_rot-gates.yml
+    permissions:
+      contents: read

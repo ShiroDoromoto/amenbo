@@ -1,12 +1,12 @@
-name: Rot gates
+name: _rot-gates
 
 # The gates that can go red WITHOUT anyone touching the tree. They live here, in a reusable
 # workflow, because two different events have to run them and there must be exactly one definition
 # of each:
 #
-#   - ci.yml calls this on push:main / pull_request, with the `changes` path filter deciding which
+#   - _ci.yml calls this on push:main / pull_request, with the `changes` path filter deciding which
 #     of them run — a change that touches no dependency shouldn't pay for an audit.
-#   - rot-weekly.yml calls it on a schedule with every input left at its default (true), so all of
+#   - rot-gates-weekly.yml calls it on a schedule with every input left at its default (true), so all of
 #     them run unconditionally. Rot is not a function of the diff: a dependency nobody edited turns
 #     red when a new advisory is published, the linters below install the newest release on every
 #     run so the RUNNER moves under a tree that didn't, and the catalog key's other copy lives in
@@ -15,10 +15,10 @@ name: Rot gates
 #     without the weekly leg these go unjudged for as long as main sits unpushed.
 #
 # What is NOT here, on purpose: rust / app-rust / gui-web. Those break when code changes, not on
-# their own, so they are ci.yml's — judged by the local gate before the merge and by ci.yml after
-# it, both on the diff. That they also run on a timer (full-nightly.yml) does not make them rot
-# gates: what that leg is watching is the path filter's own judgment, not the passing of time, and
-# it gets there by running the whole of ci.yml rather than by listing jobs a second time here.
+# their own, so they are _ci.yml's — judged on the diff, before the merge and after it. That they
+# also run on a timer (ci-full-nightly.yml) does not make them rot gates: what that leg is watching
+# is the path filter's own judgment, not the passing of time, and it gets there by running the whole
+# of _ci.yml rather than by listing jobs a second time here.
 #
 # Cost: this repo is public, so Actions minutes are free — four Linux jobs, a few minutes each (the
 # key comparison is seconds), and the weekly leg on the order of 20 min/month of runner time.
@@ -42,6 +42,10 @@ on:
         description: run the catalog public key comparison
         type: boolean
         default: true
+      provenance:
+        description: verify the shipped release from the consumer side
+        type: boolean
+        default: true
 
 jobs:
   # scripts/ drives the packaging and the on-hardware verification (mac pkg, Linux Docker, the
@@ -59,7 +63,7 @@ jobs:
   # settles the embedded half below, since actionlint runs whatever shellcheck is on PATH.
   #
   # That other half is the shell EMBEDDED in these workflows' own `run:` blocks — which the
-  # file-based half never saw, even though a step like the store_watch binary extraction in ci.yml is
+  # file-based half never saw, even though a step like the store_watch binary extraction in _ci.yml is
   # a real pipeline with real quoting. actionlint hands every `run:` to shellcheck (and validates
   # the workflow's expressions/job refs on the way), so the same contract now covers both. It is
   # not preinstalled either; `go install` it (Go ships on the runner). Neither install is pinned —
@@ -175,3 +179,46 @@ jobs:
 
       - name: Compare the shipped key with the published one
         run: guards/check-catalog-key.sh
+
+  # Verify the shipped release still installs and still carries its build provenance, from the
+  # consumer side. A release built and attested by public CI can lose its provenance after the fact
+  # — an asset overwritten from a laptop attaches nothing (wharfy only WARNS), so a consumer's
+  # `wharfy verify` would fail on bytes that were sound when they shipped. Nothing in a diff predicts
+  # that, which is what makes it one of these gates rather than one of _ci.yml's.
+  #
+  # It is the one input a change leaves off: probing the live release is meaningless against a diff,
+  # so the entry that runs on a change passes `provenance: false` while the timer takes the default.
+  provenance:
+    name: wharfy verify (shipped release digests + provenance)
+    runs-on: ubuntu-latest
+    if: ${{ inputs.provenance }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # wharfy falls back to the latest git tag if there is no record
+
+      # Same install script the release and promote workflows use; the ubuntu runner has no Homebrew.
+      - name: Install wharfy
+        run: |
+          curl -fsSL https://github.com/ShiroDoromoto/wharfy/releases/latest/download/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # verify needs no local state: with no .wharfy/ record it takes the version from
+      # the latest GitHub release (else the latest tag). The default (probe) run
+      # downloads nothing but still compares GitHub's reported asset digests against the
+      # checksums manifest and checks build provenance — a truncated upload, a swapped
+      # asset, or a release that lost its attestation turns this red.
+      - name: Verify the latest release from the consumer side
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Before the first public release there is nothing to verify — don't sit red
+          # on a repo that has never shipped. Once a release exists, verify judges it.
+          if [ -z "$(gh release list --limit 1 2>/dev/null)" ]; then
+            echo "no GitHub release yet — nothing to verify"
+            exit 0
+          fi
+          wharfy verify

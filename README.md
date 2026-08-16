@@ -8,7 +8,7 @@
 
 <!-- The badges belong on one line of source: a single newline is a hard break in GFM, so one per line
      would stack them into a column. -->
-[![License: Apache-2.0](https://img.shields.io/github/license/ShiroDoromoto/amenbo?color=blue)](LICENSE) [![CI](https://img.shields.io/github/actions/workflow/status/ShiroDoromoto/amenbo/ci.yml?branch=main&label=CI)](https://github.com/ShiroDoromoto/amenbo/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/ShiroDoromoto/amenbo?label=release)](https://github.com/ShiroDoromoto/amenbo/releases) ![OS: macOS | Windows | Linux](https://img.shields.io/badge/OS-macOS%20%7C%20Windows%20%7C%20Linux-informational)
+[![License: Apache-2.0](https://img.shields.io/github/license/ShiroDoromoto/amenbo?color=blue)](LICENSE) [![CI](https://img.shields.io/github/actions/workflow/status/ShiroDoromoto/amenbo/ci-change.yml?branch=main&label=CI)](https://github.com/ShiroDoromoto/amenbo/actions/workflows/ci-change.yml) [![Release](https://img.shields.io/github/v/release/ShiroDoromoto/amenbo?label=release)](https://github.com/ShiroDoromoto/amenbo/releases) ![OS: macOS | Windows | Linux](https://img.shields.io/badge/OS-macOS%20%7C%20Windows%20%7C%20Linux-informational)
 
 **[Download](https://amenbo.work/en/start/)** · **[Docs](#contents)** · **[Commands](#commands)**
 
@@ -181,7 +181,7 @@ moves what those locks resolve to without touching the files. CI's `out-of-works
 job fails a pull request whose copies are behind; `make lock` re-resolves both (seconds,
 nothing is compiled) and the result is yours to commit.
 Dependabot's own bumps are repaired for it, ahead of the merge — see `lockstep` in
-`.github/workflows/dependabot-automerge.yml`. That repair pushes with the workflow's own
+`.github/workflows/_dependabot-automerge.yml`. That repair pushes with the workflow's own
 token, which starts no run, so a bump that does move a lock ends up waiting on a verdict
 its new head never got.
 

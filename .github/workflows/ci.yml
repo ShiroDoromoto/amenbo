@@ -753,3 +753,60 @@ jobs:
         run: |
           chmod +x guards/check-ts-derive.sh
           guards/check-ts-derive.sh
+
+      - name: Assert the merge gate below waits for every job in this workflow
+        run: |
+          chmod +x guards/check-ci-aggregate.sh
+          guards/check-ci-aggregate.sh
+
+  # The one check the merge target requires. Every job above feeds it, so its verdict is the whole
+  # workflow's verdict — and what the ruleset pins is a single name that does not move when a job is
+  # added, renamed, or skipped by the path gate. Naming the jobs individually there would put the
+  # merge condition in a place no diff shows, where a rename silently drops one.
+  #
+  # `always()` is load-bearing. Without it a failed dependency SKIPS this job rather than running it,
+  # and a skipped required check is not a red one — the merge would sit on a verdict that never
+  # arrives, or take one that was never given. So it always runs, and folds the results itself.
+  #
+  # `skipped` passes: most jobs above are path-gated, and skipping is their ordinary answer to a diff
+  # that cannot have moved them. `cancelled` fails: such a job judged nothing. The only cancellation
+  # here comes from the concurrency group at the top, which takes down superseded runs — and no merge
+  # waits on a superseded run's verdict.
+  #
+  # Adding a job without a line in `needs:` leaves this gate green without it, and nothing goes red to
+  # say so. guards/check-ci-aggregate.sh compares the two lists; tree-guards above runs it.
+  all-green:
+    name: all green
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    needs:
+      - changes
+      - rust
+      - verification
+      - gui-web
+      - go
+      - rot-gates
+      - cargo-license
+      - npm-license
+      - app-rust
+      - out-of-workspace-locks
+      - comment-guard
+      - tree-guards
+    steps:
+      - name: Fold every job's result
+        env:
+          # Read as data rather than one interpolation per job: this expression carries whatever
+          # `needs:` names, so the fold cannot fall behind the list the way a hand-written set of
+          # `needs.<id>.result` reads would.
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "  \(.value.result)\t\(.key)"'
+          failed=$(echo "$RESULTS" | jq -r '
+            to_entries[]
+            | select(.value.result != "success" and .value.result != "skipped")
+            | .key')
+          if [ -n "$failed" ]; then
+            echo "::error::did not pass: $(echo "$failed" | tr '\n' ' ')"
+            exit 1
+          fi
+          echo "every job in this workflow passed or was skipped"

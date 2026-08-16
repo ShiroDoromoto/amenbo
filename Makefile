@@ -141,7 +141,7 @@ LINUX_CLI_IMAGE   := amenbo-linux-cli:$(LINUX_CLI_ARCH)
 # so it does not appear here = shell-gate's actionlint sees that.
 SHELL_SOURCES := $(shell git ls-files '*.sh' '.githooks/*')
 
-.PHONY: help install install-dev gui gui-dev install-gui install-gui-dev dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux verify-existing-store release codesign-cert devtool
+.PHONY: help install install-dev gui gui-dev install-gui install-gui-dev dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate ci-aggregate-gate sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux verify-existing-store release codesign-cert devtool
 
 help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
@@ -159,6 +159,7 @@ help:
 	@echo "make sidecar-name-gate - assert the CLI beside the app is looked for under the name the bundle ships it as (a rename on one side hands MCP hosts a path to nothing) = the same guard CI runs (automatic at the start of make test)"
 	@echo "make selfupdate-gate - assert the GUI asks which channel it is before reaching for self-update (a dev build that updates installs prod over itself) = the same guard CI runs (automatic at the start of make test)"
 	@echo "make ts-derive-gate - assert every #[derive(TS)] sits in the GUI crate (a derive elsewhere moves bindings.ts on a change nothing on the GUI side watches) = the same guard CI runs (automatic at the start of make test)"
+	@echo "make ci-aggregate-gate - assert CI's merge gate waits for every job in ci.yml (a job missing from its needs is one the required check goes green without) = the same guard CI runs (automatic at the start of make test)"
 	@echo "make sweep-stale  - if the cargo cache exceeds $(SWEEP_LIMIT_GB)GB, drop artifacts untouched for $(SWEEP_DAYS) days (automatic at the end of make test)"
 	@echo "make dist-gui     - build the prod GUI (mac dmg) with build-time signing into dist/ (a supplement for non-installer users; not a wharfy bundle)"
 	@echo "make dist-gui-mac - build the mac unified .pkg (GUI to /Applications, CLI to /usr/local/bin) into dist/ (the mac release bundle itself; Intel build via MAC_GUI_ARCH=amd64)"
@@ -524,6 +525,7 @@ gate-cheap:
 	$(MAKE) --no-print-directory sidecar-name-gate
 	$(MAKE) --no-print-directory selfupdate-gate
 	$(MAKE) --no-print-directory ts-derive-gate
+	$(MAKE) --no-print-directory ci-aggregate-gate
 
 ## The workspace stage: the same two commands CI's `rust` job runs, plus the doctests and the doc
 ## link check. `--all-features` lints the feature-gated targets too (scale/e2e tests, the gated
@@ -700,6 +702,14 @@ selfupdate-gate:
 ## Declared once and shared: `make test` and CI's tree-guards both run this file.
 ts-derive-gate:
 	@guards/check-ts-derive.sh
+
+## Guard the merge gate itself: CI ends in one aggregate job whose name is the single check the merge
+## target requires, and it waits for what its `needs:` names and nothing else. A job added without a
+## line there is one the required check goes green without — the run is green, the merge goes through,
+## and no build anywhere reports it. That is the one thing a red build cannot say, so it is asked here.
+## Declared once and shared: `make test` and CI's tree-guards both run this file.
+ci-aggregate-gate:
+	@guards/check-ci-aggregate.sh
 
 ## Trim a bloated cargo cache by atime LRU. `target/` has no GC, and old artifacts with a different
 ## hash pile up forever (measured ~3.7GB/day). A periodic run would eat idle time, so sweep at the end

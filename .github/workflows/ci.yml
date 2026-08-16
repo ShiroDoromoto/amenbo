@@ -5,12 +5,15 @@ name: CI
 # separate runs. Runner minutes are unchanged — each job still gets its own
 # runner — but the run list, status, and concurrency group are unified.
 #
-# Trigger scope: `push` is restricted to `main` so a feature/Dependabot branch
-# doesn't run the suite twice (once for the push, once for the PR). Pre-merge
-# validation happens via `pull_request`; `push: main` is the post-merge backstop
-# on the merge target itself (and the only gate for branches merged without a
-# PR). `concurrency` cancels an in-progress run when a newer commit (e.g. a
-# Dependabot rebase) supersedes it — but only on PRs, see below.
+# Trigger scope: `push` is restricted to `main` so a task/Dependabot branch
+# doesn't run the suite twice (once for the push, once for the PR). Every branch
+# reaches main through a PR now, so `pull_request` carries the whole pre-merge
+# gate and `push: main` is the post-merge backstop on the merge target itself.
+# The trigger is not widened to task branches: on a push the path filter below
+# sees only that push's diff, so a branch pushed in instalments would judge each
+# instalment alone, while on a PR it sees the branch's whole diff against the
+# merge base. `concurrency` cancels an in-progress run when a newer commit (e.g.
+# a Dependabot rebase) supersedes it — but only on PRs, see below.
 #
 # Cost: this repo is public, so Actions minutes are free — the net is no longer drawn
 # to save minutes but by what a change can affect: the `changes` path gate below runs

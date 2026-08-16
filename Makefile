@@ -146,8 +146,8 @@ SHELL_SOURCES := $(shell git ls-files '*.sh' '.githooks/*')
 help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
 	@echo "make install-dev  - install the dev CLI to ~/.cargo/bin/amenbo-dev (app-data: work.amenbo.amenbo-dev)"
-	@echo "make gate         - the same gate, narrowed to the layers this change touched (.github/paths-filters.yml, the file CI reads); a path on no layer falls back to the whole of make test"
-	@echo "make test         - full gate (core/cli scale,e2e + app crate clippy/test + GUI typecheck/build/test)"
+	@echo "make gate         - the same gate, narrowed to the layers this change touched (.github/paths-filters.yml, the file CI reads); a path on no layer falls back to the whole of make test. Nothing here decides a merge — that verdict is CI's, on the PR"
+	@echo "make test         - full gate (core/cli scale,e2e + app crate clippy/test + GUI typecheck/build/test). Kept for a deliberate local sweep; neither a merge nor a tag waits on it"
 	@echo "make verify ARGS=\"...\" - run the CLI in a throwaway isolated store (leaves prod/dev app-data untouched; INIT=1 binds it first, which is what --actor ai needs; SCRIPT=<file> runs a sequence through one isolation)"
 	@echo "make lint-linux   - clippy the Linux branch (cfg(target_os=\"linux\")) in a container = the same 2 jobs as CI's rust/app-rust (make test does not see them; needs Docker)"
 	@echo "make shell-gate   - shellcheck tracked shell (scripts/, guards/, .githooks/) and actionlint the run: in workflows (automatic at the start of make test; needs shellcheck 0.10+/actionlint)"
@@ -169,7 +169,7 @@ help:
 	@echo "make verify-network-linux - stand up real NFS/SMB and exercise store_watch's network-FS detection (needs Docker; also runs every time in CI)"
 	@echo "make verify-network-mac - the macOS version of the above (MNT_LOCAL detection). Mounts real SMB over loopback and exercises it (needs Docker)"
 	@echo "make verify-existing-store - run the CLI bundled in the shipped .pkg against a clone of the prod store and check an existing store still opens and reads back (release runs this before publish)"
-	@echo "make release      - [pre-tag gate only] just runs make test. Build and distribution are both public CI (release.yml on tag push -> prerelease, the promote workflow does the promotion) = there is no command here that distributes"
+	@echo "make release      - [pre-tag hand-off] prints the tag to push and where the gate before it lives. Gate, build and distribution are all public CI (the full-regression run on main, then release.yml on tag push -> prerelease, then the promote workflow) = there is no command here that gates or distributes"
 	@echo "make codesign-cert - one-time: create a stable self-signed certificate so install-dev/gui-dev stop re-prompting the keychain on every rebuild (macOS)"
 	@echo "make schema-freeze - write the store's current shape to store_engine/schema_frozen/v<latest>.sql and name it in frozen() (run it after appending a migration step, which is what bumps the version)"
 	@echo "make schema-renumber - after a merge left two steps on the same version number, move the trailing steps back into ascending order and freeze the number the last one lands on (the steps' own tests are yours)"
@@ -422,9 +422,11 @@ verify-network-mac:
 ## substituted with a container, so they drive a maintainer's own machine over ssh and run for nobody
 ## else. They live in .local/local.mk with the scripts they call, which are not tracked either.
 
-## [pre-tag gate] The prod release is built by public CI — there is no "command that distributes"
-## here at all. What this closes is only the gate before pushing a tag (version consistency and make
-## test). On tag push, release.yml builds every OS and produces a prerelease + attestation, and after
+## [pre-tag hand-off] The prod release is gated, built and published by public CI — there is no
+## "command that gates" and no "command that distributes" here at all. The full run with the path
+## filter forced open, which is the last thing standing between a wrong filter and a shipped build,
+## is the full-regression workflow dispatched on main; this target only says so and names the tag.
+## On tag push, release.yml builds every OS and produces a prerelease + attestation, and after
 ## the real byte stream is verified the promote workflow (a manual Actions dispatch) promotes
 ## prerelease→latest and publishes/verifies. Build and distribution both stay in CI; there is no line
 ## here that calls wharfy release / publish (no GITHUB_TOKEN needed either).
@@ -432,9 +434,10 @@ verify-network-mac:
 ## skill against the bytes CI built, not a local build. The version is Cargo.toml [workspace.package]
 ## version (bump it first, then run).
 release:
-	@echo "→ pre-tag gate v$(VERSION) (build and distribution are both public CI; this is the gate only)"
-	$(MAKE) test
-	@echo "→ gate green. Pushing a tag makes public CI (release.yml) build every OS and produce a prerelease + attestation:"
+	@echo "→ pre-tag hand-off v$(VERSION) (gate, build and distribution are all public CI; this only points the way)"
+	@echo "  the gate before the tag is the full-regression run on main, with the path filter forced open:"
+	@echo "    gh workflow run full-nightly.yml --ref main"
+	@echo "  once that is green, pushing a tag makes public CI (release.yml) build every OS and produce a prerelease + attestation:"
 	@echo "    git tag -a v$(VERSION) -m \"amenbo $(VERSION)\" && git push origin v$(VERSION)"
 	@echo "  the prerelease does not become latest = users are unaffected. Once you verify the real artifact CI built"
 	@echo "  (attestation + a migration rehearsal on a prod clone), the promote workflow (a manual Actions dispatch)"
@@ -446,8 +449,8 @@ release:
 ## what runs there, chosen by the same declaration — never a laxer one. A change to prose alone is
 ## the cheap stage and nothing more.
 ## The narrowing is only ever as good as the layer file: a path on no layer and not declared exempt
-## makes the script answer `full`, which is the whole of `test`. And the pre-tag gate (`make
-## release`) calls `test`, so nothing is distributed on a narrowed run.
+## makes the script answer `full`, which is the whole of `test`. Nothing is distributed on a narrowed
+## run either: the run that stands before a tag is CI's, with the filter forced open (see `release`).
 ## The layers are worked out only when `gate` is the goal — every other target would pay for a git
 ## walk it has no use for.
 ifneq (,$(filter gate,$(MAKECMDGOALS)))

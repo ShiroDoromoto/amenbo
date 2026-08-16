@@ -2,11 +2,11 @@ name: Dependabot auto-merge
 
 # Merge a Dependabot PR once CI has passed on it — nobody has to watch the queue.
 #
-# Why not GitHub's own auto-merge button: it only waits for *required* status
-# checks, and this repo declares none — the one ruleset on main forbids deletion
-# and force-push, and nothing else. With no required checks, native auto-merge
-# merges immediately, i.e. before CI says anything. So the wait is done here
-# instead: fire on CI *completing*, and merge only if it completed green.
+# The wait is done here rather than by GitHub's own auto-merge: fire on CI
+# *completing*, and merge only if it completed green. Native auto-merge would
+# hold for the same verdict now that main requires the aggregate check, but the
+# lockfile repair below has to land before the merge, and it runs off this very
+# signal — so the merge follows it here instead of racing it from the other side.
 #
 # `workflow_run` runs in the context of the base repo with a normal GITHUB_TOKEN,
 # so a fork PR cannot reach these permissions — the usual pull_request_target
@@ -42,9 +42,12 @@ jobs:
   #
   # It runs ahead of the merge rather than as a CI job because CI's token is read-only on a
   # Dependabot pull request — this workflow's `workflow_run` trigger is what carries a writable one.
-  # The push does not start another CI run (a GITHUB_TOKEN push never does), which is why the merge
-  # below can follow immediately: the run that went green and the tree being merged differ only by a
-  # lockfile cargo derived from the manifests CI already judged.
+  # The run that went green and the tree being merged differ only by a lockfile cargo derived from
+  # the manifests CI already judged.
+  #
+  # But a GITHUB_TOKEN push never starts a run, so the head this leaves behind carries no verdict of
+  # its own, and main's required check is asked for one. On the bumps that move a lock, the merge
+  # below is therefore refused and the job goes red — visibly, on the PR nobody has merged.
   #
   # A human's PR is held to the same contract by CI's `out-of-workspace-locks` job, which fails
   # instead of pushing.
@@ -119,4 +122,4 @@ jobs:
             exit 0
           fi
           echo "merging PR #$pr ($BRANCH), CI was green"
-          gh pr merge "$pr" --repo "$REPO" --squash --delete-branch
+          gh pr merge "$pr" --repo "$REPO" --merge --delete-branch

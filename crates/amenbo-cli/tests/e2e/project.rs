@@ -10,6 +10,15 @@ use serde_json::Value;
 
 use harness::*;
 
+/// The spelling the store records a folder under, worked out the way the product works it out
+/// (`binding::canonical_dir`). A test that predicts it with `std::fs::canonicalize` predicts one
+/// platform's answer: on Windows that call comes back in the verbatim `\\?\C:\…` form, which is not
+/// what is written down. Asking through the same function is what keeps the expectation honest
+/// wherever the suite runs.
+fn recorded_spelling(dir: &std::path::Path) -> String {
+    amenbo_core::binding::canonical_dir(dir).unwrap().to_string_lossy().to_string()
+}
+
 /// `config set default_view` decides the view a project **created without one** opens on. The setting
 /// is otherwise unobservable — reading it back out of `config` only proves it was stored — so what is
 /// asserted here is the project that came after it, which is the whole point of the key.
@@ -513,19 +522,27 @@ fn status_and_whoami_begin_with_project_location_header() {
     let pid = id_str(&cli.json(&["project", "add", "--name", "サイト刷新", "--json"])["project"]["id"]);
     cli.run(&["bind", "--project", &pid]);
 
-    // The child's getcwd resolves symlinks (on macOS /var → /private/var), so canonicalize the expected
-    // path to match.
-    let home = std::fs::canonicalize(&cli.home).unwrap().to_string_lossy().to_string();
-    let expected = format!("Project: サイト刷新  (this folder: {home})");
+    // The header names the folder the child is standing in, which the child reads from its own getcwd —
+    // and one folder has more than one spelling. macOS resolves /var to /private/var; Windows hands back
+    // whatever spelling the process was started with, which under a `TEMP` written in 8.3 form is not the
+    // one this test holds. So the path is read back out of the line and the two are compared as the
+    // filesystem resolves them, rather than as text. What stays pinned as text is the sentence around it.
+    let home = std::fs::canonicalize(&cli.home).unwrap();
+    let names_this_folder = |line: Option<&str>| {
+        line.and_then(|l| l.strip_prefix("Project: サイト刷新  (this folder: "))
+            .and_then(|rest| rest.strip_suffix(')'))
+            .and_then(|path| std::fs::canonicalize(path).ok())
+            .is_some_and(|named| named == home)
+    };
 
     let (status_out, code) = cli.run(&["status"]);
     assert_eq!(code, 0);
-    assert!(status_out.lines().next() == Some(expected.as_str()),
+    assert!(names_this_folder(status_out.lines().next()),
         "status begins with the location header: {status_out}");
 
     let (whoami_out, code) = cli.run(&["whoami"]);
     assert_eq!(code, 0);
-    assert!(whoami_out.lines().next() == Some(expected.as_str()),
+    assert!(names_this_folder(whoami_out.lines().next()),
         "whoami begins with the location header: {whoami_out}");
 }
 
@@ -573,8 +590,9 @@ fn project_show_lists_bound_folders_with_existence() {
     let ext = amenbo_scratch::scratch("bf");
     let ext_str = ext.to_string_lossy().to_string();
     cli.run(&["bind", "--project", &pid, "--dir", &ext_str]);
-    // `--dir` is canonicalized (symlinks resolved) before it is recorded; match on that path later.
-    let ext_canon = std::fs::canonicalize(&ext).unwrap().to_string_lossy().to_string();
+    // `--dir` is resolved (symlinks, and the verbatim spelling Windows answers in) before it is
+    // recorded; match on that path later.
+    let ext_canon = recorded_spelling(&ext);
 
     let shown = cli.json(&["project", "show", &pid, "--json"]);
     let folders = shown["bound_folders"].as_array().expect("bound_folders array");
@@ -603,7 +621,7 @@ fn doctor_and_project_show_flag_a_bound_folder_whose_pointer_vanished() {
     let ext = amenbo_scratch::scratch("mp");
     let ext_str = ext.to_string_lossy().to_string();
     cli.run(&["bind", "--project", &pid, "--dir", &ext_str]);
-    let ext_canon = std::fs::canonicalize(&ext).unwrap().to_string_lossy().to_string();
+    let ext_canon = recorded_spelling(&ext);
 
     let has_missing = |v: &Value| {
         v["issues"].as_array().unwrap().iter().any(|i| i["kind"] == "missing_pointer")
@@ -661,7 +679,7 @@ fn project_show_flags_a_bound_folder_another_store_wrote() {
     let ext = amenbo_scratch::scratch("fs");
     let ext_str = ext.to_string_lossy().to_string();
     cli.run(&["bind", "--project", &pid, "--dir", &ext_str]);
-    let ext_canon = std::fs::canonicalize(&ext).unwrap().to_string_lossy().to_string();
+    let ext_canon = recorded_spelling(&ext);
     let folder_entry = |v: &Value| -> Value {
         v["bound_folders"].as_array().unwrap().iter()
             .find(|f| f["path"].as_str() == Some(ext_canon.as_str()))
@@ -814,8 +832,8 @@ fn re_pointing_a_folder_takes_it_off_the_project_it_named_before() {
     let former =
         id_str(&cli.json(&["project", "add", "--name", "元PJ", "--dir", &moved_str, "--json"])["project"]["id"]);
     let keeper = id_str(&cli.json(&["project", "add", "--name", "移り先PJ", "--json"])["project"]["id"]);
-    // `--dir` is canonicalized before it is recorded; match on that spelling.
-    let moved_canon = std::fs::canonicalize(&moved).unwrap().to_string_lossy().to_string();
+    // `--dir` is resolved before it is recorded; match on that spelling.
+    let moved_canon = recorded_spelling(&moved);
     let lists_moved = |pid: &str| -> bool {
         cli.json(&["project", "show", pid, "--json"])["bound_folders"]
             .as_array()
@@ -851,6 +869,8 @@ fn deleting_a_project_leaves_a_folder_that_was_re_pointed_at_another_one_alone()
     let cli = Cli::new();
     let moved = amenbo_scratch::scratch("repoint-moved");
     let moved_str = moved.to_string_lossy().to_string();
+    // `--dir` is resolved before it is recorded; match on that spelling.
+    let moved_canon = recorded_spelling(&moved);
     let doomed =
         id_str(&cli.json(&["project", "add", "--name", "畳むPJ", "--dir", &moved_str, "--json"])["project"]["id"]);
     let keeper = id_str(&cli.json(&["project", "add", "--name", "引き継ぐPJ", "--json"])["project"]["id"]);
@@ -872,7 +892,7 @@ fn deleting_a_project_leaves_a_folder_that_was_re_pointed_at_another_one_alone()
     let shown = cli.json(&["project", "show", &keeper, "--json"]);
     let folders = shown["bound_folders"].as_array().unwrap_or_else(|| panic!("the keeper lists its folders: {shown}"));
     assert!(
-        folders.iter().any(|f| f["path"].as_str().is_some_and(|s| s.contains(&moved_str))),
+        folders.iter().any(|f| f["path"].as_str().is_some_and(|s| s.contains(&moved_canon))),
         "the keeper still holds the folder: {shown}",
     );
     // And the folder still reaches that project from where it stands.
@@ -908,8 +928,8 @@ fn a_moved_folder_is_re_pointed_by_id_and_the_binding_that_vanished_is_listed_wi
     // Two folders on one project: the one that stays is where the reader stands when the other goes.
     let staying = amenbo_scratch::scratch("repoint-staying");
     let moving = amenbo_scratch::scratch("repoint-moving");
-    // `--dir` records the canonical spelling, which is the one the answers come back in.
-    let moving_str = std::fs::canonicalize(&moving).unwrap().to_string_lossy().to_string();
+    // `--dir` records the resolved spelling, which is the one the answers come back in.
+    let moving_str = recorded_spelling(&moving);
     let pid = id_str(
         &cli.json(&["project", "add", "--name", "引っ越すPJ", "--dir", &staying.to_string_lossy(), "--json"])["project"]["id"],
     );
@@ -918,7 +938,7 @@ fn a_moved_folder_is_re_pointed_by_id_and_the_binding_that_vanished_is_listed_wi
     // The folder is moved out from under the binding — renamed, restored elsewhere, it is the same
     // thing to the registry: the path it holds no longer leads anywhere.
     let new_home = amenbo_scratch::scratch("repoint-new-home");
-    let new_home_str = std::fs::canonicalize(&new_home).unwrap().to_string_lossy().to_string();
+    let new_home_str = recorded_spelling(&new_home);
     std::fs::rename(moving.join(".amenbo"), new_home.join(".amenbo")).unwrap();
     std::fs::remove_dir_all(&moving).unwrap();
 

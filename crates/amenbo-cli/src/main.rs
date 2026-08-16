@@ -652,7 +652,7 @@ fn nested_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBuf> {
         Some(Command::Bind { dir: Some(d), .. })
         | Some(Command::Project { sub: ProjectCmd::Add { dir: d, .. } }) => {
             let p = std::path::PathBuf::from(d);
-            p.is_dir().then(|| std::fs::canonicalize(&p).unwrap_or(p))
+            p.is_dir().then(|| amenbo_core::binding::canonical_dir(&p).unwrap_or(p))
         }
         _ => std::env::current_dir().ok(),
     }
@@ -1454,8 +1454,8 @@ mod tests {
             "amenbo", "project", "add", "--name", "P", "--dir", &dir.to_string_lossy(),
         ]));
         assert_eq!(
-            target.map(|p| std::fs::canonicalize(&p).unwrap_or(p)),
-            Some(std::fs::canonicalize(&dir).unwrap_or(dir.clone())),
+            target.map(|p| amenbo_core::binding::canonical_dir(&p).unwrap_or(p)),
+            Some(amenbo_core::binding::canonical_dir(&dir).unwrap_or(dir.clone())),
             "the folder the pointer lands in is what the guard judges",
         );
 

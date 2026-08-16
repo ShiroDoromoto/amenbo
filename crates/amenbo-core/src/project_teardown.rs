@@ -95,7 +95,7 @@ fn release_folder(store: &Store, dir: &str, project_id: i64, registry: &mut Regi
         let _ = crate::agents::remove_from_dir(path);
     }
     registry.forget_project_ref(project_id, dir);
-    if let Ok(canon) = std::fs::canonicalize(path) {
+    if let Ok(canon) = crate::binding::canonical_dir(path) {
         let canon_str = canon.to_string_lossy().to_string();
         if canon_str != dir {
             registry.forget_project_ref(project_id, &canon_str);

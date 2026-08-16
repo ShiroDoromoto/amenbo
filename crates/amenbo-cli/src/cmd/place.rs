@@ -119,7 +119,7 @@ pub(crate) fn resolve_bound_folder(store: &Store, project_id: i64, token: &str) 
             Paths::command_name()
         ))));
     }
-    let canonical = std::fs::canonicalize(token).map(|p| p.to_string_lossy().to_string());
+    let canonical = amenbo_core::binding::canonical_dir(token).map(|p| p.to_string_lossy().to_string());
     let mut hits: Vec<&amenbo_core::binding::BoundFolder> =
         folders.iter().filter(|f| f.dir == token).collect();
     if hits.is_empty() {

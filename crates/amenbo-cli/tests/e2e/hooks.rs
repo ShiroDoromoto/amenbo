@@ -458,6 +458,11 @@ fn agent_hook_snippet_json_carries_the_request_the_configuration_and_its_destina
 /// the standing setup check that runs ahead of every other command, which is what keeps them to the one
 /// probe they came for, and keeps `hooks status` read-only as its spec says: that check can pull the record
 /// to `yes` when it finds our hook on disk, and a read must not do that behind a reader's back.
+///
+/// The count is the same fact everywhere, but the apparatus that reads it is not: it is a `#!/bin/sh`
+/// script put on `PATH` under the name `git`, which is a Unix way of standing in for a program and has no
+/// Windows counterpart there is any point in writing. The fact is held on the platforms that can ask.
+#[cfg(unix)]
 #[test]
 fn the_hook_probe_spawns_git_once_per_command_and_never_for_hooks_itself() {
     let cli = Cli::new();
@@ -476,11 +481,8 @@ fn the_hook_probe_spawns_git_once_per_command_and_never_for_hooks_itself() {
         format!("#!/bin/sh\necho \"$@\" >> {}\nexec {real_git} \"$@\"\n", log.display()),
     )
     .unwrap();
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(shim_dir.join("git"), std::fs::Permissions::from_mode(0o755)).unwrap();
-    }
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(shim_dir.join("git"), std::fs::Permissions::from_mode(0o755)).unwrap();
 
     let spawns = |args: &[&str]| -> usize {
         let _ = std::fs::remove_file(&log);

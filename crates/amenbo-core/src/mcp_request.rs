@@ -242,6 +242,14 @@ mod tests {
         crate::mcp_apps::find(id).expect("listed")
     }
 
+    /// The settings file a folder's app keeps, spelled the way the platform running this spells one.
+    /// [`McpApp::settings_path`] reaches it by joining, and a join writes the separator its own platform
+    /// uses — so a literal spelt with slashes is one platform's answer to that join rather than the
+    /// question these tests are asking, which is whether the file the request names is that one.
+    fn at(folder: &str, relative: &str) -> String {
+        Path::new(folder).join(relative).display().to_string()
+    }
+
     /// The JSON entry is the app's own word for where servers hang, with the command and the folder
     /// under it — and the word is the app's, not the family's.
     #[test]
@@ -306,7 +314,7 @@ mod tests {
         let exe = Path::new("/usr/local/bin/amenbo");
         let said = add(app("cursor"), &server(&folder, exe));
 
-        assert!(said.contains("/work/shop/.cursor/mcp.json"), "{said}");
+        assert!(said.contains(&at("/work/shop", ".cursor/mcp.json")), "{said}");
         assert!(said.contains("Keep every other server"), "{said}");
         assert!(said.contains("```json"), "{said}");
         assert!(said.contains(&entry(app("cursor"), &server(&folder, exe))), "{said}");
@@ -348,7 +356,7 @@ mod tests {
         let said = add(app("codex-cli"), &server(&folder, exe));
 
         assert!(said.contains(".codex/config.toml"), "{said}");
-        assert!(!said.contains("/work/shop/.codex"), "not under the project's folder: {said}");
+        assert!(!said.contains(&at("/work/shop", ".codex")), "not under the project's folder: {said}");
         assert!(said.contains("```toml"), "{said}");
     }
 
@@ -361,7 +369,7 @@ mod tests {
         let said = remove(app("cursor"), &server(&folder, exe));
 
         assert!(said.contains("`amenbo`"), "{said}");
-        assert!(said.contains("/work/shop/.cursor/mcp.json"), "{said}");
+        assert!(said.contains(&at("/work/shop", ".cursor/mcp.json")), "{said}");
         assert!(!said.contains("```"), "there is nothing to fence: {said}");
         assert!(said.contains("stays"), "{said}");
     }
@@ -375,8 +383,8 @@ mod tests {
         let exe = Path::new("/usr/local/bin/amenbo");
         let said = remove(app("cursor"), &server(&folders, exe));
 
-        assert!(said.contains("`/work/shop/.cursor/mcp.json`"), "{said}");
-        assert!(said.contains("`/work/greenhouse/.cursor/mcp.json`"), "{said}");
+        assert!(said.contains(&format!("`{}`", at("/work/shop", ".cursor/mcp.json"))), "{said}");
+        assert!(said.contains(&format!("`{}`", at("/work/greenhouse", ".cursor/mcp.json"))), "{said}");
         assert!(said.contains(" and `/work/greenhouse"), "read out as a list: {said}");
         // And the sentence around them agrees with itself about how many there are.
         assert!(said.contains("every other server in those files stays"), "{said}");
@@ -427,7 +435,7 @@ mod tests {
 
         assert!(said.contains("`amenbo-greenhouse`"), "the old entry is named: {said}");
         assert!(said.contains("`amenbo` entry Amenbo uses now"), "the live one is spared: {said}");
-        assert!(said.contains("/work/shop/.cursor/mcp.json"), "{said}");
+        assert!(said.contains(&at("/work/shop", ".cursor/mcp.json")), "{said}");
         assert!(!said.contains("```"), "there is nothing to fence: {said}");
         // The project it was written for is gone from the name's meaning, so it is not claimed here.
         assert!(!said.contains("Shop"), "no project is named: {said}");

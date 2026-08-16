@@ -119,12 +119,23 @@ mod tests {
     }
 
     /// Create `<dir>/.git` as a `gitdir:` file naming `target`.
-    fn git_file(dir: &Path, target: &str) {
-        std::fs::write(dir.join(".git"), format!("gitdir: {target}\n")).unwrap();
+    fn git_file(dir: &Path, target: &Path) {
+        std::fs::write(dir.join(".git"), format!("gitdir: {}\n", target.display())).unwrap();
     }
 
+    /// The `…/.git/worktrees/<name>` git writes into a linked worktree's marker, reached by joining
+    /// rather than by spelling. On Windows [`tmp`] comes back in the verbatim `\\?\` form, and inside one
+    /// of those a forward slash is an ordinary character rather than a separator — a marker spelt with
+    /// them would read as a single component, and [`classify_gitdir`] would find no `.git` to key on.
+    fn worktree_gitdir(repo: &Path, name: &str) -> PathBuf {
+        repo.join(".git").join("worktrees").join(name)
+    }
+
+    /// A directory under `parent`, named a level at a time. `name` carries a nested path as `a/b`, and a
+    /// join would hand that whole spelling over as one component — which under the verbatim base [`tmp`]
+    /// returns on Windows is a name the filesystem refuses, forward slash and all.
     fn subdir(parent: &Path, name: &str) -> PathBuf {
-        let p = parent.join(name);
+        let p = name.split('/').fold(parent.to_path_buf(), |at, part| at.join(part));
         std::fs::create_dir_all(&p).unwrap();
         p
     }
@@ -139,7 +150,7 @@ mod tests {
         std::fs::create_dir_all(project.join(".git")).unwrap();
 
         let wt = subdir(&project, "wt");
-        git_file(&wt, &format!("{}/.git/worktrees/wt", project.display()));
+        git_file(&wt, &worktree_gitdir(&project, "wt"));
 
         let found = nested(&wt).expect("the nested worktree inherited the binding");
         assert_eq!(found, Nested { worktree_root: wt.clone(), bound_dir: project.clone() });
@@ -159,7 +170,7 @@ mod tests {
         std::fs::create_dir_all(project.join(".git")).unwrap();
 
         let wt = subdir(&project, "wt");
-        git_file(&wt, &format!("{}/.git/worktrees/wt", project.display()));
+        git_file(&wt, &worktree_gitdir(&project, "wt"));
         DirBinding::new(Some(2), None).write(&wt).unwrap();
 
         let found = nested(&wt).expect("a self-written pointer is not consent to the hazard");
@@ -186,7 +197,7 @@ mod tests {
         // A worktree cut beside the project: it inherits nothing, because `.amenbo` is gitignored and so
         // never lands in the checkout.
         let outside = subdir(&root, "worktrees/1674");
-        git_file(&outside, &format!("{}/.git/worktrees/1674", project.display()));
+        git_file(&outside, &worktree_gitdir(&project, "1674"));
         assert_eq!(nested(&outside), None, "an outside worktree has no binding to inherit");
     }
 
@@ -202,7 +213,7 @@ mod tests {
         std::fs::create_dir_all(main.join(".git")).unwrap();
 
         let wt = subdir(&repos, "proj-feature");
-        git_file(&wt, &format!("{}/.git/worktrees/proj-feature", main.display()));
+        git_file(&wt, &worktree_gitdir(&main, "proj-feature"));
         DirBinding::new(Some(2), None).write(&wt).unwrap();
 
         assert_eq!(nested(&wt), None, "no managed tree sits above this worktree's root");
@@ -224,7 +235,7 @@ mod tests {
         let sub = subdir(&project, "vendor/lib");
         // Git writes a relative gitdir for a submodule — the classifier keys on the component after `.git`,
         // not on the path's shape.
-        git_file(&sub, "../../.git/modules/vendor/lib");
+        git_file(&sub, Path::new("../../.git/modules/vendor/lib"));
         assert_eq!(nested(&sub), None, "a submodule is not a throwaway worktree");
         assert_eq!(nested(&subdir(&sub, "src")), None);
     }

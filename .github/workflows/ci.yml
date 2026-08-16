@@ -219,11 +219,12 @@ jobs:
   #
   # There is no Windows leg here yet, and its absence is the one hole this net still has. The twelve
   # `cfg(windows)` files in the workspace stay ungated, because turning the leg on surfaced failures
-  # that are not the leg's to fix: tests written to Unix path spellings, and two places where the
-  # product itself behaves differently on Windows — the folder path a binding records comes back in
-  # the verbatim `\\?\` form, and a restore cannot replace a store file another connection holds
-  # open. Those are answered on their own, and the leg lands with them. The host crate's Windows
-  # side IS gated, by app-rust-mac-win below.
+  # that are not the leg's to fix. What is left of them is two places where the product itself
+  # behaves differently there, measured with the leg switched on: the folder path a binding records
+  # comes back in the verbatim `\\?\` form, so one store holds two spellings of the same kind of
+  # path, and a restore cannot replace a store file another connection holds open. Those are
+  # answered on their own, and the leg lands with them. The host crate's Windows side IS gated, by
+  # app-rust-mac-win below.
   #
   # It mirrors the `rust` job's clippy and test steps and stops there. The doc steps (doctests, doc
   # links) stay on Linux: almost every doc comment in the tree is outside an OS branch, so a third

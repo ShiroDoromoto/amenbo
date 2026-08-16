@@ -1,0 +1,14 @@
+# Every file leaves this repository exactly as it was committed.
+#
+# Git's default is to rewrite line endings on the way out on Windows, so a checkout there holds
+# CRLF where the commit holds LF. Most of the tree would not notice. What does notice is every
+# place a test compares a file's bytes against what this build produces at run time — the README
+# demo's transcript, the frozen schema, the recorded size of the agent entry. The file arrives
+# two bytes longer per line than the thing it is held against, and the failure reads as a product
+# regression on Windows rather than as what it is.
+#
+# `-text` on everything says: no conversion, either direction. The tree is LF and stays LF, which
+# is what the tools that read it — cargo, node, the shell scripts, the guards — expect on every
+# platform. A binary file is unaffected either way; naming them separately would only be a list
+# to keep current.
+* -text

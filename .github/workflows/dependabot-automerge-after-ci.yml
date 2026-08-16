@@ -13,9 +13,13 @@ on:
     workflows: [ci-change]
     types: [completed]
 
+# `actions: write` is the dispatch: when the lockfile repair moves the head, the body asks for a
+# fresh verdict by starting a run. A called workflow can only narrow what it is granted, so the
+# permission has to be here as well as on the job that uses it.
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 jobs:
   automerge:
@@ -29,3 +33,4 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: write

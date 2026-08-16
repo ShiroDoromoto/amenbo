@@ -145,8 +145,9 @@ fn executable(bundle: &Path) -> Result<PathBuf, String> {
 }
 
 // A bundle is a mac shape and `plutil` is a mac tool, so these run where the harness itself does.
-// The workspace's own CI is Linux, which is why the rest of this crate's tests inject their side
-// effects: this is the one part whose subject is the side effect.
+// The rest of this crate's tests inject their side effects, which is what lets them be asked on any
+// platform; this is the one part whose subject IS the side effect, so it is asked on the mac leg of
+// CI alone.
 #[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::*;

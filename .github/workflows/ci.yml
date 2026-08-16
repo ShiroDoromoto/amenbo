@@ -14,10 +14,16 @@ name: CI
 #
 # Cost: this repo is public, so Actions minutes are free — the net is no longer drawn
 # to save minutes but by what a change can affect: the `changes` path gate below runs
-# each build/test job only when a change could have moved it. Jobs run on Linux. The
-# host crate IS clippy+test gated (the `app-rust` job below), but the native Tauri
-# .app *bundle* (macOS only) is deliberately NOT built here — it is a distribution
-# artifact reserved for a tag/dispatch trigger, not a test gate.
+# each build/test job only when a change could have moved it. The host crate IS clippy+test
+# gated (the `app-rust` job below), but the native Tauri .app *bundle* (macOS only) is
+# deliberately NOT built here — it is a distribution artifact reserved for a tag/dispatch
+# trigger, not a test gate.
+#
+# Which OS a job runs on follows from what only that OS can compile. Everything platform-neutral
+# stays on Linux, and the Rust jobs are mirrored onto macOS and Windows because the code they judge
+# is not: `target_os = "macos"` and `cfg(windows)` branches are invisible to a Linux compiler, so on
+# Linux alone they would ride into a release never having been built. Those mirrors build and test
+# only — the installers each OS ships stay in the release workflow.
 #
 # The path gate decides what a diff can have moved, and it can be wrong: a layer whose inputs are
 # not all listed, or a path listed under no layer at all, is skipped by a filter that believes it
@@ -204,6 +210,67 @@ jobs:
       - name: Doc links
         run: RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
 
+  # The `rust` job above, on the two platforms it cannot speak for. Twelve files in the workspace
+  # carry a `target_os = "macos"` branch and twelve a `cfg(windows)` one; on Linux the compiler
+  # walks past both, so neither is built by anything on the way to a release. This job builds and
+  # tests them on every change that can reach them.
+  #
+  # One matrix rather than two job definitions: the steps are identical, and written twice they
+  # would drift. `fail-fast: false` because the two legs answer different questions — a red Windows
+  # leg must not cancel the macOS one and take its answer with it.
+  #
+  # It mirrors the `rust` job's clippy and test steps and stops there. The doc steps (doctests, doc
+  # links) stay on Linux: almost every doc comment in the tree is outside an OS branch, so a third
+  # rustdoc run would re-read what one has already judged. What that leaves out is a doc link
+  # written inside a `cfg`-gated item — no platform but its own can resolve it — and that sliver is
+  # accepted rather than paid for with a rustdoc run per OS on every change.
+  rust-mac-win:
+    name: cargo clippy + test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+
+      # The store is SQLCipher-encrypted, so rusqlite's bundled-sqlcipher-vendored-openssl builds
+      # OpenSSL from source, and openssl-src configures it by shelling out to perl. On Windows the
+      # perl a step resolves may be MSYS2's, which lacks Locale::Maketext::Simple and dies in
+      # ./Configure — so name the runner's Strawberry Perl, which openssl-src reads ahead of PERL
+      # and PATH. Set as a step rather than in the job's `env` because the variable must be ABSENT
+      # on macOS, not empty: openssl-src takes an empty value as the program to run.
+      - name: Name the runner's Strawberry Perl for the OpenSSL build
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: echo "OPENSSL_SRC_PERL=C:/Strawberry/perl/bin/perl.exe" >> $env:GITHUB_ENV
+
+      - name: Show toolchain
+        run: rustc --version && cargo clippy --version
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2.85.11
+        with:
+          tool: cargo-nextest
+
+      - name: Clippy (all targets, all features)
+        run: cargo clippy --all-targets --all-features -- -D warnings -D clippy::disallowed_methods
+
+      # Same split, and the same reason, as the `rust` job: the e2e suite runs on its own so the
+      # load it puts on the box is not shared with the rest, and it runs even when the first half
+      # failed so the `ci` profile's whole-picture report is not halved.
+      - name: Test (feature-gated scale suites + everything else)
+        run: cargo nextest run --profile ci --features scale,e2e -E 'not binary(/^cli_e2e/)'
+
+      - name: Test (the CLI e2e suites, on their own)
+        if: ${{ !cancelled() }}
+        run: cargo nextest run --profile ci --features scale,e2e -E 'binary(/^cli_e2e/)'
+
   # The pre-distribution verification harness (verification/) is its own cargo workspace, OUTSIDE
   # the main one, so the `rust` job above — which drives the default (main) manifest — never
   # compiles or tests it. Without this job its three crates (scenario schema + loader, the CLI
@@ -233,6 +300,35 @@ jobs:
       # facet env funnel amenbo_core::env enforces, and has no dep on it. The gui crate builds here
       # too: its calls to the mac screen tool are runtime shell-outs, so the code compiles and its
       # unit tests (shooting + reading injected) pass with no macOS.
+      - name: Clippy (all targets)
+        run: cargo clippy --manifest-path verification/Cargo.toml --all-targets -- -D warnings -A clippy::disallowed_methods
+
+      - name: Test
+        run: cargo test --manifest-path verification/Cargo.toml
+
+  # The harness's own macOS half. Its gui crate keeps the parts whose subject is a mac side effect
+  # — reading a real .app bundle, the file modes it must have — behind `target_os = "macos"`, so the
+  # Linux job above compiles past them and they are exercised by nothing until someone drives a
+  # release on a mac. That is the wrong place to learn the harness is broken, since it is the tool
+  # that says whether the build may ship. There is no Windows leg: the harness drives the mac
+  # artifact, and carries no Windows branch to build.
+  verification-macos:
+    name: verification harness (clippy + test, macOS)
+    runs-on: macos-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.verification == 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Show toolchain
+        run: rustc --version && cargo clippy --version
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: verification
+
+      # Same lint contract, and the same deliberate -A, as the Linux leg above.
       - name: Clippy (all targets)
         run: cargo clippy --manifest-path verification/Cargo.toml --all-targets -- -D warnings -A clippy::disallowed_methods
 
@@ -463,6 +559,66 @@ jobs:
       # workspace, so the other job's `--workspace` doc run never sees it.
       - name: Doc links
         run: RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path app/src-tauri/Cargo.toml --no-deps --document-private-items
+
+  # The `app-rust` job above, on the two platforms it cannot speak for — the same argument as
+  # `rust-mac-win`, for the other tree. The host crate is where the OS branches are thickest: the
+  # menu, autostart, each platform's notifier, and the store watch that chooses between a kernel
+  # watch and polling. Only the Linux side of any of it is built by the job above, and the Windows
+  # side has never been built by a gate at all — the release workflow was the first thing to
+  # compile it, and by then the change is already on main.
+  #
+  # No bundle here either: this is `cargo` over the crate, exactly as the Linux job is. The network-
+  # FS step is not mirrored — it stands up NFS/SMB/9P mounts on the runner, which is a Linux
+  # apparatus, and what it verifies (that the watch falls back to polling off a local disk) is the
+  # same question wherever it is asked.
+  app-rust-mac-win:
+    name: app crate clippy + test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+
+      # Why this is a step and not a job-level `env`: see the same step in `rust-mac-win`. The
+      # sidecar below builds the CLI, so this job reaches the same OpenSSL build.
+      - name: Name the runner's Strawberry Perl for the OpenSSL build
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: echo "OPENSSL_SRC_PERL=C:/Strawberry/perl/bin/perl.exe" >> $env:GITHUB_ENV
+
+      # The sidecar staging step below is a Node script; nothing else here needs a runtime.
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - name: Show toolchain
+        run: rustc --version && cargo clippy --version
+
+      # Two workspaces, not one: the crate under test is out-of-workspace with its own lock and
+      # target dir, and the sidecar step builds the ROOT workspace in release. Caching only the
+      # host crate would leave that release build — OpenSSL from source included — to be redone
+      # from nothing on every run.
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            app/src-tauri
+
+      # Same reason as the Linux job: build.rs validates tauri.conf.json's externalBin, which a
+      # plain clippy/test never stages, and binaries/ is gitignored.
+      - name: Stage CLI sidecar (externalBin)
+        run: node app/scripts/prepare-cli-sidecar.mjs
+
+      - name: Clippy (all targets)
+        run: cargo clippy --manifest-path app/src-tauri/Cargo.toml --all-targets -- -D warnings -D clippy::disallowed_methods
+
+      - name: Test
+        run: cargo test --manifest-path app/src-tauri/Cargo.toml
 
   # Two lockfiles sit outside the workspace and have to follow it: the Tauri host crate's, and the
   # verification harness's. Both are `exclude`d and carry a lock of their own, and both reach core

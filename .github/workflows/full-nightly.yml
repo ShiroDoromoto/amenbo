@@ -18,7 +18,8 @@ name: Full regression (nightly)
 # It calls ci.yml rather than restating its jobs: two copies of the suite would drift, and the copy
 # nobody watches is the one that rots. This is the same shape rot-weekly.yml uses for rot-gates.yml.
 #
-# It runs on Linux like every leg of the CI net; the macOS .app bundle stays a distribution artifact.
+# It inherits ci.yml's platforms rather than choosing any of its own, so the macOS and Windows legs
+# are forced open here too; the macOS .app bundle stays a distribution artifact, built by neither.
 
 on:
   schedule:

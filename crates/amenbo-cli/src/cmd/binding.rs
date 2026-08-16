@@ -166,7 +166,11 @@ pub(crate) fn init_cmd(flags: &Flags, name: Option<String>, language: Option<Str
     // GUI sidebar (which renders the project list) on its own, and `task add` works there right away (the
     // required project comes from the pointer's project_id). Project creation happens on this CLI path only:
     // `Store::init` is shared with the GUI's provisioning, so putting it there would create it twice.
-    let cwd = std::env::current_dir().ok();
+    // Resolved, because this folder is about to be recorded: `bind --dir` records the same folder through
+    // the same function, and two spellings of one folder is what that costs (`AMB-D-703`).
+    let cwd = std::env::current_dir()
+        .ok()
+        .map(|c| amenbo_core::binding::canonical_dir(&c).unwrap_or(c));
     let project_name = cwd
         .as_deref()
         .and_then(|c| c.file_name())
@@ -248,7 +252,7 @@ fn recover_lost_pointer(
     // project the recovered pointer names.
     {
         let mut reg = store.bindings();
-        reg.claim_project_ref(project_id, cwd.to_string_lossy());
+        reg.claim_project_ref(project_id, canonical_cwd(cwd).to_string_lossy());
         let _ = store.save_bindings(&reg);
     }
     // Regenerate the managed block idempotently (outside the markers is kept). The upsert keeps an existing
@@ -315,6 +319,12 @@ pub(crate) fn bound_folders_json(store: &Store, project_id: i64) -> serde_json::
 /// Resolve the folder `bind` acts on: the directory `--dir <path>` names, or the CWD when it is omitted.
 /// bind places a `.amenbo` inside that folder, so anything that is not an existing directory — a file, or
 /// nothing at all — is refused.
+/// A folder as it is written down, for the sites that hold a path rather than resolve one. The recording
+/// boundary is [`place_binding`]; this is for the two that record beside it.
+fn canonical_cwd(dir: &std::path::Path) -> std::path::PathBuf {
+    amenbo_core::binding::canonical_dir(dir).unwrap_or_else(|_| dir.to_path_buf())
+}
+
 pub(crate) fn resolve_bind_target(dir: Option<String>) -> Result<std::path::PathBuf, CliError> {
     match dir {
         Some(d) => {
@@ -327,11 +337,18 @@ pub(crate) fn resolve_bind_target(dir: Option<String>) -> Result<std::path::Path
                     exit: 1,
                 });
             }
-            // Registrations made from the CWD are absolute paths. Canonicalize so a relative `--dir` does not
-            // put a different string in the registry (it exists — checked above — so this cannot fail).
-            Ok(std::fs::canonicalize(&p).unwrap_or(p))
+            // Registrations made from the CWD are absolute paths. Resolve so a relative `--dir` does not put a
+            // different string in the registry (it exists — checked above — so this cannot fail), and resolve it
+            // the way every other recording path does, so the two never spell one folder two ways.
+            Ok(amenbo_core::binding::canonical_dir(&p).unwrap_or(p))
         }
+        // The CWD goes through the same resolution, so the two ways in cannot disagree. On Unix getcwd is
+        // already the resolved path and this changes nothing; on Windows the process can be standing in a
+        // folder spelt with an 8.3 short name (`C:\Users\RUNNER~1\…`), which is the very same folder the
+        // `--dir` route records under its long one. A CWD that has been deleted under us cannot resolve,
+        // and then the path we were given is the best answer there is.
         None => std::env::current_dir()
+            .map(|cwd| amenbo_core::binding::canonical_dir(&cwd).unwrap_or(cwd))
             .map_err(|e| CliError { code: "io_error", message: e.to_string(), hint: None, exit: 1 }),
     }
 }
@@ -350,6 +367,9 @@ pub(crate) fn resolve_bind_target(dir: Option<String>) -> Result<std::path::Path
 /// Every step is required to succeed. A caller that raised the project for this folder has to undo that on
 /// failure — a project nothing is linked to is what `AMB-D-528` refuses to create.
 pub(crate) fn place_binding(store: &Store, project_id: i64, dir: &std::path::Path) -> Result<(), CliError> {
+    // The recording boundary resolves what it is handed, so no caller has to remember to: one folder is
+    // written down under one spelling, whichever route reached here (`AMB-D-703`).
+    let dir = &amenbo_core::binding::canonical_dir(dir).unwrap_or_else(|_| dir.to_path_buf());
     amenbo_core::binding::pointer_for(store, project_id).write(dir).map_err(CliError::from)?;
     let mut registry = store.bindings();
     registry.claim_project_ref(project_id, dir.to_string_lossy());
@@ -542,9 +562,9 @@ pub(crate) fn unbind_cmd(flags: &Flags, dir: Option<String>) -> Result<i32, CliE
         let mut store = Store::open_at(paths).map_err(CliError::from)?;
         let mut registry = store.bindings();
         forgot = registry.forget_dir(&dir_str);
-        // The CWD is already canonical, but a non-canonical path passed to `--dir` can disagree with the
-        // registered string (the CWD as it read at bind time). Try the canonical form too, if it differs.
-        if let Ok(canon) = std::fs::canonicalize(&target) {
+        // The CWD is already resolved, but a path passed to `--dir` can disagree with the registered string
+        // (the CWD as it read at bind time). Try the resolved form too, if it differs.
+        if let Ok(canon) = amenbo_core::binding::canonical_dir(&target) {
             let canon_str = canon.to_string_lossy().to_string();
             if canon_str != dir_str {
                 forgot += registry.forget_dir(&canon_str);

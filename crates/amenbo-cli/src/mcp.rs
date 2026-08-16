@@ -418,8 +418,10 @@ fn found<'a>(named: &str, dirs: &'a [PathBuf]) -> Option<&'a Path> {
     if let Some(hit) = dirs.iter().find(|dir| dir.as_path() == asked) {
         return Some(hit);
     }
-    let real = asked.canonicalize().ok()?;
-    dirs.iter().find(|dir| dir.canonicalize().is_ok_and(|its| its == real)).map(PathBuf::as_path)
+    let real = amenbo_core::binding::canonical_dir(asked).ok()?;
+    dirs.iter()
+        .find(|dir| amenbo_core::binding::canonical_dir(dir).is_ok_and(|its| its == real))
+        .map(PathBuf::as_path)
 }
 
 /// What one tool call becomes on the command line. The two reading tools name every word themselves, so

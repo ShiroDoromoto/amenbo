@@ -99,6 +99,12 @@ zip = { version = "8", default-features = false, features = ["deflate"] }
 # near-miss there does not fail, it quietly reports a project as not set up. Writing goes through the
 # same crate so the two directions are one grammar rather than two. Pure Rust, no build script.
 toml = "1"
+# `canonicalize`, in the spelling the reader has (`binding::canonical_dir`). On Windows the std call
+# answers in the verbatim `\\?\C:\…` form, which is Win32's internal one and appears nowhere a person
+# looks; this drops the prefix again, and knows the cases where dropping it would change which file the
+# path names (a UNC route, a name Win32 reserves, a path past its length). Here rather than under
+# `cfg(windows)` because the call sites are platform-neutral — elsewhere it forwards to std unchanged.
+dunce = "1"
 
 [target.'cfg(windows)'.dependencies]
 # The one question the updater asks the OS: which machine is this, whatever the running binary was

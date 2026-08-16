@@ -597,16 +597,36 @@ pub struct Repoint {
     pub retracted: Vec<BoundFolder>,
 }
 
+/// A folder's path in the one spelling amenbo records, matches on, and shows (`AMB-D-703`).
+///
+/// `canonicalize` asks the right question — it resolves symlinks, a `.` in the middle, and a relative
+/// path down to one answer — but on Windows it answers in the verbatim `\\?\C:\…` form. That is Win32's
+/// internal spelling, and it appears nowhere the reader looks: not in Explorer, not at a prompt, not in
+/// what they typed. Recording it puts a second spelling of the same folder in the store, because the
+/// other way in (`current_dir()`, when no `--dir` is given) never produces one — and the reader then
+/// meets a path they cannot recognise as theirs in the folder list and in `status`'s header.
+///
+/// So the prefix comes off again wherever taking it off names the same file: a UNC route, a name Win32
+/// reserves, a path longer than Win32 accepts — for those the verbatim form is the only form there is,
+/// and it stays. Off Windows there is no prefix and this is `canonicalize` and nothing else.
+///
+/// **Every path that records a folder, or matches one against what is recorded, comes through here**, so
+/// that the store cannot come to hold two spellings of one folder again.
+pub fn canonical_dir(dir: impl AsRef<Path>) -> std::io::Result<PathBuf> {
+    dunce::canonicalize(dir)
+}
+
 /// Bring a folder-path string into a comparable normal form. The reverse lookup is keyed by id and
 /// holds paths as values, so the values must be levelled before they are compared. An existing path is
-/// `canonicalize`d (absorbing symlink differences, and the fact that not every bind path canonicalizes);
-/// a path that does not exist — a stale pointer, a vanished folder — is taken lexically as a `PathBuf`,
-/// which compares component by component and so absorbs a trailing slash. Recording always writes an
-/// absolute path (via `current_dir()` / `canonicalize`), so there is no need to prefix relative paths:
-/// this stays best-effort.
+/// resolved through [`canonical_dir`] (absorbing symlink differences, the verbatim spelling Windows
+/// answers in, and the fact that not every bind path canonicalizes); a path that does not exist — a
+/// stale pointer, a vanished folder — is taken lexically as a `PathBuf`, which compares component by
+/// component and so absorbs a trailing slash. Recording always writes an absolute path (via
+/// `current_dir()` / [`canonical_dir`]), so there is no need to prefix relative paths: this stays
+/// best-effort.
 pub(crate) fn normalize_dir_for_match(dir: &str) -> PathBuf {
     let p = PathBuf::from(dir);
-    std::fs::canonicalize(&p).unwrap_or(p)
+    canonical_dir(&p).unwrap_or(p)
 }
 #[cfg(test)]
 mod tests {
@@ -615,6 +635,30 @@ mod tests {
     fn tmp(tag: &str) -> PathBuf {
         let p = amenbo_scratch::scratch(&format!("bind-{tag}"));
         p
+    }
+
+    /// The spelling a folder is recorded under is one the reader could have typed (`AMB-D-703`): no
+    /// verbatim prefix, which is the form `std::fs::canonicalize` hands back on Windows and the form
+    /// nothing else on that platform produces. Off Windows nothing here can fail, and that is the point —
+    /// one function answers for every platform, so no recording path has to know which one it is on.
+    #[test]
+    fn a_folder_is_recorded_in_a_spelling_the_reader_could_have_typed() {
+        let dir = tmp("canonical");
+        let recorded = canonical_dir(&dir).expect("the folder is there");
+        assert!(
+            !recorded.to_string_lossy().starts_with(r"\\?\"),
+            "no verbatim prefix reaches the registry: {}",
+            recorded.display(),
+        );
+
+        // And it is still the question `canonicalize` asks: a route through a child and back out lands on
+        // the same string, so the several ways one folder reaches the registry cannot record several.
+        let child = dir.join("child");
+        std::fs::create_dir_all(&child).unwrap();
+        assert_eq!(canonical_dir(child.join("..")).unwrap(), recorded, "one folder, one spelling");
+
+        // A folder that is not there has no answer to give — every caller supplies its own fallback.
+        assert!(canonical_dir(dir.join("never-made")).is_err());
     }
 
     /// Bring up one store in an isolated app-data tree, create one project, and return

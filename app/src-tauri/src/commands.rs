@@ -2552,7 +2552,7 @@ pub fn project_bind_folder(project_id: i64, dir: String) -> Result<WriteAck, Cmd
     if !path.is_dir() {
         return Err(CmdError::from(amenbo_core::Error::not_found(format!("folder not found: {dir}"))));
     }
-    let cwd = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let cwd = amenbo_core::binding::canonical_dir(path).unwrap_or_else(|_| path.to_path_buf());
     if let Some((bound_dir, _)) = find_upward_ancestor(&cwd) {
         return Err(CmdError::coded(
             "binding_nested_tree",
@@ -2598,7 +2598,7 @@ pub fn project_unbind_folder(dir: String) -> Result<WriteAck, CmdError> {
     // the registry can no longer say who held it.
     let owners = registry.projects_for_dir(&dir);
     let mut forgot = registry.forget_dir(&dir);
-    if let Ok(canon) = std::fs::canonicalize(&target) {
+    if let Ok(canon) = amenbo_core::binding::canonical_dir(&target) {
         let canon_str = canon.to_string_lossy().to_string();
         if canon_str != dir {
             forgot += registry.forget_dir(&canon_str);
@@ -7276,8 +7276,9 @@ mod tests {
         assert!(project_bound_folders(former).unwrap().is_empty(), "the former project stops listing it");
         let now = project_bound_folders(keeper).unwrap();
         assert_eq!(now.len(), 1, "and the keeper lists it");
-        // The bind records the canonicalized path (symlinks resolved), which is what comes back here.
-        let canon = std::fs::canonicalize(&dir).unwrap();
+        // The bind records the resolved path (`binding::canonical_dir` — symlinks, and the verbatim
+        // spelling Windows answers in), which is what comes back here.
+        let canon = amenbo_core::binding::canonical_dir(&dir).unwrap();
         assert_eq!(now[0].path, canon.to_string_lossy(), "that folder, and not another");
         assert!(!now[0].pointer_missing, "whose pointer is the one the bind just wrote");
 
@@ -7949,7 +7950,7 @@ mod tests {
         let dir_of = |leaf: &str| -> std::path::PathBuf {
             let d = base.join(leaf);
             std::fs::create_dir_all(&d).unwrap();
-            std::fs::canonicalize(&d).unwrap()
+            amenbo_core::binding::canonical_dir(&d).unwrap()
         };
 
         let plain = new_project("素のPJ");
@@ -8055,7 +8056,7 @@ mod tests {
         let git_dir = |leaf: &str| -> std::path::PathBuf {
             let d = base.join(leaf);
             std::fs::create_dir_all(&d).unwrap();
-            let d = std::fs::canonicalize(&d).unwrap();
+            let d = amenbo_core::binding::canonical_dir(&d).unwrap();
             git_init(&d);
             d
         };
@@ -8187,7 +8188,7 @@ mod tests {
         let bound = |project: i64, leaf: &str, wired: bool| -> std::path::PathBuf {
             let d = base.join(leaf);
             std::fs::create_dir_all(&d).unwrap();
-            let d = std::fs::canonicalize(&d).unwrap();
+            let d = amenbo_core::binding::canonical_dir(&d).unwrap();
             claude_folder(&d, wired);
             project_bind_folder(project, d.to_string_lossy().to_string()).unwrap();
             d
@@ -8199,7 +8200,7 @@ mod tests {
         let bare = new_project("痕跡の無いPJ");
         let bare_dir = base.join("bare");
         std::fs::create_dir_all(&bare_dir).unwrap();
-        let bare_dir = std::fs::canonicalize(&bare_dir).unwrap();
+        let bare_dir = amenbo_core::binding::canonical_dir(&bare_dir).unwrap();
         project_bind_folder(bare, bare_dir.to_string_lossy().to_string()).unwrap();
 
         // One folder is wired and has nothing left to finish; the other points at no tool, and is the
@@ -8292,7 +8293,7 @@ mod tests {
         drop(store);
         let dir = base.join("wired");
         std::fs::create_dir_all(&dir).unwrap();
-        let dir = std::fs::canonicalize(&dir).unwrap();
+        let dir = amenbo_core::binding::canonical_dir(&dir).unwrap();
         claude_folder(&dir, true);
         project_bind_folder(project, dir.to_string_lossy().to_string()).unwrap();
 
@@ -8361,7 +8362,7 @@ mod tests {
         let bound = |project: i64, leaf: &str, wired: bool| -> std::path::PathBuf {
             let d = base.join(leaf);
             std::fs::create_dir_all(&d).unwrap();
-            let d = std::fs::canonicalize(&d).unwrap();
+            let d = amenbo_core::binding::canonical_dir(&d).unwrap();
             claude_folder(&d, wired);
             project_bind_folder(project, d.to_string_lossy().to_string()).unwrap();
             d
@@ -8466,7 +8467,7 @@ mod tests {
         let bound = |project: i64, leaf: &str| -> std::path::PathBuf {
             let d = base.join(leaf);
             std::fs::create_dir_all(&d).unwrap();
-            let d = std::fs::canonicalize(&d).unwrap();
+            let d = amenbo_core::binding::canonical_dir(&d).unwrap();
             project_bind_folder(project, d.to_string_lossy().to_string()).unwrap();
             d
         };
@@ -8568,7 +8569,7 @@ mod tests {
         let bound = |project: i64, leaf: &str| -> std::path::PathBuf {
             let d = base.join(leaf);
             std::fs::create_dir_all(&d).unwrap();
-            let d = std::fs::canonicalize(&d).unwrap();
+            let d = amenbo_core::binding::canonical_dir(&d).unwrap();
             project_bind_folder(project, d.to_string_lossy().to_string()).unwrap();
             d
         };

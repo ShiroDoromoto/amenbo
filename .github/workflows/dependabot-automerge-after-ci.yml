@@ -6,7 +6,8 @@ name: dependabot-automerge-after-ci
 #
 # `workflows:` names ci-change.yml's `name:`, not its filename. Renaming that workflow stops this
 # from firing, and nothing goes red to say so: the failure is an absence, so no run is created and
-# nothing is notified. guards/ holds the name comparison that turns it back into a red gate.
+# nothing is notified. guards/check-workflow-run-names.sh is the comparison that turns it back into
+# a red gate.
 on:
   workflow_run:
     workflows: [ci-change]

@@ -1,0 +1,23 @@
+name: rot-gates-manual
+
+# The same body the weekly leg runs (rot-gates-weekly.yml), reached by hand — for when an advisory
+# is published and waiting until Monday is not the answer, or when a gate has just been changed and
+# its verdict is what you want to see.
+#
+# Every input keeps its default of true, so this is the unfiltered run, not a narrowed one.
+#
+# It is a file of its own rather than a second trigger on the weekly leg because both would then
+# share one concurrency group, and dispatching this would cancel a scheduled run midway.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  rot-gates:
+    uses: ./.github/workflows/_rot-gates.yml
+    permissions:
+      contents: read

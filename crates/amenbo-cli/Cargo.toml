@@ -15,7 +15,7 @@ default = []
 # The real-binary suites (`cli_e2e_*`, `demo_tape`, `cli_ask`) fork the built `amenbo` binary once per
 # test (~1–2s each) — heavy by *attribute*, not by logic. Gate them behind an off-by-default feature
 # so the everyday `cargo test` stays fast; CI runs them via `--features e2e`. A feature-gated test
-# rots unless CI runs every feature (see .github/workflows/ci.yml).
+# rots unless CI runs every feature (see .github/workflows/_ci.yml).
 e2e = []
 
 [dependencies]

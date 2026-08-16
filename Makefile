@@ -107,7 +107,7 @@ MAC_UPDATER_DIST := $(DIST_DIR)/amenbo-darwin-$(MAC_GUI_ARCH)-update.app.tar.gz
 # convention. It carries the GUI alone — the CLI has its own install route.
 #   IMPORTANT: on Apple Silicon, amd64 is emulated via qemu and the Tauri CLI ABORTS
 #   (SIGABRT) mid-bundle — so amd64 does NOT build reliably here. The amd64 release build
-#   runs on a native x86_64 runner instead (.github/workflows/release.yml). Local
+#   runs on a native x86_64 runner instead (.github/workflows/_release.yml). Local
 #   `make dist-gui-linux` is for the NATIVE arch (arm64 on this mac); it reuses that exact
 #   recipe so the CI path and the local path are identical.
 LINUX_GUI_IMAGE   := amenbo-linux-gui:latest
@@ -146,8 +146,8 @@ SHELL_SOURCES := $(shell git ls-files '*.sh' '.githooks/*')
 help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
 	@echo "make install-dev  - install the dev CLI to ~/.cargo/bin/amenbo-dev (app-data: work.amenbo.amenbo-dev)"
-	@echo "make gate         - the same gate, narrowed to the layers this change touched (.github/paths-filters.yml, the file CI reads); a path on no layer falls back to the whole of make test"
-	@echo "make test         - full gate (core/cli scale,e2e + app crate clippy/test + GUI typecheck/build/test)"
+	@echo "make gate         - the same gate, narrowed to the layers this change touched (.github/paths-filters.yml, the file CI reads); a path on no layer falls back to the whole of make test. Nothing here decides a merge — that verdict is CI's, on the PR"
+	@echo "make test         - full gate (core/cli scale,e2e + app crate clippy/test + GUI typecheck/build/test). Kept for a deliberate local sweep; neither a merge nor a tag waits on it"
 	@echo "make verify ARGS=\"...\" - run the CLI in a throwaway isolated store (leaves prod/dev app-data untouched; INIT=1 binds it first, which is what --actor ai needs; SCRIPT=<file> runs a sequence through one isolation)"
 	@echo "make lint-linux   - clippy the Linux branch (cfg(target_os=\"linux\")) in a container = the same 2 jobs as CI's rust/app-rust (make test does not see them; needs Docker)"
 	@echo "make shell-gate   - shellcheck tracked shell (scripts/, guards/, .githooks/) and actionlint the run: in workflows (automatic at the start of make test; needs shellcheck 0.10+/actionlint)"
@@ -159,7 +159,7 @@ help:
 	@echo "make sidecar-name-gate - assert the CLI beside the app is looked for under the name the bundle ships it as (a rename on one side hands MCP hosts a path to nothing) = the same guard CI runs (automatic at the start of make test)"
 	@echo "make selfupdate-gate - assert the GUI asks which channel it is before reaching for self-update (a dev build that updates installs prod over itself) = the same guard CI runs (automatic at the start of make test)"
 	@echo "make ts-derive-gate - assert every #[derive(TS)] sits in the GUI crate (a derive elsewhere moves bindings.ts on a change nothing on the GUI side watches) = the same guard CI runs (automatic at the start of make test)"
-	@echo "make ci-aggregate-gate - assert CI's merge gate waits for every job in ci.yml (a job missing from its needs is one the required check goes green without) = the same guard CI runs (automatic at the start of make test)"
+	@echo "make ci-aggregate-gate - assert CI's merge gate waits for every job in _ci.yml (a job missing from its needs is one the required check goes green without) = the same guard CI runs (automatic at the start of make test)"
 	@echo "make sweep-stale  - if the cargo cache exceeds $(SWEEP_LIMIT_GB)GB, drop artifacts untouched for $(SWEEP_DAYS) days (automatic at the end of make test)"
 	@echo "make dist-gui     - build the prod GUI (mac dmg) with build-time signing into dist/ (a supplement for non-installer users; not a wharfy bundle)"
 	@echo "make dist-gui-mac - build the mac unified .pkg (GUI to /Applications, CLI to /usr/local/bin) into dist/ (the mac release bundle itself; Intel build via MAC_GUI_ARCH=amd64)"
@@ -169,7 +169,7 @@ help:
 	@echo "make verify-network-linux - stand up real NFS/SMB and exercise store_watch's network-FS detection (needs Docker; also runs every time in CI)"
 	@echo "make verify-network-mac - the macOS version of the above (MNT_LOCAL detection). Mounts real SMB over loopback and exercises it (needs Docker)"
 	@echo "make verify-existing-store - run the CLI bundled in the shipped .pkg against a clone of the prod store and check an existing store still opens and reads back (release runs this before publish)"
-	@echo "make release      - [pre-tag gate only] just runs make test. Build and distribution are both public CI (release.yml on tag push -> prerelease, the promote workflow does the promotion) = there is no command here that distributes"
+	@echo "make release      - [pre-tag hand-off] prints the tag to push and where the gate before it lives. Gate, build and distribution are all public CI (the full-regression run on main, then the release body on tag push -> prerelease, then the promote workflow) = there is no command here that gates or distributes"
 	@echo "make codesign-cert - one-time: create a stable self-signed certificate so install-dev/gui-dev stop re-prompting the keychain on every rebuild (macOS)"
 	@echo "make schema-freeze - write the store's current shape to store_engine/schema_frozen/v<latest>.sql and name it in frozen() (run it after appending a migration step, which is what bumps the version)"
 	@echo "make schema-renumber - after a merge left two steps on the same version number, move the trailing steps back into ascending order and freeze the number the last one lands on (the steps' own tests are yours)"
@@ -270,7 +270,7 @@ dist-gui:
 ## The .app is stapled at step 2, BEFORE step 3 packages it and before the tar below — because the
 ## tar is the GUI self-update artifact, and a ticket stapled after it was tarred would never reach an
 ## updating user. Both the installed copy and the updated copy therefore validate offline.
-## wharfy.yaml declares this .pkg as the mac BYO-bundle. The build runs on public CI (release.yml)
+## wharfy.yaml declares this .pkg as the mac BYO-bundle. The build runs on public CI (_release.yml)
 ## on each OS's native runner.
 ## arch is MAC_GUI_ARCH (arm64 default / amd64 for the Intel build). The Intel build is a
 ## cross-build from Apple Silicon; the GUI and the bundled CLI sidecar both come from the --target
@@ -365,7 +365,7 @@ SCENARIO ?= verification/scenarios/delegate-to-ai.yaml
 ## $(SCENARIO) through the amenbo-scenario crate and passes it in (the container has no toolchain).
 ## The name the road asserts on is looked up across `given:` as well as `steps_gui:`, since the world a
 ## road opens on is declared in the former: a card the road only reads back was never named in its steps.
-## Not on the always-on CI (it needs a full GUI build); it runs in the later stage of release.yml,
+## Not on the always-on CI (it needs a full GUI build); it runs in the later stage of _release.yml,
 ## which builds the bundle = catch the breaking trigger (a tauri/webview update) right before it
 ## ships.
 verify-gui-linux: $(GUI_APPIMAGE_HOST) $(CLI_LINUX_HOST)
@@ -398,7 +398,7 @@ $(CLI_LINUX_HOST):
 
 ## Stand up a real network FS (NFS/SMB) and exercise whether store_watch sees a store on it as
 ## "network" and wakes on polling. Get the detection wrong and the GUI misses other hosts' writes
-## forever (inotify can be armed on NFS yet reports nothing). CI (ci.yml's app-rust) runs this every
+## forever (inotify can be armed on NFS yet reports nothing). CI (_ci.yml's app-rust) runs this every
 ## time, so it stays green. This is the entry point for running the same script locally — it runs in
 ## a privileged Linux container from mac (it needs mount(8) and the nfsd/cifs kernel modules).
 verify-network-linux:
@@ -422,9 +422,11 @@ verify-network-mac:
 ## substituted with a container, so they drive a maintainer's own machine over ssh and run for nobody
 ## else. They live in .local/local.mk with the scripts they call, which are not tracked either.
 
-## [pre-tag gate] The prod release is built by public CI — there is no "command that distributes"
-## here at all. What this closes is only the gate before pushing a tag (version consistency and make
-## test). On tag push, release.yml builds every OS and produces a prerelease + attestation, and after
+## [pre-tag hand-off] The prod release is gated, built and published by public CI — there is no
+## "command that gates" and no "command that distributes" here at all. The full run with the path
+## filter forced open, which is the last thing standing between a wrong filter and a shipped build,
+## is the full-regression workflow dispatched on main; this target only says so and names the tag.
+## On tag push, release-tag.yml builds every OS and produces a prerelease + attestation, and after
 ## the real byte stream is verified the promote workflow (a manual Actions dispatch) promotes
 ## prerelease→latest and publishes/verifies. Build and distribution both stay in CI; there is no line
 ## here that calls wharfy release / publish (no GITHUB_TOKEN needed either).
@@ -432,9 +434,10 @@ verify-network-mac:
 ## skill against the bytes CI built, not a local build. The version is Cargo.toml [workspace.package]
 ## version (bump it first, then run).
 release:
-	@echo "→ pre-tag gate v$(VERSION) (build and distribution are both public CI; this is the gate only)"
-	$(MAKE) test
-	@echo "→ gate green. Pushing a tag makes public CI (release.yml) build every OS and produce a prerelease + attestation:"
+	@echo "→ pre-tag hand-off v$(VERSION) (gate, build and distribution are all public CI; this only points the way)"
+	@echo "  the gate before the tag is the full-regression run on main, with the path filter forced open:"
+	@echo "    gh workflow run ci-full-manual.yml --ref main"
+	@echo "  once that is green, pushing a tag makes public CI (release-tag.yml) build every OS and produce a prerelease + attestation:"
 	@echo "    git tag -a v$(VERSION) -m \"amenbo $(VERSION)\" && git push origin v$(VERSION)"
 	@echo "  the prerelease does not become latest = users are unaffected. Once you verify the real artifact CI built"
 	@echo "  (attestation + a migration rehearsal on a prod clone), the promote workflow (a manual Actions dispatch)"
@@ -446,8 +449,8 @@ release:
 ## what runs there, chosen by the same declaration — never a laxer one. A change to prose alone is
 ## the cheap stage and nothing more.
 ## The narrowing is only ever as good as the layer file: a path on no layer and not declared exempt
-## makes the script answer `full`, which is the whole of `test`. And the pre-tag gate (`make
-## release`) calls `test`, so nothing is distributed on a narrowed run.
+## makes the script answer `full`, which is the whole of `test`. Nothing is distributed on a narrowed
+## run either: the run that stands before a tag is CI's, with the filter forced open (see `release`).
 ## The layers are worked out only when `gate` is the goal — every other target would pay for a git
 ## walk it has no use for.
 ifneq (,$(filter gate,$(MAKECMDGOALS)))
@@ -488,8 +491,8 @@ gate:
 ## To exercise the Linux branch run `make lint-linux` (Docker, below) = cross-compilation is not
 ## possible (Tauri's glib/gtk sys crate build.rs demands pkg-config's cross setup and fails), so it
 ## borrows a Linux box. **The Windows branch (`#[cfg(windows)]`) is not seen by the usual CI** —
-## ci.yml's jobs are all ubuntu, and Windows is compiled only at a public-CI release (the windows job
-## in release.yml).
+## _ci.yml mirrors the Rust jobs onto macOS but not yet onto Windows, and Windows is compiled only at
+## a public-CI release (the windows job in _release.yml).
 test:
 	$(MAKE) --no-print-directory gate-tools
 	$(MAKE) --no-print-directory gate-cheap
@@ -534,7 +537,7 @@ gate-cheap:
 ## (clippy.toml).
 gate-rust:
 	cargo clippy --all-targets --all-features -- -D warnings -D clippy::disallowed_methods
-	## Two runs, not one: the same split CI makes (ci.yml), so the heavy e2e suites never share the
+	## Two runs, not one: the same split CI makes (_ci.yml), so the heavy e2e suites never share the
 	## box with the scale seeds. The build is shared, so the second run only schedules tests.
 	## `cli_e2e_*` is every slice of the e2e suite (crates/amenbo-cli/tests/e2e), named by prefix so a
 	## new one lands on the right side of the split without this line being touched.
@@ -625,7 +628,7 @@ doc-gate-app:
 ## (including shellcheck's minimum-version check) lives in scripts/shell-gate.sh, which is itself a
 ## target of (1) = the gate guards the gate.
 ## Fix a finding, or drop it to a `# shellcheck disable=` with a reason (do not suppress silently).
-## CI (ci.yml's shell job) calls this target too = the target set is not defined twice.
+## CI (_rot-gates.yml's shell job) calls this target too = the target set is not defined twice.
 shell-gate:
 	@scripts/shell-gate.sh $(SHELL_SOURCES)
 
@@ -746,7 +749,7 @@ verify:
 ## box's rebuild re-prompt. Prod distribution is make release.
 ## This bundle points at the PRODUCTION app-data (that is what "prod" means here), but it carries no
 ## release stamp, so launching it cannot migrate that store forward. The stamp (`AMENBO_BUILD`) is
-## set in release.yml only = never add it here.
+## set in _release.yml only = never add it here.
 gui:
 	cd app && npm run tauri build
 	@scripts/codesign-local.sh sign "$(GUI_APP)"

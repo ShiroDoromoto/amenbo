@@ -1,5 +1,5 @@
 # Dependency update proposals. Bot proposes -> CI checks the PR -> the PR merges
-# itself if CI is green (.github/workflows/dependabot-automerge.yml). Merging is
+# itself if CI is green (.github/workflows/dependabot-automerge-after-ci.yml). Merging is
 # automatic; SHIPPING is not — releases stay a deliberate human/AI step, so bumps
 # pile up on main until someone cuts one. Runtime versions (Node/Rust) are NOT
 # managed here; they follow the LTS lifecycle by hand (see the version-pin files).

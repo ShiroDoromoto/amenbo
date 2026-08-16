@@ -1,0 +1,28 @@
+name: promote-manual
+
+# The only trigger in this repository that changes what users get, and it is a human's click.
+# What it does to a verified prerelease is in _promote.yml.
+#
+# Manual is the whole design (nothing here may ever be given a push, merge or schedule trigger):
+# the bytes are verified by hand first, and this dispatch is what says they are.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to promote (e.g. v1.0.0). Its prerelease must already exist and be verified.'
+        required: true
+        type: string
+
+# A promote must finish once started; group per tag so two never race the same release.
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    uses: ./.github/workflows/_promote.yml
+    with:
+      tag: ${{ inputs.tag }}
+    permissions:
+      contents: write

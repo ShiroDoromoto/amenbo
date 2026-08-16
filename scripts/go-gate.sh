@@ -5,7 +5,7 @@
 # tree compiles it, so nothing else would notice it breaking — this is the only thing that does.
 #
 # It lives in a script rather than in the Makefile recipe and the CI job so that the three checks
-# are declared once: `make go-gate` and ci.yml's `go` job both run this file, and a verdict in one
+# are declared once: `make go-gate` and _ci.yml's `go` job both run this file, and a verdict in one
 # place is the verdict in the other. Being a tracked .sh, it is itself covered by shell-gate.
 #
 # gofmt is the whole formatting argument in Go — there is nothing to configure and no style to

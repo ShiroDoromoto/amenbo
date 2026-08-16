@@ -182,8 +182,9 @@ job fails a pull request whose copies are behind; `make lock` re-resolves both (
 nothing is compiled) and the result is yours to commit.
 Dependabot's own bumps are repaired for it, ahead of the merge — see `lockstep` in
 `.github/workflows/_dependabot-automerge.yml`. That repair pushes with the workflow's own
-token, which starts no run, so a bump that does move a lock ends up waiting on a verdict
-its new head never got.
+token, which starts no run, so on the bumps that do move a lock the same workflow dispatches
+the full gate against the branch: the head it just made gets a verdict of its own, and the
+merge it armed lands on that.
 
 The DB layer is [rusqlite](https://docs.rs/rusqlite) and nothing else: the change feed rides
 SQLite's update hook, which belongs to the connection, and reads are issued from inside the

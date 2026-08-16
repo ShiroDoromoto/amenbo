@@ -4,11 +4,11 @@ name: _dependabot-automerge
 # that reaches this body is dependabot-automerge-after-ci.yml, and the ownership checks that say
 # the run was Dependabot's and green live there: what arrives here is the branch alone.
 #
-# The wait is done here rather than by GitHub's own auto-merge: fire on CI
-# *completing*, and merge only if it completed green. Native auto-merge would
-# hold for the same verdict now that main requires the aggregate check, but the
-# lockfile repair below has to land before the merge, and it runs off this very
-# signal — so the merge follows it here instead of racing it from the other side.
+# The merge itself is armed rather than performed: `--auto` hands the wait to GitHub, which merges
+# as soon as main's required check is green on the head and the branch is up to date. What this
+# workflow adds in front of that is the one repair the bot cannot make for itself — completing the
+# bump in the lockfiles that sit outside the workspace (see `lockstep`) — and, when that repair
+# moves the head, a verdict for the head it moved to (see `reverdict`).
 #
 # The entry's `workflow_run` trigger runs in the context of the base repo with a
 # normal GITHUB_TOKEN, so a fork PR cannot reach these permissions — the usual
@@ -18,10 +18,6 @@ name: _dependabot-automerge
 #
 # Merging is automatic. SHIPPING is not: releases stay an explicit human/AI step
 # (wharfy), so bumps accumulate on main until someone cuts one deliberately.
-#
-# The merge is preceded by one repair the bot cannot make for itself — completing
-# the bump in the lockfile that sits outside the workspace (see `lockstep`). That
-# is why this workflow writes as well as merges.
 on:
   workflow_call:
     inputs:
@@ -46,9 +42,9 @@ jobs:
   # The run that went green and the tree being merged differ only by a lockfile cargo derived from
   # the manifests CI already judged.
   #
-  # But a GITHUB_TOKEN push never starts a run, so the head this leaves behind carries no verdict of
-  # its own, and main's required check is asked for one. On the bumps that move a lock, the merge
-  # below is therefore refused and the job goes red — visibly, on the PR nobody has merged.
+  # A GITHUB_TOKEN push starts no run, so the head this leaves behind would carry no verdict of its
+  # own while main's required check is asked for one. Whether the head moved is therefore this job's
+  # answer to the next, which is what fetches a verdict for it.
   #
   # A human's PR is held to the same contract by CI's `out-of-workspace-locks` job, which fails
   # instead of pushing.
@@ -58,6 +54,8 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    outputs:
+      pushed: ${{ steps.repair.outputs.pushed }}
     steps:
       # workflow_run checks out the default branch unless told otherwise, and the branch (not the
       # sha) is what a push needs to land on.
@@ -68,6 +66,7 @@ jobs:
       # The entry checked who triggered the run; this checks who owns the branch about to be
       # written to.
       - name: Push the re-resolved lockfiles if they moved
+        id: repair
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -76,6 +75,7 @@ jobs:
           set -euo pipefail
           pr="$(gh pr list --repo "$REPO" --head "$BRANCH" --state open \
                   --json number,author --jq '.[0] | select(.author.login == "app/dependabot") | .number')"
+          echo "pushed=false" >> "$GITHUB_OUTPUT"
           if [ -z "$pr" ]; then
             echo "no open Dependabot PR on ${BRANCH} — nothing to bring along"
             exit 0
@@ -93,12 +93,47 @@ jobs:
           git add app/src-tauri/Cargo.lock verification/Cargo.lock
           git commit -m "chore(deps): follow the workspace in the out-of-workspace lockfiles"
           git push origin "HEAD:${BRANCH}"
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
           echo "pushed the re-resolved lockfiles onto ${BRANCH} (PR #${pr})"
 
-  merge:
-    name: Merge green Dependabot PRs
+  # Fetch a verdict for the head the repair left behind. The run that went green judged the commit
+  # before it, and a token's push starts nothing — so without this the branch would sit forever at a
+  # head main's required check has never seen.
+  #
+  # A dispatch is the one event a GITHUB_TOKEN can start (measured, not assumed: the exception is
+  # what makes this whole shape possible). What it starts is the same body that judged the commit
+  # before, with the path gate forced open — so the verdict this asks for is stricter than the one
+  # it replaces, never laxer.
+  reverdict:
+    name: Get a verdict for the repaired head
     runs-on: ubuntu-latest
     needs: lockstep
+    if: ${{ needs.lockstep.outputs.pushed == 'true' }}
+    permissions:
+      actions: write
+    steps:
+      - name: Run the full gate against the branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ inputs.head_branch }}
+        run: |
+          set -euo pipefail
+          gh workflow run ci-full-manual.yml --repo "$REPO" --ref "$BRANCH"
+          echo "dispatched the full gate against ${BRANCH}"
+
+  # Arm the merge rather than perform it. `--auto` is what waits: GitHub merges the moment main's
+  # required check is green on the head and the branch is up to date, whether that verdict is the one
+  # this run was told about or the one `reverdict` went to fetch. Merging here instead would have to
+  # race both, and lose to whichever is slower.
+  #
+  # It runs whether or not the repair pushed, so `always()` is load-bearing: `reverdict` is skipped
+  # on the ordinary bump, and a skipped dependency would otherwise skip this too.
+  merge:
+    name: Arm auto-merge on green Dependabot PRs
+    runs-on: ubuntu-latest
+    needs: [lockstep, reverdict]
+    if: ${{ always() && needs.lockstep.result == 'success' && needs.reverdict.result != 'failure' }}
     permissions:
       contents: write
       pull-requests: write
@@ -107,7 +142,7 @@ jobs:
       # the open PR for that branch and check it really is Dependabot's before
       # touching it (the entry's check is about who triggered CI; this is about
       # who owns the branch being merged).
-      - name: Find the PR and merge it if it is Dependabot's
+      - name: Find the PR and arm auto-merge if it is Dependabot's
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -120,5 +155,5 @@ jobs:
             echo "no open Dependabot PR on $BRANCH — nothing to merge"
             exit 0
           fi
-          echo "merging PR #$pr ($BRANCH), CI was green"
-          gh pr merge "$pr" --repo "$REPO" --merge --delete-branch
+          echo "arming auto-merge on PR #$pr ($BRANCH)"
+          gh pr merge "$pr" --repo "$REPO" --merge --auto --delete-branch

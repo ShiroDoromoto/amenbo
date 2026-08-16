@@ -9,16 +9,24 @@ name: ci-full-manual
 #
 # It is a file of its own rather than a second trigger on the nightly leg because both would then
 # share one concurrency group, and dispatching this would cancel a nightly midway.
+#
+# The hand at the button is not always a person's: _dependabot-automerge.yml dispatches this against
+# the branch it just pushed a lockfile repair onto, because that push started no run of its own and
+# the head it left needs a verdict. That is why the group is keyed by ref — two branches judged at
+# once must not cancel each other — and why the job below is named `ci`.
 
 on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  full:
+  # Named `ci` to match ci-change.yml: a called workflow's checks are reported as
+  # `<this id> / <job name>`, and `ci / all green` is the single check main requires. A run started
+  # here has to be able to answer it, or the verdict it produces satisfies nothing.
+  ci:
     uses: ./.github/workflows/_ci.yml
     with:
       full: true

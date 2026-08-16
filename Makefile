@@ -141,7 +141,7 @@ LINUX_CLI_IMAGE   := amenbo-linux-cli:$(LINUX_CLI_ARCH)
 # so it does not appear here = shell-gate's actionlint sees that.
 SHELL_SOURCES := $(shell git ls-files '*.sh' '.githooks/*')
 
-.PHONY: help install install-dev gui gui-dev install-gui install-gui-dev dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate ci-aggregate-gate sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux verify-existing-store release codesign-cert devtool
+.PHONY: help install install-dev gui gui-dev install-gui install-gui-dev dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate ci-aggregate-gate workflow-run-gate sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux verify-existing-store release codesign-cert devtool
 
 help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
@@ -160,6 +160,7 @@ help:
 	@echo "make selfupdate-gate - assert the GUI asks which channel it is before reaching for self-update (a dev build that updates installs prod over itself) = the same guard CI runs (automatic at the start of make test)"
 	@echo "make ts-derive-gate - assert every #[derive(TS)] sits in the GUI crate (a derive elsewhere moves bindings.ts on a change nothing on the GUI side watches) = the same guard CI runs (automatic at the start of make test)"
 	@echo "make ci-aggregate-gate - assert CI's merge gate waits for every job in _ci.yml (a job missing from its needs is one the required check goes green without) = the same guard CI runs (automatic at the start of make test)"
+	@echo "make workflow-run-gate - assert every workflow_run trigger names a workflow that exists and can fire (a renamed name: stops the trigger without making anything red) = the same guard CI runs (automatic at the start of make test)"
 	@echo "make sweep-stale  - if the cargo cache exceeds $(SWEEP_LIMIT_GB)GB, drop artifacts untouched for $(SWEEP_DAYS) days (automatic at the end of make test)"
 	@echo "make dist-gui     - build the prod GUI (mac dmg) with build-time signing into dist/ (a supplement for non-installer users; not a wharfy bundle)"
 	@echo "make dist-gui-mac - build the mac unified .pkg (GUI to /Applications, CLI to /usr/local/bin) into dist/ (the mac release bundle itself; Intel build via MAC_GUI_ARCH=amd64)"
@@ -529,6 +530,7 @@ gate-cheap:
 	$(MAKE) --no-print-directory selfupdate-gate
 	$(MAKE) --no-print-directory ts-derive-gate
 	$(MAKE) --no-print-directory ci-aggregate-gate
+	$(MAKE) --no-print-directory workflow-run-gate
 
 ## The workspace stage: the same two commands CI's `rust` job runs, plus the doctests and the doc
 ## link check. `--all-features` lints the feature-gated targets too (scale/e2e tests, the gated
@@ -713,6 +715,14 @@ ts-derive-gate:
 ## Declared once and shared: `make test` and CI's tree-guards both run this file.
 ci-aggregate-gate:
 	@guards/check-ci-aggregate.sh
+
+## Guard a trigger that names its counterpart by `name:` rather than by filename: `workflow_run`.
+## Rename the workflow it waits on and the trigger stops firing, without a run to go red and
+## without a syntax error to catch — the wait simply never ends, and the loss shows up days later
+## as work nobody did. Naming a body that only has `workflow_call` fails the same way.
+## Declared once and shared: `make test` and CI's tree-guards both run this file.
+workflow-run-gate:
+	@guards/check-workflow-run-names.sh
 
 ## Trim a bloated cargo cache by atime LRU. `target/` has no GC, and old artifacts with a different
 ## hash pile up forever (measured ~3.7GB/day). A periodic run would eat idle time, so sweep at the end

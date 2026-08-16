@@ -731,6 +731,11 @@ jobs:
           chmod +x guards/check-ci-aggregate.sh
           guards/check-ci-aggregate.sh
 
+      - name: Assert every workflow_run trigger names a workflow that can fire
+        run: |
+          chmod +x guards/check-workflow-run-names.sh
+          guards/check-workflow-run-names.sh
+
   # The one check the merge target requires. Every job above feeds it, so its verdict is the whole
   # workflow's verdict — and what the ruleset pins is a single name that does not move when a job is
   # added, renamed, or skipped by the path gate. Naming the jobs individually there would put the

@@ -782,13 +782,16 @@ jobs:
     needs:
       - changes
       - rust
+      - rust-mac-win
       - verification
+      - verification-macos
       - gui-web
       - go
       - rot-gates
       - cargo-license
       - npm-license
       - app-rust
+      - app-rust-mac-win
       - out-of-workspace-locks
       - comment-guard
       - tree-guards

@@ -20,10 +20,17 @@
 //! The lock is a zero-byte sidecar `store.swap.lock` beside the truth source, one per store directory, so
 //! it covers whichever of `store.sqlite` / `oplog.sqlite` is live. A [`SwapGuard`] **unlocks explicitly**
 //! before it closes the fd — see its `Drop`.
+//!
+//! The lock keeps *new* opens out, and that is all an advisory lock can do. Windows adds a second demand
+//! the lock cannot meet: it refuses to replace a file any handle still holds open, and a connection that
+//! was already open when the lock was taken is exactly such a handle (`AMB-D-704`). So the swapping side
+//! also asks the two questions [`release_local_connections`] and [`ensure_replaceable`] answer — let go of
+//! what *this* process holds, and refuse with `store_busy` if another program still holds it.
 
 use std::fs::{File, OpenOptions, TryLockError};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 use crate::error::{Error, Result};
 
@@ -116,6 +123,72 @@ pub fn guard_read_open(db_path: &Path) -> Result<Option<SwapGuard>> {
     }
 }
 
+/// The closers this process registered for the store connections it keeps alive across actions.
+///
+/// Plain function pointers rather than boxed closures: a long-lived connection is process-global state
+/// already, so its closer needs nothing captured, and the registry then costs no allocation and can be
+/// `const`-constructed.
+static LOCAL_HOLDERS: Mutex<Vec<fn()>> = Mutex::new(Vec::new());
+
+/// Register a closer for a store connection this process keeps open across actions, to be run before any
+/// swap replaces the file underneath it. Surfaces that follow open-per-action hold nothing and register
+/// nothing; the GUI's change-detection connection is the one that does.
+///
+/// Registering is idempotent only in the sense that a closer must tolerate being called when there is
+/// nothing open — a swap asks every registered closer, whether or not that connection exists right now.
+pub fn release_before_swap(close: fn()) {
+    if let Ok(mut holders) = LOCAL_HOLDERS.lock() {
+        holders.push(close);
+    }
+}
+
+/// Ask every registered closer to let go, so the swap that follows is not blocked by a handle this
+/// process is holding. The closers run **outside** the registry lock: one of them re-registering (or
+/// otherwise reaching back in) would otherwise deadlock against this call.
+pub(crate) fn release_local_connections() {
+    let holders = LOCAL_HOLDERS.lock().map(|h| h.clone()).unwrap_or_default();
+    for close in holders {
+        close();
+    }
+}
+
+/// The bilingual `store_busy` a swap surfaces when the store is still held open elsewhere: nothing is
+/// underway that will finish on its own, so the sentence names the way out rather than asking for patience.
+#[cfg(windows)]
+fn held_open() -> Error {
+    Error::store_busy("another program has this store open; close it and run this again")
+}
+
+/// Refuse the swap while any handle still has `db_path` open — Windows will not replace a file
+/// underneath one, so a swap attempted here fails halfway rather than at the door (`AMB-D-704`).
+///
+/// The probe is an open that grants no sharing at all: it succeeds only when nobody else has the file,
+/// which is precisely the condition the replace needs. It is asked under the caller's exclusive swap lock
+/// and after [`release_local_connections`], so what it can still find is another program's connection —
+/// and the lock keeps a new one from arriving between this answer and the rename.
+///
+/// A store that is not there yet has no handle on it, so it is replaceable by definition.
+#[cfg(windows)]
+pub(crate) fn ensure_replaceable(db_path: &Path) -> Result<()> {
+    use std::os::windows::fs::OpenOptionsExt;
+    /// `ERROR_SHARING_VIOLATION` — the file is open with sharing this request does not allow.
+    const SHARING_VIOLATION: i32 = 32;
+
+    match OpenOptions::new().read(true).write(true).share_mode(0).open(db_path) {
+        Ok(_) => Ok(()),
+        Err(e) if e.raw_os_error() == Some(SHARING_VIOLATION) => Err(held_open()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(Error::from(e)),
+    }
+}
+
+/// Unix replaces a file underneath open connections without complaint — the rename swaps the directory
+/// entry and the old inode lives on until its last reader closes — so there is nothing to ask here.
+#[cfg(not(windows))]
+pub(crate) fn ensure_replaceable(_db_path: &Path) -> Result<()> {
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -176,6 +249,47 @@ mod tests {
             let opened = guard_write_open(&db);
             assert!(opened.is_ok(), "open {i}, right after the swap released: {opened:?}");
         }
+    }
+
+    /// A registered closer is what a swap asks before it replaces the file, so the connections this
+    /// process keeps across actions are gone by the time the replace runs.
+    #[test]
+    fn a_swap_asks_the_connections_this_process_keeps_to_let_go() {
+        static LET_GO: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        fn close() {
+            LET_GO.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+
+        release_before_swap(close);
+        release_local_connections();
+        assert!(LET_GO.load(std::sync::atomic::Ordering::SeqCst), "the swap asked, and the closer ran");
+    }
+
+    /// A store nobody holds is replaceable — and so is one that is not there yet, which has no handle on
+    /// it to begin with.
+    #[test]
+    fn an_unheld_store_is_replaceable() {
+        let dir = scratch("replaceable");
+        let db = dir.join("store.sqlite");
+        ensure_replaceable(&db).expect("a store that does not exist yet");
+        std::fs::write(&db, b"a store").unwrap();
+        ensure_replaceable(&db).expect("a store nobody has open");
+    }
+
+    /// Windows will not replace a file any handle still has open, so the swap asks first and refuses with
+    /// `store_busy` rather than failing halfway through. Unix has no such rule and nothing to ask.
+    #[cfg(windows)]
+    #[test]
+    fn windows_refuses_to_replace_a_store_something_still_holds_open() {
+        let dir = scratch("held-open");
+        let db = dir.join("store.sqlite");
+        std::fs::write(&db, b"a store").unwrap();
+
+        let held = File::open(&db).unwrap();
+        assert_eq!(ensure_replaceable(&db).unwrap_err().code(), "store_busy");
+
+        drop(held);
+        ensure_replaceable(&db).expect("replaceable again once the handle is gone");
     }
 
     /// Two opens can hold the shared lock at once — readers never block each other, only a swap blocks them.

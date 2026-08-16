@@ -56,14 +56,16 @@
 //!    aborts with nothing to roll back; the chain needs no pre-migration backup of its own, because the
 //!    thing it migrates is a copy in a staging dir and the archive itself is the "before".
 //! 3. **Swap** (only once the snapshot is green): place the archive's blobs (additive — a hash already
-//!    present is left alone), then [`checkpoint`] the live `store.sqlite` and copy it aside to a
-//!    timestamped `store.pre-restore-<stamp>.sqlite` (kept as the safety backup on success; the
-//!    checkpoint is what makes that single file carry the WAL's commits) and rename the staged, migrated
-//!    snapshot over it ([`replace_truth_source`] — the live path is never absent). An I/O failure puts
-//!    the aside back, so a failed restore never leaves a half-replaced store. Blobs are *not* rolled
-//!    back: they are content-addressed and additive, so a stray one is unreferenced garbage that
-//!    [`crate::store::Store::gc_blobs`] reclaims — whereas removing one could destroy bytes a live
-//!    attachment still points at.
+//!    present is left alone), then clear the handles that would block the replace (this process lets go
+//!    of what it keeps open, another program's connection is refused with `store_busy` — `AMB-D-704`,
+//!    the demand Windows makes and Unix does not), then [`checkpoint`] the live `store.sqlite` and copy
+//!    it aside to a timestamped `store.pre-restore-<stamp>.sqlite` (kept as the safety backup on
+//!    success; the checkpoint is what makes that single file carry the WAL's commits) and rename the
+//!    staged, migrated snapshot over it ([`replace_truth_source`] — the live path is never absent). An
+//!    I/O failure puts the aside back, so a failed restore never leaves a half-replaced store. Blobs
+//!    are *not* rolled back: they are content-addressed and additive, so a stray one is unreferenced
+//!    garbage that [`crate::store::Store::gc_blobs`] reclaims — whereas removing one could destroy
+//!    bytes a live attachment still points at.
 //!
 //! The primitives the envelope is built from — `snapshot_into`, the two verifies, `move_file`,
 //! `remove_sidecars`, `checkpoint`, `DirGuard` — are `pub(crate)`: a restore is where they were proven,
@@ -986,11 +988,16 @@ pub(crate) fn move_file(src: &Path, dest: &Path) -> Result<()> {
 /// opener arriving in the gap fabricate an **empty** store (`Connection::open` carries
 /// `SQLITE_OPEN_CREATE`) whose writes the finishing copy would then silently eat, so:
 ///
-/// 1. [`checkpoint`] folds `dest`'s committed WAL into its file, so the plain-copy `aside` is a complete
+/// 1. Clear the open handles the replace would trip over ([`crate::swap_lock`], `AMB-D-704`): this
+///    process lets go of the connections it keeps across actions, and a store another program still holds
+///    open is refused with `store_busy`. Asked **before anything here moves**, so a refusal leaves `dest`
+///    as it stands with no `aside` and no `staging` beside it — and the swap lock the caller holds keeps a
+///    new open from arriving between that answer and the rename.
+/// 2. [`checkpoint`] folds `dest`'s committed WAL into its file, so the plain-copy `aside` is a complete
 ///    single-file rewind point (a no-op when the live engine was already closed and checkpointed, as
 ///    `Store::restore` leaves it).
-/// 2. **Copy** `dest` to `aside` — `dest` stays in place.
-/// 3. Materialise `source` beside `dest` as `staging` (same directory ⇒ the final rename is atomic even
+/// 3. **Copy** `dest` to `aside` — `dest` stays in place.
+/// 4. Materialise `source` beside `dest` as `staging` (same directory ⇒ the final rename is atomic even
 ///    when `source` lives on another filesystem, e.g. a temp staging dir), then **rename `staging` over
 ///    `dest`** in one step. `dest` goes straight from the old file to the new one; it is never absent.
 ///
@@ -1003,6 +1010,8 @@ pub(crate) fn replace_truth_source(
     aside: &Path,
     staging: &Path,
 ) -> Result<()> {
+    swap_lock::release_local_connections();
+    swap_lock::ensure_replaceable(dest)?;
     checkpoint(dest)?;
     std::fs::copy(dest, aside)?;
     std::fs::copy(source, staging)?;
@@ -1861,6 +1870,12 @@ mod tests {
     /// The pre-restore aside is the rewind point, so it must carry everything the live store had —
     /// including the transactions still sitting in its `-wal`, which the swap deletes along with the old
     /// filename.
+    ///
+    /// The store the restore runs against is a **copy** of one whose WAL was left unfolded, rather than the
+    /// original with its connection still open. A swap is entitled to find nothing holding the file
+    /// (`AMB-D-704`) — on Windows a held handle is refused outright — so a live connection is the wrong way
+    /// to hold frames in the WAL. Copying the pair `store.sqlite` + `store.sqlite-wal` reproduces the state
+    /// that matters here, and hands the restore a store nobody has open.
     #[test]
     fn the_aside_keeps_transactions_that_lived_only_in_the_wal() {
         let base = scratch("restore-wal");
@@ -1870,21 +1885,31 @@ mod tests {
         let archive = base.join(format!("backup.{ARCHIVE_EXT}"));
         backup_from(&source(&a), &archive, &mut crate::progress::ignore).unwrap();
 
-        // The live store the restore will replace: one task written through the normal path…
-        let live = base.join("live");
-        std::fs::create_dir_all(&live).unwrap();
-        let dest = live.join(crate::config::STORE_FILE_NAME);
-        seed_store(&live, &["山田さんに連絡する"]);
+        // The store to be replaced, built in a scratch of its own: one task written through the normal
+        // path…
+        let built = base.join("built");
+        std::fs::create_dir_all(&built).unwrap();
+        let built_db = built.join(crate::config::STORE_FILE_NAME);
+        seed_store(&built, &["山田さんに連絡する"]);
 
         // …and a second one committed only to the WAL: holding the connection open keeps the last-close
         // checkpoint from ever folding those frames into the main file.
-        let holder = crate::store_engine::StoreEngine::open(&dest).unwrap();
+        let holder = crate::store_engine::StoreEngine::open(&built_db).unwrap();
         put_task(&holder, 99); // A key seed_store's numbering does not reach, so the UPSERT overwrites nothing
-        let wal = dest.with_extension("sqlite-wal");
+        let wal = built_db.with_extension("sqlite-wal");
         assert!(std::fs::metadata(&wal).is_ok_and(|m| m.len() > 0), "the commit is in the WAL");
 
-        restore_into(&archive, "s", &dest, &mut crate::progress::ignore).unwrap();
+        // Take the main file and its WAL away as a pair, while the frames are still unfolded — the copy is
+        // the live store the restore replaces, and no connection is attached to it. (`-shm` is left behind:
+        // it is a rebuildable index, and the next open recovers it from the WAL.)
+        let live = base.join("live");
+        std::fs::create_dir_all(&live).unwrap();
+        let dest = live.join(crate::config::STORE_FILE_NAME);
+        std::fs::copy(&built_db, &dest).unwrap();
+        std::fs::copy(&wal, dest.with_extension("sqlite-wal")).unwrap();
         drop(holder);
+
+        restore_into(&archive, "s", &dest, &mut crate::progress::ignore).unwrap();
 
         assert_eq!(live_tasks(&dest), 3, "the restored store carries the archive's tasks");
         let aside = dest.with_file_name("store.pre-restore-s.sqlite");

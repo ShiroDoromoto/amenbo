@@ -13,7 +13,8 @@ name: Scale (heavy)
 # cadence are wholly separate from ci.yml's push/PR gate; folding it in would force an event guard on
 # every PR job. See crates/amenbo-core/Cargo.toml for the `scale` / `scale-heavy` feature split.
 #
-# Cost: this repo is private (monthly minute quota); the job runs on Linux (x1) only.
+# Cost: this repo is public, so Actions minutes are free — what keeps the full 10k off the per-PR
+# gate is merge latency, not a quota. The job runs on Linux.
 
 on:
   schedule:

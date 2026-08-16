@@ -20,8 +20,8 @@ name: Rot gates
 # gates: what that leg is watching is the path filter's own judgment, not the passing of time, and
 # it gets there by running the whole of ci.yml rather than by listing jobs a second time here.
 #
-# Cost: four Linux jobs (x1), a few minutes each (the key comparison is seconds). The weekly leg is
-# on the order of 20 min/month.
+# Cost: this repo is public, so Actions minutes are free — four Linux jobs, a few minutes each (the
+# key comparison is seconds), and the weekly leg on the order of 20 min/month of runner time.
 
 on:
   workflow_call:

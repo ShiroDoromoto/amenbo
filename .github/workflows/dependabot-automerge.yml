@@ -3,17 +3,16 @@ name: Dependabot auto-merge
 # Merge a Dependabot PR once CI has passed on it — nobody has to watch the queue.
 #
 # Why not GitHub's own auto-merge button: it only waits for *required* status
-# checks, and required checks come from branch protection / rulesets, which this
-# repo cannot have (private on the Free plan — the protection API answers 403
-# "Upgrade to GitHub Pro"). With no required checks, native auto-merge merges
-# immediately, i.e. before CI says anything. So the wait is done here instead:
-# fire on CI *completing*, and merge only if it completed green.
+# checks, and this repo declares none — the one ruleset on main forbids deletion
+# and force-push, and nothing else. With no required checks, native auto-merge
+# merges immediately, i.e. before CI says anything. So the wait is done here
+# instead: fire on CI *completing*, and merge only if it completed green.
 #
 # `workflow_run` runs in the context of the base repo with a normal GITHUB_TOKEN,
 # so a fork PR cannot reach these permissions — the usual pull_request_target
 # hazard does not apply. The token still cannot approve a PR (a token cannot
-# approve its own repo's PRs), but approval is not required here: no branch
-# protection means merge needs no review.
+# approve its own repo's PRs), but approval is not required here: nothing on
+# main requires a review.
 #
 # Merging is automatic. SHIPPING is not: releases stay an explicit human/AI step
 # (wharfy), so bumps accumulate on main until someone cuts one deliberately.

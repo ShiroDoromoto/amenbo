@@ -13,7 +13,8 @@
 #
 # Grouping keeps "one PR per axis" instead of a flood: minor/patch are batched,
 # majors are split into individual PRs so each breaking migration is reviewed on
-# its own. Dependabot itself is free on private repos.
+# its own. Dependabot itself is free, and so are the Actions minutes the PRs it
+# opens spend — this repo is public.
 version: 2
 updates:
   # Rust workspace (root Cargo.toml + crates/*). The Tauri shell crate

@@ -550,11 +550,31 @@ struct Watch {
     file: (u128, u64),
 }
 
+static WATCH: std::sync::OnceLock<std::sync::Mutex<Watch>> = std::sync::OnceLock::new();
+
 fn watch() -> &'static std::sync::Mutex<Watch> {
-    static WATCH: std::sync::OnceLock<std::sync::Mutex<Watch>> = std::sync::OnceLock::new();
     WATCH.get_or_init(|| {
+        // The one handle this process keeps across actions is also the one a swap trips over: Windows
+        // refuses to replace a file anybody still has open (`AMB-D-704`). Core asks before it swaps, so
+        // register the answer here, where the connection is born — not at a call site that would have to
+        // remember.
+        amenbo_core::swap_lock::release_before_swap(release_watch_for_swap);
         std::sync::Mutex::new(Watch { store: None, path: std::path::PathBuf::new(), file: (0, 0) })
     })
+}
+
+/// Let go of the watch connection so a `restore` or a migration can replace the store file underneath it.
+/// The next signature read opens a fresh one against whatever is there then — the same recovery
+/// [`release_orphaned_watch`] performs, arrived at before the swap instead of after it.
+///
+/// Reads the static directly rather than going through [`watch`]: this runs from core, mid-swap, and
+/// re-entering the initialiser that registered it would be a way to deadlock. Nothing open yet means
+/// nothing to let go of.
+fn release_watch_for_swap() {
+    let Some(watch) = WATCH.get() else { return };
+    if let Ok(mut w) = watch.lock() {
+        w.store = None;
+    }
 }
 
 /// The WAL's shared-memory index beside the store file (`store.sqlite-shm`).

@@ -1,0 +1,30 @@
+name: dependabot-automerge-after-ci
+
+# Fire when the change gate finishes, and hand the branch to _dependabot-automerge.yml if that run
+# was Dependabot's and green. Everything the body does — the lockfile repair and the merge — is
+# there; the three conditions below are the whole of what this file decides.
+#
+# `workflows:` names ci-change.yml's `name:`, not its filename. Renaming that workflow stops this
+# from firing, and nothing goes red to say so: the failure is an absence, so no run is created and
+# nothing is notified. guards/ holds the name comparison that turns it back into a red gate.
+on:
+  workflow_run:
+    workflows: [ci-change]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]'
+    uses: ./.github/workflows/_dependabot-automerge.yml
+    with:
+      head_branch: ${{ github.event.workflow_run.head_branch }}
+    permissions:
+      contents: write
+      pull-requests: write

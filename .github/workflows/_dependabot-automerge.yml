@@ -1,6 +1,8 @@
-name: Dependabot auto-merge
+name: _dependabot-automerge
 
-# Merge a Dependabot PR once CI has passed on it — nobody has to watch the queue.
+# Merge a Dependabot PR once CI has passed on it — nobody has to watch the queue. The one entry
+# that reaches this body is dependabot-automerge-after-ci.yml, and the ownership checks that say
+# the run was Dependabot's and green live there: what arrives here is the branch alone.
 #
 # The wait is done here rather than by GitHub's own auto-merge: fire on CI
 # *completing*, and merge only if it completed green. Native auto-merge would
@@ -8,11 +10,11 @@ name: Dependabot auto-merge
 # lockfile repair below has to land before the merge, and it runs off this very
 # signal — so the merge follows it here instead of racing it from the other side.
 #
-# `workflow_run` runs in the context of the base repo with a normal GITHUB_TOKEN,
-# so a fork PR cannot reach these permissions — the usual pull_request_target
-# hazard does not apply. The token still cannot approve a PR (a token cannot
-# approve its own repo's PRs), but approval is not required here: nothing on
-# main requires a review.
+# The entry's `workflow_run` trigger runs in the context of the base repo with a
+# normal GITHUB_TOKEN, so a fork PR cannot reach these permissions — the usual
+# pull_request_target hazard does not apply. The token still cannot approve a PR (a
+# token cannot approve its own repo's PRs), but approval is not required here:
+# nothing on main requires a review.
 #
 # Merging is automatic. SHIPPING is not: releases stay an explicit human/AI step
 # (wharfy), so bumps accumulate on main until someone cuts one deliberately.
@@ -21,13 +23,12 @@ name: Dependabot auto-merge
 # the bump in the lockfile that sits outside the workspace (see `lockstep`). That
 # is why this workflow writes as well as merges.
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-
-permissions:
-  contents: write
-  pull-requests: write
+  workflow_call:
+    inputs:
+      head_branch:
+        description: the Dependabot branch the green run was on
+        required: true
+        type: string
 
 jobs:
   # The GUI shell crate and the verification harness are both `exclude`d from the workspace and
@@ -41,7 +42,7 @@ jobs:
   # none of the Tauri system libs.
   #
   # It runs ahead of the merge rather than as a CI job because CI's token is read-only on a
-  # Dependabot pull request — this workflow's `workflow_run` trigger is what carries a writable one.
+  # Dependabot pull request — the entry's `workflow_run` trigger is what carries a writable one.
   # The run that went green and the tree being merged differ only by a lockfile cargo derived from
   # the manifests CI already judged.
   #
@@ -54,24 +55,23 @@ jobs:
   lockstep:
     name: Bring the out-of-workspace lockfiles along
     runs-on: ubuntu-latest
-    if: >-
-      github.event.workflow_run.event == 'pull_request' &&
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.actor.login == 'dependabot[bot]'
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       # workflow_run checks out the default branch unless told otherwise, and the branch (not the
       # sha) is what a push needs to land on.
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.workflow_run.head_branch }}
+          ref: ${{ inputs.head_branch }}
 
-      # The same ownership check the merge job makes: the actor above says who triggered CI, this
-      # says who owns the branch about to be written to.
+      # The entry checked who triggered the run; this checks who owns the branch about to be
+      # written to.
       - name: Push the re-resolved lockfiles if they moved
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          BRANCH: ${{ inputs.head_branch }}
         run: |
           set -euo pipefail
           pr="$(gh pr list --repo "$REPO" --head "$BRANCH" --state open \
@@ -99,20 +99,19 @@ jobs:
     name: Merge green Dependabot PRs
     runs-on: ubuntu-latest
     needs: lockstep
-    if: >-
-      github.event.workflow_run.event == 'pull_request' &&
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.actor.login == 'dependabot[bot]'
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       # workflow_run does not carry the PR, only the head branch it ran on. Find
       # the open PR for that branch and check it really is Dependabot's before
-      # touching it (the actor check above is about who triggered CI; this is
-      # about who owns the branch being merged).
+      # touching it (the entry's check is about who triggered CI; this is about
+      # who owns the branch being merged).
       - name: Find the PR and merge it if it is Dependabot's
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          BRANCH: ${{ inputs.head_branch }}
         run: |
           set -euo pipefail
           pr="$(gh pr list --repo "$REPO" --head "$BRANCH" --state open \

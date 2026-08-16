@@ -1,0 +1,27 @@
+name: ci-full-manual
+
+# The whole of _ci.yml on demand, with its path gate forced open — the same body the nightly
+# leg runs (ci-full-nightly.yml), reached by hand instead of by the clock.
+#
+# This is the run that stands before a tag: `make release` names it, and what it is watching is
+# the path filter's own judgment rather than the diff. Cutting a release on a narrowed run would
+# ship whatever a wrong filter skipped.
+#
+# It is a file of its own rather than a second trigger on the nightly leg because both would then
+# share one concurrency group, and dispatching this would cancel a nightly midway.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  full:
+    uses: ./.github/workflows/_ci.yml
+    with:
+      full: true
+    permissions:
+      contents: read
+      pull-requests: read

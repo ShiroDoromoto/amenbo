@@ -9,12 +9,12 @@ repository.workspace = true
 [features]
 # Heavy scale/perf guards, split out by *attribute* so the everyday `cargo test` stays fast.
 # `read_scaling_guard` is gated behind an off-by-default feature so it is invisible to the default
-# build; CI MUST run it (see .github/workflows/ci.yml) or the guard silently rots.
+# build; CI MUST run it (see .github/workflows/_ci.yml) or the guard silently rots.
 #
 # Two tiers, split by seed size: the deterministic O(result) ratio guards prove their point
 # at a medium seed in a few seconds, but the wall-clock guards (sublinearity, the board's O(N²) net)
 # need the full 10k to bite. So `scale` (the PR gate) seeds medium and runs only the ratio guards,
-# while `scale-heavy` (nightly / workflow_dispatch — see .github/workflows/scale-heavy.yml) seeds the
+# while `scale-heavy` (nightly / dispatch — see .github/workflows/_scale-heavy.yml) seeds the
 # full 10k and additionally runs the timing guards. `scale-heavy` implies `scale`, so the
 # `read_scaling_guard` test target (required-features = ["scale"]) builds under either.
 scale = []

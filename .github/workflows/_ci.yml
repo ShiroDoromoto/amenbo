@@ -1,19 +1,10 @@
-name: CI
+name: _ci
 
-# Single gate that guards the merge target. Every job below lives in this one
-# workflow, so one event fires one workflow run (with N jobs) instead of N
-# separate runs. Runner minutes are unchanged — each job still gets its own
-# runner — but the run list, status, and concurrency group are unified.
-#
-# Trigger scope: `push` is restricted to `main` so a task/Dependabot branch
-# doesn't run the suite twice (once for the push, once for the PR). Every branch
-# reaches main through a PR now, so `pull_request` carries the whole pre-merge
-# gate and `push: main` is the post-merge backstop on the merge target itself.
-# The trigger is not widened to task branches: on a push the path filter below
-# sees only that push's diff, so a branch pushed in instalments would judge each
-# instalment alone, while on a PR it sees the branch's whole diff against the
-# merge base. `concurrency` cancels an in-progress run when a newer commit (e.g.
-# a Dependabot rebase) supersedes it — but only on PRs, see below.
+# The body of the merge gate. It starts nothing itself — `ci-change.yml` runs it on a
+# change, `ci-full-nightly.yml` and `ci-full-manual.yml` run it with the path gate forced
+# open. Every job lives in this one workflow, so one event fires one workflow run (with N
+# jobs) instead of N separate runs. Runner minutes are unchanged — each job still gets its
+# own runner — but the run list, status, and concurrency group are unified.
 #
 # Cost: this repo is public, so Actions minutes are free — the net is no longer drawn
 # to save minutes but by what a change can affect: the `changes` path gate below runs
@@ -32,42 +23,20 @@ name: CI
 #
 # The path gate decides what a diff can have moved, and it can be wrong: a layer whose inputs are
 # not all listed, or a path listed under no layer at all, is skipped by a filter that believes it
-# has judged. Nothing in that diff says so — the run is green and short. `full-nightly.yml` calls
-# this workflow once a night with `full: true`, which forces every gated job on whatever the diff
-# touched, so a hole in the filter surfaces within a day instead of on release day.
+# has judged. Nothing in that diff says so — the run is green and short. The nightly entry calls
+# this workflow with `full: true`, which forces every gated job on whatever the diff touched, so a
+# hole in the filter surfaces within a day instead of on release day.
+#
+# Concurrency belongs to the entries, not here: each one keys its own group, so the nightly leg and
+# a change's run never take each other down.
 
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_call:
     inputs:
       full:
         description: run every gated job, whatever the diff touched (the nightly leg)
         type: boolean
         default: false
-
-# Superseding is a PR-only idea here, which is why the group key differs per event.
-#
-# On a PR the path filter below diffs against the merge base, so every run sees the
-# branch's WHOLE diff — a newer run subsumes the one it cancels, and the group is
-# keyed by ref so a rebase/force-push supersedes the run it made obsolete.
-#
-# On `push` the filter sees only THAT push's diff, so a superseded main run takes
-# its changes down with it: push A touches Rust, push B (shell only) supersedes A,
-# B's filter reports rust=false, and A's Rust change is never compiled while main
-# says green. Keying push runs by SHA gives each commit its own group, so no main
-# run is ever cancelled — neither in-progress (cancel-in-progress) nor pending
-# (a group holds one pending run, and a third arrival evicts the one waiting).
-# Main is pushed on every merge now, and that is fine: an extra run costs nothing
-# next to a green main that was never built.
-#
-# Called from the nightly leg the key is the head SHA too, under that workflow's own
-# name — so a nightly and a push run over the same commit sit in different groups and
-# neither takes the other down.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
-  cancel-in-progress: true
 
 jobs:
   # Path gate for the build/test jobs: run each only when a change can affect it.
@@ -90,8 +59,8 @@ jobs:
   # touches no dependency (e.g. a relay-only or docs push) doesn't run them. The
   # trade-off is that a newly-disclosed advisory on an UNCHANGED dep isn't flagged
   # until the next dependency change — which is why those two, and the two linter
-  # gates (whose runner-side versions float), are defined in rot-gates.yml and also
-  # run on a timer from rot-weekly.yml, with no path filter at all. Here they
+  # gates (whose runner-side versions float), are defined in _rot-gates.yml and also
+  # run on a timer from rot-gates-weekly.yml, with no path filter at all. Here they
   # stay gated: a job a diff can't have moved has nothing new to report, so skipping it
 # keeps the run list to what actually changed.
   # tree-guards stays always-on: what it looks for — an internal-note reference,
@@ -180,7 +149,7 @@ jobs:
       # `sharing`, flipping the CLI out of personal mode and breaking their P1 assertions.
       # Enable scale+e2e only. `scale` (not `scale-heavy`) seeds read_scaling_guard at a *medium*
       # store and runs only its deterministic O(result) ratio guards — the full 10k seed + the
-      # wall-clock guards run nightly via scale-heavy.yml, off the PR path. The `ci` profile
+      # wall-clock guards run nightly via scale-heavy-nightly.yml, off the PR path. The `ci` profile
       # (.config/nextest.toml) runs every test to completion (no fail-fast) so one failure doesn't
       # mask the rest.
       #
@@ -392,24 +361,26 @@ jobs:
         run: bash scripts/go-gate.sh
 
   # The gates that can also go red on a tree nobody touched (the linter floats its runner-side
-  # version; the audits float the advisory DB; the catalog key's other copy is another repository's). Their definitions live in rot-gates.yml so that this
-  # workflow and the weekly timer (rot-weekly.yml) run the same thing rather than two copies that
+  # version; the audits float the advisory DB; the catalog key's other copy is another repository's). Their definitions live in _rot-gates.yml so that this
+  # workflow and the weekly timer (rot-gates-weekly.yml) run the same thing rather than two copies that
   # drift — see that file for what each one gates and why the build/test jobs are not among them.
   # Here they keep their path filter; the weekly leg runs them unfiltered.
   rot-gates:
     needs: changes
-    uses: ./.github/workflows/rot-gates.yml
+    uses: ./.github/workflows/_rot-gates.yml
     with:
       shell: ${{ needs.changes.outputs.shell == 'true' }}
       cargo_deps: ${{ needs.changes.outputs.cargo_deps == 'true' }}
       npm_deps: ${{ needs.changes.outputs.npm_deps == 'true' }}
       catalog_key: ${{ needs.changes.outputs.catalog_key == 'true' }}
+      # The one gate a change cannot judge: it probes the live release, not the tree.
+      provenance: false
 
   # amenbo is Apache-2.0 and ships binaries that statically link every Rust dependency, so a
   # strong-copyleft crate anywhere in the tree would make what we distribute undistributable.
   # Nobody reads a license at bump time — Dependabot bumps are auto-merged — so the allow-list in
   # deny.toml is the only thing that would notice one arriving. It stays HERE rather than in
-  # rot-gates.yml: unlike the audits, this verdict is a function of the lockfiles alone, so it
+  # _rot-gates.yml: unlike the audits, this verdict is a function of the lockfiles alone, so it
   # cannot go red on a tree nobody touched, and the weekly leg would only re-run it for nothing.
   cargo-license:
     name: cargo deny (licenses)
@@ -445,7 +416,7 @@ jobs:
   # same unwatched way, since Dependabot bumps are auto-merged. The gate reads the allow-list out of
   # deny.toml rather than keeping a second copy, so "what amenbo may ship" cannot come to mean two
   # different things. It sits beside cargo-license for the same reason that job is here and not in
-  # rot-gates.yml: the verdict is a function of the lockfile alone.
+  # _rot-gates.yml: the verdict is a function of the lockfile alone.
   npm-license:
     name: npm licenses (GUI shipped deps)
     runs-on: ubuntu-latest
@@ -635,7 +606,7 @@ jobs:
   #
   # Dependabot's own pull requests are exempt, because they are the ones that cause the drift and
   # failing them would deadlock the auto-merge (a red run never reaches the merge workflow). Theirs
-  # is repaired ahead of the merge instead, by the lockstep job in dependabot-automerge.yml.
+  # is repaired ahead of the merge instead, by the lockstep job in _dependabot-automerge.yml.
   out-of-workspace-locks:
     name: out-of-workspace lockfiles follow the workspace
     runs-on: ubuntu-latest
@@ -675,7 +646,7 @@ jobs:
   # a diff shows only when such a file is touched.
   #
   # The version is pinned with its checksum: an unpinned linter floats its own verdict, and a gate
-  # that changes its mind on a tree nobody touched belongs in rot-gates.yml, not here.
+  # that changes its mind on a tree nobody touched belongs in _rot-gates.yml, not here.
   comment-guard:
     name: Comment guard (placement, form, vocabulary)
     runs-on: ubuntu-latest

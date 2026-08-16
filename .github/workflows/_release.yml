@@ -1,30 +1,25 @@
-name: Release
+name: _release
 
-# Cut a release from PUBLIC CI, not a developer's laptop. A `v*` tag push
-# builds every OS's unified installer + CLI on its native runner, then one aggregate
-# job uploads them to a GitHub *prerelease* and attaches build provenance
-# (attestation) signed with the workflow's keyless OIDC identity. A prerelease is
-# downloadable but NOT latest: users keep the previous version until a human verifies
-# the real bytes and runs the separate promote job. Building is not shipping —
-# nothing here touches what users get.
+# Cut a release from PUBLIC CI, not a developer's laptop. This body builds every OS's
+# unified installer + CLI on its native runner, then one aggregate job uploads them to a
+# GitHub *prerelease* and attaches build provenance (attestation) signed with the
+# workflow's keyless OIDC identity. A prerelease is downloadable but NOT latest: users keep
+# the previous version until a human verifies the real bytes and dispatches the separate
+# promote workflow. Building is not shipping — nothing here touches what users get.
 #
-# This is the ONLY place a release is built. It must never run on a merge or branch
-# push: only a `v*` tag (the real path) or a manual dispatch (a re-run against a tag).
+# This is the ONLY place a release is built, and it starts nothing itself. The only entries
+# that reach it are release-tag.yml (a `v*` tag — the real path) and release-manual.yml (a
+# re-run against a tag). Neither is a merge or a branch push, and no third one may be added.
 # The human/AI gate closes BEFORE the tag is pushed.
 #
 # The native-amd64 Linux GUI bundle and its GUI e2e run in the `linux` job below, so a
 # broken tauri/webview hop is caught exactly when it would otherwise ship.
+#
+# Concurrency belongs to the entries: a release must finish once started, and grouping per
+# ref there keeps two tags from serializing against each other.
 
 on:
-  push:
-    tags: ['v*']
-  workflow_dispatch:
-
-# A release must finish once started — never cancel an in-progress run. Group per ref
-# so two tags don't serialize against each other.
-concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
+  workflow_call:
 
 # Least privilege by default; the aggregate `release` job widens its own.
 permissions:

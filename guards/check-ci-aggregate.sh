@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # check-ci-aggregate.sh — keep the merge gate's `needs:` complete.
 #
-# ci.yml ends in one aggregate job that every other job feeds, and that job's name is the single check
+# _ci.yml ends in one aggregate job that every other job feeds, and that job's name is the single check
 # the merge target requires. It waits for what its `needs:` names and nothing else — so a job added
 # without a line there is a job the required check never waits for. The run is green, the merge goes
 # through, and nothing anywhere says the job was not counted. That is the one failure mode a red build
@@ -17,7 +17,7 @@
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/.." && pwd)
-workflow=$root/.github/workflows/ci.yml
+workflow=$root/.github/workflows/_ci.yml
 
 if [ ! -f "$workflow" ]; then
   echo "✗ ci aggregate: $workflow is missing — did the merge gate move?" >&2
@@ -51,7 +51,7 @@ for line in lines:
         aggregate.append(line)
 
 if AGGREGATE not in jobs:
-    print(f"✗ ci aggregate: ci.yml has no `{AGGREGATE}` job.\n    That is the name the merge target "
+    print(f"✗ ci aggregate: _ci.yml has no `{AGGREGATE}` job.\n    That is the name the merge target "
           "requires — renaming it takes the required check with it. Rename it back, or move the "
           "ruleset and this guard with it.", file=sys.stderr)
     sys.exit(1)
@@ -81,12 +81,12 @@ if missing:
     ok = False
     print(f"✗ ci aggregate: {', '.join(missing)} — no line in `{AGGREGATE}`'s needs.\n"
           "    The required check does not wait for them, so it goes green without their verdict. "
-          "Add them to the needs list in .github/workflows/ci.yml.", file=sys.stderr)
+          "Add them to the needs list in .github/workflows/_ci.yml.", file=sys.stderr)
 
 stale = [n for n in needs if n not in expected]
 if stale:
     ok = False
-    print(f"✗ ci aggregate: `{AGGREGATE}` needs {', '.join(stale)}, which ci.yml has no job for.\n"
+    print(f"✗ ci aggregate: `{AGGREGATE}` needs {', '.join(stale)}, which _ci.yml has no job for.\n"
           "    A run cannot start with a needs entry pointing nowhere — the whole workflow fails to "
           "load. Drop them, or restore the jobs.", file=sys.stderr)
 
@@ -97,6 +97,6 @@ if not any(re.match(r"^    if:.*always\(\)", line) for line in aggregate):
           "required check is not a red one.", file=sys.stderr)
 
 if ok:
-    print(f"✓ ci aggregate: the merge gate waits for all {len(expected)} jobs in ci.yml")
+    print(f"✓ ci aggregate: the merge gate waits for all {len(expected)} jobs in _ci.yml")
 sys.exit(0 if ok else 1)
 PY

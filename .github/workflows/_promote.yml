@@ -1,31 +1,27 @@
-name: Promote
+name: _promote
 
-# Flip a verified prerelease to latest and publish it. This is the ONLY
-# trigger that changes what users get, and it is manual on purpose: a human/AI first
-# verifies the CI-built bytes — `gh attestation verify` on the real assets, plus a
-# migration rehearsal of the shipped CLI against a clone of the prod store — and only
-# then dispatches this. Nothing here builds or re-signs: release.yml already built the
-# assets and attached provenance as a PRERELEASE (downloadable but not latest, so
-# releases/latest/download/latest.json still serves the previous version). This job
-# flips that prerelease to latest, pushes it to the owned channels (releases, script),
-# and checks each one from the consumer side. Green = shipped.
+# Flip a verified prerelease to latest and publish it. The one entry that reaches this body,
+# promote-manual.yml, is dispatched by hand on purpose: a human/AI first verifies the CI-built
+# bytes — `gh attestation verify` on the real assets, plus a migration rehearsal of the shipped
+# CLI against a clone of the prod store — and only then dispatches it. Nothing here builds or
+# re-signs: _release.yml already built the assets and attached provenance as a PRERELEASE
+# (downloadable but not latest, so releases/latest/download/latest.json still serves the previous
+# version). This job flips that prerelease to latest, pushes it to the owned channels (releases,
+# script), and checks each one from the consumer side. Green = shipped.
 #
-# There is no push/merge trigger: distribution never runs unattended. The only
-# inputs are the tag to promote and a human's click. The whole point is that
-# no "shippable command" lives on a laptop — the promote lever is here, in CI.
+# No entry may carry a push/merge trigger: distribution never runs unattended. The only inputs are
+# the tag to promote and a human's click. The whole point is that no "shippable command" lives on a
+# laptop — the promote lever is here, in CI.
+#
+# Concurrency belongs to the entry, grouped per tag so two dispatches never race the same release.
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       tag:
         description: 'Release tag to promote (e.g. v1.0.0). Its prerelease must already exist and be verified.'
         required: true
         type: string
-
-# A promote must finish once started; group per tag so two never race the same release.
-concurrency:
-  group: promote-${{ inputs.tag }}
-  cancel-in-progress: false
 
 # publish flips the GitHub release to latest and writes the owned channels, both of
 # which live on THIS repo (channels: [releases, script] — no tap/bucket/registry), so

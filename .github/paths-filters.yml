@@ -1,5 +1,5 @@
 # The layers a change can touch, as path patterns. One declaration, read by both sides:
-# ci.yml's `changes` job hands this file to dorny/paths-filter and gates each job on the
+# _ci.yml's `changes` job hands this file to dorny/paths-filter and gates each job on the
 # layer it belongs to, and the local gate (`make gate`, via scripts/changed-facets.sh)
 # picks the stages it runs from the same answer. Written in two places they would drift,
 # and the local gate would excuse a layer CI still runs.
@@ -20,7 +20,7 @@ rust:
   - '.config/nextest.toml'
   - '.cargo/**'
   - 'app/src-tauri/**'
-  - '.github/workflows/ci.yml'
+  - '.github/workflows/_ci.yml'
   - '.github/paths-filters.yml'
   # The harness the app-rust job's network-FS step runs (it stands up the real NFS/SMB/9P
   # mounts): change it and nothing else, and the step that uses it would not re-run.
@@ -32,15 +32,15 @@ rust:
   - 'assets/cli-demo.transcript.txt'
 # The pre-distribution verification harness is a third out-of-workspace cargo workspace,
 # so the `rust` job (default manifest = main workspace) never builds or tests it. This
-# gates its own clippy+test job in ci.yml — the ONLY thing that compiles core/cli/gui in CI.
+# gates its own clippy+test job in _ci.yml — the ONLY thing that compiles core/cli/gui in CI.
 verification:
   - 'verification/**'
-  - '.github/workflows/ci.yml'
+  - '.github/workflows/_ci.yml'
   - '.github/paths-filters.yml'
 gui:
   - 'app/**'
   - '.nvmrc'
-  - '.github/workflows/ci.yml'
+  - '.github/workflows/_ci.yml'
   - '.github/paths-filters.yml'
 # devtool is one self-contained Go module with no dependency on the rest of the tree,
 # so nothing outside it can move its verdict — except the gate itself, which holds the
@@ -48,16 +48,16 @@ gui:
 go:
   - 'devtool/**'
   - 'scripts/go-gate.sh'
-  - '.github/workflows/ci.yml'
+  - '.github/workflows/_ci.yml'
   - '.github/paths-filters.yml'
 shell:
   - '**/*.sh'
   - '.githooks/**'
   - 'Makefile'
   - '.github/workflows/**'
-# The three below gate jobs whose steps live in rot-gates.yml, so that file is a build
-# input for them just as ci.yml is. (`shell` needs no such entry: its
-# '.github/workflows/**' rule already covers every workflow, rot-gates.yml included.)
+# The three below gate jobs whose steps live in _rot-gates.yml, so that file is a build
+# input for them just as _ci.yml is. (`shell` needs no such entry: its
+# '.github/workflows/**' rule already covers every workflow, _rot-gates.yml included.)
 cargo_deps:
   - 'Cargo.toml'
   - 'Cargo.lock'
@@ -72,18 +72,18 @@ cargo_deps:
   - '.cargo/audit.toml'
   # The license allow-list the cargo-license job reads.
   - 'deny.toml'
-  - '.github/workflows/ci.yml'
+  - '.github/workflows/_ci.yml'
   - '.github/paths-filters.yml'
-  - '.github/workflows/rot-gates.yml'
+  - '.github/workflows/_rot-gates.yml'
 # The key comparison is a function of the file the key is compiled into and the guard
 # that reads it. The far side of the comparison lives in another repository, which no
 # filter here can see — that half is what the weekly leg is for.
 catalog_key:
   - 'crates/amenbo-core/src/plugin_provenance.rs'
   - 'guards/check-catalog-key.sh'
-  - '.github/workflows/ci.yml'
+  - '.github/workflows/_ci.yml'
   - '.github/paths-filters.yml'
-  - '.github/workflows/rot-gates.yml'
+  - '.github/workflows/_rot-gates.yml'
 npm_deps:
   - 'app/package.json'
   - 'app/package-lock.json'
@@ -92,9 +92,9 @@ npm_deps:
   # verdict — a test edited alone still has to re-open this.
   - 'deny.toml'
   - 'guards/*.mjs'
-  - '.github/workflows/ci.yml'
+  - '.github/workflows/_ci.yml'
   - '.github/paths-filters.yml'
-  - '.github/workflows/rot-gates.yml'
+  - '.github/workflows/_rot-gates.yml'
 # What no layer needs to answer for: prose, pictures, and the forms GitHub shows a visitor.
 # Nothing compiles or runs from them, and the cheap stage — which the local gate runs
 # whatever changed — already audits the prose of every tracked file.

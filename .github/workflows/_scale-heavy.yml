@@ -1,30 +1,24 @@
-name: Scale (heavy)
+name: _scale-heavy
 
-# The full 10k-seed read-scaling guard, split out of the per-PR gate.
+# The full 10k-seed read-scaling guard, split out of the per-PR gate. It starts nothing itself —
+# scale-heavy-nightly.yml runs it on the clock, scale-heavy-manual.yml on demand.
 #
 # `read_scaling_guard` proves the read hot paths stay O(result) as the store grows. Its deterministic
-# ratio guards prove that at a medium seed in seconds (the `rust` job in ci.yml runs them on every
+# ratio guards prove that at a medium seed in seconds (the `rust` job in _ci.yml runs them on every
 # PR via `--features scale`), but its *wall-clock* guards — sublinearity and the board's O(N²) net —
 # only bite at the full 10k seed, where they cost ~23s. Running that on every PR would tax the merge
 # path for a regression class that does not need per-PR latency, so the full 10k runs here instead:
 # nightly (the cadence at which an O(N²)/O(total) regression must be caught) and on demand.
 #
-# This lives in its own workflow rather than ci.yml because its trigger (schedule + dispatch) and
-# cadence are wholly separate from ci.yml's push/PR gate; folding it in would force an event guard on
-# every PR job. See crates/amenbo-core/Cargo.toml for the `scale` / `scale-heavy` feature split.
+# This is a body of its own rather than a job in _ci.yml because its cadence is wholly separate from
+# the merge gate's; folding it in would force an event guard on every PR job. See
+# crates/amenbo-core/Cargo.toml for the `scale` / `scale-heavy` feature split.
 #
 # Cost: this repo is public, so Actions minutes are free — what keeps the full 10k off the per-PR
 # gate is merge latency, not a quota. The job runs on Linux.
 
 on:
-  schedule:
-    # Nightly at 06:00 UTC. A regression here only has to surface within a day.
-    - cron: '0 6 * * *'
-  workflow_dispatch:
-
-concurrency:
-  group: ${{ github.workflow }}
-  cancel-in-progress: true
+  workflow_call:
 
 jobs:
   scale-heavy:

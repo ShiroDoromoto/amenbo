@@ -581,7 +581,7 @@ mod tests {
     }
 
     /// The update name of every asset the release publishes a second copy of, pinned as a table
-    /// against the names `release.yml` actually copies to. The suffix lands ahead of the whole
+    /// against the names `_release.yml` actually copies to. The suffix lands ahead of the whole
     /// extension, dots inside the file name notwithstanding.
     #[test]
     fn update_name_goes_before_the_extension() {

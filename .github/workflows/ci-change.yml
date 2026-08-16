@@ -1,0 +1,41 @@
+name: ci-change
+
+# The merge gate on a change. Every branch reaches main through a PR, so `pull_request`
+# carries the whole pre-merge gate and `push: main` is the post-merge backstop on the
+# merge target itself. `push` is restricted to `main` so a task/Dependabot branch doesn't
+# run the suite twice (once for the push, once for the PR).
+#
+# The trigger is not widened to task branches: on a push the path filter sees only that
+# push's diff, so a branch pushed in instalments would judge each instalment alone, while
+# on a PR it sees the branch's whole diff against the merge base.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Superseding is a PR-only idea here, which is why the group key differs per event.
+#
+# On a PR the path filter diffs against the merge base, so every run sees the branch's
+# WHOLE diff — a newer run subsumes the one it cancels, and the group is keyed by ref so a
+# rebase/force-push supersedes the run it made obsolete.
+#
+# On `push` the filter sees only THAT push's diff, so a superseded main run takes its
+# changes down with it: push A touches Rust, push B (shell only) supersedes A, B's filter
+# reports rust=false, and A's Rust change is never compiled while main says green. Keying
+# push runs by SHA gives each commit its own group, so no main run is ever cancelled —
+# neither in-progress (cancel-in-progress) nor pending (a group holds one pending run, and
+# a third arrival evicts the one waiting). Main is pushed on every merge, and that is fine:
+# an extra run costs nothing next to a green main that was never built.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  # The job id is load-bearing: a called workflow's checks are reported as
+  # `<this id> / <job name>`, so the one check main requires is `ci / all green`. Renaming
+  # it drops the requirement on the ruleset's side, where no diff would show it.
+  ci:
+    uses: ./.github/workflows/_ci.yml
+    permissions:
+      contents: read
+      pull-requests: read

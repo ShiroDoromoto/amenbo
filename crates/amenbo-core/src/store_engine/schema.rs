@@ -1109,8 +1109,14 @@ pub const JOURNAL_MODE_SQL: &str = "PRAGMA journal_mode = WAL;";
 /// costs: in the rollback journal every statement writes, syncs and unlinks a journal file, where the WAL
 /// takes an append — so the sixty-odd `CREATE`s are far cheaper on the far side of the switch.
 pub fn genesis_sql() -> (&'static str, String) {
-    let ddl = schema_sql().replace(JOURNAL_MODE_SQL, "");
-    (JOURNAL_MODE_SQL, ddl)
+    genesis_sql_from(&schema_sql())
+}
+
+/// [`genesis_sql`], for DDL that is not this build's — a frozen shape a test builds an older store from
+/// (`schema_frozen`). The split is the same one, made in one place, so a store raised from a frozen file
+/// is raised the way a store is raised.
+pub fn genesis_sql_from(ddl: &str) -> (&'static str, String) {
+    (JOURNAL_MODE_SQL, ddl.replace(JOURNAL_MODE_SQL, ""))
 }
 
 /// Extra DDL not derived from any declaration: the journal mode and the read-model indexes the query

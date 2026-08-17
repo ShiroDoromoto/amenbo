@@ -1092,6 +1092,27 @@ plain_tables! {
     }
 }
 
+/// The one line of [`schema_sql`] that is not DDL, named so that [`genesis_sql`] can lift it out.
+pub const JOURNAL_MODE_SQL: &str = "PRAGMA journal_mode = WAL;";
+
+/// [`schema_sql`], split into the part that must be issued on its own and the part that may be wrapped
+/// in a transaction — which is how a store is actually born ([`super::super::store_engine`]'s `init`).
+///
+/// **The text stays whole; only its execution is split.** `schema_sql`'s output is frozen verbatim, one
+/// file per version (`schema_frozen`, which is test-only), and those files are append-only — so a
+/// store's shape cannot be made to depend on how the shape is run. Everything a version's frozen file
+/// records is still exactly what `schema_sql` emits.
+///
+/// The split is worth making for two reasons that pull the same way. A `PRAGMA` inside a transaction is
+/// not refused, it is **quietly ignored**, so a wrapped batch that carried this one would leave the store
+/// in the rollback journal and nothing would say so. And the journal mode decides what the DDL after it
+/// costs: in the rollback journal every statement writes, syncs and unlinks a journal file, where the WAL
+/// takes an append — so the sixty-odd `CREATE`s are far cheaper on the far side of the switch.
+pub fn genesis_sql() -> (&'static str, String) {
+    let ddl = schema_sql().replace(JOURNAL_MODE_SQL, "");
+    (JOURNAL_MODE_SQL, ddl)
+}
+
 /// Extra DDL not derived from any declaration: the journal mode and the read-model indexes the query
 /// layer needs.
 ///
@@ -1353,6 +1374,51 @@ pub fn table_content_is_empty(conn: &rusqlite::Connection) -> rusqlite::Result<b
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// What a store is born from is run in two pieces, and the second is wrapped in a transaction
+    /// ([`genesis_sql`]). A statement that cannot live in one has to be in the first piece. `PRAGMA` is
+    /// the one that bites: inside a transaction it is not refused, it is **quietly ignored** — a
+    /// `journal_mode` left in the wrapped half would leave the store in the rollback journal and nothing
+    /// anywhere would go red. So the wrapped half is held to DDL, statement by statement.
+    #[test]
+    fn nothing_a_transaction_would_swallow_is_left_in_the_wrapped_half() {
+        let (apart, wrapped) = genesis_sql();
+        assert_eq!(apart, JOURNAL_MODE_SQL, "the journal mode is what is issued on its own");
+        for line in wrapped.lines().map(str::trim_start) {
+            let head = line.split_whitespace().next().unwrap_or("").to_uppercase();
+            assert!(
+                !matches!(head.as_str(), "PRAGMA" | "BEGIN" | "COMMIT" | "VACUUM" | "ATTACH" | "DETACH"),
+                "`{line}` cannot be in the wrapped half — issue it beside the journal mode instead",
+            );
+        }
+        // And the whole is still the whole: nothing was lost on the way out.
+        assert!(schema_sql().contains(JOURNAL_MODE_SQL), "the frozen text still carries it");
+        assert!(!wrapped.contains(JOURNAL_MODE_SQL), "and the wrapped half no longer does");
+    }
+
+    /// Splitting the batch and wrapping half of it changes when the store is durable, and nothing else.
+    /// What it is left holding must be the same object for object, and the same declaration for each,
+    /// whichever way it was built — which is the whole claim this rests on.
+    #[test]
+    fn a_store_born_the_split_way_holds_what_one_born_in_one_batch_does() {
+        let objects = |split: bool| -> Vec<String> {
+            let conn = rusqlite::Connection::open_in_memory().unwrap();
+            if split {
+                let (apart, wrapped) = genesis_sql();
+                conn.execute_batch(apart).unwrap();
+                conn.execute_batch(&format!("BEGIN;\n{wrapped}\nCOMMIT;")).unwrap();
+            } else {
+                conn.execute_batch(&schema_sql()).unwrap();
+            }
+            let mut q = conn
+                .prepare("SELECT type || ' ' || name || ' ' || COALESCE(sql, '') FROM sqlite_master ORDER BY 1")
+                .unwrap();
+            q.query_map([], |r| r.get(0)).unwrap().map(Result::unwrap).collect()
+        };
+        let one_batch = objects(false);
+        assert!(!one_batch.is_empty(), "the batch builds something");
+        assert_eq!(objects(true), one_batch, "the split way leaves the same store");
+    }
 
     /// The device-local sets are keyed by the task's `INTEGER` id, like everything else the database
     /// holds, so no boundary that crosses them pays for a conversion.

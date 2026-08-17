@@ -174,12 +174,22 @@ impl StoreEngine {
         Ok(e)
     }
 
-    fn init(conn: Connection) -> Result<StoreEngine> {
+    fn init(mut conn: Connection) -> Result<StoreEngine> {
         // Wait — don't fail — when another local process (e.g. the GUI's watch/GC threads) holds the
         // write lock: block up to this long for the lock instead of erroring out with SQLITE_BUSY the
         // instant it is contended. Every batch of field writes is one transaction (all-or-nothing), and
         // this timeout keeps a contended write from failing needlessly. Set before any migration write.
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
+        // The journal mode first, because the DDL below is written into whichever one is live. Left
+        // until after, a new store is built in the rollback journal — a file written, synced and
+        // unlinked once per statement — where the WAL takes an append (`schema::JOURNAL_MODE_SQL`).
+        let (journal_mode, ddl) = schema::genesis_sql();
+        conn.execute_batch(journal_mode)?;
+        // Is there anything here at all? An empty `sqlite_master` is a store being born, and the only
+        // state in which the batch below writes rather than recognises. It decides how the batch is run
+        // and nothing else — a store that answers "not empty" still goes through it, so an interrupted
+        // genesis is still completed by the `IF NOT EXISTS` clauses, exactly as before.
+        let being_born: i64 = conn.query_row("SELECT count(*) FROM sqlite_master", [], |r| r.get(0))?;
         // Create what is missing, and nothing else. `schema_sql` only ever issues
         // `CREATE … IF NOT EXISTS`, so this is genesis on a new file and a no-op on a store this
         // build already wrote. It does **not** evolve a store an older build left behind: bringing an
@@ -187,7 +197,24 @@ impl StoreEngine {
         // applied from the version the store carries — not a diff replayed on every open. The chain runs
         // on the engine this returns, so everything here necessarily runs *before* it: what this batch
         // names must already exist in the oldest store the chain still opens (see `schema::EXTRA_SQL`).
-        conn.execute_batch(&schema::schema_sql())?;
+        //
+        // On a store being born the whole batch is one transaction, so the sixty-odd objects it creates
+        // cost one durable commit instead of one apiece. `Immediate` rather than the deferred default:
+        // deferred starts read-only and asks to upgrade at the first write, and SQLite will not run the
+        // busy handler on that upgrade — two processes reaching genesis together would meet `SQLITE_BUSY`
+        // where today they queue. Taking the lock up front cannot cost anyone anything here, since the
+        // store it locks is one nobody else has yet.
+        //
+        // On a store that already exists the batch stays exactly as it was, statement by statement in
+        // autocommit. It writes nothing, so it takes no write lock — which is what keeps an open on the
+        // ordinary path from contending with the GUI's.
+        if being_born == 0 {
+            let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+            tx.execute_batch(&ddl)?;
+            tx.commit()?;
+        } else {
+            conn.execute_batch(&ddl)?;
+        }
         // Enforce the registry's `REFERENCES` for every write from here on.
         conn.execute_batch("PRAGMA foreign_keys = ON;")?;
         // Keep the feed inside its bound even for a CLI-only store, where no process lives long enough

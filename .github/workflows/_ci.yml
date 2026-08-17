@@ -40,7 +40,8 @@ on:
 jobs:
   # Path gate for the build/test jobs: run each only when a change can affect it.
   #
-  # `rust` (gates rust ~8min + app-rust) is a positive allowlist of the Rust
+  # `rust` (gates the workspace's clippy+test jobs, the e2e job beside each of
+  # them, and the host crate's) is a positive allowlist of the Rust
   # build inputs: the workspace crates, the manifests/lockfile, the toolchain +
   # lint + nextest config, .cargo/, the out-of-workspace Tauri host crate
   # (app/src-tauri), and this workflow. A change confined to relay/ or docs (or
@@ -152,23 +153,11 @@ jobs:
       # (.config/nextest.toml) runs every test to completion (no fail-fast) so one failure doesn't
       # mask the rest.
       #
-      # The two heavy sides run one after the other rather than interleaved. Run together, the e2e
-      # suite has twice been ended mid-test by a signal — the CLI child had already written its
-      # answer, and re-running the same commit was green — which points at the load the run puts on
-      # the box rather than at anything either side asserts. Splitting them costs nothing (the
-      # build is shared) and it partitions the question: an e2e run that dies by signal with nothing
-      # else on the machine takes the load story off the table.
-      #
-      # `cli_e2e_*` is every slice of the e2e suite (crates/amenbo-cli/tests/e2e), named by prefix so
-      # a new one lands on the right side of the split without this workflow being touched.
+      # The e2e slices are not here — they are the `rust-e2e` job below, and this one holds the rest
+      # of the suite. `cli_e2e_*` is every slice of that suite (crates/amenbo-cli/tests/e2e), named
+      # by prefix so a new one lands on the right side of the line without either job being touched.
       - name: Test (feature-gated scale suites + everything else)
         run: cargo nextest run --profile ci --features scale,e2e -E 'not binary(/^cli_e2e/)'
-
-      # Run even when the step above failed: the `ci` profile deliberately reports every failure
-      # rather than the first, and splitting the run must not take half of that picture away.
-      - name: Test (the CLI e2e suites, on their own)
-        if: ${{ !cancelled() }}
-        run: cargo nextest run --profile ci --features scale,e2e -E 'binary(/^cli_e2e/)'
 
       # nextest does NOT run doctests; run them separately so a future `/// ```rust`
       # example can't silently skip CI. Today there are none (only ```text blocks), so
@@ -182,6 +171,46 @@ jobs:
       # private too) = all that fails here is a broken link.
       - name: Doc links
         run: RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
+
+  # The e2e half of the suite, on a runner of its own. The rest of it is the `rust` job above, and
+  # neither half asserts anything the other decides — so the gate's wait is the longer of the two and
+  # not their sum. On Windows that is the difference that matters: the e2e slices and everything else
+  # are the two longest test runs in the workflow, and only one of them stands on the critical path.
+  #
+  # A runner of its own is also the separation the e2e suite needs. Run interleaved with the rest on
+  # one box, it has twice been ended mid-test by a signal — the CLI child had already written its
+  # answer, and re-running the same commit was green — which points at the load the run puts on the
+  # machine rather than at anything either side asserts. Two jobs keep that load apart, and they let
+  # each half report its whole picture: the `ci` profile runs every test to completion, and one job
+  # going red says nothing about whether the other one ran.
+  #
+  # No clippy and no doc steps here: those judge the tree once, in the `rust` job, and a second
+  # verdict on the same source would only cost a run. The feature set matches (`scale,e2e`) so both
+  # jobs build the same artifacts. The caches are one per job — the rust-cache key carries the job id
+  # — so this job fills its own rather than drawing on the `rust` job's.
+  rust-e2e:
+    name: cargo test (CLI e2e)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # rust-toolchain.toml pins the channel and components; rustup installs them on the first cargo
+      # invocation, which is what this step is for — rust-cache below reads the rustc version.
+      - name: Show toolchain
+        run: rustc --version && cargo --version
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2.85.13
+        with:
+          tool: cargo-nextest
+
+      - name: Test (the CLI e2e suites)
+        run: cargo nextest run --profile ci --features scale,e2e -E 'binary(/^cli_e2e/)'
 
   # The `rust` job above, on the two platforms it cannot speak for. Twelve files in the workspace carry
   # a `target_os = "macos"` branch and twelve a `cfg(windows)` one; on Linux the compiler walks past
@@ -232,14 +261,51 @@ jobs:
       - name: Clippy (all targets, all features)
         run: cargo clippy --all-targets --all-features -- -D warnings -D clippy::disallowed_methods
 
-      # Same split, and the same reason, as the `rust` job: the e2e suite runs on its own so the
-      # load it puts on the box is not shared with the rest, and it runs even when the first half
-      # failed so the `ci` profile's whole-picture report is not halved.
+      # Same line, and the same reason, as the `rust` job: the e2e slices are the `rust-e2e-mac-win`
+      # job below, and this one holds the rest of the suite.
       - name: Test (feature-gated scale suites + everything else)
         run: cargo nextest run --profile ci --features scale,e2e -E 'not binary(/^cli_e2e/)'
 
-      - name: Test (the CLI e2e suites, on their own)
-        if: ${{ !cancelled() }}
+  # `rust-e2e`, on the two platforms it cannot speak for — the same argument as `rust-mac-win`, for
+  # the other half of the suite. Windows is where the line between the halves pays most: both of its
+  # test runs are the slowest of their kind in the workflow, so taking either one off the critical
+  # path is worth minutes rather than seconds.
+  #
+  # It mirrors the e2e step and the OpenSSL build's perl, and stops there — clippy and the doc steps
+  # belong to the jobs that hold the other half.
+  rust-e2e-mac-win:
+    name: cargo test (CLI e2e, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+
+      # Same reason, and the same wording, as `rust-mac-win` above: rusqlite's vendored SQLCipher
+      # builds OpenSSL from source, openssl-src configures it through perl, and the perl a step
+      # resolves on Windows may be MSYS2's, which dies in ./Configure. A step rather than the job's
+      # `env` because the variable must be ABSENT on macOS, not empty.
+      - name: Name the runner's Strawberry Perl for the OpenSSL build
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: echo "OPENSSL_SRC_PERL=C:/Strawberry/perl/bin/perl.exe" >> $env:GITHUB_ENV
+
+      - name: Show toolchain
+        run: rustc --version && cargo --version
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2.85.13
+        with:
+          tool: cargo-nextest
+
+      - name: Test (the CLI e2e suites)
         run: cargo nextest run --profile ci --features scale,e2e -E 'binary(/^cli_e2e/)'
 
   # The pre-distribution verification harness (verification/) is its own cargo workspace, OUTSIDE
@@ -765,7 +831,9 @@ jobs:
     needs:
       - changes
       - rust
+      - rust-e2e
       - rust-mac-win
+      - rust-e2e-mac-win
       - verification
       - verification-macos
       - gui-web

@@ -37,6 +37,21 @@ on:
         type: boolean
         default: false
 
+# Cache writes belong to main. Every rust-cache step below restores; only a run on main saves.
+# A run on a PR reads main's entry — a run may restore from its base branch and the default one —
+# and then throws away what it built, which sounds wasteful until the saving is counted. Each PR
+# filled entries of its own, scoped to `refs/pull/<n>/merge`, which no other PR can read and which
+# outlive the merge by a week: measured on 2026-08-17 that was 3.8GB of the repository's 10GB budget
+# held by five already-merged PRs and one already-merged task branch. Past the budget GitHub evicts
+# the least recently used entry, and the entry evicted is as likely to be one main is still using —
+# which is how a Windows leg comes to rebuild from nothing — 727s, measured on this workflow.
+#
+# What a PR gives up is the delta its own lockfile bump rebuilds on every push, and not a cold build:
+# rust-cache's restore key drops the lockfile hash, so a bumped lock still lands on main's entry and
+# recompiles only what moved.
+env:
+  SAVE_CACHE: ${{ github.ref == 'refs/heads/main' }}
+
 jobs:
   # Path gate for the build/test jobs: run each only when a change can affect it.
   #
@@ -135,10 +150,14 @@ jobs:
       # targets and all features — so what it stores covers what the others need, and the
       # readers below take it with `save-if: false` rather than racing to upload the same
       # bytes and having the loser's upload rejected.
+      #
+      # `SAVE_CACHE` (top of this file) narrows that to a run on main: on a PR this job restores
+      # main's entry like the readers do, and saves nothing.
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: workspace
+          save-if: ${{ env.SAVE_CACHE }}
 
       # nextest runs each test in its own process and in parallel — faster than
       # `cargo test` and it prints per-test timings (slow tests surface in the
@@ -273,11 +292,12 @@ jobs:
       # One entry per platform, shared with rust-e2e-mac-win the way the `rust` job shares with
       # rust-e2e — the key carries the OS and arch, so this saves the mac one and the Windows one and
       # the Linux job's entry is untouched. This leg is the saver on both, for the same reason: its
-      # all-features clippy is the widest build of the two.
+      # all-features clippy is the widest build of the two — and on main alone (`SAVE_CACHE`).
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: workspace
+          save-if: ${{ env.SAVE_CACHE }}
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@v2.85.13
@@ -361,6 +381,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: verification
+          save-if: ${{ env.SAVE_CACHE }}
 
       # -D warnings holds the harness to the same bar as the rest of the tree, but
       # -A clippy::disallowed_methods is deliberate: this workspace black-box-drives the
@@ -395,6 +416,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: verification
+          save-if: ${{ env.SAVE_CACHE }}
 
       # Same lint contract, and the same deliberate -A, as the Linux leg above.
       - name: Clippy (all targets)
@@ -585,6 +607,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: app/src-tauri
+          save-if: ${{ env.SAVE_CACHE }}
 
       # The host crate's build.rs (tauri_build) validates tauri.conf.json's
       # externalBin=binaries/amenbo. That sidecar CLI is normally staged by tauri's
@@ -678,12 +701,18 @@ jobs:
       # target dir, and the sidecar step builds the ROOT workspace in release. Caching only the
       # host crate would leave that release build — OpenSSL from source included — to be redone
       # from nothing on every run.
+      #
+      # The `.` here is not the entry `rust-mac-win` shares under `shared-key: workspace`, however
+      # alike the two look: that one holds a debug build (clippy and test drive the dev profile),
+      # this one a release build (prepare-cli-sidecar.mjs passes `--release`). Neither can be
+      # dropped in favour of the other.
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
             .
             app/src-tauri
+          save-if: ${{ env.SAVE_CACHE }}
 
       # Same reason as the Linux job: build.rs validates tauri.conf.json's externalBin, which a
       # plain clippy/test never stages, and binaries/ is gitignored.

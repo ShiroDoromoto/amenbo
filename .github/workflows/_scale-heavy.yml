@@ -31,15 +31,22 @@ jobs:
       - name: Show toolchain
         run: rustc --version
 
+      # The merge gate's Linux entry for this workspace (_ci.yml's `rust` job, `shared-key:
+      # workspace`), read and not written. This job builds the same workspace from the same lockfile,
+      # and that job's clippy is `--all-targets --all-features` — `scale-heavy` included — so its
+      # entry already holds every dependency artifact this one wants.
+      #
+      # `save-if: false` because a second copy of that answer is what this step used to be: a
+      # hand-rolled actions/cache over the whole `target` dir, which stored this workspace's own
+      # crates as well as its dependencies (rust-cache drops the former, since they change every
+      # commit) and, with a `restore-keys` prefix, grew across lockfiles rather than being replaced.
+      # It was 434MB of the repository's 10GB budget on 2026-08-17, spent to hold what the gate's
+      # entry already held.
       - name: Cache cargo
-        uses: actions/cache@v6
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
-          restore-keys: cargo-${{ runner.os }}-
+          shared-key: workspace
+          save-if: false
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@v2.85.13

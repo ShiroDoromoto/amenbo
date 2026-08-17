@@ -48,5 +48,9 @@ jobs:
 
       # `scale-heavy` implies `scale`, so this seeds the full 10k store and additionally runs the
       # timing guards. Scope to the single guard target — the rest of the suite is the PR gate's job.
+      #
+      # `--profile scale-heavy` and not `ci`: at the full 10k seed this one test costs an order more
+      # than anything the merge gate runs, so the two legs need different lines for SLOW. The profile
+      # (.config/nextest.toml) carries the same fail-fast and failure-output the `ci` one does.
       - name: Read scaling guard at full 10k seed
-        run: cargo nextest run --profile ci --features scale-heavy -p amenbo-core --test read_scaling_guard
+        run: cargo nextest run --profile scale-heavy --features scale-heavy -p amenbo-core --test read_scaling_guard

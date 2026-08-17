@@ -1156,7 +1156,13 @@ mod tests {
         let path = dir.join("store.sqlite");
         {
             let conn = rusqlite::Connection::open(&path).unwrap();
-            conn.execute_batch(ddl).unwrap();
+            // Raised the way a store is raised (`schema::genesis_sql`): the journal mode first, then the
+            // rest in one transaction. Statement by statement in the rollback journal, the sixty-odd
+            // objects here cost a durable write apiece — and this fixture builds one store per version of
+            // the chain, per test, which is where the Windows leg's minutes were going.
+            let (journal_mode, ddl) = schema::genesis_sql_from(ddl);
+            conn.execute_batch(journal_mode).unwrap();
+            conn.execute_batch(&format!("BEGIN;\n{ddl}\nCOMMIT;")).unwrap();
         }
         let engine = StoreEngine::open(&path).unwrap();
         engine
@@ -1225,6 +1231,35 @@ mod tests {
         assert!(!run.migrated());
         assert_eq!(run, Run { from: LATEST_VERSION, to: LATEST_VERSION, applied: vec![] });
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// The fixtures take their shape from the frozen files, and a store of one age is not a store of
+    /// another. Every test below rests on that: the chain is asked to move a store an older build left
+    /// behind, so a fixture built from *this* build's registry would hand the chain nothing to move and
+    /// every step would pass over a store that already looked finished.
+    ///
+    /// Nothing in the fixture says out loud where its shape comes from, so this asks the question the
+    /// only way that cannot be satisfied by accident: two ages must not build the same store. Swap the
+    /// frozen text for `schema_sql()` and every age builds one shape, and this is what goes red.
+    #[test]
+    fn two_ages_do_not_build_the_same_store() {
+        let objects = |engine: &StoreEngine| -> Vec<String> {
+            let mut q = engine
+                .conn()
+                .prepare("SELECT type || ' ' || name || ' ' || COALESCE(sql, '') FROM sqlite_master ORDER BY 1")
+                .unwrap();
+            q.query_map([], |r| r.get::<_, String>(0)).unwrap().map(|r| r.unwrap()).collect()
+        };
+        let oldest = scratch("ages-oldest");
+        let newest = scratch("ages-newest");
+        let old_shape = objects(&store_at(&oldest, OLDEST_FROZEN_VERSION));
+        let new_shape = objects(&store_at(&newest, LATEST_VERSION));
+        assert!(!old_shape.is_empty(), "the fixture builds something");
+        assert_ne!(
+            old_shape, new_shape,
+            "a v{OLDEST_FROZEN_VERSION} fixture and a v{LATEST_VERSION} one came out identical — the \
+             shape is no longer coming from the frozen files, and the chain has nothing left to move",
+        );
     }
 
     /// The genesis DDL runs at open, and the chain runs on the engine that open returns — so the DDL

@@ -452,6 +452,28 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
+    /// What the reader is told when the store is held. `store_busy` says wait and do it again;
+    /// `storage_error` — which is what every other engine failure rounds to — says the store gave way,
+    /// restart and send the log. Getting the second for a lock that clears in milliseconds sends somebody
+    /// to the log directory over nothing, so the code is asserted here at the crossing every write takes
+    /// (`store::Store`'s `self.engine.write()?`).
+    #[test]
+    fn a_contended_write_reaches_the_reader_as_store_busy() {
+        let (dir, path) = temp_store("write-busy-code");
+        let holder = StoreEngine::open(&path).unwrap();
+        let other = StoreEngine::open(&path).unwrap();
+        other.conn().busy_timeout(std::time::Duration::from_secs(0)).unwrap();
+
+        let held = holder.write().unwrap();
+        let refused = match other.write() {
+            Ok(_) => panic!("the other connection holds the write lock, so this must be refused"),
+            Err(e) => crate::error::Error::from(e),
+        };
+        assert_eq!(refused.code(), "store_busy", "a held store is busy, not broken: {refused}");
+        drop(held);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// The reason the operation and its read must share one `BEGIN IMMEDIATE` transaction: two writers
     /// each computing `next_id` and INSERTing must not take the same id — which *is* the
     /// conversational number. SQLite's writer exclusion is per-transaction, so the read has to be *in*

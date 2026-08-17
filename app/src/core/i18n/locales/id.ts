@@ -590,7 +590,7 @@ export const id: Translation = {
     not_ready_premise_unsettled: "{ref} belum selesai diputuskan — tunggu putusannya atau lepaskan tautannya",
     not_ready_not_started: "tugas ini baru mulai {start} — ubah tanggal mulai kalau itu keliru",
     not_ready_draft: "tugas ini masih dibuat — selesaikan pembuatannya dulu",
-    store_busy: "Penyimpanan sedang dipulihkan atau diperbarui. Coba lagi sebentar lagi.",
+    store_busy: "Penyimpanan sedang digunakan. Coba lagi sebentar lagi.",
     storage_error: "Penyimpanan tidak dapat dibaca atau ditulis, dan tidak ada yang berubah. Mulai ulang amenbo lalu coba lagi — kalau terus terjadi, kirimkan isi Pengaturan > Log.",
     not_found_task: "Tugas {ref} tidak ditemukan.",
     not_found_decision: "Keputusan {ref} tidak ditemukan.",

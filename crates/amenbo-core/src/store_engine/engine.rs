@@ -68,6 +68,27 @@ pub enum StoreEngineError {
     OutOfReach(crate::error::Error),
 }
 
+impl StoreEngineError {
+    /// Whether this is SQLite reporting the store held by another writer, rather than anything wrong
+    /// with the store or the statement. It is the one failure a caller is meant to answer by asking
+    /// again: `init` gives every connection a `busy_timeout` (5s) so a contended write waits rather
+    /// than failing, and a refusal past that means the wait ran out, not that the write was bad.
+    ///
+    /// Both codes SQLite has for it are named. `SQLITE_BUSY` is the file's write lock held elsewhere;
+    /// `SQLITE_LOCKED` is a table locked within the same connection group. They arrive from different
+    /// places and mean the same thing to a caller — try again.
+    pub fn is_contention(&self) -> bool {
+        matches!(
+            self,
+            StoreEngineError::Sqlite(rusqlite::Error::SqliteFailure(e, _))
+                if matches!(
+                    e.code,
+                    rusqlite::ErrorCode::DatabaseBusy | rusqlite::ErrorCode::DatabaseLocked
+                )
+        )
+    }
+}
+
 pub type Result<T> = std::result::Result<T, StoreEngineError>;
 
 /// One record row a transaction touched, as SQLite reported it to the change feed's `update_hook`.

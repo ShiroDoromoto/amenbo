@@ -415,6 +415,43 @@ mod tests {
         drop(tx);
     }
 
+    /// A write the lock is held against is told apart from a write that is wrong. The test below retries
+    /// on the first and fails on the second, so the two must not read alike: were `is_contention` to stop
+    /// recognising a held lock, that retry would quietly become no retry, and the flake it answers would
+    /// be back with nothing saying why.
+    ///
+    /// The waiting is taken out of it on purpose — `busy_timeout(0)` makes the refusal immediate, so what
+    /// is asserted is the code SQLite returns and not how long anything sat for it.
+    #[test]
+    fn a_write_the_lock_is_held_against_reads_as_contention() {
+        let (dir, path) = temp_store("write-contention");
+        let holder = StoreEngine::open(&path).unwrap();
+        let other = StoreEngine::open(&path).unwrap();
+        other.conn().busy_timeout(std::time::Duration::from_secs(0)).unwrap();
+
+        let held = holder.write().unwrap();
+        // `match` and not `expect_err`: the Ok side is a live transaction guard, which carries no Debug
+        // for a failure message to print.
+        let refused = match other.write() {
+            Ok(_) => panic!("the other connection holds the write lock, so this must be refused"),
+            Err(e) => e,
+        };
+        assert!(refused.is_contention(), "a held write lock reads as contention, got: {refused}");
+        drop(held);
+
+        // The other side of the telling-apart, and a SQLite refusal too rather than some other variant:
+        // nesting a transaction on one connection is `SQLITE_ERROR`, which must not read as a lock to
+        // wait out — a caller that retried it would retry for ever.
+        let outer = other.write().unwrap();
+        let nested = match other.write() {
+            Ok(_) => panic!("a write cannot open inside another on one connection"),
+            Err(e) => e,
+        };
+        assert!(!nested.is_contention(), "a rejected statement is not contention, got: {nested}");
+        drop(outer);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     /// The reason the operation and its read must share one `BEGIN IMMEDIATE` transaction: two writers
     /// each computing `next_id` and INSERTing must not take the same id — which *is* the
     /// conversational number. SQLite's writer exclusion is per-transaction, so the read has to be *in*
@@ -423,6 +460,15 @@ mod tests {
     fn concurrent_writers_never_take_the_same_number() {
         const WRITERS: i64 = 4;
         const EACH: i64 = 5;
+        // What a contended `BEGIN IMMEDIATE` is allowed to do, and what this test is not about. The
+        // connection's `busy_timeout` waits 5s for the lock and then refuses: the store saying to ask
+        // again, not a defect. This test's subject is the numbering, so it asks again and keeps that
+        // assertion. Bounded rather than a bare loop, so a store that never opens fails the test instead
+        // of hanging in it. Windows is where the wait actually runs out — its disk is slow enough under
+        // a loaded runner that four writers in a tight loop can hold each other past five seconds. No
+        // shape a user drives it in comes near that: eight `task add` processes at once all land inside
+        // the wait (`cli_e2e_store`).
+        const TRIES: usize = 6;
         let (dir, path) = temp_store("write-number");
         // Open once up front: opening runs migrations, which would themselves contend for the lock.
         StoreEngine::open(&path).unwrap();
@@ -433,7 +479,14 @@ mod tests {
                 s.spawn(move || {
                     let e = StoreEngine::open(&path).unwrap();
                     for i in 0..EACH {
-                        let tx = e.write().unwrap();
+                        let mut left = TRIES;
+                        let tx = loop {
+                            match e.write() {
+                                Ok(tx) => break tx,
+                                Err(err) if err.is_contention() && left > 1 => left -= 1,
+                                Err(err) => panic!("w{w}-{i} could not open a write in {TRIES}: {err}"),
+                            }
+                        };
                         let next = super::super::read::next_id(tx.conn(), "task").unwrap();
                         tx.put_record(
                             "task",

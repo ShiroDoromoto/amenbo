@@ -7,24 +7,63 @@
 # - nextest does **not** run doctests. The gate picks those up separately with `cargo test --doc`.
 # - `--all-features` is not usable: it turns on `sharing`, which breaks the cli_e2e_* suites' solo-mode
 #   assumption. Heavy suites are listed explicitly as `--features scale,e2e`.
+#
+# What SLOW means here, and how the lines below were chosen. A SLOW mark never kills a test — it puts
+# it in the closing summary — so the line's whole job is to name a test that costs more than its layer
+# should, and it earns nothing by being loose. There are two layers with an order of magnitude between
+# them, so there are two lines: the everyday suite (unit + the integration tests against a real store)
+# and the e2e suite (which starts the CLI binary once per assertion). Each is set from what the layer
+# actually costs on the three platforms the gate runs, with the slowest legitimate test as the floor.
+#
+# Absolute seconds cannot see the thing that has found the most in practice, which is the RATIO between
+# the platforms — a test that is 20x its macOS cost on Windows is suspect whatever its seconds say, and
+# nextest has no way to ask that at runtime. That question is asked by hand, from the gate's own logs:
+# take a run of the workspace's clippy+test and CLI e2e jobs on all three OSes, pull the per-test
+# `PASS [ N.NNNs]` lines out of each job's log, join them by test name, and sort by the Windows-over-
+# macOS ratio. It is the same reading that first told the endurance group below from a real defect.
 
 [profile.default]
-# Mark slow tests as SLOW to surface them (never kill them). Under the gate (`--features scale,e2e`)
-# the slowest are export_scaling_guard / read_scaling_guard at ~2s, so the threshold sits an order
-# above that: they never read as SLOW, but a regression does. `scale` seeds medium; the 10k seed and
-# the wall-clock guards live in `scale-heavy` (nightly), so seconds is the right order here.
+# The everyday layer's line. Under the gate (`--features scale,e2e`) the slowest legitimate tests here
+# are the endurance group — change_feed / sync_changes, which put 6000 writes through one store to show
+# the feed stays bounded — at 7.4s on Linux and 3.6s on macOS. 10s is the first round number above
+# that, so neither platform reports SLOW for what it is meant to cost.
+#
+# Windows is louder and honestly so: its disk makes the same endurance group cost 89–204s, and
+# store_engine::migrate::tests 23–32s. Those are judged as costing what they cost, and a line drawn
+# above them would be a line above nothing at all. They stay named in every summary, which is the
+# standing cost of the Windows leg written where a reader of the run will see it.
 slow-timeout = { period = "10s" }
 # List slow-or-worse (slow / fail) tests in the closing summary, so heavy tests are visible at a glance.
 final-status-level = "slow"
 
+# The e2e layer's line, an order above the everyday one. Every assertion here starts the CLI as a child
+# process, so seconds are the unit: the slices run 3.5s at the median on macOS and 12.7s on Windows,
+# and the slowest single test measured on any platform is 39.7s (Windows, the reach slices). 60s clears
+# that by half again — a Windows e2e test that reads SLOW has gone past anything the suite has cost.
+#
+# Written under `default` rather than per profile: nextest reads a profile's own overrides first and
+# falls back to `default`'s, so `--profile ci` inherits this one.
+[[profile.default.overrides]]
+filter = 'binary(/^cli_e2e/)'
+slow-timeout = { period = "60s" }
+
 [profile.ci]
 # CI: on a failure keep running the rest (take the whole picture), and print failures immediately
-# as well as again at the end.
+# as well as again at the end. The SLOW lines are not restated here — they are the same judgement on
+# the same tests, inherited from `default`, and a second copy is one to drift.
 fail-fast = false
 failure-output = "immediate-final"
-# This is looser than default not because the runner is slow, but because **the nightly scale-heavy
-# run shares this ci profile** (scale-heavy.yml passes `--profile ci --features scale-heavy`, which
-# runs read_scaling_guard at BIG=10k with the wall-clock guards). Tuned to the PR path's medium seed
-# alone, that nightly run would report SLOW on every test.
+
+# The nightly scale-heavy leg (_scale-heavy.yml), which runs read_scaling_guard at BIG=10k with the
+# wall-clock guards the PR path leaves out. It is one test, and 10k is the seed it is built for: 28.6s
+# on the nightly runner, where the PR path's medium seed costs 6s. Sharing the `ci` profile would put
+# that 28.6s under a line drawn for tests two orders below it, which is why this leg has a profile of
+# its own — and why `ci`'s line is free to be chosen for the suite it actually gates.
+#
+# 60s is twice what the guard measures. The guard asserts its own wall-clock budgets, so what a SLOW
+# mark adds here is a doubling nobody asked for, and that is worth a line in the summary.
+[profile.scale-heavy]
 slow-timeout = { period = "60s" }
 final-status-level = "slow"
+fail-fast = false
+failure-output = "immediate-final"

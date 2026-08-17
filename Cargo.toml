@@ -31,3 +31,26 @@ clap = { version = "4", features = ["derive"] }
 # spans/events; with no subscriber installed (CLI today) they are cheap no-ops. The GUI installs a
 # reloadable file subscriber (see `app/src-tauri/src/perf.rs`).
 tracing = "0.1"
+
+# The end-to-end suite spawns the CLI as a child, once per command it drives — a thousand times over a
+# run — and an unoptimised build of it takes several hundred milliseconds to reach `main`. Nothing it is
+# asked to do costs that: the time goes into building the command tree, every subcommand and every
+# argument, before the first word of input is read (the same tree `.cargo/config.toml` gives Windows an
+# 8 MB stack for). Optimising the two crates that tree is built from is the whole of the fix.
+#
+# `opt-level` and `debug-assertions` are separate knobs, which is what makes this free: the eighteen
+# `debug_assert!`s in the tree stay, and `perf`'s `cfg!(debug_assertions)` branch stays on the side the
+# suite means to exercise. Moving the suite to the release profile would buy the same speed and give
+# those up silently — `amenbo_core::build_profile` is the test that refuses it.
+#
+# Only these two. The test binaries themselves are left unoptimised: they run once each, so what they
+# would gain is less than what compiling them again costs.
+#
+# Level 2 rather than 1, because 1 buys almost nothing here and costs most of the compile time anyway:
+# measured on one machine, startup went 0.57s → 0.51s at level 1 and → 0.13s at level 2, while the build
+# went 27s → 63s → 77s. The knee is at 2, so the middle setting is the one to avoid.
+[profile.dev.package.amenbo-core]
+opt-level = 2
+
+[profile.dev.package.amenbo-cli]
+opt-level = 2

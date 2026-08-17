@@ -88,3 +88,33 @@ pub mod worktree;
 
 pub use error::{Error, ErrorCode, Fields, Msg, Result};
 pub use store::Store;
+
+#[cfg(test)]
+mod build_profile {
+    /// The suite runs with debug assertions on, and this is what says so.
+    ///
+    /// `Cargo.toml` raises `opt-level` for the binary the end-to-end suite spawns, because starting it
+    /// unoptimised costs several hundred milliseconds a thousand times over. `opt-level` is independent
+    /// of `debug-assertions`, so that trade buys speed and gives up nothing — but the neighbouring move,
+    /// building the suite in the release profile, would take eighteen `debug_assert!`s out of the tree
+    /// silently, and `perf` branches on `cfg!(debug_assertions)` for behaviour rather than for speed.
+    /// The suite would go on passing while asserting less, which is the one failure a green run cannot
+    /// report. So it is asked here instead.
+    ///
+    /// `overflow-checks` has no `cfg!` to ask, and follows `debug-assertions` unless someone sets the two
+    /// apart; this covers it only that far.
+    ///
+    /// The condition is a compile-time constant, and clippy says so — which is the point rather than a
+    /// slip: what is being asked is not a fact about this run but a fact about the build this run was
+    /// produced by, and a constant is the only shape that question has.
+    #[test]
+    #[allow(clippy::assertions_on_constants)]
+    fn the_suite_runs_with_debug_assertions_on() {
+        assert!(
+            cfg!(debug_assertions),
+            "the tests are being built without debug assertions — `debug_assert!` is compiled out and \
+             `perf` takes its other branch, so the suite would pass while checking less. Raise \
+             `opt-level` if this is about speed; do not move the suite to a profile that turns these off.",
+        );
+    }
+}

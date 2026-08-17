@@ -589,7 +589,7 @@ export const vi: Translation = {
     not_ready_premise_unsettled: "{ref} chưa ngã ngũ — hãy chờ phán quyết hoặc gỡ mối nối",
     not_ready_not_started: "việc này đến {start} mới bắt đầu — hãy sửa ngày bắt đầu nếu sai",
     not_ready_draft: "việc này vẫn đang được tạo — hãy hoàn tất việc tạo trước",
-    store_busy: "Kho dữ liệu đang được khôi phục hoặc cập nhật. Hãy thử lại sau giây lát.",
+    store_busy: "Kho dữ liệu đang được sử dụng. Hãy thử lại sau giây lát.",
     storage_error: "Không đọc hoặc ghi được kho dữ liệu, và không có gì bị thay đổi. Hãy khởi động lại amenbo rồi thử lại — nếu vẫn xảy ra, hãy gửi những gì có trong Cài đặt > Nhật ký.",
     not_found_task: "Không tìm thấy việc {ref}.",
     not_found_decision: "Không tìm thấy quyết định {ref}.",

@@ -616,7 +616,7 @@ export const it: Translation = {
     not_ready_premise_unsettled: "{ref} non è risolta: aspetta la decisione o togli il collegamento",
     not_ready_not_started: "non comincia prima del {start}: cambia la data di inizio se non è quella giusta",
     not_ready_draft: "è ancora in fase di creazione: completa prima la creazione",
-    store_busy: "L'archivio è in fase di ripristino o aggiornamento. Riprova tra un momento.",
+    store_busy: "L'archivio è in uso in questo momento. Riprova tra un momento.",
     storage_error: "Non è stato possibile leggere o scrivere l'archivio, e non è stato cambiato nulla. Riavvia amenbo e riprova; se continua a succedere, invia quello che si trova in Impostazioni > Registri.",
     not_found_task: "Attività {ref} non trovata.",
     not_found_decision: "Decisione {ref} non trovata.",

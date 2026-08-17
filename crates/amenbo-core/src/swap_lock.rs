@@ -69,6 +69,11 @@ impl Drop for SwapGuard {
 
 /// The bilingual `store_busy` a contended open surfaces: the store is mid-swap, so retrying in a
 /// moment succeeds. Its stable code (`store_busy`) is in the retryable set.
+///
+/// This English names the swap, because here the cause is known. The reader's own language does not: the
+/// code is shared with a write the lock was held against (`crate::error`), and its template says the one
+/// thing true of both — the store is in use, ask again. Naming the swap in the template would put a
+/// restore in front of somebody whose store is merely being written.
 fn busy() -> Error {
     Error::store_busy("the store is being restored or migrated; try again in a moment")
 }

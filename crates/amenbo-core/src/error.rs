@@ -32,7 +32,15 @@ use crate::store_engine::StoreEngineError;
 /// `file is not a database` — SQLite says nothing about *which* file — leaves nobody able to tell which
 /// store it was. Anything that reads a store by path maps its SQLite errors through this.
 pub(crate) fn sqlite_at(path: &Path) -> impl Fn(rusqlite::Error) -> Error + '_ {
-    move |e| Error::Storage(format!("{}: {}", path.display(), StoreEngineError::from(e)))
+    move |e| {
+        let e = StoreEngineError::from(e);
+        // Contention is not this store failing, so it is not named as one — see the crossing in
+        // `From<StoreEngineError>`, which is where the sentence lives.
+        if e.is_contention() {
+            return Error::from(e);
+        }
+        Error::Storage(format!("{}: {}", path.display(), e))
+    }
 }
 
 /// [`sqlite_at`], for code that holds only a connection. The connection knows which file it is
@@ -51,6 +59,10 @@ pub(crate) fn engine_on(conn: &Connection) -> impl Fn(StoreEngineError) -> Error
         // A reach refusal names no file: it is not the store that failed, and naming the SQLite
         // path would leak the store's location into a containment message. It crosses unchanged.
         (StoreEngineError::OutOfReach(_), _) => Error::from(e),
+        // Nor did the store fail when it is merely held: the crossing above turns that into
+        // `store_busy`, and prefixing a path onto it would put a file name in front of a sentence
+        // about waiting.
+        (held, _) if held.is_contention() => Error::from(e),
         // An in-memory database reports no name (or an empty one) — there is nothing to name, so it falls
         // back to the bare mapping rather than printing an empty prefix.
         (_, Some(p)) if !p.is_empty() => Error::Storage(format!("{p}: {e}")),
@@ -226,6 +238,16 @@ pub enum Error {
     StoreBusy(Msg),
 }
 
+/// The sentence core writes when the store is held by somebody else. The reader's own language comes
+/// from the `store_busy` template, which says the one thing true of every way the family arises — the
+/// store is in use, ask again — so this English is the log's line and the CLI's, not the screen's.
+///
+/// Named here rather than written at each of the three crossings below, so the three cannot drift into
+/// saying different things about the same condition.
+fn contended() -> Error {
+    Error::store_busy("the store is in use by another program; try again in a moment")
+}
+
 impl From<crate::store_engine::StoreEngineError> for Error {
     fn from(e: crate::store_engine::StoreEngineError) -> Self {
         match e {
@@ -233,6 +255,13 @@ impl From<crate::store_engine::StoreEngineError> for Error {
             // `Storage` would make a containment refusal claim to be a store failure, and would erase the
             // `out_of_reach` code from the contract.
             crate::store_engine::StoreEngineError::OutOfReach(inner) => inner,
+            // The store held by another writer is `store_busy` and not `storage_error`. The two ask
+            // opposite things of the reader: `store_busy` says wait and do it again, `storage_error` says
+            // the store gave way — restart, and send the log. A contended write is transient and the
+            // batch never opened, so telling a reader their store failed would be false twice over.
+            // `AMB-D-154` puts the store's whole concurrency answer on the write lock and this timeout,
+            // which makes a refusal past the wait an ordinary outcome of that design, not a fault in it.
+            other if other.is_contention() => contended(),
             other => Error::Storage(other.to_string()),
         }
     }

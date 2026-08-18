@@ -6,7 +6,7 @@
 # for months and every local gate still passes — the breakage surfaces in CI, i.e. after
 # it is already on main.
 #
-# It runs the same two clippy invocations as CI's `rust` and `app-rust` jobs, on the same
+# It runs the same two clippy invocations as CI's `lint` and `app-rust` jobs, on the same
 # system deps (the image already carries webkit2gtk/gtk for the Tauri host crate), so a
 # green run here means those jobs are green too.
 #
@@ -39,7 +39,7 @@ export CARGO_PROFILE_DEV_DEBUG=0
 
 rustc --version && cargo clippy --version
 
-# The core/cli workspace — CI's `rust` job, same flags (feature-gated code included, and
+# The core/cli workspace — CI's `lint` job, same flags (feature-gated code included, and
 # the facet env funnel: AMENBO_* is read via amenbo_core::env, never raw std::env).
 echo "→ [container] clippy: workspace (core/cli)"
 cargo clippy --all-targets --all-features -- -D warnings -D clippy::disallowed_methods

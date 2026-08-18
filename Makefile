@@ -149,7 +149,7 @@ help:
 	@echo "make gate         - the same gate, narrowed to the layers this change touched (.github/paths-filters.yml, the file CI reads); a path on no layer falls back to the whole of make test. Nothing here decides a merge — that verdict is CI's, on the PR"
 	@echo "make test         - full gate (core/cli scale,e2e + app crate clippy/test + GUI typecheck/build/test). Kept for a deliberate local sweep; neither a merge nor a tag waits on it"
 	@echo "make verify ARGS=\"...\" - run the CLI in a throwaway isolated store (leaves prod/dev app-data untouched; INIT=1 binds it first, which is what --actor ai needs; SCRIPT=<file> runs a sequence through one isolation)"
-	@echo "make lint-linux   - clippy the Linux branch (cfg(target_os=\"linux\")) in a container = the same 2 jobs as CI's rust/app-rust (make test does not see them; needs Docker)"
+	@echo "make lint-linux   - clippy the Linux branch (cfg(target_os=\"linux\")) in a container = the same 2 jobs as CI's lint/app-rust (make test does not see them; needs Docker)"
 	@echo "make shell-gate   - shellcheck tracked shell (scripts/, guards/, .githooks/) and actionlint the run: in workflows (automatic at the start of make test; needs shellcheck 0.10+/actionlint)"
 	@echo "make comment-gate - audit every comment in the tree, and the prose and config values of every tracked file that carries no code, against esorp.yaml = the same commands CI runs (automatic at the start of make test; skipped without esorp)"
 	@echo "make go-gate      - gofmt/vet/test the optional devtool module = the same checks CI's go job runs (automatic at the start of make test; skipped without Go)"
@@ -532,11 +532,11 @@ gate-cheap:
 	$(MAKE) --no-print-directory ci-aggregate-gate
 	$(MAKE) --no-print-directory workflow-run-gate
 
-## The workspace stage: the same two commands CI's `rust` job runs, plus the doctests and the doc
-## link check. `--all-features` lints the feature-gated targets too (scale/e2e tests, the gated
-## `sharing` surface) so they cannot rot — required-features targets are invisible to a plain
-## `--all-targets` build — and -D clippy::disallowed_methods enforces the facet env funnel
-## (clippy.toml).
+## The workspace stage: CI's `lint` job (clippy, the doctests, the doc link check) and its `rust`
+## job (the tests) in one pass, because a local sweep has no runners to spread them over.
+## `--all-features` lints the feature-gated targets too (the scale and e2e suites) so they cannot
+## rot — required-features targets are invisible to a plain `--all-targets` build — and
+## -D clippy::disallowed_methods enforces the facet env funnel (clippy.toml).
 gate-rust:
 	cargo clippy --all-targets --all-features -- -D warnings -D clippy::disallowed_methods
 	## Two runs, not one: the same split CI makes (_ci.yml), so the heavy e2e suites never share the
@@ -579,11 +579,11 @@ gate-verification:
 ## does not see — store_watch's inotify/statfs paths are the real thing — is only checked once it is
 ## **compiled** on Linux. Cross-compilation does not reach it (Tauri's glib/gtk sys crate build.rs
 ## demands pkg-config's cross setup), so it borrows the same container as the Linux GUI bundle (with
-## webkit/gtk, Dockerfile.linux-gui) and runs the same 2 clippy jobs as CI's `rust` + `app-rust`
+## webkit/gtk, Dockerfile.linux-gui) and runs the same 2 clippy jobs as CI's `lint` + `app-rust`
 ## inside it = if this is green those 2 jobs are green.
 ## **Not in `make test`**: the container build and a full Linux-side compile take minutes, and that
 ## tax does not fit a change that touched mac only. The guard against forgetting to run it is CI
-## (`rust`/`app-rust` always run on every push) = this is **redundancy to fail before CI**, not a
+## (`lint`/`app-rust` always run on every push) = this is **redundancy to fail before CI**, not a
 ## replacement for CI.
 ## It never touches the local target/ or mac-native node_modules (it copies into the container to
 ## build). Later runs are fast because named volumes (registry + two target dirs) carry over. Needs

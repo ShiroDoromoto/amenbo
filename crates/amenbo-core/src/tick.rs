@@ -263,17 +263,22 @@ fn run_over(store: &Store, day: NaiveDate, purposes: &[Purpose]) -> Result<Repor
 /// What goes into a registration is per-OS in a way the rest of this module is deliberately not — the
 /// plist macOS wants is written by the app bundle through `SMAppService`, the Windows task has to be
 /// built from XML because `schtasks` has no flag for the battery gates, and Linux writes a pair of
-/// systemd user units — so each door lands with the OS that needs it (`AMB-T-3253` / `AMB-T-3254`)
-/// rather than being guessed at from here. A target with no door yet answers through `nodoor`, which is
-/// the honest state and not a half-written one.
+/// systemd user units — so each door lands with the OS that needs it (`AMB-T-3253`) rather than being
+/// guessed at from here. A target with no door yet answers through `nodoor`, which is the honest state
+/// and not a half-written one.
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "linux")]
 use linux as platform;
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(windows)]
+mod windows;
+#[cfg(windows)]
+use windows as platform;
+
+#[cfg(not(any(target_os = "linux", windows)))]
 mod nodoor;
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", windows)))]
 use nodoor as platform;
 
 #[cfg(test)]
@@ -309,7 +314,7 @@ mod tests {
     /// With no door on this target, the state is readable and the two writes refuse — the reason a
     /// caller can say so, rather than reporting a registration that was never written.
     #[test]
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", windows)))]
     fn a_target_with_no_door_answers_rather_than_pretending() {
         assert!(!available());
         assert!(!probe().expect("a target with no door still has a state to report"));
@@ -321,7 +326,7 @@ mod tests {
     /// was never asked to hold anything. What the writes do is the machine's to decide, so they are not
     /// called here: a build box is not a place to register a timer on.
     #[test]
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", windows))]
     fn a_target_with_a_door_reads_the_scheduler_without_writing_to_it() {
         assert!(available());
         assert!(!probe().expect("the scheduler has a state to report"));

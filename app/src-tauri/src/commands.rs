@@ -430,16 +430,10 @@ fn store_activity_dtos(store: &Store, limit: usize) -> Result<Vec<ActivityItemDt
     Ok(items.into_iter().map(|it| activity_dto(it, &store.config)).collect())
 }
 
-/// Has the first snapshot after process start already bypassed the update-check cache and asked
-/// upstream fresh? Only the first one wins the `false→true` flip; every tick after it goes through
-/// the 24h cache (we do not talk to the network on every tick).
-static UPDATE_CHECK_REFRESHED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
 /// Assemble the read data for every screen into one sheet. **Directory-independent**: what it opens
 /// is the single store in this machine's app-data. If there is no store yet it returns an **empty
 /// snapshot** (we never quietly create a default empty store — the empty state is explicit).
 fn build_snapshot() -> Result<Snapshot, CmdError> {
-    use std::sync::atomic::Ordering;
     let _perf = amenbo_core::perf::Timer::start("build_snapshot");
     let mut acc = Acc::default();
 
@@ -451,10 +445,7 @@ fn build_snapshot() -> Result<Snapshot, CmdError> {
     let language = config.language.clone();
     let date_locale = config.date_locale.clone();
 
-    let first_snapshot = UPDATE_CHECK_REFRESHED
-        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-        .is_ok();
-    let upstream = upstream_release(config.update_check, first_snapshot);
+    let upstream = upstream_release(config.update_check, false);
 
     let mut startup_health = StartupHealthDto::default();
     let mut version_status = VersionStatusDto::default();
@@ -673,8 +664,9 @@ pub fn store_signature() -> String {
 /// and no traffic to fetch either. The plugin that would perform the swap is withheld too (`lib.rs`),
 /// so the two halves fail closed independently.
 ///
-/// `fresh` bypasses the TTL cache — the first snapshot after process start, and the menu's manual
-/// check — exactly as [`amenbo_core::update_check::check_fresh`] describes.
+/// `fresh` bypasses the TTL cache, and only the menu's manual check asks for it
+/// (`AMB-D-710`) — exactly as [`amenbo_core::update_check::check_fresh`] describes. Every reading
+/// nobody asked for, process start included, goes through the cache.
 fn upstream_release(
     enabled: bool,
     fresh: bool,
@@ -694,8 +686,8 @@ fn upstream_release(
 /// that, since it is only rebuilt when the store itself has moved, and someone who only reads never
 /// moves it. Cheap by construction: the cache TTL lives in `update_check::check`, so a call inside
 /// the window answers from the cache with no traffic at all, and only a stale one queries upstream
-/// (timed out, silent on failure). Never `check_fresh` — bypassing the cache belongs to the first
-/// snapshot after process start, not to a trigger the user can fire by alt-tabbing.
+/// (timed out, silent on failure). Never `check_fresh` — bypassing the cache belongs to the menu's
+/// manual check alone, not to a trigger the user can fire by alt-tabbing.
 #[tauri::command]
 pub fn version_status() -> Result<VersionStatusDto, CmdError> {
     let config = amenbo_core::config::Paths::resolve()

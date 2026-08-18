@@ -83,6 +83,7 @@
 
 .due--overdue { color: var(--c-due-overdue); }
 .due--today { color: var(--c-due-today); }
+.due--tomorrow { color: var(--c-due-tomorrow); }
 .due--future { color: var(--c-due-future); }
 
 /* ---------- board ---------- */
@@ -957,6 +958,7 @@ button.feed__target:hover { color: var(--c-accent); }
 }
 .cal__chip--overdue { border-left-color: var(--c-due-overdue); }
 .cal__chip--today { border-left-color: var(--c-due-today); }
+.cal__chip--tomorrow { border-left-color: var(--c-due-tomorrow); }
 .cal__chip--future { border-left-color: var(--c-due-future); }
 .cal__chip--closed { color: var(--c-text-faint); text-decoration: line-through; }
 .cal__chip--selected { background: var(--c-accent-weak); box-shadow: inset 0 0 0 1px var(--c-accent); }
@@ -985,6 +987,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .tl__bar { position: absolute; top: 3px; height: 12px; border-radius: var(--r-sm); min-width: 4px; background: var(--c-due-future); }
 .tl__bar--overdue { background: var(--c-due-overdue); }
 .tl__bar--today { background: var(--c-due-today); }
+.tl__bar--tomorrow { background: var(--c-due-tomorrow); }
 .tl__bar--future { background: var(--c-due-future); }
 .tl__bar--closed { background: var(--c-done); opacity: 0.7; }
 .tl__rel { font-size: var(--fs-2xs); color: var(--c-text-muted); text-align: right; white-space: nowrap; }

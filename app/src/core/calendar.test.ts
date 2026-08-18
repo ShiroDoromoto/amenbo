@@ -72,11 +72,20 @@ describe("monthMatrix", () => {
 });
 
 describe("dueKind / relativeDays", () => {
-  it("judges overdue/today/future relative to today", () => {
+  it("judges overdue/today/tomorrow/future relative to today", () => {
     expect(dueKind("2026-06-20", "2026-06-21")).toBe("overdue");
     expect(dueKind("2026-06-21", "2026-06-21")).toBe("today");
-    expect(dueKind("2026-06-22", "2026-06-21")).toBe("future");
+    expect(dueKind("2026-06-22", "2026-06-21")).toBe("tomorrow");
+    expect(dueKind("2026-06-23", "2026-06-21")).toBe("future");
     expect(dueKind("2026-06-21T23:00:00Z", "2026-06-21")).toBe("today"); // judged by the day even with a time attached
+  });
+
+  // Tomorrow is the next calendar day, so it crosses the end of a month and the end of a year
+  // rather than being the string one greater.
+  it("takes tomorrow across a month and a year boundary", () => {
+    expect(dueKind("2026-07-01", "2026-06-30")).toBe("tomorrow");
+    expect(dueKind("2027-01-01", "2026-12-31")).toBe("tomorrow");
+    expect(dueKind("2026-07-02", "2026-06-30")).toBe("future");
   });
 
   it("relativeDays is due - today", () => {

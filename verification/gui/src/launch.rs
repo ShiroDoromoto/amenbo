@@ -53,10 +53,17 @@ pub struct Gui<'a> {
 /// `AMENBO_HOME` carries a second meaning beside the store it names: a launch that names its own
 /// store is the one the app leaves out of its single-instance guard. That is what lets this one come
 /// up beside whatever the operator already has open, instead of being turned away into their window.
+///
+/// `AMENBO_UPDATE_CHECK=0` goes beside it so that standing the app up asks the release feed nothing.
+/// A shipped build queries it as it comes up, and a run walks the screens many times over — so the
+/// numbers the product is measured by would carry every launch this harness made, indistinguishable
+/// from somebody going to look for a new version. The CLI driver beside this one has always carried
+/// the same switch; this is the app being held to it too.
 pub fn launch<'a>(bundle: &Path, store: &'a Session) -> Result<Gui<'a>, String> {
     let exe = executable(bundle)?;
     let child = Command::new(&exe)
         .env("AMENBO_HOME", &store.home)
+        .env("AMENBO_UPDATE_CHECK", "0")
         .current_dir(&store.cwd)
         .stdout(Stdio::null())
         .spawn()

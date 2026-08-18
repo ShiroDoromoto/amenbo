@@ -189,10 +189,13 @@ anyone to remember to tidy.
 The executable inside the bundle is started directly rather than the bundle being `open`ed, since
 the environment is what carries the store and `open` hands the launch to launchd with an
 environment of its own. `AMENBO_HOME` is the product's own override, so the build under test is not
-a different build for having been asked. The store follows this workspace's throwaway rules — one
-parent under the temp tree, a name that does not lean on the pid, a sweep of what is over a day old
-on the way in — and the app is started from a directory of its own, since a child inherits the
-harness's, and the harness is run from this repository.
+a different build for having been asked. `AMENBO_UPDATE_CHECK=0` rides along with it, the same way
+it does on the CLI side: the app asks the release manifest as it comes up, and a road walked over
+and over would otherwise put every one of those launches into the numbers the product is measured
+by. The store follows this workspace's throwaway rules — one parent under the temp tree, a name
+that does not lean on the pid, a sweep of what is over a day old on the way in — and the app is
+started from a directory of its own, since a child inherits the harness's, and the harness is run
+from this repository.
 
 **The world a road starts from is stood up before the app is.** A scenario's [`given:`](#given--the-world-a-road-starts-from)
 is walked by the CLI the same bundle ships (`Contents/MacOS/amenbo`), pointed at that same throwaway

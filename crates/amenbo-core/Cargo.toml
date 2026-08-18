@@ -123,6 +123,18 @@ windows-sys = { version = "0.61", features = [
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+# The hourly tick's macOS door (`src/tick.rs`). `SMAppService` is the only way to register a per-user
+# agent that macOS lists under the app's own name rather than the developer's, and it is
+# an Objective-C class, so it is reached the way the app crate already reaches the same framework:
+# `objc2-service-management` for the class, `objc2-foundation` for the `NSString` it takes and the
+# `NSBundle` this process was launched from, and `objc2` for the runtime lookup that asks whether this
+# macOS has the class at all. Here rather than in the app crate because both faces open the same door —
+# the GUI from its own bundle, the CLI from the copy of itself inside it.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-service-management = "0.3"
+
 [dev-dependencies]
 amenbo-scratch.workspace = true
 # A port to answer on, for the one route core takes to a third party it does not publish: GitHub's API

@@ -38,6 +38,17 @@ pub(super) const AVAILABLE: bool = true;
 /// ever one task to put in it.
 const TASK: &str = "amenbo-tick";
 
+/// Nothing here turns on which process is asking: the task is written and read through the scheduler,
+/// which answers whoever is signed in as this user.
+pub(super) fn reachable_from_here() -> bool {
+    AVAILABLE
+}
+
+/// There is nothing to launch that would answer differently.
+pub(super) fn relaunch_target() -> Option<std::path::PathBuf> {
+    None
+}
+
 pub(super) fn probe() -> Result<bool> {
     // `/Query /TN` answers in its exit status: `0` the task is there, non-zero it is not. Anything that
     // is not a plain yes is read as "nothing registered" — which is the truth of what is held either

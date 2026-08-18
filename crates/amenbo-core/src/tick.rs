@@ -35,6 +35,9 @@
 //! and Windows has to have both battery gates turned off, or a laptop off its charger runs no tick at
 //! all.
 //!
+//! **A door can also have a say in *who* may open it**, which macOS does — see [`reachable_from_here`]
+//! and [`relaunch_target`]. Everywhere else, whoever can reach the machine can work the door.
+//!
 //! **Being woken is not being due.** The timer carries no meaning, so an hour that is owed nothing is the
 //! ordinary case and [`PURPOSES`] is where an hour's work is decided. What is owed is counted in calendar
 //! days rather than in wake-ups (`AMB-D-708`): a machine that was asleep is woken for the hours it missed,
@@ -126,6 +129,32 @@ pub fn fix_for(consent: Option<TickConsent>, registered: bool) -> TickFix {
 pub fn available() -> bool {
     platform::AVAILABLE
 }
+
+/// Can *this process* work the door, or only a differently-launched one?
+///
+/// On macOS the door is the app bundle's (see [`platform`]), so a process launched from outside one
+/// cannot open it — which the CLI on `PATH` is, being a symlink into the bundle rather than the
+/// bundle's own executable. It is not a failure and not a refusal: the same machine, asked by the
+/// bundle's executable, answers normally. A caller that can re-launch itself from inside the bundle
+/// does that and asks again; one that cannot says which process has to ask.
+///
+/// Everywhere else the door has no such requirement, and this is true whenever [`available`] is.
+pub fn reachable_from_here() -> bool {
+    platform::reachable_from_here()
+}
+
+/// The executable to launch so that the door *is* reachable, for a caller that can launch one.
+///
+/// On macOS this is the bundle's own copy of whatever is running now: the same binary, named by the path
+/// it really sits at rather than by the symlink that reached it, which is the whole of what
+/// [`reachable_from_here`] turns on. `None` where re-launching would not help — every other target, and a
+/// macOS process whose executable is not inside a bundle carrying the plist. That `None` is what makes a
+/// re-launch loop impossible: the caller only ever launches something that will answer.
+pub fn relaunch_target() -> Option<std::path::PathBuf> {
+    platform::relaunch_target()
+}
+
+
 
 /// Is the scheduler holding amenbo's tick right now? Read from the OS, every time — never from the
 /// answer on record (see the module docs).
@@ -263,9 +292,13 @@ fn run_over(store: &Store, day: NaiveDate, purposes: &[Purpose]) -> Result<Repor
 /// What goes into a registration is per-OS in a way the rest of this module is deliberately not — the
 /// plist macOS wants is written by the app bundle through `SMAppService`, the Windows task has to be
 /// built from XML because `schtasks` has no flag for the battery gates, and Linux writes a pair of
-/// systemd user units — so each door lands with the OS that needs it (`AMB-T-3253`) rather than being
-/// guessed at from here. A target with no door yet answers through `nodoor`, which is the honest state
-/// and not a half-written one.
+/// systemd user units. A target with no door answers through `nodoor`, which is the honest state and
+/// not a half-written one.
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "macos")]
+use macos as platform;
+
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "linux")]
@@ -276,9 +309,9 @@ mod windows;
 #[cfg(windows)]
 use windows as platform;
 
-#[cfg(not(any(target_os = "linux", windows)))]
+#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
 mod nodoor;
-#[cfg(not(any(target_os = "linux", windows)))]
+#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
 use nodoor as platform;
 
 #[cfg(test)]
@@ -314,9 +347,10 @@ mod tests {
     /// With no door on this target, the state is readable and the two writes refuse — the reason a
     /// caller can say so, rather than reporting a registration that was never written.
     #[test]
-    #[cfg(not(any(target_os = "linux", windows)))]
+    #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
     fn a_target_with_no_door_answers_rather_than_pretending() {
         assert!(!available());
+        assert!(!reachable_from_here());
         assert!(!probe().expect("a target with no door still has a state to report"));
         assert!(register().is_err());
         assert!(unregister().is_err());
@@ -329,7 +363,22 @@ mod tests {
     #[cfg(any(target_os = "linux", windows))]
     fn a_target_with_a_door_reads_the_scheduler_without_writing_to_it() {
         assert!(available());
+        assert!(reachable_from_here());
         assert!(!probe().expect("the scheduler has a state to report"));
+    }
+
+    /// macOS has the door, and a test binary is exactly the caller that cannot open it: it runs from the
+    /// target directory rather than from inside the app bundle the plist is carried in. All three faces
+    /// refuse rather than answering about a bundle they are not in — including the read, whose
+    /// alternative would be reporting "nothing registered" about a machine it never asked.
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn the_bundles_door_does_not_open_for_a_process_outside_it() {
+        assert!(available());
+        assert!(!reachable_from_here());
+        assert!(probe().is_err());
+        assert!(register().is_err());
+        assert!(unregister().is_err());
     }
 
     /// The rule the hourly wake-up rests on: within one calendar day the work is carried out once, however

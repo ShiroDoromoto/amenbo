@@ -18,6 +18,17 @@ pub(super) const AVAILABLE: bool = false;
 /// nothing the reader could type to fix it.
 const NO_DOOR: &str = "amenbo cannot register the hourly tick on this system yet";
 
+/// Nothing is out of reach on a target where nothing is in reach: the honest answer about *where* the
+/// door can be opened from is that there is no door, which [`AVAILABLE`] already says.
+pub(super) fn reachable_from_here() -> bool {
+    AVAILABLE
+}
+
+/// There is nothing to launch that would answer differently.
+pub(super) fn relaunch_target() -> Option<std::path::PathBuf> {
+    None
+}
+
 pub(super) fn probe() -> Result<bool> {
     Ok(false)
 }

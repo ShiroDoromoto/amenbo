@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The hourly tick (AMB-D-707). Registered through SMAppService from the app bundle this file
+	     is carried in, so macOS lists it under amenbo's own name rather than the developer's
+	     (AMB-D-549). Bundled means signed, so nothing here can be rewritten at run time — which is
+	     harmless for a timer whose whole design is one plain hourly wake-up. -->
+	<key>Label</key>
+	<string>work.amenbo.tick</string>
+
+	<!-- What the wake-up runs: the CLI carried in this same bundle, named relative to the bundle
+	     root, so the job follows the app wherever it is installed. -->
+	<key>BundleProgram</key>
+	<string>Contents/MacOS/amenbo</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>Contents/MacOS/amenbo</string>
+		<string>tick</string>
+		<string>run</string>
+	</array>
+
+	<!-- On the hour, every hour. StartCalendarInterval and not StartInterval: an interval drops the
+	     turns that came round while the machine was asleep, and a calendar entry runs the missed one
+	     once on wake (AMB-T-3248 measured all three schedulers on exactly this). -->
+	<key>StartCalendarInterval</key>
+	<dict>
+		<key>Minute</key>
+		<integer>0</integer>
+	</dict>
+
+	<!-- Nothing is waiting for this, so it takes the background band: lower priority, throttled I/O,
+	     and no claim on the CPU a person is using. -->
+	<key>ProcessType</key>
+	<string>Background</string>
+
+	<!-- Registering is not a reason to run: the first turn is the next hour. -->
+	<key>RunAtLoad</key>
+	<false/>
+</dict>
+</plist>

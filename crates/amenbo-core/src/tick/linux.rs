@@ -37,6 +37,17 @@ const TIMER: &str = "amenbo-tick.timer";
 /// either naming the other.
 const SERVICE: &str = "amenbo-tick.service";
 
+/// Nothing here turns on which process is asking: a user unit is written and read through
+/// `systemctl --user`, which answers whoever can reach the session.
+pub(super) fn reachable_from_here() -> bool {
+    AVAILABLE
+}
+
+/// There is nothing to launch that would answer differently.
+pub(super) fn relaunch_target() -> Option<std::path::PathBuf> {
+    None
+}
+
 pub(super) fn probe() -> Result<bool> {
     // `is-enabled` answers in its exit status and not on stdout, and the three answers that matter are
     // `0` enabled, `1` disabled, `4` no such unit. Anything else — a Linux with no systemd on it, a

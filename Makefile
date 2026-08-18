@@ -544,8 +544,8 @@ gate-rust:
 	## box with the scale seeds. The build is shared, so the second run only schedules tests.
 	## `cli_e2e_*` is every slice of the e2e suite (crates/amenbo-cli/tests/e2e), named by prefix so a
 	## new one lands on the right side of the split without this line being touched.
-	## CI shards each of these two across runners on top of the split; here they run whole, there
-	## being one machine either way.
+	## CI shards the e2e run across runners on top of the split, the other one being short enough to
+	## run whole there as well; here both run whole, there being one machine either way.
 	cargo nextest run --features scale,e2e -E 'not binary(/^cli_e2e/)'
 	cargo nextest run --features scale,e2e -E 'binary(/^cli_e2e/)'
 	cargo test --doc --features scale,e2e

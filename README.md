@@ -474,6 +474,15 @@ amenbo hooks install                        # wire the lint hooks here (`git com
 amenbo hooks status                         # what is in each hook slot, and what this device answered
 amenbo hooks uninstall                      # remove amenbo's hooks here, and opt this repository out
 
+# Have this machine's own scheduler wake amenbo once an hour, so what a day owes gets
+# said with no app open and nothing of ours left running. What is registered carries no
+# meaning — amenbo works out once awake what is due — so however much comes to depend on
+# it, this stays one row in your system settings, and switching that row off stops all of
+# it. Registering writes into your scheduler, so amenbo asks once, for this device.
+amenbo tick install                         # register it (idempotent — run it again after an upgrade)
+amenbo tick status                          # what the scheduler is holding, and what this device answered
+amenbo tick uninstall                       # take it away, and record that this device does not want it
+
 # Have this folder's AI run `amenbo agent` at session start, through its own tool's
 # session-start hook. Unlike the lint hooks above, amenbo writes nothing here: it
 # hands over a request to give the AI you work with (stdout is that text, and

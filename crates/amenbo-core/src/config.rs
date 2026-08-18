@@ -445,6 +445,17 @@ pub struct Config {
     /// leave this alone.
     #[serde(default)]
     pub hook_consent: Option<crate::hooks::HookConsent>,
+    /// **May amenbo have this machine's scheduler wake it once an hour?** — asked once, for the tick as
+    /// a feature, and never again ([`crate::tick`]). `None` is the unanswered state, the same shape as
+    /// [`Config::hook_consent`] and for the same reason. It lives here because the device is the only
+    /// scale it has: one machine holds one timer, so there is nothing narrower to record it against.
+    /// **A user-level setting; never synced.**
+    ///
+    /// There is no `config set` key for it. What moves it is the faces that state an intent — `tick
+    /// install` and `tick uninstall` — and the startup pass, which only ever takes a `yes` back to
+    /// `no` after the user has removed the registration themselves.
+    #[serde(default)]
+    pub tick_consent: Option<crate::tick::TickConsent>,
 }
 
 /// Cap on the size of an avatar data URL, in bytes. A loose limit to stop breakage and runaways —
@@ -496,6 +507,7 @@ impl Default for Config {
             human_avatar: None,
             ai_avatar: None,
             hook_consent: None,
+            tick_consent: None,
         }
     }
 }

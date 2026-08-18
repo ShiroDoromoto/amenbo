@@ -274,6 +274,24 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Windows only: the runner's default TEMP is C:\Users\RUNNER~1\AppData\Local\Temp, on the
+      # system drive, while the workspace and every target dir sit on D:. The suite stands up a
+      # store per test and places it by `std::env::temp_dir()`, so the default splits the hottest
+      # I/O of the run off the drive doing all its other work. Naming the workspace drive's temp
+      # dir instead cut Windows test execution by 40% on this job and 12% on the e2e one (median of
+      # 4-7 repetitions per condition, measured 2026-08-18 — a single pair proves nothing here, the
+      # same condition scatters 759-1212s across runners). The build is unmoved, and rust-cache's
+      # key does not read TMP/TEMP, so nothing goes cold on the way in. RUNNER_TEMP rather than a
+      # literal D:\a\_temp — which is what it resolves to today — because the runner puts it on the
+      # workspace drive by construction, so an image that moves the workspace moves this with it.
+      # The same step heads rust-e2e-mac-win and app-rust-mac-win below.
+      - name: Put TMP/TEMP on the workspace drive
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          echo "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+          echo "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+
       # The store is SQLCipher-encrypted, so rusqlite's bundled-sqlcipher-vendored-openssl builds
       # OpenSSL from source, and openssl-src configures it by shelling out to perl. On Windows the
       # perl a step resolves may be MSYS2's, which lacks Locale::Maketext::Simple and dies in
@@ -330,6 +348,16 @@ jobs:
         os: [macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
+
+      # Same step, and the same reason, as `rust-mac-win` above: the default TEMP is on C: while
+      # the workspace is on D:, and it is the tests reading `std::env::temp_dir()` that pay for the
+      # split.
+      - name: Put TMP/TEMP on the workspace drive
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          echo "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+          echo "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
 
       # Same reason, and the same wording, as `rust-mac-win` above: rusqlite's vendored SQLCipher
       # builds OpenSSL from source, openssl-src configures it through perl, and the perl a step
@@ -676,6 +704,16 @@ jobs:
         os: [macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
+
+      # Same step, and the same reason, as `rust-mac-win` above: the default TEMP is on C: while
+      # the workspace is on D:, and it is the tests reading `std::env::temp_dir()` that pay for the
+      # split.
+      - name: Put TMP/TEMP on the workspace drive
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: |
+          echo "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+          echo "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
 
       # The store is SQLCipher-encrypted, so rusqlite's bundled-sqlcipher-vendored-openssl builds
       # OpenSSL from source, and openssl-src configures it by shelling out to perl. On Windows the

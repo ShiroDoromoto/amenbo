@@ -1,0 +1,249 @@
+# Being told, rather than asking. The what-to-do-now view answers the same question about days, but a
+# reader only ever gets that answer by typing for it; this road is about the answer arriving unasked,
+# on a screen that was opened for something else entirely.
+#
+# What makes it one road and not two is the pairing. A badge is a number and a colour, and neither says
+# which tasks it counted — so a warning that points somewhere the tasks are not is green on every step
+# that reads the badge alone. The press is what closes it: the row is read first, then pressed, then
+# the listing under it is read, and the same days have to come back on both sides.
+#
+# Three days are seeded and a fourth is not. Past, today and tomorrow each land on a badge; the day
+# after tomorrow is the one that must not, and it is what says the warning has an edge at all rather
+# than counting whatever carries a date. A finished task with a day gone by is the other edge: closed
+# work is not pressing, so it is out of the count and out of the listing both.
+#
+# The screen is the only witness. A terminal has no row standing in front of it to warn, and nothing
+# to press through — asked, it answers with `status`, which is `see-what-to-do-now`'s road.
+#
+# The world is declared below: five tasks under one project, each carrying the day it needs. The
+# operator is not asked to open anything first — where the app lands on launch is not this road's
+# subject, and the first move is the press.
+id: be-warned-a-day-has-come
+title: The sidebar warns on two steps that days have come, and pressing the warning opens exactly the tasks it counted
+description: >
+  Read the smart view for days without opening it — three tasks on the stop step, one on the heed step
+  — then press it and find those four in the listing, and neither the task due the day after tomorrow
+  nor the finished one whose day went by. What is under test is the pairing: a badge that counted one
+  set while the row opened another would put a colour in front of a reader and send them somewhere the
+  work it warned about is not.
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse
+
+  # Its day went by a long time ago — the worst of the stop step, and so the first row the listing draws.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day went by long ago
+    as: long_gone
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: long_gone
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: long_gone
+      due: "2020-01-01"
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day went by
+    as: gone
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: gone
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: gone
+      due: "2021-01-01"
+
+  # Today is on the stop step and not on the heed one: the day a task is due is a day nothing but doing
+  # the work moves, so noticing it buys nothing that noticing it yesterday did not.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day is today
+    as: today_task
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: today_task
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: today_task
+      due: today
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day is tomorrow
+    as: tomorrow_task
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: tomorrow_task
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: tomorrow_task
+      due: "+1d"
+
+  # The edge. One day further out and the warning must not carry it, or what the row reports is
+  # everything with a date on it.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day is the one after
+    as: later
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: later
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: later
+      due: "+2d"
+
+  # The other edge: a day long gone, on work that is over. Nothing about it is pressing, so it is out
+  # of the count as well as out of the listing — and it is seeded overdue on purpose, since a build
+  # that counted days without asking whether the work had ended would put it on the worst step of all.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day went by, and the work is over
+    as: finished
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: finished
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: finished
+      due: "2020-06-01"
+
+  - type: action
+    domain: task
+    op: status
+    with:
+      target: finished
+      status: done
+
+steps_gui:
+  # Read before anything is pressed. Three on the stop step — two days gone and today's — which is
+  # also what says the finished one is out: four tasks carry a day at or before today, and only three
+  # of them are counted.
+  - type: assert
+    domain: task
+    op: view-warns
+    with:
+      view: due
+      step: stop
+      count: 3
+
+  # And one on the heed step. The day after tomorrow is seeded and not counted here, which is the whole
+  # of what makes this a step rather than a horizon.
+  - type: assert
+    domain: task
+    op: view-warns
+    with:
+      view: due
+      step: heed
+      count: 1
+
+  - type: action
+    domain: task
+    op: open-view
+    with:
+      view: due
+
+  # The four the badges counted, on the other side of the press.
+  - type: assert
+    domain: task
+    op: view-lists
+    with:
+      target: long_gone
+      view: due
+      present: true
+
+  - type: assert
+    domain: task
+    op: view-lists
+    with:
+      target: gone
+      view: due
+      present: true
+
+  - type: assert
+    domain: task
+    op: view-lists
+    with:
+      target: today_task
+      view: due
+      present: true
+
+  - type: assert
+    domain: task
+    op: view-lists
+    with:
+      target: tomorrow_task
+      view: due
+      present: true
+
+  # And the two neither badge counted. Read here rather than taken on trust: a listing that opened on
+  # every dated task would satisfy every step above it and none of these.
+  - type: assert
+    domain: task
+    op: view-lists
+    with:
+      target: later
+      view: due
+      present: false
+
+  - type: assert
+    domain: task
+    op: view-lists
+    with:
+      target: finished
+      view: due
+      present: false

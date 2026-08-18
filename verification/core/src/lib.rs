@@ -285,6 +285,14 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone. A terminal prints its hits as text and the reader types the ref it read
     // into `show`, so there is nothing there to press.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "open-hit", required: &["words", "target"], refs: &["target"], strings: &["words"], binds: false },
+    // Onto a smart view, from the row in the sidebar that stands for it. A smart view is a standing
+    // selection of tasks and not a project's board, so opening one is a move of its own: what the row
+    // says before it is pressed and what the press lands on are two claims about the same view, and
+    // only a road that makes the move between them can hold one to the other.
+    //
+    // A screen road alone. A terminal has no standing selection to press — it writes the selection out
+    // as a `--filter` each time it asks, which is what `listed` walks.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "open-view", required: &["view"], refs: &[], strings: &["view"], binds: false },
     // A project's own life: its fields, where it sits in the list, and whether it is still in play.
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "create", required: &["name"], refs: &[], strings: &["name"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "update", required: &["target"], refs: &["target"], strings: &["name", "notes", "view"], binds: false },
@@ -1159,6 +1167,19 @@ const REGISTRY: &[OpSpec] = &[
     // Which bucket of the "what to do now" view a task lands in (`overdue` / `due_today` /
     // `in_progress`) — the view is assembled from days, so the bucket is not the task's status field.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "status-bucket", required: &["target", "bucket"], refs: &["target"], strings: &["bucket"], binds: false },
+    // What a smart view's row says before anyone opens it: how much stands on one of the steps it warns
+    // on, read off the badge beside its name. `step` is the ladder's own word for what a colour asks of
+    // the reader (`stop` / `heed`) rather than the colour itself, so a road is written against a
+    // meaning and not against a palette. `count: 0` is the other half of the claim — a step with
+    // nothing on it draws no badge at all, which is what keeps a quiet row quiet.
+    //
+    // A screen road alone. Being told without asking is the whole subject, and a terminal is only ever
+    // asked; what it answers when asked is `status-bucket`'s.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "view-warns", required: &["view", "step", "count"], refs: &[], strings: &["view", "step"], binds: false },
+    // And what that view holds once it is opened. Apart from `listed`, whose filter the road writes
+    // out: a smart view carries a selection of its own, so what is under test is that selection
+    // agreeing with the warning the row gave — never a filter the road could have spelled to match.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "view-lists", required: &["target", "view"], refs: &["target"], strings: &["view"], binds: false },
     // The three faces the store shows of itself, each a dotted path into what that read prints:
     // `config` its settings, `identity` the name and the hardware it was raised on, `update` what a
     // check for a newer build comes back with.

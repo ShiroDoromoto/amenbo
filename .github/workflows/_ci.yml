@@ -55,11 +55,11 @@ env:
 jobs:
   # Path gate for the build/test jobs: run each only when a change can affect it.
   #
-  # `rust` (gates the workspace's clippy+test jobs, the e2e job beside each of
-  # them, and the host crate's) is a positive allowlist of the Rust
-  # build inputs: the workspace crates, the manifests/lockfile, the toolchain +
-  # lint + nextest config, .cargo/, the out-of-workspace Tauri host crate
-  # (app/src-tauri), and this workflow. A change confined to relay/ or docs (or
+  # `rust` (gates the workspace's test jobs, the e2e job beside each of them, the
+  # lint jobs that judge the source once, and the host crate's) is a positive
+  # allowlist of the Rust build inputs: the workspace crates, the
+  # manifests/lockfile, the toolchain + lint + nextest config, .cargo/, the
+  # out-of-workspace Tauri host crate (app/src-tauri), and this workflow. A change confined to relay/ or docs (or
   # any non-Rust tree) matches none of these, so the Rust suite is skipped.
   #
   # `gui` (gates gui-web) is a positive allowlist of every front-end build input:
@@ -120,7 +120,7 @@ jobs:
           filters: .github/paths-filters.yml
 
   rust:
-    name: cargo clippy + test
+    name: cargo test
     runs-on: ubuntu-latest
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' }}
@@ -128,9 +128,10 @@ jobs:
       - uses: actions/checkout@v7
 
       # rust-toolchain.toml pins the channel (1.96.0) and components
-      # (rustfmt/clippy); rustup installs them on the first cargo invocation.
+      # (rustfmt/clippy); rustup installs them on the first cargo invocation, which is what this
+      # step is for — rust-cache below reads the rustc version.
       - name: Show toolchain
-        run: rustc --version && cargo clippy --version
+        run: rustc --version && cargo --version
 
       # rust-cache over a hand-rolled actions/cache: it caches only reusable
       # dependency artifacts (not this workspace's own crates, which change every
@@ -141,15 +142,17 @@ jobs:
       #
       # `shared-key` puts every job that builds this workspace on one cache entry per
       # platform. Without it the key carries the job id, so each job fills a cache of its own
-      # — and the four here (this one, rust-e2e, and the two mac-win legs) compile the same
-      # dependencies from the same lockfile with the same features, which was 774MB of the
-      # repository's 10GB cache budget spent storing one answer four times, and a new job
-      # starting from nothing every time one was added.
+      # — and the six here (this one, rust-e2e, lint, and their three mac-win counterparts)
+      # compile the same dependencies from the same lockfile, which when there were four of them
+      # was 774MB of the repository's 10GB cache budget spent storing one answer four times, and
+      # a new job starting from nothing every time one is added.
       #
-      # This job is the one that saves. It is the widest build of the four — clippy over all
-      # targets and all features — so what it stores covers what the others need, and the
-      # readers below take it with `save-if: false` rather than racing to upload the same
-      # bytes and having the loser's upload rejected.
+      # This job is the one that saves, and what it stores is the dependency build every reader
+      # wants. It is no longer the widest build — `lint` builds all targets under all features —
+      # but the three features this workspace declares (`e2e`, `scale`, `scale-heavy`) are empty
+      # markers that gate targets rather than pull crates, so both feature sets resolve to one
+      # dependency graph. The readers take it with `save-if: false` rather than racing to upload
+      # the same bytes and having the loser's upload rejected.
       #
       # `SAVE_CACHE` (top of this file) narrows that to a run on main: on a PR this job restores
       # main's entry like the readers do, and saves nothing.
@@ -167,20 +170,10 @@ jobs:
         with:
           tool: cargo-nextest
 
-      # -D clippy::disallowed_methods enforces the facet env funnel (clippy.toml):
-      # raw std::env::var/var_os is banned outside amenbo_core::env so a facet can
-      # never silently fall back to human from a new call site. `--all-features`
-      # lints the feature-gated targets too (scale/e2e tests, the gated `sharing`
-      # surface) so they can't rot — required-features targets are invisible to a
-      # plain `--all-targets` build.
-      - name: Clippy (all targets, all features)
-        run: cargo clippy --all-targets --all-features -- -D warnings -D clippy::disallowed_methods
-
       # The everyday test run skips the feature-gated heavy suites (read_scaling_guard
       # behind `scale`, the cli_e2e_* slices behind `e2e`) so local runs stay sub-second; CI MUST
-      # enable them or those guards silently rot. NOT `--all-features`: that would also turn on
-      # `sharing`, flipping the CLI out of personal mode and breaking their P1 assertions.
-      # Enable scale+e2e only. `scale` (not `scale-heavy`) seeds read_scaling_guard at a *medium*
+      # enable them or those guards silently rot. Enable scale+e2e only, and not `--all-features`:
+      # `scale` (not `scale-heavy`) seeds read_scaling_guard at a *medium*
       # store and runs only its deterministic O(result) ratio guards — the full 10k seed + the
       # wall-clock guards run nightly via scale-heavy-nightly.yml, off the PR path. The `ci` profile
       # (.config/nextest.toml) runs every test to completion (no fail-fast) so one failure doesn't
@@ -191,19 +184,6 @@ jobs:
       # by prefix so a new one lands on the right side of the line without either job being touched.
       - name: Test (feature-gated scale suites + everything else)
         run: cargo nextest run --profile ci --features scale,e2e -E 'not binary(/^cli_e2e/)'
-
-      # nextest does NOT run doctests; run them separately so a future `/// ```rust`
-      # example can't silently skip CI. Today there are none (only ```text blocks), so
-      # this is a near-instant honesty backstop, not a cost.
-      - name: Doctests
-        run: cargo test --doc --features scale,e2e
-
-      # Whether doc comments point at a symbol that does not exist. An intra-doc link to a removed
-      # function sends the reader to code that is not there, so stop it mechanically rather than by
-      # prose discipline. Links to private items are allowed on the crate side (a doc reader sees
-      # private too) = all that fails here is a broken link.
-      - name: Doc links
-        run: RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
 
   # The e2e half of the suite, on a runner of its own. The rest of it is the `rust` job above, and
   # neither half asserts anything the other decides — so the gate's wait is the longer of the two and
@@ -217,10 +197,10 @@ jobs:
   # each half report its whole picture: the `ci` profile runs every test to completion, and one job
   # going red says nothing about whether the other one ran.
   #
-  # No clippy and no doc steps here: those judge the tree once, in the `rust` job, and a second
-  # verdict on the same source would only cost a run. The feature set matches (`scale,e2e`), so this
-  # job builds the same dependencies the `rust` job does and reads its cache rather than filling one
-  # of its own.
+  # No clippy and no doc steps here: those judge the tree once, in the `lint` job, which is where
+  # every verdict that is about the source rather than about a test run now lives. The feature set
+  # matches (`scale,e2e`), so this job builds the same dependencies the `rust` job does and reads its
+  # cache rather than filling one of its own.
   rust-e2e:
     name: cargo test (CLI e2e)
     runs-on: ubuntu-latest
@@ -257,13 +237,16 @@ jobs:
   # on every change that can reach them. The host crate's other half is gated the same way, by
   # app-rust-mac-win below.
   #
-  # It mirrors the `rust` job's clippy and test steps and stops there. The doc steps (doctests, doc
-  # links) stay on Linux: almost every doc comment in the tree is outside an OS branch, so a third
-  # rustdoc run would re-read what one has already judged. What that leaves out is a doc link
-  # written inside a `cfg`-gated item — no platform but its own can resolve it — and that sliver is
-  # accepted rather than paid for with a rustdoc run per OS on every change.
+  # It mirrors the `rust` job's test step and stops there. Clippy is the `lint` / `lint-mac-win`
+  # pair, which between them cover all three platforms for the same reason this job exists — a
+  # `cfg`-gated branch is invisible to the compiler that walks past it, and so is the lint on what
+  # is inside it. The doc steps stay on Linux alone:
+  # almost every doc comment in the tree is outside an OS branch, so a third rustdoc run would
+  # re-read what one has already judged. What that leaves out is a doc link written inside a
+  # `cfg`-gated item — no platform but its own can resolve it — and that sliver is accepted rather
+  # than paid for with a rustdoc run per OS on every change.
   rust-mac-win:
-    name: cargo clippy + test (${{ matrix.os }})
+    name: cargo test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' }}
@@ -314,20 +297,22 @@ jobs:
       #
       # rust-cache's key covers the cargo environment, so this renames the Windows entry: the first
       # run on main after it lands rebuilds from nothing (727s, measured on this workflow) and every
-      # run after that reads the new entry. The two legs below set the same variable in the same
-      # place, one of them because it reads the entry this job saves.
+      # run after that reads the new entry. The three legs below set the same variable in the same
+      # place, two of them because they read the entry this job saves.
       - name: Trim the dev profile's debug info to line tables
         if: ${{ runner.os == 'Windows' }}
         shell: pwsh
         run: echo "CARGO_PROFILE_DEV_DEBUG=line-tables-only" >> $env:GITHUB_ENV
 
       - name: Show toolchain
-        run: rustc --version && cargo clippy --version
+        run: rustc --version && cargo --version
 
-      # One entry per platform, shared with rust-e2e-mac-win the way the `rust` job shares with
-      # rust-e2e — the key carries the OS and arch, so this saves the mac one and the Windows one and
-      # the Linux job's entry is untouched. This leg is the saver on both, for the same reason: its
-      # all-features clippy is the widest build of the two — and on main alone (`SAVE_CACHE`).
+      # One entry per platform, shared with rust-e2e-mac-win and lint-mac-win the way the `rust` job
+      # shares with rust-e2e and lint — the key carries the OS and arch, so this saves the mac one
+      # and the Windows one and the Linux job's entry is untouched. This leg is the saver on both,
+      # for the same reason the `rust` job is on Linux: the features are empty markers, so the
+      # dependency build it stores is the one every reader on this platform wants — and on main
+      # alone (`SAVE_CACHE`).
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
@@ -339,9 +324,6 @@ jobs:
         with:
           tool: cargo-nextest
 
-      - name: Clippy (all targets, all features)
-        run: cargo clippy --all-targets --all-features -- -D warnings -D clippy::disallowed_methods
-
       # Same line, and the same reason, as the `rust` job: the e2e slices are the `rust-e2e-mac-win`
       # job below, and this one holds the rest of the suite.
       - name: Test (feature-gated scale suites + everything else)
@@ -352,8 +334,8 @@ jobs:
   # test runs are the slowest of their kind in the workflow, so taking either one off the critical
   # path is worth minutes rather than seconds.
   #
-  # It mirrors the e2e step and the OpenSSL build's perl, and stops there — clippy and the doc steps
-  # belong to the jobs that hold the other half.
+  # It mirrors the e2e step and the OpenSSL build's perl, and stops there — clippy belongs to
+  # `lint-mac-win` and the doc steps to `lint`, neither of which is about a test run.
   rust-e2e-mac-win:
     name: cargo test (CLI e2e, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -410,6 +392,103 @@ jobs:
 
       - name: Test (the CLI e2e suites)
         run: cargo nextest run --profile ci --features scale,e2e -E 'binary(/^cli_e2e/)'
+
+  # Every verdict on the source itself, in one job: clippy, the doctests, and the intra-doc links.
+  # It is here rather than inside the test jobs because a lint riding along with tests is run once
+  # per test job, and the test jobs are split — by suite already, and by shard next.
+  # That is the same verdict on the same tree, paid for N times. A job that runs tests runs tests.
+  #
+  # It reads the `rust` job's entry and saves nothing: same workspace, same lockfile, and the same
+  # dependency graph (the features are empty markers), so the entry that job stores is the one this
+  # one wants.
+  lint:
+    name: clippy + doctests + doc links
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # rust-toolchain.toml pins the channel and components (rustfmt/clippy); rustup installs them on
+      # the first cargo invocation, which is what this step is for — rust-cache below reads the rustc
+      # version.
+      - name: Show toolchain
+        run: rustc --version && cargo clippy --version
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: workspace
+          save-if: false
+
+      # -D clippy::disallowed_methods enforces the facet env funnel (clippy.toml):
+      # raw std::env::var/var_os is banned outside amenbo_core::env so a facet can
+      # never silently fall back to human from a new call site. `--all-features`
+      # lints the feature-gated targets too (the scale and e2e suites) so they can't
+      # rot — required-features targets are invisible to a plain `--all-targets` build.
+      - name: Clippy (all targets, all features)
+        run: cargo clippy --all-targets --all-features -- -D warnings -D clippy::disallowed_methods
+
+      # nextest does NOT run doctests; run them separately so a `/// ```rust` example can't
+      # silently skip CI. The tree carries one (amenbo-static-host) and ```text blocks
+      # everywhere else, so this is a near-instant honesty backstop, not a cost.
+      - name: Doctests
+        run: cargo test --doc --features scale,e2e
+
+      # Whether doc comments point at a symbol that does not exist. An intra-doc link to a removed
+      # function sends the reader to code that is not there, so stop it mechanically rather than by
+      # prose discipline. Links to private items are allowed on the crate side (a doc reader sees
+      # private too) = all that fails here is a broken link.
+      - name: Doc links
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --document-private-items
+
+  # Clippy on the two platforms Linux cannot lint for. The reason is the one that puts `rust-mac-win`
+  # in this workflow at all: a `target_os = "macos"` or `cfg(windows)` branch is walked past by every
+  # other compiler, so a lint that runs only on Linux has never read the code inside it. The doc
+  # steps stay on the Linux leg alone — see `rust-mac-win` for why that sliver is accepted.
+  #
+  # Reads `rust-mac-win`'s entry for its platform and saves nothing, the same arrangement as `lint`
+  # on Linux.
+  lint-mac-win:
+    name: clippy (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: changes
+    if: ${{ needs.changes.outputs.rust == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+
+      # Same reason, and the same wording, as `rust-mac-win` above: rusqlite's vendored SQLCipher
+      # builds OpenSSL from source, openssl-src configures it through perl, and the perl a step
+      # resolves on Windows may be MSYS2's, which dies in ./Configure. A step rather than the job's
+      # `env` because the variable must be ABSENT on macOS, not empty.
+      - name: Name the runner's Strawberry Perl for the OpenSSL build
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: echo "OPENSSL_SRC_PERL=C:/Strawberry/perl/bin/perl.exe" >> $env:GITHUB_ENV
+
+      # Same line, and the same reason, as `rust-mac-win` above — and here it is also what keeps this
+      # job on that job's cache entry, the variable being part of the key.
+      - name: Trim the dev profile's debug info to line tables
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: echo "CARGO_PROFILE_DEV_DEBUG=line-tables-only" >> $env:GITHUB_ENV
+
+      - name: Show toolchain
+        run: rustc --version && cargo clippy --version
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: workspace
+          save-if: false
+
+      # The same lint contract as the Linux leg, on the branches only this platform compiles.
+      - name: Clippy (all targets, all features)
+        run: cargo clippy --all-targets --all-features -- -D warnings -D clippy::disallowed_methods
 
   # The pre-distribution verification harness (verification/) is its own cargo workspace, OUTSIDE
   # the main one, so the `rust` job above — which drives the default (main) manifest — never
@@ -965,6 +1044,8 @@ jobs:
       - rust-e2e
       - rust-mac-win
       - rust-e2e-mac-win
+      - lint
+      - lint-mac-win
       - verification
       - verification-macos
       - gui-web

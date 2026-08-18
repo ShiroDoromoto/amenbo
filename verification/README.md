@@ -409,7 +409,7 @@ the roads start from), and an ordered list of steps
 under `steps_cli` and/or `steps_gui`. Each step is an `action` (changes state) or an
 `assert` (an expected result), names the `domain` it touches (`task` / `decision` /
 `comment` / `project` / `dimension` / `attachment` / `store` / `folder` / `repo` / `plugin` /
-`mcp`) and an
+`mcp` / `tick`) and an
 `op`, and carries named args under `with`. An action may bind its result with `as:`, and a later step
 refers back to it with `target:` — an op that joins two objects names the second under its own key
 (`decision link`'s `task:`), and every such key is checked back to an earlier binding, not just
@@ -469,6 +469,16 @@ for the rest of the road, `call` calls a tool on it with the words a caller send
 has a conversation where a command has an exit code — the server outlives the step that stood it, and
 a tool that ran and refused comes back as a *result* marked in error rather than as a transport fault,
 which is what an assert there is written against.
+
+And one is nobody typing at all. **`tick`** is the machine's own scheduler starting amenbo once an
+hour, and what amenbo works out once it is awake: `woken` carries out one turn and judges what came
+back, which is the whole of what a scheduler ever gets — a tick leaves a day mark and nothing else a
+reader can ask for, so being woken *is* the reading. `holds` reads whether the scheduler is holding
+the registration. **Nothing there writes one.** A registration lands outside the throwaway store a
+run makes, in the launchd, systemd or Task Scheduler of whichever machine the gate is running on, so
+a road that walked it would leave an hourly timer on a release box —
+`be-offered-a-start-at-login` draws the same line for the login registration, and that half is
+walked on the real machines.
 
 A few ops exist to put something **wrong**, because a repair cannot be shown working over a store
 where there is nothing to repair — and a sweep that sweeps nothing looks exactly like one that works.

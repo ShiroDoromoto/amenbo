@@ -18,3 +18,4 @@ pub(crate) mod project;
 pub(crate) mod repo;
 pub(crate) mod store;
 pub(crate) mod task;
+pub(crate) mod tick;

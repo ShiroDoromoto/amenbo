@@ -453,6 +453,9 @@ impl<'a> Driver<'a> {
             Domain::Repo => self.repo_action(op, with),
             Domain::Plugin => self.plugin_action(op, with, bind),
             Domain::Mcp => self.mcp_action(op, with),
+            // Nothing here writes a registration into the machine the gate is running on — see
+            // `domain::tick` — so the wake-up carries no action of its own.
+            Domain::Tick => Err(unmapped(domain, op)),
         }
     }
 
@@ -477,6 +480,7 @@ impl<'a> Driver<'a> {
             Domain::Repo => self.repo_assert(op, with),
             Domain::Plugin => self.plugin_assert(op, with),
             Domain::Mcp => self.mcp_assert(op, with),
+            Domain::Tick => self.tick_assert(op, with),
         }
     }
 

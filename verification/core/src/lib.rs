@@ -181,6 +181,11 @@ pub enum Domain {
     /// protocol — a server standing for one folder, the tools it publishes, and what a call through
     /// one comes back with — and none of that is a record in the store.
     Mcp,
+    /// The hourly wake-up: the machine's own scheduler starting amenbo, and what amenbo works out
+    /// once it is awake. A domain of its own because nobody is at the keyboard for any of it — the
+    /// caller is the scheduler, the occasion is a calendar day, and what comes of it leaves through
+    /// the outbox rather than onto a screen.
+    Tick,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1583,6 +1588,20 @@ const REGISTRY: &[OpSpec] = &[
     // model reads the refusal instead of the host swallowing it. `contains` is the words that refusal
     // — or that answer — has to carry, since a road about a door being shut is about which door.
     OpSpec { kind: Kind::Assert, domain: Domain::Mcp, op: "answered", required: &[], refs: &[], strings: &["contains"], binds: false },
+    // ── the hourly wake-up ────────────────────────────────────────────────────────────────────────
+    // Being woken is the whole of what a tick does, and what it reports on the way past is the whole
+    // of what can be read about it: the day mark it leaves behind has no face of its own, and asking
+    // for one would be a command written for this harness rather than for a reader. So the wake is
+    // the assert — it carries out one hour's turn and judges what came back, which is exactly what a
+    // scheduler would have got.
+    OpSpec { kind: Kind::Assert, domain: Domain::Tick, op: "woken", required: &["purpose", "carried_out"], refs: &[], strings: &["purpose"], binds: false },
+    // What the scheduler is holding, read and never written. **No op here registers one**: a
+    // registration is written outside the throwaway store this run makes — into the launchd, systemd
+    // or Task Scheduler of whatever machine the gate is running on — and a road that left one behind
+    // would leave an hourly timer on a release box. `be-offered-a-start-at-login` draws the same line
+    // for the login registration. The half that registers is walked on the real machines.
+    OpSpec { kind: Kind::Assert, domain: Domain::Tick, op: "holds", required: &["registered"], refs: &[], strings: &[], binds: false },
+
 ];
 
 fn lookup(kind: Kind, domain: Domain, op: &str) -> Option<&'static OpSpec> {

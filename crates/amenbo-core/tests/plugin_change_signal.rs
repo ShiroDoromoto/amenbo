@@ -123,15 +123,38 @@ fn it_fires_for_the_changes_no_semantic_event_names() {
 
 /// A write that changed nothing signals nothing. The signal rides the change feed's drain, so "no rows
 /// moved" and "no signal" are the same fact — a reader is never sent re-reading by a no-op.
+///
+/// **The clock is moved on first, and that is the whole test.** A stamp is kept to the second, so a
+/// no-op that composed the row anyway would come out identical to what is already stored — and pass
+/// here — for as long as both calls land inside one second. Crossing the boundary is what asks the
+/// question: with `updated_at` now different, anything that writes the row back moves a column, and one
+/// column moved is a feed row, a project version and a signal. Left to chance it is a test that passes
+/// on a fast machine and fails on a slow one, which is what it did.
 #[test]
 fn a_write_that_changed_nothing_signals_nothing() {
     let mut store = temp_store();
     let project = store.project_add(new_project("PJ")).unwrap().id;
     let task = filed(&mut store, new_task("タスク", project));
+    wait_out_the_second();
 
     let h = head(&store);
     store.finish_task_creation(task, ActorKind::Ai).unwrap();
     assert!(signals(&store, h).is_empty(), "a creation already over moved nothing");
+}
+
+/// Wait until the wall clock's second has ticked over. Under a second, and only in the one test whose
+/// subject it is.
+fn wait_out_the_second() {
+    let second = || {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("the clock is past the epoch")
+            .as_secs()
+    };
+    let start = second();
+    while second() == start {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
 }
 
 /// One transaction, one signal per project — never one per row it touched. A task delete carries its

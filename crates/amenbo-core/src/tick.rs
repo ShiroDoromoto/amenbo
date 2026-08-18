@@ -27,8 +27,8 @@
 //! of the OS would leave amenbo claiming a timer that is not there. The two meet in exactly one place,
 //! [`fix_for`].
 //!
-//! **What goes inside a registration is per-OS.** A plist, a scheduler task and a systemd unit are not
-//! one shape with three spellings, so each OS gets its own door ([`platform`]). Three points from
+//! **What goes inside a registration is not here.** A plist, a scheduler task and a systemd unit are
+//! not one shape with three spellings, so each OS writes its own, and the build picks one. Three points from
 //! `AMB-D-707` are not writing style but whether the premise holds at all, and every door has to meet
 //! them: macOS registers through `SMAppService` so the row carries amenbo's name rather than the
 //! developer's; all three need the missed-run setting turned on explicitly, none having it by default;
@@ -122,8 +122,12 @@ pub fn fix_for(consent: Option<TickConsent>, registered: bool) -> TickFix {
 /// False is not a failure and not a refusal to answer: it is the honest state of a target amenbo has
 /// not learned to register on, and every face here says so rather than half-doing the work. While it is
 /// false [`probe`] is `false`, and [`register`] and [`unregister`] refuse.
+///
+/// It is a fact about the **build**, not about the machine: a Linux without systemd on it still has a
+/// door compiled in, and what it does not have is something behind the door — which is [`probe`]'s
+/// answer and the writes' refusal, said where the machine is actually asked.
 pub fn available() -> bool {
-    platform::available()
+    platform::AVAILABLE
 }
 
 /// Can *this process* work the door, or only a differently-launched one?
@@ -149,6 +153,7 @@ pub fn reachable_from_here() -> bool {
 pub fn relaunch_target() -> Option<std::path::PathBuf> {
     platform::relaunch_target()
 }
+
 
 
 /// Is the scheduler holding amenbo's tick right now? Read from the OS, every time — never from the
@@ -282,169 +287,28 @@ fn run_over(store: &Store, day: NaiveDate, purposes: &[Purpose]) -> Result<Repor
     Ok(report)
 }
 
-/// The door into this machine's scheduler: `SMAppService`, over an agent plist carried in the app
-/// bundle (`AMB-D-707`).
-///
-/// **Why the bundle and not `~/Library/LaunchAgents`.** A plist written straight into that directory
-/// belongs to no bundle, so macOS files it as a legacy agent and lists it under the developer's name
-/// (`AMB-D-549`). A user looking for amenbo in their settings does not find it, and `AMB-D-707`'s
-/// "one row, and switching it off stops everything" goes with it. An agent registered through
-/// `SMAppService` is listed under the app.
-///
-/// **The cost is that only the bundle can open the door.** `SMAppService` reads the plist out of the
-/// *calling process's* main bundle, and a process launched through the symlink that puts the CLI on
-/// `PATH` has no main bundle to read from — macOS resolves it to the directory the symlink sits in,
-/// not to the app the symlink points into. Hence [`reachable_from_here`]: from inside the bundle the
-/// three faces work, and from outside it a caller re-launches the bundle's own executable and asks
-/// again ([`crate::tick::reachable_from_here`]).
-#[cfg(target_os = "macos")]
-mod platform {
-    use std::path::PathBuf;
-
-    use objc2_foundation::{NSBundle, NSString};
-    use objc2_service_management::{SMAppService, SMAppServiceStatus};
-
-    use crate::error::{Error, Result};
-
-    /// The agent plist's name inside the bundle, under `Contents/Library/LaunchAgents/`. It is what
-    /// `SMAppService` is asked for, and the file itself carries the schedule — bundled, so signed,
-    /// so fixed at build time. `AMB-D-707` is what makes that harmless: the tick is plain and hourly,
-    /// and there is no reason for a build to want a different cadence than the one before it.
-    const PLIST: &str = "work.amenbo.tick.plist";
-
-    /// Where the plist sits, relative to the bundle root — the one path this module needs to look at
-    /// itself, to answer whether the process is running from inside a bundle that carries it.
-    const PLIST_IN_BUNDLE: &str = "Contents/Library/LaunchAgents/work.amenbo.tick.plist";
-
-    /// `SMAppService` arrived in macOS 13, and the framework holding it is old enough that only the
-    /// class itself can answer whether this system has it.
-    pub(super) fn available() -> bool {
-        objc2::runtime::AnyClass::get(c"SMAppService").is_some()
-    }
-
-    /// The bundle this process was launched from, when it carries our agent plist.
-    fn bundle_with_plist() -> Option<PathBuf> {
-        let path = PathBuf::from(NSBundle::mainBundle().bundlePath().to_string());
-        path.join(PLIST_IN_BUNDLE).is_file().then_some(path)
-    }
-
-    pub(super) fn reachable_from_here() -> bool {
-        available() && bundle_with_plist().is_some()
-    }
-
-    /// This executable, at the path it really sits at, when that path is inside a bundle carrying the
-    /// plist. The symlink that puts the CLI on `PATH` is what has to come off, and that is the whole of
-    /// what this does: launched by the resolved path, the process has the bundle as its main bundle and
-    /// the door opens. `current_exe` on this platform hands back the path the process was launched by,
-    /// symlink and all, so the resolving is asked for here rather than assumed.
-    pub(super) fn relaunch_target() -> Option<PathBuf> {
-        if !available() || bundle_with_plist().is_some() {
-            return None;
-        }
-        let exe = std::fs::canonicalize(std::env::current_exe().ok()?).ok()?;
-        let bundle = exe.ancestors().find(|p| p.extension().is_some_and(|e| e == "app"))?;
-        bundle.join(PLIST_IN_BUNDLE).is_file().then_some(exe)
-    }
-
-    /// The agent, as `SMAppService` names it. Only ever called where [`reachable_from_here`] holds.
-    fn service() -> objc2::rc::Retained<SMAppService> {
-        unsafe { SMAppService::agentServiceWithPlistName(&NSString::from_str(PLIST)) }
-    }
-
-    /// What a caller outside the bundle is told. It names the process that has to ask rather than a
-    /// command to type, because which one that is depends on who is asking.
-    fn out_of_bundle() -> Error {
-        Error::invalid(
-            "the hourly tick is registered by amenbo.app itself, and this process is not running from inside it",
-        )
-    }
-
-    pub(super) fn probe() -> Result<bool> {
-        if !reachable_from_here() {
-            return Err(out_of_bundle());
-        }
-        // Enabled is the only status that means the tick actually fires. A user who switches the row
-        // off in System Settings leaves one that is neither enabled nor gone, and what they can see is
-        // off — the same reading the login registration takes (`AMB-D-546`).
-        Ok(unsafe { service().status() } == SMAppServiceStatus::Enabled)
-    }
-
-    pub(super) fn register() -> Result<()> {
-        if !reachable_from_here() {
-            return Err(out_of_bundle());
-        }
-        let service = service();
-        match unsafe { service.registerAndReturnError() } {
-            Ok(()) => Ok(()),
-            // Registering what is already registered is answered as a failure by macOS, and is not
-            // one: what the caller wanted is what the OS holds. Only a status that disagrees is an
-            // error — which is what makes this idempotent.
-            Err(_) if unsafe { service.status() } == SMAppServiceStatus::Enabled => Ok(()),
-            Err(e) => Err(Error::invalid(format!(
-                "the hourly tick could not be registered: {}",
-                e.localizedDescription()
-            ))),
-        }
-    }
-
-    pub(super) fn unregister() -> Result<()> {
-        if !reachable_from_here() {
-            return Err(out_of_bundle());
-        }
-        let service = service();
-        match unsafe { service.unregisterAndReturnError() } {
-            Ok(()) => Ok(()),
-            // The mirror of register's: nothing registered is the state the caller asked for.
-            Err(_) if unsafe { service.status() } != SMAppServiceStatus::Enabled => Ok(()),
-            Err(e) => Err(Error::invalid(format!(
-                "the hourly tick could not be taken away: {}",
-                e.localizedDescription()
-            ))),
-        }
-    }
-}
-
-/// The door into this machine's scheduler, on the targets that have none written yet.
+/// The door into this machine's scheduler, chosen for the target being built.
 ///
 /// What goes into a registration is per-OS in a way the rest of this module is deliberately not — the
-/// Windows task has to be built from XML because `schtasks` carries no flag for the battery gates, and
-/// Linux writes a pair of user units — so each door lands with the OS that needs it (`AMB-T-3254` /
-/// `AMB-T-3255`) rather than being guessed at from here.
-#[cfg(not(target_os = "macos"))]
-mod platform {
-    use crate::error::{Error, Result};
+/// plist macOS wants is written by the app bundle through `SMAppService`, the Windows task has to be
+/// built from XML because `schtasks` has no flag for the battery gates, and Linux writes a pair of
+/// systemd user units — so each door lands with the OS that needs it (`AMB-T-3254`) rather than being
+/// guessed at from here. A target with no door yet answers through `nodoor`, which is the honest state
+/// and not a half-written one.
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "macos")]
+use macos as platform;
 
-    /// What every face here says while there is no door: the plain fact, and no hint, because there is
-    /// nothing the reader could type to fix it.
-    const NO_DOOR: &str = "amenbo cannot register the hourly tick on this system yet";
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "linux")]
+use linux as platform;
 
-    pub(super) fn available() -> bool {
-        false
-    }
-
-    /// Nothing is out of reach on a target where nothing is in reach: the honest answer about *where*
-    /// the door can be opened from is that there is no door, which [`available`] already says.
-    pub(super) fn reachable_from_here() -> bool {
-        false
-    }
-
-    /// There is nothing to launch that would answer differently.
-    pub(super) fn relaunch_target() -> Option<std::path::PathBuf> {
-        None
-    }
-
-    pub(super) fn probe() -> Result<bool> {
-        Ok(false)
-    }
-
-    pub(super) fn register() -> Result<()> {
-        Err(Error::invalid(NO_DOOR))
-    }
-
-    pub(super) fn unregister() -> Result<()> {
-        Err(Error::invalid(NO_DOOR))
-    }
-}
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+mod nodoor;
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+use nodoor as platform;
 
 #[cfg(test)]
 mod tests {
@@ -478,8 +342,8 @@ mod tests {
 
     /// With no door on this target, the state is readable and the two writes refuse — the reason a
     /// caller can say so, rather than reporting a registration that was never written.
-    #[cfg(not(target_os = "macos"))]
     #[test]
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     fn a_target_with_no_door_answers_rather_than_pretending() {
         assert!(!available());
         assert!(!reachable_from_here());
@@ -488,14 +352,25 @@ mod tests {
         assert!(unregister().is_err());
     }
 
-    /// macOS has the door, and a test binary is exactly the caller that cannot open it: it runs from
-    /// the target directory rather than from inside the app bundle the plist is carried in. All three
-    /// faces refuse rather than answering about a bundle they are not in — including the read, whose
-    /// alternative would be reporting "nothing registered" about a machine it never asked.
-    #[cfg(target_os = "macos")]
+    /// And on a target that has one, the reading still answers — with nothing held, on a machine that
+    /// was never asked to hold anything. What the writes do is the machine's to decide, so they are not
+    /// called here: a build box is not a place to register a timer on.
     #[test]
+    #[cfg(target_os = "linux")]
+    fn a_target_with_a_door_reads_the_scheduler_without_writing_to_it() {
+        assert!(available());
+        assert!(reachable_from_here());
+        assert!(!probe().expect("the scheduler has a state to report"));
+    }
+
+    /// macOS has the door, and a test binary is exactly the caller that cannot open it: it runs from the
+    /// target directory rather than from inside the app bundle the plist is carried in. All three faces
+    /// refuse rather than answering about a bundle they are not in — including the read, whose
+    /// alternative would be reporting "nothing registered" about a machine it never asked.
+    #[test]
+    #[cfg(target_os = "macos")]
     fn the_bundles_door_does_not_open_for_a_process_outside_it() {
-        assert!(available(), "every macOS this builds for has SMAppService");
+        assert!(available());
         assert!(!reachable_from_here());
         assert!(probe().is_err());
         assert!(register().is_err());

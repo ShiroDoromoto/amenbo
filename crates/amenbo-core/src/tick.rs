@@ -157,10 +157,10 @@ pub struct Purpose {
 
 /// Every purpose a tick carries out, in the order it carries them out.
 ///
-/// Empty: the entry is here and nothing has been declared into it yet. A tick over an empty table is not a
-/// wasted one — it still works the queues, which is the half that has to happen whether or not there was
-/// anything to say (`AMB-D-706`).
-pub const PURPOSES: &[Purpose] = &[];
+/// A tick that finds nothing owed is not a wasted one — it still works the queues, which is the half that
+/// has to happen whether or not there was anything to say (`AMB-D-706`).
+pub const PURPOSES: &[Purpose] =
+    &[Purpose { id: crate::due::PURPOSE, run: crate::due::emit }];
 
 /// What became of one purpose's turn for a day.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -227,8 +227,8 @@ pub fn run(store: &Store, day: NaiveDate) -> Result<Report> {
 }
 
 /// [`run`] with the table said out loud — the testable half, the way the nudges split. What this build
-/// ships is [`PURPOSES`]; the walk over a table is what a test has to be able to drive, and an empty
-/// declaration table would otherwise leave the walk unread.
+/// ships is [`PURPOSES`], and what the walk does with a purpose that failed, or one whose turn is already
+/// taken, is answered by driving a table the test wrote rather than by whatever happens to be declared.
 fn run_over(store: &Store, day: NaiveDate, purposes: &[Purpose]) -> Result<Report> {
     let mut report = Report::default();
     for purpose in purposes {

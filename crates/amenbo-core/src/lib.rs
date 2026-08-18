@@ -18,6 +18,7 @@ pub mod blob;
 pub mod build_stamp;
 pub mod config;
 pub mod doctor;
+pub mod due;
 pub mod env;
 pub mod error;
 pub mod hooks;

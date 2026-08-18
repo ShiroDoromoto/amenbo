@@ -1,4 +1,5 @@
-//! `tick`: the hourly wake-up the OS scheduler starts amenbo through, and what it reports for it.
+//! `tick run`: the hourly wake-up the scheduler starts amenbo through, and what it reports for it.
+//! Its siblings — the answer, and the registration the answer stands beside — are `setup`'s.
 
 use serde_json::json;
 
@@ -13,7 +14,7 @@ use crate::output::{human, print_json, CliError, Flags};
 /// this process, and a scheduler keeps what a run wrote and what it exited with. Delivery is not held to
 /// that — a failed run is dropped rather than retried, and the execution log is where each one's outcome is
 /// written (`AMB-D-399`, `AMB-D-361`).
-pub(crate) fn tick_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
+pub(crate) fn tick_run_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
     let day = amenbo_core::time::today();
     let report = amenbo_core::tick::run(store, day).map_err(CliError::from)?;
 
@@ -25,7 +26,7 @@ pub(crate) fn tick_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
     if flags.json {
         print_json(&json!({
             "ok": report.failed.is_empty(),
-            "action": "tick",
+            "action": "tick.run",
             "day": amenbo_core::time::date_to_string(day),
             "ran": report.ran,
             "already_done": report.already_done,

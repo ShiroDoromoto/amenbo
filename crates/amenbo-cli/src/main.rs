@@ -45,10 +45,13 @@ use cmd::outbox::{resume_dispatch, with_dispatch};
 use cmd::place::{binding_project, bound_project, location_header, named_project_flag};
 use cmd::plugin::{PluginsAtEntry, plugin_cmd, plugin_validate_cmd, plugins_for_agent};
 use cmd::project::project;
-use cmd::setup::{agent_hook_answer_cmd, agent_hook_setup, agent_hook_snippet_cmd, hooks_cmd, lint_hook_setup};
+use cmd::setup::{
+    agent_hook_answer_cmd, agent_hook_setup, agent_hook_snippet_cmd, hooks_cmd, lint_hook_setup, tick_cmd,
+    tick_reconcile,
+};
 use cmd::status::{render_discover, render_status};
 use cmd::task::task;
-use cmd::tick::tick_cmd;
+use cmd::tick::tick_run_cmd;
 use cmd::update::{self_rollback_cmd, self_update_cmd, unstamped_line, update_cmd, version_unbound};
 use mcp::mcp_cmd;
 use output::{
@@ -420,6 +423,9 @@ fn uses_facet(cmd: &Option<Command>) -> bool {
         | Command::Whoami
         | Command::Config { .. } // settings live in the user layer, outside any project
         | Command::Bind { .. } // only writes the `.amenbo` pointer
+        // One timer for the machine, answered on the device: it reads and writes a config key and no
+        // store content at all, which is `config`'s class rather than the lint hook's.
+        | Command::Tick { .. }
         | Command::Lint { .. } // reads the text it is handed; no store to reach into
         | Command::GithookPreCommit // the hook's face of `lint`; reads the staged diff, no store
         | Command::GithookCommitMsg { .. } // the hook's face of `lint <file>`; reads the message file, no store
@@ -435,10 +441,6 @@ fn uses_facet(cmd: &Option<Command>) -> bool {
         // nothing, and was handed the store to work (`AMB-T-2175`). So was a plugin calling amenbo back,
         // whose window comes from the gate it fired through rather than from a facet (`AMB-D-406`).
         | Command::PluginRunner { .. }
-        // The hourly tick is woken by the OS scheduler, which is neither a person nor their AI and has no
-        // facet to declare (`AMB-D-706`). It reads no store content on anyone's behalf either: what it
-        // carries out is amenbo's own errand, whose reach is the device rather than a bound project.
-        | Command::Tick
         // `validate` reads a manifest file the author names and touches no store at all — unlike the rest
         // of the group, which moves this machine's plugin state and the plugin's own per-project rows.
         | Command::Plugin { sub: PluginCmd::Validate { .. } } => false,
@@ -481,9 +483,6 @@ fn stamps_facet(cmd: &Option<Command>) -> bool {
         // A runner fires the hooks a facet's own writes already queued; it creates nothing and assigns
         // nothing, so there is no author for it to stamp (`AMB-T-2175`).
         | Command::PluginRunner { .. }
-        // The tick carries out amenbo's own errands and fires the hooks they queued; it creates nothing and
-        // assigns nothing, so there is no author for it to stamp.
-        | Command::Tick
         // The MCP server writes nothing itself; what its tool calls run is a child that stamps its own.
         | Command::Mcp { .. }
         // `validate` reads a manifest file the author names and touches no store at all; the rest of the
@@ -492,6 +491,9 @@ fn stamps_facet(cmd: &Option<Command>) -> bool {
         // to stamp a facet onto.
         | Command::Plugin { .. }
         | Command::Hooks { .. }
+        // The hourly tick's answer: a config key and a registration in the OS, with no author to stamp
+        // and no activity behind it.
+        | Command::Tick { .. }
         // The AI-harness consent, like the lint's: a per-project row that records an answer, with no
         // author to stamp and no activity behind it.
         | Command::AgentHook { .. }
@@ -626,12 +628,12 @@ fn requires_pointer(cmd: &Option<Command>) -> bool {
             | Some(Command::Bind { .. })
             | Some(Command::Version)
             | Some(Command::Update { .. })
-            // The tick is started by the OS scheduler, from whatever directory that scheduler stands in, so
-            // there never is a pointer for it to find and "run init first" would be advice to nobody. What
-            // this guard protects against is met a different way for it: rather than take a missing pointer
-            // as leave to raise a store, `run` looks for the device's store and, finding none, does nothing
-            // at all.
-            | Some(Command::Tick)
+            // The scheduler's own face, started from whatever directory that scheduler stands in, so there
+            // never is a pointer for it to find and "run init first" would be advice to nobody. What this
+            // guard protects against is met a different way for it: rather than take a missing pointer as
+            // leave to raise a store, `run` looks for the device's store and, finding none, does nothing at
+            // all. Its siblings are not here — a person typing `tick install` stands somewhere on purpose.
+            | Some(Command::Tick { sub: TickCmd::Run })
     )
 }
 
@@ -662,10 +664,10 @@ fn nested_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBuf> {
         // it opens no store there. The folder that decides anything is `--dir`, and the child that runs in
         // it meets this guard itself — one answer, given where it is owed.
         | Some(Command::Mcp { .. })
-        // The tick, for the reason `plugin-runner` is: the store it works is this device's, and the folder
-        // its launcher happened to stand in decides nothing about it. Refusing it would stall a delivery
-        // over where a scheduler was configured.
-        | Some(Command::Tick)
+        // The scheduler's face, for the reason `plugin-runner` is: the store it works is this device's, and
+        // the folder its launcher happened to stand in decides nothing about it. Refusing it would stall a
+        // delivery over where a scheduler was configured.
+        | Some(Command::Tick { sub: TickCmd::Run })
         | Some(Command::Unbind { .. }) => None,
         Some(Command::Bind { dir: Some(d), .. })
         | Some(Command::Project { sub: ProjectCmd::Add { dir: d, .. } }) => {
@@ -745,7 +747,7 @@ fn pointer_store_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBu
             | Some(Command::PluginRunner { .. })
             | Some(Command::Plugin { sub: PluginCmd::Validate { .. } })
             | Some(Command::Mcp { .. })
-            | Some(Command::Tick)
+            | Some(Command::Tick { sub: TickCmd::Run })
             | Some(Command::Unbind { .. })
             | Some(Command::Bind { .. })
             | Some(Command::Init { .. })
@@ -898,11 +900,11 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
             .collect();
         return Err(CliError::no_pointer(&candidates));
     }
-    // The tick's own half of that guard, which it is outside of. It resolves no folder, so a missing pointer
-    // says nothing about whether there is anything to do — but it must not be the thing that brings a store
-    // into being either, and `Store::open` below would do exactly that on a device where amenbo has never
-    // been used. Reach for this device's store file directly: no store, nothing owed, nothing to say.
-    if matches!(cli.command, Some(Command::Tick))
+    // The scheduler's own half of that guard, which it is outside of. It resolves no folder, so a missing
+    // pointer says nothing about whether there is anything to do — but it must not be the thing that brings
+    // a store into being either, and `Store::open` below would do exactly that on a device where amenbo has
+    // never been used. Reach for this device's store file directly: no store, nothing owed, nothing to say.
+    if matches!(cli.command, Some(Command::Tick { sub: TickCmd::Run }))
         && !amenbo_core::config::Paths::resolve().map_err(CliError::from)?.store_file.exists()
     {
         return Ok(0);
@@ -964,7 +966,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     if plugin_window.is_none()
         && !matches!(
             cli.command,
-            Some(Command::Plugin { sub: PluginCmd::Flush }) | Some(Command::Tick)
+            Some(Command::Plugin { sub: PluginCmd::Flush }) | Some(Command::Tick { sub: TickCmd::Run })
         )
     {
         resume_dispatch(&store);
@@ -1082,11 +1084,16 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
 
     // The two setups amenbo offers, in the order their questions are put. `hooks` is outside both: its argv
     // already answered the lint's question, and the harness path can record consent, which `hooks status`
-    // promises not to do. So is the tick: a scheduler is nobody to put a question to, and what it does must
-    // not depend on the directory it was started in.
-    if !matches!(cli.command, Some(Command::Hooks { .. }) | Some(Command::Tick)) {
+    // promises not to do. So is the tick group: `tick`'s own argv already answers, and the face the
+    // scheduler calls is nobody to put a question to.
+    if !matches!(cli.command, Some(Command::Hooks { .. }) | Some(Command::Tick { .. })) {
         let lint_asked = lint_hook_setup(&mut store, flags);
         agent_hook_setup(&store, flags, lint_asked);
+    }
+    // The hourly tick settles its own two states here, for the same reason and with the same exception:
+    // `tick`'s argv already says what this would say, and `tick status` promises to only read.
+    if !matches!(cli.command, Some(Command::Tick { .. })) {
+        tick_reconcile(&mut store);
     }
 
     let Some(command) = cli.command else {
@@ -1437,8 +1444,9 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         Command::Restore { .. } => {
             unreachable!("handled before open")
         }
-        Command::Tick => return tick_cmd(&store, flags),
         Command::Hooks { sub } => return hooks_cmd(&mut store, flags, sub),
+        Command::Tick { sub: TickCmd::Run } => return tick_run_cmd(&store, flags),
+        Command::Tick { sub } => return tick_cmd(&mut store, flags, sub),
         // The recording face is the one that needs this folder: the answer is kept against the project
         // it is bound to, so unlike `snippet` it opens the store like any other write.
         Command::AgentHook { sub: AgentHookCmd::Answer { answer } } => {

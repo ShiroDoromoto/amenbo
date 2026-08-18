@@ -336,6 +336,117 @@ fn render_hook_status(
     out
 }
 
+/// `amenbo tick …`: the explicit faces of the hourly tick (`AMB-D-707`), usable whatever the device
+/// answered.
+///
+/// They speak for the whole machine, and there is nothing narrower for them to speak for: one machine
+/// holds one registration, so the lint's split — a device answer with a per-repository opt-out — has no
+/// counterpart here. `install` is a yes and `uninstall` a no, each of them the answer and the
+/// registration in one act.
+///
+/// **The registration is written first, and the answer only after it succeeded.** A scheduler that
+/// refused leaves the answer as it was, so the config never claims a timer that is not there — the same
+/// order the login registration keeps, and for the same reason.
+pub(crate) fn tick_cmd(store: &mut Store, flags: &Flags, sub: TickCmd) -> Result<i32, CliError> {
+    use amenbo_core::tick::{self, TickConsent};
+
+    let cmd = Paths::command_name();
+    match sub {
+        TickCmd::Install => {
+            tick::register().map_err(CliError::from)?;
+            store.config.tick_consent = Some(TickConsent::Yes);
+            let _ = store.save_config();
+            if flags.json {
+                print_json(&json!({ "ok": true, "registered": true, "consent": TickConsent::Yes }));
+            } else {
+                human(flags, format!("tick: registered, once an hour. Not wanted? `{cmd} tick uninstall`."));
+            }
+        }
+        TickCmd::Uninstall => {
+            tick::unregister().map_err(CliError::from)?;
+            store.config.tick_consent = Some(TickConsent::No);
+            let _ = store.save_config();
+            if flags.json {
+                print_json(&json!({ "ok": true, "registered": false, "consent": TickConsent::No }));
+            } else {
+                human(flags, format!("tick: taken away. Register it again any time with `{cmd} tick install`."));
+            }
+        }
+        TickCmd::Status => {
+            let registered = tick::probe().map_err(CliError::from)?;
+            let consent = store.config.tick_consent;
+            if flags.json {
+                print_json(&json!({
+                    "supported": tick::available(),
+                    "registered": registered,
+                    "consent": consent,
+                }));
+            } else {
+                human(flags, render_tick_status(tick::available(), registered, consent, cmd));
+            }
+        }
+        // The scheduler's own face, and the only one of the four that is not about the answer: it carries
+        // the hour out rather than settling what may be registered. `run` dispatches it ahead of this.
+        TickCmd::Run => unreachable!("`tick run` is handled by cmd::tick"),
+    }
+    Ok(0)
+}
+
+/// The two facts, the scheduler's and the answer's, on their own lines — which is the whole point: the
+/// answer is not a mirror of the scheduler, so a reader has to be able to see them disagree. A machine
+/// with no door of ours yet says so on the scheduler's line and nowhere else: the answer is still the
+/// user's to have given, and overwriting it with "unsupported" would lose it.
+fn render_tick_status(
+    supported: bool,
+    registered: bool,
+    consent: Option<amenbo_core::tick::TickConsent>,
+    cmd: &str,
+) -> String {
+    use amenbo_core::tick::TickConsent;
+
+    let scheduler = match (supported, registered) {
+        (false, _) => "not something amenbo can register on this system yet".to_string(),
+        (true, true) => "holding the hourly tick".to_string(),
+        (true, false) => format!("nothing registered (register it: `{cmd} tick install`)"),
+    };
+    let answered = match consent {
+        None => "not asked yet",
+        Some(TickConsent::Yes) => "yes — one timer, for this machine",
+        Some(TickConsent::No) => "no (not asked again; `tick install` still works)",
+    };
+    format!("scheduler: {scheduler}\nthis device: {answered}")
+}
+
+/// Settle the device's answer and the scheduler against each other, once, before the command the user
+/// came for — which is where an upgrade gets the timer pointed at the build running now, and where a
+/// registration the user switched off themselves takes the answer with it.
+///
+/// Everything here is best-effort and silent: the tick is a convenience, and a scheduler that will not
+/// say what it holds leaves both halves as the last run left them, which is the state that was working.
+/// `tick` itself is not routed here — its argv already says what this would ask, and letting it record
+/// an answer would break `tick status`'s promise to only read.
+pub(crate) fn tick_reconcile(store: &mut Store) {
+    use amenbo_core::tick::{self, TickConsent, TickFix};
+
+    if !tick::available() {
+        return;
+    }
+    let Ok(registered) = tick::probe() else { return };
+    match tick::fix_for(store.config.tick_consent, registered) {
+        TickFix::Nothing => {}
+        TickFix::Rewrite => {
+            let _ = tick::register();
+        }
+        TickFix::Deregister => {
+            let _ = tick::unregister();
+        }
+        TickFix::TakeTheAnswerBack => {
+            store.config.tick_consent = Some(TickConsent::No);
+            let _ = store.save_config();
+        }
+    }
+}
+
 /// Write the veto down, and let a failure to do so pass: the row is a convenience that decides whether
 /// amenbo acts here again, the hook itself is already where the user asked for it, and failing the command
 /// over the note about it would undo nothing and help no one.

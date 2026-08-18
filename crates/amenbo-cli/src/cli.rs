@@ -369,21 +369,6 @@ pub enum Command {
         store: String,
     },
 
-    /// The entry point the **OS scheduler** wakes amenbo through, every hour (`AMB-D-706`). Hidden because a
-    /// scheduler calls it — never a hand. It is not a daemon: it is started, judges what is owed, works
-    /// what the plugin queues still hold, and exits, so there is nothing running between two ticks.
-    ///
-    /// What the OS holds is one bare "wake amenbo every hour" and nothing more, so being woken is not being
-    /// due: what a given hour is owed is judged here, counted in calendar days rather than in wake-ups
-    /// (`AMB-D-707`, `AMB-D-708`). A round with nothing owed is not a wasted one — it still works the
-    /// queues, which is where a delivery a killed runner left standing gets picked up.
-    ///
-    /// It resolves no folder and takes no facet: a scheduler runs it from wherever it happens to stand, and
-    /// what it works is this device's one store. On a device with no store there is nothing to do, and it
-    /// says nothing and exits 0 rather than raising one on a schedule.
-    #[command(hide = true)]
-    Tick,
-
     /// Manage the git hooks that run `amenbo lint`: `pre-commit` for the staged diff, and `commit-msg`
     /// for the message, which is the only place git offers it. Installing writes into your git plumbing,
     /// which amenbo does not do unasked: it asks once — for the lint as a feature, on this device — and
@@ -396,6 +381,19 @@ pub enum Command {
     Hooks {
         #[command(subcommand)]
         sub: HooksCmd,
+    },
+
+    /// Manage the hourly tick: the one plain timer amenbo asks this machine's scheduler to hold, so
+    /// that what has to happen on time happens with no app open and nothing resident. What is
+    /// registered carries no meaning — it wakes amenbo once an hour, and amenbo works out once awake
+    /// what is due — so however many things come to depend on it, this stays one row in your system
+    /// settings, and switching that row off stops all of them. Registering writes into your
+    /// scheduler, which amenbo does not do unasked: it asks once, for the tick as a feature, on this
+    /// device. These are the explicit faces of that — `install` is that yes, `uninstall` is that no,
+    /// and `status` shows the answer beside what the scheduler actually holds.
+    Tick {
+        #[command(subcommand)]
+        sub: TickCmd,
     },
 
     /// Hand over the configuration that makes an AI tool run `amenbo agent` when a session starts — the
@@ -835,6 +833,39 @@ pub enum HooksCmd {
 
     /// Show what is in each hook slot and what this project answered — the two facts, side by side.
     Status,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum TickCmd {
+    /// Register the hourly tick, and record that this device consented. Idempotent: run over a
+    /// registration that is already there, it writes it again, which is how the timer comes to name
+    /// the build running now after an upgrade.
+    Install,
+
+    /// Take the registration away, and record that this device does not want it. Unlike the lint's,
+    /// this is a device-wide no, because the device is the only scale a timer has — and it closes the
+    /// question rather than the door: `tick install` registers it again whenever you want it back.
+    Uninstall,
+
+    /// Show what the scheduler is holding and what this device answered — the two facts, side by
+    /// side. They are read independently on purpose, so a registration you switched off yourself is
+    /// something amenbo can see rather than something it talks over.
+    Status,
+
+    /// The face the scheduler itself calls, once an hour (`AMB-D-706`). Hidden because a scheduler calls
+    /// it — never a hand. It is not a daemon: it starts, judges what the calendar day owes, works what the
+    /// plugin queues still hold, and exits, so nothing is running between two ticks.
+    ///
+    /// Being woken is not being due: the timer carries no meaning, so an hour that is owed nothing is the
+    /// ordinary case, and what is owed is counted in calendar days rather than in wake-ups (`AMB-D-708`).
+    /// A round with nothing owed is still not a wasted one — it works the queues, which is where a
+    /// delivery a killed runner left standing gets picked up.
+    ///
+    /// It resolves no folder and takes no facet: a scheduler runs it from wherever it happens to stand,
+    /// and what it works is this device's one store. On a device holding no store there is nothing to do,
+    /// and it says nothing and exits 0 rather than raising one on a schedule.
+    #[command(hide = true)]
+    Run,
 }
 
 #[derive(Subcommand, Debug)]

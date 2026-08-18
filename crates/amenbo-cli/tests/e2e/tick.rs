@@ -1,8 +1,8 @@
-//! The hourly tick: what a wake-up with nothing owed still does, what it picks up that a previous run
-//! left standing, the queue it leaves to the runner already on it, and the device where there is nothing
-//! to wake for at all.
+//! `tick run`, the face the scheduler calls: what a wake-up with nothing owed still does, what it picks
+//! up that a previous run left standing, the queue it leaves to the runner already on it, and the device
+//! where there is nothing to wake for at all.
 //!
-//! Driven as a process because that is the whole of what the OS scheduler starts: it resolves no folder,
+//! Driven as a process because that is the whole of what a scheduler starts: it resolves no folder,
 //! declares no facet, and answers with an exit code nothing else reads.
 
 mod harness;
@@ -17,8 +17,8 @@ fn a_tick_with_nothing_owed_works_the_queues_and_exits_clean() {
     let cli = Cli::new();
     cli.run(&["init", "--name", "tester"]);
 
-    let out = cli.json(&["tick", "--json"]);
-    assert_eq!(out["action"], "tick");
+    let out = cli.json(&["tick", "run", "--json"]);
+    assert_eq!(out["action"], "tick.run");
     assert_eq!(out["ok"], true);
     assert_eq!(out["ran"].as_array().unwrap().len(), 0, "nothing is owed on this build: {out}");
     assert_eq!(out["failed"].as_array().unwrap().len(), 0);
@@ -30,7 +30,7 @@ fn a_tick_with_nothing_owed_works_the_queues_and_exits_clean() {
         .env("AMENBO_HOME", &cli.home)
         .env("AMENBO_UPDATE_CHECK", "0")
         .current_dir(&cli.home)
-        .args(["tick"])
+        .args(["tick", "run"])
         .output()
         .expect("failed to run the binary");
     assert_eq!(exit_code(&out), 0, "stderr: {}", String::from_utf8_lossy(&out.stderr));
@@ -45,7 +45,7 @@ fn a_tick_on_a_device_with_no_store_raises_none() {
     let empty = cli.home.join("never-used");
 
     let (out, code) =
-        cli.run_env(&[("AMENBO_HOME", empty.to_str().unwrap())], &["tick", "--json"]);
+        cli.run_env(&[("AMENBO_HOME", empty.to_str().unwrap())], &["tick", "run", "--json"]);
     assert_eq!(code, 0, "nothing to do is not a failure: {out}");
     assert!(out.trim().is_empty(), "and nothing to report either: {out}");
     assert!(!empty.exists(), "a tick does not bring a store into being");
@@ -79,14 +79,14 @@ fn a_tick_carries_the_delivery_a_previous_run_left_standing() {
     cli.json(&["task", "finish-creating", &id_str(&added["task"]["id"]), "--json"]);
     std::fs::set_permissions(&plugins, std::fs::Permissions::from_mode(0o755)).unwrap();
 
-    let out = cli.json(&["tick", "--json"]);
+    let out = cli.json(&["tick", "run", "--json"]);
     assert_eq!(out["delivered"], 1, "the tick carried what was standing: {out}");
     assert_eq!(out["queues"].as_array().unwrap().len(), 0, "and left nothing owed: {out}");
     let payload = wrote_json(&capture, |v| !v["event"].is_null());
     assert_eq!(payload["event"], "task.created");
 
     // Woken again with the queues empty: the same clean round as a fresh store's.
-    let again = cli.json(&["tick", "--json"]);
+    let again = cli.json(&["tick", "run", "--json"]);
     assert_eq!(again["delivered"], 0);
 }
 
@@ -113,7 +113,7 @@ fn a_tick_leaves_the_queue_a_runner_is_already_on() {
     let added = cli.json(&["task", "add", "--title", "走行役の居るキュー", "--project", &pid, "--json"]);
     cli.json(&["task", "finish-creating", &id_str(&added["task"]["id"]), "--json"]);
 
-    let out = cli.json(&["tick", "--json"]);
+    let out = cli.json(&["tick", "run", "--json"]);
     assert_eq!(out["delivered"], 0, "nothing was taken from under the runner: {out}");
     let queues = out["queues"].as_array().unwrap();
     assert_eq!(queues.len(), 1, "the queue is named rather than passed over in silence: {out}");

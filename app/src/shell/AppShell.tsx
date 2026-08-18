@@ -55,7 +55,7 @@ export type Nav = { type: "view" | "project" | "projectSettings"; id: string; pi
 export type ComposeTarget = { projectId: number; label: string };
 
 /** The smart views opened in the list screen. Browsing completed work is a project's list view plus a status:done filter. */
-const LIST_VIEWS = ["inbox"];
+const LIST_VIEWS = ["inbox", "due"];
 
 /**
  * The app frame. Nav and the right-pane selection are folded into a single Location on the history stack (so ＜/＞

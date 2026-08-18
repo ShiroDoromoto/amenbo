@@ -31,6 +31,6 @@ export const dataAdapter = {
   // translations and what it is drawn with from the sidebar (`AMB-D-689`), so neither
   // belongs in the data.
   smartViews(): SmartView[] {
-    return [{ id: "inbox" }, { id: "activity" }];
+    return [{ id: "inbox" }, { id: "activity" }, { id: "due" }];
   },
 };

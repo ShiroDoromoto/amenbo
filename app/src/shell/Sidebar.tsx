@@ -1,15 +1,17 @@
 import { useState, type DragEvent } from "react";
 import { dataAdapter } from "../mock/adapter";
 import { useInboxCount } from "../core/mailbox";
-import { useArchivedProjects } from "../core/reads";
+import { dueBadges, type DueCounts } from "../core/due";
+import { useArchivedProjects, useDueCounts } from "../core/reads";
 import { useStore } from "../store/store";
 import { t } from "../core/i18n";
 import { Icon, type IconName } from "../components/Icon";
+import type { SmartView } from "../mock/types";
 import type { Nav } from "./AppShell";
 
 // Which icon each smart view is drawn with. The views arrive as ids alone, so the drawing
 // is decided here rather than travelling with the data (`AMB-D-689`).
-const VIEW_ICON: Record<string, IconName> = { inbox: "inbox", activity: "activity" };
+const VIEW_ICON: Record<string, IconName> = { inbox: "inbox", activity: "activity", due: "calendar" };
 
 /**
  * The left sidebar (smart views, projects, other, and the collapsed archive). Reordering a project drags and drops
@@ -25,6 +27,7 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
   const projects = dataAdapter.listProjects();
   // The inbox badge counts the real mailbox set. Subscribing here also drives arrival detection (sound / OS notification).
   const inboxCount = useInboxCount();
+  const due = useDueCounts();
   const archived = useArchivedProjects();
   const [archivedOpen, setArchivedOpen] = useState(false);
   const isActive = (n: Nav) => nav.type === n.type && nav.id === n.id;
@@ -66,14 +69,11 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
         <div className="sidebar__label">{t("side.smartViews")}</div>
         {views.map((v) => {
           const n: Nav = { type: "view", id: v.id };
-          // The inbox gets the reactive count that arrival detection feeds, and an alert-coloured badge to press what needs an answer.
-          const count = v.id === "inbox" ? inboxCount : v.count;
-          const alert = v.id === "inbox";
           return (
             <button key={v.id} className={`navitem ${isActive(n) ? "navitem--active" : ""}`} onClick={() => onNav(n)}>
               {VIEW_ICON[v.id] ? <Icon name={VIEW_ICON[v.id]} /> : null}
               {t(`smartview.${v.id}`)}
-              {count ? <span className={`navitem__count ${alert ? "navitem__count--alert" : ""}`}>{count}</span> : null}
+              <ViewBadges view={v} inboxCount={inboxCount} due={due} />
             </button>
           );
         })}
@@ -196,4 +196,37 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
       )}
     </div>
   );
+}
+
+/**
+ * The badge or badges a smart view carries.
+ *
+ * The inbox counts what needs an answer, on the accent. The due row is the one view that warns on two
+ * steps at once — its day has gone or is today, and its day is tomorrow — so it draws one badge per
+ * step rather than merging them: merged, it would have to pick a single colour and drop the other
+ * count, and the two ask different things of the reader. Each badge carries its own words, so the
+ * colour is never the only thing that says which step it is. Any other view shows what the data says
+ * it has, or nothing.
+ */
+function ViewBadges({ view, inboxCount, due }: { view: SmartView; inboxCount: number; due: DueCounts }) {
+  if (view.id === "due") {
+    const badges = dueBadges(due);
+    if (badges.length === 0) return null;
+    return (
+      <span className="navitem__counts">
+        {badges.map((b) => (
+          <span
+            key={b.step}
+            className={`navitem__count navitem__count--${b.step}`}
+            title={b.step === "stop" ? t("smartview.dueStop") : t("smartview.dueHeed")}
+          >
+            {b.count}
+          </span>
+        ))}
+      </span>
+    );
+  }
+  const count = view.id === "inbox" ? inboxCount : view.count;
+  if (!count) return null;
+  return <span className={`navitem__count ${view.id === "inbox" ? "navitem__count--alert" : ""}`}>{count}</span>;
 }

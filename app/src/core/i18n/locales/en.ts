@@ -208,8 +208,10 @@ const ui = {
   "compose.new": "New task", "compose.titlePh": "Title",
   "compose.notes": "Notes (Markdown, optional)", "compose.notesPh": "Write notes in Markdown… (optional)",
   "compose.hint": "Enter to create · Esc to cancel", "compose.cancel": "Cancel", "compose.create": "Create",
-  // smart views (sidebar shows inbox/activity; archive is the header for the board-opened list)
+  // smart views (sidebar shows inbox/activity/due; archive is the header for the board-opened list)
   "smartview.inbox": "Inbox @me", "smartview.activity": "Activity",
+  "smartview.due": "Due",
+  "smartview.dueStop": "Overdue or due today", "smartview.dueHeed": "Due tomorrow",
   "mailbox.notifyTitle": "amenbo inbox", "mailbox.notifyBody.one": "{n} item needs your attention", "mailbox.notifyBody.other": "{n} items need your attention",
   "mailbox.notifyFailed": "Couldn't show an OS notification (allow amenbo notifications in system settings)",
   "pager.range": "{from}–{to} of {total}", "pager.page": "page {page}/{pages}",
@@ -589,6 +591,7 @@ const ui = {
   // list empty states
   "list.empty": "No matching tasks", "list.emptyInbox": "Nothing pending for you (and your AI)",
   "list.emptyArchived": "No archived items",
+  "list.emptyDue": "Nothing due today or tomorrow",
   "list.unread": "Unread", "list.archive": "Archive from inbox",
   // Inbox tabs (Inbox = the active inbox / Archived = set aside, restorable).
   "list.tabInbox": "Inbox", "list.tabArchived": "Archived",

@@ -19,6 +19,8 @@ import { loadInboxArchived } from "./inboxArchive";
 import { invoke } from "./ipc";
 import { decisionRef, parseRef, taskRef } from "./idref";
 import { currentLang, type Lang } from "./i18n";
+import { addDays } from "./calendar";
+import { DUE_OVERDUE, DUE_TODAY, DUE_TOMORROW, DUE_WINDOWS, type DueCounts } from "./due";
 import { isClosed } from "./status";
 import type { TaskCard } from "../mock/types";
 import type { ArchivedProjectDto, AttachmentDto, DecisionCommentDto, SearchHitDto, SearchResultDto, TaskCommitDto, TaskPageDto, DecisionPageDto, RefTargetDto } from "../bindings/bindings";
@@ -75,6 +77,23 @@ export function useTaskPage(q: TaskPageQuery): TaskPage & { loading: boolean } {
     () => fetchTaskPage(q),
   );
   return { tasks: data?.tasks ?? [], totalMatched: data?.totalMatched ?? 0, loading };
+}
+
+/**
+ * The counts behind the sidebar's due row (`core/due`): what wants a hand now, and what is coming
+ * tomorrow. Three counting queries — `limit: 0` asks the store for the total and for no rows at all —
+ * so a badge that is usually zero costs no task cards. They ride the same `taskPage` keys as any list,
+ * so a write that moves a due date refetches them without a path of their own.
+ *
+ * The day the store compares against is its own, resolved per query; a window left open across midnight
+ * therefore holds yesterday's counts until the next write or refocus, the same way a due chip already
+ * holds the day it was drawn on.
+ */
+export function useDueCounts(): DueCounts {
+  const overdue = useTaskPage({ filter: DUE_OVERDUE, limit: 0 });
+  const today = useTaskPage({ filter: DUE_TODAY, limit: 0 });
+  const tomorrow = useTaskPage({ filter: DUE_TOMORROW, limit: 0 });
+  return { stop: overdue.totalMatched + today.totalMatched, heed: tomorrow.totalMatched };
 }
 
 /** One row of the "archived" section at the bottom of the sidebar. */
@@ -566,10 +585,11 @@ async function fetchSuperset(query: { filter: string; sort: string }): Promise<T
 }
 
 /**
- * One page of a smart view. The inbox is the only smart view there is — browsing completed work gets no view of
- * its own, it is a project's list view plus a `status:done` filter. The inbox does not fit a single query (an OR
- * of conditions, the unread-comment set, a state machine), so the bounded candidate set is refined on the client
- * and only then cut into a `page` window — no full copy of the store ever lands in JS.
+ * One page of a smart view. There are two that list tasks — the inbox and the due row — and browsing completed
+ * work is neither: that is a project's list view plus a `status:done` filter. Neither fits a single query (the
+ * inbox is an OR of conditions, the unread-comment set and a state machine; the due row is three day windows),
+ * so each pulls a bounded candidate set, refines it on the client, and only then cuts a `page` window out of it
+ * — no full copy of the store ever lands in JS.
  */
 export function useSmartView(viewId: string, page: number, pageSize: number): { tasks: TaskCard[]; total: number } {
   const { data } = useQuery<{ tasks: TaskCard[]; total: number }>(
@@ -589,7 +609,22 @@ async function fetchSmartView(viewId: string, page: number, pageSize: number): P
     const full = await fetchInboxArchivedTasks();
     return { tasks: full.slice(page * pageSize, (page + 1) * pageSize), total: full.length };
   }
+  if (viewId === "due") {
+    const full = await fetchDueTasks();
+    return { tasks: full.slice(page * pageSize, (page + 1) * pageSize), total: full.length };
+  }
   return { tasks: [], total: 0 };
+}
+
+/**
+ * The due view: exactly the tasks the sidebar's badges counted, so pressing a warning lands on what it warned
+ * about. The three windows are disjoint and already ordered by deadline, so pulling each one sorted by day and
+ * concatenating them in `DUE_WINDOWS` order is the whole ordering — the list reads worst-overdue first and
+ * tomorrow last, with no second sort to keep in step with the badge.
+ */
+async function fetchDueTasks(): Promise<TaskCard[]> {
+  const windows = await Promise.all(DUE_WINDOWS.map((filter) => fetchSuperset({ filter, sort: "due" })));
+  return windows.flat();
 }
 
 /**
@@ -702,6 +737,18 @@ function assigneeIs(t: TaskCard, value: string): boolean {
   return t.assignee?.kind === v || t.assignee?.name?.toLowerCase() === v;
 }
 
+/** The mock's reading of one `due:` value against a task's day (the fixtures' TODAY stands in for the store's). */
+function mockDueMatches(due: string | null, value: string): boolean {
+  const day = due?.slice(0, 10) ?? "";
+  switch (value) {
+    case "none": return !day;
+    case "today": return day === TODAY;
+    case "tomorrow": return day === addDays(TODAY, 1);
+    case "overdue": return !!day && day < TODAY;
+    default: return true;  // week, and any bare date: not asked for by a view, so left un-narrowed.
+  }
+}
+
 /**
  * The browser-mock fallback (outside Tauri, i.e. iterating on the frontend alone). Filters the fixtures with a
  * subset of `task_page`'s grammar, evaluating only the tokens the views actually emit
@@ -716,7 +763,10 @@ function mockMatches(t: TaskCard, q: TaskPageQuery): boolean {
       case "status": if (!anyOf(value, (v) => t.status === v)) return false; break;
       // `done:` asks whether the task is **closed**, not whether it was carried out (`AMB-D-397`).
       case "done": if (isClosed(t.status) !== (value === "true")) return false; break;
-      case "due": if (value === "today" && t.due !== TODAY) return false; break;
+      // The mock's day arms, read against the fixtures' fixed TODAY: the three the due view asks for, and
+      // the "no day at all" one. An arm left unhandled would silently match everything, which reads on
+      // screen as a badge counting the whole backlog.
+      case "due": if (!mockDueMatches(t.due, value)) return false; break;
       case "priority": if (!anyOf(value, (v) => (t.priority ?? "none") === v)) return false; break;
       case "assignee": if (!anyOf(value, (v) => assigneeIs(t, v))) return false; break;
       // Unsupported tokens are ignored — the mock is an approximation for iterating. `dim:` is one of them:
@@ -736,6 +786,13 @@ function mockSort(tasks: TaskCard[], sort: string): TaskCard[] {
         const av = a.completedAt ?? "", bv = b.completedAt ?? "";
         if (av === bv) return 0;
         if (!av) return 1;     // None sinks to the bottom (ascending)
+        if (!bv) return -1;
+        return av < bv ? -1 : 1;
+      }
+      case "due": {
+        const av = a.due ?? "", bv = b.due ?? "";
+        if (av === bv) return 0;
+        if (!av) return 1;     // No day sinks to the bottom (ascending), as the store's own `due` sort does
         if (!bv) return -1;
         return av < bv ? -1 : 1;
       }

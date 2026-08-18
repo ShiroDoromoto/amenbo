@@ -1,6 +1,11 @@
 <div align="center">
 
-<img src="assets/logo.svg" alt="" width="120" height="120">
+<!-- The mark is drawn on no ground of its own, so the page lays one: black on a light ground,
+     white on a dark one. GitHub picks between the two by the reader's theme. -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/brand/web/mark-inv-512.png">
+  <img src="assets/brand/web/mark-512.png" alt="" width="120" height="120">
+</picture>
 
 # amenbo
 
@@ -70,7 +75,7 @@ crates/
   amenbo-static-host/ test support: a loopback host, for what is reached by URL
 app/                  the desktop GUI shown above (React + Vite front end; Tauri shell
                       in `app/src-tauri`, calling amenbo-core directly — no server)
-assets/               the logo, the CLI demo and its script, the GUI screenshot
+assets/               the CLI demo and its script, the GUI screenshot
   brand/              the mark: the origin SVGs — the delivered drawing, and the redraw that
                       keeps a whole-pixel stroke at 32px and below — and the icons and
                       rasters `make brand` bakes from them (the only place a coordinate

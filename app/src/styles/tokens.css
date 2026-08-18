@@ -16,6 +16,14 @@
   --c-accent-weak: #d6ecec;
   --c-accent-text: #095a59;
 
+  /* ----- the brand mark -----
+     Black on the light ground, white on the dark one — the pair every origin in `assets/brand/`
+     is held as (`AMB-D-712`). The drawing in `components/BrandMark.tsx` carries no colour of its
+     own, so a theme swaps the mark by swapping this one value. Not `--c-text`: the mark is the
+     product's, and stays the black and white it was drawn as while the text around it warms
+     with the palette. */
+  --c-brand-mark: #000000;
+
   /* ----- semantic ----- */
   --c-human: #3b6bd6; /* human */
   --c-ai: #8a4fd0;    /* AI */
@@ -122,6 +130,8 @@
   --c-accent: #2ba6a4;
   --c-accent-weak: #11403f;
   --c-accent-text: #7fd6d4;
+
+  --c-brand-mark: #ffffff;
 
   --c-human: #6f97ec;
   --c-ai: #b083ea;

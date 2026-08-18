@@ -150,8 +150,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--c-surface);
   border-bottom: 1px solid var(--c-border);
 }
-/* The brand mark tightens its gap a little so it reads as a pair with the workspace name. */
-.topbar__brand { display: inline-flex; align-items: center; margin-right: calc(var(--s-2) - var(--s-4)); }
+/* The brand mark tightens its gap a little so it reads as a pair with the workspace name.
+   It is drawn in `currentColor`, so the colour it takes is the one set here — black on the light
+   ground, white on the dark one — and not the topbar's text colour. */
+.topbar__brand {
+  display: inline-flex; align-items: center;
+  margin-right: calc(var(--s-2) - var(--s-4));
+  color: var(--c-brand-mark);
+}
 /* "Amenbo" is a link that opens the product page (https://amenbo.work/) in the default
    browser. */
 .topbar__ws { font-weight: var(--fw-bold); font-size: var(--fs-lg); cursor: pointer; }

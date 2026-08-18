@@ -145,11 +145,20 @@ pub fn add(tx: &WriteTx<'_>, input: NewTask) -> Result<Task> {
 /// A task filed by mistake ends the way any other does — `reject` for work decided against, `delete` for a
 /// row that should not exist.
 ///
-/// Finishing a creation that is already finished writes the same row back rather than refusing: there is no
-/// state to protect and nothing the caller would do differently on being told. The surfaces short-circuit
-/// it into a reported no-op, which is where "already finished" is worth saying.
+/// Finishing a creation that is already finished hands the task straight back rather than refusing: there
+/// is no state to protect and nothing the caller would do differently on being told. The surfaces
+/// short-circuit it into a reported no-op, which is where "already finished" is worth saying.
+///
+/// **It writes nothing, and that is load-bearing.** Composing the row anyway would leave `updated_at` as
+/// the one column that moved — the clock always having moved — and a task whose only change is that it was
+/// touched is a change the whole store then carries: a change-feed row, a project version, and the signal
+/// that says the project moved (`AMB-D-582`). A reader outside the store re-reads its window over a call
+/// that ended nothing.
 pub fn finish_creating(tx: &WriteTx<'_>, id: i64) -> Result<Task> {
     let before = live_before(tx, id)?;
+    if !before.draft {
+        return Ok(before);
+    }
     let after = Task { draft: false, updated_at: Timestamp::now(), ..before.clone() };
     emit_update(tx, record::task(&before), record::task(&after))?;
     Ok(after)

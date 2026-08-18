@@ -5,9 +5,10 @@ name: _dependabot-automerge
 # the run was Dependabot's and green live there: what arrives here is the branch alone.
 #
 # The merge itself is armed rather than performed: `--auto` hands the wait to GitHub, which merges
-# as soon as main's required check is green on the head and the branch is up to date. What this
-# workflow adds in front of that is the one repair the bot cannot make for itself — completing the
-# bump in the lockfiles that sit outside the workspace (see `lockstep`) — and, when that repair
+# as soon as main's required check is green on the head. Being behind main is not part of that wait:
+# the ruleset does not ask for the branch to be up to date, so the head merges as it stands. What
+# this workflow adds in front of that is the one repair the bot cannot make for itself — completing
+# the bump in the lockfiles that sit outside the workspace (see `lockstep`) — and, when that repair
 # moves the head, a verdict for the head it moved to (see `reverdict`).
 #
 # The entry's `workflow_run` trigger runs in the context of the base repo with a
@@ -123,9 +124,9 @@ jobs:
           echo "dispatched the full gate against ${BRANCH}"
 
   # Arm the merge rather than perform it. `--auto` is what waits: GitHub merges the moment main's
-  # required check is green on the head and the branch is up to date, whether that verdict is the one
-  # this run was told about or the one `reverdict` went to fetch. Merging here instead would have to
-  # race both, and lose to whichever is slower.
+  # required check is green on the head, whether that verdict is the one this run was told about or
+  # the one `reverdict` went to fetch. Merging here instead would have to race both, and lose to
+  # whichever is slower.
   #
   # It runs whether or not the repair pushed, so `always()` is load-bearing: `reverdict` is skipped
   # on the ordinary bump, and a skipped dependency would otherwise skip this too.

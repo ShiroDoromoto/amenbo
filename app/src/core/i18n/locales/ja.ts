@@ -198,8 +198,10 @@ export const ja: Translation = {
     "compose.new": "新規タスク", "compose.titlePh": "タイトル",
     "compose.notes": "メモ（Markdown・任意）", "compose.notesPh": "Markdown で概要を書く…（任意）",
     "compose.hint": "Enter で作成 · Esc で取消", "compose.cancel": "取消", "compose.create": "作成",
-    // smart views (sidebar shows inbox/activity; archive is the header for the board-opened list)
+    // smart views (sidebar shows inbox/activity/due; archive is the header for the board-opened list)
     "smartview.inbox": "受信 @自分", "smartview.activity": "アクティビティ",
+    "smartview.due": "期日",
+    "smartview.dueStop": "期限切れ・今日が期日", "smartview.dueHeed": "明日が期日",
     "mailbox.notifyTitle": "amenbo 受信箱", "mailbox.notifyBody.other": "確認が必要な項目が {n} 件届きました",
     "mailbox.notifyFailed": "OS 通知を出せませんでした（システム設定で amenbo の通知を許可してください）",
     "pager.range": "{from}–{to} / {total}件", "pager.page": "{page}/{pages} ページ",
@@ -556,6 +558,7 @@ export const ja: Translation = {
     // list empty states
     "list.empty": "該当するタスクはありません", "list.emptyInbox": "あなた（と AI）宛の未対応はありません",
     "list.emptyArchived": "アーカイブした項目はありません",
+    "list.emptyDue": "今日・明日が期日のタスクはありません",
     "list.unread": "未読", "list.archive": "受信箱からアーカイブ",
     // Inbox tabs (Inbox = the active inbox / Archived = set aside, restorable).
     "list.tabInbox": "受信", "list.tabArchived": "アーカイブ",

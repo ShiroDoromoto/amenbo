@@ -71,8 +71,10 @@ crates/
 app/                  the desktop GUI shown above (React + Vite front end; Tauri shell
                       in `app/src-tauri`, calling amenbo-core directly — no server)
 assets/               the logo, the CLI demo and its script, the GUI screenshot
-  brand/              the mark: two origin SVGs, and the icons and rasters `make brand`
-                      bakes from them (the only place a coordinate is written)
+  brand/              the mark: the origin SVGs — the delivered drawing, and the redraw that
+                      keeps a whole-pixel stroke at 32px and below — and the icons and
+                      rasters `make brand` bakes from them (the only place a coordinate
+                      is written)
 verification/         black-box checks of an installed build, run before a release
                       (its own cargo workspace, so `make test` never pulls it in)
 devtool/              optional Go helper: a throwaway dev GUI per task, and a fake outside world

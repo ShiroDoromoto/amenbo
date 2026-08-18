@@ -1,0 +1,103 @@
+# Being told with nothing open. `be-warned-a-day-has-come` is the same news on a screen somebody is
+# already looking at; this road is the other half of it — the day comes round, amenbo is not running,
+# and the machine's own scheduler starts it long enough to say so.
+#
+# ── What is walked, and what deliberately is not ──────────────────────────────────────────────────
+# The wake is walked. The registration is not.
+#
+# Registering writes outside the throwaway store this run makes: into the launchd, systemd or Task
+# Scheduler of whichever machine the gate is running on. A road that walked it would leave an hourly
+# timer behind on a release box, and nothing the run hands back would take it away.
+# `be-offered-a-start-at-login` draws the same line for the login registration, and for the same
+# reason — that half belongs on the real machines, where somebody can see it in their own settings.
+#
+# What is left is the whole of what a scheduler ever gets: it starts amenbo, and amenbo says what the
+# day owed. So the road is the wake, twice, plus the reading that says the run left nothing behind.
+#
+# ── The rule the second wake is here for ──────────────────────────────────────────────────────────
+# An hourly timer wakes amenbo twenty-four times a day, and a machine that was asleep is woken for the
+# hours it missed all at once. What is owed is therefore counted in calendar days and never in
+# wake-ups: told once, the day is marked, and every wake after it stands down. Without that, coming
+# back from a weekend rings the same news several times over.
+#
+# ── The screen road ───────────────────────────────────────────────────────────────────────────────
+# There is none, and no gap. A scheduler has no screen to start anything on, and what a reader sees
+# once the news has arrived is the other file's subject.
+id: be-told-a-day-has-come-with-nothing-open
+title: The scheduler wakes amenbo, which says once a day which days have come — and stands down for the rest of that day
+description: >
+  The goal is being told without asking and without amenbo open. A day comes round on work that was
+  filed a while ago; the machine's scheduler starts amenbo, which works out what the day owes and
+  sends it. Woken again in the same day it stands down, because what is owed is counted in calendar
+  days rather than in the twenty-four times an hourly timer comes round — and a run that is woken for
+  the hours a sleeping machine missed would otherwise ring the same news over and over.
+
+given:
+  # Its day is today: the step nothing but doing the work moves.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day is today
+    as: today_task
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: today_task
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: today_task
+      due: today
+
+  # And one on the day before its own, which is the last day noticing still buys something.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day is tomorrow
+    as: tomorrow_task
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: tomorrow_task
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: tomorrow_task
+      due: "+1d"
+
+steps_cli:
+  # The scheduler's turn. Nothing was pressed and nothing is open: amenbo is started, works out what
+  # the day owes, and sends it.
+  - type: assert
+    domain: tick
+    op: woken
+    with:
+      purpose: due
+      carried_out: true
+
+  # An hour later, on the same day. The day is marked, so this turn stands down — which is what keeps
+  # a machine coming back from a weekend from ringing yesterday's news twenty-four more times.
+  - type: assert
+    domain: tick
+    op: woken
+    with:
+      purpose: due
+      carried_out: false
+
+  # And the machine the gate ran on is left as it was found. Nothing above registers a timer, so this
+  # is the line that says so out loud rather than leaving it to be taken on trust.
+  - type: assert
+    domain: tick
+    op: holds
+    with:
+      registered: false

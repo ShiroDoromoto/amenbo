@@ -1995,6 +1995,7 @@ fn domain_str(d: Domain) -> &'static str {
         Domain::Repo => "repo",
         Domain::Plugin => "plugin",
         Domain::Mcp => "mcp",
+        Domain::Tick => "tick",
     }
 }
 

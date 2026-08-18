@@ -195,7 +195,7 @@ DDL and the per-column write whitelist are derived from it, so they cannot drift
 A gate only ever compiles the cfg branches of the OS it runs on, so `#[cfg(target_os =
 "linux")]` code (the store-watch network-FS path, for one) is invisible to a green run on a
 mac. `make lint-linux` builds the tree for Linux inside the container the Linux bundles are
-built in, running the same two clippy invocations as CI's `rust` + `app-rust` jobs. Cross-
+built in, running the same two clippy invocations as CI's `lint` + `app-rust` jobs. Cross-
 compiling won't do: the Tauri gtk/glib sys crates need their system deps at build time, so
 a real Linux is the only way to reach that code. It needs Docker and takes a few minutes,
 which is why it is not part of `make test` — reach for it when you touch an OS-gated branch.

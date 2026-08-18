@@ -113,6 +113,11 @@ name = "cli_e2e_mcp"
 path = "tests/e2e/mcp.rs"
 required-features = ["e2e"]
 
+[[test]]
+name = "cli_e2e_tick"
+path = "tests/e2e/tick.rs"
+required-features = ["e2e"]
+
 # The README demo's script, replayed against this build. It forks the binary once per line the film
 # types, so it sits behind the same gate for the same reason.
 [[test]]

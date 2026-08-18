@@ -95,9 +95,10 @@ npm_deps:
   - '.github/workflows/_ci.yml'
   - '.github/paths-filters.yml'
   - '.github/workflows/_rot-gates.yml'
-# What no layer needs to answer for: prose, pictures, and the forms GitHub shows a visitor.
-# Nothing compiles or runs from them, and the cheap stage — which the local gate runs
-# whatever changed — already audits the prose of every tracked file.
+# What no layer needs to answer for: prose, pictures, the forms GitHub shows a visitor, and
+# the hand-run baker that turns the brand origins into the rest of those pictures. Nothing
+# compiles or runs from them, and the cheap stage — which the local gate runs whatever
+# changed — already audits the prose of every tracked file.
 #
 # This is a declaration, not a catch-all: a path that matches no layer and is not named
 # here makes the local gate fall to the whole of `make test`. That is the point. Config
@@ -109,4 +110,7 @@ ungated:
   - 'assets/*.png'
   - 'assets/*.svg'
   - 'assets/*.gif'
+  # The brand set: two origin SVGs and everything `make brand` bakes from them.
+  - 'assets/brand/**'
+  - 'scripts/gen-brand.py'
   - '.github/ISSUE_TEMPLATE/**'

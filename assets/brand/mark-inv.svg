@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-32 -32 64 64" width="1024" height="1024">
+  <title>amenbo (inverted)</title>
+  <!-- The mark in white, for a dark ground — the same paths as mark.svg beside it, which carries
+       the note on where they come from and what to do when a new delivery arrives. Held as its own
+       file rather than recoloured on the fly, because the delivery is two files and this is the
+       second one.
+
+       45deg-rotated square lattice. Every vertex satisfies (x-y) % 4 == 0 and (x+y) % 4 == 0,
+       i.e. it lands on a corner of the rotated grid whose cell is half the diamond's side.
+       node pitch 20 / half-diagonal 4 / stroke 1 -->
+  <g fill="none" stroke="#ffffff" stroke-width="1" stroke-linecap="butt" stroke-linejoin="miter">
+    <!-- links -->
+    <path d="M -4,0 L -16,0"/>
+    <path d="M 0,-4 L 0,-16"/>
+    <path d="M 2,-2 L 18,-18"/>
+    <path d="M -2,2 L -14,14"/>
+    <path d="M 2,2 L 18,18"/>
+    <!-- free legs -->
+    <path d="M 2,-18 L 12,-8"/>
+    <path d="M 0,4 L 0,16"/>
+    <!-- nodes -->
+    <path d="M -4,0 L 0,-4 L 4,0 L 0,4 Z"/>
+    <path d="M -4,-20 L 0,-24 L 4,-20 L 0,-16 Z"/>
+    <path d="M -24,0 L -20,-4 L -16,0 L -20,4 Z"/>
+    <path d="M 16,-20 L 20,-24 L 24,-20 L 20,-16 Z"/>
+    <path d="M -20,16 L -16,12 L -12,16 L -16,20 Z"/>
+    <path d="M 16,20 L 20,16 L 24,20 L 20,24 Z"/>
+  </g>
+</svg>

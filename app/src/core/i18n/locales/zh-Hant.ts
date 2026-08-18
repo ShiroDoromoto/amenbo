@@ -155,6 +155,8 @@ export const zhHant: Translation = {
     "cal.today": "今天", "cal.prevMonth": "上個月", "cal.nextMonth": "下個月",
     "cal.noDue": "沒有到期日（{n}）", "cal.empty": "沒有帶到期日的任務",
     "cal.more": "還有 {n} 項", "cal.overdueDays": "逾期 {n} 天", "cal.inDays": "{n} 天後",
+    "date.due": "到期日", "date.start": "開始日期",
+    "date.clear": "清除",
     "card.assignee": "負責人",
     "detail.tab.detail": "詳細", "detail.tab.activity": "動態",
     "detail.notFound": "找不到該任務",

@@ -4,6 +4,11 @@
 # be taken away again. Two of those fields are not decoration: a start day still ahead holds the task
 # unready, and priority is what the mailbox sorts on. So each one is read back off the store rather
 # than trusted to a write that exited zero.
+#
+# The screen walks the two days rather than the whole form. They are the fields it could read and not
+# write until lately — a due date drawn on every card, with nowhere on the pane to put one there — so
+# what its road answers for is the writing, the premise the start day carries once it lands, and the
+# taking back — which on this face is a button of its own, and the only way off it.
 id: shape-a-task
 title: A task registered with nothing but a title starts todo, is filled in field by field, and can be emptied again
 description: >
@@ -12,6 +17,23 @@ description: >
   them. Declare a start day still ahead and watch readiness go with it. Then clear the start day and
   the priority and read the absence back: clearing is its own command, and a field that will not
   clear is a field the user cannot take back.
+# One card of ordinary work, and the only premise either road has. The screen's road files its own task
+# from a column head, and a board with nothing on it draws the first loop where the columns would be —
+# so the world puts the columns there and nothing else. The terminal's road asks nothing of it.
+given:
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO WORLD — work this board already carried
+    as: standing
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: standing
+
 steps_cli:
   # Nothing but a title, and it is already a task in a state: todo, with nothing else said.
   - type: action
@@ -149,3 +171,109 @@ steps_cli:
       filter: "priority:none"
       target: seed
       present: true
+
+steps_gui:
+  # Filed from the board, and finished, so that the readiness read at the end is the start day's answer
+  # and not the creation's.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — dated from the screen
+    as: seed
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: seed
+
+  # The move the pane had no field for. Both days are written where the task is read, and neither is a
+  # date the app chose: an empty picker draws a day of its own, so a build that let that through would
+  # answer here with today rather than with what was typed.
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: seed
+      due: "2099-12-31"
+      start: "2099-01-01"
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: due_on
+      equals: "2099-12-31"
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: start_on
+      equals: "2099-01-01"
+
+  # A start day is not a note to self on this face either. It is the third premise, and the pane says
+  # so where the other premises stand — a day written and no reason drawn beside it would leave the
+  # reader to find out at the reserve.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: not_started_until
+      equals: "2099-01-01"
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: ready
+      equals: false
+
+  # And the taking back, which on this face is a move of its own rather than an empty value handed to
+  # the form: both days come off by a button standing beside the picker, since the picker's own way of
+  # emptying itself is not drawn on every platform. A build where that button does not write leaves the
+  # reader looking at a day they never set — an emptied picker fills itself in — with no way off it.
+  - type: action
+    domain: task
+    op: clear
+    with:
+      target: seed
+      field: due
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: due_on
+      equals: null
+
+  - type: action
+    domain: task
+    op: clear
+    with:
+      target: seed
+      field: start
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: start_on
+      equals: null
+
+  # The premise goes with the day. What the start day was holding back is the reserve, so the reading
+  # that closes this road is the readiness it took away coming back — not the field alone.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: ready
+      equals: true

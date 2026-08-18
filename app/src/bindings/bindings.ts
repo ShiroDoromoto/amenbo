@@ -1670,6 +1670,12 @@ export type TaskCardDto = { id: number, title: string,
  */
 ref: string, notes: string, projectId: number | null, status: "todo" | "in_progress" | "done" | "blocked" | "rejected", assignee: ActorDto | null, priority: "high" | "medium" | "low" | null, due: string | null, 
 /**
+ * The declared start day (`YYYY-MM-DD`), whether or not it has come. `not_started_until` below is
+ * the premise this field can raise; this is the field itself, which is what the pane editing it has
+ * to show — a day that has already come is still a value the person put there and may want back.
+ */
+startOn: string | null, 
+/**
  * Completion timestamp (RFC3339 UTC). Used to sort the Done column newest-first, among other
  * things. None while the task is still open.
  */

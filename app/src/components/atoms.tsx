@@ -216,6 +216,63 @@ export function DueChip({ due }: { due: string | null }) {
 }
 
 /**
+ * The field that writes one of a task's two days. It is the platform's own date input, so the picker is
+ * the one the reader already knows and the value crossing this boundary is `YYYY-MM-DD` both ways — the
+ * shape core stores, with no time and no zone to lose on the road (`AMB-D-429`).
+ *
+ * **No day is drawn as no day, not as an empty picker.** An empty date input fills itself in with a date
+ * of its own as the placeholder, and on the pane that reads as a day somebody set — the one thing this
+ * field must never say. So the absence is written out ("none", with the button that begins one), and the
+ * picker appears once there is a day to show or the reader has asked to name one.
+ *
+ * Taking the day off again has its own button rather than relying on the picker's, which not every
+ * platform draws: a date that will not come off is a date the reader cannot take back.
+ */
+export function DateField({ label, value, onChange }: {
+  label: string;
+  value: string | null;
+  onChange: (day: string | null) => void;
+}) {
+  // Asked for, but not named yet — the picker is open on a task that has no day. It is local to the
+  // field: what the store holds is still nothing, and nothing is written until a day is chosen.
+  const [naming, setNaming] = useState(false);
+
+  if (value === null && !naming) {
+    return (
+      <span>
+        <span className="faint">{t("detail.none")}</span>
+        <button className="feed__action" style={{ marginLeft: 6 }} onClick={() => setNaming(true)}>
+          {t("detail.add")}
+        </button>
+      </span>
+    );
+  }
+  return (
+    <span>
+      <input
+        type="date"
+        className="inlineselect"
+        aria-label={label}
+        autoFocus={naming}
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value === "" ? null : e.target.value)}
+      />
+      <button
+        className="feed__action"
+        style={{ marginLeft: 6 }}
+        onClick={() => {
+          setNaming(false);
+          // Closing a picker that never got a day is not a write: there is nothing there to clear.
+          if (value !== null) onChange(null);
+        }}
+      >
+        {t("date.clear")}
+      </button>
+    </span>
+  );
+}
+
+/**
  * The chip that names, in the list itself, the premises blocking a reservation (`ready === false`) before anyone
  * tries to start. A barred circle = an unfinished dependency blocker; a warning triangle = a decision not yet
  * settled as grounds; an hourglass = a declared start day that has not come; a pencil = the creation is not

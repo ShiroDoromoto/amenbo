@@ -157,6 +157,8 @@ export const es: Translation = {
     "cal.today": "Hoy", "cal.prevMonth": "Mes anterior", "cal.nextMonth": "Mes siguiente",
     "cal.noDue": "Sin fecha límite ({n})", "cal.empty": "No hay tareas con fecha límite",
     "cal.more": "+{n} más", "cal.overdueDays": "{n} d de retraso", "cal.inDays": "en {n} d",
+    "date.due": "Fecha límite", "date.start": "Fecha de inicio",
+    "date.clear": "Quitar",
     "card.assignee": "Responsable",
     "detail.tab.detail": "Detalles", "detail.tab.activity": "Actividad",
     "detail.notFound": "Tarea no encontrada",

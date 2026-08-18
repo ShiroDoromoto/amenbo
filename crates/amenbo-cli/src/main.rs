@@ -48,6 +48,7 @@ use cmd::project::project;
 use cmd::setup::{agent_hook_answer_cmd, agent_hook_setup, agent_hook_snippet_cmd, hooks_cmd, lint_hook_setup};
 use cmd::status::{render_discover, render_status};
 use cmd::task::task;
+use cmd::tick::tick_cmd;
 use cmd::update::{self_rollback_cmd, self_update_cmd, unstamped_line, update_cmd, version_unbound};
 use mcp::mcp_cmd;
 use output::{
@@ -434,6 +435,10 @@ fn uses_facet(cmd: &Option<Command>) -> bool {
         // nothing, and was handed the store to work (`AMB-T-2175`). So was a plugin calling amenbo back,
         // whose window comes from the gate it fired through rather than from a facet (`AMB-D-406`).
         | Command::PluginRunner { .. }
+        // The hourly tick is woken by the OS scheduler, which is neither a person nor their AI and has no
+        // facet to declare (`AMB-D-706`). It reads no store content on anyone's behalf either: what it
+        // carries out is amenbo's own errand, whose reach is the device rather than a bound project.
+        | Command::Tick
         // `validate` reads a manifest file the author names and touches no store at all — unlike the rest
         // of the group, which moves this machine's plugin state and the plugin's own per-project rows.
         | Command::Plugin { sub: PluginCmd::Validate { .. } } => false,
@@ -476,6 +481,9 @@ fn stamps_facet(cmd: &Option<Command>) -> bool {
         // A runner fires the hooks a facet's own writes already queued; it creates nothing and assigns
         // nothing, so there is no author for it to stamp (`AMB-T-2175`).
         | Command::PluginRunner { .. }
+        // The tick carries out amenbo's own errands and fires the hooks they queued; it creates nothing and
+        // assigns nothing, so there is no author for it to stamp.
+        | Command::Tick
         // The MCP server writes nothing itself; what its tool calls run is a child that stamps its own.
         | Command::Mcp { .. }
         // `validate` reads a manifest file the author names and touches no store at all; the rest of the
@@ -618,6 +626,12 @@ fn requires_pointer(cmd: &Option<Command>) -> bool {
             | Some(Command::Bind { .. })
             | Some(Command::Version)
             | Some(Command::Update { .. })
+            // The tick is started by the OS scheduler, from whatever directory that scheduler stands in, so
+            // there never is a pointer for it to find and "run init first" would be advice to nobody. What
+            // this guard protects against is met a different way for it: rather than take a missing pointer
+            // as leave to raise a store, `run` looks for the device's store and, finding none, does nothing
+            // at all.
+            | Some(Command::Tick)
     )
 }
 
@@ -648,6 +662,10 @@ fn nested_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBuf> {
         // it opens no store there. The folder that decides anything is `--dir`, and the child that runs in
         // it meets this guard itself — one answer, given where it is owed.
         | Some(Command::Mcp { .. })
+        // The tick, for the reason `plugin-runner` is: the store it works is this device's, and the folder
+        // its launcher happened to stand in decides nothing about it. Refusing it would stall a delivery
+        // over where a scheduler was configured.
+        | Some(Command::Tick)
         | Some(Command::Unbind { .. }) => None,
         Some(Command::Bind { dir: Some(d), .. })
         | Some(Command::Project { sub: ProjectCmd::Add { dir: d, .. } }) => {
@@ -727,6 +745,7 @@ fn pointer_store_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBu
             | Some(Command::PluginRunner { .. })
             | Some(Command::Plugin { sub: PluginCmd::Validate { .. } })
             | Some(Command::Mcp { .. })
+            | Some(Command::Tick)
             | Some(Command::Unbind { .. })
             | Some(Command::Bind { .. })
             | Some(Command::Init { .. })
@@ -879,6 +898,15 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
             .collect();
         return Err(CliError::no_pointer(&candidates));
     }
+    // The tick's own half of that guard, which it is outside of. It resolves no folder, so a missing pointer
+    // says nothing about whether there is anything to do — but it must not be the thing that brings a store
+    // into being either, and `Store::open` below would do exactly that on a device where amenbo has never
+    // been used. Reach for this device's store file directly: no store, nothing owed, nothing to say.
+    if matches!(cli.command, Some(Command::Tick))
+        && !amenbo_core::config::Paths::resolve().map_err(CliError::from)?.store_file.exists()
+    {
+        return Ok(0);
+    }
     // Restore sits after the exec guard (it needs to know where this device's store is) and ahead of the
     // migration and the open, because it is the one command that replaces the truth source **wholesale** and
     // therefore never has to read the one it replaces. Both of the steps below would be wrong here:
@@ -929,7 +957,16 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     // command that was asked to work them, and to say what moved, ever reaches one. What it left to
     // report was then somebody else's work by definition, which is nothing (`AMB-T-2507`). Nothing is
     // lost by standing down for it: the flush drives both layers, unconditionally, and waits.
-    if plugin_window.is_none() && !matches!(cli.command, Some(Command::Plugin { sub: PluginCmd::Flush })) {
+    //
+    // Nor does the tick, which is the flush's reason word for word: working the queues to their end, in this
+    // process, is half of what the scheduler started it for, and a kick that handed every queue to a runner
+    // first would leave it with somebody else's work to report — which is nothing.
+    if plugin_window.is_none()
+        && !matches!(
+            cli.command,
+            Some(Command::Plugin { sub: PluginCmd::Flush }) | Some(Command::Tick)
+        )
+    {
         resume_dispatch(&store);
     }
 
@@ -1045,8 +1082,9 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
 
     // The two setups amenbo offers, in the order their questions are put. `hooks` is outside both: its argv
     // already answered the lint's question, and the harness path can record consent, which `hooks status`
-    // promises not to do.
-    if !matches!(cli.command, Some(Command::Hooks { .. })) {
+    // promises not to do. So is the tick: a scheduler is nobody to put a question to, and what it does must
+    // not depend on the directory it was started in.
+    if !matches!(cli.command, Some(Command::Hooks { .. }) | Some(Command::Tick)) {
         let lint_asked = lint_hook_setup(&mut store, flags);
         agent_hook_setup(&store, flags, lint_asked);
     }
@@ -1399,6 +1437,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         Command::Restore { .. } => {
             unreachable!("handled before open")
         }
+        Command::Tick => return tick_cmd(&store, flags),
         Command::Hooks { sub } => return hooks_cmd(&mut store, flags, sub),
         // The recording face is the one that needs this folder: the answer is kept against the project
         // it is bound to, so unlike `snippet` it opens the store like any other write.

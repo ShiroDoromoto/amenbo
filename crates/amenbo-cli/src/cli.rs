@@ -369,6 +369,21 @@ pub enum Command {
         store: String,
     },
 
+    /// The entry point the **OS scheduler** wakes amenbo through, every hour (`AMB-D-706`). Hidden because a
+    /// scheduler calls it — never a hand. It is not a daemon: it is started, judges what is owed, works
+    /// what the plugin queues still hold, and exits, so there is nothing running between two ticks.
+    ///
+    /// What the OS holds is one bare "wake amenbo every hour" and nothing more, so being woken is not being
+    /// due: what a given hour is owed is judged here, counted in calendar days rather than in wake-ups
+    /// (`AMB-D-707`, `AMB-D-708`). A round with nothing owed is not a wasted one — it still works the
+    /// queues, which is where a delivery a killed runner left standing gets picked up.
+    ///
+    /// It resolves no folder and takes no facet: a scheduler runs it from wherever it happens to stand, and
+    /// what it works is this device's one store. On a device with no store there is nothing to do, and it
+    /// says nothing and exits 0 rather than raising one on a schedule.
+    #[command(hide = true)]
+    Tick,
+
     /// Manage the git hooks that run `amenbo lint`: `pre-commit` for the staged diff, and `commit-msg`
     /// for the message, which is the only place git offers it. Installing writes into your git plumbing,
     /// which amenbo does not do unasked: it asks once — for the lint as a feature, on this device — and

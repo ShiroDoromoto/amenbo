@@ -79,6 +79,7 @@ pub mod slug;
 pub mod store;
 pub mod swap_lock;
 pub mod sync_snapshot;
+pub mod tick;
 pub mod time;
 mod tmpdir;
 pub mod update_check;

@@ -35,14 +35,22 @@ describe("DueChip", () => {
     render("2026-06-21");
     expect(chip()?.className).toContain("due--today");
     render("2026-06-22");
+    expect(chip()?.className).toContain("due--tomorrow");
+    render("2026-06-23");
     expect(chip()?.className).toContain("due--future");
   });
 
-  it("moves with the clock — the same due date reads future today and overdue later", () => {
-    render("2026-06-22");
+  it("moves with the clock — one due date walks down every step as the days pass", () => {
+    render("2026-06-23");
     expect(chip()?.className).toContain("due--future");
+    act(() => { vi.setSystemTime(new Date(2026, 5, 22, 12, 0, 0)); });
+    render("2026-06-23");
+    expect(chip()?.className).toContain("due--tomorrow");
     act(() => { vi.setSystemTime(new Date(2026, 5, 23, 12, 0, 0)); });
-    render("2026-06-22");
+    render("2026-06-23");
+    expect(chip()?.className).toContain("due--today");
+    act(() => { vi.setSystemTime(new Date(2026, 5, 24, 12, 0, 0)); });
+    render("2026-06-23");
     expect(chip()?.className).toContain("due--overdue");
   });
 

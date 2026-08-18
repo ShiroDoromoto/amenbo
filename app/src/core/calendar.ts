@@ -70,10 +70,16 @@ export function monthMatrix(year: number, month: number, weekStart = 0): string[
   return weeks;
 }
 
-// Where a date stands relative to today: overdue, today, or still ahead.
-export function dueKind(due: string, today: string): "overdue" | "today" | "future" {
+// Where a date stands relative to today. Tomorrow is a step of its own because the colour ladder needs it:
+// a day that has come is a stop (nothing but doing the work moves it), and the last day it can still be
+// heeded is the one before — see `--c-due-*` in styles/tokens.css.
+export type DueKind = "overdue" | "today" | "tomorrow" | "future";
+
+export function dueKind(due: string, today: string): DueKind {
   const d = due.slice(0, 10);
-  return d < today ? "overdue" : d === today ? "today" : "future";
+  if (d < today) return "overdue";
+  if (d === today) return "today";
+  return d === addDays(today, 1) ? "tomorrow" : "future";
 }
 
 // Due day (`YYYY-MM-DD`) → the tasks due on it. Tasks with no due date are left out.
@@ -101,7 +107,7 @@ export interface TimelineRow {
   due: string; // YYYY-MM-DD
   leftPct: number; // left edge of the bar (% of the axis window)
   widthPct: number; // width of the bar (%, clamped to a minimum)
-  kind: "overdue" | "today" | "future";
+  kind: DueKind;
 }
 
 export interface TimelineModel {

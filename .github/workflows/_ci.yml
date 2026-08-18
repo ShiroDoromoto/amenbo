@@ -20,6 +20,15 @@ name: _ci
 # onto both, and so is the workspace. Those mirrors build and test only — the installers each OS
 # ships stay in the release workflow.
 #
+# The mirrors do not run on a change. A change is judged on Linux alone, and macOS and Windows are
+# read by the `full` legs — the nightly one, and the run that stands before a tag — so each mirror
+# is gated on `inputs.full` rather than on the path filter. What forced that is the concurrency this
+# account has: 20 jobs at once, 5 of them macOS, and both ceilings were measured saturated. With the
+# queue full it is the total CPU a run asks for that sets its finish time, so the only lever left was
+# to ask for fewer jobs — 3,108 a day became 518. What it costs is a macOS- or Windows-only break
+# going unseen for at most a day: the nightly leg ends it, and the pre-tag full leg cannot let it
+# past. Watch the nightly's red; if it starts arriving often, put the mirrors back on `push: main`.
+#
 # The path gate decides what a diff can have moved, and it can be wrong: a layer whose inputs are
 # not all listed, or a path listed under no layer at all, is skipped by a filter that believes it
 # has judged. Nothing in that diff says so — the run is green and short. The nightly entry calls
@@ -55,8 +64,9 @@ env:
 jobs:
   # Path gate for the build/test jobs: run each only when a change can affect it.
   #
-  # `rust` (gates the workspace's test jobs, the e2e job beside each of them, the
-  # lint jobs that judge the source once, and the host crate's) is a positive
+  # `rust` (gates the workspace's Linux test jobs — the rest of the suite and the e2e half beside
+  # it — the lint job that judges the source once, and the host crate's; the mac/Windows mirrors of
+  # all three read `inputs.full` instead) is a positive
   # allowlist of the Rust build inputs: the workspace crates, the
   # manifests/lockfile, the toolchain + lint + nextest config, .cargo/, the
   # out-of-workspace Tauri host crate (app/src-tauri), and this workflow. A change confined to relay/ or docs (or
@@ -119,20 +129,16 @@ jobs:
           # declared in one place cannot drift from the other.
           filters: .github/paths-filters.yml
 
-  # Sharded three ways. A shard is a slice of the *test list*, not of the tree: each one builds the
-  # whole workspace and then runs the third of the tests `--partition hash:` deals it, so the wait is
-  # the build plus a third of the run rather than the build plus all of it. Three and not more
-  # because two floors hold the slice up — the build and setup every shard pays whatever it runs, and
-  # the longest single test, which no slice can be shorter than.
+  # Not sharded. This half of the suite runs in about 34 seconds, and a shard of it would still pay
+  # the checkout, the toolchain, the cache restore and the build every runner pays whatever it runs —
+  # so splitting it buys back less than it spends, and spends it on the concurrency the mirrors and
+  # the e2e half are queueing for. The e2e half below is the long one, and that is the one that is
+  # split; the mac/Windows mirrors keep their shards, being both slower and off the change path.
   rust:
-    name: cargo test (${{ matrix.shard }}/3)
+    name: cargo test
     runs-on: ubuntu-latest
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v7
 
@@ -151,13 +157,13 @@ jobs:
       #
       # `shared-key` puts every job that builds this workspace on one cache entry per
       # platform. Without it the key carries the job id, so each job fills a cache of its own —
-      # and there are eight of them per platform once the test jobs are sharded, all compiling the
-      # same dependencies from the same lockfile. Back when there were four that was 774MB of the
+      # six of them on Linux and eight on each mirror once the test jobs are sharded, all compiling
+      # the same dependencies from the same lockfile. Back when there were four that was 774MB of the
       # repository's 10GB cache budget spent storing one answer four times, and a new job starting
       # from nothing every time one was added.
       #
-      # Every shard reads and none of them saves: the entry is written once per platform, by the
-      # `lint` job, which is where the argument for that lives.
+      # This job reads and does not save: the entry is written once per platform, by the `lint` job,
+      # which is where the argument for that lives.
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
@@ -184,12 +190,8 @@ jobs:
       # The e2e slices are not here — they are the `rust-e2e` job below, and this one holds the rest
       # of the suite. `cli_e2e_*` is every slice of that suite (crates/amenbo-cli/tests/e2e), named
       # by prefix so a new one lands on the right side of the line without either job being touched.
-      #
-      # `--partition hash:` deals the tests out by a hash of their name, so a test lands on the same
-      # shard every run and a new one lands on a shard without anybody choosing. `count:` would deal
-      # them by position instead, which moves every test after an inserted one.
       - name: Test (feature-gated scale suites + everything else)
-        run: cargo nextest run --profile ci --features scale,e2e -E 'not binary(/^cli_e2e/)' --partition hash:${{ matrix.shard }}/3
+        run: cargo nextest run --profile ci --features scale,e2e -E 'not binary(/^cli_e2e/)'
 
   # The e2e half of the suite, on a runner of its own. The rest of it is the `rust` job above, and
   # neither half asserts anything the other decides — so the gate's wait is the longer of the two and
@@ -237,17 +239,21 @@ jobs:
         with:
           tool: cargo-nextest
 
-      # Four shards here against the `rust` job's three: this half is the longer of the two, so it
-      # is the one that sets the gate's wait. Beyond four the build every shard pays stops being
-      # worth the test time a further slice removes.
+      # Four shards, and the `rust` job none: this half is by far the longer of the two, so it is the
+      # one that sets the gate's wait and the only one a slice pays for. Beyond four the build every
+      # shard pays stops being worth the test time a further slice removes.
+      #
+      # `--partition hash:` deals the tests out by a hash of their name, so a test lands on the same
+      # shard every run and a new one lands on a shard without anybody choosing. `count:` would deal
+      # them by position instead, which moves every test after an inserted one.
       - name: Test (the CLI e2e suites)
         run: cargo nextest run --profile ci --features scale,e2e -E 'binary(/^cli_e2e/)' --partition hash:${{ matrix.shard }}/4
 
   # The `rust` job above, on the two platforms it cannot speak for. Twelve files in the workspace carry
   # a `target_os = "macos"` branch and twelve a `cfg(windows)` one; on Linux the compiler walks past
   # every one of them, so nothing builds them on the way to a release. This job builds and tests them
-  # on every change that can reach them. The host crate's other half is gated the same way, by
-  # app-rust-mac-win below.
+  # on the `full` legs — nightly, and before a tag — and not on a change; the head of this file has
+  # why. The host crate's other half is gated the same way, by app-rust-mac-win below.
   #
   # It mirrors the `rust` job's test step and stops there. Clippy is the `lint` / `lint-mac-win`
   # pair, which between them cover all three platforms for the same reason this job exists — a
@@ -256,17 +262,16 @@ jobs:
   # almost every doc comment in the tree is outside an OS branch, so a third rustdoc run would
   # re-read what one has already judged. What that leaves out is a doc link written inside a
   # `cfg`-gated item — no platform but its own can resolve it — and that sliver is accepted rather
-  # than paid for with a rustdoc run per OS on every change.
+  # than paid for with a rustdoc run per OS.
   #
-  # Sharded the same three ways as the `rust` job, and deliberately so. Neither mac nor Windows is
-  # on the critical path once the e2e half is split, so the shards buy no time here — what they buy
-  # is one shape for all three platforms, which is what keeps a new test from needing anybody to
-  # decide which side of an OS it lands on. The count is one number, so it can be moved later.
+  # Sharded three ways where the Linux `rust` job is not sharded at all. These two are the slow ones
+  # — the same suite takes minutes here against the Linux leg's 34 seconds — so a slice buys back
+  # real time, and it buys it on legs nothing waits on: the nightly leg answers to the clock, and the
+  # pre-tag one is run once. The count is one number, so it can be moved later.
   rust-mac-win:
     name: cargo test (${{ matrix.os }} ${{ matrix.shard }}/3)
     runs-on: ${{ matrix.os }}
-    needs: changes
-    if: ${{ needs.changes.outputs.rust == 'true' }}
+    if: ${{ inputs.full }}
     strategy:
       fail-fast: false
       matrix:
@@ -347,17 +352,16 @@ jobs:
         run: cargo nextest run --profile ci --features scale,e2e -E 'not binary(/^cli_e2e/)' --partition hash:${{ matrix.shard }}/3
 
   # `rust-e2e`, on the two platforms it cannot speak for — the same argument as `rust-mac-win`, for
-  # the other half of the suite. Windows is where the line between the halves pays most: both of its
-  # test runs are the slowest of their kind in the workflow, so taking either one off the critical
-  # path is worth minutes rather than seconds.
+  # the other half of the suite, and on the same `full` legs. Windows is where the line between the
+  # halves pays most: both of its test runs are the slowest of their kind in the workflow, so taking
+  # either one off the run's critical path is worth minutes rather than seconds.
   #
   # It mirrors the e2e step and the OpenSSL build's perl, and stops there — clippy belongs to
   # `lint-mac-win` and the doc steps to `lint`, neither of which is about a test run.
   rust-e2e-mac-win:
     name: cargo test (CLI e2e, ${{ matrix.os }} ${{ matrix.shard }}/4)
     runs-on: ${{ matrix.os }}
-    needs: changes
-    if: ${{ needs.changes.outputs.rust == 'true' }}
+    if: ${{ inputs.full }}
     strategy:
       fail-fast: false
       matrix:
@@ -467,16 +471,18 @@ jobs:
 
   # Clippy on the two platforms Linux cannot lint for. The reason is the one that puts `rust-mac-win`
   # in this workflow at all: a `target_os = "macos"` or `cfg(windows)` branch is walked past by every
-  # other compiler, so a lint that runs only on Linux has never read the code inside it. The doc
-  # steps stay on the Linux leg alone — see `rust-mac-win` for why that sliver is accepted.
+  # other compiler, so a lint that runs only on Linux has never read the code inside it. It rides the
+  # same `full` legs as that job. The doc steps stay on the Linux leg alone — see `rust-mac-win` for
+  # why that sliver is accepted.
   #
   # It writes the shared entry for its platform, the same way `lint` does on Linux and for the same
-  # reason — one leg per OS, the widest build, and on main alone.
+  # reason — one leg per OS, the widest build, and on main alone. That entry is now written by the
+  # nightly leg rather than by every merge, which is enough: it is the dependency graph that is
+  # cached, and that moves when the lockfile does, not when a commit does.
   lint-mac-win:
     name: clippy (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    needs: changes
-    if: ${{ needs.changes.outputs.rust == 'true' }}
+    if: ${{ inputs.full }}
     strategy:
       fail-fast: false
       matrix:
@@ -576,11 +582,14 @@ jobs:
   # release on a mac. That is the wrong place to learn the harness is broken, since it is the tool
   # that says whether the build may ship. There is no Windows leg: the harness drives the mac
   # artifact, and carries no Windows branch to build.
+  #
+  # On the `full` legs, like every other mirror here — and the pre-tag one is the run that stands
+  # immediately before the harness is asked to judge a real artifact, which is where its own verdict
+  # is worth most.
   verification-macos:
     name: verification harness (clippy + test, macOS)
     runs-on: macos-latest
-    needs: changes
-    if: ${{ needs.changes.outputs.verification == 'true' }}
+    if: ${{ inputs.full }}
     steps:
       - uses: actions/checkout@v7
 
@@ -830,11 +839,11 @@ jobs:
         run: RUSTDOCFLAGS="-D warnings" cargo doc --manifest-path app/src-tauri/Cargo.toml --no-deps --document-private-items
 
   # The `app-rust` job above, on the two platforms it cannot speak for — the same argument as
-  # `rust-mac-win`, for the other tree. The host crate is where the OS branches are thickest: the
-  # menu, autostart, each platform's notifier, and the store watch that chooses between a kernel
-  # watch and polling. Only the Linux side of any of it is built by the job above, and the Windows
-  # side has never been built by a gate at all — the release workflow was the first thing to
-  # compile it, and by then the change is already on main.
+  # `rust-mac-win`, for the other tree, and on the same `full` legs. The host crate is where the OS
+  # branches are thickest: the menu, autostart, each platform's notifier, and the store watch that
+  # chooses between a kernel watch and polling. Only the Linux side of any of it is built by the job
+  # above, and the Windows side had never been built by a gate at all — the release workflow was the
+  # first thing to compile it, and by then the change was already on main.
   #
   # No bundle here either: this is `cargo` over the crate, exactly as the Linux job is. The network-
   # FS step is not mirrored — it stands up NFS/SMB/9P mounts on the runner, which is a Linux
@@ -843,8 +852,7 @@ jobs:
   app-rust-mac-win:
     name: app crate clippy + test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    needs: changes
-    if: ${{ needs.changes.outputs.rust == 'true' }}
+    if: ${{ inputs.full }}
     strategy:
       fail-fast: false
       matrix:
@@ -1072,9 +1080,14 @@ jobs:
   # arrives, or take one that was never given. So it always runs, and folds the results itself.
   #
   # `skipped` passes: most jobs above are path-gated, and skipping is their ordinary answer to a diff
-  # that cannot have moved them. `cancelled` fails: such a job judged nothing. The only cancellation
-  # here comes from the concurrency group at the top, which takes down superseded runs — and no merge
-  # waits on a superseded run's verdict.
+  # that cannot have moved them — as is the mac/Windows mirrors' and `scale-heavy`'s answer to any
+  # change at all, those being gated on `inputs.full`. That is what lets one required check name the
+  # whole workflow while a change runs a fraction of it: the `full` legs run the rest on the clock,
+  # and the pre-tag one has to be green before a tag is cut.
+  #
+  # `cancelled` fails: such a job judged nothing. The only cancellation here comes from the
+  # concurrency group at the top, which takes down superseded runs — and no merge waits on a
+  # superseded run's verdict.
   #
   # Adding a job without a line in `needs:` leaves this gate green without it, and nothing goes red to
   # say so. guards/check-ci-aggregate.sh compares the two lists; tree-guards above runs it.

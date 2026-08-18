@@ -45,7 +45,10 @@ use cmd::outbox::{resume_dispatch, with_dispatch};
 use cmd::place::{binding_project, bound_project, location_header, named_project_flag};
 use cmd::plugin::{PluginsAtEntry, plugin_cmd, plugin_validate_cmd, plugins_for_agent};
 use cmd::project::project;
-use cmd::setup::{agent_hook_answer_cmd, agent_hook_setup, agent_hook_snippet_cmd, hooks_cmd, lint_hook_setup};
+use cmd::setup::{
+    agent_hook_answer_cmd, agent_hook_setup, agent_hook_snippet_cmd, hooks_cmd, lint_hook_setup, tick_cmd,
+    tick_reconcile,
+};
 use cmd::status::{render_discover, render_status};
 use cmd::task::task;
 use cmd::update::{self_rollback_cmd, self_update_cmd, unstamped_line, update_cmd, version_unbound};
@@ -419,6 +422,9 @@ fn uses_facet(cmd: &Option<Command>) -> bool {
         | Command::Whoami
         | Command::Config { .. } // settings live in the user layer, outside any project
         | Command::Bind { .. } // only writes the `.amenbo` pointer
+        // One timer for the machine, answered on the device: it reads and writes a config key and no
+        // store content at all, which is `config`'s class rather than the lint hook's.
+        | Command::Tick { .. }
         | Command::Lint { .. } // reads the text it is handed; no store to reach into
         | Command::GithookPreCommit // the hook's face of `lint`; reads the staged diff, no store
         | Command::GithookCommitMsg { .. } // the hook's face of `lint <file>`; reads the message file, no store
@@ -484,6 +490,9 @@ fn stamps_facet(cmd: &Option<Command>) -> bool {
         // to stamp a facet onto.
         | Command::Plugin { .. }
         | Command::Hooks { .. }
+        // The hourly tick's answer: a config key and a registration in the OS, with no author to stamp
+        // and no activity behind it.
+        | Command::Tick { .. }
         // The AI-harness consent, like the lint's: a per-project row that records an answer, with no
         // author to stamp and no activity behind it.
         | Command::AgentHook { .. }
@@ -1050,6 +1059,11 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         let lint_asked = lint_hook_setup(&mut store, flags);
         agent_hook_setup(&store, flags, lint_asked);
     }
+    // The hourly tick settles its own two states here, for the same reason and with the same exception:
+    // `tick`'s argv already says what this would say, and `tick status` promises to only read.
+    if !matches!(cli.command, Some(Command::Tick { .. })) {
+        tick_reconcile(&mut store);
+    }
 
     let Some(command) = cli.command else {
         // No arguments: discover.
@@ -1400,6 +1414,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
             unreachable!("handled before open")
         }
         Command::Hooks { sub } => return hooks_cmd(&mut store, flags, sub),
+        Command::Tick { sub } => return tick_cmd(&mut store, flags, sub),
         // The recording face is the one that needs this folder: the answer is kept against the project
         // it is bound to, so unlike `snippet` it opens the store like any other write.
         Command::AgentHook { sub: AgentHookCmd::Answer { answer } } => {

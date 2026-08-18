@@ -11,7 +11,7 @@ import { addComment as mutAddComment, editComment as mutEditComment, removeComme
 import { activityRowKey, loadTaskActivity } from "../core/activity";
 import { confirmDialog } from "../core/dialog";
 import {
-  DueChip, FacetAvatar, PremiseChangedField, PriorityDot, StatusSelect, TaskIdChip,
+  DateField, DueChip, FacetAvatar, PremiseChangedField, PriorityDot, StatusSelect, TaskIdChip,
 } from "../components/atoms";
 import { agoLabel, errText, eventText, priorityLabel, t, tf } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
@@ -267,6 +267,17 @@ export function TaskDetailPane({
                 return placement.project.name;
               })()}
             </span>
+          </div>
+          {/* The two days, as the fields that write them — the chip above says how the due date stands, and
+              the premise row below says whether the start day is still holding the task back. Neither of
+              those is a way of changing one, which is what these are. */}
+          <div className="detail__field">
+            <span className="detail__flabel">{t("date.due")}</span>
+            <DateField label={t("date.due")} value={task.due} onChange={(day) => store.setDue(taskId, day)} />
+          </div>
+          <div className="detail__field">
+            <span className="detail__flabel">{t("date.start")}</span>
+            <DateField label={t("date.start")} value={task.startOn} onChange={(day) => store.setStart(taskId, day)} />
           </div>
           {axisProject && axisProject.dimensions.map((dim) => (
             <div className="detail__field" key={dim.id}>

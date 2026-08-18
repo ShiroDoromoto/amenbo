@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useStore } from "../store/store";
+import { DateField } from "../components/atoms";
 import { t } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 
@@ -21,16 +22,20 @@ export function TaskComposePane({
   const store = useStore();
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
+  // The two days are offered here as well as on the detail pane, for the task whose dates are already
+  // known when it is filed. Neither is required — a task still registers on a title alone.
+  const [due, setDue] = useState<string | null>(null);
+  const [start, setStart] = useState<string | null>(null);
 
-  // Dirty whenever there is input (title or notes). On unmount, always drop it back to false.
+  // Dirty whenever there is input (title, notes, or either day). On unmount, always drop it back to false.
   useEffect(() => {
-    onDirtyChange?.(title.trim() !== "" || notes.trim() !== "");
+    onDirtyChange?.(title.trim() !== "" || notes.trim() !== "" || due !== null || start !== null);
     return () => onDirtyChange?.(false);
-  }, [title, notes, onDirtyChange]);
+  }, [title, notes, due, start, onDirtyChange]);
 
   const submit = async () => {
     if (!title.trim()) return;
-    const newId = await store.addTask(projectId, title.trim(), notes.trim() || undefined);
+    const newId = await store.addTask(projectId, title.trim(), notes.trim() || undefined, due, start);
     onCreated(newId);
   };
 
@@ -67,6 +72,15 @@ export function TaskComposePane({
               if (e.key === "Escape") onCancel();
             }}
           />
+        </div>
+
+        <div className="detail__field" style={{ marginTop: "var(--s-3)" }}>
+          <span className="detail__flabel">{t("date.due")}</span>
+          <DateField label={t("date.due")} value={due} onChange={setDue} />
+        </div>
+        <div className="detail__field">
+          <span className="detail__flabel">{t("date.start")}</span>
+          <DateField label={t("date.start")} value={start} onChange={setStart} />
         </div>
 
         <div className="compose__actions" style={{ marginTop: "var(--s-3)" }}>

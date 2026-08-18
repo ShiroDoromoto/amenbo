@@ -157,6 +157,8 @@ export const uk: Translation = {
     "cal.today": "Сьогодні", "cal.prevMonth": "Попередній місяць", "cal.nextMonth": "Наступний місяць",
     "cal.noDue": "Без терміну ({n})", "cal.empty": "Завдань із терміном немає",
     "cal.more": "+{n} ще", "cal.overdueDays": "прострочено на {n} дн.", "cal.inDays": "через {n} дн.",
+    "date.due": "Термін", "date.start": "Дата початку",
+    "date.clear": "Прибрати",
     "card.assignee": "Відповідальний",
     "detail.tab.detail": "Подробиці", "detail.tab.activity": "Активність",
     "detail.notFound": "Завдання не знайдено",

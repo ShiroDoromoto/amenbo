@@ -157,6 +157,8 @@ export const th: Translation = {
     "cal.today": "วันนี้", "cal.prevMonth": "เดือนก่อน", "cal.nextMonth": "เดือนถัดไป",
     "cal.noDue": "ไม่มีกำหนดส่ง ({n})", "cal.empty": "ไม่มีงานที่มีกำหนดส่ง",
     "cal.more": "+{n} รายการ", "cal.overdueDays": "เลย {n} วัน", "cal.inDays": "อีก {n} วัน",
+    "date.due": "กำหนดส่ง", "date.start": "วันเริ่มต้น",
+    "date.clear": "ล้าง",
     "card.assignee": "ผู้รับผิดชอบ",
     "detail.tab.detail": "รายละเอียด", "detail.tab.activity": "ความเคลื่อนไหว",
     "detail.notFound": "ไม่พบงาน",

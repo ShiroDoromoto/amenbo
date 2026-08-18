@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="1024" height="1024">
+  <title>amenbo (small)</title>
+  <!-- The mark for small sizes. mark.svg beside it is the origin this is drawn from and
+       the one to use above 32 pixels; this is its counterpart below that, and it is the
+       other file a new delivery has to be re-cut into.
+
+       Below about 32 pixels the delivered mark stops being black: its stroke is a 64th of the
+       canvas, so at 16 it asks for a quarter of a pixel and the screen answers with pale grey
+       (the darkest pixel measures 145 of 255). This version is drawn for that size instead —
+       one unit is one pixel at 16, the stroke is one whole unit, and the centre sits on a half
+       so a vertical or horizontal stroke covers one pixel column rather than smearing over two.
+
+       The node centres, the arm lengths and the leg are the delivered ones, scaled. Two things
+       change, and only because 16 pixels cannot hold them: the nodes are filled rather than
+       outlined, the hole an outline needs being thinner than a pixel, and the free leg that
+       floats beside the upper-right arm is dropped, reading as a stray dot at this size. -->
+  <g fill="none" stroke="#000000" stroke-width="1" stroke-linecap="butt">
+    <path d="M 6.380,7.500 L 3.020,7.500"/>
+    <path d="M 7.500,6.380 L 7.500,3.020"/>
+    <path d="M 8.060,6.940 L 12.540,2.460"/>
+    <path d="M 6.940,8.060 L 3.580,11.420"/>
+    <path d="M 8.060,8.060 L 12.540,12.540"/>
+    <path d="M 7.500,8.620 L 7.500,11.980"/>
+  </g>
+  <g fill="#000000" stroke="none">
+    <path d="M 6.100,7.500 L 7.500,6.100 L 8.900,7.500 L 7.500,8.900 Z"/>
+    <path d="M 6.100,1.900 L 7.500,0.500 L 8.900,1.900 L 7.500,3.300 Z"/>
+    <path d="M 0.500,7.500 L 1.900,6.100 L 3.300,7.500 L 1.900,8.900 Z"/>
+    <path d="M 11.700,1.900 L 13.100,0.500 L 14.500,1.900 L 13.100,3.300 Z"/>
+    <path d="M 1.620,11.980 L 3.020,10.580 L 4.420,11.980 L 3.020,13.380 Z"/>
+    <path d="M 11.700,13.100 L 13.100,11.700 L 14.500,13.100 L 13.100,14.500 Z"/>
+  </g>
+</svg>

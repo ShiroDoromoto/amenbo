@@ -305,6 +305,25 @@ jobs:
         shell: pwsh
         run: echo "OPENSSL_SRC_PERL=C:/Strawberry/perl/bin/perl.exe" >> $env:GITHUB_ENV
 
+      # Debug info is the largest thing a Windows build writes, and this leg's disk is what makes it
+      # slow: cutting the dev profile from full debug info to line tables alone took 14% off the
+      # build here and left the test run exactly where it was. What goes is variable inspection
+      # under a debugger — a backtrace still names its file and its line, which is the whole of what
+      # a CI log is ever read for. macOS keeps its full debug info: that build sits well under the
+      # critical path, so there is nothing to buy there. A step rather than the job's `env` for the
+      # same reason as the perl above — on macOS the variable has to be ABSENT, not empty.
+      #
+      # rust-cache's key covers the cargo environment, so this renames the Windows entry: the first
+      # run on main after it lands rebuilds from nothing (727s, measured on this workflow) and every
+      # run after that reads the new entry. That is also why every Windows leg sets it, in the same
+      # place: `lint-mac-win` writes the entry the workspace shares and the rest read it, so a leg
+      # that left the variable out would key on an entry nobody writes and build from nothing every
+      # run.
+      - name: Trim the dev profile's debug info to line tables
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: echo "CARGO_PROFILE_DEV_DEBUG=line-tables-only" >> $env:GITHUB_ENV
+
       - name: Show toolchain
         run: rustc --version && cargo --version
 
@@ -365,6 +384,13 @@ jobs:
         if: ${{ runner.os == 'Windows' }}
         shell: pwsh
         run: echo "OPENSSL_SRC_PERL=C:/Strawberry/perl/bin/perl.exe" >> $env:GITHUB_ENV
+
+      # Same line, and the same reason, as `rust-mac-win` above — and here it is also what keeps this
+      # job on the shared cache entry, the variable being part of its key.
+      - name: Trim the dev profile's debug info to line tables
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: echo "CARGO_PROFILE_DEV_DEBUG=line-tables-only" >> $env:GITHUB_ENV
 
       - name: Show toolchain
         run: rustc --version && cargo --version
@@ -466,6 +492,13 @@ jobs:
         if: ${{ runner.os == 'Windows' }}
         shell: pwsh
         run: echo "OPENSSL_SRC_PERL=C:/Strawberry/perl/bin/perl.exe" >> $env:GITHUB_ENV
+
+      # Same line, and the same reason, as `rust-mac-win` above — and this is the leg that writes the
+      # shared cache entry, so the variable is part of the key its readers have to match.
+      - name: Trim the dev profile's debug info to line tables
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: echo "CARGO_PROFILE_DEV_DEBUG=line-tables-only" >> $env:GITHUB_ENV
 
       - name: Show toolchain
         run: rustc --version && cargo clippy --version
@@ -840,6 +873,14 @@ jobs:
         if: ${{ runner.os == 'Windows' }}
         shell: pwsh
         run: echo "OPENSSL_SRC_PERL=C:/Strawberry/perl/bin/perl.exe" >> $env:GITHUB_ENV
+
+      # Same line, and the same reason, as `rust-mac-win` above. It reaches the clippy and the test
+      # step below, which drive the dev profile; the sidecar staged in between builds the root
+      # workspace in release, which the variable does not touch.
+      - name: Trim the dev profile's debug info to line tables
+        if: ${{ runner.os == 'Windows' }}
+        shell: pwsh
+        run: echo "CARGO_PROFILE_DEV_DEBUG=line-tables-only" >> $env:GITHUB_ENV
 
       # The sidecar staging step below is a Node script; nothing else here needs a runtime.
       - uses: actions/setup-node@v7

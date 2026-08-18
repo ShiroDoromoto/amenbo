@@ -385,6 +385,9 @@ pub(crate) fn tick_cmd(store: &mut Store, flags: &Flags, sub: TickCmd) -> Result
                 human(flags, render_tick_status(tick::available(), registered, consent, cmd));
             }
         }
+        // The scheduler's own face, and the only one of the four that is not about the answer: it carries
+        // the hour out rather than settling what may be registered. `run` dispatches it ahead of this.
+        TickCmd::Run => unreachable!("`tick run` is handled by cmd::tick"),
     }
     Ok(0)
 }

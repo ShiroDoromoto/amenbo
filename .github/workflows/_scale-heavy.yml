@@ -1,7 +1,8 @@
 name: _scale-heavy
 
-# The full 10k-seed read-scaling guard, split out of the per-PR gate. It starts nothing itself —
-# scale-heavy-nightly.yml runs it on the clock, scale-heavy-manual.yml on demand.
+# The full 10k-seed read-scaling guard. It starts nothing itself — two callers reach it, for two
+# different questions: _ci.yml's `scale-heavy` job runs it on the `full` legs (nightly, and the run
+# that stands before a tag), and scale-heavy-manual.yml runs it on demand.
 #
 # `read_scaling_guard` proves the read hot paths stay O(result) as the store grows. Its deterministic
 # ratio guards prove that at a medium seed in seconds (the `rust` job in _ci.yml runs them on every
@@ -10,9 +11,11 @@ name: _scale-heavy
 # path for a regression class that does not need per-PR latency, so the full 10k runs here instead:
 # nightly (the cadence at which an O(N²)/O(total) regression must be caught) and on demand.
 #
-# This is a body of its own rather than a job in _ci.yml because its cadence is wholly separate from
-# the merge gate's; folding it in would force an event guard on every PR job. See
-# crates/amenbo-core/Cargo.toml for the `scale` / `scale-heavy` feature split.
+# It stays a body of its own, rather than being inlined into that job, so that the on-demand leg has
+# something to call: a change that touched a read hot path gets its verdict in a couple of minutes
+# instead of waiting out a full _ci.yml run. Inlining would mean two copies of the same steps, and
+# the copy nobody watches is the one that rots. See crates/amenbo-core/Cargo.toml for the `scale` /
+# `scale-heavy` feature split.
 #
 # Cost: this repo is public, so Actions minutes are free — what keeps the full 10k off the per-PR
 # gate is merge latency, not a quota. The job runs on Linux.

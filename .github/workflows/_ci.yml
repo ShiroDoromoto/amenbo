@@ -175,7 +175,7 @@ jobs:
       # enable them or those guards silently rot. Enable scale+e2e only, and not `--all-features`:
       # `scale` (not `scale-heavy`) seeds read_scaling_guard at a *medium*
       # store and runs only its deterministic O(result) ratio guards — the full 10k seed + the
-      # wall-clock guards run nightly via scale-heavy-nightly.yml, off the PR path. The `ci` profile
+      # wall-clock guards run on the `full` legs (the `scale-heavy` job below), off the PR path. The `ci` profile
       # (.config/nextest.toml) runs every test to completion (no fail-fast) so one failure doesn't
       # mask the rest.
       #
@@ -489,6 +489,27 @@ jobs:
       # The same lint contract as the Linux leg, on the branches only this platform compiles.
       - name: Clippy (all targets, all features)
         run: cargo clippy --all-targets --all-features -- -D warnings -D clippy::disallowed_methods
+
+  # The deepest tier of the same suite, and the only job here that no diff can open. `read_scaling_guard`
+  # proves the read hot paths stay O(result) as the store grows: its deterministic ratio guards say so at
+  # a medium seed in seconds, and the `rust` job runs those on every PR via `--features scale`. Its
+  # wall-clock guards — sublinearity, and the board's O(N^2) net — only bite at the full 10k seed, where
+  # they cost about 23s on top of a full-10k seeding run.
+  #
+  # `inputs.full` and not a path filter: what decides this one is cadence, not what the diff touched. A
+  # regression in this class has to be caught within a day, not within a merge, and the seeding is too
+  # slow to put in front of every PR. So it rides the legs that already ask for everything —
+  # ci-full-nightly.yml on the clock, and ci-full-manual.yml before a tag, which is what puts the guard
+  # in front of a release for the first time.
+  #
+  # It calls _scale-heavy.yml rather than restating its steps, because scale-heavy-manual.yml calls the
+  # same body for the on-demand answer: a change that touched a read hot path gets a verdict in a couple
+  # of minutes there instead of waiting out a full run here. One body, two callers, nothing to drift.
+  scale-heavy:
+    if: ${{ inputs.full }}
+    uses: ./.github/workflows/_scale-heavy.yml
+    permissions:
+      contents: read
 
   # The pre-distribution verification harness (verification/) is its own cargo workspace, OUTSIDE
   # the main one, so the `rust` job above — which drives the default (main) manifest — never
@@ -1046,6 +1067,7 @@ jobs:
       - rust-e2e-mac-win
       - lint
       - lint-mac-win
+      - scale-heavy
       - verification
       - verification-macos
       - gui-web

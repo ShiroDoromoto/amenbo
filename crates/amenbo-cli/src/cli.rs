@@ -851,6 +851,11 @@ pub enum TickCmd {
     /// side. They are read independently on purpose, so a registration you switched off yourself is
     /// something amenbo can see rather than something it talks over.
     Status,
+
+    /// The wake-up itself — what the scheduler runs, never a line to type. It opens nothing and
+    /// decides nothing yet; what amenbo works out once awake is being written (`AMB-T-3258`).
+    #[command(hide = true)]
+    Run,
 }
 
 #[derive(Subcommand, Debug)]

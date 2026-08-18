@@ -350,8 +350,19 @@ fn render_hook_status(
 pub(crate) fn tick_cmd(store: &mut Store, flags: &Flags, sub: TickCmd) -> Result<i32, CliError> {
     use amenbo_core::tick::{self, TickConsent};
 
+    // Where the door is the app bundle's, the copy of this executable inside the bundle is the one that
+    // can open it, and this process is the same binary reached by another path. Hand the command over to
+    // it and relay what it did (`AMB-D-707` puts the writing hand in the bundle; `tick::relaunch_target`
+    // answers `None` unless launching one would actually help, so this cannot loop).
+    if !tick::reachable_from_here() {
+        if let Some(exe) = tick::relaunch_target() {
+            return relaunch_in_bundle(&exe, flags, &sub);
+        }
+    }
     let cmd = Paths::command_name();
     match sub {
+        // Handled before the store is opened — the scheduler runs it from a directory nobody chose.
+        TickCmd::Run => unreachable!("handled before open"),
         TickCmd::Install => {
             tick::register().map_err(CliError::from)?;
             store.config.tick_consent = Some(TickConsent::Yes);
@@ -373,20 +384,52 @@ pub(crate) fn tick_cmd(store: &mut Store, flags: &Flags, sub: TickCmd) -> Result
             }
         }
         TickCmd::Status => {
-            let registered = tick::probe().map_err(CliError::from)?;
+            // Read-only, so it answers wherever it is asked: a process that cannot work the door reports
+            // that, rather than failing over a question about the scheduler it never got to put.
+            let reachable = tick::reachable_from_here();
+            let registered = reachable && tick::probe().map_err(CliError::from)?;
             let consent = store.config.tick_consent;
             if flags.json {
                 print_json(&json!({
-                    "supported": tick::available(),
+                    "supported": reachable,
                     "registered": registered,
                     "consent": consent,
                 }));
             } else {
-                human(flags, render_tick_status(tick::available(), registered, consent, cmd));
+                human(flags, render_tick_status(reachable, tick::available(), registered, consent, cmd));
             }
         }
     }
     Ok(0)
+}
+
+/// Run this same command again as the bundle's own executable, and give the caller back exactly what it
+/// said. Streams are inherited, so the child's text and its `--json` land on this process's own stdout
+/// and stderr with nothing rewritten in between — what the reader sees is one command, run once.
+fn relaunch_in_bundle(exe: &std::path::Path, flags: &Flags, sub: &TickCmd) -> Result<i32, CliError> {
+    let face = match sub {
+        TickCmd::Install => "install",
+        TickCmd::Uninstall => "uninstall",
+        TickCmd::Status => "status",
+        TickCmd::Run => unreachable!("handled before open"),
+    };
+    let mut child = std::process::Command::new(exe);
+    child.args(["tick", face]);
+    if flags.json {
+        child.arg("--json");
+    }
+    if flags.quiet {
+        child.arg("--quiet");
+    }
+    match child.status() {
+        Ok(status) => Ok(status.code().unwrap_or(1)),
+        Err(e) => Err(CliError {
+            code: "io_error",
+            message: format!("Cannot reach amenbo's own copy at {}: {e}", exe.display()),
+            hint: None,
+            exit: 1,
+        }),
+    }
 }
 
 /// The two facts, the scheduler's and the answer's, on their own lines — which is the whole point: the
@@ -394,17 +437,21 @@ pub(crate) fn tick_cmd(store: &mut Store, flags: &Flags, sub: TickCmd) -> Result
 /// with no door of ours yet says so on the scheduler's line and nowhere else: the answer is still the
 /// user's to have given, and overwriting it with "unsupported" would lose it.
 fn render_tick_status(
-    supported: bool,
+    reachable: bool,
+    has_a_door: bool,
     registered: bool,
     consent: Option<amenbo_core::tick::TickConsent>,
     cmd: &str,
 ) -> String {
     use amenbo_core::tick::TickConsent;
 
-    let scheduler = match (supported, registered) {
-        (false, _) => "not something amenbo can register on this system yet".to_string(),
-        (true, true) => "holding the hourly tick".to_string(),
-        (true, false) => format!("nothing registered (register it: `{cmd} tick install`)"),
+    let scheduler = match (reachable, has_a_door, registered) {
+        (false, false, _) => "not something amenbo can register on this system yet".to_string(),
+        // A door this machine has, asked by a process that is not the one holding the key: this copy of
+        // amenbo sits outside the app bundle the registration is written from.
+        (false, true, _) => "registered by amenbo.app itself, and this copy of amenbo is not inside one".to_string(),
+        (true, _, true) => "holding the hourly tick".to_string(),
+        (true, _, false) => format!("nothing registered (register it: `{cmd} tick install`)"),
     };
     let answered = match consent {
         None => "not asked yet",

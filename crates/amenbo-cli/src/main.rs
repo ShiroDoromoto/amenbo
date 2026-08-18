@@ -830,6 +830,12 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         // diff (no paths), `commit-msg` lints the message file git hands over.
         Some(Command::GithookPreCommit) => return lint_cmd(flags, Vec::new(), false),
         Some(Command::GithookCommitMsg { path }) => return lint_cmd(flags, vec![path.clone()], false),
+        // The hourly tick's wake-up, on the same store-free footing and for a plainer reason: the
+        // scheduler runs it from a directory nobody chose, where a pointer search answers about
+        // wherever launchd happens to stand. There is nothing here to open yet — what amenbo works
+        // out once awake is `AMB-T-3258`'s — and an entry point that opened a store to do nothing
+        // would create one on a machine that has none.
+        Some(Command::Tick { sub: TickCmd::Run }) => return Ok(0),
         // A plugin runner: amenbo launched this process to work one queue (`AMB-T-2175`). It opens the store
         // it was handed, so it sits ahead of every guard that asks about *this* directory — its own is
         // whatever its launcher happened to be in, and it was never asked to answer for it.

@@ -644,6 +644,28 @@ impl Instructor {
                 }
                 format!("Open the task \"{}\" and set {}.", self.target_label(with), set.join(", "))
             }
+            // The other half of writing a day: taking it back off. It is a move of its own on this face
+            // and not an empty value handed to the same form — an emptied picker draws a day of its own,
+            // so the screen keeps a button beside each day for the taking-off, and that button is what a
+            // reader who wants the day gone has to find. The field is named by the CLI's own word for it,
+            // the pair the two roads share, and the two days are the whole of what this face can take
+            // back: a step naming anything else is turned away here rather than sending an operator to
+            // look for a button the screen never draws.
+            (Domain::Task, "clear") => {
+                let day = match req(with, "field")? {
+                    "due" => "due date",
+                    "start" => "start date",
+                    other => {
+                        return Err(format!(
+                            "action `clear` names `{other}`, and the screen offers no way to take that back"
+                        ))
+                    }
+                };
+                format!(
+                    "Open the task \"{}\" and press the button beside its {day} that takes the day off.",
+                    self.target_label(with)
+                )
+            }
             // Hanging a file on a record. Where it goes is the whole of the instruction, because the
             // screen keeps two ways in and they are not the same place: a record's own attachments have
             // a section of their own on its pane, and a remark's fold into the button under it.
@@ -1113,6 +1135,18 @@ impl Instructor {
                  there and cannot be typed into, holding in place of an example the words that say to \
                  choose a side first."
                     .to_string()
+            }
+            // The absence, said as an absence. A field written as `null` is read on this face by there
+            // being nothing in its place, so the line asks for that rather than for the word — an
+            // operator sent looking for "null" on the pane would find it nowhere and have nothing to
+            // answer with. What a build gets wrong here is the second half: a field that empties into a
+            // value of its own reads as a day somebody set.
+            (Domain::Task, "field") if matches!(with.get("equals"), Some(v) if v.is_null()) => {
+                format!(
+                    "Confirm the task \"{}\" shows no {} — the pane says it has none, and draws nothing of its own in its place.",
+                    self.target_label(with),
+                    req(with, "field")?
+                )
             }
             (Domain::Task, "field") => format!(
                 "Confirm the task \"{}\" shows {} = {}.",
@@ -3717,6 +3751,57 @@ steps_gui:
             assert!(err.contains("Greenhouse"), "the refusal names what was written: {err}");
             assert!(err.contains("steps_cli"), "and where it belongs instead: {err}");
         }
+    }
+
+    /// Taking a day back off names the button beside that day, since the picker's own way of emptying
+    /// itself is not drawn on every platform — and a field the screen keeps no such button for is
+    /// refused where it is written rather than sent to an operator who would go looking for one.
+    #[test]
+    fn taking_a_day_off_names_the_button_beside_it_and_no_other_field_has_one() {
+        let clear = |field: &str| Step::Action {
+            domain: Domain::Task,
+            op: "clear".to_string(),
+            with: [
+                ("target".to_string(), serde_yaml::Value::from("seed")),
+                ("field".to_string(), serde_yaml::Value::from(field)),
+            ]
+            .into_iter()
+            .collect(),
+            bind: None,
+        };
+
+        for (field, day) in [("due", "due date"), ("start", "start date")] {
+            let said = Instructor::new().render(&clear(field)).unwrap();
+            assert!(said.contains(day), "the line names which day: {said}");
+            assert!(said.contains("button beside"), "and where the button stands: {said}");
+        }
+
+        let err = Instructor::new().render(&clear("priority")).unwrap_err();
+        assert!(err.contains("priority"), "the refusal names what was written: {err}");
+    }
+
+    /// And the reading that closes it: a field written as `null` is asked for as an absence on the
+    /// pane, never as the word — there is nothing on screen for an operator to match that against.
+    #[test]
+    fn a_field_written_as_null_is_read_as_nothing_standing_there() {
+        let step = Step::Assert {
+            domain: Domain::Task,
+            op: "field".to_string(),
+            with: [
+                ("target".to_string(), serde_yaml::Value::from("seed")),
+                ("field".to_string(), serde_yaml::Value::from("due_on")),
+                ("equals".to_string(), serde_yaml::Value::Null),
+            ]
+            .into_iter()
+            .collect(),
+        };
+        let said = Instructor::new().render(&step).unwrap();
+        assert!(said.contains("shows no due_on"), "the absence is what is asked for: {said}");
+        assert!(!said.contains("null"), "and never the word itself: {said}");
+        assert!(
+            Instructor::new().expectation(&step).is_none(),
+            "nothing standing there is not a reading",
+        );
     }
 
     #[test]

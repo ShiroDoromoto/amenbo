@@ -1,11 +1,13 @@
 name: scale-heavy-manual
 
-# The full 10k read-scaling guard on demand — the same body the nightly leg runs
-# (scale-heavy-nightly.yml), for when a change touched a read hot path and waiting for the clock is
-# not the answer.
+# The full 10k read-scaling guard on demand — the same body _ci.yml's `scale-heavy` job runs on the
+# `full` legs, for when a change touched a read hot path and neither the clock nor a full run is the
+# answer. This leg exists for its latency: a couple of minutes for the one guard, against the whole
+# suite for ci-full-manual.yml.
 #
-# It is a file of its own rather than a second trigger on the nightly leg because both would then
-# share one concurrency group, and dispatching this would cancel a scheduled run midway.
+# The timed leg is ci-full-nightly.yml, which reaches this body through _ci.yml along with everything
+# else it forces open. There is no scale-heavy-nightly.yml: a second schedule for one job of that run
+# would only ask the same question twice.
 
 on:
   workflow_dispatch:

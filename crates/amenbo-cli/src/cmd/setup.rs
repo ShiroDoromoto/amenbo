@@ -420,12 +420,21 @@ fn render_tick_status(
 ///
 /// Everything here is best-effort and silent: the tick is a convenience, and a scheduler that will not
 /// say what it holds leaves both halves as the last run left them, which is the state that was working.
+/// It is also **silent about a device that was never asked**, and returns before reading the scheduler
+/// at all — that reading costs a process, and on an unanswered device its answer changes nothing.
 /// `tick` itself is not routed here — its argv already says what this would ask, and letting it record
 /// an answer would break `tick status`'s promise to only read.
 pub(crate) fn tick_reconcile(store: &mut Store) {
     use amenbo_core::tick::{self, TickConsent, TickFix};
 
     if !tick::available() {
+        return;
+    }
+    // Nothing to settle before the question has been put: `tick::fix_for` answers `Nothing` for an
+    // unanswered device whatever the scheduler holds, so reading the scheduler first would spend a
+    // process on an answer that is thrown away — on every command, on the machines where nobody has
+    // answered yet, which is most of them.
+    if store.config.tick_consent.is_none() {
         return;
     }
     let Ok(registered) = tick::probe() else { return };

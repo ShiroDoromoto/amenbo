@@ -21,7 +21,7 @@
 //! [`fix_for`].
 //!
 //! **What goes inside a registration is not here.** A plist, a scheduler task and a systemd unit are
-//! not one shape with three spellings, so each OS writes its own ([`platform`]). Three points from
+//! not one shape with three spellings, so each OS writes its own, and the build picks one. Three points from
 //! `AMB-D-707` are not writing style but whether the premise holds at all, and every door has to meet
 //! them: macOS registers through `SMAppService` so the row carries amenbo's name rather than the
 //! developer's; all three need the missed-run setting turned on explicitly, none having it by default;
@@ -93,6 +93,10 @@ pub fn fix_for(consent: Option<TickConsent>, registered: bool) -> TickFix {
 /// False is not a failure and not a refusal to answer: it is the honest state of a target amenbo has
 /// not learned to register on, and every face here says so rather than half-doing the work. While it is
 /// false [`probe`] is `false`, and [`register`] and [`unregister`] refuse.
+///
+/// It is a fact about the **build**, not about the machine: a Linux without systemd on it still has a
+/// door compiled in, and what it does not have is something behind the door — which is [`probe`]'s
+/// answer and the writes' refusal, said where the machine is actually asked.
 pub fn available() -> bool {
     platform::AVAILABLE
 }
@@ -118,36 +122,23 @@ pub fn unregister() -> Result<()> {
     platform::unregister()
 }
 
-/// The door into this machine's scheduler.
+/// The door into this machine's scheduler, chosen for the target being built.
 ///
-/// Empty on every OS today. What goes into a registration is per-OS in a way the rest of this module is
-/// deliberately not — the plist macOS wants is written by the app bundle through `SMAppService`, the
-/// Windows task has to be built from XML because `schtasks` has no flag for the battery gates, and
-/// Linux writes a pair of user units — so each door lands with the OS that needs it
-/// (`AMB-T-3253` / `AMB-T-3254` / `AMB-T-3255`) rather than being guessed at from here.
-mod platform {
-    use crate::error::{Error, Result};
+/// What goes into a registration is per-OS in a way the rest of this module is deliberately not — the
+/// plist macOS wants is written by the app bundle through `SMAppService`, the Windows task has to be
+/// built from XML because `schtasks` has no flag for the battery gates, and Linux writes a pair of
+/// systemd user units — so each door lands with the OS that needs it (`AMB-T-3253` / `AMB-T-3254`)
+/// rather than being guessed at from here. A target with no door yet answers through `nodoor`, which is
+/// the honest state and not a half-written one.
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "linux")]
+use linux as platform;
 
-    /// Whether a door is written for this target. One flag rather than three `cfg` arms, because today
-    /// the answer is the same on all of them and three copies of "not yet" is three places to update.
-    pub(super) const AVAILABLE: bool = false;
-
-    /// What every face here says while there is no door: the plain fact, and no hint, because there is
-    /// nothing the reader could type to fix it.
-    const NO_DOOR: &str = "amenbo cannot register the hourly tick on this system yet";
-
-    pub(super) fn probe() -> Result<bool> {
-        Ok(false)
-    }
-
-    pub(super) fn register() -> Result<()> {
-        Err(Error::invalid(NO_DOOR))
-    }
-
-    pub(super) fn unregister() -> Result<()> {
-        Err(Error::invalid(NO_DOOR))
-    }
-}
+#[cfg(not(target_os = "linux"))]
+mod nodoor;
+#[cfg(not(target_os = "linux"))]
+use nodoor as platform;
 
 #[cfg(test)]
 mod tests {
@@ -177,10 +168,21 @@ mod tests {
     /// With no door on this target, the state is readable and the two writes refuse — the reason a
     /// caller can say so, rather than reporting a registration that was never written.
     #[test]
+    #[cfg(not(target_os = "linux"))]
     fn a_target_with_no_door_answers_rather_than_pretending() {
         assert!(!available());
         assert!(!probe().expect("a target with no door still has a state to report"));
         assert!(register().is_err());
         assert!(unregister().is_err());
+    }
+
+    /// And on a target that has one, the reading still answers — with nothing held, on a machine that
+    /// was never asked to hold anything. What the writes do is the machine's to decide, so they are not
+    /// called here: a build box is not a place to register a timer on.
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn a_target_with_a_door_reads_the_scheduler_without_writing_to_it() {
+        assert!(available());
+        assert!(!probe().expect("the scheduler has a state to report"));
     }
 }

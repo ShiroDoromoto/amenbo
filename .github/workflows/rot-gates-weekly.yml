@@ -18,8 +18,8 @@ name: rot-gates-weekly
 
 on:
   schedule:
-    # Mondays at 07:00 UTC. An hour after scale-heavy-nightly.yml and an hour before
-    # ci-full-nightly.yml, so the three timed legs never contend for the same runners.
+    # Mondays at 07:00 UTC, an hour before ci-full-nightly.yml, so the two timed legs never contend
+    # for the same runners.
     - cron: '0 7 * * 1'
 
 concurrency:

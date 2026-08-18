@@ -27,8 +27,9 @@ name: ci-full-nightly
 
 on:
   schedule:
-    # Nightly at 08:00 UTC. Two hours after scale-heavy-nightly.yml and an hour after
-    # rot-gates-weekly.yml, so the three timed legs never contend for the same runners.
+    # Nightly at 08:00 UTC, an hour after rot-gates-weekly.yml, so the two timed legs never contend
+    # for the same runners. The full 10k read-scaling guard rides in here now, as _ci.yml's
+    # `scale-heavy` job, so it no longer has a schedule of its own.
     - cron: '0 8 * * *'
 
 concurrency:

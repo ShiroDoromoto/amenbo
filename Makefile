@@ -161,7 +161,7 @@ help:
 	@echo "make ts-derive-gate - assert every #[derive(TS)] sits in the GUI crate (a derive elsewhere moves bindings.ts on a change nothing on the GUI side watches) = the same guard CI runs (automatic at the start of make test)"
 	@echo "make ci-aggregate-gate - assert CI's merge gate waits for every job in _ci.yml (a job missing from its needs is one the required check goes green without) = the same guard CI runs (automatic at the start of make test)"
 	@echo "make workflow-run-gate - assert every workflow_run trigger names a workflow that exists and can fire (a renamed name: stops the trigger without making anything red) = the same guard CI runs (automatic at the start of make test)"
-	@echo "make brand        - re-bake assets/brand/ (app icons, marks) from the two origin SVGs after a new delivery. The set is tracked, so run this only when the mark itself moves (macOS; needs Google Chrome and Pillow)"
+	@echo "make brand        - re-bake the brand images (assets/brand/, and the app bundle icons under app/src-tauri/) from the origin SVGs. The set is tracked, so run this only when the mark itself moves (macOS; needs Google Chrome and Pillow)"
 	@echo "make sweep-stale  - if the cargo cache exceeds $(SWEEP_LIMIT_GB)GB, drop artifacts untouched for $(SWEEP_DAYS) days (automatic at the end of make test)"
 	@echo "make dist-gui     - build the prod GUI (mac dmg) with build-time signing into dist/ (a supplement for non-installer users; not a wharfy bundle)"
 	@echo "make dist-gui-mac - build the mac unified .pkg (GUI to /Applications, CLI to /usr/local/bin) into dist/ (the mac release bundle itself; Intel build via MAC_GUI_ARCH=amd64)"
@@ -817,10 +817,11 @@ devtool:
 	cd devtool && go build -o "$(CARGO_BIN)/devtool" .
 	@echo "→ devtool (parallel development; $(CARGO_BIN)/devtool)"
 
-## Re-bake the brand image set from its two origins (assets/brand/mark.svg and mark-inv.svg): the
-## app icon on its tile for both channels, and the mark alone at the sizes a page reaches for.
-## The set it writes is tracked, so this is not a build step and nothing waits on it — it is run by
-## hand when the mark itself changes, and what moves is committed. See scripts/gen-brand.py.
+## Re-bake the brand images from the origins in assets/brand/: the app icon on its tile for both
+## channels, the mark alone at the sizes a page reaches for, and the bundle's own copy of the icon
+## under app/src-tauri/ (which is what a bundler actually reads).
+## Everything it writes is tracked, so this is not a build step and nothing waits on it — it is run
+## by hand when the mark itself changes, and what moves is committed. See scripts/gen-brand.py.
 brand:
 	python3 scripts/gen-brand.py
 

@@ -383,6 +383,19 @@ pub enum Command {
         sub: HooksCmd,
     },
 
+    /// Manage the hourly tick: the one plain timer amenbo asks this machine's scheduler to hold, so
+    /// that what has to happen on time happens with no app open and nothing resident. What is
+    /// registered carries no meaning — it wakes amenbo once an hour, and amenbo works out once awake
+    /// what is due — so however many things come to depend on it, this stays one row in your system
+    /// settings, and switching that row off stops all of them. Registering writes into your
+    /// scheduler, which amenbo does not do unasked: it asks once, for the tick as a feature, on this
+    /// device. These are the explicit faces of that — `install` is that yes, `uninstall` is that no,
+    /// and `status` shows the answer beside what the scheduler actually holds.
+    Tick {
+        #[command(subcommand)]
+        sub: TickCmd,
+    },
+
     /// Hand over the configuration that makes an AI tool run `amenbo agent` when a session starts — the
     /// session-start hook, which reaches the model over the protocol instead of hoping the managed block
     /// in CLAUDE.md/AGENTS.md is read. **amenbo never writes a provider's settings**: this hands you the
@@ -819,6 +832,24 @@ pub enum HooksCmd {
     Uninstall,
 
     /// Show what is in each hook slot and what this project answered — the two facts, side by side.
+    Status,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum TickCmd {
+    /// Register the hourly tick, and record that this device consented. Idempotent: run over a
+    /// registration that is already there, it writes it again, which is how the timer comes to name
+    /// the build running now after an upgrade.
+    Install,
+
+    /// Take the registration away, and record that this device does not want it. Unlike the lint's,
+    /// this is a device-wide no, because the device is the only scale a timer has — and it closes the
+    /// question rather than the door: `tick install` registers it again whenever you want it back.
+    Uninstall,
+
+    /// Show what the scheduler is holding and what this device answered — the two facts, side by
+    /// side. They are read independently on purpose, so a registration you switched off yourself is
+    /// something amenbo can see rather than something it talks over.
     Status,
 }
 

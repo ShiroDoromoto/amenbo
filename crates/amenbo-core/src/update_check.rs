@@ -356,12 +356,11 @@ pub fn check(enabled: bool) -> Option<LatestRelease> {
     check_inner(enabled, false)
 }
 
-/// [`check`], bypassing the cache: query upstream once **even if** a fresh entry exists. For the two
-/// readings that must not answer from an entry up to a TTL old: the **first** tick after process
-/// start, so that right after a release we do not sit behind a fresh cache entry for the old version
-/// and fail to mention the new one, and a check somebody **typed or clicked** (`AMB-D-463`), where
-/// what is being asked for is the state now. Every other reading — the ones that ride along with work
-/// the user came to do — goes through [`check`], which is what keeps the traffic to the cache's terms.
+/// [`check`], bypassing the cache: query upstream once **even if** a fresh entry exists. For the one
+/// reading that must not answer from an entry up to a TTL old: a check somebody **typed or clicked**
+/// (`AMB-D-463`) — `amenbo update`, and the app menu's "check for updates" — where what is being
+/// asked for is the state now. Every reading nobody asked for goes through [`check`], process start
+/// included (`AMB-D-710`), which is what keeps the traffic to the cache's terms.
 ///
 /// The contract (honours the disable knob, times out, silent on failure, falls back to stale) is
 /// identical to [`check`], and **a successful fetch updates the cache too**, so the entry that later ticks read

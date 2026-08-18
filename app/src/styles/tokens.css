@@ -47,9 +47,11 @@
   --c-pri-med: var(--c-heed);
   --c-pri-low: var(--c-plain);
 
-  /* due */
+  /* due — the day it falls on is already a stop: nothing but doing the work moves it, and no
+     amount of noticing buys another day. Heed is the day before, while noticing still helps. */
   --c-due-overdue: var(--c-stop);
-  --c-due-today: var(--c-heed);
+  --c-due-today: var(--c-stop);
+  --c-due-tomorrow: var(--c-heed);
   --c-due-future: var(--c-text-muted);
 
   /* ----- typography ----- */

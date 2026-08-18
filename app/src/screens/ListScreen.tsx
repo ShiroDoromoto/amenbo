@@ -11,9 +11,9 @@ import { useSmartView } from "../core/reads";
 import { t } from "../core/i18n";
 import { isClosed } from "../core/status";
 
-// Shared list view for the list smart views (inbox / archive). They are saved filters — the same
+// Shared list view for the list smart views (inbox / archive / due). They are saved filters — the same
 // query the AI uses via mailbox. Each view pulls only its current page via core/reads (server-side
-// LIMIT/OFFSET, or a bounded refine for inbox); no full task array is held in JS. The view's name is
+// LIMIT/OFFSET, or a bounded refine for inbox and due); no full task array is held in JS. The view's name is
 // the sidebar's job alone — the header row carries only controls.
 export function ListScreen({
   viewId, headerSlot, selectedTaskId, onSelectTask,
@@ -42,35 +42,36 @@ export function ListScreen({
   useEffect(() => { if (page > 0 && page >= pageCount) setPage(pageCount - 1); }, [page, pageCount]);
   const start = page * PAGE_SIZE;
 
+  // The header band carries controls and nothing else, so it is raised only by a view that has some. The
+  // inbox has its two tabs; the due row has nothing to put there, and an empty bordered band above its
+  // list would read as something that failed to draw.
   const toolbar = (
     <div className="board__toolbar">
-      {isInbox && (
-        <div className="viewtabs">
-          <button
-            className={`viewtab ${!archived ? "viewtab--active" : ""}`}
-            onClick={() => setTab("inbox")}
-          >
-            {t("list.tabInbox")}
-          </button>
-          <button
-            className={`viewtab ${archived ? "viewtab--active" : ""}`}
-            onClick={() => setTab("archived")}
-          >
-            {t("list.tabArchived")}
-          </button>
-        </div>
-      )}
+      <div className="viewtabs">
+        <button
+          className={`viewtab ${!archived ? "viewtab--active" : ""}`}
+          onClick={() => setTab("inbox")}
+        >
+          {t("list.tabInbox")}
+        </button>
+        <button
+          className={`viewtab ${archived ? "viewtab--active" : ""}`}
+          onClick={() => setTab("archived")}
+        >
+          {t("list.tabArchived")}
+        </button>
+      </div>
     </div>
   );
 
   return (
     <>
-      {headerSlot && createPortal(toolbar, headerSlot)}
+      {headerSlot && isInbox && createPortal(toolbar, headerSlot)}
 
       {total === 0 ? (
         <div className="placeholder">
           <Icon name="check" size="lg" />
-          <div>{archived ? t("list.emptyArchived") : viewId === "inbox" ? t("list.emptyInbox") : t("list.empty")}</div>
+          <div>{emptyLine(viewId, archived)}</div>
         </div>
       ) : (
         <>
@@ -101,6 +102,17 @@ export function ListScreen({
       )}
     </>
   );
+}
+
+/**
+ * What an empty view says. Each of these lists is a different absence, and one line for all of them would
+ * report the wrong one: an empty inbox is nothing waiting on you, an empty due row is nothing pressing.
+ */
+function emptyLine(viewId: string, archived: boolean): string {
+  if (archived) return t("list.emptyArchived");
+  if (viewId === "inbox") return t("list.emptyInbox");
+  if (viewId === "due") return t("list.emptyDue");
+  return t("list.empty");
 }
 
 // The row is memoised so that changing the selection does not re-render every sibling row. For that

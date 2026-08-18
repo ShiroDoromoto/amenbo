@@ -517,6 +517,12 @@ impl Instructor {
     /// the very card being read. Both answers put that word on the shot, and what separates them is
     /// which part of the board it came from — which a reading never says.
     ///
+    /// `view-warns` is a `Review`. What it names is a bare number, and the sidebar draws bare numbers
+    /// down its whole length — one beside every project — so a reading of it would pass wherever the
+    /// run was pointed. What tells this one from those is the colour it is drawn in, and a reading
+    /// gives back characters with nothing on them. The zero side is worse still: it is an absence, and
+    /// a reading answers which words are on a shot, never which are missing from the right part of it.
+    ///
     /// `nudge` is a `Review`, and the sentence it names is why: an offer is put in the interface's own
     /// words, so a reading of it would hold this gate to the one language the run happened to be set up
     /// in. What the step names is written down all the same — it is what the eye closing the shot is
@@ -530,9 +536,14 @@ impl Instructor {
             // of a struck title misses the words that are there, and the same miss on a `present:
             // false` step is a pass nobody earned. A hit row is not one of these — a search draws its
             // titles plain, ended or not — so `found` keeps its expectation.
-            (Domain::Task, "listed") | (Domain::Task, "narrowed") if self.struck_through(with) => None,
+            (Domain::Task, "listed") | (Domain::Task, "narrowed") | (Domain::Task, "view-lists")
+                if self.struck_through(with) =>
+            {
+                None
+            }
             (Domain::Task, "listed")
             | (Domain::Task, "narrowed")
+            | (Domain::Task, "view-lists")
             | (Domain::Task, "found")
             | (Domain::Decision, "found") => {
                 Some(Expectation { text: self.target_label(with), present: present(with) })
@@ -699,6 +710,12 @@ impl Instructor {
                 req(with, "words")?,
                 self.target_label(with)
             ),
+            // Onto a smart view. The row is named by what it stands for and not by its label: the
+            // sidebar is drawn in whichever language the app was started in, so a line written on the
+            // wording would send the operator looking for a word this run never puts on screen.
+            (Domain::Task, "open-view") => {
+                format!("In the sidebar, press {}.", view_row(req(with, "view")?)?)
+            }
             // The moves that carry the screen from one shot to the next. They read as what to do and
             // not as what to confirm, because that is what they are — the shot they leave behind is
             // the screen after the move, which is how a road across screens is proven walked rather
@@ -1102,6 +1119,32 @@ impl Instructor {
                 self.target_label(with),
                 req(with, "field")?,
                 show(with.get("equals").ok_or("assert `field` needs `equals`")?)
+            ),
+            // The warning a smart view's row carries, read with nothing opened — which is the claim:
+            // the reader is told before they go looking. The colour is named beside the step because
+            // the colour is what an eye actually finds on the shot, and unlike a label it says the
+            // same thing in every language.
+            (Domain::Task, "view-warns") => {
+                let view = view_row(req(with, "view")?)?;
+                let step = warn_step(req(with, "step")?)?;
+                match count(with, "count")? {
+                    0 => format!(
+                        "With nothing opened, confirm the sidebar row for {view} carries no badge on {step}: nothing stands on that step, so nothing is drawn for it."
+                    ),
+                    n => format!(
+                        "With nothing opened, confirm the sidebar row for {view} carries the badge {n} on {step}."
+                    ),
+                }
+            }
+            // And what the press landed on. The view is named again rather than left to the step
+            // before it: a shot of the wrong listing and a shot of the right one both hold rows, and
+            // the line has to say which listing the eye is standing in front of.
+            (Domain::Task, "view-lists") => format!(
+                "Confirm the task \"{}\" is {} the rows of the listing opened from {}.{}",
+                self.target_label(with),
+                if present(with) { "among" } else { "nowhere among" },
+                view_row(req(with, "view")?)?,
+                self.struck_note(with)
             ),
             (Domain::Plugin, "browsed") => {
                 let name = req(with, "name")?;
@@ -1648,6 +1691,41 @@ fn ticked(with: &Args) -> Result<String, String> {
             names(with, "projects")?
         )),
     }
+}
+
+/// What a smart view's row stands for, said without its label. The sidebar is translated, so a road
+/// that named the wording would be held to whichever language the run was started in — while what the
+/// row is for is the same in all of them.
+fn view_row(id: &str) -> Result<&'static str, String> {
+    Ok(match id {
+        "inbox" => "the smart view that gathers what is waiting on the reader",
+        "due" => "the smart view that stands for the days work is due on",
+        "activity" => "the smart view that runs everything that has happened",
+        other => {
+            return Err(format!("`view: {other}` is not a smart view the sidebar draws"))
+        }
+    })
+}
+
+/// The step a warning is drawn on, in the ladder's own words and in the colour that carries them. Both
+/// halves are said: the step is what the road means, and the colour is what the eye closing the shot
+/// has to find.
+fn warn_step(step: &str) -> Result<&'static str, String> {
+    Ok(match step {
+        "stop" => "the stop step, drawn in red — its day has gone, or its day is today",
+        "heed" => "the heed step, drawn in amber — its day is tomorrow",
+        other => return Err(format!(
+            "`step: {other}` is not a step a row warns on (stop / heed)"
+        )),
+    })
+}
+
+/// A count a step names, which is a number and not a word — YAML types it, and a road that wrote it
+/// quoted would arrive here as a string nothing could compare.
+fn count(with: &Args, key: &str) -> Result<u64, String> {
+    with.get(key)
+        .and_then(|v| v.as_u64())
+        .ok_or_else(|| format!("arg `{key}` must be a whole number"))
 }
 
 /// The four places a hit can be on, in words an operator reads off the row. The set is closed and a
@@ -3428,6 +3506,115 @@ steps_gui:
             s.steps(Driver::Gui).iter().all(|st| ins.expectation(st).is_none()),
             "an answer drawn in the interface's own words is not a reading, and neither is paint"
         );
+    }
+
+    /// The two claims a road makes about a smart view, and the one of them a reading cannot close. The
+    /// row is read before anything is opened and the listing after, so what proves the pair is that the
+    /// badge goes to an eye — it is a bare number in a sidebar full of bare numbers, told apart from
+    /// them by a colour — while the rows under it are read off the shot like any other listing.
+    #[test]
+    fn the_badge_on_a_view_is_an_eyes_and_the_rows_under_it_are_read() {
+        let warns = Step::Assert {
+            domain: Domain::Task,
+            op: "view-warns".to_string(),
+            with: [
+                ("view".to_string(), serde_yaml::Value::from("due")),
+                ("step".to_string(), serde_yaml::Value::from("stop")),
+                ("count".to_string(), serde_yaml::Value::from(3)),
+            ]
+            .into_iter()
+            .collect(),
+        };
+        let said = Instructor::new().render(&warns).unwrap();
+        assert!(said.contains("nothing opened"), "the row is read before the press: {said}");
+        assert!(said.contains("red"), "and the eye is told which colour to find: {said}");
+        assert!(
+            Instructor::new().expectation(&warns).is_none(),
+            "a bare number told apart by its colour is a Review",
+        );
+
+        let lists = Step::Assert {
+            domain: Domain::Task,
+            op: "view-lists".to_string(),
+            with: [
+                ("target".to_string(), serde_yaml::Value::from("t")),
+                ("view".to_string(), serde_yaml::Value::from("due")),
+            ]
+            .into_iter()
+            .collect(),
+        };
+        assert!(
+            Instructor::new().expectation(&lists).is_some(),
+            "a title standing in a listing is read off the shot",
+        );
+    }
+
+    /// A step with nothing on the step it names says so as an absence, and the line has to carry the
+    /// reason: a badge that is simply not drawn and a badge an eye skipped over look alike on a shot.
+    #[test]
+    fn a_step_with_nothing_on_it_asks_for_no_badge_at_all() {
+        let step = Step::Assert {
+            domain: Domain::Task,
+            op: "view-warns".to_string(),
+            with: [
+                ("view".to_string(), serde_yaml::Value::from("due")),
+                ("step".to_string(), serde_yaml::Value::from("heed")),
+                ("count".to_string(), serde_yaml::Value::from(0)),
+            ]
+            .into_iter()
+            .collect(),
+        };
+        let said = Instructor::new().render(&step).unwrap();
+        assert!(said.contains("no badge"), "got: {said}");
+        assert!(said.contains("nothing stands on that step"), "and why there is none: {said}");
+    }
+
+    /// A view the sidebar does not draw, and a step the ladder does not have, are refused where they
+    /// are written rather than carried to a screen as an instruction nobody can act on.
+    #[test]
+    fn a_view_or_a_step_the_screen_has_no_such_thing_of_is_refused() {
+        let open = Step::Action {
+            domain: Domain::Task,
+            op: "open-view".to_string(),
+            with: [("view".to_string(), serde_yaml::Value::from("overdue"))].into_iter().collect(),
+            bind: None,
+        };
+        let err = Instructor::new().render(&open).unwrap_err();
+        assert!(err.contains("overdue"), "got: {err}");
+
+        let warns = Step::Assert {
+            domain: Domain::Task,
+            op: "view-warns".to_string(),
+            with: [
+                ("view".to_string(), serde_yaml::Value::from("due")),
+                ("step".to_string(), serde_yaml::Value::from("plain")),
+                ("count".to_string(), serde_yaml::Value::from(1)),
+            ]
+            .into_iter()
+            .collect(),
+        };
+        let err = Instructor::new().render(&warns).unwrap_err();
+        assert!(err.contains("plain"), "got: {err}");
+    }
+
+    /// A count written as words rather than as a number is refused here, not compared at the far end of
+    /// a run. YAML types an unquoted scalar by its shape, so a quoted one arrives as a string — and a
+    /// string is what the badge can never be.
+    #[test]
+    fn a_count_that_is_not_a_number_is_refused() {
+        let step = Step::Assert {
+            domain: Domain::Task,
+            op: "view-warns".to_string(),
+            with: [
+                ("view".to_string(), serde_yaml::Value::from("due")),
+                ("step".to_string(), serde_yaml::Value::from("stop")),
+                ("count".to_string(), serde_yaml::Value::from("three")),
+            ]
+            .into_iter()
+            .collect(),
+        };
+        let err = Instructor::new().render(&step).unwrap_err();
+        assert!(err.contains("count"), "got: {err}");
     }
 
     /// An answer the record cannot hold is refused where it is written, the same way a consent answered

@@ -268,6 +268,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* The inbox's needs-attention badge: the accent colour carries "unread / needs a look". */
 .navitem__count--alert { background: var(--c-accent); color: #fff; font-weight: var(--fw-medium); }
 .navitem--active .navitem__count--alert { background: var(--c-accent); color: #fff; }
+/* The due row warns on two steps at once, so its badges travel as a group. Only the group takes the
+   auto margin: two of them side by side would each claim a share of the free space and drift apart. */
+.navitem__counts { margin-left: auto; display: flex; align-items: center; gap: var(--s-1); }
+.navitem__counts .navitem__count { margin-left: 0; }
+/* Its day has gone or is today — nothing moves until a hand is put to it. Its day is tomorrow — it
+   moves on its own, and the badge is there to be known while it comes (the steps of `tokens.css`). */
+.navitem__count--stop { background: var(--c-stop); color: #fff; font-weight: var(--fw-medium); }
+.navitem__count--heed { background: var(--c-heed); color: #fff; font-weight: var(--fw-medium); }
+.navitem--active .navitem__count--stop { background: var(--c-stop); color: #fff; }
+.navitem--active .navitem__count--heed { background: var(--c-heed); color: #fff; }
 .navitem--muted { color: var(--c-text-faint); font-size: var(--fs-sm); cursor: pointer; }
 
 /* ---------- main ---------- */

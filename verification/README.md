@@ -742,6 +742,13 @@ button takes while there is no answer left to clear, and the shape either road's
 row has no folder to hand over. All three are read off how the control is drawn, not off what it does
 when used: one shut in the build and painted like a live one is one a reader still reaches for.
 
+Pressing a smart view open from the sidebar, reading the warning its row carries before that press, and
+reading which tasks the listing behind it holds (`task open-view` / `task view-warns` / `task
+view-lists`), are one road's for a reason of their own: what they are about is being told without asking.
+A terminal is only ever asked. It answers the same question about days when a reader types for it, which
+is what `task status-bucket` reads — but there is no row standing in front of it to carry a colour, and
+nothing to press through to a listing it has already printed.
+
 Opening the fold that offers the other way in, and reading an app's row behind it (`repo mcp-open` /
 `mcp-app` / `mcp-road` / `mcp-road-shut`), are one road's for a reason of their own: what the fold is for
 is the reader whose AI cannot open a folder at all, and a terminal standing in that folder is the reader

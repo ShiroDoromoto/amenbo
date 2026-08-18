@@ -119,11 +119,20 @@ jobs:
           # declared in one place cannot drift from the other.
           filters: .github/paths-filters.yml
 
+  # Sharded three ways. A shard is a slice of the *test list*, not of the tree: each one builds the
+  # whole workspace and then runs the third of the tests `--partition hash:` deals it, so the wait is
+  # the build plus a third of the run rather than the build plus all of it. Three and not more
+  # because two floors hold the slice up — the build and setup every shard pays whatever it runs, and
+  # the longest single test, which no slice can be shorter than.
   rust:
-    name: cargo test
+    name: cargo test (${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v7
 
@@ -141,26 +150,19 @@ jobs:
       # toolchain above triggers the rustup install) since it reads the rustc version.
       #
       # `shared-key` puts every job that builds this workspace on one cache entry per
-      # platform. Without it the key carries the job id, so each job fills a cache of its own
-      # — and the six here (this one, rust-e2e, lint, and their three mac-win counterparts)
-      # compile the same dependencies from the same lockfile, which when there were four of them
-      # was 774MB of the repository's 10GB cache budget spent storing one answer four times, and
-      # a new job starting from nothing every time one is added.
+      # platform. Without it the key carries the job id, so each job fills a cache of its own —
+      # and there are eight of them per platform once the test jobs are sharded, all compiling the
+      # same dependencies from the same lockfile. Back when there were four that was 774MB of the
+      # repository's 10GB cache budget spent storing one answer four times, and a new job starting
+      # from nothing every time one was added.
       #
-      # This job is the one that saves, and what it stores is the dependency build every reader
-      # wants. It is no longer the widest build — `lint` builds all targets under all features —
-      # but the three features this workspace declares (`e2e`, `scale`, `scale-heavy`) are empty
-      # markers that gate targets rather than pull crates, so both feature sets resolve to one
-      # dependency graph. The readers take it with `save-if: false` rather than racing to upload
-      # the same bytes and having the loser's upload rejected.
-      #
-      # `SAVE_CACHE` (top of this file) narrows that to a run on main: on a PR this job restores
-      # main's entry like the readers do, and saves nothing.
+      # Every shard reads and none of them saves: the entry is written once per platform, by the
+      # `lint` job, which is where the argument for that lives.
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: workspace
-          save-if: ${{ env.SAVE_CACHE }}
+          save-if: false
 
       # nextest runs each test in its own process and in parallel — faster than
       # `cargo test` and it prints per-test timings (slow tests surface in the
@@ -182,8 +184,12 @@ jobs:
       # The e2e slices are not here — they are the `rust-e2e` job below, and this one holds the rest
       # of the suite. `cli_e2e_*` is every slice of that suite (crates/amenbo-cli/tests/e2e), named
       # by prefix so a new one lands on the right side of the line without either job being touched.
+      #
+      # `--partition hash:` deals the tests out by a hash of their name, so a test lands on the same
+      # shard every run and a new one lands on a shard without anybody choosing. `count:` would deal
+      # them by position instead, which moves every test after an inserted one.
       - name: Test (feature-gated scale suites + everything else)
-        run: cargo nextest run --profile ci --features scale,e2e -E 'not binary(/^cli_e2e/)'
+        run: cargo nextest run --profile ci --features scale,e2e -E 'not binary(/^cli_e2e/)' --partition hash:${{ matrix.shard }}/3
 
   # The e2e half of the suite, on a runner of its own. The rest of it is the `rust` job above, and
   # neither half asserts anything the other decides — so the gate's wait is the longer of the two and
@@ -198,14 +204,18 @@ jobs:
   # going red says nothing about whether the other one ran.
   #
   # No clippy and no doc steps here: those judge the tree once, in the `lint` job, which is where
-  # every verdict that is about the source rather than about a test run now lives. The feature set
-  # matches (`scale,e2e`), so this job builds the same dependencies the `rust` job does and reads its
-  # cache rather than filling one of its own.
+  # every verdict that is about the source rather than about a test run now lives. The dependency
+  # graph is the same one every job here builds, so this reads the shared entry rather than filling
+  # one of its own.
   rust-e2e:
-    name: cargo test (CLI e2e)
+    name: cargo test (CLI e2e ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v7
 
@@ -214,9 +224,8 @@ jobs:
       - name: Show toolchain
         run: rustc --version && cargo --version
 
-      # The `rust` job's cache, read and not written: same workspace, same lockfile, same features, so
-      # the entry it saves is the one this job wants. `save-if: false` because the two run at once and
-      # only one upload of identical bytes can land.
+      # The `lint` job's cache, read and not written: same workspace, same lockfile, same
+      # dependency graph.
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
@@ -228,8 +237,11 @@ jobs:
         with:
           tool: cargo-nextest
 
+      # Four shards here against the `rust` job's three: this half is the longer of the two, so it
+      # is the one that sets the gate's wait. Beyond four the build every shard pays stops being
+      # worth the test time a further slice removes.
       - name: Test (the CLI e2e suites)
-        run: cargo nextest run --profile ci --features scale,e2e -E 'binary(/^cli_e2e/)'
+        run: cargo nextest run --profile ci --features scale,e2e -E 'binary(/^cli_e2e/)' --partition hash:${{ matrix.shard }}/4
 
   # The `rust` job above, on the two platforms it cannot speak for. Twelve files in the workspace carry
   # a `target_os = "macos"` branch and twelve a `cfg(windows)` one; on Linux the compiler walks past
@@ -245,8 +257,13 @@ jobs:
   # re-read what one has already judged. What that leaves out is a doc link written inside a
   # `cfg`-gated item — no platform but its own can resolve it — and that sliver is accepted rather
   # than paid for with a rustdoc run per OS on every change.
+  #
+  # Sharded the same three ways as the `rust` job, and deliberately so. Neither mac nor Windows is
+  # on the critical path once the e2e half is split, so the shards buy no time here — what they buy
+  # is one shape for all three platforms, which is what keeps a new test from needing anybody to
+  # decide which side of an OS it lands on. The count is one number, so it can be moved later.
   rust-mac-win:
-    name: cargo test (${{ matrix.os }})
+    name: cargo test (${{ matrix.os }} ${{ matrix.shard }}/3)
     runs-on: ${{ matrix.os }}
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' }}
@@ -254,6 +271,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest]
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v7
 
@@ -290,17 +308,13 @@ jobs:
       - name: Show toolchain
         run: rustc --version && cargo --version
 
-      # One entry per platform, shared with rust-e2e-mac-win and lint-mac-win the way the `rust` job
-      # shares with rust-e2e and lint — the key carries the OS and arch, so this saves the mac one
-      # and the Windows one and the Linux job's entry is untouched. This leg is the saver on both,
-      # for the same reason the `rust` job is on Linux: the features are empty markers, so the
-      # dependency build it stores is the one every reader on this platform wants — and on main
-      # alone (`SAVE_CACHE`).
+      # `lint-mac-win`'s entry for this platform, read and not written — the same arrangement as
+      # every other test job here.
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: workspace
-          save-if: ${{ env.SAVE_CACHE }}
+          save-if: false
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@v2.85.13
@@ -308,9 +322,10 @@ jobs:
           tool: cargo-nextest
 
       # Same line, and the same reason, as the `rust` job: the e2e slices are the `rust-e2e-mac-win`
-      # job below, and this one holds the rest of the suite.
+      # job below, this one holds the rest of the suite, and `--partition hash:` deals that rest out
+      # by test name.
       - name: Test (feature-gated scale suites + everything else)
-        run: cargo nextest run --profile ci --features scale,e2e -E 'not binary(/^cli_e2e/)'
+        run: cargo nextest run --profile ci --features scale,e2e -E 'not binary(/^cli_e2e/)' --partition hash:${{ matrix.shard }}/3
 
   # `rust-e2e`, on the two platforms it cannot speak for — the same argument as `rust-mac-win`, for
   # the other half of the suite. Windows is where the line between the halves pays most: both of its
@@ -320,7 +335,7 @@ jobs:
   # It mirrors the e2e step and the OpenSSL build's perl, and stops there — clippy belongs to
   # `lint-mac-win` and the doc steps to `lint`, neither of which is about a test run.
   rust-e2e-mac-win:
-    name: cargo test (CLI e2e, ${{ matrix.os }})
+    name: cargo test (CLI e2e, ${{ matrix.os }} ${{ matrix.shard }}/4)
     runs-on: ${{ matrix.os }}
     needs: changes
     if: ${{ needs.changes.outputs.rust == 'true' }}
@@ -328,6 +343,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest]
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v7
 
@@ -353,8 +369,8 @@ jobs:
       - name: Show toolchain
         run: rustc --version && cargo --version
 
-      # `rust-mac-win`'s entry for this platform, read and not written — the same arrangement as
-      # rust-e2e and the `rust` job.
+      # `lint-mac-win`'s entry for this platform, read and not written — the same arrangement as
+      # every other test job here.
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
@@ -367,16 +383,15 @@ jobs:
           tool: cargo-nextest
 
       - name: Test (the CLI e2e suites)
-        run: cargo nextest run --profile ci --features scale,e2e -E 'binary(/^cli_e2e/)'
+        run: cargo nextest run --profile ci --features scale,e2e -E 'binary(/^cli_e2e/)' --partition hash:${{ matrix.shard }}/4
 
   # Every verdict on the source itself, in one job: clippy, the doctests, and the intra-doc links.
   # It is here rather than inside the test jobs because a lint riding along with tests is run once
   # per test job, and the test jobs are split — by suite already, and by shard next.
   # That is the same verdict on the same tree, paid for N times. A job that runs tests runs tests.
   #
-  # It reads the `rust` job's entry and saves nothing: same workspace, same lockfile, and the same
-  # dependency graph (the features are empty markers), so the entry that job stores is the one this
-  # one wants.
+  # It is also the job that writes the shared cache entry on Linux — the argument for that is on the
+  # cache step below.
   lint:
     name: clippy + doctests + doc links
     runs-on: ubuntu-latest
@@ -391,11 +406,17 @@ jobs:
       - name: Show toolchain
         run: rustc --version && cargo clippy --version
 
+      # The one job per platform that writes the shared entry, and on main alone (`SAVE_CACHE`,
+      # top of this file). It is the saver because it is the only job here that exists exactly
+      # once: every test job is a shard of a matrix, and picking one shard to save would be
+      # picking arbitrarily among identical uploads — of which only one can land anyway. What it
+      # stores also covers every reader by construction, being the widest build in the workflow
+      # (all targets, all features).
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: workspace
-          save-if: false
+          save-if: ${{ env.SAVE_CACHE }}
 
       # -D clippy::disallowed_methods enforces the facet env funnel (clippy.toml):
       # raw std::env::var/var_os is banned outside amenbo_core::env so a facet can
@@ -423,8 +444,8 @@ jobs:
   # other compiler, so a lint that runs only on Linux has never read the code inside it. The doc
   # steps stay on the Linux leg alone — see `rust-mac-win` for why that sliver is accepted.
   #
-  # Reads `rust-mac-win`'s entry for its platform and saves nothing, the same arrangement as `lint`
-  # on Linux.
+  # It writes the shared entry for its platform, the same way `lint` does on Linux and for the same
+  # reason — one leg per OS, the widest build, and on main alone.
   lint-mac-win:
     name: clippy (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -453,7 +474,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: workspace
-          save-if: false
+          save-if: ${{ env.SAVE_CACHE }}
 
       # The same lint contract as the Linux leg, on the branches only this platform compiles.
       - name: Clippy (all targets, all features)

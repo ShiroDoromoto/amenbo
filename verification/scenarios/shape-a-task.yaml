@@ -7,7 +7,8 @@
 #
 # The screen walks the two days rather than the whole form. They are the fields it could read and not
 # write until lately — a due date drawn on every card, with nowhere on the pane to put one there — so
-# what its road answers for is the writing, and the premise the start day carries once it lands.
+# what its road answers for is the writing, the premise the start day carries once it lands, and the
+# taking back — which on this face is a button of its own, and the only way off it.
 id: shape-a-task
 title: A task registered with nothing but a title starts todo, is filled in field by field, and can be emptied again
 description: >
@@ -232,3 +233,47 @@ steps_gui:
       target: seed
       field: ready
       equals: false
+
+  # And the taking back, which on this face is a move of its own rather than an empty value handed to
+  # the form: both days come off by a button standing beside the picker, since the picker's own way of
+  # emptying itself is not drawn on every platform. A build where that button does not write leaves the
+  # reader looking at a day they never set — an emptied picker fills itself in — with no way off it.
+  - type: action
+    domain: task
+    op: clear
+    with:
+      target: seed
+      field: due
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: due_on
+      equals: null
+
+  - type: action
+    domain: task
+    op: clear
+    with:
+      target: seed
+      field: start
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: start_on
+      equals: null
+
+  # The premise goes with the day. What the start day was holding back is the reserve, so the reading
+  # that closes this road is the readiness it took away coming back — not the field alone.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: ready
+      equals: true

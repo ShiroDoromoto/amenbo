@@ -852,8 +852,18 @@ pub enum TickCmd {
     /// something amenbo can see rather than something it talks over.
     Status,
 
-    /// The wake-up itself — what the scheduler runs, never a line to type. It opens nothing and
-    /// decides nothing yet; what amenbo works out once awake is being written (`AMB-T-3258`).
+    /// The face the scheduler itself calls, once an hour (`AMB-D-706`). Hidden because a scheduler calls
+    /// it — never a hand. It is not a daemon: it starts, judges what the calendar day owes, works what the
+    /// plugin queues still hold, and exits, so nothing is running between two ticks.
+    ///
+    /// Being woken is not being due: the timer carries no meaning, so an hour that is owed nothing is the
+    /// ordinary case, and what is owed is counted in calendar days rather than in wake-ups (`AMB-D-708`).
+    /// A round with nothing owed is still not a wasted one — it works the queues, which is where a
+    /// delivery a killed runner left standing gets picked up.
+    ///
+    /// It resolves no folder and takes no facet: a scheduler runs it from wherever it happens to stand,
+    /// and what it works is this device's one store. On a device holding no store there is nothing to do,
+    /// and it says nothing and exits 0 rather than raising one on a schedule.
     #[command(hide = true)]
     Run,
 }

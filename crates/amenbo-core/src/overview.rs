@@ -1,9 +1,10 @@
 //! The **overview tables** of the unified database.
 //!
 //! Folder bindings, read receipts, the inbox archive, the lint-hook consent, the AI-harness consent, the
-//! nudge log and the usage tallies are device-local overview state: per-machine, never synced, and —
-//! unlike a task or a decision — not a record of any one project. They are ordinary tables of the one
-//! database, declared by [`crate::store_engine::schema::schema_sql`].
+//! nudge log, the usage tallies and the tick's day marks are device-local overview state: per-machine,
+//! never synced, and — unlike a task or a decision — not a record of any one project. They are ordinary
+//! tables of the one database, declared by [`crate::store_engine::schema::schema_sql`], plus the scalars
+//! among them, which are `store_meta` keys.
 //!
 //! This module is the read/write path onto them, written against a bare [`StoreEngine`] rather than a
 //! particular store type.
@@ -374,6 +375,31 @@ pub fn record_launch(engine: &StoreEngine, day: &str) -> Result<()> {
     Ok(())
 }
 
+// ───────────────────────── tick day marks ─────────────────────────
+
+/// The `store_meta` key holding the day a tick purpose was last carried out on. One key per purpose, so a
+/// purpose declared later brings no table and no migration with it — what is kept is a day, and a day is a
+/// scalar like the launch tally beside it.
+fn tick_day_key(purpose: &str) -> String {
+    format!("tick.day.{purpose}")
+}
+
+/// The calendar day (`%Y-%m-%d`) this device last carried `purpose` out on, or `None` if it never has.
+///
+/// Device-local like the nudge log, and for the same reason: what it answers is whether *this machine* has
+/// taken the day's turn, and a second machine on the same data takes its own (`AMB-D-708`). The judgement
+/// that reads it lives in [`crate::tick`].
+pub fn tick_day(engine: &StoreEngine, purpose: &str) -> Result<Option<String>> {
+    Ok(engine.get_meta(&tick_day_key(purpose))?)
+}
+
+/// Record that `purpose` has now been carried out on `day` (`%Y-%m-%d`). The day replaces whatever was
+/// there: the only question ever put to this mark is about the day in hand, so the days before it answer
+/// nothing.
+pub fn mark_tick_day(engine: &StoreEngine, purpose: &str, day: &str) -> Result<()> {
+    Ok(engine.set_meta(&tick_day_key(purpose), Some(day))?)
+}
+
 // ───────────────────────── lint-hook opt-out ─────────────────────────
 
 /// Has this project been opted out of the lint hooks — did `hooks uninstall` run in it? Presence of the
@@ -591,6 +617,15 @@ mod tests {
         record_launch(&engine, "2026-08-04").unwrap();
         record_launch(&engine, "2026-08-09").unwrap();
         assert_eq!(usage_tallies(&engine).unwrap(), (2, Some("2026-08-04".to_owned())));
+
+        // Tick day marks: one key per purpose, unset until a purpose has been carried out, and the day
+        // replaces the one before it rather than being kept beside it.
+        assert!(tick_day(&engine, "due").unwrap().is_none(), "a fresh store has ticked nothing");
+        mark_tick_day(&engine, "due", "2026-08-18").unwrap();
+        mark_tick_day(&engine, "tidy", "2026-08-18").unwrap();
+        mark_tick_day(&engine, "due", "2026-08-19").unwrap();
+        assert_eq!(tick_day(&engine, "due").unwrap().as_deref(), Some("2026-08-19"));
+        assert_eq!(tick_day(&engine, "tidy").unwrap().as_deref(), Some("2026-08-18"));
     }
 
     /// A save writes the whole index, and **a folder that is still in it keeps the row it had** — id and

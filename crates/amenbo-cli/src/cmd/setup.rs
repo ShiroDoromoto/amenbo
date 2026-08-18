@@ -361,8 +361,6 @@ pub(crate) fn tick_cmd(store: &mut Store, flags: &Flags, sub: TickCmd) -> Result
     }
     let cmd = Paths::command_name();
     match sub {
-        // Handled before the store is opened — the scheduler runs it from a directory nobody chose.
-        TickCmd::Run => unreachable!("handled before open"),
         TickCmd::Install => {
             tick::register().map_err(CliError::from)?;
             store.config.tick_consent = Some(TickConsent::Yes);
@@ -399,6 +397,9 @@ pub(crate) fn tick_cmd(store: &mut Store, flags: &Flags, sub: TickCmd) -> Result
                 human(flags, render_tick_status(reachable, tick::available(), registered, consent, cmd));
             }
         }
+        // The scheduler's own face, and the only one of the four that is not about the answer: it carries
+        // the hour out rather than settling what may be registered. `run` dispatches it ahead of this.
+        TickCmd::Run => unreachable!("`tick run` is handled by cmd::tick"),
     }
     Ok(0)
 }
@@ -411,7 +412,7 @@ fn relaunch_in_bundle(exe: &std::path::Path, flags: &Flags, sub: &TickCmd) -> Re
         TickCmd::Install => "install",
         TickCmd::Uninstall => "uninstall",
         TickCmd::Status => "status",
-        TickCmd::Run => unreachable!("handled before open"),
+        TickCmd::Run => unreachable!("`tick run` is handled by cmd::tick"),
     };
     let mut child = std::process::Command::new(exe);
     child.args(["tick", face]);

@@ -211,27 +211,6 @@ fn amenbos_own_flags_are_the_plugins_from_the_name_onward() {
     );
 }
 
-/// The JSON a **runner process** wrote at `path`, waited for (`AMB-T-2175`).
-///
-/// A runner is launched by the command that queued the event and outlives it, so what the plugin writes
-/// lands *after* that command has returned — there is nothing for a caller to join any more. `want` picks
-/// the value being waited for, which is what tells a second run from the one already on disk rather than
-/// racing it.
-#[cfg(unix)]
-fn wrote_json(path: &std::path::Path, want: impl Fn(&Value) -> bool) -> Value {
-    for _ in 0..200 {
-        if let Ok(v) = std::fs::read_to_string(path).map_err(|_| ()).and_then(|t| {
-            serde_json::from_str::<Value>(&t).map_err(|_| ())
-        }) {
-            if want(&v) {
-                return v;
-            }
-        }
-        std::thread::sleep(std::time::Duration::from_millis(50));
-    }
-    panic!("no runner wrote the payload waited for at {} within ten seconds", path.display());
-}
-
 /// The execution log once it holds `count` runs, waited for the same way and for the same reason: the run is
 /// recorded by the runner process, not by the command that launched it (`AMB-T-2175`).
 #[cfg(unix)]
@@ -524,18 +503,5 @@ fn declare_scope(cli: &Cli, name: &str, scope: &str) {
     let mut manifest: Value =
         serde_json::from_str(&std::fs::read_to_string(&manifest_file).unwrap()).unwrap();
     manifest["scope"] = serde_json::json!(scope);
-    std::fs::write(&manifest_file, serde_json::to_vec(&manifest).unwrap()).unwrap();
-}
-
-/// Plant an installed plugin that subscribes to `events` — [`install_plugin`] with the manifest field the
-/// dispatch resolver reads. The executable it lays down does nothing; a caller that wants the plugin to
-/// *do* something overwrites it.
-#[cfg(unix)]
-fn install_subscribing_plugin(cli: &Cli, name: &str, events: &[&str]) {
-    install_plugin(cli, name, serde_json::json!([]));
-    let manifest_file = cli.home.join("plugins").join(name).join("manifest.json");
-    let mut manifest: Value =
-        serde_json::from_str(&std::fs::read_to_string(&manifest_file).unwrap()).unwrap();
-    manifest["events"] = serde_json::json!(events);
     std::fs::write(&manifest_file, serde_json::to_vec(&manifest).unwrap()).unwrap();
 }

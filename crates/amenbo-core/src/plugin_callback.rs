@@ -13,6 +13,13 @@
 //! | [`STORE_ENV`] (`AMENBO_HOME`) | the store to open — the base directory the run's own store sits in |
 //! | [`REACH_ENV`] (`AMENBO_PLUGIN_REACH`) | how far it may read — the project it fires for, or the device |
 //!
+//! **`amenbo` itself is put within reach, not assumed to be.** A plugin is told to run the binary by name,
+//! so it has to be findable by name wherever a plugin is started from — and a plugin fired by the hourly
+//! tick inherits the scheduler's `PATH`, not a shell's. amenbo puts its own directory in front of the
+//! child's `PATH` for exactly that reason (`AMB-D-716`, carried out in
+//! [`crate::plugin_exec::PluginInvocation::spawn`]), which is why nothing here has to hand the author a
+//! path to call and no plugin has to read one.
+//!
 //! **The store is named, never resolved.** A plugin's working directory is whatever its launcher happened
 //! to be in, so the `.amenbo` walk would answer about a folder nobody consulted — and a runner works the
 //! store its parent drove, not whichever one its own environment would find. Naming it is the same choice

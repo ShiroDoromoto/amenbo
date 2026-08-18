@@ -88,6 +88,10 @@ impl PluginInvocation {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        // Before the caller's own variables, so a caller that names `PATH` itself still wins.
+        if let Some(path) = reachable_path() {
+            cmd.env("PATH", path);
+        }
         for (key, value) in &self.env {
             cmd.env(key, value);
         }
@@ -241,6 +245,32 @@ fn finish(
     }
 }
 
+/// The `PATH` a plugin is started with: amenbo's own directory in front, then whatever this process
+/// inherited (`AMB-D-716`).
+///
+/// `AMB-D-406` tells a plugin author to read a record back by running `amenbo <read command> --json`,
+/// found the way any program is found — on `PATH`. That is the only route that works in every language,
+/// and it is a promise about the environment the plugin is started in, which is amenbo's to keep.
+///
+/// **It was not kept where nobody typed the command.** A plugin fired from a terminal inherits the shell's
+/// `PATH` and finds amenbo there; one fired from the hourly tick inherits the scheduler's, and macOS's
+/// launchd hands out `/usr/bin:/bin:/usr/sbin:/sbin` — which never holds the `~/.local/bin` the shipped CLI
+/// sits in. The plugin's call came back "no such command", and the notification went out stripped of
+/// everything it could not read.
+///
+/// **In front, not appended**, so the build that started the plugin is the one it calls back into: a device
+/// carrying a second amenbo further down `PATH` would otherwise answer for a store this run never opened.
+/// The inherited entries follow unchanged, so every other command a plugin reaches for is where it was.
+///
+/// `None` where there is nothing to put in front — no `current_exe`, no parent directory, or a path that
+/// cannot be joined — and the child is then left with exactly the environment it would have had.
+fn reachable_path() -> Option<std::ffi::OsString> {
+    let own_dir = std::env::current_exe().ok()?.parent()?.to_path_buf();
+    let inherited = crate::env::path().unwrap_or_default();
+    let dirs = std::iter::once(own_dir).chain(std::env::split_paths(&inherited));
+    std::env::join_paths(dirs).ok()
+}
+
 /// What a finished plugin left behind. The output is captured as text — the plugin contract is a
 /// text one (line-based stdout, human diagnostics on stderr) — decoded lossily so invalid bytes never
 /// fail the capture.
@@ -265,9 +295,30 @@ impl PluginOutput {
     }
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The promise `AMB-D-406` makes to a plugin author — "run `amenbo …`" — is kept by the environment the
+    /// child is started in, so the directory amenbo is running from has to lead its `PATH` (`AMB-D-716`).
+    #[test]
+    fn amenbos_own_directory_leads_the_path_a_plugin_is_given() {
+        let path = reachable_path().expect("this test binary has a path, and that path has a parent");
+        let first = std::env::split_paths(&path).next().expect("the joined path is not empty");
+        let own_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+        assert_eq!(first, own_dir);
+    }
+
+    /// Everything else a plugin reaches for has to stay where it was, so what follows the one entry we put
+    /// in front is the inherited `PATH`, in its own order and untouched.
+    #[test]
+    fn the_inherited_path_follows_it_unchanged() {
+        let inherited: Vec<_> =
+            std::env::split_paths(&crate::env::path().unwrap_or_default()).collect();
+        let path = reachable_path().expect("this test binary has a path, and that path has a parent");
+        let behind: Vec<_> = std::env::split_paths(&path).skip(1).collect();
+        assert_eq!(behind, inherited);
+    }
 
     /// A fire-and-forget hook that never reads its stdin and exits at once must not take amenbo down with
     /// it (`AMB-D-352` — a hook failing changes nothing). The CLI runs with SIGPIPE at its default
@@ -277,6 +328,7 @@ mod tests {
     /// is far larger than any pipe buffer, so the write is still in flight when the child exits — the
     /// losing side of the race the guard must win every time, which is why this reproduces deterministically
     /// what the CLI e2e only flaked on.
+    #[cfg(unix)]
     #[test]
     fn a_hook_that_ignores_a_large_stdin_and_exits_does_not_signal_us_down() {
         // Reproduce the CLI's disposition for the length of this test, then restore it — a shared-process
@@ -296,5 +348,34 @@ mod tests {
 
         // SAFETY: restore the disposition the test found, same contract as above.
         unsafe { libc::signal(libc::SIGPIPE, prev) };
+    }
+
+    /// The child's own environment is what matters, not what we computed: a plugin asked for its `PATH`
+    /// reads amenbo's directory first.
+    #[cfg(unix)]
+    #[test]
+    fn a_plugin_reads_that_path_out_of_its_own_environment() {
+        let out = PluginInvocation::new("/bin/sh")
+            .arg("-c")
+            .arg("printf %s \"$PATH\"")
+            .run()
+            .expect("a plugin that prints its PATH runs");
+        let first = out.stdout.split(':').next().expect("the child had a PATH");
+        let own_dir = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+        assert_eq!(std::path::Path::new(first), own_dir);
+    }
+
+    /// A caller that sets `PATH` itself is making a deliberate choice about the child's environment, and
+    /// the one entry amenbo puts in front is not allowed to overrule it.
+    #[cfg(unix)]
+    #[test]
+    fn a_caller_that_names_its_own_path_keeps_it() {
+        let out = PluginInvocation::new("/bin/sh")
+            .arg("-c")
+            .arg("printf %s \"$PATH\"")
+            .env("PATH", "/nowhere")
+            .run()
+            .expect("a plugin that prints its PATH runs");
+        assert_eq!(out.stdout, "/nowhere");
     }
 }

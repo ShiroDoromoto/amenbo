@@ -38,6 +38,18 @@ pub fn plugin_reach() -> Option<String> {
     var(PLUGIN_REACH_VAR)
 }
 
+/// The name of [`path`], for the one surface that **writes** it rather than reads it: a plugin is started
+/// with amenbo's own directory in front of this list ([`crate::plugin_exec`]).
+pub const PATH_VAR: &str = "PATH";
+
+/// `PATH` — the OS's own list of directories a bare command name is looked up in. amenbo reads it for one
+/// purpose: to hand a plugin that same list with its own directory in front, so the `amenbo` a plugin is
+/// told to call (`AMB-D-406`) is there to be found even when the process was started by a scheduler rather
+/// than by a shell (`AMB-D-716`).
+pub fn path() -> Option<OsString> {
+    var_os(PATH_VAR)
+}
+
 /// The name of [`mcp_dirs`], for the MCP server that sets it on every run it starts
 /// (`crate::mcp`).
 pub const MCP_DIRS_VAR: &str = "AMENBO_MCP_DIRS";

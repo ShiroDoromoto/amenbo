@@ -34,6 +34,9 @@ mod single_instance;
 /// tauri, so the integration test (`tests/store_watch.rs`) can drive the real behaviour on all three
 /// operating systems.
 pub mod store_watch;
+/// The hourly tick's startup pass: what this device answered about being woken, settled against what
+/// its scheduler holds (`AMB-D-707`).
+mod tick;
 #[cfg(target_os = "windows")]
 mod windows_notify;
 
@@ -209,6 +212,11 @@ pub fn run() {
         // here, before the window can draw a switch out of a setting the login no longer honours.
         autostart::reconcile(app.handle());
       }
+      // The hourly tick's own two states, settled the same way and on the same occasion. Unlike the
+      // login registration it is not withheld from a development build: nothing is registered that was
+      // not asked for, so a build that was asked is the one that has to tidy up after itself. On macOS
+      // this is the only face that can make the pass at all — see the module docs.
+      tick::reconcile();
       #[cfg(target_os = "macos")]
       macos_notify::init(app.handle().clone());
       let handle = app.handle().clone();

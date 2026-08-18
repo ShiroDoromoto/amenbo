@@ -177,6 +177,45 @@ pub fn unregister() -> Result<()> {
     platform::unregister()
 }
 
+/// Settle the answer on record against what the scheduler holds, once — [`fix_for`] with its hands
+/// attached. The answer that has to be written back comes out; `None` means the record still says what
+/// it said, which is the overwhelmingly common case.
+///
+/// **Persisting is the caller's**, because where the answer is kept is: the CLI carries it on the store
+/// it already has open, and the app on the config it loaded as it came up. What is here is the part they
+/// must not answer differently.
+///
+/// Three things end it before the scheduler is asked at all, and each is a process not spent:
+///
+/// 1. **No door on this target** — there is nothing to settle against.
+/// 2. **Nobody has answered** — [`fix_for`] says `Nothing` for an unanswered device whatever the
+///    scheduler holds, and that is most machines, on every startup.
+/// 3. **This process cannot work the door** ([`reachable_from_here`]) — on macOS the CLI on `PATH` is
+///    exactly that process, and re-launching the bundle's own copy once per command to settle a state
+///    that rarely drifts is a cost with no occasion. The app is launched from inside the bundle, so it
+///    settles there, which is why it is the app that calls this on that platform.
+///
+/// Everything it does is best-effort: a scheduler that will not say what it holds leaves both halves as
+/// the last run left them, which is the state that was working.
+pub fn settle(consent: Option<TickConsent>) -> Option<TickConsent> {
+    if !available() || consent.is_none() || !reachable_from_here() {
+        return None;
+    }
+    let registered = probe().ok()?;
+    match fix_for(consent, registered) {
+        TickFix::Nothing => None,
+        TickFix::Rewrite => {
+            let _ = register();
+            None
+        }
+        TickFix::Deregister => {
+            let _ = unregister();
+            None
+        }
+        TickFix::TakeTheAnswerBack => Some(TickConsent::No),
+    }
+}
+
 /// One thing amenbo may have to do when it is woken: the id its day mark is kept under, and the work.
 pub struct Purpose {
     /// What the day mark is keyed by. It names a line of the table compiled into this binary, so no row of
@@ -379,6 +418,23 @@ mod tests {
         assert!(probe().is_err());
         assert!(register().is_err());
         assert!(unregister().is_err());
+    }
+
+    /// A device nobody has answered for is left alone without the scheduler being asked at all — the
+    /// state most machines are in, on every startup.
+    #[test]
+    fn settling_an_unasked_device_asks_the_scheduler_nothing() {
+        assert_eq!(settle(None), None);
+    }
+
+    /// And a process that cannot work the door settles nothing either, whatever the answer says: on
+    /// macOS a test binary is exactly that process, so an answer moved here would be one moved on a
+    /// reading nobody could take.
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn settling_from_outside_the_bundle_moves_no_answer() {
+        assert_eq!(settle(Some(TickConsent::Yes)), None);
+        assert_eq!(settle(Some(TickConsent::No)), None);
     }
 
     /// The rule the hourly wake-up rests on: within one calendar day the work is carried out once, however

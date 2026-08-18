@@ -166,6 +166,10 @@ const ui = {
   "cal.today": "Today", "cal.prevMonth": "Previous month", "cal.nextMonth": "Next month",
   "cal.noDue": "No due date ({n})", "cal.empty": "No tasks with a due date",
   "cal.more": "+{n} more", "cal.overdueDays": "{n}d overdue", "cal.inDays": "in {n}d",
+  // The two days a task carries, as the fields that write them. One area rather than two, because the
+  // detail pane and the compose pane put the same two fields in front of the same person.
+  "date.due": "Due date", "date.start": "Start date",
+  "date.clear": "Clear",
   "card.assignee": "Assignee",
   "detail.tab.detail": "Details", "detail.tab.activity": "Activity",
   "detail.notFound": "Task not found",

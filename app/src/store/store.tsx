@@ -19,7 +19,13 @@ import type { ActivityItem, Facet, Priority, Status } from "../mock/types";
 interface Store {
   listActivity(): ActivityItem[];
   // Returns the id of the task created, so the caller can open its detail right away. null on failure (a toast says so).
-  addTask(projectId: number | null, title: string, notes?: string): Promise<number | null>;
+  addTask(
+    projectId: number | null,
+    title: string,
+    notes?: string,
+    due?: string | null,
+    start?: string | null,
+  ): Promise<number | null>;
   /**
    * Move a task's status. `rejected` is the one value that carries a reason, and it is required — the
    * pull-down collects it and this routes it to the write that keeps it (`AMB-D-397`).
@@ -31,6 +37,10 @@ interface Store {
    */
   finishCreating(id: number): void;
   setPriority(id: number, priority: Priority | null): void;
+  /** Set the due date (`YYYY-MM-DD`), or null to take it away. */
+  setDue(id: number, due: string | null): void;
+  /** Set the start day (`YYYY-MM-DD`), or null to take it away. A day still ahead holds the task unready. */
+  setStart(id: number, start: string | null): void;
   setAssignee(id: number, kind: Facet | null): void;
   addComment(taskId: number, text: string): void;
   /** Take back a comment posted by mistake (it is deleted outright). */
@@ -118,7 +128,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const store: Store = useMemo(() => ({
     listActivity() { return activity; },
 
-    addTask(projectId, title, notes) { return runResult(mut.addTask(projectId, title, notes)); },
+    addTask(projectId, title, notes, due, start) { return runResult(mut.addTask(projectId, title, notes, due, start)); },
     setStatus(id, status, reason) {
       // The one fork on the way down: a rejection goes through the write that also keeps the reason, so
       // no surface can reach `rejected` and leave the reasoning behind.
@@ -126,6 +136,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     finishCreating(id) { run(mut.finishTaskCreation(id)); },
     setPriority(id, priority) { run(mut.setPriority(id, priority)); },
+    setDue(id, due) { run(mut.setDue(id, due)); },
+    setStart(id, start) { run(mut.setStart(id, start)); },
     setAssignee(id, kind) { run(mut.setAssignee(id, kind)); },
     addComment(taskId, text) { run(mut.addComment(taskId, text)); },
     removeComment(commentId, taskId) { run(mut.removeComment(commentId, taskId)); },

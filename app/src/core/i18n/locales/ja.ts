@@ -156,6 +156,8 @@ export const ja: Translation = {
     "cal.today": "今日", "cal.prevMonth": "前の月", "cal.nextMonth": "次の月",
     "cal.noDue": "期日なし（{n}）", "cal.empty": "期日付きのタスクがありません",
     "cal.more": "他 {n} 件", "cal.overdueDays": "{n}日超過", "cal.inDays": "あと{n}日",
+    "date.due": "期日", "date.start": "着手日",
+    "date.clear": "消す",
     "card.assignee": "担当",
     "detail.tab.detail": "詳細", "detail.tab.activity": "アクティビティ",
     "detail.notFound": "タスクが見つかりません",

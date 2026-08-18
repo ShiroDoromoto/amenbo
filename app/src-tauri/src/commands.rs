@@ -251,6 +251,7 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
         assignee,
         priority: row.priority.as_deref().and_then(Priority::parse).map(|p| p.as_str()),
         due: due_date.map(date_iso),
+        start_on: start_date.map(date_iso),
         completed_at: row
             .completed_at
             .as_deref()
@@ -1499,18 +1500,24 @@ pub fn watch_store(app: tauri::AppHandle) {
 
 /// Create a task (directly under a project, or in the inbox; stamped created_by=human).
 /// Classification is added afterwards, on the dimension axes.
+///
+/// The two days are optional and normally absent — a task is registered with a title and filled in
+/// afterwards — but they are taken here as well, so that someone who already knows when the work is due,
+/// or when it may start, does not have to file the task and then go back into it to say so.
 #[tauri::command]
 pub fn task_add(
     project_id: Option<i64>,
     title: String,
     notes: Option<String>,
+    due: Option<String>,
+    start: Option<String>,
 ) -> Result<WriteAck, CmdError> {
     let id = with_store_mut(|store| {
         let t = store.add_task(amenbo_core::ops::task::NewTask {
             title,
             project_id,
-            due_on: None,
-            start_on: None,
+            due_on: day_arg(due.as_deref())?,
+            start_on: day_arg(start.as_deref())?,
             priority: None,
             notes: notes.unwrap_or_default(),
             created_by_kind: Some(ActorKind::Human),
@@ -2183,6 +2190,62 @@ pub fn task_set_title(id: i64, title: String) -> Result<WriteAck, CmdError> {
             title: Some(title),
             ..Default::default()
         })?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["tasks"]).task(id))
+}
+
+/// Read a day off this face: nothing at all, and the empty string a cleared date input sends, both mean
+/// "no day"; anything else goes through core's own parser, so the GUI reads a date exactly as the CLI's
+/// `--due` / `--start` does — a calendar day, or a relative form counted from this machine's own today
+/// (`AMB-D-429`).
+fn day_arg(input: Option<&str>) -> Result<Option<NaiveDate>, CmdError> {
+    match input.map(str::trim) {
+        None | Some("") => Ok(None),
+        Some(s) => Ok(Some(amenbo_core::time::parse_date(s, amenbo_core::time::today())?)),
+    }
+}
+
+/// Set the due date; due=None (or the empty string) clears it. Same shape as the CLI's
+/// `task update --due/--clear-due`. The date shows on the list cards, so the tasks scope is raised and
+/// the board and list refetch too.
+#[tauri::command]
+pub fn task_set_due(id: i64, due: Option<String>) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        let patch = match day_arg(due.as_deref())? {
+            None => amenbo_core::ops::task::TaskPatch {
+                clear_due: true,
+                ..Default::default()
+            },
+            Some(d) => amenbo_core::ops::task::TaskPatch {
+                due_on: Some(d),
+                ..Default::default()
+            },
+        };
+        store.update_task(id, patch)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["tasks"]).task(id))
+}
+
+/// Set the start day; start=None (or the empty string) clears it. Same shape as the CLI's
+/// `task update --start/--clear-start`. A day still ahead is the third premise of `ready`, so this write
+/// moves whether the task can be reserved at all — the tasks scope is raised for that as much as for the
+/// chip the cards draw from it.
+#[tauri::command]
+pub fn task_set_start(id: i64, start: Option<String>) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        let patch = match day_arg(start.as_deref())? {
+            None => amenbo_core::ops::task::TaskPatch {
+                clear_start: true,
+                ..Default::default()
+            },
+            Some(d) => amenbo_core::ops::task::TaskPatch {
+                start_on: Some(d),
+                ..Default::default()
+            },
+        };
+        store.update_task(id, patch)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]).task(id))
@@ -6176,8 +6239,8 @@ mod tests {
                 .id
         };
 
-        let blocker = task_add(Some(project_id), "先行".into(), None).unwrap().tasks[0];
-        let dependent = task_add(Some(project_id), "後続".into(), None).unwrap().tasks[0];
+        let blocker = task_add(Some(project_id), "先行".into(), None, None, None).unwrap().tasks[0];
+        let dependent = task_add(Some(project_id), "後続".into(), None, None, None).unwrap().tasks[0];
         finish_creating(blocker);
         finish_creating(dependent);
         {
@@ -6224,7 +6287,7 @@ mod tests {
                 .id
         };
 
-        let task = task_add(Some(project_id), "実装".into(), None).unwrap().tasks[0];
+        let task = task_add(Some(project_id), "実装".into(), None, None, None).unwrap().tasks[0];
         finish_creating(task);
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
 
@@ -6282,7 +6345,7 @@ mod tests {
                 .id
         };
 
-        let task = task_add(Some(project_id), "実装".into(), None).unwrap().tasks[0];
+        let task = task_add(Some(project_id), "実装".into(), None, None, None).unwrap().tasks[0];
         finish_creating(task);
         let did = decision_add(project_id, "決めごと".into(), Some("結論".into())).unwrap().decisions[0];
         decision_set_link(did, task, true).unwrap();
@@ -6328,7 +6391,7 @@ mod tests {
                 .unwrap()
                 .id
         };
-        let task = task_add(Some(project_id), "やらないと決めた作業".into(), None).unwrap().tasks[0];
+        let task = task_add(Some(project_id), "やらないと決めた作業".into(), None, None, None).unwrap().tasks[0];
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
 
         let err = task_reject(task, "   ".into()).err().expect("an empty reason must be refused");
@@ -6377,7 +6440,7 @@ mod tests {
             p.id
         };
 
-        let ack = task_add(Some(project_id), "結線テスト".into(), None).unwrap();
+        let ack = task_add(Some(project_id), "結線テスト".into(), None, None, None).unwrap();
         assert_eq!(ack.tasks.len(), 1, "task_add returns the new task id");
         assert!(ack.scopes.contains(&"tasks"), "task_add invalidates the task lists");
         let id = ack.tasks[0];
@@ -6432,7 +6495,7 @@ mod tests {
         let proj = proj_snap.projects.iter().find(|p| p.id == project_id).unwrap();
         assert!(proj.dimensions.iter().any(|d| d.name == "軸2"), "dimension added");
 
-        let del_id = task_add(Some(project_id), "消す対象".into(), None).unwrap().tasks[0];
+        let del_id = task_add(Some(project_id), "消す対象".into(), None, None, None).unwrap().tasks[0];
         let ack = task_delete(del_id).unwrap();
         assert_eq!(ack.tasks, vec![del_id], "delete acks the removed task");
         assert!(card(del_id).is_none(), "deleted task drops from the list");
@@ -6459,9 +6522,88 @@ mod tests {
         assert!(snap.activity.iter().any(|a| a.kind == "system" && a.event.as_ref().map(|e| e.kind == "task.assigned").unwrap_or(false)), "assigned event emitted");
 
         let sig_before = store_signature();
-        let _ = task_add(Some(project_id), "シグネチャ確認".into(), None).unwrap();
+        let _ = task_add(Some(project_id), "シグネチャ確認".into(), None, None, None).unwrap();
         assert!(!sig_before.is_empty(), "store signature is non-empty when a store exists");
         assert_ne!(store_signature(), sig_before, "a write advances the store signature");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// The two days a task can carry, from the face that had no way of writing them. Each one is set,
+    /// read back off the card, and cleared — and clearing is asked for on its own, because a day that
+    /// will not come off is a day the person cannot take back. The start day is asked one more thing:
+    /// it is a premise of `ready`, so writing it has to move whether the task can be reserved at all.
+    #[test]
+    fn the_two_days_are_written_read_back_and_taken_away() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("app-days");
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        let project_id = {
+            let mut store = Store::open().unwrap();
+            store
+                .project_add(amenbo_core::ops::project::NewProject {
+                    name: "期日PJ".into(),
+                    view: View::List,
+                    notes: String::new(),
+                    color: None,
+                })
+                .unwrap()
+                .id
+        };
+        let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().expect("task");
+
+        // Given at creation, both days are on the card the board draws from — no second visit needed.
+        let id = task_add(
+            Some(project_id),
+            "日付つきで登録".into(),
+            None,
+            Some("2099-12-31".into()),
+            Some("2099-01-01".into()),
+        )
+        .unwrap()
+        .tasks[0];
+        finish_creating(id);
+        assert_eq!(card(id).due.as_deref(), Some("2099-12-31"));
+        assert_eq!(card(id).start_on.as_deref(), Some("2099-01-01"));
+        assert!(!card(id).ready, "a start day still ahead holds the task unready");
+        assert_eq!(
+            card(id).not_started_until.as_deref(),
+            Some("2099-01-01"),
+            "and says so as the premise, beside the field itself"
+        );
+
+        // Edited afterwards, one field at a time.
+        task_set_due(id, Some("2099-06-30".into())).unwrap();
+        assert_eq!(card(id).due.as_deref(), Some("2099-06-30"));
+
+        // A day that has come is still the value the person put there, so the card carries it even
+        // though it is no longer a reason to wait.
+        task_set_start(id, Some("2000-01-01".into())).unwrap();
+        let c = card(id);
+        assert_eq!(c.start_on.as_deref(), Some("2000-01-01"), "the field holds what was written");
+        assert!(c.not_started_until.is_none(), "a day that has come is no longer a premise");
+        assert!(c.ready, "and the task is reservable again");
+
+        // Relative forms are read the way the CLI reads them, off this machine's own today
+        // (`AMB-D-429`) — the GUI's date input sends `YYYY-MM-DD`, but the face does not narrow to it.
+        task_set_due(id, Some("today".into())).unwrap();
+        assert_eq!(
+            card(id).due.as_deref(),
+            Some(amenbo_core::time::date_to_string(amenbo_core::time::today()).as_str())
+        );
+
+        // Both ways of saying "no day": nothing at all, and the empty string a cleared date input sends.
+        let ack = task_set_due(id, None).unwrap();
+        assert!(ack.scopes.contains(&"tasks"), "the cards draw the due date, so they refetch");
+        assert!(card(id).due.is_none(), "the due date comes off");
+        task_set_start(id, Some(String::new())).unwrap();
+        assert!(card(id).start_on.is_none(), "and so does the start day");
+
+        // A date that is not one is refused rather than quietly ignored.
+        let err = task_set_due(id, Some("31/12/2099".into())).err().expect("not a date");
+        assert_eq!(err.code, "invalid_value");
+        assert!(card(id).due.is_none(), "and the refusal wrote nothing");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }
@@ -6490,7 +6632,7 @@ mod tests {
         };
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next().unwrap();
 
-        let id = task_add(Some(project_id), "作りかけ".into(), None).unwrap().tasks[0];
+        let id = task_add(Some(project_id), "作りかけ".into(), None, None, None).unwrap().tasks[0];
         let t = card(id);
         assert!(t.draft, "a creation lands unfinished");
         assert!(!t.ready, "which is the fourth premise holding the reservation back");
@@ -6606,8 +6748,8 @@ mod tests {
         decision_supersede(head, old).unwrap();
         decision_amend(head, partial).unwrap();
         decision_builds_on(head, premise).unwrap();
-        let shipped = task_add(Some(project_id), "整数キーへ移行".into(), None).unwrap().tasks[0];
-        let pending = task_add(Some(project_id), "GUI を追従させる".into(), None).unwrap().tasks[0];
+        let shipped = task_add(Some(project_id), "整数キーへ移行".into(), None, None, None).unwrap().tasks[0];
+        let pending = task_add(Some(project_id), "GUI を追従させる".into(), None, None, None).unwrap().tasks[0];
         decision_set_link(head, shipped, true).unwrap();
         decision_set_link(head, pending, true).unwrap();
         task_status(shipped, "done".into()).unwrap();
@@ -6668,7 +6810,7 @@ mod tests {
 
         provision_project("PJ").unwrap();
         let project_id = snapshot().unwrap().projects[0].id;
-        let tid = task_add(Some(project_id), "コメントを消す".into(), None).unwrap().tasks[0];
+        let tid = task_add(Some(project_id), "コメントを消す".into(), None, None, None).unwrap().tasks[0];
 
         let _ = comment_add(tid, "誤投稿".into()).unwrap();
         let _ = comment_add(tid, "残すコメント".into()).unwrap();
@@ -6702,7 +6844,7 @@ mod tests {
 
         provision_project("PJ").unwrap();
         let project_id = snapshot().unwrap().projects[0].id;
-        let tid = task_add(Some(project_id), "コメントを直す".into(), None).unwrap().tasks[0];
+        let tid = task_add(Some(project_id), "コメントを直す".into(), None, None, None).unwrap().tasks[0];
         let _ = comment_add(tid, "誤字のある投稿".into()).unwrap();
 
         let posted: Vec<ActivityItemDto> =
@@ -6872,7 +7014,7 @@ mod tests {
             .unwrap();
             p.id
         };
-        let task_id = task_add(Some(project_id), "添付親タスク".into(), None).unwrap().tasks[0];
+        let task_id = task_add(Some(project_id), "添付親タスク".into(), None, None, None).unwrap().tasks[0];
         comment_add(task_id, "添付を付けるコメント".into()).unwrap();
         let comment_id = {
             let store = Store::open().unwrap();
@@ -7394,7 +7536,7 @@ mod tests {
         };
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next();
 
-        let id = task_add(Some(project_id), "軸テスト".into(), None).unwrap().tasks[0];
+        let id = task_add(Some(project_id), "軸テスト".into(), None, None, None).unwrap().tasks[0];
         assert_eq!(card(id).unwrap().project_id, Some(project_id));
 
         let ack = task_set_dimension_value(id, v1).unwrap();
@@ -7439,7 +7581,7 @@ mod tests {
             p.id
         };
 
-        let ack = task_add(Some(project_id), "空PJタスク".into(), None).unwrap();
+        let ack = task_add(Some(project_id), "空PJタスク".into(), None, None, None).unwrap();
         assert!(ack.scopes.contains(&"tasks"), "task_add invalidates the board lists");
         let task_id = ack.tasks[0];
 
@@ -7689,7 +7831,7 @@ mod tests {
         let tmp = amenbo_scratch::scratch("app-m5");
         std::env::set_var("AMENBO_HOME", &tmp);
 
-        let id = task_add(None, "受信箱D".into(), None).unwrap().tasks[0];
+        let id = task_add(None, "受信箱D".into(), None, None, None).unwrap().tasks[0];
         task_assign(id, Some("human".into())).unwrap();
         assert!(mailbox_comment_tasks().unwrap().is_empty(), "no comments = no membership");
 
@@ -7740,7 +7882,7 @@ mod tests {
 
         assert!(mailbox_triggered_at(vec![]).unwrap().is_empty(), "empty input is empty");
 
-        let id = task_add(None, "triggeredAt".into(), None).unwrap().tasks[0];
+        let id = task_add(None, "triggeredAt".into(), None, None, None).unwrap().tasks[0];
 
         let get = |ids: Vec<i64>| -> Option<String> {
             mailbox_triggered_at(ids).unwrap().into_iter().find(|(i, _)| *i == id).map(|(_, at)| at)
@@ -7884,7 +8026,7 @@ mod tests {
         assert!(empty.rows.is_empty() && !empty.expired, "empty when unchanged (not expired)");
         assert_eq!(empty.cursor, start, "when empty, the cursor stays as passed");
 
-        let task = task_add(Some(project_id), "実装".into(), None).unwrap().tasks[0];
+        let task = task_add(Some(project_id), "実装".into(), None, None, None).unwrap().tasks[0];
         let after_add = changes_since(start, None).unwrap();
         assert!(
             after_add.rows.iter().any(|r| r.dataset == "task" && r.row_id == task && r.op == "insert"),

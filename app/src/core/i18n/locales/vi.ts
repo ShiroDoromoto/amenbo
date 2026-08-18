@@ -157,6 +157,8 @@ export const vi: Translation = {
     "cal.today": "Hôm nay", "cal.prevMonth": "Tháng trước", "cal.nextMonth": "Tháng sau",
     "cal.noDue": "Không có hạn ({n})", "cal.empty": "Không có việc nào có hạn",
     "cal.more": "+{n} nữa", "cal.overdueDays": "trễ {n} ngày", "cal.inDays": "còn {n} ngày",
+    "date.due": "Hạn", "date.start": "Ngày bắt đầu",
+    "date.clear": "Xóa",
     "card.assignee": "Người phụ trách",
     "detail.tab.detail": "Chi tiết", "detail.tab.activity": "Hoạt động",
     "detail.notFound": "Không thấy việc",

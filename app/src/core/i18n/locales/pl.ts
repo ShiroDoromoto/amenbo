@@ -157,6 +157,8 @@ export const pl: Translation = {
     "cal.today": "Dziś", "cal.prevMonth": "Poprzedni miesiąc", "cal.nextMonth": "Następny miesiąc",
     "cal.noDue": "Bez terminu ({n})", "cal.empty": "Brak zadań z terminem",
     "cal.more": "+{n} więcej", "cal.overdueDays": "{n} dni po terminie", "cal.inDays": "za {n} dni",
+    "date.due": "Termin", "date.start": "Data początkowa",
+    "date.clear": "Usuń",
     "card.assignee": "Odpowiedzialny",
     "detail.tab.detail": "Szczegóły", "detail.tab.activity": "Aktywność",
     "detail.notFound": "Nie znaleziono zadania",

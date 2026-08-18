@@ -48,11 +48,12 @@ use crate::time::Timestamp;
 pub const VERSION: u32 = 1;
 
 /// The v1 event names — the one source of truth for the strings a plugin dispatches on, shared with the
-/// write points that emit them. Eleven are semantic: three the events an `update` alone cannot tell apart
+/// points that emit them. Eleven are semantic: three the events an `update` alone cannot tell apart
 /// (named alongside the new state that does), and eight that name themselves outright — a creation, a
-/// deletion, a terminal, a comment posted or taken back. The twelfth ([`name::STORE_CHANGED`]) is not
-/// one of that family at all: it is the ledger saying only that something moved. Together they are the
-/// v1 catalog ([`V1_EVENTS`]).
+/// deletion, a terminal, a comment posted or taken back. Two more are the **due warnings**, which are
+/// semantic in the same way but are not writes at all: nobody acted, a day arrived, and the hourly tick
+/// noticed ([`crate::due`]). The last ([`name::STORE_CHANGED`]) is of no family: it is the ledger saying
+/// only that something moved. Together they are the v1 catalog ([`V1_EVENTS`]).
 pub mod name {
     /// A task was created. No `new` — the name is the whole state. It fires when the **creation ends**
     /// (`task finish-creating`), not when `task add` returns (`AMB-D-557`): between the two nobody can
@@ -84,9 +85,20 @@ pub mod name {
     /// is nothing left to read), so without this event a mirror keeps a comment that is gone. No `new` —
     /// the name is the whole state.
     pub const COMMENT_REMOVED: &str = "comment.removed";
+    /// **A task's due day has come or gone** — today's, or a day already past (`AMB-D-708`). No `new` and
+    /// **no `actor`**: nobody acted, a day arrived, and the only thing that fired it is the hourly tick
+    /// ([`crate::tick`]) noticing. It fires once per calendar day per task, for as long as the day stays
+    /// past and the task stays open, so a task nobody closes is named again tomorrow.
+    pub const TASK_DUE: &str = "task.due";
+    /// **A task's due day is tomorrow** — the warning step before [`TASK_DUE`], and the same cut the screen
+    /// draws in the colour before its own (`app/src/core/due.ts`). The two are separate names rather than
+    /// one carrying which step, because a subscription is by name: someone who wants only the day itself
+    /// says so by not subscribing to this. No `new`, and no `actor`, for the same reason as [`TASK_DUE`].
+    pub const TASK_DUE_TOMORROW: &str = "task.due_tomorrow";
     /// **Something in this project changed** — the one signal that says only that, and is the odd one out
-    /// of this catalog on purpose (`AMB-D-582`). The eleven above are *semantic*: composed at an ops write
-    /// point, which alone knows which of the six an `update` was and who drove it. This one is composed at
+    /// of this catalog on purpose (`AMB-D-582`). The thirteen above all say what happened — eleven composed
+    /// at an ops write point, which alone knows which of the six an `update` was and who drove it, and two
+    /// composed by the tick for a day that came ([`crate::due`]). This one is composed at
     /// the **ledger seam** — the change feed's drain, inside the very transaction that wrote — so it
     /// reaches every write, including the ones no name above covers: a notes edit, a due date, a
     /// classification put on or taken off, an edge drawn, a decision settled, an attachment gone.
@@ -103,9 +115,10 @@ pub mod name {
 }
 
 /// The complete v1 event catalog — every name in [`name`]. A plugin's subscription is checked against
-/// this set. Eleven of them are semantic; the twelfth ([`name::STORE_CHANGED`]) is the ledger's own
-/// signal and says nothing about what happened.
-pub const V1_EVENTS: [&str; 12] = [
+/// this set. Thirteen of them say what happened — eleven at a write point, and two the hourly tick fires
+/// for a day that came; the last ([`name::STORE_CHANGED`]) is the ledger's own signal and says nothing
+/// about what happened.
+pub const V1_EVENTS: [&str; 14] = [
     name::TASK_CREATED,
     name::TASK_STATUS_CHANGED,
     name::TASK_DONE,
@@ -117,6 +130,8 @@ pub const V1_EVENTS: [&str; 12] = [
     name::DECISION_REJECTED,
     name::COMMENT_ADDED,
     name::COMMENT_REMOVED,
+    name::TASK_DUE,
+    name::TASK_DUE_TOMORROW,
     name::STORE_CHANGED,
 ];
 
@@ -255,6 +270,34 @@ impl Payload {
         Self::base(name::COMMENT_REMOVED, id, actor, at)
     }
 
+    /// `task.due` — task `id`'s due day has come or gone (`AMB-D-708`). Takes no actor: a day arriving is
+    /// not something anybody did, and the hourly tick that noticed it is not an author.
+    pub fn task_due(id: i64, at: Timestamp) -> Self {
+        Self::dated(name::TASK_DUE, id, at)
+    }
+
+    /// `task.due_tomorrow` — task `id`'s due day is tomorrow. The step before [`task_due`](Self::task_due),
+    /// and actorless for the same reason.
+    pub fn task_due_tomorrow(id: i64, at: Timestamp) -> Self {
+        Self::dated(name::TASK_DUE_TOMORROW, id, at)
+    }
+
+    /// The shell the two due warnings share: the common fields with no actor at all, which is what makes
+    /// them different from [`base`](Self::base) rather than a variation of it.
+    fn dated(event: &'static str, id: i64, at: Timestamp) -> Self {
+        Self {
+            v: VERSION,
+            event,
+            id,
+            actor: None,
+            at,
+            new: None,
+            record: None,
+            parent: None,
+            version: None,
+        }
+    }
+
     /// `store.changed` — something in project `project_id` changed, and it is now at `version`
     /// (`AMB-D-582`). The one constructor that takes no actor, because the seam it is built at knows
     /// none: it fires from the change feed's drain, which holds which rows moved and nothing about who
@@ -323,11 +366,13 @@ impl Payload {
         parent: Option<i64>,
     ) -> Option<Self> {
         let event = V1_EVENTS.iter().copied().find(|name| *name == event)?;
-        // The ledger's own signal carries no actor and never did, so its stored column is not read: a
-        // parse there would only ask this build to recognise a value the seam never wrote. Every other
-        // event must name one, and a row that cannot is dropped rather than fired with a guess.
+        // Three events carry no actor and never did, so their stored column is not read: a parse there
+        // would only ask this build to recognise a value the seam never wrote. The ledger's own signal is
+        // one, and the two due warnings are the others — nobody acted, a day arrived. Every other event
+        // must name an actor, and a row that cannot is dropped rather than fired with a guess.
         let signal = event == name::STORE_CHANGED;
-        let actor = if signal { None } else { Some(ActorKind::parse(actor)?) };
+        let actorless = signal || matches!(event, name::TASK_DUE | name::TASK_DUE_TOMORROW);
+        let actor = if actorless { None } else { Some(ActorKind::parse(actor)?) };
         let at = Timestamp::parse_rfc3339(at)?;
         Some(Self {
             v: VERSION,
@@ -407,6 +452,38 @@ mod tests {
         assert_eq!(Payload::from_outbox_row(&semantic), None);
     }
 
+    /// The due warnings take the same actorless road, and the row rebuilds byte-for-byte what the
+    /// constructor emits — which is what says the tick's stored row and the typed payload are one thing.
+    /// They carry no `version` either: that field is the change signal's alone.
+    #[test]
+    fn a_due_warning_rebuilds_from_a_row_that_names_no_actor() {
+        use crate::store_engine::OutboxRow;
+        for (event, built) in [
+            (name::TASK_DUE, Payload::task_due(9, at())),
+            (name::TASK_DUE_TOMORROW, Payload::task_due_tomorrow(9, at())),
+        ] {
+            let row = OutboxRow {
+                id: 1,
+                event: event.to_string(),
+                record_id: 9,
+                actor: String::new(),
+                at: "2026-07-22T09:00:00Z".to_string(),
+                new_state: None,
+                project: Some(3),
+                record: None,
+                parent: None,
+            };
+            let rebuilt = Payload::from_outbox_row(&row).expect("a due warning names no actor");
+            assert_eq!(
+                serde_json::to_string(&rebuilt).unwrap(),
+                serde_json::to_string(&built).unwrap(),
+                "{event} rebuilds byte-for-byte what the named constructor emits",
+            );
+            assert!(rebuilt.actor.is_none());
+            assert!(rebuilt.version.is_none(), "the version is the change signal's alone");
+        }
+    }
+
     #[test]
     fn every_constructor_names_a_catalog_event() {
         let all = [
@@ -421,6 +498,8 @@ mod tests {
             Payload::decision_rejected(1, ActorKind::Human, at()),
             Payload::comment_added(1, ActorKind::Human, at()),
             Payload::comment_removed(1, ActorKind::Human, at()),
+            Payload::task_due(1, at()),
+            Payload::task_due_tomorrow(1, at()),
             Payload::store_changed(1, at(), 7),
         ];
         for p in &all {

@@ -9,21 +9,27 @@ mod harness;
 
 use harness::*;
 
-/// The ordinary round. Nothing is declared to be done on a calendar day yet, so a tick has nothing to
-/// carry out — and it is still a clean exit, not a refusal. It takes no facet and needs no pointer: the
-/// scheduler that starts it is neither a person nor their AI, and stands wherever it happens to stand.
+/// The ordinary round: every purpose takes its turn, and the day is marked so the next hour's wake-up
+/// takes none. A store with nothing due warns about nothing, which is a turn taken and not a turn skipped.
+/// It takes no facet and needs no pointer: the scheduler that starts it is neither a person nor their AI,
+/// and stands wherever it happens to stand.
 #[test]
-fn a_tick_with_nothing_owed_works_the_queues_and_exits_clean() {
+fn a_tick_takes_each_purposes_turn_once_a_day_and_exits_clean() {
     let cli = Cli::new();
     cli.run(&["init", "--name", "tester"]);
 
     let out = cli.json(&["tick", "run", "--json"]);
     assert_eq!(out["action"], "tick.run");
     assert_eq!(out["ok"], true);
-    assert_eq!(out["ran"].as_array().unwrap().len(), 0, "nothing is owed on this build: {out}");
+    assert_eq!(out["ran"], serde_json::json!(["due"]), "the day's turn was taken: {out}");
     assert_eq!(out["failed"].as_array().unwrap().len(), 0);
-    assert_eq!(out["delivered"], 0, "and there is nothing waiting to deliver");
+    assert_eq!(out["delivered"], 0, "nothing is due, so nothing was warned about");
     assert_eq!(out["queues"].as_array().unwrap().len(), 0);
+
+    // The next hour of the same day: the turn is already taken, so nothing runs again.
+    let again = cli.json(&["tick", "run", "--json"]);
+    assert_eq!(again["ran"].as_array().unwrap().len(), 0, "{again}");
+    assert_eq!(again["already_done"], serde_json::json!(["due"]), "{again}");
 
     // The same round without a facet on the command line: a scheduler has none to pass.
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_amenbo"))
@@ -88,6 +94,48 @@ fn a_tick_carries_the_delivery_a_previous_run_left_standing() {
     // Woken again with the queues empty: the same clean round as a fresh store's.
     let again = cli.json(&["tick", "run", "--json"]);
     assert_eq!(again["delivered"], 0);
+}
+
+/// The whole road, walked once: a day comes, the tick warns about it, and the warning reaches a plugin —
+/// with no app open, no facet on the command line, and nothing resident (`AMB-D-706`).
+///
+/// The two steps are named apart on the wire so a subscriber can take one and leave the other, and the
+/// event carries no actor at all: nobody acted, a day arrived (`AMB-D-708`).
+#[cfg(unix)]
+#[test]
+fn a_day_that_has_come_reaches_a_plugin_through_the_tick() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+
+    let capture = cli.home.join("warned.json");
+    install_subscribing_plugin(&cli, "bell", &["task.due"]);
+    let program = cli.home.join("plugins").join("bell").join("bell");
+    std::fs::write(&program, format!("#!/bin/sh\ncat > '{}'\n", capture.display())).unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    cli.json(&["plugin", "enable", "bell", "--json"]);
+
+    let pid = cli.bound_project();
+    let today =
+        cli.json(&["task", "add", "--title", "今日が期日", "--project", &pid, "--due", "today", "--json"]);
+    let today_id = id_str(&today["task"]["id"]);
+    cli.finish_creating(&today_id);
+    // Tomorrow's is the other step, which this plugin did not subscribe to: it is warned about, and this
+    // plugin is not the one told.
+    let soon = cli.json(&[
+        "task", "add", "--title", "明日が期日", "--project", &pid, "--due", "tomorrow", "--json",
+    ]);
+    cli.finish_creating(&id_str(&soon["task"]["id"]));
+
+    let out = cli.json(&["tick", "run", "--json"]);
+    assert_eq!(out["ran"], serde_json::json!(["due"]), "{out}");
+    assert!(out["delivered"].as_i64().unwrap() >= 1, "the warning went out: {out}");
+
+    let payload = wrote_json(&capture, |v| v["event"] == "task.due");
+    assert_eq!(payload["event"], "task.due");
+    assert_eq!(id_str(&payload["id"]), today_id, "the payload names the task whose day it is");
+    assert!(payload["actor"].is_null(), "a day arriving is nobody's act: {payload}");
 }
 
 /// One queue is worked by one runner, and the lease is what says so (`AMB-D-399`). The GUI's own drive may

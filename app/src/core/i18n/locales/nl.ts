@@ -154,6 +154,8 @@ export const nl: Translation = {
     "cal.today": "Vandaag", "cal.prevMonth": "Vorige maand", "cal.nextMonth": "Volgende maand",
     "cal.noDue": "Geen deadline ({n})", "cal.empty": "Geen taken met een deadline",
     "cal.more": "+{n} meer", "cal.overdueDays": "{n} d over tijd", "cal.inDays": "over {n} d",
+    "date.due": "Deadline", "date.start": "Begindatum",
+    "date.clear": "Wissen",
     "card.assignee": "Verantwoordelijke",
     "detail.tab.detail": "Details", "detail.tab.activity": "Activiteit",
     "detail.notFound": "Taak niet gevonden",

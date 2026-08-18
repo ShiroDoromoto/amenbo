@@ -18,7 +18,7 @@ function card(over: Partial<TaskCard>): TaskCard {
     id: 1, title: "t", ref: "#1", notes: "", projectId: null, status: "todo",
     assignee: null, priority: null, due: null, completedAt: null,
     comments: 0, ready: true, blockedBy: [], placement: null, createdBy: null,
-    linkedDecisions: [], blockedByDecisions: [], notStartedUntil: null, draft: false,
+    linkedDecisions: [], blockedByDecisions: [], startOn: null, notStartedUntil: null, draft: false,
     ...over,
   };
 }

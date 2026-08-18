@@ -376,6 +376,10 @@ pub struct TaskCardDto {
     #[ts(type = "\"high\" | \"medium\" | \"low\" | null")]
     pub(crate) priority: Option<&'static str>,
     pub(crate) due: Option<String>,
+    /// The declared start day (`YYYY-MM-DD`), whether or not it has come. `not_started_until` below is
+    /// the premise this field can raise; this is the field itself, which is what the pane editing it has
+    /// to show — a day that has already come is still a value the person put there and may want back.
+    pub(crate) start_on: Option<String>,
     /// Completion timestamp (RFC3339 UTC). Used to sort the Done column newest-first, among other
     /// things. None while the task is still open.
     pub(crate) completed_at: Option<String>,

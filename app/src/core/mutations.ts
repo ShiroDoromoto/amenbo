@@ -17,6 +17,7 @@ import { isClosed } from "./status";
 import type { ActivityItem, Facet, Priority, Status, TaskCard } from "../mock/types";
 import type { ActivityTargetDto, AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, McpRequestDto, McpSetupDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
 import { taskRef } from "./idref";
+import { todayStr } from "./calendar";
 
 /**
  * What a write command returns (mirrors the Rust `WriteAck`). It is never a whole snapshot: the GUI
@@ -147,6 +148,15 @@ function notReadyParts(t: TaskCard): CmdErrorPart[] {
 }
 
 /**
+ * The mock's copy of core's `not_started_until`: a start day is a reason to wait only while it is still
+ * ahead. Dates are `YYYY-MM-DD` and hold no time zone (`AMB-D-429`), so the comparison is the strings'
+ * own order, against this machine's calendar day.
+ */
+function startAhead(start: string | null): string | null {
+  return start && start > todayStr() ? start : null;
+}
+
+/**
  * The mock's copy of core's readiness derivation: no unfinished blocker, no unsettled grounding decision,
  * the declared start day arrived, and the creation finished (core's `reserve_blockers`, whose emptiness
  * *is* `ready`). It lives in one place so that clearing any one premise cannot come to disagree with
@@ -198,13 +208,21 @@ function sysItem(taskId: number, title: string, event: EventDto): ActivityItem {
 }
 
 /** Returns the id of the task just created, so the caller can open its detail pane. Null if it cannot be resolved. */
-export async function addTask(projectId: number | null, title: string, notes?: string): Promise<number | null> {
+export async function addTask(
+  projectId: number | null,
+  title: string,
+  notes?: string,
+  due?: string | null,
+  start?: string | null,
+): Promise<number | null> {
   if (inTauri()) {
     // Pass a project and core places the task there so it lands on that board; its
     // classification (dimension values) is assigned afterwards. With no project it is an inbox
     // (unfiled) task. task_add's WriteAck carries the new task among its affected ids (commands.rs),
     // so we apply the ack and lift the id out of it.
-    const ack = await invoke<WriteAck>("task_add", { projectId, title, notes: notes ?? null });
+    const ack = await invoke<WriteAck>("task_add", {
+      projectId, title, notes: notes ?? null, due: due ?? null, start: start ?? null,
+    });
     applyAck(ack);
     return ack.tasks[0] ?? null;
   }
@@ -217,11 +235,12 @@ export async function addTask(projectId: number | null, title: string, notes?: s
 
     const task: TaskCard = {
       id, title, notes: notes ?? "", status: "todo", assignee: null, priority: null,
-      due: null, comments: 0, createdBy: me(),
+      due: due ?? null, comments: 0, createdBy: me(),
       ref: taskRef(id), projectId, completedAt: null,
       // A creation lands unfinished, exactly as core's `add` leaves it (`AMB-D-554`): the task is on the
       // board and refused a reservation until the detail pane's "finish creating" ends the second stage.
-      ready: false, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [], notStartedUntil: null,
+      ready: false, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [],
+      startOn: start ?? null, notStartedUntil: startAhead(start ?? null),
       draft: true,
     };
     return { ...s, tasks: [...s.tasks, task], activity: [sysItem(id, title, { kind: "task.created" }), ...s.activity] };
@@ -345,6 +364,35 @@ export async function setPriority(id: number, priority: Priority | null): Promis
   mockMutate((s) => ({
     ...s,
     tasks: s.tasks.map((x) => (x.id === id ? { ...x, priority } : x)),
+  }));
+}
+
+/**
+ * Set or clear the due date (`YYYY-MM-DD`, or null to take it away). Silent on the timeline for the same
+ * reason `setPriority` is: core keeps no system event for an edited date.
+ */
+export async function setDue(id: number, due: string | null): Promise<void> {
+  if (inTauri()) return invokeAck("task_set_due", { id, due });
+  mockMutate((s) => ({
+    ...s,
+    tasks: s.tasks.map((x) => (x.id === id ? { ...x, due } : x)),
+  }));
+}
+
+/**
+ * Set or clear the start day (`YYYY-MM-DD`, or null to take it away). Unlike the due date this one is a
+ * premise: while the day is still ahead the task cannot be reserved, so the mock re-derives that here —
+ * browser iteration shows the same card the desktop would.
+ */
+export async function setStart(id: number, start: string | null): Promise<void> {
+  if (inTauri()) return invokeAck("task_set_start", { id, start });
+  mockMutate((s) => ({
+    ...s,
+    tasks: s.tasks.map((x) => {
+      if (x.id !== id) return x;
+      const notStartedUntil = startAhead(start);
+      return { ...x, startOn: start, notStartedUntil, ready: readyOf({ ...x, notStartedUntil }) };
+    }),
   }));
 }
 

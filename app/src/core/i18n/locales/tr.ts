@@ -154,6 +154,8 @@ export const tr: Translation = {
     "cal.today": "Bugün", "cal.prevMonth": "Önceki ay", "cal.nextMonth": "Sonraki ay",
     "cal.noDue": "Son tarih yok ({n})", "cal.empty": "Son tarihi olan iş yok",
     "cal.more": "+{n} daha", "cal.overdueDays": "{n} gün gecikmiş", "cal.inDays": "{n} gün sonra",
+    "date.due": "Son tarih", "date.start": "Başlangıç tarihi",
+    "date.clear": "Kaldır",
     "card.assignee": "Sorumlu",
     "detail.tab.detail": "Ayrıntılar", "detail.tab.activity": "Hareketler",
     "detail.notFound": "İş bulunamadı",

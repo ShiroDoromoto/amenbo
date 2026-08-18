@@ -154,6 +154,8 @@ export const ko: Translation = {
     "cal.today": "오늘", "cal.prevMonth": "이전 달", "cal.nextMonth": "다음 달",
     "cal.noDue": "기한 없음({n})", "cal.empty": "기한이 있는 작업이 없습니다",
     "cal.more": "+{n}건 더", "cal.overdueDays": "{n}일 지남", "cal.inDays": "{n}일 후",
+    "date.due": "기한", "date.start": "시작일",
+    "date.clear": "지우기",
     "card.assignee": "담당",
     "detail.tab.detail": "상세", "detail.tab.activity": "활동",
     "detail.notFound": "작업을 찾을 수 없습니다",

@@ -157,6 +157,8 @@ export const it: Translation = {
     "cal.today": "Oggi", "cal.prevMonth": "Mese precedente", "cal.nextMonth": "Mese successivo",
     "cal.noDue": "Senza scadenza ({n})", "cal.empty": "Nessuna attività con una scadenza",
     "cal.more": "+{n} altre", "cal.overdueDays": "{n} g di ritardo", "cal.inDays": "tra {n} g",
+    "date.due": "Scadenza", "date.start": "Data di inizio",
+    "date.clear": "Rimuovi",
     "card.assignee": "Responsabile",
     "detail.tab.detail": "Dettagli", "detail.tab.activity": "Attività",
     "detail.notFound": "Attività non trovata",

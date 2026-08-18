@@ -158,6 +158,8 @@ export const ptBR: Translation = {
     "cal.today": "Hoje", "cal.prevMonth": "Mês anterior", "cal.nextMonth": "Próximo mês",
     "cal.noDue": "Sem prazo ({n})", "cal.empty": "Nenhuma tarefa com prazo",
     "cal.more": "+{n} a mais", "cal.overdueDays": "{n} d de atraso", "cal.inDays": "em {n} d",
+    "date.due": "Prazo", "date.start": "Data de início",
+    "date.clear": "Remover",
     "card.assignee": "Responsável",
     "detail.tab.detail": "Detalhes", "detail.tab.activity": "Atividade",
     "detail.notFound": "Tarefa não encontrada",

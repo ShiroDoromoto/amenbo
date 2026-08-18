@@ -157,6 +157,8 @@ export const id: Translation = {
     "cal.today": "Hari ini", "cal.prevMonth": "Bulan sebelumnya", "cal.nextMonth": "Bulan berikutnya",
     "cal.noDue": "Tanpa tenggat ({n})", "cal.empty": "Tidak ada tugas bertenggat",
     "cal.more": "+{n} lagi", "cal.overdueDays": "lewat {n} hari", "cal.inDays": "{n} hari lagi",
+    "date.due": "Tenggat", "date.start": "Tanggal mulai",
+    "date.clear": "Hapus",
     "card.assignee": "Penanggung jawab",
     "detail.tab.detail": "Rincian", "detail.tab.activity": "Aktivitas",
     "detail.notFound": "Tugas tidak ditemukan",

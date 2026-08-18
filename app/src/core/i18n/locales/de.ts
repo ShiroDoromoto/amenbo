@@ -154,6 +154,8 @@ export const de: Translation = {
     "cal.today": "Heute", "cal.prevMonth": "Voriger Monat", "cal.nextMonth": "Nächster Monat",
     "cal.noDue": "Kein Fälligkeitsdatum ({n})", "cal.empty": "Keine Aufgaben mit Fälligkeitsdatum",
     "cal.more": "+{n} weitere", "cal.overdueDays": "{n} T überfällig", "cal.inDays": "in {n} T",
+    "date.due": "Fälligkeitsdatum", "date.start": "Startdatum",
+    "date.clear": "Entfernen",
     "card.assignee": "Zuständig",
     "detail.tab.detail": "Details", "detail.tab.activity": "Aktivität",
     "detail.notFound": "Aufgabe nicht gefunden",

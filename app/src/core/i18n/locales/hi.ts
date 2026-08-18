@@ -154,6 +154,8 @@ export const hi: Translation = {
     "cal.today": "आज", "cal.prevMonth": "पिछला महीना", "cal.nextMonth": "अगला महीना",
     "cal.noDue": "कोई समय-सीमा नहीं ({n})", "cal.empty": "समय-सीमा वाला कोई काम नहीं",
     "cal.more": "+{n} और", "cal.overdueDays": "{n} दिन देर", "cal.inDays": "{n} दिन में",
+    "date.due": "समय-सीमा", "date.start": "आरंभ तिथि",
+    "date.clear": "हटाएँ",
     "card.assignee": "ज़िम्मेदार",
     "detail.tab.detail": "विवरण", "detail.tab.activity": "गतिविधि",
     "detail.notFound": "काम नहीं मिला",

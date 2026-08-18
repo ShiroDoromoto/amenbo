@@ -157,6 +157,8 @@ export const fr: Translation = {
     "cal.today": "Aujourd'hui", "cal.prevMonth": "Mois précédent", "cal.nextMonth": "Mois suivant",
     "cal.noDue": "Sans échéance ({n})", "cal.empty": "Aucune tâche avec une échéance",
     "cal.more": "+{n} de plus", "cal.overdueDays": "{n} j de retard", "cal.inDays": "dans {n} j",
+    "date.due": "Échéance", "date.start": "Date de début",
+    "date.clear": "Effacer",
     "card.assignee": "Responsable",
     "detail.tab.detail": "Détails", "detail.tab.activity": "Activité",
     "detail.notFound": "Tâche introuvable",

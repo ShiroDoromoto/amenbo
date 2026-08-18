@@ -157,6 +157,8 @@ export const ru: Translation = {
     "cal.today": "Сегодня", "cal.prevMonth": "Предыдущий месяц", "cal.nextMonth": "Следующий месяц",
     "cal.noDue": "Без срока ({n})", "cal.empty": "Задач со сроком нет",
     "cal.more": "ещё {n}", "cal.overdueDays": "просрочено на {n} дн.", "cal.inDays": "через {n} дн.",
+    "date.due": "Срок", "date.start": "Дата начала",
+    "date.clear": "Убрать",
     "card.assignee": "Ответственный",
     "detail.tab.detail": "Подробности", "detail.tab.activity": "Активность",
     "detail.notFound": "Задача не найдена",

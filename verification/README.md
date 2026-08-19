@@ -476,10 +476,13 @@ which is what an assert there is written against.
 And one is nobody typing at all. **`tick`** is the machine's own scheduler starting amenbo once an
 hour, and what amenbo works out once it is awake: `woken` carries out one turn and judges what came
 back, which is the whole of what a scheduler ever gets — a tick leaves a day mark and nothing else a
-reader can ask for, so being woken *is* the reading. `holds` reads whether the scheduler is holding
-the registration. **Nothing there writes one.** A registration lands outside the throwaway store a
-run makes, in the launchd, systemd or Task Scheduler of whichever machine the gate is running on, so
-a road that walked it would leave an hourly timer on a release box —
+reader can ask for, so being woken *is* the reading. `holds` reads what the run *did* to the
+registration — `changed: false` being "left the machine as it was found". **Nothing there writes
+one.** A registration lands outside the throwaway store a run makes, in the launchd, systemd or Task
+Scheduler of whichever machine the gate is running on, which is also why the reading is a difference
+and not an absolute: the store's isolation does not reach the scheduler, so a road asking whether a
+registration is held at all would read the one belonging to whoever is running the gate. A road that
+walked the registration itself would leave an hourly timer on a release box —
 `be-offered-a-start-at-login` draws the same line for the login registration, and that half is
 walked on the real machines.
 

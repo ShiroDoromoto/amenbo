@@ -95,9 +95,13 @@ steps_cli:
       carried_out: false
 
   # And the machine the gate ran on is left as it was found. Nothing above registers a timer, so this
-  # is the line that says so out loud rather than leaving it to be taken on trust.
+  # is the line that says so out loud rather than leaving it to be taken on trust. What it reads is the
+  # difference across the run and not whether a registration is there at all: the scheduler belongs to
+  # the machine rather than to this store, so on the machine of anybody who uses the hourly tick — a
+  # release box included, since the release registers one before it walks this road — an absolute
+  # reading would fail this line over somebody else's timer.
   - type: assert
     domain: tick
     op: holds
     with:
-      registered: false
+      changed: false

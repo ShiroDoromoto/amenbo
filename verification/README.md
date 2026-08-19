@@ -386,12 +386,15 @@ project and the folder its entry names, beside the app reaching nothing, each ro
 walk —
 `be-offered-a-start-at-login`
 walks the one thing on screen nobody went and asked for — an offer that comes up on its own once the app has been come
-back to, and the answer that takes it away — and the hourly check's three roads close the set:
+back to, and the answer that takes it away — and the hourly check's roads close the set:
 `be-offered-the-hourly-check` walks the band that arrives when a dated task, a carrier and an unanswered
 device stand together, the yes read back on the settings row, and that row taking it back off;
-`take-back-a-no-about-the-hourly-check` walks the way back a declined band, rightly, never offers; and
+`take-back-a-no-about-the-hourly-check` walks the way back a declined band, rightly, never offers;
 `not-be-asked-about-the-hourly-check-nothing-would-carry` reads the band staying down when nothing
-enabled would carry the warning a yes would start.
+enabled would carry the warning a yes would start; and the pair around its third button —
+`be-asked-again-after-putting-the-hourly-check-off` and
+`not-be-asked-twice-in-a-day-about-the-hourly-check` — reads the one day of quiet a "later" buys from
+both of its sides, on the deferral day the `tick deferred` premise stands up.
 
 Everything the wait prints — the step about to be taken, and the prompt — goes to stderr, so `--json`
 still leaves one machine-readable line on stdout. A driver that is not a person keeps its side open

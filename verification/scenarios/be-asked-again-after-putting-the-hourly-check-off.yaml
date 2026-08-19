@@ -1,0 +1,98 @@
+# The third button, and the day after it. "later" answers nothing: it writes the day it was pressed
+# and holds the band back until tomorrow — so its whole meaning spans two launches, and no single run
+# can press it and then meet what the press decides. The world below is the day after: the band was
+# put off yesterday, the quiet has been spent, and the app opens with the question standing again.
+#
+# ── What the return proves, and what its sibling carries ──────────────────────────────────────────
+# The band coming back is what tells "later" from a no. A build that recorded a refusal under that
+# button would leave this launch silent — the band never returns to an answered device — so the first
+# reading here is the one that catches it. The other half of the day boundary, the same-day quiet, is
+# its sibling's (`not-be-asked-twice-in-a-day-about-the-hourly-check`): one world per file, because a
+# world is stood up before the launch and a launch is what the band is judged at.
+#
+# The road then presses "later" itself — the one place the press is walked — and the band goes for
+# today. Nothing is registered and nothing needs taking back: of the three buttons this is the only
+# one that leaves the machine exactly as it stood.
+#
+# ── The screen road alone ─────────────────────────────────────────────────────────────────────────
+# A terminal has no band to put off, so there is no second road and no gap in one. Both readings are
+# the interface's own words — an eye closes them, and a band that failed to return leaves the press
+# with nothing to press, which is the road's own second reader.
+id: be-asked-again-after-putting-the-hourly-check-off
+title: Putting the hourly check off is not an answer — the band is back the day after, and can be put off again
+description: >
+  The goal is the day boundary, read from its far side. Yesterday this device pressed the button that
+  only puts the question off; today the app opens and the band is standing again, because nothing was
+  answered and the quiet that button buys is one day long. Pressing it again takes the band away for
+  today and today alone. A build that had taken the press for a refusal would open this launch silent,
+  with nothing anywhere to say the question was ever put.
+
+given:
+  # The band's two standing conditions, the way `be-offered-the-hourly-check` stands them up: a dated
+  # task still open, and the official `task.due` subscriber enabled in this run's own project
+  # (installed over the network on purpose — see `put-a-plugin-on-the-machine.yaml`). The device
+  # itself is unanswered, where a fresh store already stands.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day is set
+    as: dated
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: dated
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: dated
+      due: "+7d"
+
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: slack
+
+  - type: action
+    domain: plugin
+    op: enable
+    with:
+      name: slack
+
+  # And the press this road is about, already spent: "later" was pressed yesterday. The day is
+  # written straight into the store, since a day having passed is the one world a run can only be
+  # given (`store worn-in` draws that line first).
+  - type: action
+    domain: tick
+    op: deferred
+    with:
+      when: yesterday
+
+steps_gui:
+  # The return. Yesterday's quiet is over and nothing was answered, so the question is standing
+  # again — which is the reading a refusal recorded under the wrong button can never produce.
+  - type: assert
+    domain: tick
+    op: banner
+    with:
+      present: true
+
+  # The press itself, walked where it means something: on a band that is provably the returned one.
+  - type: action
+    domain: tick
+    op: banner-answer
+    with:
+      answer: later
+
+  # And gone for today. What this press wrote is tomorrow's business — the world above is exactly
+  # this state, one day on.
+  - type: assert
+    domain: tick
+    op: banner
+    with:
+      present: false

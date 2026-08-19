@@ -1,0 +1,78 @@
+# The same-day half of "later". The button's whole promise is one day of quiet, and the half a press
+# can never show is the quiet holding across a launch: the band hides itself the moment any button is
+# pressed, so a run that pressed "later" and read the band gone would be reading the hiding, not the
+# record. The world below is what the record alone does — "later" was pressed earlier today, the app
+# opens fresh, and the band stays down on the strength of the written day and nothing else.
+#
+# One reading, and an absence: nothing is pressed and nothing is opened. Its sibling
+# (`be-asked-again-after-putting-the-hourly-check-off`) reads the same record one day on, and the two
+# files together are what say the quiet is a day and not forever — a build that never brought the
+# band back reads green here and red there.
+#
+# The other two conditions are stood up on purpose, the way the carrier-less road stands its two
+# (`not-be-asked-about-the-hourly-check-nothing-would-carry`): with a dated task open and a carrier
+# enabled, the band that stays down is down for the deferral and for nothing else.
+#
+# A terminal has no band to leave down, so there is no second road and no gap in one. The reading is
+# an absence in the interface's own words — an eye closes it.
+id: not-be-asked-twice-in-a-day-about-the-hourly-check
+title: A device that said "later" this morning is not asked again today — the band stays down on the written day alone
+description: >
+  The goal is the quiet a "later" buys, read where only the record can be holding it. The band was put
+  off earlier today; the app opens fresh, with a dated task on the board and a carrier enabled, and
+  the band stays down — not because a screen is hiding it, but because the day on disk says today was
+  already asked. A build that lost that record would put the question again within the hour, which is
+  exactly the nagging the button exists to end.
+
+given:
+  # The band's two standing conditions, so the absence reads against a gate that would otherwise be
+  # open: a dated task still open, and the official `task.due` subscriber enabled in this run's own
+  # project (installed over the network on purpose — see `put-a-plugin-on-the-machine.yaml`).
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day is set
+    as: dated
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: dated
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: dated
+      due: "+7d"
+
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: slack
+
+  - type: action
+    domain: plugin
+    op: enable
+    with:
+      name: slack
+
+  # And the press, already made this morning: "later" written as today. The launch below is the
+  # second time today the question could have been put, which is the whole of what is under test.
+  - type: action
+    domain: tick
+    op: deferred
+    with:
+      when: today
+
+steps_gui:
+  # The one reading. The app came up with the gate's three conditions otherwise standing, and the
+  # band did not: today was already asked.
+  - type: assert
+    domain: tick
+    op: banner
+    with:
+      present: false

@@ -216,6 +216,8 @@ export const uk: Translation = {
     "settings.avatarChoose": "Обрати зображення…", "settings.avatarReset": "Повернути айдентикон",
     "settings.avatarHint": "Задайте обличчя для Людини та ШІ. Зображення зменшуються до 96px перед збереженням (якщо нічого не задано, кожен бік отримує власний айдентикон).",
     "settings.appearance": "Вигляд", "settings.theme": "Тема", "settings.language": "Мова",
+    "settings.defaultView": "Вигляд за замовчуванням",
+    "settings.defaultViewNote": "Вигляд, у якому відкривається новий проєкт. Наявні проєкти зберігають свій.",
     "settings.themeOs": "За системою", "settings.themeDark": "Темна", "settings.themeLight": "Світла",
     "settings.developer": "Для розробників",
     "settings.perfLog": "Журнал швидкодії (вимірювання)",

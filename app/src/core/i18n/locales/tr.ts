@@ -209,6 +209,8 @@ export const tr: Translation = {
     "settings.avatarChoose": "Görsel seç…", "settings.avatarReset": "Identicon'a döndür",
     "settings.avatarHint": "İnsan ve yapay zekâ için birer yüz tanımlayın. Görseller kaydedilmeden önce 96px'e küçültülür (tanımlanmazsa her taraf için ayrı identicon kullanılır).",
     "settings.appearance": "Görünüm", "settings.theme": "Tema", "settings.language": "Dil",
+    "settings.defaultView": "Varsayılan görünüm",
+    "settings.defaultViewNote": "Yeni bir projenin açıldığı görünüm. Var olan projeler kendi görünümlerini korur.",
     "settings.themeOs": "İşletim sistemine uy", "settings.themeDark": "Koyu", "settings.themeLight": "Açık",
     "settings.developer": "Geliştirici",
     "settings.perfLog": "Başarım günlüğü (ölçüm)",

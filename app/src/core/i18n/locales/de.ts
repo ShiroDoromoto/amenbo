@@ -211,6 +211,8 @@ export const de: Translation = {
     "settings.avatarChoose": "Bild wählen…", "settings.avatarReset": "Zurück zum Identicon",
     "settings.avatarHint": "Hinterlege ein Gesicht für Mensch und KI. Bilder werden vor dem Speichern auf 96 px verkleinert (ohne Bild wird je Facette ein Identicon benutzt).",
     "settings.appearance": "Darstellung", "settings.theme": "Design", "settings.language": "Sprache",
+    "settings.defaultView": "Standardansicht",
+    "settings.defaultViewNote": "Die Ansicht, mit der ein neues Projekt geöffnet wird. Bestehende Projekte behalten ihre eigene.",
     "settings.themeOs": "Dem System folgen", "settings.themeDark": "Dunkel", "settings.themeLight": "Hell",
     "settings.developer": "Entwicklung",
     "settings.perfLog": "Leistungsprotokoll (Instrumentierung)",

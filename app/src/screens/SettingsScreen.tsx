@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { currentLang, doctorText, errText, langEndonym, LANGS, t, tn, tf, type Lang } from "../core/i18n";
+import { currentLang, doctorText, errText, langEndonym, LANGS, t, tn, tf, viewLabel, type Lang, type ViewKind } from "../core/i18n";
 import { getSnapshot, subscribe } from "../core/snapshot";
 import {
   bindFolder, cancelDataOp, fetchDoctorReport, fetchStoreLocations, fileToAvatarDataUrl, listenDataProgress,
   openLogsDir, pickBackupPath, pickExportPath, pickRestoreArchive, resyncManagedBlocks, runBackup, runDoctorFix,
-  runExport, runRestore, setAutostart, setFacetNames, setLanguage, setFacetAvatar, setPerfLog, setUpdateCheck,
+  runExport, runRestore, setAutostart, setDefaultView, setFacetNames, setLanguage, setFacetAvatar, setPerfLog,
+  setUpdateCheck,
 } from "../core/mutations";
 import { ErrorNote } from "../components/ErrorNote";
 import { DoneNote } from "../components/DoneNote";
@@ -19,6 +20,9 @@ import { facetColor, FacetAvatar, identiconSeed } from "../components/atoms";
 import { getThemePref, setThemePref, type ThemePref } from "../core/theme";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { Icon } from "../components/Icon";
+
+/** The four a project can open in, in the order the header draws its tabs. */
+const VIEWS: ViewKind[] = ["list", "board", "calendar", "timeline"];
 
 // Settings: profile, appearance, AI policy, developer, and data (export and backup). The store is a
 // single local one, so there is no section for sharing, syncing, keys or members.
@@ -44,6 +48,7 @@ export function SettingsScreen() {
           </select>
         </div>
         <LanguageSetting />
+        <DefaultViewSetting />
       </Category>
 
       {/* Nor does a development build carry the startup section: it registers nothing at login, so the
@@ -96,6 +101,26 @@ function LanguageSetting() {
           <option key={l} value={l} lang={l}>{langEndonym(l)}</option>
         ))}
       </select>
+    </div>
+  );
+}
+
+/** Change the view a project created without one of its own opens in (config.default_view). It reads
+ *  defaultView from the snapshot, so the pull-down follows a value written anywhere else — `config set`
+ *  in the terminal included. The note under it is load-bearing: this setting looks inert, because every
+ *  project that already exists carries its own view and nothing on screen moves when it changes. */
+function DefaultViewSetting() {
+  const view = useSyncExternalStore(subscribe, () => getSnapshot().defaultView);
+  const change = (e: React.ChangeEvent<HTMLSelectElement>) => { void setDefaultView(e.target.value as ViewKind); };
+  return (
+    <div className="settings__row">
+      <span className="settings__k">{t("settings.defaultView")}</span>
+      <span>
+        <select className="btn" value={view} onChange={change}>
+          {VIEWS.map((v) => <option key={v} value={v}>{viewLabel(v)}</option>)}
+        </select>
+        <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.defaultViewNote")}</div>
+      </span>
     </div>
   );
 }

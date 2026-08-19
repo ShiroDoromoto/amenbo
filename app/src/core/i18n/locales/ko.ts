@@ -209,6 +209,8 @@ export const ko: Translation = {
     "settings.avatarChoose": "이미지 고르기…", "settings.avatarReset": "기본 무늬로 되돌리기",
     "settings.avatarHint": "사람과 AI에 각각 얼굴을 등록합니다. 이미지는 저장 전에 96px로 줄입니다(설정하지 않으면 각자의 기본 무늬를 씁니다).",
     "settings.appearance": "모양", "settings.theme": "테마", "settings.language": "언어",
+    "settings.defaultView": "기본 보기",
+    "settings.defaultViewNote": "새로 만드는 프로젝트가 열리는 보기입니다. 이미 있는 프로젝트는 각자의 보기를 그대로 씁니다.",
     "settings.themeOs": "시스템 따르기", "settings.themeDark": "어둡게", "settings.themeLight": "밝게",
     "settings.developer": "개발자",
     "settings.perfLog": "성능 로그(계측)",

@@ -212,6 +212,8 @@ export const th: Translation = {
     "settings.avatarChoose": "เลือกรูป…", "settings.avatarReset": "กลับไปใช้ identicon",
     "settings.avatarHint": "ลงทะเบียนใบหน้าให้ทั้งมนุษย์และ AI รูปจะถูกย่อเหลือ 96px ก่อนบันทึก (ถ้าไม่ตั้ง จะใช้ identicon ของแต่ละฝั่ง)",
     "settings.appearance": "รูปลักษณ์", "settings.theme": "ธีม", "settings.language": "ภาษา",
+    "settings.defaultView": "มุมมองเริ่มต้น",
+    "settings.defaultViewNote": "มุมมองที่โปรเจกต์ใหม่จะเปิดขึ้น โปรเจกต์ที่มีอยู่แล้วยังคงใช้มุมมองของตัวเอง",
     "settings.themeOs": "ตามระบบ", "settings.themeDark": "มืด", "settings.themeLight": "สว่าง",
     "settings.developer": "นักพัฒนา",
     "settings.perfLog": "บันทึกสมรรถนะ (การวัด)",

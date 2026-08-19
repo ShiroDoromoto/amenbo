@@ -544,6 +544,11 @@ pub struct Snapshot {
     /// OS — the registration itself lives outside the app, and only a shipped build ever draws the
     /// switch (a development build registers nothing, `AMB-D-547`).
     pub(crate) autostart: bool,
+    /// The view a project created without one of its own opens in (`config.default_view`, default
+    /// board). Exposed so the settings screen can show and change it. It is only the answer nobody
+    /// gave: a project already carries its own `view`, and this never repaints one.
+    #[ts(type = "\"list\" | \"board\" | \"calendar\" | \"timeline\"")]
+    pub(crate) default_view: String,
 }
 
 /// The startup integrity check, shaped for the GUI: it feeds a read-only warning banner. Empty means

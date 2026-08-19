@@ -228,6 +228,8 @@ const ui = {
   "settings.avatarChoose": "Choose image…", "settings.avatarReset": "Reset to identicon",
   "settings.avatarHint": "Register a face for Human and AI. Images are downscaled to 96px before saving (a per-facet identicon is used when unset).",
   "settings.appearance": "Appearance", "settings.theme": "Theme", "settings.language": "Language",
+  "settings.defaultView": "Default view",
+  "settings.defaultViewNote": "The view a new project opens in. Projects that already exist keep the view they have.",
   "settings.themeOs": "Follow OS", "settings.themeDark": "Dark", "settings.themeLight": "Light",
   "settings.developer": "Developer",
   "settings.perfLog": "Perf log (instrumentation)",

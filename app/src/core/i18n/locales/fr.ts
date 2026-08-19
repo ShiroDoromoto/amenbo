@@ -215,6 +215,8 @@ export const fr: Translation = {
     "settings.avatarChoose": "Choisir une image…", "settings.avatarReset": "Revenir à l'identicon",
     "settings.avatarHint": "Enregistrez un visage pour l'humain et pour l'IA. Les images sont réduites à 96 px avant l'enregistrement (sans image, un identicon est utilisé par facette).",
     "settings.appearance": "Apparence", "settings.theme": "Thème", "settings.language": "Langue",
+    "settings.defaultView": "Vue par défaut",
+    "settings.defaultViewNote": "La vue avec laquelle s'ouvre un nouveau projet. Les projets existants conservent la leur.",
     "settings.themeOs": "Suivre le système", "settings.themeDark": "Sombre", "settings.themeLight": "Clair",
     "settings.developer": "Développement",
     "settings.perfLog": "Journal de performance (instrumentation)",

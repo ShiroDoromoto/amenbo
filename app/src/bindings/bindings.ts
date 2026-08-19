@@ -1633,7 +1633,13 @@ updateCheck: boolean,
  * OS — the registration itself lives outside the app, and only a shipped build ever draws the
  * switch (a development build registers nothing, `AMB-D-547`).
  */
-autostart: boolean, };
+autostart: boolean, 
+/**
+ * The view a project created without one of its own opens in (`config.default_view`, default
+ * board). Exposed so the settings screen can show and change it. It is only the answer nobody
+ * gave: a project already carries its own `view`, and this never repaints one.
+ */
+defaultView: "list" | "board" | "calendar" | "timeline", };
 
 /**
  * One bound folder whose managed block is out of date. `version` is the version of that folder's

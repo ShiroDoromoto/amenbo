@@ -1,0 +1,55 @@
+# The question not being put, on a device where a yes would change nothing. The band is held behind
+# three conditions at once, and this road reads the gate from the outside: the device is unanswered and
+# a dated task is open, but nothing on the machine subscribes to `task.due` — so a yes would register a
+# timer whose warning nothing carries, and the band, rightly, does not ask for one.
+#
+# One condition is taken away rather than all three, because absence proves nothing about a gate that
+# was never near opening: with the other two standing, the band that stays down is down for exactly the
+# reason under test. The carrier is the condition chosen because it is the one a reader cannot see from
+# the board — a board with dated work on it looks exactly like one the question should be standing
+# over.
+#
+# The world installs nothing and reaches no network, and there is nothing to press and nothing to take
+# back: the road is one reading of a screen the app left alone. A terminal has no band to leave down,
+# so there is no second road and no gap in one. The reading is an absence in the interface's own words,
+# which is a `Review` twice over — an eye closes it.
+id: not-be-asked-about-the-hourly-check-nothing-would-carry
+title: With nothing enabled that would carry the warning, the offer to check due dates is not put
+description: >
+  The goal is silence with a reason. A store holds an open task with a day on it and the device has
+  never been asked about the hourly check — two of the band's three conditions — but no plugin
+  subscribed to the due warning is enabled anywhere, so a yes would start a timer whose news nothing
+  carries. The band stays down. A build that asked anyway would be collecting an answer it cannot act
+  on, from exactly the reader least equipped to know why.
+
+given:
+  # The two conditions that do hold: a dated task still open, on a device nobody has asked. The date is
+  # a week out so the shot is not also carrying the due warning's badges, and the unanswered device is
+  # where a fresh store already stands. No plugin is installed — that absence is the world.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day is set
+    as: dated
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: dated
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: dated
+      due: "+7d"
+
+steps_gui:
+  # The one reading. Nothing is pressed and nothing is opened: the app came up, and the band did not.
+  - type: assert
+    domain: tick
+    op: banner
+    with:
+      present: false

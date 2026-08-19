@@ -471,7 +471,7 @@ fn render_tick_status(
 /// status`'s promise to only read.
 pub(crate) fn tick_reconcile(store: &mut Store) {
     if let Some(answer) = amenbo_core::tick::settle(store.config.tick_consent) {
-        store.config.tick_consent = Some(answer);
+        store.config.tick_consent = answer;
         let _ = store.save_config();
     }
 }

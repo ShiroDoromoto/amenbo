@@ -22,8 +22,8 @@
 ///
 /// Best-effort throughout, like everything else in the startup path: a config that cannot be resolved
 /// or written leaves both halves as the last run left them, which is the state that was working. The
-/// only thing that ever moves here is a yes going back to no, after the user took the registration away
-/// where they can see it.
+/// only thing that ever moves here is a yes going back to unanswered, after the user took the
+/// registration away where they can see it — which is what lets the offer be put again (`AMB-D-718`).
 pub fn reconcile() {
     let Ok(paths) = amenbo_core::config::Paths::resolve() else {
         return;
@@ -32,7 +32,7 @@ pub fn reconcile() {
     let Some(answer) = amenbo_core::tick::settle(config.tick_consent) else {
         return;
     };
-    config.tick_consent = Some(answer);
+    config.tick_consent = answer;
     if let Err(e) = config.save(&paths.config_file) {
         log::warn!("tick: the registration is gone but the answer could not follow ({e})");
     }

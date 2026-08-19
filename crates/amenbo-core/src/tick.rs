@@ -91,7 +91,9 @@ pub enum TickFix {
     /// registration pointing anywhere else wakes nothing, and says nothing about having failed.
     Rewrite,
     /// Wanted, and nothing is registered: the user switched the row off where they can see it, and the
-    /// answer follows rather than putting the timer back behind them.
+    /// answer follows rather than putting the timer back behind them. It follows all the way to
+    /// **unanswered**, not to a `no` (`AMB-D-718`): a `no` silences the offer as well as the timer, and
+    /// would leave the way back open only to someone who knows `tick install` is there.
     TakeTheAnswerBack,
     /// Not wanted, and something is registered: take it away.
     Deregister,
@@ -109,7 +111,8 @@ pub enum TickFix {
 /// difference is what the two features are: a git hook is amenbo's own file in a repository's plumbing,
 /// while the tick is a row in the user's system settings with a switch on it. Undoing that switch from
 /// under them would make it not a switch — so the answer follows what they can see
-/// ([`TickFix::TakeTheAnswerBack`]), and turning the tick back on is `tick install`.
+/// ([`TickFix::TakeTheAnswerBack`]), back to unanswered, which is what leaves the offer able to be put
+/// again where they can see it (`AMB-D-718`). Asking for the timer outright is still `tick install`.
 ///
 /// Never having been asked leaves everything alone, registration included. Adopting one as a yes would
 /// record an answer nobody gave, and taking it away would remove a timer the user may well have asked
@@ -225,8 +228,11 @@ pub fn unregister() -> Result<()> {
 }
 
 /// Settle the answer on record against what the scheduler holds, once — [`fix_for`] with its hands
-/// attached. The answer that has to be written back comes out; `None` means the record still says what
-/// it said, which is the overwhelmingly common case.
+/// attached. What comes out is what the record has to become: `None` means it still says what it said,
+/// which is the overwhelmingly common case, and `Some(answer)` is what to write in its place — with
+/// `Some(None)` the device put back to never having answered (`AMB-D-718`). That inner shape is
+/// [`crate::config::Config::tick_consent`]'s own, so a caller writes across what it is handed rather
+/// than reading the move out of it.
 ///
 /// **Persisting is the caller's**, because where the answer is kept is: the CLI carries it on the store
 /// it already has open, and the app on the config it loaded as it came up. What is here is the part they
@@ -244,7 +250,7 @@ pub fn unregister() -> Result<()> {
 ///
 /// Everything it does is best-effort: a scheduler that will not say what it holds leaves both halves as
 /// the last run left them, which is the state that was working.
-pub fn settle(consent: Option<TickConsent>) -> Option<TickConsent> {
+pub fn settle(consent: Option<TickConsent>) -> Option<Option<TickConsent>> {
     if !available() || consent.is_none() || !reachable_from_here() {
         return None;
     }
@@ -259,7 +265,7 @@ pub fn settle(consent: Option<TickConsent>) -> Option<TickConsent> {
             let _ = unregister();
             None
         }
-        TickFix::TakeTheAnswerBack => Some(TickConsent::No),
+        TickFix::TakeTheAnswerBack => Some(None),
     }
 }
 
@@ -495,6 +501,17 @@ mod tests {
     #[test]
     fn settling_an_unasked_device_asks_the_scheduler_nothing() {
         assert_eq!(settle(None), None);
+    }
+
+    /// A yes the scheduler no longer holds takes the answer back to **unanswered** rather than to a no
+    /// (`AMB-D-718`) — a no would silence the offer along with the timer. A build box is exactly that
+    /// device, holding no registration, and this row of the table writes nothing to the scheduler.
+    #[test]
+    #[cfg(any(target_os = "linux", windows))]
+    fn a_yes_the_scheduler_no_longer_holds_leaves_the_device_unanswered() {
+        assert_eq!(settle(Some(TickConsent::Yes)), Some(None));
+        // And a no with nothing registered is the two already agreeing.
+        assert_eq!(settle(Some(TickConsent::No)), None);
     }
 
     /// And a process that cannot work the door settles nothing either, whatever the answer says: on

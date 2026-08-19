@@ -61,6 +61,18 @@ SEED_GUI_DEV_DATA := command -v devtool >/dev/null 2>&1 && devtool devgui seed $
 endif
 GUI_APP_DEV := $(BUNDLE_DIR)/$(GUI_DEV_NAME).app
 
+# The hourly tick's launchd agent, which every mac bundle carries and registers from inside itself.
+# macOS keys its record of a background item by the plist's label, and one user has one record per
+# label — so the label carries the channel exactly as the Linux units and the Windows task do
+# (crates/amenbo-core/src/tick.rs, registration_name), and the file is named for the label. The
+# plist is signed into the bundle, so it is written before the build rather than chosen at run time.
+TICK_LABEL     := work.amenbo.tick
+TICK_LABEL_DEV := $(TICK_LABEL).$(GUI_DEV_DATA)
+# The entry that bundles it, per label: tauri copies $(1).plist into Contents/Library/LaunchAgents/,
+# which is where SMAppService looks. It is passed per build rather than written in tauri.conf.json
+# because the name is a fact about the channel, and the config file is one for every build.
+tick-config = --config '{"bundle":{"macOS":{"files":{"Library/LaunchAgents/$(1).plist":"launchd/$(1).plist"}}}}'
+
 DIST_DIR := dist
 VERSION  := $(shell awk '/\[workspace.package\]/{f=1} f&&/^version/{gsub(/[",]/,"",$$3);print $$3;exit}' Cargo.toml)
 
@@ -252,7 +264,8 @@ dev-build:
 ## bundle is produced separately on the ssh win host.
 dist-gui:
 	@mkdir -p $(DIST_DIR)
-	cd app && npm run tauri build -- --target $(MAC_GUI_TRIPLE)
+	@scripts/write-tick-plist.sh $(TICK_LABEL)
+	cd app && npm run tauri build -- --target $(MAC_GUI_TRIPLE) $(call tick-config,$(TICK_LABEL))
 	cp "$(GUI_DMG_SRC)" "$(GUI_DMG_DIST)"
 	@echo "→ $(GUI_DMG_DIST) (mac GUI dmg; .app is ad-hoc self-signed; distribution signing is retired)"
 	@codesign --verify --deep --verbose=2 "$(GUI_DMG_DIST)" 2>&1 | head -1 || true
@@ -279,7 +292,8 @@ dist-gui:
 ## slice.
 dist-gui-mac:
 	@mkdir -p $(DIST_DIR)
-	cd app && npm run tauri build -- --target $(MAC_GUI_TRIPLE)
+	@scripts/write-tick-plist.sh $(TICK_LABEL)
+	cd app && npm run tauri build -- --target $(MAC_GUI_TRIPLE) $(call tick-config,$(TICK_LABEL))
 	scripts/codesign-release-mac.sh "$(MAC_GUI_APP)"
 	scripts/notarize-mac.sh app "$(MAC_GUI_APP)"
 	scripts/build-pkg-mac.sh "$(MAC_GUI_APP)" "$(GUI_PKG_DIST)" "$(VERSION)" "$(MAC_GUI_ARCH)"
@@ -764,16 +778,18 @@ verify:
 ## release stamp, so launching it cannot migrate that store forward. The stamp (`AMENBO_BUILD`) is
 ## set in _release.yml only = never add it here.
 gui:
-	cd app && npm run tauri build
+	@scripts/write-tick-plist.sh $(TICK_LABEL)
+	cd app && npm run tauri build -- $(call tick-config,$(TICK_LABEL))
 	@scripts/codesign-local.sh sign "$(GUI_APP)"
 	@echo "→ amenbo.app (prod): app/src-tauri/target/release/bundle/macos/amenbo.app"
 
 ## Dev GUI: the dev identifier/productName/executable name and the dev AMENBO_APP_NAME. AMB-T-ID=<id>
-## swaps all four for that task's throwaway instance (see the GUI_DEV_* block above). The second --config is
-## merged over the file, so one recipe covers both shapes; with AMB-T-ID unset it merely restates what
-## tauri.dev.conf.json already says.
+## swaps all four for that task's throwaway instance (see the GUI_DEV_* block above), and the tick's
+## label with them. The inline --configs are merged over the file, so one recipe covers both shapes;
+## with AMB-T-ID unset the names merely restate what tauri.dev.conf.json already says.
 gui-dev:
-	cd app && AMENBO_APP_NAME=$(GUI_DEV_DATA) npm run tauri build -- --config src-tauri/tauri.dev.conf.json --config '{"productName":"$(GUI_DEV_NAME)","identifier":"$(GUI_DEV_ID)","mainBinaryName":"$(GUI_DEV_BIN)"}'
+	@scripts/write-tick-plist.sh $(TICK_LABEL_DEV)
+	cd app && AMENBO_APP_NAME=$(GUI_DEV_DATA) npm run tauri build -- --config src-tauri/tauri.dev.conf.json --config '{"productName":"$(GUI_DEV_NAME)","identifier":"$(GUI_DEV_ID)","mainBinaryName":"$(GUI_DEV_BIN)"}' $(call tick-config,$(TICK_LABEL_DEV))
 	@# Tauri emits an ad-hoc (linker-signed) .app whose CDHash changes every rebuild,
 	@# re-prompting the keychain each cycle. Sign with the stable local identity so
 	@# one "Always Allow" survives future rebuilds (matches install/install-dev).

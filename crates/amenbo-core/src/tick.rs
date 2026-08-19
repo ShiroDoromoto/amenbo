@@ -35,11 +35,11 @@
 //! and Windows has to have both battery gates turned off, or a laptop off its charger runs no tick at
 //! all.
 //!
-//! **What it is registered *as* is one rule for every door** (`registered_name`, which only the
-//! targets that have a door compile): production keeps
-//! the plain name, and every other build carries its channel in it. A scheduler namespace is one per
-//! user and not one per build, so two amenbos on a machine — production beside the shared dev build,
-//! or two per-task instances — would otherwise be handed the same row to fight over.
+//! **What it is registered *as* is one rule for every door** (`registration_name`, which only the
+//! targets that have a door compile): production keeps the plain name, and every other build carries
+//! its channel in it. A scheduler namespace is one per user and not one per build, so two amenbos on
+//! a machine — production beside the shared dev build, or two per-task instances — would otherwise
+//! be handed the same row to fight over.
 //!
 //! **A door can also have a say in *who* may open it**, which macOS does — see [`reachable_from_here`]
 //! and [`relaunch_target`]. Everywhere else, whoever can reach the machine can work the door.
@@ -136,38 +136,44 @@ pub fn available() -> bool {
     platform::AVAILABLE
 }
 
-/// The plain name production registers under — the one word both Linux units and the Windows task
-/// are named from.
+/// The plain name production registers under on Linux and Windows — the one word the units and the
+/// task are named from.
 #[cfg(any(target_os = "linux", windows, test))]
 const TICK_NAME: &str = "amenbo-tick";
 
-/// What *this build* registers under: [`TICK_NAME`] on production, and that name carrying the
-/// channel everywhere else.
+/// The plain label production files the agent under on macOS — reverse-DNS, because that is what a
+/// launchd label is, and the plist in the bundle is named for it.
+#[cfg(any(target_os = "macos", test))]
+const TICK_LABEL: &str = "work.amenbo.tick";
+
+/// What *this build* registers under: `base` on production, and `base` carrying this build's
+/// channel behind `separator` everywhere else. Each door passes its own two — a systemd unit, a
+/// scheduler task and a launchd label are spelled differently and named by the same rule.
 ///
-/// A machine holds one scheduler namespace per user — `~/.config/systemd/user` and the Task
-/// Scheduler both — so two amenbos naming their registration the same word do not get one each:
-/// the second write lands on the first's row, and the build that lost it is left with a
-/// registration that reads as held while pointing at somebody else's executable. Nothing in the
-/// probe can tell that apart, [`TickFix::Rewrite`] being deliberately blind to what a registration
-/// points at. Production beside the shared dev build is this repository's ordinary day, and two
-/// per-task instances (`AMB-T-ID=<id>`) are the same collision again.
+/// A machine holds one scheduler namespace per user — `~/.config/systemd/user`, the Task Scheduler,
+/// and macOS's record of background items — so two amenbos naming their registration the same word
+/// do not get one each: the second write lands on the first's row, and the build that lost it is
+/// left with a registration that reads as held while pointing at somebody else's executable.
+/// Nothing in the probe can tell that apart, [`TickFix::Rewrite`] being deliberately blind to what a
+/// registration points at. Production beside the shared dev build is this repository's ordinary day,
+/// and two per-task instances (`AMB-T-ID=<id>`) are the same collision again.
 ///
-/// **The production name is untouched**, so an upgrade writes over the row an older build
+/// **The production names are untouched**, so an upgrade writes over the row an older build
 /// registered rather than leaving it behind next to a new one.
-#[cfg(any(target_os = "linux", windows, test))]
-fn registered_name() -> String {
-    registered_name_for(crate::config::Paths::APP_NAME)
+#[cfg(any(target_os = "macos", target_os = "linux", windows, test))]
+fn registration_name(base: &str, separator: char) -> String {
+    registration_name_for(base, separator, crate::config::Paths::APP_NAME)
 }
 
-/// The rule [`registered_name`] applies, taking the channel as an argument for the reason
+/// The rule [`registration_name`] applies, taking the channel as an argument for the reason
 /// [`crate::config::Paths::is_dev_app_name`] does — a running binary's channel is fixed at compile
 /// time, so only a table can pin what each name maps to.
-#[cfg(any(target_os = "linux", windows, test))]
-fn registered_name_for(app_name: &str) -> String {
+#[cfg(any(target_os = "macos", target_os = "linux", windows, test))]
+fn registration_name_for(base: &str, separator: char, app_name: &str) -> String {
     if app_name == crate::config::Paths::PRODUCTION_APP_NAME {
-        TICK_NAME.to_string()
+        base.to_string()
     } else {
-        format!("{TICK_NAME}-{app_name}")
+        format!("{base}{separator}{app_name}")
     }
 }
 
@@ -462,19 +468,26 @@ mod tests {
     }
 
     /// One machine, several amenbos: production keeps the name it has always registered under, and
-    /// every other build asks for a row of its own rather than for that one.
+    /// every other build asks for a row of its own rather than for that one. Both spellings are
+    /// here, because the rule is one and the doors that apply it are three.
     #[test]
     fn a_build_that_is_not_production_registers_under_a_name_of_its_own() {
         use crate::config::Paths;
+        let unix = |app: &str| registration_name_for(TICK_NAME, '-', app);
+        let mac = |app: &str| registration_name_for(TICK_LABEL, '.', app);
 
         // Untouched, so an upgrade writes over the row the build before it registered.
-        assert_eq!(registered_name_for(Paths::PRODUCTION_APP_NAME), "amenbo-tick");
+        assert_eq!(unix(Paths::PRODUCTION_APP_NAME), "amenbo-tick");
+        assert_eq!(mac(Paths::PRODUCTION_APP_NAME), "work.amenbo.tick");
         // The shared dev build, and one task's throwaway instance: three amenbos, three rows.
-        assert_eq!(registered_name_for(Paths::DEV_APP_NAME), "amenbo-tick-amenbo-dev");
-        assert_eq!(registered_name_for("amenbo-dev-3320"), "amenbo-tick-amenbo-dev-3320");
-        assert_ne!(registered_name_for(Paths::DEV_APP_NAME), registered_name_for("amenbo-dev-3320"));
+        assert_eq!(unix(Paths::DEV_APP_NAME), "amenbo-tick-amenbo-dev");
+        assert_eq!(mac(Paths::DEV_APP_NAME), "work.amenbo.tick.amenbo-dev");
+        assert_eq!(unix("amenbo-dev-3321"), "amenbo-tick-amenbo-dev-3321");
+        assert_eq!(mac("amenbo-dev-3321"), "work.amenbo.tick.amenbo-dev-3321");
+        assert_ne!(mac(Paths::DEV_APP_NAME), mac("amenbo-dev-3321"));
         // And whatever this build is, its name is that one word plus what tells it apart.
-        assert!(registered_name().starts_with(TICK_NAME), "got: {}", registered_name());
+        assert!(registration_name(TICK_NAME, '-').starts_with(TICK_NAME));
+        assert!(registration_name(TICK_LABEL, '.').starts_with(TICK_LABEL));
     }
 
     /// A device nobody has answered for is left alone without the scheduler being asked at all — the

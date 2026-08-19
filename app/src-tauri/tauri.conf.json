@@ -48,11 +48,6 @@
     ],
     "android": {
       "debugApplicationIdSuffix": ".debug"
-    },
-    "macOS": {
-      "files": {
-        "Library/LaunchAgents/work.amenbo.tick.plist": "launchd/work.amenbo.tick.plist"
-      }
     }
   },
   "plugins": {

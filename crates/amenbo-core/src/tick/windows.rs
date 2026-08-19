@@ -14,7 +14,7 @@
 //! The first two are the loud ones: on the machine most people have, a plain registration is one that
 //! never fires. The third is the same missed-run guarantee the other two doors write a line for.
 //!
-//! **The task is named for the build that registered it** ([`super::registered_name`]). A user has
+//! **The task is named for the build that registered it** ([`super::registration_name`]). A user has
 //! one Task Scheduler namespace, and `/F` overwrites without asking — so two amenbos under one name
 //! is not two tasks but one, pointed at whichever registered last.
 //!
@@ -38,11 +38,11 @@ use crate::tmpdir;
 pub(super) const AVAILABLE: bool = true;
 
 /// The one row the user sees, named the way the other doors name theirs — this build's name
-/// ([`super::registered_name`]), so a dev build asks the scheduler for a task of its own instead of
+/// ([`super::registration_name`]), so a dev build asks the scheduler for a task of its own instead of
 /// writing over production's. A flat name and not a folder: a folder under `Tasks` is a second thing
 /// to create, to find and to leave behind, and there is only ever one task to put in it.
 fn task_name() -> String {
-    super::registered_name()
+    super::registration_name(super::TICK_NAME, '-')
 }
 
 /// Nothing here turns on which process is asking: the task is written and read through the scheduler,

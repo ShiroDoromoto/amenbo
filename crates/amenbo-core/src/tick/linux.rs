@@ -12,7 +12,7 @@
 //! the service says what to run; neither is usable without the other, so both are written, both are
 //! removed, and only the timer is ever enabled — the service is pulled in by it.
 //!
-//! **The pair is named for the build that wrote it** ([`super::registered_name`]). One user has one
+//! **The pair is named for the build that wrote it** ([`super::registration_name`]). One user has one
 //! `~/.config/systemd/user`, so a dev build sharing production's unit names would not get its own
 //! timer — it would overwrite production's and point it at itself.
 //!
@@ -33,17 +33,22 @@ use crate::sys;
 /// Linux has a door.
 pub(super) const AVAILABLE: bool = true;
 
+/// What this build's two units are both named from ([`super::registration_name`]) — one stem, so a
+/// dev build's pair lands beside production's in `~/.config/systemd/user` instead of on top of it.
+fn stem() -> String {
+    super::registration_name(super::TICK_NAME, '-')
+}
+
 /// The unit that says *when*. It is the only one enabled, and so the only one `is-enabled` is asked
 /// about: enabling the service directly would run it once at boot rather than once an hour.
 fn timer() -> String {
-    format!("{}.timer", super::registered_name())
+    format!("{}.timer", stem())
 }
 
 /// The unit that says *what*. Named to match the timer, which is how systemd pairs the two without
-/// either naming the other — so both are taken from the same stem, and a dev build's pair lands
-/// beside production's in `~/.config/systemd/user` instead of on top of it.
+/// either naming the other.
 fn service() -> String {
-    format!("{}.service", super::registered_name())
+    format!("{}.service", stem())
 }
 
 /// Nothing here turns on which process is asking: a user unit is written and read through
@@ -212,9 +217,9 @@ mod tests {
     /// dev build writes two files of its own rather than over production's two.
     #[test]
     fn the_two_units_share_the_stem_this_build_registers_under() {
-        let stem = super::super::registered_name();
-        assert_eq!(timer(), format!("{stem}.timer"));
-        assert_eq!(service(), format!("{stem}.service"));
+        assert_eq!(timer(), format!("{}.timer", stem()));
+        assert_eq!(service(), format!("{}.service", stem()));
+        assert!(stem().starts_with(super::super::TICK_NAME), "got: {}", stem());
     }
 
     /// The units are the user's own, so they are written where that user's configuration lives —

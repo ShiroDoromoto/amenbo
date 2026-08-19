@@ -1604,12 +1604,15 @@ const REGISTRY: &[OpSpec] = &[
     // the assert — it carries out one hour's turn and judges what came back, which is exactly what a
     // scheduler would have got.
     OpSpec { kind: Kind::Assert, domain: Domain::Tick, op: "woken", required: &["purpose", "carried_out"], refs: &[], strings: &["purpose"], binds: false },
-    // What the scheduler is holding, read and never written. **No op here registers one**: a
-    // registration is written outside the throwaway store this run makes — into the launchd, systemd
-    // or Task Scheduler of whatever machine the gate is running on — and a road that left one behind
-    // would leave an hourly timer on a release box. `be-offered-a-start-at-login` draws the same line
-    // for the login registration. The half that registers is walked on the real machines.
-    OpSpec { kind: Kind::Assert, domain: Domain::Tick, op: "holds", required: &["registered"], refs: &[], strings: &[], binds: false },
+    // What the run did to the registration the scheduler holds, read and never written. **No op here
+    // registers one**: a registration is written outside the throwaway store this run makes — into
+    // the launchd, systemd or Task Scheduler of whatever machine the gate is running on — and a road
+    // that left one behind would leave an hourly timer on a release box. `be-offered-a-start-at-login`
+    // draws the same line for the login registration. The half that registers is walked on the real
+    // machines. `changed` is the difference across the run and not the machine's absolute answer,
+    // because the throwaway store does not reach that far: on a machine where somebody uses the
+    // hourly tick, a road asking whether one is held would read their registration and go red.
+    OpSpec { kind: Kind::Assert, domain: Domain::Tick, op: "holds", required: &["changed"], refs: &[], strings: &[], binds: false },
 
 ];
 

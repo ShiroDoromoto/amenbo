@@ -189,6 +189,12 @@ pub(crate) struct Driver<'a> {
     /// conversation is what the protocol has: dropping it between steps would leave every later one
     /// talking to a closed pipe.
     server: Option<crate::domain::mcp::Standing>,
+    /// What the machine's own scheduler was holding when this run began. Read once, before anything
+    /// walks: nothing in this harness registers a timer, so the only reading an assert can honestly
+    /// make is the difference — whether the run left the machine as it found it. The absolute state
+    /// belongs to the machine and not to the run, and reading it as one would fail every road about
+    /// leaving nothing behind on the very machines where somebody uses the hourly tick.
+    tick_at_start: bool,
     /// Set while a step that declared `refused:` is running. It is read where a failed invocation
     /// is judged, so the arm issuing the command never has to know it might be turned away —
     /// [`Driver::refused`] puts it up and takes it back down around the one call.
@@ -218,12 +224,14 @@ impl<'a> Driver<'a> {
             numbers: HashMap::new(),
             catalogs: HashMap::new(),
             server: None,
+            tick_at_start: false,
             refusal: None,
         };
         let v = d.run_json(&["init", "--name", "verify", "--json"])?;
         d.project_id = v["identity"]["project_id"]
             .as_i64()
             .ok_or("init did not report a project_id")?;
+        d.tick_at_start = d.tick_registered()?;
         Ok(d)
     }
 

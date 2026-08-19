@@ -15,6 +15,13 @@ use amenbo_scenario::{Args, Domain};
 use crate::{req_bool, req_str, unmapped, Driver, Outcome};
 
 impl Driver<'_> {
+    /// Whether the machine's scheduler is holding the hourly tick right now. It is read here and at
+    /// the start of a run, and the assert is the difference between the two — see `holds` below.
+    pub(crate) fn tick_registered(&self) -> Result<bool, String> {
+        let v = self.run_json(&["tick", "status", "--json"])?;
+        Ok(v["registered"].as_bool().unwrap_or(false))
+    }
+
     pub(crate) fn tick_assert(&self, op: &str, with: &Args) -> Result<Outcome, String> {
         match op {
             // One hour's turn, and whether the named purpose was carried out on it. The two answers
@@ -57,20 +64,30 @@ impl Driver<'_> {
                     ),
                 ))
             }
-            // What the scheduler is holding. Read-only by design, and false is what a run should
-            // always find: nothing in this harness registers a timer, so a true here is a machine
-            // carrying one from somewhere else — which is worth reading as much as the answer is.
+            // What the run did to the scheduler's registration, and never what the machine holds.
+            // The registration lives outside the throwaway store, in the launchd, systemd or Task
+            // Scheduler this run was started on, so the absolute reading is the machine's own answer
+            // and not this road's: on a machine where somebody uses the hourly tick it is `true`
+            // before anything walks. What a road can honestly say is the difference across it —
+            // `changed: false` being "left as it was found", which is what every road here is owed
+            // since nothing in this harness registers a timer.
             "holds" => {
-                let want = req_bool(with, "registered")?;
-                let v = self.run_json(&["tick", "status", "--json"])?;
-                let registered = v["registered"].as_bool().unwrap_or(false);
-                let pass = registered == want;
+                let want = req_bool(with, "changed")?;
+                let now = self.tick_registered()?;
+                let changed = now != self.tick_at_start;
+                let pass = changed == want;
                 Ok(Outcome::assert(
                     pass,
                     format!(
-                        "the scheduler {} the hourly tick (expected {}, {})",
-                        if registered { "is holding" } else { "holds nothing of ours" },
-                        if want { "held" } else { "nothing" },
+                        "the run left the scheduler {} ({}; expected {}, {})",
+                        if changed { "holding something else" } else { "as it was found" },
+                        match (self.tick_at_start, now) {
+                            (true, true) => "it was holding the hourly tick before and still is",
+                            (false, false) => "it was holding nothing of ours before and still is",
+                            (false, true) => "it was holding nothing of ours before and holds the hourly tick now",
+                            (true, false) => "it was holding the hourly tick before and holds nothing of ours now",
+                        },
+                        if want { "a change" } else { "no change" },
                         if pass { "as expected" } else { "MISMATCH" }
                     ),
                 ))

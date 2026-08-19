@@ -146,3 +146,41 @@ steps_cli:
     with:
       field: hw_mismatch
       equals: false
+
+# The screen's road through the same goal. It is shorter than the terminal's on purpose: the settings
+# a store answers for are one screen here, and only some of them are drawn on it — the identity, the
+# integrity switch and how dates are written have no face, so this road walks what a reader can
+# actually reach and leaves the rest to the road above.
+#
+# What it does walk is the half a terminal cannot prove: that the setting is **reachable**. A value
+# `config set` writes and nothing draws is a setting nobody can find, which is exactly the state the
+# default view was in until it was put on this screen.
+steps_gui:
+  - type: action
+    domain: store
+    op: set-default-view
+    with:
+      view: list
+
+  # And then the thing the setting is for. Reading the pull-down back would only say the screen
+  # remembers what was typed into it; the project raised afterwards is what the value decides.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: SCENARIO PROJECT — opened on the configured view
+    as: configured
+
+  - type: action
+    domain: project
+    op: open-settings
+    with:
+      project: SCENARIO PROJECT — opened on the configured view
+
+  - type: assert
+    domain: project
+    op: field
+    with:
+      target: configured
+      field: default_view
+      equals: list

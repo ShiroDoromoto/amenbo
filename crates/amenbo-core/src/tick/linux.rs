@@ -12,6 +12,10 @@
 //! the service says what to run; neither is usable without the other, so both are written, both are
 //! removed, and only the timer is ever enabled — the service is pulled in by it.
 //!
+//! **The pair is named for the build that wrote it** ([`super::registered_name`]). One user has one
+//! `~/.config/systemd/user`, so a dev build sharing production's unit names would not get its own
+//! timer — it would overwrite production's and point it at itself.
+//!
 //! **`Persistent=true` is the one line the default gets wrong.** Without it a machine that was asleep or
 //! shut down over the top of the hour simply loses that turn, and the missed-run guarantee
 //! `AMB-D-707` set out for all three doors does not hold here.
@@ -31,11 +35,16 @@ pub(super) const AVAILABLE: bool = true;
 
 /// The unit that says *when*. It is the only one enabled, and so the only one `is-enabled` is asked
 /// about: enabling the service directly would run it once at boot rather than once an hour.
-const TIMER: &str = "amenbo-tick.timer";
+fn timer() -> String {
+    format!("{}.timer", super::registered_name())
+}
 
 /// The unit that says *what*. Named to match the timer, which is how systemd pairs the two without
-/// either naming the other.
-const SERVICE: &str = "amenbo-tick.service";
+/// either naming the other — so both are taken from the same stem, and a dev build's pair lands
+/// beside production's in `~/.config/systemd/user` instead of on top of it.
+fn service() -> String {
+    format!("{}.service", super::registered_name())
+}
 
 /// Nothing here turns on which process is asking: a user unit is written and read through
 /// `systemctl --user`, which answers whoever can reach the session.
@@ -55,7 +64,7 @@ pub(super) fn probe() -> Result<bool> {
     // is held either way. Reading it as an error instead would make a machine that simply has no timer
     // indistinguishable from one that would not say, and it is the writes below that have to speak up
     // about a systemd there is none of, since only they have something to fail at.
-    Ok(matches!(systemctl(&["is-enabled", TIMER]).map(|c| c == Some(0)), Ok(true)))
+    Ok(matches!(systemctl(&["is-enabled", &timer()]).map(|c| c == Some(0)), Ok(true)))
 }
 
 pub(super) fn register() -> Result<()> {
@@ -67,9 +76,10 @@ pub(super) fn register() -> Result<()> {
     // Written over whatever is there rather than merged into it. These two files are amenbo's own —
     // their names say so — and rewriting them is exactly what points a timer at the build running now
     // after an upgrade, which is the contract `register` is idempotent for.
-    std::fs::write(dir.join(SERVICE), service_unit(&exe.display().to_string()))
-        .map_err(|e| wrote(SERVICE, e))?;
-    std::fs::write(dir.join(TIMER), timer_unit()).map_err(|e| wrote(TIMER, e))?;
+    let (timer, service) = (timer(), service());
+    std::fs::write(dir.join(&service), service_unit(&exe.display().to_string()))
+        .map_err(|e| wrote(&service, e))?;
+    std::fs::write(dir.join(&timer), timer_unit()).map_err(|e| wrote(&timer, e))?;
 
     // systemd reads unit files once and caches them, so a file written under a manager already running
     // is not seen until it is told to look again.
@@ -77,7 +87,7 @@ pub(super) fn register() -> Result<()> {
     // `--now` starts the timer as well as enabling it, so the first turn is not waited for across a
     // reboot. Both halves are idempotent: over a timer already enabled and running, this exits 0 and
     // changes nothing.
-    run(&["enable", "--now", TIMER])
+    run(&["enable", "--now", &timer])
 }
 
 pub(super) fn unregister() -> Result<()> {
@@ -85,15 +95,15 @@ pub(super) fn unregister() -> Result<()> {
     // section to undo what enabling it wrote. It is allowed to fail, and the ordinary reason it does is
     // that there was nothing registered — which is the state the caller asked for, so the removal
     // carries on to the files rather than stopping on a no-op.
-    let _ = systemctl(&["disable", "--now", TIMER]);
+    let _ = systemctl(&["disable", "--now", &timer()]);
 
     let dir = unit_dir()?;
-    for unit in [TIMER, SERVICE] {
-        match std::fs::remove_file(dir.join(unit)) {
+    for unit in [timer(), service()] {
+        match std::fs::remove_file(dir.join(&unit)) {
             Ok(()) => {}
             // Already gone is the state being asked for.
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(wrote(unit, e)),
+            Err(e) => return Err(wrote(&unit, e)),
         }
     }
     run(&["daemon-reload"])
@@ -196,6 +206,15 @@ mod tests {
         assert!(service.contains("Type=oneshot"), "nothing is held open between turns: {service}");
         // The registration names the build that wrote it, which is what `Rewrite` is for.
         assert!(service.contains("ExecStart=/opt/amenbo/bin/amenbo tick run"), "got: {service}");
+    }
+
+    /// The pair systemd pairs is one stem with the two endings, and the stem is this build's — so a
+    /// dev build writes two files of its own rather than over production's two.
+    #[test]
+    fn the_two_units_share_the_stem_this_build_registers_under() {
+        let stem = super::super::registered_name();
+        assert_eq!(timer(), format!("{stem}.timer"));
+        assert_eq!(service(), format!("{stem}.service"));
     }
 
     /// The units are the user's own, so they are written where that user's configuration lives —

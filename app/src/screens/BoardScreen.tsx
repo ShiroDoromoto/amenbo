@@ -55,6 +55,14 @@ function byCompletedDesc(a: TaskCard, b: TaskCard): number {
   if (!bv) return -1;
   return av < bv ? 1 : -1;
 }
+// Order of the todo column: what can be reserved now comes first. Ties keep `order_key` — sort is stable, so
+// the waiting cards follow further down the same column, `BlockedChips` and all, rather than moving to a column
+// of their own. Only todo is read this way: in_progress is already reserved, so readiness has nothing left to
+// say about it, and blocked is a physical stop rather than a premise the reader clears by taking the card.
+function byReadyFirst(a: TaskCard, b: TaskCard): number {
+  if (a.ready === b.ready) return 0;
+  return a.ready ? -1 : 1;
+}
 // How many cards the closed column stacks. What has ended grows without bound as time passes, so the column
 // carries only the most recent N and sends the rest to the list view through the "see closed in list" affordance.
 const DONE_COLUMN_CAP = 20;
@@ -392,8 +400,11 @@ export function BoardScreen({
             const isDone = st === "done";
             const colTasks = tasks.filter((t) => (isDone ? isClosed(t.status) : t.status === st));
             // Newest completion first; a rejection has no completion time at all, so the rejected sink
-            // below the done — which is the order to read them in anyway.
-            const sorted = isDone ? colTasks.slice().sort(byCompletedDesc) : colTasks;
+            // below the done — which is the order to read them in anyway. The todo column is read top-down as
+            // "what to take next", so there what is ready rises above what is still waiting on a premise.
+            const sorted = isDone
+              ? colTasks.slice().sort(byCompletedDesc)
+              : st === "todo" ? colTasks.slice().sort(byReadyFirst) : colTasks;
             const cards = isDone ? sorted.slice(0, DONE_COLUMN_CAP) : sorted;
             const rejected = isDone ? colTasks.filter((t) => t.status === "rejected").length : 0;
             const overflow = isDone && sorted.length > DONE_COLUMN_CAP

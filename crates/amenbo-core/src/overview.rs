@@ -400,6 +400,31 @@ pub fn mark_tick_day(engine: &StoreEngine, purpose: &str, day: &str) -> Result<(
     Ok(engine.set_meta(&tick_day_key(purpose), Some(day))?)
 }
 
+// ───────────────────────── the tick banner's "later" ─────────────────────────
+
+/// The `store_meta` key holding the day the tick's banner was last put off. A scalar and device-local,
+/// like the day marks above it — what it answers is whether *this machine* was told "later" today, and a
+/// second machine on the same data is asked in its own right.
+const TICK_BANNER_LATER_META: &str = "tick.banner.later_day";
+
+/// The calendar day (`%Y-%m-%d`) this device last pressed **later** on the tick's banner, or `None` if it
+/// never has.
+///
+/// The button that writes it answers nothing (`AMB-D-718`): the question stays open, and this day is only
+/// what holds the banner back until tomorrow. On the app's own screen a "later" would need no record —
+/// the banner is put up once per view — but this one spans the whole app and outlives any one of them, so
+/// without a day on disk it would be a button that changes nothing.
+pub fn tick_banner_later(engine: &StoreEngine) -> Result<Option<String>> {
+    Ok(engine.get_meta(TICK_BANNER_LATER_META)?)
+}
+
+/// Record that the tick's banner was put off on `day` (`%Y-%m-%d`). The day replaces whatever was there,
+/// for the reason [`mark_tick_day`] gives: the only question ever put to this mark is about the day in
+/// hand.
+pub fn defer_tick_banner(engine: &StoreEngine, day: &str) -> Result<()> {
+    Ok(engine.set_meta(TICK_BANNER_LATER_META, Some(day))?)
+}
+
 // ───────────────────────── lint-hook opt-out ─────────────────────────
 
 /// Has this project been opted out of the lint hooks — did `hooks uninstall` run in it? Presence of the

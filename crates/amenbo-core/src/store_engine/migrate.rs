@@ -427,6 +427,23 @@ pub const STEPS: &[Step] = &[
                  CHECK(show_on_card IN (0, 1));",
         ),
     },
+    Step {
+        to: 28,
+        name: "index the tasks that carry a due day",
+        // `AMB-D-718`: the tick's banner asks, on every launch, whether anything is still owed a warning.
+        // Unindexed that is one full pass over the task table per launch, heaviest on the store that
+        // answers no — the person who never puts a day on anything.
+        //
+        // **The version is what this step is for.** `due_on` is a genesis column, so the index itself is
+        // declared in `schema::EXTRA_SQL` and every open creates it, an existing store's included — a
+        // partial index needs no column carried and no row rewritten. What a store cannot do for itself
+        // is say which shape it is now in, and the frozen shapes are dated by this chain
+        // (`super::schema_frozen`), so moving the genesis DDL is what appends a step here. The statement
+        // is repeated in frozen text rather than referenced, as every step's is.
+        apply: Apply::Sql(
+            "CREATE INDEX IF NOT EXISTS task_by_due ON task(due_on) WHERE due_on IS NOT NULL;",
+        ),
+    },
 ];
 
 /// v23: give the change feed the window each instruction belongs to (`AMB-D-582`), so a reader closed to

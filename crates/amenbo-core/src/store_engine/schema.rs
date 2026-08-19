@@ -1198,6 +1198,13 @@ CREATE INDEX IF NOT EXISTS plugin_queue_by_plugin ON plugin_queue(plugin, id);
 -- `project_id` — placement is folded onto the task — scopes every list to one project.
 CREATE INDEX IF NOT EXISTS task_by_status    ON task(status);
 CREATE INDEX IF NOT EXISTS task_by_project   ON task(project_id);
+-- The tasks that carry a due day, and only those. Partial, because the question every read of it puts
+-- is about dated work — "is anything still owed a warning" (the tick's banner, `AMB-D-718`), and the
+-- warning's own windows — so the tasks with no day on them are not a smaller answer, they are no part of
+-- the question. On a store where due days are barely used that is an index of a handful of rows instead
+-- of one entry per task, and the EXISTS that says "nothing is dated here" is answered off it rather than
+-- by reading every task. `due_on` is a genesis column, so this belongs here rather than in a step.
+CREATE INDEX IF NOT EXISTS task_by_due ON task(due_on) WHERE due_on IS NOT NULL;
 -- The project slug's uniqueness. This index *is* the constraint — the column decl cannot carry
 -- `UNIQUE` (see `SLUG`). NULLs are distinct in SQLite, so rows without a slug coexist.
 CREATE UNIQUE INDEX IF NOT EXISTS project_by_slug ON project(slug);

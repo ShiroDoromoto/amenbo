@@ -403,6 +403,15 @@ const REGISTRY: &[OpSpec] = &[
     // terminal would be changing a value nothing it could then read depends on. `language` is the code
     // the store keeps, and the instruction says it in full.
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "set-language", required: &["language"], refs: &[], strings: &["language"], binds: false },
+    // The view a project created without one of its own comes up in. Like the language beside it, it
+    // is written as a move rather than as a premise, and for the same reason twice over: what turns on
+    // it is what happens **after** it changes — the next project raised — and a store that opened with
+    // the value already set proves nothing about the setting having been reachable.
+    //
+    // `view` is the word the store keeps (`list` / `board` / `calendar` / `timeline`), which is also
+    // the word `config set default_view` takes. The pull-down draws each of the four in the reader's
+    // own language, and a table of those here would be a second copy of nineteen dictionaries.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "set-default-view", required: &["view"], refs: &[], strings: &["view"], binds: false },
     // The other face of the integrity check: the one that puts right what the reading face reports.
     // It is an action and not an assert precisely because it writes — what it swept is read back by
     // asking the reading face again.

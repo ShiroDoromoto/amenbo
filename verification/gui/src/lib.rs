@@ -809,6 +809,18 @@ impl Instructor {
                 "In amenbo's own settings, set the language the interface is read in to the one whose code is \"{}\", then return to the screen the road was on.",
                 req(with, "language")?
             ),
+            // The view a project raised without one of its own comes up in, changed where a reader
+            // changes it — the same screen the language above sits on. The step names the word the
+            // store keeps rather than the one standing in the pull-down, for the reason the language
+            // step does: the four are drawn in the reader's own language, and a table of those here
+            // would go wrong the day one of them is reworded.
+            //
+            // Returning is part of the step for the same reason too: what this setting decides is on
+            // another screen entirely, and the road walks there next.
+            (Domain::Store, "set-default-view") => format!(
+                "In amenbo's own settings, set the view a newly created project opens in to the one stored as \"{}\", then return to the screen the road was on.",
+                req(with, "view")?
+            ),
             (Domain::Plugin, "open-entry") => format!(
                 "Open the row for \"{}\", the one served by the catalog \"{}\".",
                 req(with, "name")?,
@@ -1150,6 +1162,15 @@ impl Instructor {
             }
             (Domain::Task, "field") => format!(
                 "Confirm the task \"{}\" shows {} = {}.",
+                self.target_label(with),
+                req(with, "field")?,
+                show(with.get("equals").ok_or("assert `field` needs `equals`")?)
+            ),
+            // The same reading, one level up: a field a project keeps for itself, read off the face it
+            // keeps it on. It is a `Review` like the task's own — what stands on that face is a
+            // pull-down, and which of four is standing in it is a thing an eye settles and OCR does not.
+            (Domain::Project, "field") => format!(
+                "Confirm the project \"{}\" shows {} = {}.",
                 self.target_label(with),
                 req(with, "field")?,
                 show(with.get("equals").ok_or("assert `field` needs `equals`")?)

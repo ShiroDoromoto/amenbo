@@ -1562,6 +1562,24 @@ pub fn task_live(conn: &Connection, id: i64) -> Result<bool> {
     exists_row(conn, TA.id, &Pred::eq(TA.id, id))
 }
 
+/// EXISTS an open task carrying a due day — the whole device, whatever project it sits in.
+///
+/// What the tick's banner asks before it offers to start warning about days (`AMB-D-718`): a store whose
+/// every dated task is over has nothing for the warning to say, and offering to switch it on there is a
+/// question that buys the person nothing.
+///
+/// Open is closed-or-not (`AMB-D-397`), so `done` and `rejected` both drop out — the same cut the warning
+/// itself takes (`crate::due`). No reach: this is a device question, asked by the app about the machine it
+/// is running on, and a project-shaped answer would offer the timer to one board and not the next.
+///
+/// Kept off a table scan by the partial index over `due_on` (`schema::EXTRA_SQL`): the banner is judged on
+/// every launch, and a store where nobody uses due days is exactly the one where an unindexed EXISTS has
+/// to read every task to say no.
+pub fn any_open_task_is_dated(conn: &Connection) -> Result<bool> {
+    const TA: col::task::Cols = col::task::ALL;
+    exists_row(conn, TA.id, &Pred::is_not_null(TA.due_on).and(still_open(TA.status)))
+}
+
 /// The project a task belongs to — the one column a reach check needs ([`crate::reach::Reach`]).
 /// `None` = the task is unplaced (no project) **or** there is no such row; both are "not inside any
 /// project", which is what the caller asks about. O(1) on the primary key.
@@ -5723,6 +5741,64 @@ mod tests {
         assert_eq!(c.no_due, 1, "…and stops being an undated piece of work too");
     }
 
+    /// What the tick's banner asks the store: is there open work with a day on it? Both terminals drop out
+    /// (`AMB-D-397`), a task with no day is not dated work, and the answer is about the device rather than
+    /// any one project — a dated task nobody has placed still counts.
+    #[test]
+    fn dated_open_work_is_found_wherever_it_sits() {
+        let e = StoreEngine::open_in_memory_unchecked().unwrap();
+        e.put_record("project", 1, &[("name", text("Alpha")), ("order_key", text("a"))]).unwrap();
+        let task = |id: i64, status: &str, project: Option<&str>, due: Option<&str>| {
+            let mut cols = vec![("title", text(&id.to_string())), ("status", text(status))];
+            if let Some(p) = project {
+                cols.push(("project_id", text(p)));
+            }
+            if let Some(day) = due {
+                cols.push(("due_on", text(day)));
+            }
+            e.put_record("task", id, &cols).unwrap();
+        };
+
+        assert!(!any_open_task_is_dated(e.conn()).unwrap(), "an empty store has nothing owed a warning");
+
+        task(1, "todo", Some("1"), None);
+        assert!(!any_open_task_is_dated(e.conn()).unwrap(), "a task with no day is not dated work");
+
+        task(2, "done", Some("1"), Some("2026-07-01"));
+        task(3, "rejected", Some("1"), Some("2026-07-01"));
+        assert!(!any_open_task_is_dated(e.conn()).unwrap(), "both terminals are over, day or no day");
+
+        // Unplaced, and still the device's answer: the timer is one per machine, not one per board.
+        task(4, "blocked", None, Some("2026-07-01"));
+        assert!(any_open_task_is_dated(e.conn()).unwrap());
+    }
+
+    /// And it is answered off the partial index rather than by reading every task — the point of
+    /// `task_by_due`, on the store where the answer is no and every row would otherwise be read to say so.
+    #[test]
+    fn the_dated_work_question_is_answered_off_the_index() {
+        let e = StoreEngine::open_in_memory().unwrap();
+        const TA: col::task::Cols = col::task::ALL;
+        let mut sel = Select::new();
+        let _ = sel.pred(
+            Exists::over(TA.id.table())
+                .filter(Pred::is_not_null(TA.due_on).and(still_open(TA.status)))
+                .pred(),
+        );
+        let sql = Sql::select(&sel);
+        let plan: String = e
+            .conn()
+            .prepare(&format!("EXPLAIN QUERY PLAN {}", sql.text()))
+            .unwrap()
+            .query_map(rusqlite::params_from_iter(sql.params()), |r| r.get::<_, String>(3))
+            .unwrap()
+            .map(|r| r.unwrap())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(plan.contains("task_by_due"), "the plan does not seek the index:\n{plan}");
+    }
+
+    /// `project_overview` carries per-project proposed (under-discussion) decision counts: `proposed`
     /// `project_overview` carries per-project proposed (under-discussion) decision counts: `proposed`
     /// decisions grouped by their `project_id`. accepted/rejected are excluded by status, and a proposed
     /// decision that a `supersedes` edge points at is excluded as no longer current. A project with none

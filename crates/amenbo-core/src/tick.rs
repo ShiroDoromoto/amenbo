@@ -5,7 +5,7 @@
 //!
 //! | half | what it is |
 //! |---|---|
-//! | whether we are woken | the answer on record ([`TickConsent`]), what the scheduler holds ([`probe`]), and the rule that settles the two ([`fix_for`]) |
+//! | whether we are woken | the answer on record ([`TickConsent`]), what the scheduler holds ([`probe`]), the rule that settles the two ([`fix_for`]), and whether there is a question to put at all ([`banner_shows`]) |
 //! | what is done once awake | the declaration table ([`PURPOSES`]), the day mark that holds a purpose to one turn a day ([`once_a_day`]), and the entry that walks them ([`run`]) |
 //!
 //! **What is registered carries no meaning.** It wakes amenbo once an hour, and amenbo decides once
@@ -20,6 +20,10 @@
 //! once is repeating a question whose answer is already known. There is no scale below the device here
 //! — one machine holds one timer — so the lint's per-repository opt-out has no counterpart, and
 //! [`crate::config::Config::tick_consent`] is the only record there is.
+//!
+//! **Where the question is put is the app, and it is put in a banner** (`AMB-D-718`). Whether that banner
+//! has anything to ask today is [`banner_shows`] — the same shape as the answer itself, a judgement made
+//! here and drawn there.
 //!
 //! **The answer and the registration are two independent facts.** The answer says what was consented
 //! to and never what the scheduler holds, which is [`probe`]'s answer and is read from the OS every
@@ -60,9 +64,9 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
-use crate::plugin_manifest::Face;
+use crate::plugin_manifest::{Face, Scope};
 use crate::plugin_runner::{Waiting, Worked};
-use crate::plugin_subscribe::EnabledSubscribers;
+use crate::plugin_subscribe::{EnabledSubscribers, InstalledPlugin};
 use crate::store::Store;
 use crate::store_engine::StoreEngine;
 use crate::time::date_to_string;
@@ -267,6 +271,72 @@ pub fn settle(consent: Option<TickConsent>) -> Option<Option<TickConsent>> {
         }
         TickFix::TakeTheAnswerBack => Some(None),
     }
+}
+
+/// **Is there a question to put here today?** — the one answer the banner that asks for the tick is drawn
+/// from (`AMB-D-718`).
+///
+/// The banner spans the whole app rather than a board, because the timer it asks about is the device's,
+/// and it is judged on every launch. So the conditions are read cheapest first, and the first one that
+/// says no ends it:
+///
+/// | condition | why it is asked |
+/// |---|---|
+/// | this build has a door ([`available`]) | on a target amenbo cannot register on, "start checking" is a button with nothing behind it |
+/// | nobody here has answered | an answer given is not a question to put again ([`TickConsent`]) |
+/// | **later** was not pressed today | that button's whole meaning is one day of quiet ([`crate::overview::tick_banner_later`]) |
+/// | an open task carries a due day | the warning only ever speaks about `done:false` work with a day on it |
+/// | a plugin subscribed to `task.due` is enabled somewhere | carrying the warning outward is a plugin's; with none listening, a yes changes nothing |
+///
+/// The last two read the store and the plugins directory, which is why they are last: on the machine that
+/// has already answered — every machine, after the first time — this returns without touching either.
+///
+/// It does not ask [`reachable_from_here`]. That one is about the process holding the door, and the
+/// process that puts this question is the app, which on every target is the one that can work it; the CLI
+/// puts the question in its own words and never through here.
+pub fn banner_shows(store: &Store, today: NaiveDate) -> Result<bool> {
+    if !available() || store.config.tick_consent.is_some() {
+        return Ok(false);
+    }
+    if crate::overview::tick_banner_later(&store.engine)?.as_deref()
+        == Some(date_to_string(today).as_str())
+    {
+        return Ok(false);
+    }
+    if !crate::store_engine::read::any_open_task_is_dated(store.engine.conn())? {
+        return Ok(false);
+    }
+    warning_has_a_carrier(store, &crate::plugin_installed::installed(&store.paths)?)
+}
+
+/// Whether any of `installed` subscribes to `task.due` and has its gate open at the layer its author
+/// declared (`AMB-D-601`) — anywhere on this device, in any project.
+///
+/// Anywhere, because the question behind it is about the timer, which is one per machine: a warning that
+/// reaches one project is a warning the tick is worth having. Which projects it reaches, and which it does
+/// not, is a thing the plugin's own settings say, and not something to weigh here.
+///
+/// A plugin that is enabled but incompatible with this build, or one whose subscription names a face this
+/// device's drives never use, still counts. Both are states the person can be shown and can fix, and
+/// neither is a reason to go quiet about the timer that would carry the warning once they had.
+///
+/// The installed set is passed in rather than found here, the way [`run_over`] takes its table: what is on
+/// disk is [`crate::plugin_installed`]'s answer, and taking it as an argument is what lets this be driven
+/// by a set a test wrote.
+fn warning_has_a_carrier(store: &Store, installed: &[InstalledPlugin]) -> Result<bool> {
+    for plugin in installed {
+        if !plugin.manifest.events.iter().any(|e| e.event == crate::plugin_payload::name::TASK_DUE) {
+            continue;
+        }
+        let declared = plugin.manifest.scope;
+        if store.layers_with_plugin_enabled(&plugin.name)?.iter().any(|layer| match declared {
+            Scope::Project => !layer.is_device(),
+            Scope::Machine => layer.is_device(),
+        }) {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// One thing amenbo may have to do when it is woken: the id its day mark is kept under, and the work.
@@ -522,6 +592,197 @@ mod tests {
     fn settling_from_outside_the_bundle_moves_no_answer() {
         assert_eq!(settle(Some(TickConsent::Yes)), None);
         assert_eq!(settle(Some(TickConsent::No)), None);
+    }
+
+    /// A store with one project, which is what the banner's conditions are read off.
+    fn store_with_project(tag: &str) -> (Store, i64) {
+        let mut store = Store::open_at(crate::config::Paths::at(amenbo_scratch::scratch(tag))).unwrap();
+        let project = store
+            .project_add(crate::ops::project::NewProject {
+                name: "期日".into(),
+                view: crate::model::View::Board,
+                notes: String::new(),
+                color: None,
+            })
+            .unwrap();
+        (store, project.id)
+    }
+
+    /// File a task, with or without a day on it.
+    fn file(store: &mut Store, project: i64, title: &str, due: Option<NaiveDate>) -> i64 {
+        store
+            .add_task(crate::ops::task::NewTask {
+                title: title.into(),
+                project_id: Some(project),
+                due_on: due,
+                start_on: None,
+                priority: None,
+                notes: String::new(),
+                created_by_kind: Some(crate::model::ActorKind::Human),
+                at_binding_id: None,
+            })
+            .unwrap()
+            .id
+    }
+
+    /// One installed plugin, as the resolver reads it — the manifest's `scope` and `events` are the two
+    /// fields the carrier check asks about, and the rest is filler.
+    fn installed(name: &str, scope: Scope, events: &[&str]) -> InstalledPlugin {
+        use crate::plugin_manifest::{EventSubscription, Manifest, Os};
+        InstalledPlugin {
+            name: name.into(),
+            program: std::path::PathBuf::from(format!("/plugins/{name}")),
+            manifest: Manifest {
+                name: name.into(),
+                desc: String::new(),
+                about: None,
+                author: String::new(),
+                repo: String::new(),
+                os: vec![Os::Linux],
+                category: String::new(),
+                url: String::new(),
+                checksum: String::new(),
+                signature: None,
+                assets: Default::default(),
+                official: false,
+                detail_sum: None,
+                scope,
+                payload_v: crate::plugin_payload::VERSION,
+                min_amenbo: None,
+                config: Vec::new(),
+                events: events.iter().map(|e| EventSubscription::new(*e)).collect(),
+                agent: None,
+                settings: None,
+            },
+            origin: None,
+        }
+    }
+
+    /// Lay a well-formed install down under the store's own base, so [`banner_shows`] finds it the way it
+    /// finds a real one: the home, the executable, and the manifest that marks the install finished.
+    fn lay_down(store: &Store, plugin: &InstalledPlugin) {
+        let home = store.paths.plugin_dir(&plugin.name);
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::write(
+            home.join(crate::plugin_installed::program_file_name(&plugin.name)),
+            b"#!/bin/sh\n",
+        )
+        .unwrap();
+        std::fs::write(
+            home.join(crate::plugin_installed::MANIFEST_FILE_NAME),
+            serde_json::to_string(&plugin.manifest).unwrap(),
+        )
+        .unwrap();
+    }
+
+    /// Open a plugin's gate at one layer — what an enable does.
+    fn enable_at(store: &mut Store, plugin: &str, layer: crate::plugin_layer::Layer) {
+        crate::plugin_trust::enable(
+            store,
+            plugin,
+            layer,
+            &[],
+            |_| true,
+            &crate::plugin_check::Checked::NotDeclared,
+        )
+        .unwrap();
+    }
+
+    /// The three conditions the decision names, each on its own: with all of them met the banner has a
+    /// question to put, and taking any one away silences it (`AMB-D-718`).
+    #[test]
+    #[cfg(any(target_os = "macos", target_os = "linux", windows))]
+    fn the_banner_asks_only_where_all_three_conditions_hold() {
+        let today = day("2026-08-19");
+        let (mut store, project) = store_with_project("tick-banner-conditions");
+        let dated = file(&mut store, project, "期日つき", Some(today));
+        lay_down(&store, &installed("carrier", Scope::Project, &["task.due"]));
+        enable_at(&mut store, "carrier", crate::plugin_layer::Layer::Project(project));
+
+        // Unanswered, dated work on the board, and something listening: the whole question is live.
+        assert!(banner_shows(&store, today).unwrap());
+
+        // Answered — either way. The question is the device's and it has been put once already.
+        for answer in [TickConsent::Yes, TickConsent::No] {
+            store.config.tick_consent = Some(answer);
+            assert!(!banner_shows(&store, today).unwrap(), "{answer:?} is an answer, not a question");
+        }
+        store.config.tick_consent = None;
+
+        // Nothing dated left: the warning only ever speaks about open work with a day on it, so there is
+        // nothing here for the timer to say.
+        store
+            .set_task_status(dated, crate::model::TaskStatus::Done, crate::model::ActorKind::Human)
+            .unwrap();
+        assert!(!banner_shows(&store, today).unwrap());
+        file(&mut store, project, "期日なし", None);
+        assert!(!banner_shows(&store, today).unwrap(), "a task with no day is not dated work");
+        file(&mut store, project, "また期日つき", Some(today));
+        assert!(banner_shows(&store, today).unwrap());
+
+        // Nobody listening: carrying the warning outward is a plugin's, so a yes would change nothing.
+        crate::plugin_trust::disable(&mut store, "carrier", crate::plugin_layer::Layer::Project(project))
+            .unwrap();
+        assert!(!banner_shows(&store, today).unwrap());
+    }
+
+    /// **Later** is one day of quiet and not an answer: the banner stays down for the day it was pressed
+    /// on, and is back the next.
+    #[test]
+    #[cfg(any(target_os = "macos", target_os = "linux", windows))]
+    fn later_holds_the_banner_back_for_that_day_alone() {
+        let today = day("2026-08-19");
+        let (mut store, project) = store_with_project("tick-banner-later");
+        file(&mut store, project, "期日つき", Some(today));
+        lay_down(&store, &installed("carrier", Scope::Project, &["task.due"]));
+        enable_at(&mut store, "carrier", crate::plugin_layer::Layer::Project(project));
+
+        crate::overview::defer_tick_banner(&store.engine, "2026-08-19").unwrap();
+        assert!(!banner_shows(&store, today).unwrap());
+        assert!(banner_shows(&store, day("2026-08-20")).unwrap(), "the next day it is asked again");
+        assert!(
+            store.config.tick_consent.is_none(),
+            "later answers nothing — the question is still open",
+        );
+    }
+
+    /// The gate that counts is the one the plugin's author declared (`AMB-D-601`): a project plugin
+    /// switched on in some project, a machine plugin switched on for the device, and neither reads the
+    /// other's row.
+    #[test]
+    fn a_carrier_is_counted_at_the_layer_its_author_declared() {
+        use crate::plugin_layer::Layer;
+        let (mut store, project) = store_with_project("tick-banner-carrier");
+        let of_the_project = [installed("slack", Scope::Project, &["task.due"])];
+        let of_the_device = [installed("slack", Scope::Machine, &["task.due"])];
+
+        // Installed, subscribed, and switched on nowhere.
+        assert!(!warning_has_a_carrier(&store, &of_the_project).unwrap());
+
+        // The project's own switch answers for a project plugin, and not for a machine one.
+        enable_at(&mut store, "slack", Layer::Project(project));
+        assert!(warning_has_a_carrier(&store, &of_the_project).unwrap());
+        assert!(!warning_has_a_carrier(&store, &of_the_device).unwrap());
+
+        // And the device's switch the other way round.
+        let (mut store, _) = store_with_project("tick-banner-carrier-device");
+        enable_at(&mut store, "slack", Layer::Device);
+        assert!(warning_has_a_carrier(&store, &of_the_device).unwrap());
+        assert!(!warning_has_a_carrier(&store, &of_the_project).unwrap());
+    }
+
+    /// A plugin that is on but does not subscribe to `task.due` carries nothing — being installed and
+    /// enabled is not the same as listening for the warning.
+    #[test]
+    fn a_plugin_that_is_on_but_not_listening_carries_nothing() {
+        let (mut store, project) = store_with_project("tick-banner-not-listening");
+        enable_at(&mut store, "elsewhere", crate::plugin_layer::Layer::Project(project));
+        let elsewhere = [installed("elsewhere", Scope::Project, &["task.done", "comment.added"])];
+        assert!(!warning_has_a_carrier(&store, &elsewhere).unwrap());
+
+        // The day-before warning is its own event, and subscribing to it alone is not subscribing to this.
+        let tomorrow_only = [installed("elsewhere", Scope::Project, &["task.due_tomorrow"])];
+        assert!(!warning_has_a_carrier(&store, &tomorrow_only).unwrap());
     }
 
     /// The rule the hourly wake-up rests on: within one calendar day the work is carried out once, however

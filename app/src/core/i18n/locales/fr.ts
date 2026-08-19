@@ -34,7 +34,7 @@ export const fr: Translation = {
     "newproj.moreTitle": "Également",
     "newproj.copyStatus": "Copier {cmd} status", "newproj.copied": "Copié",
     "newproj.openTerminal": "Ouvrir dans le terminal", "newproj.openFinder": "Afficher dans le Finder",
-    "newproj.openBoard": "Ouvrir le tableau",
+    "newproj.openProject": "Ouvrir le projet",
     "firstloop.title": "Votre premier tour",
     "firstloop.intro": "Demandez à votre IA d'enregistrer les premières tâches.",
     "firstloop.s1title": "Ouvrez un terminal",

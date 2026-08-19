@@ -35,7 +35,7 @@ export const ptBR: Translation = {
     "newproj.moreTitle": "Além disso",
     "newproj.copyStatus": "Copiar {cmd} status", "newproj.copied": "Copiado",
     "newproj.openTerminal": "Abrir no terminal", "newproj.openFinder": "Mostrar no Finder",
-    "newproj.openBoard": "Abrir o quadro",
+    "newproj.openProject": "Abrir o projeto",
     "firstloop.title": "Sua primeira volta",
     "firstloop.intro": "Peça à sua IA que registre as primeiras tarefas.",
     "firstloop.s1title": "Abra um terminal",

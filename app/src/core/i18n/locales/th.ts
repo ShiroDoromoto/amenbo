@@ -34,7 +34,7 @@ export const th: Translation = {
     "newproj.moreTitle": "นอกจากนี้",
     "newproj.copyStatus": "คัดลอก {cmd} status", "newproj.copied": "คัดลอกแล้ว",
     "newproj.openTerminal": "เปิดในเทอร์มินัล", "newproj.openFinder": "แสดงใน Finder",
-    "newproj.openBoard": "เปิดบอร์ด",
+    "newproj.openProject": "เปิดโปรเจกต์",
     "firstloop.title": "รอบแรกของคุณ",
     "firstloop.intro": "ลองให้ AI ของคุณบันทึกงานชุดแรกดู",
     "firstloop.s1title": "เปิดเทอร์มินัล",

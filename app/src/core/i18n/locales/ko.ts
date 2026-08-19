@@ -31,7 +31,7 @@ export const ko: Translation = {
     "newproj.moreTitle": "그 밖에",
     "newproj.copyStatus": "{cmd} status 복사", "newproj.copied": "복사했습니다",
     "newproj.openTerminal": "터미널에서 열기", "newproj.openFinder": "Finder에서 보기",
-    "newproj.openBoard": "보드 열기",
+    "newproj.openProject": "프로젝트 열기",
     "firstloop.title": "첫 한 바퀴",
     "firstloop.intro": "AI에게 부탁해 첫 작업들을 등록해 보세요.",
     "firstloop.s1title": "터미널 열기",

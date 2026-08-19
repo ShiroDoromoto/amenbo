@@ -31,7 +31,7 @@ export const hi: Translation = {
     "newproj.moreTitle": "इसके अलावा",
     "newproj.copyStatus": "{cmd} status कॉपी करें", "newproj.copied": "कॉपी हो गया",
     "newproj.openTerminal": "टर्मिनल में खोलें", "newproj.openFinder": "Finder में दिखाएँ",
-    "newproj.openBoard": "बोर्ड खोलें",
+    "newproj.openProject": "परियोजना खोलें",
     "firstloop.title": "आपका पहला चक्र",
     "firstloop.intro": "अपने AI से पहले काम दर्ज करने को कहें।",
     "firstloop.s1title": "टर्मिनल खोलें",

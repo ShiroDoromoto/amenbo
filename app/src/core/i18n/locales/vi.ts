@@ -34,7 +34,7 @@ export const vi: Translation = {
     "newproj.moreTitle": "Ngoài ra",
     "newproj.copyStatus": "Chép {cmd} status", "newproj.copied": "Đã chép",
     "newproj.openTerminal": "Mở trong terminal", "newproj.openFinder": "Hiện trong Finder",
-    "newproj.openBoard": "Mở bảng",
+    "newproj.openProject": "Mở dự án",
     "firstloop.title": "Vòng đầu tiên của bạn",
     "firstloop.intro": "Hãy nhờ AI của bạn ghi những việc đầu tiên.",
     "firstloop.s1title": "Mở terminal",

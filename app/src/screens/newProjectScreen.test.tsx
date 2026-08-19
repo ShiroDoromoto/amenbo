@@ -16,6 +16,8 @@ const hoisted = vi.hoisted(() => ({
   created: [] as Array<[string, string | null]>,
   /** Every walk out to the screen where an AI is connected, by the project handed over with it. */
   opened: [] as number[],
+  /** Every hand-over the primary action made, as the target it named. */
+  landed: [] as Array<{ type: string; id: string }>,
 }));
 
 vi.mock("../core/snapshot", async (importOriginal) => {
@@ -45,7 +47,7 @@ let root: Root;
 const render = () =>
   act(async () => {
     root.render(createElement(NewProjectScreen, {
-      onCreated: () => {},
+      onCreated: (target: { type: string; id: string }) => { hoisted.landed.push(target); },
       onCancel: () => {},
       onOpenMcp: (projectId: number) => { hoisted.opened.push(projectId); },
     }));
@@ -72,6 +74,7 @@ beforeEach(() => {
   hoisted.picked = null;
   hoisted.created.length = 0;
   hoisted.opened.length = 0;
+  hoisted.landed.length = 0;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -154,5 +157,19 @@ describe("raising a project on the desktop", () => {
 
     await act(async () => { button(t("nav.mcp")).click(); });
     expect(hoisted.opened, "the project it just raised travels with the press").toEqual([1]);
+  });
+
+  // The primary action is named after the project, not after one of the four views: where it lands is
+  // the project's own view (`config.default_view` decided it, and any of the four is possible), so a
+  // button saying "the board" would be wrong for everyone whose default is something else.
+  it("offers the way in under the project's name, and hands the project over when pressed", async () => {
+    hoisted.picked = "/w/seedbed";
+    await render();
+    await name("Seedbed");
+    await act(async () => { button(t("newproj.chooseFolder")).click(); });
+    await act(async () => { createButton().click(); });
+
+    await act(async () => { button(t("newproj.openProject")).click(); });
+    expect(hoisted.landed).toEqual([{ type: "project", id: "1" }]);
   });
 });

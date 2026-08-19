@@ -43,7 +43,7 @@ const ui = {
   "newproj.moreTitle": "Also",
   "newproj.copyStatus": "Copy {cmd} status", "newproj.copied": "Copied",
   "newproj.openTerminal": "Open in terminal", "newproj.openFinder": "Reveal in Finder",
-  "newproj.openBoard": "Open the board",
+  "newproj.openProject": "Open the project",
   "firstloop.title": "Your first loop",
   "firstloop.intro": "Ask your AI to register the first tasks.",
   "firstloop.s1title": "Open a terminal",

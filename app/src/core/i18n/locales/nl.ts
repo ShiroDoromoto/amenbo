@@ -31,7 +31,7 @@ export const nl: Translation = {
     "newproj.moreTitle": "Verder",
     "newproj.copyStatus": "{cmd} status kopiëren", "newproj.copied": "Gekopieerd",
     "newproj.openTerminal": "Openen in terminal", "newproj.openFinder": "Tonen in Finder",
-    "newproj.openBoard": "Bord openen",
+    "newproj.openProject": "Project openen",
     "firstloop.title": "Je eerste ronde",
     "firstloop.intro": "Vraag je AI om de eerste taken vast te leggen.",
     "firstloop.s1title": "Open een terminal",

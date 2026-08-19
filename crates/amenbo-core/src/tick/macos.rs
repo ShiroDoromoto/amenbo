@@ -7,6 +7,13 @@
 //! "one row, and switching it off stops everything" goes with it. An agent registered through
 //! `SMAppService` is listed under the app.
 //!
+//! **The agent is named for the build that carries it** (`label`, below). macOS keys its record of a
+//! background item by the plist's label, and one user has one record per label — so production and
+//! a dev build sharing a label are not two items but one, resolving to whichever registered last
+//! (`AMB-T-3261` measured exactly that, and lost an hour to it). The plist is signed into the
+//! bundle, so the label cannot be chosen at run time: `scripts/write-tick-plist.sh` writes the file
+//! as the bundle is built, and this module derives the same name from the channel it was built for.
+//!
 //! **The cost is that only the bundle can open the door.** `SMAppService` reads the plist out of the
 //! *calling process's* main bundle, and a process launched through the symlink that puts the CLI on
 //! `PATH` has no main bundle to read from — macOS resolves it to the directory the symlink sits in,
@@ -21,15 +28,30 @@ use objc2_service_management::{SMAppService, SMAppServiceStatus};
 
 use crate::error::{Error, Result};
 
+/// The label macOS files this build's background item under ([`super::registration_name`]), and so
+/// the name of the plist that carries it. Production keeps the plain label; every other channel
+/// carries its own, because the record is keyed by the label and one user has one record per label.
+fn label() -> String {
+    super::registration_name(super::TICK_LABEL, '.')
+}
+
 /// The agent plist's name inside the bundle, under `Contents/Library/LaunchAgents/`. It is what
 /// `SMAppService` is asked for, and the file itself carries the schedule — bundled, so signed,
 /// so fixed at build time. `AMB-D-707` is what makes that harmless: the tick is plain and hourly,
 /// and there is no reason for a build to want a different cadence than the one before it.
-const PLIST: &str = "work.amenbo.tick.plist";
+///
+/// The file is named for the label it declares, which is the convention `SMAppService` is used
+/// under and what lets one word settle both. `scripts/write-tick-plist.sh` writes it at build time
+/// from the same word — the Makefile hands tauri the entry that bundles it.
+fn plist() -> String {
+    format!("{}.plist", label())
+}
 
 /// Where the plist sits, relative to the bundle root — the one path this module needs to look at
 /// itself, to answer whether the process is running from inside a bundle that carries it.
-const PLIST_IN_BUNDLE: &str = "Contents/Library/LaunchAgents/work.amenbo.tick.plist";
+fn plist_in_bundle() -> String {
+    format!("Contents/Library/LaunchAgents/{}", plist())
+}
 
 /// macOS has a door.
 pub(super) const AVAILABLE: bool = true;
@@ -43,7 +65,7 @@ fn class_is_there() -> bool {
 /// The bundle this process was launched from, when it carries our agent plist.
 fn bundle_with_plist() -> Option<PathBuf> {
     let path = PathBuf::from(NSBundle::mainBundle().bundlePath().to_string());
-    path.join(PLIST_IN_BUNDLE).is_file().then_some(path)
+    path.join(plist_in_bundle()).is_file().then_some(path)
 }
 
 pub(super) fn reachable_from_here() -> bool {
@@ -61,12 +83,12 @@ pub(super) fn relaunch_target() -> Option<PathBuf> {
     }
     let exe = std::fs::canonicalize(std::env::current_exe().ok()?).ok()?;
     let bundle = exe.ancestors().find(|p| p.extension().is_some_and(|e| e == "app"))?;
-    bundle.join(PLIST_IN_BUNDLE).is_file().then_some(exe)
+    bundle.join(plist_in_bundle()).is_file().then_some(exe)
 }
 
 /// The agent, as `SMAppService` names it. Only ever called where [`reachable_from_here`] holds.
 fn service() -> objc2::rc::Retained<SMAppService> {
-    unsafe { SMAppService::agentServiceWithPlistName(&NSString::from_str(PLIST)) }
+    unsafe { SMAppService::agentServiceWithPlistName(&NSString::from_str(&plist())) }
 }
 
 /// What a caller outside the bundle is told. It names the process that has to ask rather than a
@@ -118,5 +140,20 @@ pub(super) fn unregister() -> Result<()> {
             "the hourly tick could not be taken away: {}",
             e.localizedDescription()
         ))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The plist is named for the label it declares. That is the convention `SMAppService` is used
+    /// under, and it is what lets one word settle both sides — the file the build writes, and the
+    /// name this module asks the bundle for.
+    #[test]
+    fn the_plist_is_named_for_the_label_it_carries() {
+        assert_eq!(plist(), format!("{}.plist", label()));
+        assert!(plist_in_bundle().ends_with(&plist()), "got: {}", plist_in_bundle());
+        assert!(label().starts_with(super::super::TICK_LABEL), "got: {}", label());
     }
 }

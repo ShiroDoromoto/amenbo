@@ -16,6 +16,9 @@
 # Tauri sidecar staging: `make gui`/`gui-dev` build the CLI and drop it here as
 # `amenbo-<triple>` for bundle.externalBin. Build artifact, not source.
 /app/src-tauri/binaries/
+# The tick's launchd agent, written per build by scripts/write-tick-plist.sh: its label carries the
+# channel, so the file that is bundled is a build artifact rather than one tracked shape.
+/app/src-tauri/launchd/
 # wharfy: the distribution state/artifact area (`.wharfy/`) and the prebuilt binaries `make dist`
 # emits (`dist/`). Both are distribution artifacts, not source. The wharfy config `wharfy.yaml` is
 # committed.

@@ -53,6 +53,12 @@ command -v productbuild >/dev/null 2>&1 || { echo "✗ productbuild not found (X
 APP_NAME="$(basename "$APP")"
 [ -f "$APP/Contents/MacOS/amenbo" ] || { echo "✗ CLI sidecar missing at $APP/Contents/MacOS/amenbo — did the tauri build stage it?"; exit 1; }
 
+# The hourly tick's agent, which the app registers out of its own bundle. It is written
+# per build (scripts/write-tick-plist.sh) and bundled by the entry the Makefile passes tauri, so a
+# build made without either ships an app that can never register the tick and says only that it is
+# "not running from inside" a bundle. Nothing else looks, so this does.
+ls "$APP/Contents/Library/LaunchAgents/"*.plist >/dev/null 2>&1 || { echo "✗ the hourly tick's launchd agent is missing from $APP/Contents/Library/LaunchAgents — was the bundle built through make (gui / dist-gui-mac)?"; exit 1; }
+
 # Both binaries we ship must carry the slice this .pkg claims: the GUI (amenbo-app) and
 # the sidecar CLI (amenbo) it symlinks onto PATH.
 if [ -n "$ARCH" ]; then

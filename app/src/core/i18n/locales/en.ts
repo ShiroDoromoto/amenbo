@@ -513,6 +513,13 @@ const ui = {
   "agentHookWiring.copied": "Copied",
   "agentHookWiring.no": "Don't show this again",
   "agentHookWiring.later": "Later",
+  // The offer to be woken once an hour, put across the whole app. The band says why the timer is
+  // wanted; the settings row (`tickSetting.*`) says what is set now and how to change it.
+  "tickBanner.title": "Be told before a task's day comes",
+  "tickBanner.what": "Once an hour amenbo wakes, looks for tasks whose day is near, and sends the warning on through the plugins you have switched on. It runs from this computer's own scheduler, so nothing stays running in the background.",
+  "tickBanner.start": "Start checking due dates",
+  "tickBanner.never": "Don't show this again",
+  "tickBanner.later": "Later",
   // The other way in: an AI whose host cannot open a folder reaches this project over MCP instead
   // (`AMB-D-671`, `AMB-D-672`, `AMB-D-673`). Folded away on both the creation and the settings screen,
   // because the reader who has amenbo on the command line needs none of it.

@@ -3561,6 +3561,60 @@ pub fn hook_answer(yes: bool) -> Result<(), CmdError> {
     Ok(())
 }
 
+/// Whether the tick's banner has a question to put on this device today (`AMB-D-718`).
+///
+/// Called **once, at app startup**, after `setup` has settled the answer against the scheduler
+/// ([`crate::tick::reconcile`]) — a yes whose registration the user removed is back to unanswered by
+/// then, which is exactly the state this is meant to catch. Core makes the whole judgement
+/// ([`amenbo_core::tick::banner_shows`]); nothing is weighed here.
+///
+/// A machine with no store yet says no, the way [`record_launch`] counts nothing there: the question is
+/// about work with days on it, and there is none until there is a store to hold it.
+#[tauri::command]
+pub fn tick_banner() -> Result<bool, CmdError> {
+    let paths = amenbo_core::config::Paths::resolve()?;
+    if amenbo_core::env::home().is_none() && !paths.store_file.exists() {
+        return Ok(false);
+    }
+    Ok(open_store_read()?.tick_banner_shows(amenbo_core::time::today())?)
+}
+
+/// Write down what the reader answered on the tick's banner — the device's one answer, given once
+/// (`AMB-D-707` / `AMB-D-718`).
+///
+/// **On a yes the registration is written first, and the answer only after it came back.** A scheduler
+/// that refused leaves the device unanswered, so the config never claims a timer that is not there — the
+/// same order [`config_set_autostart`] and the CLI's `tick install` both keep, and for the same reason.
+///
+/// A no writes nothing into the scheduler. The banner is only ever up while the device is unanswered, and
+/// an unanswered device holds no registration of amenbo's to take away; the startup pass is what tidies
+/// one up if it somehow does.
+#[tauri::command]
+pub fn tick_answer(yes: bool) -> Result<(), CmdError> {
+    use amenbo_core::tick::{self, TickConsent};
+
+    if yes {
+        tick::register()?;
+    }
+    let paths = amenbo_core::config::Paths::resolve()?;
+    let mut config = amenbo_core::config::Config::load(&paths.config_file);
+    config.tick_consent = Some(if yes { TickConsent::Yes } else { TickConsent::No });
+    config.save(&paths.config_file)?;
+    Ok(())
+}
+
+/// Put the tick's banner off until tomorrow — what **later** records, and the whole of what it records.
+///
+/// It is not an answer: the question stays open, and the banner comes back the next day the conditions
+/// hold. The day is written because this banner spans the whole app and outlives any one screen — held in
+/// the webview alone, "later" would be a button that changes nothing past the next launch.
+#[tauri::command]
+pub fn tick_banner_later() -> Result<(), CmdError> {
+    let day = amenbo_core::time::date_to_string(amenbo_core::time::today());
+    open_store()?.defer_tick_banner(&day)?;
+    Ok(())
+}
+
 /// The row for one catalog entry.
 fn agent_hook_tool(harness: &amenbo_core::harness::Harness, cmd: &str) -> AgentHookToolDto {
     AgentHookToolDto {

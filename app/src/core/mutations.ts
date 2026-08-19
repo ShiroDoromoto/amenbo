@@ -693,6 +693,44 @@ export async function answerHookOffer(yes: boolean): Promise<void> {
 }
 
 /**
+ * Whether the tick's banner has a question to put on this device today (`AMB-D-718`). The whole
+ * judgement is core's — the answer on record, a day already put off, work with days on it, and something
+ * installed to carry the warning outward.
+ *
+ * Called **once, at app startup**. It is read then rather than on every store tick because the answer it
+ * turns on is the device's and does not move while the app is open: the pass that settles it against the
+ * scheduler has already run by the time the window draws. Outside Tauri there is no scheduler and no
+ * question.
+ */
+export async function fetchTickBanner(): Promise<boolean> {
+  if (!inTauri()) return false;
+  return await invoke<boolean>("tick_banner");
+}
+
+/**
+ * Record the device's answer about the hourly tick, and register the timer on a yes.
+ *
+ * **Call it only when there is an answer.** "Later" is not one — it puts the banner off for the day
+ * ({@link deferTickBanner}) and leaves the question open, which is why there is no third value here.
+ *
+ * Throws if the registration was refused, and nothing is recorded when it is: the config must never claim
+ * a timer the machine is not holding.
+ */
+export async function answerTick(yes: boolean): Promise<void> {
+  if (!inTauri()) return;
+  await invoke("tick_answer", { yes });
+}
+
+/**
+ * Put the tick's banner off until tomorrow. It records the day and nothing else — the question stays
+ * unanswered, and the banner is back the next day the conditions hold.
+ */
+export async function deferTickBanner(): Promise<void> {
+  if (!inTauri()) return;
+  await invoke("tick_banner_later");
+}
+
+/**
  * The nudges core says are due now, as the ids they are declared under (`AMB-D-542`, `AMB-D-544`). The
  * judgement is core's — which thresholds are met, and what has already gone out — so what comes back is
  * only which of them to put; the wording and the look are this surface's.

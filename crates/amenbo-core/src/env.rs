@@ -95,7 +95,7 @@ pub fn no_color() -> Option<String> {
     var("NO_COLOR")
 }
 
-/// `AMENBO_UPDATE_CHECK` — the environment override for the update check (the static latest.json
+/// `AMENBO_UPDATE_CHECK` — the environment override for the update check (the update endpoint
 /// query). `0` / `off` / `false` / `no` **disable** it, overriding `config.update_check`: a hard kill
 /// switch for CI, for privacy, and for tests that must guarantee nothing ever leaves the machine.
 /// Any other value, or none, leaves the decision to the config.
@@ -105,8 +105,8 @@ pub fn update_check_disabled() -> bool {
         .unwrap_or(false)
 }
 
-/// `AMENBO_UPDATE_JSON_URL` — override the latest.json we query, pointing tests and development at
-/// something other than the production URL.
+/// `AMENBO_UPDATE_JSON_URL` — override the manifest URL we query, pointing tests and development at
+/// something other than the production endpoint.
 pub fn update_json_url() -> Option<String> {
     var("AMENBO_UPDATE_JSON_URL")
 }

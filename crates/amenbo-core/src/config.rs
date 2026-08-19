@@ -378,7 +378,7 @@ pub struct Config {
     /// a large store. **A local setting; never synced.**
     #[serde(default = "default_true")]
     pub startup_integrity_check: bool,
-    /// Whether to query the static `latest.json` and thereby notice that a newer release exists.
+    /// Whether to query the update endpoint and thereby notice that a newer release exists.
     /// **On by default**: noticing a new release is a plain user benefit. Turning it off suppresses
     /// even this infrastructure query — the privacy escape hatch. The query is **infrastructure
     /// traffic only**; the core guarantee of zero functional traffic (no user data ever leaves the

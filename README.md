@@ -274,10 +274,10 @@ On the network, amenbo keeps two layers apart. **Feature-side communication stay
 at zero**: no telemetry, no phone-home, no central server — your task data never
 leaves your device. What does go out is **infra-side**, and there are two kinds.
 
-The **update check** reads a small static `latest.json` from this repository's latest
-release to notice when a newer version is out. That request carries no task data, is on
+The **update check** reads a small manifest from amenbo's own update endpoint to
+notice when a newer version is out. That request carries no task data, is on
 by default, and can be turned off (`amenbo config set update_check false`, or
-`AMENBO_UPDATE_CHECK=0`). The check only reads that static file; amenbo never updates
+`AMENBO_UPDATE_CHECK=0`). The check only reads that manifest; amenbo never updates
 itself in the background — downloading and applying a new version is always something you
 set off yourself (`amenbo update`, or `amenbo update --apply` for the standalone CLI).
 

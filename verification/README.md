@@ -500,7 +500,9 @@ and `set` read and move the row in amenbo's own settings that holds the answer a
 way a no is taken back. A road that answers `start`, or moves the row to `on`, registers the timer
 for real, so it takes that back (the row to `off`) before it ends, and what it asserts in between
 stays on the answer's side of the line `holds` draws: the answer having landed, never the machine's
-registration as an absolute.
+registration as an absolute. The last piece is a premise rather than a road: `deferred` stands up
+the day the band was last put off, because "later"'s whole meaning — quiet today, back tomorrow —
+spans two launches, and no single run holds both.
 
 A few ops exist to put something **wrong**, because a repair cannot be shown working over a store
 where there is nothing to repair — and a sweep that sweeps nothing looks exactly like one that works.
@@ -692,10 +694,11 @@ nobody wrote stalls on the operator having nothing to pick.
 A premise is not a road: a file carrying a world and no steps is refused like any other file nothing
 walks.
 
-The list holds one premise that is not a record at all. `store worn-in` stands up the passage of
-time — how much amenbo has been used on this device — which is the one world a road can only be given:
-every other premise is something somebody could have done a moment before the run, and this one is
-something they could only have done over days.
+The list holds two premises that are not records at all, and both stand up the passage of time —
+the one world a road can only be given, every other premise being something somebody could have done
+a moment before the run. `store worn-in` is how much amenbo has been used on this device, which they
+could only have done over days; `tick deferred` is a day having passed — or not — since the band was
+put off, which no run can wait out, the band being judged once at launch.
 
 `folder foreign-pointer` is on the list for the neighbouring reason: not that nobody could have done
 it a moment before, but that nobody under test could have done it at all. A build stamps its own name

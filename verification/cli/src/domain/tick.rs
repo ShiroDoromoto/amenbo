@@ -8,13 +8,69 @@
 //!
 //! **Nothing here registers a timer.** The registration is written outside the throwaway store a run
 //! makes — into the launchd, systemd or Task Scheduler of whichever machine the gate is running on —
-//! so a road that walked it would leave an hourly timer on a release box. Only the reading is here.
+//! so a road that walked it would leave an hourly timer on a release box. Only the reading is here,
+//! plus one premise's reach (`deferred`) — a day written into the run's own store, the way
+//! `store worn-in` writes its tallies, and still nothing that touches the machine.
+
+use std::path::Path;
 
 use amenbo_scenario::{Args, Domain};
 
 use crate::{req_bool, req_str, unmapped, Driver, Outcome};
 
+/// The `store_meta` key the build keeps the band's "later" day under. The name is the build's, and it
+/// is written down here for the reason `store.rs` writes its two down: a store is a plain SQLite
+/// file, and the premise reaches into it directly.
+const TICK_BANNER_LATER_KEY: &str = "tick.banner.later_day";
+
+/// Stand up the band already put off: write the day "later" was pressed straight into the store, as
+/// `today` or `yesterday`. Direct, like `wear_in`, and for the same reason: the state is a day
+/// having passed — or not — since a press, which no run reaches by pressing, the band being judged
+/// once at launch.
+fn defer_banner(home: &Path, when: &str) -> Result<String, String> {
+    let modifier = match when {
+        "today" => "+0 days",
+        "yesterday" => "-1 days",
+        other => {
+            return Err(format!(
+                "`deferred` takes `today` or `yesterday`, not `{other}` — the band returns after one day, so anything further back is the same world as `yesterday`"
+            ))
+        }
+    };
+    let db = home.join(crate::domain::store::STORE_FILE);
+    if !db.is_file() {
+        return Err(format!(
+            "there is no store at {} yet — `deferred` writes into one the run has already made",
+            db.display()
+        ));
+    }
+    let conn = rusqlite::Connection::open(&db)
+        .map_err(|e| format!("could not open the store at {}: {e}", db.display()))?;
+    let sql = |e: rusqlite::Error| format!("could not put the band off: {e}");
+    // The reader's day and not UTC, for the reason `wear_in` gives: that is the day the build writes
+    // there, and what reads it back compares the two as text.
+    let day: String = conn
+        .query_row("SELECT date('now', 'localtime', ?1)", [modifier], |r| r.get(0))
+        .map_err(sql)?;
+    conn.execute(
+        "INSERT OR REPLACE INTO store_meta (key, value) VALUES (?1, ?2)",
+        rusqlite::params![TICK_BANNER_LATER_KEY, day],
+    )
+    .map_err(sql)?;
+    Ok(format!("the band was put off on {day} ({when})"))
+}
+
 impl Driver<'_> {
+    /// The wake-up's one action, and it is a premise's: everything else in this domain is a reading.
+    pub(crate) fn tick_action(&self, op: &str, with: &Args) -> Result<Outcome, String> {
+        match op {
+            "deferred" => {
+                Ok(Outcome::action(defer_banner(&self.session.home, req_str(with, "when")?)?))
+            }
+            _ => Err(unmapped(Domain::Tick, op)),
+        }
+    }
+
     /// Whether the machine's scheduler is holding the hourly tick right now. It is read here and at
     /// the start of a run, and the assert is the difference between the two — see `holds` below.
     pub(crate) fn tick_registered(&self) -> Result<bool, String> {
@@ -94,5 +150,67 @@ impl Driver<'_> {
             }
             _ => Err(unmapped(Domain::Tick, op)),
         }
+    }
+}
+
+#[cfg(test)]
+mod deferred_tests {
+    use super::*;
+
+    /// A store holding only the table this premise reaches into, for the reason `worn_in_tests`
+    /// stands up its two: the rest of the schema is the shipped build's business.
+    fn store_with_meta() -> crate::scratch::Session {
+        let session = crate::scratch::session("deferred-test", false).expect("a throwaway home");
+        let conn = rusqlite::Connection::open(session.home.join(crate::domain::store::STORE_FILE))
+            .expect("a store to open");
+        conn.execute_batch("CREATE TABLE store_meta (key TEXT PRIMARY KEY, value TEXT);")
+            .expect("the one table this reaches into");
+        session
+    }
+
+    fn later_day(home: &Path) -> Option<String> {
+        let conn = rusqlite::Connection::open(home.join(crate::domain::store::STORE_FILE))
+            .expect("a store to open");
+        conn.query_row("SELECT value FROM store_meta WHERE key = ?1", [TICK_BANNER_LATER_KEY], |r| {
+            r.get(0)
+        })
+        .ok()
+    }
+
+    /// The whole of what the premise claims: the named day is on the key the build reads, and naming
+    /// the other day replaces it — the only question ever put to this mark is about the day in hand.
+    #[test]
+    fn putting_the_band_off_writes_the_named_day() {
+        let session = store_with_meta();
+        let conn = rusqlite::Connection::open(session.home.join(crate::domain::store::STORE_FILE))
+            .expect("a store to open");
+
+        defer_banner(&session.home, "today").expect("today is a day it knows");
+        let today: String =
+            conn.query_row("SELECT date('now', 'localtime')", [], |r| r.get(0)).expect("the day");
+        assert_eq!(later_day(&session.home), Some(today));
+
+        defer_banner(&session.home, "yesterday").expect("yesterday too, replacing the day");
+        let yesterday: String = conn
+            .query_row("SELECT date('now', 'localtime', '-1 days')", [], |r| r.get(0))
+            .expect("the day before");
+        assert_eq!(later_day(&session.home), Some(yesterday));
+    }
+
+    /// Anything further back is the same world as yesterday, so it is refused rather than mapped:
+    /// a premise quietly accepting days it does not distinguish would read as distinguishing them.
+    #[test]
+    fn a_day_further_back_is_refused() {
+        let session = store_with_meta();
+        let err = defer_banner(&session.home, "last-week").expect_err("only the two named days");
+        assert!(err.contains("last-week"), "{err}");
+    }
+
+    /// And a home with no store in it yet, which is what a premise that put this first would meet.
+    #[test]
+    fn a_home_with_no_store_is_refused() {
+        let session = crate::scratch::session("deferred-empty-test", false).expect("a throwaway home");
+        let err = defer_banner(&session.home, "today").expect_err("nothing to write into");
+        assert!(err.contains("no store"), "{err}");
     }
 }

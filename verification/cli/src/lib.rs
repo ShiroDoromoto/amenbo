@@ -462,8 +462,9 @@ impl<'a> Driver<'a> {
             Domain::Plugin => self.plugin_action(op, with, bind),
             Domain::Mcp => self.mcp_action(op, with),
             // Nothing here writes a registration into the machine the gate is running on — see
-            // `domain::tick` — so the wake-up carries no action of its own.
-            Domain::Tick => Err(unmapped(domain, op)),
+            // `domain::tick`. The one action the wake-up carries is a premise's reach into the
+            // run's own store, and nothing further.
+            Domain::Tick => self.tick_action(op, with),
         }
     }
 

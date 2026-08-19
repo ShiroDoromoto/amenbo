@@ -382,7 +382,7 @@ fn count_files_in(dir: &Path) -> Result<usize, String> {
 /// The store file inside a run's own home, and the two scalars this device tallies its use into. The
 /// names are the build's, and they are the whole of what is written down here — a store is a plain
 /// SQLite file, and no shipped path ever keys one.
-const STORE_FILE: &str = "store.sqlite";
+pub(crate) const STORE_FILE: &str = "store.sqlite";
 const LAUNCH_COUNT_KEY: &str = "usage.launch_count";
 const FIRST_LAUNCH_DAY_KEY: &str = "usage.first_launch_day";
 

@@ -1619,8 +1619,8 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Tick, op: "holds", required: &["changed"], refs: &[], strings: &[], binds: false },
     // The other half of the tick is the device's consent, and it is met on a screen:
     // a band across the whole app puts the question, and a row in amenbo's own settings holds the
-    // answer afterwards. Screen roads alone, all four of the ops below — the terminal's way in is
-    // `tick install`, which asks nothing — so the CLI driver never meets them.
+    // answer afterwards. Screen roads alone, the next four ops — the terminal's way in is
+    // `tick install`, which asks nothing — so the CLI driver never meets them as steps.
     //
     // Whether the band is standing. It comes up only while three conditions hold together — the
     // device unanswered, a dated task still open, a plugin subscribed to `task.due` enabled
@@ -1646,6 +1646,14 @@ const REGISTRY: &[OpSpec] = &[
     // that moved. What a road asserts after it stays on the answer's side of that line, as it does
     // after the band.
     OpSpec { kind: Kind::Action, domain: Domain::Tick, op: "set", required: &["position"], refs: &[], strings: &["position"], binds: false },
+    // The band already put off — a premise (see PREMISE_OPS), not a screen move. "later"'s whole
+    // meaning is one day of quiet, and the band is judged once at launch, so no press this run makes
+    // can show either half of it: the same-day silence needs a launch *after* the press, and the
+    // return needs a day to have passed — which, like the passage of time `store worn-in` stands up,
+    // a road can only be given. `when` is `today` (pressed before this launch, the quiet still
+    // running) or `yesterday` (pressed a day ago, the quiet spent); the band returns after one day,
+    // so anything further back is the same world as `yesterday`.
+    OpSpec { kind: Kind::Action, domain: Domain::Tick, op: "deferred", required: &["when"], refs: &[], strings: &["when"], binds: false },
 
 ];
 
@@ -1754,6 +1762,11 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // author's word too, every plugin the official catalog serves declares none, and a screen road
     // about reading the layer off a row has to find a row that already declares one.
     (Domain::Plugin, "declare-scope"),
+    // The tick's band already put off. What it stands up is a day having passed — or not — since
+    // "later" was pressed, and no run earns that: the band is judged once at launch, so the press
+    // and the judgement it gates can never be in the same run. The same kind of reach as
+    // `store worn-in`, one key further in.
+    (Domain::Tick, "deferred"),
 ];
 
 /// Whether this op may stand a world up (see [`PREMISE_OPS`]).

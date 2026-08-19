@@ -375,10 +375,21 @@ pub(crate) fn tick_cmd(store: &mut Store, flags: &Flags, sub: TickCmd) -> Result
             tick::unregister().map_err(CliError::from)?;
             store.config.tick_consent = Some(TickConsent::No);
             let _ = store.save_config();
+            // Where the OS keeps a row of its own past the removal, say so here — this is the moment the
+            // reader would otherwise read it as the removal having failed (`tick::removal_leaves_a_row`).
+            let leaves_a_row = tick::removal_leaves_a_row();
             if flags.json {
-                print_json(&json!({ "ok": true, "registered": false, "consent": TickConsent::No }));
+                print_json(&json!({
+                    "ok": true,
+                    "registered": false,
+                    "consent": TickConsent::No,
+                    "row_remains": leaves_a_row,
+                }));
             } else {
                 human(flags, format!("tick: taken away. Register it again any time with `{cmd} tick install`."));
+                if leaves_a_row {
+                    human(flags, "  macOS keeps its own record of the row, so it stays in your login items — with nothing behind it.");
+                }
             }
         }
         TickCmd::Status => {

@@ -33,6 +33,9 @@ use crate::sys;
 /// Linux has a door.
 pub(super) const AVAILABLE: bool = true;
 
+/// Removing the units removes them: nothing of ours is left for the user to find.
+pub(super) const REMOVAL_LEAVES_A_ROW: bool = false;
+
 /// What this build's two units are both named from ([`super::registration_name`]) — one stem, so a
 /// dev build's pair lands beside production's in `~/.config/systemd/user` instead of on top of it.
 fn stem() -> String {

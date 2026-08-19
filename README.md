@@ -488,7 +488,9 @@ amenbo hooks uninstall                      # remove amenbo's hooks here, and op
 # said with no app open and nothing of ours left running. What is registered carries no
 # meaning — amenbo works out once awake what is due — so however much comes to depend on
 # it, this stays one row in your system settings, and switching that row off stops all of
-# it. Registering writes into your scheduler, so amenbo asks once, for this device.
+# it. Registering writes into your scheduler, so amenbo asks once, for this device. On macOS
+# that row outlives `tick uninstall`: the OS keeps its own record of it, amenbo has nothing
+# further to take away, and nothing runs behind the row that is left.
 amenbo tick install                         # register it (idempotent — run it again after an upgrade)
 amenbo tick status                          # what the scheduler is holding, and what this device answered
 amenbo tick uninstall                       # take it away, and record that this device does not want it

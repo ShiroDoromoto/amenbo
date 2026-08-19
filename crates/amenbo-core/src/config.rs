@@ -453,7 +453,7 @@ pub struct Config {
     ///
     /// There is no `config set` key for it. What moves it is the faces that state an intent — `tick
     /// install` and `tick uninstall` — and the startup pass, which only ever takes a `yes` back to
-    /// `no` after the user has removed the registration themselves.
+    /// unanswered after the user has removed the registration themselves (`AMB-D-718`).
     #[serde(default)]
     pub tick_consent: Option<crate::tick::TickConsent>,
 }

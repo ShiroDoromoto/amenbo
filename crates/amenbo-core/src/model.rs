@@ -824,7 +824,11 @@ pub struct Attachment {
     /// tamper detection, and identity across devices. `None` in url mode.
     #[serde(default)]
     pub blob_hash: Option<String>,
-    /// The original filename (blob), or the display label (url).
+    /// What the attachment is called: the file's own name (blob) or the display label (url). A blob
+    /// renamed at attach time carries the label with the file's suffix kept on it, because this one
+    /// field is read as a name again past the ingest — `attach save` writes under it, and `attach open`
+    /// gives the OS a copy carrying its extension. What the bytes *are* is [`Attachment::mime`]'s, read
+    /// off the file itself and never off this.
     #[serde(default)]
     pub filename: Option<String>,
     /// MIME type — the GUI picks its viewer by it.

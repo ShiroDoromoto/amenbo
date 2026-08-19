@@ -9,6 +9,27 @@ use crate::cli::*;
 use crate::cmd::comment::{resolve_live_decision_comment, resolve_live_task_comment};
 use crate::output::{confirm, human, print_json, write_envelope, CliError, Flags};
 
+/// A label carrying the source file's suffix, unless it already ends in that same one.
+///
+/// `filename` is the one field an attachment has for what a file is called, and it is read as a name
+/// again past the ingest: `attach save` writes under it, and `attach open` copies to a temp file
+/// carrying its extension so the OS can pick an application. A label like `1 before the install` leaves
+/// both with nothing to go on, so the file's own suffix goes back on the end of it.
+///
+/// The test is "does it already end in this suffix", and deliberately not "does it have an extension":
+/// a label is a caption and may hold a dot anywhere — `v1.2 baseline` would answer the second question
+/// yes, with `2 baseline` for an extension, and lose the `.csv` that made the name useful.
+fn keep_the_suffix(label: &str, on_disk: Option<&str>) -> String {
+    let Some(ext) = on_disk.map(std::path::Path::new).and_then(|p| p.extension()).and_then(|e| e.to_str())
+    else {
+        return label.to_string();
+    };
+    // Compared folded, and over whole strings: a label is free-form text, so slicing it by the suffix's
+    // byte length could land inside a character.
+    let suffix = format!(".{}", ext.to_lowercase());
+    if label.to_lowercase().ends_with(&suffix) { label.to_string() } else { format!("{label}.{ext}") }
+}
+
 /// The attachment's display label (`att:<id>`).
 fn attach_label(a: &Attachment) -> String {
     format!("att:{}", a.id)
@@ -47,11 +68,14 @@ pub(crate) fn attach_add(
         if !meta.is_file() {
             return Err(CliError { code: "invalid_value", message: format!("'{source}' is not a regular file"), hint: None, exit: 2 });
         }
-        let filename = name
-            .clone()
-            .or_else(|| path.file_name().and_then(|n| n.to_str()).map(str::to_string))
-            .unwrap_or_else(|| "attachment".to_string());
-        let mime = amenbo_core::blob::mime_from_filename(&filename);
+        // What the file *is* comes from the file, and `--name` only renames it: read the type off the
+        // source's own name, never off the label, which carries no extension when it is a sentence.
+        let on_disk = path.file_name().and_then(|n| n.to_str());
+        let mime = on_disk.and_then(amenbo_core::blob::mime_from_filename);
+        let filename = match name {
+            Some(label) => keep_the_suffix(&label, on_disk),
+            None => on_disk.unwrap_or("attachment").to_string(),
+        };
         // Check the per-file limit (which varies by type) before ingesting — it is what stops a runaway.
         store.config.attachment_limits.check_per_file(mime, meta.len()).map_err(CliError::from)?;
         let blob = store.blobs().ingest_path(path).map_err(CliError::from)?;

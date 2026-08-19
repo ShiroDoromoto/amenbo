@@ -33,6 +33,7 @@ const SNAPSHOT = {
   perfLog: null,
   updateCheck: true,
   autostart: false,
+  defaultView: "board",
 };
 
 /** What core answers for `version_status`. Each test rewrites this. */

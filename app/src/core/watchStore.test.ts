@@ -53,6 +53,7 @@ const SNAPSHOT = {
   perfLog: null,
   updateCheck: true,
   autostart: false,
+  defaultView: "board",
 };
 
 /** What core is made to answer. Each test rewrites these. */

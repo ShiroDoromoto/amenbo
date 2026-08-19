@@ -216,6 +216,8 @@ export const pl: Translation = {
     "settings.avatarChoose": "Wybierz obraz…", "settings.avatarReset": "Wróć do identikonu",
     "settings.avatarHint": "Nadaj twarz człowiekowi i SI. Obrazy są pomniejszane do 96px przed zapisem (gdy nic nie ustawisz, każda strona dostaje własny identikon).",
     "settings.appearance": "Wygląd", "settings.theme": "Motyw", "settings.language": "Język",
+    "settings.defaultView": "Widok domyślny",
+    "settings.defaultViewNote": "Widok, w którym otwiera się nowy projekt. Istniejące projekty zachowują swój.",
     "settings.themeOs": "Zgodnie z systemem", "settings.themeDark": "Ciemny", "settings.themeLight": "Jasny",
     "settings.developer": "Dla programistów",
     "settings.perfLog": "Dziennik wydajności (pomiary)",

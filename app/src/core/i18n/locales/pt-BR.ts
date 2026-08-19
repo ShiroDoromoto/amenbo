@@ -216,6 +216,8 @@ export const ptBR: Translation = {
     "settings.avatarChoose": "Escolher imagem…", "settings.avatarReset": "Voltar ao identicon",
     "settings.avatarHint": "Registre um rosto para a pessoa e para a IA. As imagens são reduzidas a 96px antes de salvar (sem imagem, usa-se um identicon por faceta).",
     "settings.appearance": "Aparência", "settings.theme": "Tema", "settings.language": "Idioma",
+    "settings.defaultView": "Visualização padrão",
+    "settings.defaultViewNote": "A visualização com que um novo projeto abre. Projetos que já existem mantêm a sua.",
     "settings.themeOs": "Seguir o sistema", "settings.themeDark": "Escuro", "settings.themeLight": "Claro",
     "settings.developer": "Desenvolvimento",
     "settings.perfLog": "Log de desempenho (instrumentação)",

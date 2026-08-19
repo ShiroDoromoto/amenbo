@@ -212,6 +212,8 @@ export const id: Translation = {
     "settings.avatarChoose": "Pilih gambar…", "settings.avatarReset": "Kembalikan ke identicon",
     "settings.avatarHint": "Daftarkan satu wajah untuk Manusia dan AI. Gambar diperkecil ke 96px sebelum disimpan (tanpa gambar, dipakai identicon untuk masing-masing sisi).",
     "settings.appearance": "Tampilan", "settings.theme": "Tema", "settings.language": "Bahasa",
+    "settings.defaultView": "Tampilan bawaan",
+    "settings.defaultViewNote": "Tampilan saat proyek baru dibuka. Proyek yang sudah ada tetap memakai tampilannya sendiri.",
     "settings.themeOs": "Ikuti OS", "settings.themeDark": "Gelap", "settings.themeLight": "Terang",
     "settings.developer": "Pengembang",
     "settings.perfLog": "Log kinerja (instrumentasi)",

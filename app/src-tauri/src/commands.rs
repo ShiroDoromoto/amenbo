@@ -474,6 +474,7 @@ fn build_snapshot() -> Result<Snapshot, CmdError> {
         perf_log: config.perf_log.map(|p| p.as_config_str().to_string()),
         update_check: config.update_check,
         autostart: config.autostart,
+        default_view: config.default_view.as_str().to_string(),
     })
 }
 
@@ -2976,6 +2977,20 @@ pub fn config_set_update_check(enabled: bool) -> Result<WriteAck, CmdError> {
     let paths = amenbo_core::config::Paths::resolve()?;
     let mut config = amenbo_core::config::Config::load(&paths.config_file);
     config.set("update_check", if enabled { "true" } else { "false" })?;
+    config.save(&paths.config_file)?;
+    Ok(WriteAck::new(&[]))
+}
+
+/// Change the view a new project opens in (`config.default_view`) from the settings screen. A thin
+/// wrapper onto core's `Config::set("default_view", …)`, which is where a value outside
+/// list|board|calendar|timeline is refused. What it moves is the answer for a project created
+/// without a view of its own — every project that already exists keeps the one it carries, so
+/// nothing on screen changes until the next project is made.
+#[tauri::command]
+pub fn config_set_default_view(view: String) -> Result<WriteAck, CmdError> {
+    let paths = amenbo_core::config::Paths::resolve()?;
+    let mut config = amenbo_core::config::Config::load(&paths.config_file);
+    config.set("default_view", view.trim())?;
     config.save(&paths.config_file)?;
     Ok(WriteAck::new(&[]))
 }

@@ -209,6 +209,8 @@ export const hi: Translation = {
     "settings.avatarChoose": "छवि चुनें…", "settings.avatarReset": "आइडेंटिकॉन पर लौटाएँ",
     "settings.avatarHint": "मनुष्य और AI के लिए एक चेहरा दर्ज करें। छवियाँ सहेजने से पहले 96px तक छोटी की जाती हैं (न रखने पर हर पक्ष का अपना आइडेंटिकॉन इस्तेमाल होता है)।",
     "settings.appearance": "रूप", "settings.theme": "थीम", "settings.language": "भाषा",
+    "settings.defaultView": "डिफ़ॉल्ट व्यू",
+    "settings.defaultViewNote": "नई परियोजना जिस व्यू में खुलती है। पहले से मौजूद परियोजनाएँ अपना व्यू बनाए रखती हैं।",
     "settings.themeOs": "OS के अनुसार", "settings.themeDark": "गहरा", "settings.themeLight": "हल्का",
     "settings.developer": "डेवलपर",
     "settings.perfLog": "प्रदर्शन लॉग (मापन)",

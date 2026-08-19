@@ -216,6 +216,8 @@ export const ru: Translation = {
     "settings.avatarChoose": "Выбрать изображение…", "settings.avatarReset": "Вернуть идентикон",
     "settings.avatarHint": "Задайте лицо человеку и ИИ. Перед сохранением изображения уменьшаются до 96 пикселей (если ничего не задано, для каждой стороны берётся идентикон).",
     "settings.appearance": "Оформление", "settings.theme": "Тема", "settings.language": "Язык",
+    "settings.defaultView": "Вид по умолчанию",
+    "settings.defaultViewNote": "Вид, в котором открывается новый проект. Существующие проекты сохраняют свой.",
     "settings.themeOs": "Как в системе", "settings.themeDark": "Тёмная", "settings.themeLight": "Светлая",
     "settings.developer": "Для разработчика",
     "settings.perfLog": "Журнал производительности (замеры)",

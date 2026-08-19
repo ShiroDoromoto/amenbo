@@ -209,6 +209,8 @@ export const nl: Translation = {
     "settings.avatarChoose": "Afbeelding kiezen…", "settings.avatarReset": "Terug naar identicon",
     "settings.avatarHint": "Geef Mens en AI elk een gezicht. Afbeeldingen worden vóór het opslaan verkleind naar 96px (zonder afbeelding krijgt elke kant een eigen identicon).",
     "settings.appearance": "Weergave", "settings.theme": "Thema", "settings.language": "Taal",
+    "settings.defaultView": "Standaardweergave",
+    "settings.defaultViewNote": "De weergave waarin een nieuw project opent. Bestaande projecten houden hun eigen weergave.",
     "settings.themeOs": "Volg het systeem", "settings.themeDark": "Donker", "settings.themeLight": "Licht",
     "settings.developer": "Ontwikkelaar",
     "settings.perfLog": "Prestatielogboek (metingen)",

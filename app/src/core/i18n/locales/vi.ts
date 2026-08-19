@@ -212,6 +212,8 @@ export const vi: Translation = {
     "settings.avatarChoose": "Chọn ảnh…", "settings.avatarReset": "Về lại identicon",
     "settings.avatarHint": "Đăng ký một gương mặt cho Người và cho AI. Ảnh được thu nhỏ về 96px trước khi lưu (không đặt thì mỗi bên dùng identicon riêng).",
     "settings.appearance": "Giao diện", "settings.theme": "Chủ đề", "settings.language": "Ngôn ngữ",
+    "settings.defaultView": "Chế độ xem mặc định",
+    "settings.defaultViewNote": "Chế độ xem khi mở một dự án mới. Các dự án đã có vẫn giữ chế độ xem của mình.",
     "settings.themeOs": "Theo hệ điều hành", "settings.themeDark": "Tối", "settings.themeLight": "Sáng",
     "settings.developer": "Nhà phát triển",
     "settings.perfLog": "Nhật ký hiệu năng (đo đạc)",

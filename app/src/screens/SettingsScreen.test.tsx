@@ -28,6 +28,8 @@ const hoisted = vi.hoisted(() => ({
   restoreReport: { previousSavedTo: null, blobs: 0, superseded: 0, migration: null } as RestoreReportDto,
   /** What `fetchDevBadge` answers — the badge text on a development build, null on a shipped one. */
   devBadge: null as string | null,
+  /** Every view `setDefaultView` was asked to write, in the order the pull-down asked for them. */
+  defaultViews: [] as string[],
 }));
 
 vi.mock("../core/snapshot", async (importOriginal) => {
@@ -68,6 +70,7 @@ vi.mock("../core/mutations", () => {
     cancelDataOp: noop,
     setFacetNames: noop, setFacetAvatar: noop, setLanguage: noop, setPerfLog: noop, setUpdateCheck: noop,
     setAutostart: noop,
+    setDefaultView: (view: string) => { hoisted.defaultViews.push(view); return Promise.resolve(); },
     fetchDevBadge: () => Promise.resolve(hoisted.devBadge),
   };
 });
@@ -125,6 +128,16 @@ function rowLabels(): string[] {
   return [...container.querySelectorAll(".settings__k")].map((k) => k.textContent ?? "");
 }
 
+/** The pull-down of the row carrying this label — reached through the row, since the screen draws
+ *  several selects and their options are the only thing telling them apart. */
+function selectInRow(label: string): HTMLSelectElement {
+  const row = [...container.querySelectorAll(".settings__row")]
+    .find((r) => r.querySelector(".settings__k")?.textContent === label);
+  const sel = row?.querySelector("select");
+  if (!sel) throw new Error(`no select in the row labelled ${label}`);
+  return sel as HTMLSelectElement;
+}
+
 /** A button found by its label, or null if there is none. */
 function buttonByLabel(label: string): HTMLButtonElement | null {
   return ([...container.querySelectorAll("button")].find((b) => b.textContent === label) ?? null) as HTMLButtonElement | null;
@@ -140,6 +153,7 @@ beforeEach(() => {
   hoisted.restoreArchive = null;
   hoisted.restoreReport = restored();
   hoisted.devBadge = null;
+  hoisted.defaultViews = [];
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -350,5 +364,24 @@ describe("Settings > Updates (a control only a shipped build can honour)", () =>
     // The sections around it stay, so this is one section leaving and not the screen giving up.
     expect(rowLabels()).toContain(t("settings.perfLog"));
     expect(rowLabels()).toContain(t("settings.dataPath"));
+  });
+});
+
+describe("Settings > Appearance (the view a project created without one opens in)", () => {
+  it("stands at the value config holds, and writes the one that is chosen", async () => {
+    await render();
+    expect(rowLabels()).toContain(t("settings.defaultView"));
+    const pick = selectInRow(t("settings.defaultView"));
+    // Core's own default, as the empty snapshot carries it — the row reads config rather than
+    // starting from a value of its own.
+    expect(pick.value).toBe("board");
+    // All four, so the row cannot quietly offer a subset of what `config set default_view` takes.
+    expect([...pick.options].map((o) => o.value)).toEqual(["list", "board", "calendar", "timeline"]);
+
+    await act(async () => {
+      pick.value = "calendar";
+      pick.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(hoisted.defaultViews).toEqual(["calendar"]);
   });
 });

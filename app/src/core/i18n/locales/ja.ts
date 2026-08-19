@@ -214,6 +214,8 @@ export const ja: Translation = {
     "settings.avatarChoose": "画像を選ぶ…", "settings.avatarReset": "identicon に戻す",
     "settings.avatarHint": "人間 / AI それぞれの顔を登録できます。画像は 96px に縮小して保存します（未設定なら facet ごとの identicon）。",
     "settings.appearance": "外観", "settings.theme": "テーマ", "settings.language": "言語",
+    "settings.defaultView": "既定のビュー",
+    "settings.defaultViewNote": "新しく作るプロジェクトが開くビュー。すでにあるプロジェクトは、それぞれのビューのままです。",
     "settings.themeOs": "OS に従う", "settings.themeDark": "ダーク", "settings.themeLight": "ライト",
     "settings.developer": "開発者",
     "settings.perfLog": "perf ログ（計装）",

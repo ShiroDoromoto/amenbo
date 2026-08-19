@@ -210,6 +210,8 @@ export const zhHant: Translation = {
     "settings.avatarChoose": "選擇圖片…", "settings.avatarReset": "恢復為預設圖樣",
     "settings.avatarHint": "為人和 AI 各登錄一張臉。圖片會先縮到 96px 再儲存（未設定時使用各自的預設圖樣）。",
     "settings.appearance": "外觀", "settings.theme": "主題", "settings.language": "語言",
+    "settings.defaultView": "預設檢視",
+    "settings.defaultViewNote": "新建專案開啟時使用的檢視。既有專案仍維持各自的檢視。",
     "settings.themeOs": "跟隨系統", "settings.themeDark": "深色", "settings.themeLight": "淺色",
     "settings.developer": "開發者",
     "settings.perfLog": "效能記錄（埋點）",

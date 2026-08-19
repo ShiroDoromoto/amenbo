@@ -308,6 +308,7 @@ pub fn run() {
       commands::config_set_language,
       commands::config_set_perf_log,
       commands::config_set_update_check,
+      commands::config_set_default_view,
       commands::config_set_autostart,
       commands::set_facet_avatars,
       commands::set_facet_names,

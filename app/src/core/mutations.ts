@@ -12,7 +12,7 @@ import { applySnapshot, getSnapshot, inTauri, loadSnapshot, type Snapshot } from
 import { applyPerfConfig, invoke } from "./ipc";
 import { invalidateAllQueries, invalidateQueries, type QueryKey } from "./query";
 import { type AttachTargetType } from "./reads";
-import { guessLang, t, tf, type CmdError, type CmdErrorPart } from "./i18n";
+import { guessLang, t, tf, type CmdError, type CmdErrorPart, type ViewKind } from "./i18n";
 import { isClosed } from "./status";
 import type { ActivityItem, Facet, Priority, Status, TaskCard } from "../mock/types";
 import type { ActivityTargetDto, AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, McpRequestDto, McpSetupDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
@@ -1140,6 +1140,18 @@ export async function setPerfLog(mode: string): Promise<void> {
 export async function setUpdateCheck(enabled: boolean): Promise<void> {
   if (inTauri()) return invokeAck("config_set_update_check", { enabled });
   mockMutate((s) => ({ ...s, updateCheck: enabled }));
+}
+
+/**
+ * Change the view a new project opens in (`config.default_view`). `config.json` lives outside the
+ * store, so it is the `loadSnapshot` at the tail of the ack that re-reads the snapshot's
+ * `defaultView` and brings the pull-down into step **without a restart**. Nothing else on screen
+ * moves: every project already carries its own view, and this is only the answer for the next one
+ * created without one. Outside Tauri (browser) it just swaps the cached `defaultView`.
+ */
+export async function setDefaultView(view: ViewKind): Promise<void> {
+  if (inTauri()) return invokeAck("config_set_default_view", { view });
+  mockMutate((s) => ({ ...s, defaultView: view }));
 }
 
 /**

@@ -210,6 +210,8 @@ export const zhHans: Translation = {
     "settings.avatarChoose": "选择图片…", "settings.avatarReset": "恢复为默认图案",
     "settings.avatarHint": "为人和 AI 各登记一张脸。图片会先缩小到 96px 再保存（未设置时使用各自的默认图案）。",
     "settings.appearance": "外观", "settings.theme": "主题", "settings.language": "语言",
+    "settings.defaultView": "默认视图",
+    "settings.defaultViewNote": "新建项目打开时使用的视图。已有项目仍保持各自的视图。",
     "settings.themeOs": "跟随系统", "settings.themeDark": "深色", "settings.themeLight": "浅色",
     "settings.developer": "开发者",
     "settings.perfLog": "性能日志（埋点）",

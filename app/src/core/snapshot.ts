@@ -64,6 +64,8 @@ const EMPTY: Snapshot = {
   perfLog: null,
   updateCheck: true,
   autostart: false, // off until asked for — nothing is registered at login by default
+  tickConsent: null, // nobody has been asked about the hourly tick yet
+  tickRemovalLeavesARow: false, // a build fact; the real one arrives with the first snapshot
   defaultView: "board", // what a project created without a view of its own opens in (core's default)
 };
 
@@ -452,6 +454,8 @@ export async function loadSnapshot(opts: LoadOptions = {}): Promise<void> {
       perfLog: null, // in the browser this is on by default in dev (ipc decides via import.meta.env.DEV)
       updateCheck: true,
       autostart: false, // the browser has no login to register with
+      tickConsent: null, // and no scheduler to hold a timer, so the question is never put
+      tickRemovalLeavesARow: false, // …so there is no row for a removal to leave behind either
       defaultView: "board",
     };
   }

@@ -708,17 +708,21 @@ export async function fetchTickBanner(): Promise<boolean> {
 }
 
 /**
- * Record the device's answer about the hourly tick, and register the timer on a yes.
+ * Record the device's answer about the hourly tick: a yes registers the timer with this machine's
+ * scheduler first, a no takes it away first, and only then is the answer written.
  *
- * **Call it only when there is an answer.** "Later" is not one — it puts the banner off for the day
- * ({@link deferTickBanner}) and leaves the question open, which is why there is no third value here.
+ * Both faces come through here — the band that puts the question (`AMB-D-718`) and the settings switch
+ * that is the way back from a no. **Call it only when there is an answer.** "Later" is not one: it puts
+ * the band off for the day ({@link deferTickBanner}) and leaves the question open, which is why there is
+ * no third value here.
  *
- * Throws if the registration was refused, and nothing is recorded when it is: the config must never claim
- * a timer the machine is not holding.
+ * Throws if the scheduler refused, and nothing is recorded when it does: the config must never claim a
+ * timer the machine is not holding, nor drop one it is. `config.json` sits outside the store, so the ack
+ * reloads the snapshot — which is what carries a band's answer to the settings switch.
  */
 export async function answerTick(yes: boolean): Promise<void> {
-  if (!inTauri()) return;
-  await invoke("tick_answer", { yes });
+  if (inTauri()) return invokeAck("tick_answer", { yes });
+  mockMutate((s) => ({ ...s, tickConsent: yes ? "yes" : "no" }));
 }
 
 /**

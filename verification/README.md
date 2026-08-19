@@ -384,9 +384,14 @@ project put on the card, and nothing at all from the axis beside it that did not
 `set-an-app-up-to-reach-this-project` walks the fold that holds the other way in — the app already reaching this
 project and the folder its entry names, beside the app reaching nothing, each row offering the one road its app can
 walk —
-and `be-offered-a-start-at-login`
+`be-offered-a-start-at-login`
 walks the one thing on screen nobody went and asked for — an offer that comes up on its own once the app has been come
-back to, and the answer that takes it away.
+back to, and the answer that takes it away — and the hourly check's three roads close the set:
+`be-offered-the-hourly-check` walks the band that arrives when a dated task, a carrier and an unanswered
+device stand together, the yes read back on the settings row, and that row taking it back off;
+`take-back-a-no-about-the-hourly-check` walks the way back a declined band, rightly, never offers; and
+`not-be-asked-about-the-hourly-check-nothing-would-carry` reads the band staying down when nothing
+enabled would carry the warning a yes would start.
 
 Everything the wait prints — the step about to be taken, and the prompt — goes to stderr, so `--json`
 still leaves one machine-readable line on stdout. A driver that is not a person keeps its side open

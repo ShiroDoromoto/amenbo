@@ -1,0 +1,128 @@
+# The device's one question, arriving on its own. Until it is answered the due warning is silent, and
+# nothing anywhere says so — so the band puts the question across the whole app, and it earns its place
+# by being held behind three conditions at once: the device unanswered, a dated task still open, and a
+# plugin subscribed to `task.due` enabled somewhere. The world below stands all three up, which is what
+# lets the first shot be of the band standing there with nothing pressed to bring it up.
+#
+# ── What is walked, and where the assert stops ────────────────────────────────────────────────────
+# The yes is walked, and read back as the answer — never as the registration. Pressing the button
+# writes a real registration into this machine's scheduler, but the scheduler belongs to the machine
+# and not to this run's throwaway store, so what the machine holds is not this road's to read: on the
+# machine of anybody who uses the hourly tick — a release box included — an absolute reading would be
+# reading somebody else's timer. `be-told-a-day-has-come-with-nothing-open` draws that line for the
+# terminal with a difference reading; on a screen the answer is read where a person would read it, on
+# the row in amenbo's own settings that holds it.
+#
+# The road then moves that row to off before it ends, which is as close to "left as it was found" as a
+# screen can put the machine: the yes this run gave is taken back, and the timer with it. A machine
+# that already held a registration of its own is re-asked rather than broken — the build heals a yes
+# whose registration is gone by putting the answer back to unanswered, so the band returns and the
+# owner can consent again.
+#
+# ── The screen road alone ─────────────────────────────────────────────────────────────────────────
+# A terminal has no surface to put the question on — its way in is `tick install`, which asks nothing —
+# so there is no second road here and no gap in one.
+#
+# Every reading is left for an eye. The band's offer and the row's two positions are words of the
+# interface, so a reading of them would hold this gate to whichever language the run was set up in.
+# The road has a second reader all the same: a band that never came up is one nobody can answer, and
+# the step after the first cannot be carried out at all.
+id: be-offered-the-hourly-check
+title: The offer to check due dates arrives on its own, the yes lands where the settings keep it, and the same row takes it back
+description: >
+  The goal is one question, put once, and answered where the answer can later be found. A store with a
+  dated task and a plugin that would carry the warning opens the app, and the band offering the hourly
+  check is standing there with nothing pressed to bring it up. Pressing the button that starts the
+  checking takes the band away and leaves the answer on the row in amenbo's own settings — which is
+  read for the yes, and then moved back to off, so the run's own consent is not left registered on the
+  machine that walked it.
+
+given:
+  # The dated task. Any open task carrying a day is enough — the band is about the timer, not about a
+  # day being near — and the date is set a week out on purpose: a road about the offer must not also
+  # be standing under the due warning's badges.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day is set
+    as: dated
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: dated
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: dated
+      due: "+7d"
+
+  # The carrier. `slack` is the official plugin that subscribes to `task.due`, and enabling it in this
+  # run's own project is the whole of what the band asks — which project a warning reaches is the
+  # plugin's business, not the question's. Like every line that installs a plugin, this goes to the
+  # catalog over the network on purpose (see `put-a-plugin-on-the-machine.yaml`).
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: slack
+
+  - type: action
+    domain: plugin
+    op: enable
+    with:
+      name: slack
+
+steps_gui:
+  # The arrival. Three conditions hold, so the band is up — read before anything is pressed, since
+  # coming up unasked is the whole of what it is for.
+  - type: assert
+    domain: tick
+    op: banner
+    with:
+      present: true
+
+  # The yes. The button is named by what it leaves behind rather than by its wording: the two that
+  # take the band away without a yes sit beside it, and pressing one of those is exactly the mistake
+  # this road exists to catch.
+  - type: action
+    domain: tick
+    op: banner-answer
+    with:
+      answer: start
+
+  # Answered is off the screen. A band that stayed up after taking an answer would be asking a
+  # question it already holds the answer to.
+  - type: assert
+    domain: tick
+    op: banner
+    with:
+      present: false
+
+  # And the answer is where a person would go looking for it: the row in amenbo's own settings stands
+  # at on. This is the whole of what the press is read back by — the registration it also wrote
+  # belongs to the machine, and is deliberately not read (see the header).
+  - type: assert
+    domain: tick
+    op: setting
+    with:
+      position: on
+
+  # Taken back before the road ends. The row is the one control that moves the answer and the timer
+  # together, so this is what leaves the machine as the run found it — and it is also the row doing
+  # the second half of its own job.
+  - type: action
+    domain: tick
+    op: set
+    with:
+      position: off
+
+  - type: assert
+    domain: tick
+    op: setting
+    with:
+      position: off

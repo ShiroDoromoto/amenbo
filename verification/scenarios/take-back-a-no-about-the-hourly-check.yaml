@@ -1,0 +1,125 @@
+# The no, and the way back from it. Declining the band writes a no and the band never returns — which
+# is right, and which is also why the answer cannot live in the band alone: a no with no way back would
+# make one press at one moment the last word this device ever gets. The row in amenbo's own settings is
+# that way back, and this road is what proves it — `take-back-a-no-about-starting-this-projects-ai`
+# walks the same shape for the other consent the app keeps.
+#
+# ── What each half is read by ─────────────────────────────────────────────────────────────────────
+# The no is read twice: the band going, and the row standing at off. Off is also where a device nobody
+# asked stands — the row has two positions over the answer's three states — so the row alone cannot say
+# a no was recorded; the band having taken an answer is what does.
+#
+# Taking the no back registers the timer for real, so the road moves the row to off again before it
+# ends, for the reason `be-offered-the-hourly-check` gives in its header: the machine that walked the
+# road is left as it was found, as far as a screen can say so, and a machine that held a registration
+# of its own is re-asked by its own store rather than broken.
+#
+# ── The screen road alone ─────────────────────────────────────────────────────────────────────────
+# The band and the row are both surfaces, and a terminal has neither. Its way back from a no is
+# `tick install`, which is a command a person has to already know — the row existing is the point.
+#
+# Every reading is left for an eye: the offer's words and the row's two positions are the interface's
+# own. The band that never came up is caught by the road itself — nobody can decline it.
+id: take-back-a-no-about-the-hourly-check
+title: Declining the hourly check is not the last word — the settings row holds the no, and moving it turns the check on
+description: >
+  The goal is the way back. The band offering the hourly check is declined for good, and it goes; the
+  row in amenbo's own settings now holds that no, standing at off. Moving the row to on takes the no
+  back — the answer becomes a yes and the timer is registered — which is the road a reader who changed
+  their mind has to have, because the band, rightly, is never coming back to re-ask. The row is then
+  moved to off again, so the run's own consent is not left registered on the machine that walked it.
+
+given:
+  # The three conditions the band is held behind, the same way `be-offered-the-hourly-check` stands
+  # them up: a dated task still open, and the official `task.due` subscriber enabled in this run's own
+  # project (installed over the network on purpose — see `put-a-plugin-on-the-machine.yaml`). The
+  # third condition, the device unanswered, is where a fresh store already stands.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — its day is set
+    as: dated
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: dated
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: dated
+      due: "+7d"
+
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: slack
+
+  - type: action
+    domain: plugin
+    op: enable
+    with:
+      name: slack
+
+steps_gui:
+  # The band, up on its own — the state the no is given from.
+  - type: assert
+    domain: tick
+    op: banner
+    with:
+      present: true
+
+  # The no. Named by what it leaves behind: the button that starts the checking and the one that only
+  # puts the question off sit beside it, and neither of those writes a no.
+  - type: action
+    domain: tick
+    op: banner-answer
+    with:
+      answer: never
+
+  - type: assert
+    domain: tick
+    op: banner
+    with:
+      present: false
+
+  # Where the no now lives. The row standing at off after the band took an answer is the reading —
+  # and it is read here, before it is moved, so the move below is seen changing something.
+  - type: assert
+    domain: tick
+    op: setting
+    with:
+      position: off
+
+  # The way back. One move, and the answer and the timer move together: the no becomes a yes and the
+  # registration is written. This is the road the band cannot offer.
+  - type: action
+    domain: tick
+    op: set
+    with:
+      position: on
+
+  - type: assert
+    domain: tick
+    op: setting
+    with:
+      position: on
+
+  # And off again before the road ends, so the machine that walked it is left as it was found (see
+  # the header).
+  - type: action
+    domain: tick
+    op: set
+    with:
+      position: off
+
+  - type: assert
+    domain: tick
+    op: setting
+    with:
+      position: off

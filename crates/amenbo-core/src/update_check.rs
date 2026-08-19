@@ -1,10 +1,10 @@
-//! Querying the static `latest.json`.
+//! Querying the update endpoint.
 //!
 //! amenbo keeps its **functional traffic at zero**: local-first, no central server, no user data
 //! ever leaving the machine. That core is untouched; what this module owns is the one piece of
-//! **infrastructure traffic** — noticing that a newer release exists. It queries the static
-//! `latest.json` hanging off the newest release of the project's own repository: a version plus
-//! minimal metadata, carrying no user data. (It is wharfy's release step that publishes it.)
+//! **infrastructure traffic** — noticing that a newer release exists. It queries amenbo's own
+//! update endpoint, which answers with the manifest wharfy's release step publishes as
+//! `latest.json`: a version plus minimal metadata, carrying no user data.
 //!
 //! The policy: **on by default**, with a config knob to disable it
 //! ([`crate::config::Config::update_check`]); **timed out**; **silent on failure** (a failed update
@@ -27,15 +27,18 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
 
-/// The default endpoint: the static manifest hanging off the **newest** release of the project's
-/// own repository. `releases/latest/download/…` is a stable redirect (302 to an object CDN) that
-/// does not hit the GitHub Releases API, so we can fetch it as a plain, cacheable static file. It is
-/// the counterpart of the URL the publisher writes to.
+/// The default endpoint: amenbo's own update service, answering with the manifest the release step
+/// publishes as `latest.json`. Asking here rather than at the release itself is what keeps where a
+/// version is announced apart from where the release is hosted (`AMB-D-717`).
 ///
-/// A shipped binary carries this URL baked in, so moving the releases elsewhere strands every
-/// existing install on the old address until it updates once.
-pub const LATEST_JSON_URL: &str =
-    "https://github.com/ShiroDoromoto/amenbo/releases/latest/download/latest.json";
+/// The query string is part of the constant on purpose. One string is the whole address, so a change
+/// of server — or a move back to a file hanging off a release — is a change of this line and nothing
+/// else, rather than a base and its parameters kept in step by hand.
+///
+/// A shipped binary carries this URL baked in, so moving the endpoint strands every existing install
+/// on the old address until it updates once — which is why the release's own `latest.json` goes on
+/// being published.
+pub const LATEST_JSON_URL: &str = "https://update.amenbo.work/update-check/v1?client=amenbo";
 
 /// Where the "apply the update" affordance falls back to: the download page of the latest release.
 /// We land here whenever the unified-installer URL for the current OS cannot be read out of

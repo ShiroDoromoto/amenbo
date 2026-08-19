@@ -394,6 +394,19 @@ impl Store {
         crate::nudge::record_launch(&self.engine)
     }
 
+    /// Whether the tick's banner has a question to put on this device today
+    /// ([`crate::tick::banner_shows`]) — the whole of what the app asks before drawing it.
+    pub fn tick_banner_shows(&self, today: chrono::NaiveDate) -> Result<bool> {
+        crate::tick::banner_shows(self, today)
+    }
+
+    /// Put the tick's banner off until tomorrow — what the **later** button records, and the only thing
+    /// it records (the question stays unanswered).
+    pub fn defer_tick_banner(&self, day: &str) -> Result<()> {
+        crate::overview::defer_tick_banner(&self.engine, day)
+    }
+
+    /// Has this project been opted out of the lint hooks — did `hooks uninstall` run in it
     /// Has this project been opted out of the lint hooks — did `hooks uninstall` run in it
     /// ([`crate::hooks`])? It says what was explicitly asked for here, never what `.git/hooks` currently
     /// holds. The *answer* to the hook question is not per project and does not live here: it is

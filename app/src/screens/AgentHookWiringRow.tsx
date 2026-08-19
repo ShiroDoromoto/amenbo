@@ -128,7 +128,7 @@ export function AgentHookWiringRow({ projectId, wiring }: { projectId: number; w
   };
 
   return (
-    <div className="agenthookrow">
+    <div className="standingrow agenthookrow">
       <div className="agenthookrow__title"><Icon name="plug" size="md" /> {t("agentHookWiring.title")}</div>
       {/* Only where there is a choice to make. With one tool waiting, the folders have already said which
           one they are, and a picker holding a single value asks a question with no other answer. */}

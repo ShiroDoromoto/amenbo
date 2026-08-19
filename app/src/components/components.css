@@ -693,15 +693,30 @@ button.feed__target:hover { color: var(--c-accent); }
 .board__firstloop { padding: var(--s-5); max-width: 720px; }
 .firstloop__error { color: var(--c-stop); font-size: var(--fs-sm); }
 
-/* ---------- the standing row for folders whose AI is not started on amenbo ---------- */
-/* It sits on the project's surface rather than across the top of the app, so it wears the surface's own
-   colours — the warning band is for what a startup check found, and this is work left. */
-.agenthookrow {
+/* ---------- the standing rows ---------- */
+/* The box a standing row is drawn in: what is left to set up, said on the app's own surface with an
+   accent edge down its side. It wears the surface's own colours rather than a band's coloured ground —
+   the warning band is for what a startup check found, and a standing row is work left, put once and
+   read for as long as it is true (`AMB-D-460`, `AMB-D-718`).
+
+   The box carries no margin, because the two rows drawn in it stand in places that space them
+   differently: one inside a project's surface, one in the stack of bands across the top of the app.
+   Each says its own below. */
+.standingrow {
   display: flex; flex-direction: column; gap: var(--s-2);
-  margin: var(--s-4) var(--s-5) 0; padding: var(--s-4);
+  padding: var(--s-4);
   border: 1px solid var(--c-border); border-left: 3px solid var(--c-accent); border-radius: var(--r-md);
   background: var(--c-surface); max-width: 720px;
 }
+/* The folders whose AI is not started on amenbo, on the project's own screen: the board's surface
+   margin, and nothing under it — what follows sets its own top. */
+.agenthookrow { margin: var(--s-4) var(--s-5) 0; }
+/* The tick's offer, in the stack of bands. The bands butt against each other and against the top bar,
+   so this one holds itself off all four sides rather than taking a surface's margin. */
+.tickbanner { margin: var(--s-3) var(--s-4); }
+.tickbanner__title { font-weight: var(--fw-bold); font-size: var(--fs-md); }
+.tickbanner__what { font-size: var(--fs-sm); }
+.tickbanner__actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .agenthookrow__title { font-weight: var(--fw-bold); font-size: var(--fs-md); }
 .agenthookrow__what { font-size: var(--fs-sm); }
 .agenthookrow__folders { font-size: var(--fs-sm); color: var(--c-text-muted); }

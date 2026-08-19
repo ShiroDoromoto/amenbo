@@ -15,6 +15,7 @@ import { HealthBanner } from "../components/HealthBanner";
 import { ManagedBlockBanner } from "../components/ManagedBlockBanner";
 import { OrphanBindingBanner } from "../components/OrphanBindingBanner";
 import { HookSetupBanner } from "../components/HookSetupBanner";
+import { TickBanner } from "../components/TickBanner";
 import { ListScreen } from "../screens/ListScreen";
 import { SearchScreen } from "../screens/SearchScreen";
 import { SettingsScreen } from "../screens/SettingsScreen";
@@ -334,6 +335,7 @@ export function AppShell() {
         <ManagedBlockBanner />
         <OrphanBindingBanner />
         <HookSetupBanner asked={hooksAsked} />
+        <TickBanner />
       </div>
       <div
         className={`shell__body ${showRight ? "" : "shell__body--no-right"}${sidebarCollapsed ? " shell__body--sidebar-collapsed" : ""}`}

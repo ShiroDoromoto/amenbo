@@ -30,6 +30,10 @@ const hoisted = vi.hoisted(() => ({
   devBadge: null as string | null,
   /** Every view `setDefaultView` was asked to write, in the order the pull-down asked for them. */
   defaultViews: [] as string[],
+  /** Every answer the tick row wrote, in order (`true` is a yes). */
+  tickAnswers: [] as boolean[],
+  /** What `answerTick` should refuse with, or null to let it land. */
+  tickFails: null as string | null,
 }));
 
 vi.mock("../core/snapshot", async (importOriginal) => {
@@ -71,11 +75,17 @@ vi.mock("../core/mutations", () => {
     setFacetNames: noop, setFacetAvatar: noop, setLanguage: noop, setPerfLog: noop, setUpdateCheck: noop,
     setAutostart: noop,
     setDefaultView: (view: string) => { hoisted.defaultViews.push(view); return Promise.resolve(); },
+    answerTick: (yes: boolean) => {
+      if (hoisted.tickFails) return Promise.reject(new Error(hoisted.tickFails));
+      hoisted.tickAnswers.push(yes);
+      return Promise.resolve();
+    },
     fetchDevBadge: () => Promise.resolve(hoisted.devBadge),
   };
 });
 
 import { SettingsScreen } from "./SettingsScreen";
+import { applySnapshot, getSnapshot } from "../core/snapshot";
 import { doctorText, t, tn, tf } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -154,6 +164,9 @@ beforeEach(() => {
   hoisted.restoreReport = restored();
   hoisted.devBadge = null;
   hoisted.defaultViews = [];
+  hoisted.tickAnswers = [];
+  hoisted.tickFails = null;
+  applySnapshot({ ...getSnapshot(), tickConsent: null, tickRemovalLeavesARow: false });
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -383,5 +396,84 @@ describe("Settings > Appearance (the view a project created without one opens in
       pick.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(hoisted.defaultViews).toEqual(["calendar"]);
+  });
+});
+
+// The way back from a "don't show this again" on the band (`AMB-D-718`): once the question is answered
+// the band never returns, so this row is the only place the answer can still be moved.
+describe("Settings > due warnings (the hourly tick)", () => {
+  /** Put an answer on record the way a snapshot carries it, and redraw. */
+  async function withConsent(consent: string | null, leavesARow = false) {
+    applySnapshot({ ...getSnapshot(), tickConsent: consent, tickRemovalLeavesARow: leavesARow });
+    await render();
+  }
+
+  async function choose(value: "on" | "off") {
+    const pick = selectInRow(t("settings.tick"));
+    await act(async () => {
+      pick.value = value;
+      pick.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
+
+  // Two positions over three states. Never having answered is not a setting to sit in — what it means
+  // on the machine is that no timer is held, which is what "off" already says.
+  it("stands where the answer on record puts it, and reads an unanswered device as off", async () => {
+    await withConsent("yes");
+    expect(selectInRow(t("settings.tick")).value).toBe("on");
+
+    await withConsent("no");
+    expect(selectInRow(t("settings.tick")).value).toBe("off");
+
+    await withConsent(null);
+    expect(selectInRow(t("settings.tick")).value).toBe("off");
+  });
+
+  it("writes the answer that was chosen, each way", async () => {
+    await withConsent("no");
+    await choose("on");
+    expect(hoisted.tickAnswers).toEqual([true]);
+
+    await withConsent("yes");
+    await choose("off");
+    expect(hoisted.tickAnswers).toEqual([true, false]);
+  });
+
+  // A development build draws this one, unlike the two rows above it: nothing is registered here that
+  // was not asked for, so the build that was asked has to be able to take it back.
+  it("is drawn on a development build too", async () => {
+    hoisted.devBadge = "DEV";
+    await withConsent(null);
+    expect(rowLabels()).toContain(t("settings.tick"));
+    expect(sectionTitles()).toContain(t("settings.dueWarning"));
+    // …while the two that are withheld from that channel are still withheld.
+    expect(rowLabels()).not.toContain(t("settings.autostart"));
+    expect(rowLabels()).not.toContain(t("settings.updateCheck"));
+  });
+
+  // macOS keeps its own record of the row, and `unregister` does not reach it. Said here for the reason
+  // `tick uninstall` says it: unsaid, the row still sitting in login items reads as a failed removal.
+  it("says the row outlives the removal, where the OS keeps one", async () => {
+    await withConsent("yes", true);
+    await choose("off");
+    expect(container.textContent).toContain(t("settings.tickRowRemains"));
+  });
+
+  it("says nothing of the sort where the removal takes the row with it", async () => {
+    await withConsent("yes", false);
+    await choose("off");
+    expect(container.textContent).not.toContain(t("settings.tickRowRemains"));
+  });
+
+  // Switching on is one act with the registration, so a scheduler that refused must leave the row where
+  // it was rather than reading as a timer nobody is holding.
+  it("keeps the reason on the row when the scheduler refused", async () => {
+    hoisted.tickFails = "the scheduler would not take it";
+    await withConsent(null);
+    await choose("on");
+
+    expect(container.textContent).toContain("the scheduler would not take it");
+    expect(hoisted.tickAnswers).toEqual([]);
+    expect(selectInRow(t("settings.tick")).value, "the answer on record has not moved").toBe("off");
   });
 });

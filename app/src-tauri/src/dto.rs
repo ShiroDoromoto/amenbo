@@ -544,6 +544,21 @@ pub struct Snapshot {
     /// OS — the registration itself lives outside the app, and only a shipped build ever draws the
     /// switch (a development build registers nothing, `AMB-D-547`).
     pub(crate) autostart: bool,
+    /// What this device answered about the hourly tick (`config.tick_consent`) — `"yes"`, `"no"`, or
+    /// null for a device nobody has asked yet (`AMB-D-707`). Exposed so the settings screen's switch
+    /// can show the answer on record, the way `autostart` above is.
+    ///
+    /// Three states and a two-way switch, because the third is not a setting: never having answered is
+    /// the *absence* of one, and what it means on the machine — no timer registered — is what "off"
+    /// already says. The difference the null carries is whether the band may still put the question
+    /// (`AMB-D-718`), which core decides and this screen never asks about.
+    pub(crate) tick_consent: Option<String>,
+    /// Whether taking the tick's registration away leaves a row behind in the OS's own list
+    /// ([`amenbo_core::tick::removal_leaves_a_row`] — macOS, and only macOS). A fact about the build,
+    /// so it rides in the snapshot rather than being asked for: what the settings switch needs it for
+    /// is the sentence to say the moment it is switched off, and left unsaid the row that stays reads
+    /// as a removal that failed.
+    pub(crate) tick_removal_leaves_a_row: bool,
     /// The view a project created without one of its own opens in (`config.default_view`, default
     /// board). Exposed so the settings screen can show and change it. It is only the answer nobody
     /// gave: a project already carries its own `view`, and this never repaints one.

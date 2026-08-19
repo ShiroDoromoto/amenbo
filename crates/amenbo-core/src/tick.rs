@@ -85,6 +85,18 @@ pub enum TickConsent {
     No,
 }
 
+impl TickConsent {
+    /// The answer as the one word it is written as, everywhere it leaves Rust — the `config.json` field
+    /// serde writes, and the wire the GUI's settings switch reads it off. Spelled here rather than at
+    /// each face, so the two cannot come to disagree.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            TickConsent::Yes => "yes",
+            TickConsent::No => "no",
+        }
+    }
+}
+
 /// What a pass has to do to bring the answer and the registration back into agreement — the drift
 /// table as a value, walked row by row in [`fix_for`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

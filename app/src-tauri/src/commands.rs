@@ -474,6 +474,8 @@ fn build_snapshot() -> Result<Snapshot, CmdError> {
         perf_log: config.perf_log.map(|p| p.as_config_str().to_string()),
         update_check: config.update_check,
         autostart: config.autostart,
+        tick_consent: config.tick_consent.map(|c| c.as_str().to_string()),
+        tick_removal_leaves_a_row: amenbo_core::tick::removal_leaves_a_row(),
         default_view: config.default_view.as_str().to_string(),
     })
 }
@@ -3586,21 +3588,29 @@ pub fn tick_banner() -> Result<bool, CmdError> {
 /// that refused leaves the device unanswered, so the config never claims a timer that is not there — the
 /// same order [`config_set_autostart`] and the CLI's `tick install` both keep, and for the same reason.
 ///
-/// A no writes nothing into the scheduler. The banner is only ever up while the device is unanswered, and
-/// an unanswered device holds no registration of amenbo's to take away; the startup pass is what tidies
-/// one up if it somehow does.
+/// **And a no takes the registration away first, for the same reason.** The two are one act, the way
+/// `tick install` and `tick uninstall` are: this is the road the settings switch takes as well as the
+/// band's, and a switch moved to off over a timer that is still held would be the same lie the other way
+/// round. Both writes are idempotent, so a no from the band — where the device is unanswered and holds
+/// nothing — asks the scheduler for the state it is already in.
+///
+/// The ack is empty of ids and still worth returning: `config.json` is outside the store, so it is the
+/// snapshot reload at the tail of the ack that carries the new answer to the settings switch. That is
+/// what keeps the switch in step when the band is what was pressed.
 #[tauri::command]
-pub fn tick_answer(yes: bool) -> Result<(), CmdError> {
+pub fn tick_answer(yes: bool) -> Result<WriteAck, CmdError> {
     use amenbo_core::tick::{self, TickConsent};
 
     if yes {
         tick::register()?;
+    } else {
+        tick::unregister()?;
     }
     let paths = amenbo_core::config::Paths::resolve()?;
     let mut config = amenbo_core::config::Config::load(&paths.config_file);
     config.tick_consent = Some(if yes { TickConsent::Yes } else { TickConsent::No });
     config.save(&paths.config_file)?;
-    Ok(())
+    Ok(WriteAck::new(&[]))
 }
 
 /// Put the tick's banner off until tomorrow — what **later** records, and the whole of what it records.

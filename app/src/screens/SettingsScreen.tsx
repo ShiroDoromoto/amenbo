@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { currentLang, doctorText, errText, langEndonym, LANGS, t, tn, tf, viewLabel, type Lang, type ViewKind } from "../core/i18n";
 import { getSnapshot, subscribe } from "../core/snapshot";
 import {
+  answerTick,
   bindFolder, cancelDataOp, fetchDoctorReport, fetchStoreLocations, fileToAvatarDataUrl, listenDataProgress,
   openLogsDir, pickBackupPath, pickExportPath, pickRestoreArchive, resyncManagedBlocks, runBackup, runDoctorFix,
   runExport, runRestore, setAutostart, setDefaultView, setFacetNames, setLanguage, setFacetAvatar, setPerfLog,
@@ -58,6 +59,13 @@ export function SettingsScreen() {
           <AutostartSetting />
         </Category>
       )}
+
+      {/* The hourly tick has a section of its own, and a development build draws it: unlike the two
+          above, nothing is registered here that was not asked for, so the build that was asked is the
+          one that has to be able to take it back. */}
+      <Category title={t("settings.dueWarning")}>
+        <TickSetting />
+      </Category>
 
       {/* A development build carries no update section. Its one control is a switch core does not read
           — the check is withheld from the channel outright — so what would be left is a heading over a
@@ -646,6 +654,59 @@ function AutostartSetting() {
           <option value="off">{t("settings.autostartOff")}</option>
         </select>
         <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.autostartNote")}</div>
+      </span>
+    </div>
+  );
+}
+
+/** Turn the hourly tick on or off (`config.tick_consent`). On is a yes and the registration written into
+ *  this machine's scheduler; off is a no and the registration taken away — core writes the scheduler
+ *  first either way, so a switch that moved is a timer that moved (`tick_answer`).
+ *
+ *  **Two positions over three states.** The answer has a third — never asked — and it is not a setting to
+ *  sit in: what it means on the machine is that no timer is held, which is what off already says. What
+ *  the third state decides is whether the band may still put the question (`AMB-D-718`), and that is
+ *  core's to judge and never this row's.
+ *
+ *  **It says where things stand, and the band says why they should change.** The two texts are written
+ *  apart on purpose: a reader arrives here to change a setting, not to be sold one.
+ *
+ *  Unlike the two rows above it, a development build draws this one. Nothing is registered that was not
+ *  asked for, so the build that was asked is the build that has to be able to take it back — and every
+ *  target this screen is built for has a door into its scheduler. */
+function TickSetting() {
+  const consent = useSyncExternalStore(subscribe, () => getSnapshot().tickConsent);
+  const leavesARow = useSyncExternalStore(subscribe, () => getSnapshot().tickRemovalLeavesARow);
+  const [error, setError] = useState<string | null>(null);
+  // Said once, right after a switch-off that went through, and only where the OS keeps a row of its own
+  // past the removal. It is the moment the reader would otherwise read the row still sitting in their
+  // login items as the removal having failed — the same sentence `tick uninstall` says, on the face it
+  // was pressed on.
+  const [rowRemains, setRowRemains] = useState(false);
+  const change = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const yes = e.target.value === "on";
+    setError(null);
+    setRowRemains(false);
+    try {
+      await answerTick(yes);
+      setRowRemains(!yes && leavesARow);
+    } catch (err) {
+      setError(errText(err));
+    }
+  };
+  return (
+    <div className="settings__row">
+      <span className="settings__k">{t("settings.tick")}</span>
+      <span>
+        <select className="btn" value={consent === "yes" ? "on" : "off"} onChange={(e) => void change(e)}>
+          <option value="on">{t("settings.tickOn")}</option>
+          <option value="off">{t("settings.tickOff")}</option>
+        </select>
+        <div className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("settings.tickNote")}</div>
+        {rowRemains && (
+          <div style={{ fontSize: "var(--fs-xs)" }}><DoneNote>{t("settings.tickRowRemains")}</DoneNote></div>
+        )}
+        {error && <ErrorNote tone="quiet">{error}</ErrorNote>}
       </span>
     </div>
   );

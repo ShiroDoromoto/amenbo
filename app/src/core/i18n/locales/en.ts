@@ -239,6 +239,14 @@ const ui = {
   "settings.autostartOn": "On",
   "settings.autostartOff": "Off",
   "settings.autostartNote": "Opens amenbo when you sign in to this computer, exactly as opening it yourself does. What arrived in your inbox while it was closed is gathered up the next time it opens, so being up earlier is noticing earlier.",
+  // The hourly tick, on the settings screen. The band says why the timer is wanted (`tickBanner.*`);
+  // this says where things stand and how to change them.
+  "settings.dueWarning": "Due warnings",
+  "settings.tick": "Hourly check",
+  "settings.tickOn": "On",
+  "settings.tickOff": "Off",
+  "settings.tickNote": "On, this computer's scheduler wakes amenbo once an hour to look for tasks whose day is near, and the warning goes out through the plugins you have switched on. Off takes that registration away, and nothing of ours is left running.",
+  "settings.tickRowRemains": "macOS keeps its own record of the row, so it stays in your login items — with nothing behind it.",
   "nudge.autostart.title": "Open amenbo when you sign in?",
   "nudge.autostart.yes": "Yes, open it at login (recommended)",
   "nudge.autostart.no": "No thanks",

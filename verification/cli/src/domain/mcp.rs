@@ -297,18 +297,18 @@ mod tests {
     use super::*;
 
     /// A server of the test's own, standing in for the shipped one: it reads a request per line and
-    /// answers from a script written beside it. What is under test here is this harness's half of the
+    /// answers from a script it is handed. What is under test here is this harness's half of the
     /// conversation — the ids, the one-reply-per-request reading, and the way a result is read back —
     /// which is the half no scenario run can check on its own (a road that came back red would not say
     /// whether the fault was the server's or the questioner's).
     fn stand_in(answers: &[&str]) -> Standing {
-        // One script per stand-in, not one per process: these tests run beside each other, and two
-        // of them writing the same file would leave the second reading the first one's answers.
-        static STOOD: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-        let nth = STOOD.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("amenbo-verify-mcp-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).expect("a directory to write into");
-        let path = dir.join(format!("server-{nth}.sh"));
+        // The script is handed to `sh` as an argument rather than written out and run. A file written
+        // here and exec'd a moment later is the classic ETXTBSY race: these tests run beside each
+        // other, and a stand-in forked while this one's script was still open for writing carries that
+        // descriptor for as long as it lives, which is what makes Linux refuse the exec. Nothing is
+        // written, so there is nothing to race — and nothing is left behind in the temp directory
+        // either.
+        //
         // The last thing it does is take a question and go, whatever it answered before that: a
         // stand-in that simply exited would race the request being written, and a write that lost
         // that race is a broken pipe rather than the silence this is about.
@@ -318,16 +318,15 @@ mod tests {
             .chain(std::iter::once("read -r _line".to_string()))
             .collect::<Vec<_>>()
             .join("\n");
-        std::fs::write(&path, format!("#!/bin/sh\n{script}\n")).expect("written");
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).expect("runnable");
 
-        let mut child = Command::new(&path)
+        let mut child = Command::new("/bin/sh")
+            .arg("-c")
+            .arg(&script)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
-            .expect("the stand-in starts");
+            .unwrap_or_else(|e| panic!("the stand-in starts: {e}"));
         let stdin = child.stdin.take().expect("its input");
         let stdout = child.stdout.take().expect("its output");
         Standing {

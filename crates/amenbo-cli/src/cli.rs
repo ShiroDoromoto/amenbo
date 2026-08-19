@@ -1324,7 +1324,9 @@ pub enum TaskCmd {
         /// treat <source> as an external URL link instead of ingesting a file
         #[arg(long)]
         url: bool,
-        /// display label (defaults to the file name / URL)
+        /// display label (defaults to the file name / URL). On a file it keeps that file's suffix,
+        /// so `attach save` and `attach open` still have one to work from, and what the file is stays
+        /// read from the file rather than from this.
         #[arg(long)]
         name: Option<String>,
     },
@@ -1425,7 +1427,9 @@ pub enum CommentCmd {
         /// treat <source> as an external URL link instead of ingesting a file
         #[arg(long)]
         url: bool,
-        /// display label (defaults to the file name / URL)
+        /// display label (defaults to the file name / URL). On a file it keeps that file's suffix,
+        /// so `attach save` and `attach open` still have one to work from, and what the file is stays
+        /// read from the file rather than from this.
         #[arg(long)]
         name: Option<String>,
     },
@@ -1572,7 +1576,9 @@ pub enum DecisionCmd {
         /// treat <source> as an external URL link instead of ingesting a file
         #[arg(long)]
         url: bool,
-        /// display label (defaults to the file name / URL)
+        /// display label (defaults to the file name / URL). On a file it keeps that file's suffix,
+        /// so `attach save` and `attach open` still have one to work from, and what the file is stays
+        /// read from the file rather than from this.
         #[arg(long)]
         name: Option<String>,
     },
@@ -1630,7 +1636,9 @@ pub enum DecisionCommentCmd {
         /// treat <source> as an external URL link instead of ingesting a file
         #[arg(long)]
         url: bool,
-        /// display label (defaults to the file name / URL)
+        /// display label (defaults to the file name / URL). On a file it keeps that file's suffix,
+        /// so `attach save` and `attach open` still have one to work from, and what the file is stays
+        /// read from the file rather than from this.
         #[arg(long)]
         name: Option<String>,
     },

@@ -7,6 +7,49 @@ use serde_json::Value;
 
 use harness::*;
 
+/// A label given with `--name` renames the attachment and says nothing about what it holds. The type
+/// is read off the file on disk, so a label written as a sentence — which is what a caption is — leaves
+/// a PNG a PNG: the size limit that varies by type measures it as an image, and the GUI has something to
+/// pick a viewer by. The label keeps the file's suffix too, because `attach save` writes under this name
+/// and `attach open` hands the OS a copy carrying its extension.
+#[test]
+fn a_label_renames_an_attachment_without_changing_what_it_is() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "添付PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+    let t = cli.json(&["task", "add", "--title", "証拠つきタスク", "--project", &pid, "--json"]);
+    let tid = id_str(&t["task"]["id"]);
+
+    let shot = cli.home.join("shot.png");
+    std::fs::write(&shot, b"\x89PNG\r\n\x1a\n").unwrap();
+
+    // A caption for a label: the type still comes from `shot.png`, and the suffix is put back on.
+    let captioned =
+        cli.json(&["task", "attach", &tid, shot.to_str().unwrap(), "--name", "1 before the install", "--json"]);
+    assert_eq!(captioned["attachment"]["mime"], "image/png");
+    assert_eq!(captioned["attachment"]["filename"], "1 before the install.png");
+
+    // A label that already ends in a suffix is left exactly as it was written.
+    let spelled =
+        cli.json(&["task", "attach", &tid, shot.to_str().unwrap(), "--name", "before.png", "--json"]);
+    assert_eq!(spelled["attachment"]["mime"], "image/png");
+    assert_eq!(spelled["attachment"]["filename"], "before.png");
+
+    // A caption may hold a dot of its own without that counting as a suffix — `v1.2 baseline` would
+    // otherwise read as an extension of `2 baseline` and lose the `.png` that makes the name usable.
+    let dotted =
+        cli.json(&["task", "attach", &tid, shot.to_str().unwrap(), "--name", "v1.2 baseline", "--json"]);
+    assert_eq!(dotted["attachment"]["mime"], "image/png");
+    assert_eq!(dotted["attachment"]["filename"], "v1.2 baseline.png");
+
+    // And a file the table knows no type for stays typeless, label or no label.
+    let recipe = cli.home.join("Makefile");
+    std::fs::write(&recipe, "all:\n").unwrap();
+    let plain = cli.json(&["task", "attach", &tid, recipe.to_str().unwrap(), "--name", "how it builds", "--json"]);
+    assert!(plain["attachment"]["mime"].is_null());
+    assert_eq!(plain["attachment"]["filename"], "how it builds");
+}
+
 /// The `attach` surface end-to-end — a file ingests as a `blob` (metadata recorded, bytes in
 /// the content-addressed store), an external link attaches as `url`, both list/show, and `rm` deletes
 /// them so the listing drops back to empty.

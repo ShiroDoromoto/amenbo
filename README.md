@@ -389,7 +389,8 @@ amenbo comment rm 42 --yes                  # delete one posted by mistake (perm
 # Attachments: ingest a file as a content-addressed blob (bytes kept out of the
 # truth source), or attach an external link. Works on tasks, decisions, and
 # individual comments (a comment's attachments are kept separate from its parent's).
-amenbo task attach 12 ./design.png              # ingest a file (blob; mime from extension)
+amenbo task attach 12 ./design.png              # ingest a file (blob; mime from the file's extension)
+amenbo task attach 12 ./design.png --name "the first cut"   # ...under a name of your own (it keeps the .png)
 amenbo task attach 12 https://example.com/spec --url --name spec   # external link
 amenbo decision attach AMB-D-<n> ./benchmark.csv
 amenbo comment attach 42 ./note.png             # attach to one task comment (id from `comment list`)

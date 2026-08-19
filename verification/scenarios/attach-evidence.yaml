@@ -14,7 +14,10 @@ steps_cli:
   - { type: action, domain: task, op: create, with: { title: SCENARIO SEED — the task with evidence on it }, as: seed }
   - { type: action, domain: task, op: attach, with: { target: seed, file: run.log, name: the run log }, as: log }
   - { type: assert, domain: attachment, op: field, with: { target: log, field: kind, equals: blob } }
-  - { type: assert, domain: attachment, op: field, with: { target: log, field: filename, equals: the run log } }
+  # Named at attach time, and still called a log: the file's own suffix goes back on the label, so
+  # what comes out below lands as something the machine can open.
+  - { type: assert, domain: attachment, op: field, with: { target: log, field: filename, equals: the run log.log } }
+  - { type: assert, domain: attachment, op: field, with: { target: log, field: mime, equals: text/plain } }
   - { type: assert, domain: attachment, op: field, with: { target: log, field: size_bytes, equals: 18 } }
   - { type: assert, domain: attachment, op: field, with: { target: log, field: target_type, equals: task } }
   - { type: assert, domain: attachment, op: listed, with: { target: log, owner: seed, owner_kind: task, present: true } }

@@ -473,18 +473,29 @@ has a conversation where a command has an exit code — the server outlives the 
 a tool that ran and refused comes back as a *result* marked in error rather than as a transport fault,
 which is what an assert there is written against.
 
-And one is nobody typing at all. **`tick`** is the machine's own scheduler starting amenbo once an
-hour, and what amenbo works out once it is awake: `woken` carries out one turn and judges what came
-back, which is the whole of what a scheduler ever gets — a tick leaves a day mark and nothing else a
-reader can ask for, so being woken *is* the reading. `holds` reads what the run *did* to the
-registration — `changed: false` being "left the machine as it was found". **Nothing there writes
-one.** A registration lands outside the throwaway store a run makes, in the launchd, systemd or Task
-Scheduler of whichever machine the gate is running on, which is also why the reading is a difference
-and not an absolute: the store's isolation does not reach the scheduler, so a road asking whether a
-registration is held at all would read the one belonging to whoever is running the gate. A road that
-walked the registration itself would leave an hourly timer on a release box —
-`be-offered-a-start-at-login` draws the same line for the login registration, and that half is
-walked on the real machines.
+And one is nobody typing at all — on its command side. **`tick`** is the machine's own scheduler
+starting amenbo once an hour, and what amenbo works out once it is awake: `woken` carries out one
+turn and judges what came back, which is the whole of what a scheduler ever gets — a tick leaves a
+day mark and nothing else a reader can ask for, so being woken *is* the reading. `holds` reads what
+the run *did* to the registration — `changed: false` being "left the machine as it was found".
+**Nothing there writes one.** A registration lands outside the throwaway store a run makes, in the
+launchd, systemd or Task Scheduler of whichever machine the gate is running on, which is also why
+the reading is a difference and not an absolute: the store's isolation does not reach the scheduler,
+so a road asking whether a registration is held at all would read the one belonging to whoever is
+running the gate. A road that installed one from the terminal and left it would leave an hourly
+timer on a release box — `be-offered-a-start-at-login` draws the same line for the login
+registration, and that half is walked on the real machines.
+
+The consent in front of that wake is the one part of the tick a person meets, and it is on a
+screen — so these are screen roads alone, the terminal's way in (`tick install`) asking
+nothing. `banner` reads whether the band offering the hourly check is standing across the app, up
+only while the device is unanswered, a dated task is open and a `task.due` subscriber is enabled
+somewhere; `banner-answer` gives one of its three answers (`start` / `never` / `later`); `setting`
+and `set` read and move the row in amenbo's own settings that holds the answer afterwards — the one
+way a no is taken back. A road that answers `start`, or moves the row to `on`, registers the timer
+for real, so it takes that back (the row to `off`) before it ends, and what it asserts in between
+stays on the answer's side of the line `holds` draws: the answer having landed, never the machine's
+registration as an absolute.
 
 A few ops exist to put something **wrong**, because a repair cannot be shown working over a store
 where there is nothing to repair — and a sweep that sweeps nothing looks exactly like one that works.

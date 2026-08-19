@@ -37,6 +37,9 @@ use crate::tmpdir;
 /// Windows has a door.
 pub(super) const AVAILABLE: bool = true;
 
+/// Deleting the task deletes it: nothing of ours is left for the user to find.
+pub(super) const REMOVAL_LEAVES_A_ROW: bool = false;
+
 /// The one row the user sees, named the way the other doors name theirs — this build's name
 /// ([`super::registration_name`]), so a dev build asks the scheduler for a task of its own instead of
 /// writing over production's. A flat name and not a folder: a folder under `Tasks` is a second thing

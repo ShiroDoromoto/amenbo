@@ -14,6 +14,9 @@ use crate::error::{Error, Result};
 /// No door on this target.
 pub(super) const AVAILABLE: bool = false;
 
+/// Nothing was ever registered here, so nothing is left behind either.
+pub(super) const REMOVAL_LEAVES_A_ROW: bool = false;
+
 /// What every face here says while there is no door: the plain fact, and no hint, because there is
 /// nothing the reader could type to fix it.
 const NO_DOOR: &str = "amenbo cannot register the hourly tick on this system yet";

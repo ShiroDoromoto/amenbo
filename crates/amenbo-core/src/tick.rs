@@ -143,6 +143,20 @@ pub fn available() -> bool {
     platform::AVAILABLE
 }
 
+/// Whether taking the registration away still leaves the user a row to look at.
+///
+/// macOS is the one that does. It keeps its own record of a background item, and `unregister` does not
+/// reach it: the row stays in Login Items with the toggle reading as allowed, while nothing runs behind
+/// it. There is no further move for amenbo to make — so this is here to be *said*, at the moment the
+/// registration is taken away, rather than to be acted on. Left unsaid, the row reads as "it did not
+/// work"; said first, it is just how the OS keeps its list.
+///
+/// A fact about the **build**, like [`available`], and for the same reason: which door this binary was
+/// compiled against is fixed long before it is asked.
+pub fn removal_leaves_a_row() -> bool {
+    platform::REMOVAL_LEAVES_A_ROW
+}
+
 /// The plain name production registers under on Linux and Windows — the one word the units and the
 /// task are named from.
 #[cfg(any(target_os = "linux", windows, test))]
@@ -541,6 +555,15 @@ mod tests {
         assert!(probe().is_err());
         assert!(register().is_err());
         assert!(unregister().is_err());
+    }
+
+    /// Only macOS leaves the user something to look at after the registration is taken away, and the
+    /// point of pinning it is that it is a property of the door rather than of the run: nothing is
+    /// registered here, and the answer is the same either way — which is what lets the removal say it
+    /// without first asking the machine anything.
+    #[test]
+    fn only_the_door_that_keeps_its_own_record_leaves_a_row_behind() {
+        assert_eq!(removal_leaves_a_row(), cfg!(target_os = "macos"));
     }
 
     /// One machine, several amenbos: production keeps the name it has always registered under, and

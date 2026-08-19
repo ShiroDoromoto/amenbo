@@ -844,7 +844,9 @@ pub enum TickCmd {
 
     /// Take the registration away, and record that this device does not want it. Unlike the lint's,
     /// this is a device-wide no, because the device is the only scale a timer has — and it closes the
-    /// question rather than the door: `tick install` registers it again whenever you want it back.
+    /// question rather than the door: `tick install` registers it again whenever you want it back. On
+    /// macOS the row outlives this: the OS keeps its own record of the item, so it stays in your login
+    /// items with nothing behind it.
     Uninstall,
 
     /// Show what the scheduler is holding and what this device answered — the two facts, side by

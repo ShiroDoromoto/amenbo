@@ -56,6 +56,14 @@ fn plist_in_bundle() -> String {
 /// macOS has a door.
 pub(super) const AVAILABLE: bool = true;
 
+/// macOS keeps its own record of a background item, and taking the registration away does not take
+/// that record with it: the row stays in Login Items, under the app, with the toggle still reading as
+/// allowed. `AMB-T-3339` measured it on a machine that had never carried amenbo's label before, so it
+/// is not the residue of an earlier build — `unregister` had done its work (the agent's record read
+/// disabled, and launchd held no job), and the row was there all the same. Nothing further is amenbo's
+/// to take away, which is why this is a fact to say rather than a state to fix.
+pub(super) const REMOVAL_LEAVES_A_ROW: bool = true;
+
 /// `SMAppService` arrived in macOS 13, and the framework holding it is old enough that only the class
 /// itself can answer whether the system in front of us has it.
 fn class_is_there() -> bool {

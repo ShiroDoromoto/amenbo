@@ -14,6 +14,10 @@
 //! The first two are the loud ones: on the machine most people have, a plain registration is one that
 //! never fires. The third is the same missed-run guarantee the other two doors write a line for.
 //!
+//! **The task is named for the build that registered it** ([`super::registered_name`]). A user has
+//! one Task Scheduler namespace, and `/F` overwrites without asking — so two amenbos under one name
+//! is not two tasks but one, pointed at whichever registered last.
+//!
 //! **The XML file has to be UTF-16.** `schtasks /Create /XML` reads it as Unicode and refuses a UTF-8
 //! file, so the bytes are encoded here rather than handed to a writer that would do the ordinary thing.
 //! It is a throwaway file next to the registration, not a record of it: what the scheduler holds after
@@ -33,10 +37,13 @@ use crate::tmpdir;
 /// Windows has a door.
 pub(super) const AVAILABLE: bool = true;
 
-/// The one row the user sees, named the way the other doors name theirs. A flat name and not a folder:
-/// a folder under `Tasks` is a second thing to create, to find and to leave behind, and there is only
-/// ever one task to put in it.
-const TASK: &str = "amenbo-tick";
+/// The one row the user sees, named the way the other doors name theirs — this build's name
+/// ([`super::registered_name`]), so a dev build asks the scheduler for a task of its own instead of
+/// writing over production's. A flat name and not a folder: a folder under `Tasks` is a second thing
+/// to create, to find and to leave behind, and there is only ever one task to put in it.
+fn task_name() -> String {
+    super::registered_name()
+}
 
 /// Nothing here turns on which process is asking: the task is written and read through the scheduler,
 /// which answers whoever is signed in as this user.
@@ -54,7 +61,7 @@ pub(super) fn probe() -> Result<bool> {
     // is not a plain yes is read as "nothing registered" — which is the truth of what is held either
     // way, and keeps a scheduler that would not answer from being told apart from an empty one by a
     // caller that has the same move to make for both.
-    Ok(matches!(schtasks(&["/Query", "/TN", TASK]), Ok(Some(0))))
+    Ok(matches!(schtasks(&["/Query", "/TN", &task_name()]), Ok(Some(0))))
 }
 
 pub(super) fn register() -> Result<()> {
@@ -70,7 +77,7 @@ pub(super) fn register() -> Result<()> {
     // `/F` is what makes this idempotent: over a task already registered it overwrites without asking,
     // and without it `schtasks` stops on a Y/N nobody is there to answer. Overwriting is also how an
     // upgrade points the task at the build running now.
-    let out = run(&["/Create", "/TN", TASK, "/XML", &path.display().to_string(), "/F"]);
+    let out = run(&["/Create", "/TN", &task_name(), "/XML", &path.display().to_string(), "/F"]);
     let _ = std::fs::remove_file(&path);
     out
 }
@@ -79,7 +86,7 @@ pub(super) fn unregister() -> Result<()> {
     // Deleting what is not there exits non-zero, and that is the state the caller asked for — so the
     // status is read rather than insisted on, and only a scheduler that could not be reached at all is
     // reported.
-    schtasks(&["/Delete", "/TN", TASK, "/F"])?;
+    schtasks(&["/Delete", "/TN", &task_name(), "/F"])?;
     Ok(())
 }
 

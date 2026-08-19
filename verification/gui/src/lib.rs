@@ -528,6 +528,16 @@ impl Instructor {
     /// in. What the step names is written down all the same — it is what the eye closing the shot is
     /// looking for. The road has a second reader besides that one: an offer that never came up is an
     /// offer nobody can decline, so the step after it cannot be carried out at all.
+    ///
+    /// `tick banner` is a `Review` for the reason `nudge` is: the band puts its offer in the
+    /// interface's own words, so a reading of them would hold this gate to the one language the run
+    /// was set up in — and its `present: false` half is an absence, which a reading answers nothing
+    /// about. It keeps `nudge`'s second reader too: a band that never came up is a band nobody can
+    /// answer, so the step after it cannot be carried out at all.
+    ///
+    /// `tick setting` is a `Review` for the reason `plugin config`'s state is: the two positions the
+    /// row can stand in are drawn as words of the interface, and which of them is standing is not
+    /// something the presence of text can settle.
     fn expectation(&self, step: &Step) -> Option<Expectation> {
         let Step::Assert { domain, op, with } = step else { return None };
         match (*domain, op.as_str()) {
@@ -1004,6 +1014,38 @@ impl Instructor {
                 req(with, "app")?,
                 names(with, "projects")?
             ),
+            // The three answers the tick's band takes, each button named by what pressing it leaves
+            // behind rather than by its wording: the labels are words of the
+            // interface, and the three sit side by side on the one band — which of them was pressed
+            // is exactly what the assert after this has to be able to trust.
+            //
+            // All three are walked, where the login nudge takes only the refusal: a yes there
+            // registers this machine's login with no way back on the road, while a yes here is
+            // taken back by moving the settings row to off before the run ends.
+            (Domain::Tick, "banner-answer") => match req(with, "answer")? {
+                "start" => "In the band offering to watch due dates, press the button that starts the hourly check — the one that answers yes and registers the timer."
+                    .to_string(),
+                "never" => "In the band offering to watch due dates, press the button that declines it for good — the one whose answer is a no that only the settings row takes back."
+                    .to_string(),
+                "later" => "In the band offering to watch due dates, press the button that only puts the question off — the one that answers nothing and leaves it to come back tomorrow."
+                    .to_string(),
+                other => {
+                    return Err(format!("action `banner-answer` does not know the answer `{other}`"))
+                }
+            },
+            // The settings row moved. The move and what it writes are one instruction, the way a
+            // form's save is: a row read in its new position with nothing written behind it would be
+            // evidence of an answer the store never received. The row has two positions, so the one
+            // to leave it in is named by what it does rather than by the word drawn on it.
+            (Domain::Tick, "set") => match req(with, "position")? {
+                "on" => "In amenbo's own settings, move the hourly check's row to the position that turns the check on — the answer becomes a yes and the timer is registered."
+                    .to_string(),
+                "off" => "In amenbo's own settings, move the hourly check's row to the position that turns the check off — the answer becomes a no and the registration is taken away."
+                    .to_string(),
+                other => {
+                    return Err(format!("action `set` does not know the position `{other}`"))
+                }
+            },
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -1641,6 +1683,28 @@ impl Instructor {
                     }
                 }
             }
+            // The tick's band, standing or gone. Nothing is pressed here and nothing is opened —
+            // the band comes up on its own while its three conditions hold, so the line is the
+            // screen as the app left it, and the absent half is read after one of them has gone.
+            (Domain::Tick, "banner") => match present(with) {
+                true => "Confirm the band offering to watch due dates is standing across the app — it came up by itself, and it carries three buttons: one that starts the checking, one that declines it, one that puts it off."
+                    .to_string(),
+                false => "Confirm no band offering to watch due dates is anywhere on the screen."
+                    .to_string(),
+            },
+            // Where the hourly check's own row stands. The two positions are named by what each
+            // holds rather than by the word drawn on it, since the words are the interface's own —
+            // and off is also where a device nobody asked stands, the row having two positions over
+            // the answer's three states.
+            (Domain::Tick, "setting") => match req(with, "position")? {
+                "on" => "Confirm the hourly check's row in amenbo's own settings stands in the position that has the check on — the one that holds a yes and a registered timer."
+                    .to_string(),
+                "off" => "Confirm the hourly check's row in amenbo's own settings stands in the position that has the check off — the one that holds no registration."
+                    .to_string(),
+                other => {
+                    return Err(format!("assert `setting` does not know the position `{other}`"))
+                }
+            },
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -2286,6 +2350,114 @@ steps_gui:
         let mut ins = Instructor::new();
         ins.render(&s.steps(Driver::Gui)[0]).unwrap();
         assert!(ins.expectation(&s.steps(Driver::Gui)[1]).is_none(), "a field assert is not OCR-judged");
+    }
+
+    /// The tick's band: each button is named by what pressing it leaves behind, the answer travels
+    /// as a value, and every step of the road is closed by an eye — the band's offer is put in the
+    /// interface's own words, and its absent half is an absence no reading settles.
+    #[test]
+    fn the_ticks_band_is_answered_by_what_each_press_leaves_and_read_by_an_eye() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: tick
+    op: banner
+    with: { present: true }
+  - type: action
+    domain: tick
+    op: banner-answer
+    with: { answer: later }
+  - type: action
+    domain: tick
+    op: banner-answer
+    with: { answer: start }
+  - type: action
+    domain: tick
+    op: banner-answer
+    with: { answer: never }
+  - type: assert
+    domain: tick
+    op: banner
+    with: { present: false }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> =
+            s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("standing across the app") && lines[0].contains("three buttons"), "got: {}", lines[0]);
+        assert!(lines[1].contains("puts the question off"), "got: {}", lines[1]);
+        assert!(lines[2].contains("answers yes") && lines[2].contains("registers the timer"), "got: {}", lines[2]);
+        assert!(lines[3].contains("declines it for good"), "got: {}", lines[3]);
+        assert!(lines[4].contains("no band") && lines[4].contains("anywhere on the screen"), "got: {}", lines[4]);
+        for st in s.steps(Driver::Gui) {
+            assert!(ins.expectation(st).is_none(), "the band's words are the interface's — an eye closes these");
+        }
+    }
+
+    /// The row that holds the answer afterwards: moved by what the position does rather than by the
+    /// word drawn on it, and read the same way — which of two drawn words is standing is nothing a
+    /// reading settles, so the assert is left for an eye.
+    #[test]
+    fn the_ticks_settings_row_is_moved_and_read_by_its_position() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: tick
+    op: setting
+    with: { position: off }
+  - type: action
+    domain: tick
+    op: set
+    with: { position: on }
+  - type: assert
+    domain: tick
+    op: setting
+    with: { position: on }
+"#;
+        let s = load(yaml);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> =
+            s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("check off") && lines[0].contains("no registration"), "got: {}", lines[0]);
+        assert!(lines[1].contains("turns the check on") && lines[1].contains("timer is registered"), "got: {}", lines[1]);
+        assert!(lines[2].contains("check on") && lines[2].contains("registered timer"), "got: {}", lines[2]);
+        for st in s.steps(Driver::Gui) {
+            assert!(ins.expectation(st).is_none(), "the row's positions are words of the interface — an eye closes these");
+        }
+    }
+
+    /// An answer or a position outside the ones the screen offers is a scenario bug, and it is met
+    /// at render time rather than in front of a screen.
+    #[test]
+    fn an_unknown_tick_answer_or_position_is_refused() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: tick
+    op: banner-answer
+    with: { answer: maybe }
+  - type: action
+    domain: tick
+    op: set
+    with: { position: sideways }
+  - type: assert
+    domain: tick
+    op: setting
+    with: { position: sideways }
+"#);
+        let mut ins = Instructor::new();
+        let err = ins.render(&s.steps(Driver::Gui)[0]).unwrap_err();
+        assert!(err.contains("does not know the answer `maybe`"), "got: {err}");
+        let err = ins.render(&s.steps(Driver::Gui)[1]).unwrap_err();
+        assert!(err.contains("does not know the position `sideways`"), "got: {err}");
+        let err = ins.render(&s.steps(Driver::Gui)[2]).unwrap_err();
+        assert!(err.contains("does not know the position `sideways`"), "got: {err}");
     }
 
     /// The press through a hit: the move names the word asked for and the record pressed, and what the

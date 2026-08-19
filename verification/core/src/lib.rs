@@ -181,10 +181,14 @@ pub enum Domain {
     /// protocol — a server standing for one folder, the tools it publishes, and what a call through
     /// one comes back with — and none of that is a record in the store.
     Mcp,
-    /// The hourly wake-up: the machine's own scheduler starting amenbo, and what amenbo works out
-    /// once it is awake. A domain of its own because nobody is at the keyboard for any of it — the
-    /// caller is the scheduler, the occasion is a calendar day, and what comes of it leaves through
-    /// the outbox rather than onto a screen.
+    /// The hourly wake-up: the machine's own scheduler starting amenbo, what amenbo works out once
+    /// it is awake — and the device's consent to any of it, which is the one part of the
+    /// tick a person meets on a screen: the band that puts the question across the app, and the
+    /// settings row that holds the answer afterwards. A domain of its own because all of it is about
+    /// this device's timer and none of it about a record in the store. The wake itself still has
+    /// nobody at the keyboard — the caller is the scheduler, the occasion is a calendar day, and
+    /// what comes of it leaves through the outbox — while the screen's half decides nothing but
+    /// whether that wake is registered at all.
     Tick,
 }
 
@@ -1613,6 +1617,35 @@ const REGISTRY: &[OpSpec] = &[
     // because the throwaway store does not reach that far: on a machine where somebody uses the
     // hourly tick, a road asking whether one is held would read their registration and go red.
     OpSpec { kind: Kind::Assert, domain: Domain::Tick, op: "holds", required: &["changed"], refs: &[], strings: &[], binds: false },
+    // The other half of the tick is the device's consent, and it is met on a screen:
+    // a band across the whole app puts the question, and a row in amenbo's own settings holds the
+    // answer afterwards. Screen roads alone, all four of the ops below — the terminal's way in is
+    // `tick install`, which asks nothing — so the CLI driver never meets them.
+    //
+    // Whether the band is standing. It comes up only while three conditions hold together — the
+    // device unanswered, a dated task still open, a plugin subscribed to `task.due` enabled
+    // somewhere — so the `present: false` half is what a road reads after any one of the three has
+    // gone, and the road that proves the gate is the one that takes a single condition away.
+    OpSpec { kind: Kind::Assert, domain: Domain::Tick, op: "banner", required: &["present"], refs: &[], strings: &[], binds: false },
+    // The answer given on it. It travels as a value rather than in the op's name, the way a consent
+    // answer does everywhere else: `start` writes the yes, `never` the no, `later` no answer and the
+    // day the question was put off to. All three are walked — unlike the login nudge, a yes here can
+    // be taken back on the settings row before the run ends — but what a road may read after a
+    // `start` is the answer having landed, never the machine's registration as an absolute: the
+    // registration lives outside the throwaway store, so `holds` reads it as a difference across the
+    // run, and that line holds here.
+    OpSpec { kind: Kind::Action, domain: Domain::Tick, op: "banner-answer", required: &["answer"], refs: &[], strings: &["answer"], binds: false },
+    // Where the settings row stands: `on` is a device that answered yes, `off` one that answered no
+    // — or was never asked, the row having two positions over the answer's three states, since what
+    // an unanswered device holds on the machine is what off already says. The row is the way back
+    // the band does not give — a no is taken back here and nowhere else — so what a road reads off
+    // its position is that the way back is standing where a reader would look for it.
+    OpSpec { kind: Kind::Assert, domain: Domain::Tick, op: "setting", required: &["position"], refs: &[], strings: &["position"], binds: false },
+    // And moving it. `on` answers yes, `off` answers no, and the registration moves with the answer
+    // — written before the yes is kept, taken away with the no — so a switch that moved is a timer
+    // that moved. What a road asserts after it stays on the answer's side of that line, as it does
+    // after the band.
+    OpSpec { kind: Kind::Action, domain: Domain::Tick, op: "set", required: &["position"], refs: &[], strings: &["position"], binds: false },
 
 ];
 

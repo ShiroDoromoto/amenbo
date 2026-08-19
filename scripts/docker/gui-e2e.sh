@@ -42,6 +42,25 @@ has_words() {
   return 0
 }
 
+# Assembling those lines is also what breaks a glyph. With the sidebar's words joined onto the
+# title's second line, the line's context bends a short `i` into an `l`: `me-ai` is read as `me-al`,
+# every time, on the tesseract this image carries. Sparse mode (`--psm 11`) assembles no lines, so
+# no such context exists and the glyph is read right — but it is documented as returning text "in no
+# particular order", which is the one thing the subsequence match above rests on. So neither reading
+# is trusted alone: read both ways, and let the ordered one stay primary.
+read_board() {   # <png> <stem> — leaves <stem>-lines.txt and <stem>-sparse.txt beside it
+  tesseract "$1" "$2-lines" 2>/dev/null
+  tesseract "$1" "$2-sparse" --psm 11 2>/dev/null
+}
+
+# The card counts as on screen if EITHER reading finds it, which is what makes a glyph one of them
+# fudged survivable. It costs nothing in strictness: the words of a title the CLI never wrote are in
+# neither reading, so the before shot is held to both — absent there means absent twice over.
+seen_in() {      # <stem> — 0 if the needle is in either reading
+  has_words "$(norm < "$1-lines.txt")" "$NEEDLE" && return 0
+  has_words "$(norm < "$1-sparse.txt")" "$NEEDLE"
+}
+
 export AMENBO_HOME=/root/amenbo-home   # a throwaway store; never the real app-data tree
 export AMENBO_UPDATE_CHECK=0
 export DISPLAY=:99
@@ -87,16 +106,18 @@ echo "== pixels changed: $changed"
 [ "$changed" != "0" ] || { echo "✗ the webview did not repaint"; exit 1; }
 
 echo "== read the board back off the screen (OCR)"
-tesseract /out/1-before.png /out/1-before 2>/dev/null
-tesseract /out/2-after.png /out/2-after 2>/dev/null
-before="$(norm < /out/1-before.txt)"
-after="$(norm < /out/2-after.txt)"
-if has_words "$before" "$NEEDLE"; then
+read_board /out/1-before.png /out/1-before
+read_board /out/2-after.png /out/2-after
+if seen_in /out/1-before; then
   echo "✗ '$CARD' was on the board BEFORE the CLI wrote it — the check proves nothing"; exit 1
 fi
-if ! has_words "$after" "$NEEDLE"; then
+if ! seen_in /out/2-after; then
   echo "✗ the webview repainted but the '$CARD' card is not on the board"
-  echo "  (what OCR read:)"; cat /out/2-after.txt; exit 1
+  # Both readings, because which one lost the card is the first thing to look at: the ordered one
+  # alone is what sent the last failure looking for a product fault that was not there.
+  echo "  (what OCR read, line by line:)"; cat /out/2-after-lines.txt
+  echo "  (and reading it as sparse text:)"; cat /out/2-after-sparse.txt
+  exit 1
 fi
 echo "→ '$CARD' appeared on the board with no interaction (see /out/2-after.png)"
 kill "$GUI_PID" 2>/dev/null || true

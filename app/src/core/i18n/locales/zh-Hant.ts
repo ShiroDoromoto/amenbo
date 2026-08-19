@@ -32,7 +32,7 @@ export const zhHant: Translation = {
     "newproj.moreTitle": "其他",
     "newproj.copyStatus": "複製 {cmd} status", "newproj.copied": "已複製",
     "newproj.openTerminal": "在終端機中開啟", "newproj.openFinder": "在 Finder 中顯示",
-    "newproj.openBoard": "開啟看板",
+    "newproj.openProject": "開啟專案",
     "firstloop.title": "你的第一輪",
     "firstloop.intro": "請你的 AI 登錄最初的幾個任務。",
     "firstloop.s1title": "開啟終端機",

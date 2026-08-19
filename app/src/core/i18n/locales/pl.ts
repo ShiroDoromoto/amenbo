@@ -34,7 +34,7 @@ export const pl: Translation = {
     "newproj.moreTitle": "Poza tym",
     "newproj.copyStatus": "Skopiuj {cmd} status", "newproj.copied": "Skopiowano",
     "newproj.openTerminal": "Otwórz w terminalu", "newproj.openFinder": "Pokaż w Finderze",
-    "newproj.openBoard": "Otwórz tablicę",
+    "newproj.openProject": "Otwórz projekt",
     "firstloop.title": "Twoja pierwsza pętla",
     "firstloop.intro": "Poproś swoją SI, żeby zapisała pierwsze zadania.",
     "firstloop.s1title": "Otwórz terminal",

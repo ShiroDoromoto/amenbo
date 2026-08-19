@@ -8,7 +8,8 @@
 // Done step: "Created project X", what the folder enables and where it is, and then the first loop
 // (`FirstLoop`), which is what the reader is meant to do next. The rest (reveal the folder, copy
 // `amenbo status`, the way out to where an AI is connected over MCP) sits below it as a side offer.
-// The primary action is "Open the board". This carries the same information as the CLI's own init/bind
+// The primary action opens the project. It is not named after a screen: where it lands is the project's
+// own view, which may be any of the four. This carries the same information as the CLI's own init/bind
 // success output.
 //
 // The browser iteration is another thing: it writes no store and offers no folder field, so there is
@@ -64,7 +65,7 @@ export function NewProjectScreen({ onCreated, onCancel, onOpenMcp }: { onCreated
     return (
       <DoneStep
         created={created}
-        onOpenBoard={() => onCreated({ type: "project", id: String(created.id) })}
+        onOpenProject={() => onCreated({ type: "project", id: String(created.id) })}
         onOpenMcp={onOpenMcp}
       />
     );
@@ -119,12 +120,12 @@ export function NewProjectScreen({ onCreated, onCancel, onOpenMcp }: { onCreated
 
 /**
  * The done step: "Created project X", then "an AI started in this folder can operate this project",
- * the path, and the first loop, with "Open the board" as the primary action. All of it is about the
+ * the path, and the first loop, with opening the project as the primary action. All of it is about the
  * folder, and on the desktop there always is one (`AMB-D-532`). In the browser there is none — opening
  * a terminal or a file manager would be a no-op there anyway — so the step is the heading and the way
- * on to the board.
+ * on into the project.
  */
-function DoneStep({ created, onOpenBoard, onOpenMcp }: { created: Created; onOpenBoard: () => void; onOpenMcp: (projectId: number) => void }) {
+function DoneStep({ created, onOpenProject, onOpenMcp }: { created: Created; onOpenProject: () => void; onOpenMcp: (projectId: number) => void }) {
   const { id, name, dir } = created;
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -180,7 +181,7 @@ function DoneStep({ created, onOpenBoard, onOpenMcp }: { created: Created; onOpe
         {error && <ErrorNote>{error}</ErrorNote>}
 
         <div className="actions">
-          <button className="btn btn--primary" autoFocus onClick={onOpenBoard}>{t("newproj.openBoard")}</button>
+          <button className="btn btn--primary" autoFocus onClick={onOpenProject}>{t("newproj.openProject")}</button>
         </div>
       </div>
     </>

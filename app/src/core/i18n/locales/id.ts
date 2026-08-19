@@ -34,7 +34,7 @@ export const id: Translation = {
     "newproj.moreTitle": "Selain itu",
     "newproj.copyStatus": "Salin {cmd} status", "newproj.copied": "Tersalin",
     "newproj.openTerminal": "Buka di terminal", "newproj.openFinder": "Tampilkan di Finder",
-    "newproj.openBoard": "Buka papan",
+    "newproj.openProject": "Buka proyek",
     "firstloop.title": "Putaran pertama Anda",
     "firstloop.intro": "Minta AI Anda mencatat tugas-tugas pertama.",
     "firstloop.s1title": "Buka terminal",

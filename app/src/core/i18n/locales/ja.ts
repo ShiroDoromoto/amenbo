@@ -31,7 +31,7 @@ export const ja: Translation = {
     "newproj.moreTitle": "その他",
     "newproj.copyStatus": "{cmd} status をコピー", "newproj.copied": "コピーしました",
     "newproj.openTerminal": "ターミナルで開く", "newproj.openFinder": "Finder で開く",
-    "newproj.openBoard": "ボードを開く",
+    "newproj.openProject": "プロジェクトを開く",
     "firstloop.title": "最初の1周",
     "firstloop.intro": "AI に頼んで、最初のタスクを登録します。",
     "firstloop.s1title": "ターミナルを開く",

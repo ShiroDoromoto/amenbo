@@ -413,7 +413,7 @@ function HarnessSection({ projectId, onOpenMcp }: { projectId: number; onOpenMcp
           </div>
         )}
 
-        {/* The inventory: every folder of this project that still starts its AI without amenbo, whichever
+        {/* The inventory: every folder of this project that still starts its AI without Amenbo, whichever
             notice the board happens to be carrying. Silent where there is nothing waiting — an empty list
             is what "all wired" looks like, and it needs no sentence of its own.
             The folders are listed once each, not once per tool. Core answers by harness, and a folder that
@@ -589,7 +589,7 @@ function PluginsSection({ projectId }: { projectId: number }) {
           <div key={i.name}>
             <PluginCrossingRow install={i} layer={projectId} name={i.name} />
             {/* Said per row, unlike the plugin face where every row is the same plugin: here each row is
-                a different one, and only some of them are builds this amenbo cannot speak to. */}
+                a different one, and only some of them are builds this Amenbo cannot speak to. */}
             {!i.compatible && (
               <div className="pluggate__note">{i.incompatibleReason ?? t("plugins.incompatible")}</div>
             )}

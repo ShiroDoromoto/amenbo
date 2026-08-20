@@ -669,7 +669,7 @@ fn plugin_validate_reads_the_layer_an_author_declared_and_refuses_one_it_does_no
     // same wall an install meets — so the author is told now, not after the PR is merged.
     for unknown in ["global", "workspace", "device"] {
         let (stdout, code) = validate(&manifest(Some(unknown)));
-        assert_eq!(code, 1, "'{unknown}' is not a layer amenbo knows");
+        assert_eq!(code, 1, "'{unknown}' is not a layer Amenbo knows");
         let out: Value = serde_json::from_str(&stdout).unwrap();
         assert_eq!(out["ok"], false);
         assert!(out["parse_error"].is_string(), "refused at the shape, before any rule is asked");
@@ -816,7 +816,7 @@ fn plugin_catalog_registers_lists_and_removes_a_third_party_source() {
     assert_eq!(sources[0]["official"], true, "official is first");
     assert_eq!(
         sources[0]["fingerprint"], "6272CBB782CB57A0",
-        "the official catalog's key is the one amenbo ships (`AMB-D-371`)"
+        "the official catalog's key is the one Amenbo ships (`AMB-D-371`)"
     );
     let third = sources.iter().find(|s| s["url"] == url).expect("the source is listed");
     assert_eq!(third["reachable"], false, "and marked unreachable");

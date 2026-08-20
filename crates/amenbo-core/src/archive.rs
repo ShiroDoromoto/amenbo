@@ -1698,7 +1698,7 @@ mod tests {
         assert!(Path::new(&second.backup.path).is_file(), "the new rewind point is kept");
         assert!(!Path::new(&first.backup.path).exists(), "and the one it superseded is gone");
         assert_eq!(second.superseded, vec![first.backup.path.clone()], "the report names what went");
-        assert!(user_backup.is_file(), "an archive the user placed is not amenbo's to sweep");
+        assert!(user_backup.is_file(), "an archive the user placed is not Amenbo's to sweep");
     }
 
     /// Strip a column from a store's `task` table — a store as an **older build** left it, before a step

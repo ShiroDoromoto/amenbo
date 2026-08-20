@@ -91,12 +91,12 @@ fn a_facet_written_after_plugin_run_is_named_where_the_call_failed() {
 
     // The habit every other command teaches: flags on the end. Here they are the plugin's.
     let (stderr, code) = spawn(&["plugin", "run", "worktree", "start", "1", "--actor", "ai"]);
-    assert_eq!(code, 2, "the facet never reached amenbo, so the call stops: {stderr}");
+    assert_eq!(code, 2, "the facet never reached Amenbo, so the call stops: {stderr}");
     assert!(stderr.contains("facet is unspecified"), "it is still the same failure: {stderr}");
     assert!(stderr.contains("went to the plugin"), "the hint names where it went: {stderr}");
     assert!(
         stderr.contains("--actor ai plugin run worktree start 1"),
-        "and hands back the same call with the flag where amenbo can see it: {stderr}"
+        "and hands back the same call with the flag where Amenbo can see it: {stderr}"
     );
 
     // Nothing of Amenbo's among what the plugin was handed: no facet was written anywhere, so the
@@ -204,10 +204,10 @@ fn amenbos_own_flags_are_the_plugins_from_the_name_onward() {
     // plugin's return value rides inside that document rather than being printed raw.
     let (stdout, code) = cli.run(&["plugin", "run", "--json", "--actor", "human", "usage", "hello"]);
     assert_eq!(code, 0, "{stdout}");
-    let doc: Value = serde_json::from_str(&stdout).expect("amenbo answered in JSON");
+    let doc: Value = serde_json::from_str(&stdout).expect("Amenbo answered in JSON");
     assert!(
         doc["value"].as_str().unwrap_or_default().contains("handed: hello"),
-        "the plugin's own words are inside amenbo's document: {stdout}"
+        "the plugin's own words are inside Amenbo's document: {stdout}"
     );
 }
 

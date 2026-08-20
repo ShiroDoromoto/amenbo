@@ -236,12 +236,12 @@ describe("what the opened entry says installing it would mean", () => {
   });
 
   // Compatibility is enforced at the gate that fires the plugin, so this warns and leaves the choice.
-  it("says a build this amenbo cannot run, without taking the install away", () => {
-    hoisted.detail = doc({ compatible: false, incompatibleReason: "needs amenbo 9.0" });
+  it("says a build this Amenbo cannot run, without taking the install away", () => {
+    hoisted.detail = doc({ compatible: false, incompatibleReason: "needs Amenbo 9.0" });
     render();
     open(0);
 
-    expect(detail()!.textContent).toContain("needs amenbo 9.0");
+    expect(detail()!.textContent).toContain("needs Amenbo 9.0");
     expect(button(t("plugins.install"))!.disabled).toBe(false);
   });
 

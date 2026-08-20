@@ -158,7 +158,7 @@ fn the_readme_demo_still_shows_what_this_build_prints() {
     let commands = demo_commands(&tape);
     assert!(
         commands.len() >= 5,
-        "the tape types {} amenbo commands — the parser has lost the film",
+        "the tape types {} Amenbo commands — the parser has lost the film",
         commands.len()
     );
 

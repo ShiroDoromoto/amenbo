@@ -134,7 +134,7 @@ fn a_host_shakes_hands_lists_the_tools_and_calls_them() {
     // where two bound folders tell each other apart by the projects in them.
     let result = server.call(3, "agent", &bound, json!({}));
     assert_eq!(result["isError"], false, "the entry point is there to be read: {result}");
-    let spec: Value = serde_json::from_str(&text(&result)).expect("the tool hands back amenbo's own JSON");
+    let spec: Value = serde_json::from_str(&text(&result)).expect("the tool hands back Amenbo's own JSON");
     assert!(spec["agentCycle"].is_object(), "the entry point carries the cycle");
     assert!(
         spec["setup_incomplete"]["agent_hook"].is_null(),
@@ -161,7 +161,7 @@ fn what_amenbo_refuses_reaches_the_caller_as_amenbo_wrote_it() {
 
     let result = server.call(1, "agent_command", &bound, json!({ "command": "no-such-command" }));
     assert_eq!(result["isError"], true, "a command nobody registered is a refusal: {result}");
-    let refusal: Value = serde_json::from_str(&text(&result)).expect("the refusal is amenbo's own JSON");
+    let refusal: Value = serde_json::from_str(&text(&result)).expect("the refusal is Amenbo's own JSON");
     assert_eq!(refusal["error"]["code"], "unknown_command");
 
     server.stop();
@@ -185,7 +185,7 @@ fn run_reaches_the_bound_folder_and_the_facet_is_never_the_caller_s() {
         json!({ "args": ["task", "add", "--title", "over the wire", "--json", "--actor", "human"] }),
     );
     assert_eq!(result["isError"], false, "{result}");
-    let added: Value = serde_json::from_str(&text(&result)).expect("amenbo's own JSON");
+    let added: Value = serde_json::from_str(&text(&result)).expect("Amenbo's own JSON");
     assert_eq!(added["acted_facet"], "ai", "the server names the facet, not the caller: {added}");
     let id = added["task"]["ref"].as_str().expect("the new task's ref").to_string();
 
@@ -193,7 +193,7 @@ fn run_reaches_the_bound_folder_and_the_facet_is_never_the_caller_s() {
     // AI standing there would have reached no project at all.
     let result = server.call(2, "run", &bound, json!({ "args": ["task", "list", "--json"] }));
     assert_eq!(result["isError"], false, "{result}");
-    let listed: Value = serde_json::from_str(&text(&result)).expect("amenbo's own JSON");
+    let listed: Value = serde_json::from_str(&text(&result)).expect("Amenbo's own JSON");
     let refs: Vec<&str> =
         listed["tasks"].as_array().expect("tasks").iter().filter_map(|t| t["ref"].as_str()).collect();
     assert!(refs.contains(&id.as_str()), "the write and the read are the same project: {refs:?}");
@@ -248,12 +248,12 @@ fn a_destructive_command_still_waits_for_the_confirmation() {
         &bound,
         json!({ "args": ["task", "add", "--title", "to be deleted", "--json"] }),
     )))
-    .expect("amenbo's own JSON");
+    .expect("Amenbo's own JSON");
     let id = added["task"]["ref"].as_str().expect("the new task's ref").to_string();
 
     let result = server.call(2, "run", &bound, json!({ "args": ["task", "delete", &id, "--json"] }));
     assert_eq!(result["isError"], true, "a destructive command is not waved through: {result}");
-    let refusal: Value = serde_json::from_str(&text(&result)).expect("amenbo's own JSON");
+    let refusal: Value = serde_json::from_str(&text(&result)).expect("Amenbo's own JSON");
     assert_eq!(refusal["error"]["code"], "confirmation_required");
 
     server.stop();

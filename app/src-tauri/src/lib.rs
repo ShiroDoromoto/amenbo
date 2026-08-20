@@ -410,7 +410,7 @@ mod tests {
     /// Whatever machine this runs on, the key it asks for is one the release actually carries.
     #[test]
     fn updater_target_names_a_published_platform() {
-        let target = super::updater_target().expect("a machine amenbo is built for names a target");
+        let target = super::updater_target().expect("a machine Amenbo is built for names a target");
         assert!(
             PUBLISHED.contains(&target.as_str()),
             "the machine answered `{target}`, which no release publishes"

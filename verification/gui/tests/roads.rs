@@ -39,7 +39,7 @@ fn every_screen_road_renders_into_instructions() {
 /// out, mid-run, hunting a list for a name that was never in it.
 ///
 /// What may be named is a project the world stood up, or the one a run finds itself in already
-/// (amenbo raises a project for the folder the run works in, and calls it after that folder).
+/// (Amenbo raises a project for the folder the run works in, and calls it after that folder).
 #[test]
 fn every_project_a_screen_road_opens_is_a_project_that_exists() {
     for f in scenario_files() {

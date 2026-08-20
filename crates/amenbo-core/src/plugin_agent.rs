@@ -419,7 +419,7 @@ mod tests {
         let out = entry(&installed("quiet", None, &["comment.added"]), "amenbo").0;
         assert_eq!(out["name"], "quiet");
         assert_eq!(out["desc"], "Isolate each task in its own git worktree");
-        assert!(out.get("when").is_none(), "silence is not a sentence amenbo writes for them");
+        assert!(out.get("when").is_none(), "silence is not a sentence Amenbo writes for them");
         assert!(out.get("commands").is_none());
         assert_eq!(out["events"], json!(["comment.added"]), "what it watches is still readable");
     }
@@ -453,7 +453,7 @@ mod tests {
         assert_eq!(
             out,
             json!({ "name": "watcher", "events": ["task.done"] }),
-            "the vocabulary is amenbo's, and that is the whole of what is left"
+            "the vocabulary is Amenbo's, and that is the whole of what is left"
         );
     }
 

@@ -466,7 +466,7 @@ export function AppShell() {
           them: a first launch asks for no setup at all. */}
       <HookConsentModal onDone={onHooksAsked} />
       {/* A nudge is the less urgent of the two and goes last — it is raised on the strength of how much
-          amenbo has been used, which is exactly what someone still being asked the first question has not
+          Amenbo has been used, which is exactly what someone still being asked the first question has not
           done yet. `hooksAsked` is that turn being over, the same latch the setup banner waits on. */}
       {hooksAsked && <NudgeHost />}
     </div>

@@ -375,10 +375,10 @@ describe("moving a gate from the list", () => {
   it("refuses to enable a plugin this build cannot speak to, and names the mismatch", () => {
     hoisted.projects = [{ id: 1, name: "alpha" }];
     hoisted.installs = [
-      row({ name: "notify", compatible: false, incompatibleReason: "needs amenbo 9.0" }),
+      row({ name: "notify", compatible: false, incompatibleReason: "needs Amenbo 9.0" }),
     ];
     render();
-    expect(container.textContent).toContain("needs amenbo 9.0");
+    expect(container.textContent).toContain("needs Amenbo 9.0");
     expect(container.textContent).toContain(t("plugins.incompatibleChip"));
 
     // The crossing still draws — a project can hold settings for a plugin that cannot run — and it is

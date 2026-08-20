@@ -216,7 +216,7 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
   return (
     <div className="plugcfg">
       {/* What the author's check said about these settings as a whole (`AMB-D-664`), at the head of the
-          form because that is what it is about. A silence has no sentence of theirs in it, so amenbo says
+          form because that is what it is about. A silence has no sentence of theirs in it, so Amenbo says
           what happened in its own words and leaves the reason to the run log. */}
       {check && !check.ok && (
         <div className="pluggate__note">
@@ -434,7 +434,7 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
                   </button>
                 </div>
               )}
-              {/* What the press did: the author's own line where they wrote one, and amenbo's word for it
+              {/* What the press did: the author's own line where they wrote one, and Amenbo's word for it
                   where they did not. An operation has no return value to draw (`AMB-D-664`). */}
               {ran[a.cmd] && pressing !== a.cmd && (
                 <div className={ran[a.cmd].ok ? "faint plugcfg__note" : "pluggate__note"}>

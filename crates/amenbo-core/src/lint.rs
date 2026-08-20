@@ -297,7 +297,7 @@ mod tests {
     #[test]
     fn foreign_refs_and_bare_numbers_are_left_alone() {
         for line in ["fixes #12", "PROJ-123 is Jira's", "T-45 might be anyone's", "D-9 too", "ENG-1"] {
-            assert!(refs_in_line(line).is_empty(), "{line} is not an amenbo ref");
+            assert!(refs_in_line(line).is_empty(), "{line} is not an Amenbo ref");
         }
     }
 

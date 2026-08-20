@@ -2028,7 +2028,7 @@ mod tests {
         assert_eq!(
             worktree.trust_root().unwrap().fingerprint(),
             crate::plugin_provenance::TrustRoot::official().fingerprint(),
-            "and it is checked against amenbo's own key"
+            "and it is checked against Amenbo's own key"
         );
 
         let extra = view.find("extra").expect("the registered catalog's own entry resolves");

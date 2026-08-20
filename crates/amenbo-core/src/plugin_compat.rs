@@ -70,13 +70,13 @@ impl Incompatibility {
     fn en(&self) -> String {
         match self {
             Self::Payload { plugin, amenbo } => format!(
-                "it reads payload contract v{plugin}, and this amenbo speaks v{amenbo}"
+                "it reads payload contract v{plugin}, and this Amenbo speaks v{amenbo}"
             ),
             Self::AmenboTooOld { min, running } => {
-                format!("it needs amenbo {min} or newer, and this is {running}")
+                format!("it needs Amenbo {min} or newer, and this is {running}")
             }
             Self::UnreadableFloor { min } => {
-                format!("it declares a minimum amenbo version that cannot be read ('{min}')")
+                format!("it declares a minimum Amenbo version that cannot be read ('{min}')")
             }
         }
     }
@@ -106,7 +106,7 @@ impl Incompatibility {
     pub fn into_error(self, plugin: &str) -> Error {
         Error::Invalid(
             Msg::new(format!(
-                "plugin '{plugin}' is not compatible with this amenbo: {}",
+                "plugin '{plugin}' is not compatible with this Amenbo: {}",
                 self.en()
             ))
             .coded(ErrorCode::InvalidPluginIncompatible)
@@ -123,7 +123,7 @@ impl Incompatibility {
     pub fn into_update_error(self, plugin: &str) -> Error {
         Error::Invalid(
             Msg::new(format!(
-                "the build of '{plugin}' the catalog publishes does not run on this amenbo ({}) — nothing was replaced, and the installed build is untouched",
+                "the build of '{plugin}' the catalog publishes does not run on this Amenbo ({}) — nothing was replaced, and the installed build is untouched",
                 self.en()
             ))
             .coded(ErrorCode::InvalidPluginUpdateIncompatible)

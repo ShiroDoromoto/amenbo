@@ -65,9 +65,9 @@ pub fn ensure_may_migrate() -> Result<()> {
         return Ok(());
     }
     Err(Error::invalid(
-        "refusing to migrate: this amenbo was not built by the release workflow, and migrating your \
-         production store would carry it past what the released amenbo can open. Run the released \
-         amenbo to migrate, point this build at an isolated store with AMENBO_HOME=<dir>, or — if \
+        "refusing to migrate: this Amenbo was not built by the release workflow, and migrating your \
+         production store would carry it past what the released Amenbo can open. Run the released \
+         Amenbo to migrate, point this build at an isolated store with AMENBO_HOME=<dir>, or — if \
          this build is deliberately the one that must do it — re-run it once with \
          AMENBO_ALLOW_UNSTAMPED_MIGRATE=1",
     ))

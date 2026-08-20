@@ -31,7 +31,7 @@ pub(crate) fn version_unbound(flags: &Flags) -> Result<i32, CliError> {
         }));
     } else {
         let suffix = if channel == "amenbo" { String::new() } else { format!(" ({channel})") };
-        human(flags, format!("amenbo {}{}", agent::VERSION, suffix));
+        human(flags, format!("Amenbo {}{}", agent::VERSION, suffix));
         human(flags, format!("format: this build opens up to store v{}", amenbo_core::model::FORMAT_VERSION));
         if let Some(line) = unstamped_line() {
             human(flags, line);
@@ -104,7 +104,7 @@ pub(crate) fn update_cmd(flags: &Flags, print: bool) -> Result<i32, CliError> {
     } else {
         // `--print` is the face that opens nothing (headless / scripts), so it must not say it will.
         match (&newer, print) {
-            (Some(v), _) => human(flags, format!("A newer amenbo ({v}) is available (this build is {}).", agent::VERSION)),
+            (Some(v), _) => human(flags, format!("A newer Amenbo ({v}) is available (this build is {}).", agent::VERSION)),
             (None, false) => human(flags, format!("This build is {} — no newer version detected (opening the installer anyway).", agent::VERSION)),
             (None, true) => human(flags, format!("This build is {} — no newer version detected.", agent::VERSION)),
         }
@@ -170,8 +170,8 @@ pub(crate) fn self_update_cmd(flags: &Flags) -> Result<i32, CliError> {
                     "backup": done.backup.display().to_string(),
                 }));
             } else {
-                human(flags, format!("Updated amenbo: {} → {}.", done.from, done.to));
-                human(flags, "Restart amenbo to run the new version.");
+                human(flags, format!("Updated Amenbo: {} → {}.", done.from, done.to));
+                human(flags, "Restart Amenbo to run the new version.");
                 human(flags, format!("The previous binary is kept at {} — undo with `{} update --rollback`.", done.backup.display(), Paths::command_name()));
             }
             Ok(0)
@@ -236,10 +236,10 @@ pub(crate) fn self_rollback_cmd(flags: &Flags) -> Result<i32, CliError> {
                 }));
             } else {
                 match &restored {
-                    Some(v) => human(flags, format!("Rolled back amenbo: {} → {}.", done.from, v)),
-                    None => human(flags, format!("Rolled back amenbo from {} to the previous version.", done.from)),
+                    Some(v) => human(flags, format!("Rolled back Amenbo: {} → {}.", done.from, v)),
+                    None => human(flags, format!("Rolled back Amenbo from {} to the previous version.", done.from)),
                 }
-                human(flags, "Restart amenbo to run the restored version.");
+                human(flags, "Restart Amenbo to run the restored version.");
             }
             Ok(0)
         }

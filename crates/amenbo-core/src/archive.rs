@@ -706,7 +706,7 @@ fn ensure_layout_readable(layout: u32) -> Result<()> {
     if layout < MIN_ARCHIVE_LAYOUT_VERSION {
         return Err(Error::Invalid(
             Msg::new(format!(
-                "this archive uses layout v{layout} — it was written before the consolidation, and this build reads v{MIN_ARCHIVE_LAYOUT_VERSION} and later. Restore it with the amenbo that wrote it (nothing here was changed)"
+                "this archive uses layout v{layout} — it was written before the consolidation, and this build reads v{MIN_ARCHIVE_LAYOUT_VERSION} and later. Restore it with the Amenbo that wrote it (nothing here was changed)"
             ))
             .coded(ErrorCode::InvalidRestoreLayoutTooOld)
             .with("layout", layout)
@@ -716,7 +716,7 @@ fn ensure_layout_readable(layout: u32) -> Result<()> {
     if layout > ARCHIVE_LAYOUT_VERSION {
         return Err(Error::Invalid(
             Msg::new(format!(
-                "this archive uses layout v{layout} — this build reads up to v{ARCHIVE_LAYOUT_VERSION}. update to the latest amenbo — nothing was changed"
+                "this archive uses layout v{layout} — this build reads up to v{ARCHIVE_LAYOUT_VERSION}. update to the latest Amenbo — nothing was changed"
             ))
             .coded(ErrorCode::InvalidRestoreLayoutTooNew)
             .with("layout", layout)
@@ -782,7 +782,7 @@ fn preflight_generation_gate(manifest: &ArchiveManifest) -> Result<()> {
         let app = &manifest.producer_app_version;
         return Err(Error::Invalid(
             Msg::new(format!(
-                "this archive was produced by a newer amenbo (v{app}) — its store is at format v{found}, past the v{max} this build reads. use amenbo {app} or newer — nothing was changed"
+                "this archive was produced by a newer Amenbo (v{app}) — its store is at format v{found}, past the v{max} this build reads. use Amenbo {app} or newer — nothing was changed"
             ))
             .coded(ErrorCode::InvalidRestoreArchiveNewer)
             .with("app", app)
@@ -1937,7 +1937,7 @@ mod tests {
 
         let err = restore_into(&archive, "s", &dest, &mut crate::progress::ignore).unwrap_err();
         assert!(
-            err.to_string().contains("newer amenbo"),
+            err.to_string().contains("newer Amenbo"),
             "unexpected error: {err}"
         );
         assert_eq!(std::fs::read(&dest).unwrap(), b"LIVE-SENTINEL", "live tree must be untouched");

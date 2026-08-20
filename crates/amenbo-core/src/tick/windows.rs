@@ -69,7 +69,7 @@ pub(super) fn probe() -> Result<bool> {
 
 pub(super) fn register() -> Result<()> {
     let exe = std::env::current_exe()
-        .map_err(|e| Error::Invalid(Msg::new(format!("Cannot find amenbo's own path: {e}"))))?;
+        .map_err(|e| Error::Invalid(Msg::new(format!("Cannot find Amenbo's own path: {e}"))))?;
 
     // A file for the length of one call. It is written where throwaway files go rather than beside the
     // store: nothing reads it again, and a definition left lying next to a user's work would read as one.
@@ -104,7 +104,7 @@ fn definition(exe: &str) -> String {
         r#"<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
-    <Description>amenbo hourly tick</Description>
+    <Description>Amenbo hourly tick</Description>
   </RegistrationInfo>
   <Triggers>
     <CalendarTrigger>

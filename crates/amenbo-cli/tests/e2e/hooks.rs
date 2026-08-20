@@ -177,7 +177,7 @@ fn agent_hook_snippet_gives_stdout_to_the_request_and_says_where_it_goes_on_stde
     assert!(out.contains(" agent --json"), "the request does not launch the entry point: {out}");
     assert!(err.contains(".claude/settings.json"), "stderr does not name the file it edits: {err}");
     assert!(
-        err.contains("amenbo writes nothing"),
+        err.contains("Amenbo writes nothing"),
         "stderr does not say the writing is not amenbo's: {err}"
     );
 

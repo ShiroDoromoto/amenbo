@@ -56,7 +56,7 @@ pub(crate) fn agent_hook_snippet_cmd(flags: &Flags, tool: &str, copy: bool) -> R
     }
     if !flags.quiet {
         eprintln!(
-            "Give this to the AI you work with in this folder — it edits {}, and amenbo writes nothing.\n\
+            "Give this to the AI you work with in this folder — it edits {}, and Amenbo writes nothing.\n\
              Once that lands, this folder's AI runs `{cmd} agent --json` at the start of every session.",
             harness.paste_into
         );
@@ -120,7 +120,7 @@ pub(crate) fn agent_hook_answer_cmd(store: &Store, flags: &Flags, yes: bool) -> 
         return Ok(0);
     }
     if yes {
-        human(flags, "Recorded: yes — this project may have its AI started on amenbo.");
+        human(flags, "Recorded: yes — this project may have its AI started on Amenbo.");
         human(flags, format!("One step is left: `{cmd} agent-hook snippet <tool>` prints the text to give your AI."));
     } else {
         human(flags, "Recorded: no — we will not ask about this again.");
@@ -284,7 +284,7 @@ fn render_install(done: &amenbo_core::hooks::InstallReport, cmd: &str) -> String
     }
     for slot in &done.refused {
         lines.push(format!(
-            "hooks: {} is not amenbo's to change (git tracks it, or it will not read back as text), so amenbo left it alone. Add this line yourself:\n    {}",
+            "hooks: {} is not Amenbo's to change (git tracks it, or it will not read back as text), so Amenbo left it alone. Add this line yourself:\n    {}",
             slot.name(),
             guidance_line(*slot, cmd)
         ));
@@ -313,9 +313,9 @@ fn render_hook_status(
                 let name = slot.name();
                 match state {
                     HookState::Unwired => format!("  {name}: not there (install: `{cmd} hooks install`)"),
-                    HookState::Managed { version } => format!("  {name}: amenbo's block (marker v{version})"),
+                    HookState::Managed { version } => format!("  {name}: Amenbo's block (marker v{version})"),
                     HookState::Foreign => format!(
-                        "  {name}: another tool's hook, no amenbo block yet (add one alongside: `{cmd} hooks install`)"
+                        "  {name}: another tool's hook, no Amenbo block yet (add one alongside: `{cmd} hooks install`)"
                     ),
                 }
             })
@@ -330,7 +330,7 @@ fn render_hook_status(
     let mut out = format!("hooks on disk:\n{on_disk}\nthis device: {answered}");
     if opted_out {
         out.push_str(&format!(
-            "\nthis repository: opted out by `{cmd} hooks uninstall` — amenbo will not wire it here on its own"
+            "\nthis repository: opted out by `{cmd} hooks uninstall` — Amenbo will not wire it here on its own"
         ));
     }
     out
@@ -437,7 +437,7 @@ fn relaunch_in_bundle(exe: &std::path::Path, flags: &Flags, sub: &TickCmd) -> Re
         Ok(status) => Ok(status.code().unwrap_or(1)),
         Err(e) => Err(CliError {
             code: "io_error",
-            message: format!("Cannot reach amenbo's own copy at {}: {e}", exe.display()),
+            message: format!("Cannot reach Amenbo's own copy at {}: {e}", exe.display()),
             hint: None,
             exit: 1,
         }),
@@ -458,10 +458,10 @@ fn render_tick_status(
     use amenbo_core::tick::TickConsent;
 
     let scheduler = match (reachable, has_a_door, registered) {
-        (false, false, _) => "not something amenbo can register on this system yet".to_string(),
+        (false, false, _) => "not something Amenbo can register on this system yet".to_string(),
         // A door this machine has, asked by a process that is not the one holding the key: this copy of
         // Amenbo sits outside the app bundle the registration is written from.
-        (false, true, _) => "registered by amenbo.app itself, and this copy of amenbo is not inside one".to_string(),
+        (false, true, _) => "registered by amenbo.app itself, and this copy of Amenbo is not inside one".to_string(),
         (true, _, true) => "holding the hourly tick".to_string(),
         (true, _, false) => format!("nothing registered (register it: `{cmd} tick install`)"),
     };
@@ -530,7 +530,7 @@ pub(crate) fn lint_hook_setup(store: &mut Store, flags: &Flags) -> bool {
     let restored = hooks::restore_blocks(&cwd, Paths::command_name(), answered.or(consent), opted_out);
     if !restored.is_empty() && !flags.quiet {
         let names = restored.iter().map(|s| s.name()).collect::<Vec<_>>().join(", ");
-        eprintln!("⚠ amenbo's lint block in {names} had been changed or removed — restored it.");
+        eprintln!("⚠ Amenbo's lint block in {names} had been changed or removed — restored it.");
     }
     report_unfinished_setup(flags, &cwd, answered, states, consent, opted_out);
     // Whether a question was actually put here — the only branch that returns an answer is the one that
@@ -616,7 +616,7 @@ fn offer_lint_hook(
                         eprintln!("✓ {names} hook installed, under the answer you already gave. Not here? `{cmd} hooks uninstall`.");
                     } else {
                         let gone = vanished.iter().map(|s| s.name()).collect::<Vec<_>>().join(", ");
-                        eprintln!("⚠ amenbo's lint block was gone from {gone} (another tool may have replaced its hook) — restored it under the answer you already gave.");
+                        eprintln!("⚠ Amenbo's lint block was gone from {gone} (another tool may have replaced its hook) — restored it under the answer you already gave.");
                     }
                 }
                 Err(e) => eprintln!("⚠ Could not install the hook: {e}"),
@@ -634,7 +634,7 @@ fn offer_lint_hook(
                     }
                 }
             } else {
-                eprintln!("Not installed. amenbo will not ask again — `{cmd} hooks install` when you want it.");
+                eprintln!("Not installed. Amenbo will not ask again — `{cmd} hooks install` when you want it.");
             }
             let answer = if yes { HookConsent::Yes } else { HookConsent::No };
             store.config.hook_consent = Some(answer);
@@ -657,7 +657,7 @@ fn offer_prompt(states: Option<amenbo_core::hooks::HookStates>) -> String {
 
     let Some(states) = states else { return String::new() };
     let mut prompt = String::from(
-        "amenbo can keep amenbo refs (AMB-T-…) out of your commits by linting them on the way out.\n",
+        "Amenbo can keep Amenbo refs (AMB-T-…) out of your commits by linting them on the way out.\n",
     );
     let has_foreign = !states.slots_in(HookState::Foreign).is_empty();
     prompt.push_str(if has_foreign {
@@ -665,7 +665,7 @@ fn offer_prompt(states: Option<amenbo_core::hooks::HookStates>) -> String {
     } else {
         "It writes a small git hook, and touches nothing else.\n"
     });
-    prompt.push_str("Asked once: your answer covers the repositories amenbo works in, now and later.\n");
+    prompt.push_str("Asked once: your answer covers the repositories Amenbo works in, now and later.\n");
     prompt.push_str("Wire it up?");
     prompt
 }
@@ -766,7 +766,7 @@ fn offer_agent_hook(
         _ => "your tool",
     };
     prompt.push_str(&format!(
-        "We hand you a text. Give it to your AI to edit {tool}'s settings, and your AI reads how to work with amenbo at the start of every session and records the work as tasks without being asked.\n",
+        "We hand you a text. Give it to your AI to edit {tool}'s settings, and your AI reads how to work with Amenbo at the start of every session and records the work as tasks without being asked.\n",
     ));
     prompt.push_str(if again {
         "Want the text again? We will not ask a third time."
@@ -883,12 +883,12 @@ fn report_unwired_harnesses(
             // above still carries it for the reader that can name itself.
             [] => {}
             [one] => {
-                eprintln!("⚠ One step is left before your AI keeps this work in amenbo: {}'s settings here do not open a session with `{cmd} agent`.", one.label);
+                eprintln!("⚠ One step is left before your AI keeps this work in Amenbo: {}'s settings here do not open a session with `{cmd} agent`.", one.label);
                 eprintln!("  The text to give your AI: {cmd} agent-hook snippet {}", one.id);
             }
             several => {
                 let labels = several.iter().map(|one| one.label).collect::<Vec<_>>().join(", ");
-                eprintln!("⚠ One step is left before your AI keeps this work in amenbo: the settings of {labels} here do not open a session with `{cmd} agent`.");
+                eprintln!("⚠ One step is left before your AI keeps this work in Amenbo: the settings of {labels} here do not open a session with `{cmd} agent`.");
                 eprintln!("  The text to give your AI, one tool at a time: {cmd} agent-hook snippet <tool>");
             }
         }

@@ -147,7 +147,7 @@ pub(crate) fn init_cmd(flags: &Flags, name: Option<String>, language: Option<Str
     // out of the AI's project context.
     let mut store = if store_exists {
         if name.is_some() {
-            human(flags, format!("  (--name is ignored: this device already holds an amenbo store; change your display name with `{} config set human_name <name>`)", Paths::command_name()));
+            human(flags, format!("  (--name is ignored: this device already holds an Amenbo store; change your display name with `{} config set human_name <name>`)", Paths::command_name()));
         }
         Store::open_at(paths).map_err(CliError::from)?
     } else {
@@ -220,7 +220,7 @@ pub(crate) fn init_cmd(flags: &Flags, name: Option<String>, language: Option<Str
             json!({ "human_name": human_name, "project_id": project_id, "project_name": project_name, "placed": placed }),
             None, false, "");
     } else {
-        human(flags, format!("✓ Ready — project '{}' is set up; an AI launched in this folder can now operate amenbo (you are {}).", project_name, human_name));
+        human(flags, format!("✓ Ready — project '{}' is set up; an AI launched in this folder can now operate Amenbo (you are {}).", project_name, human_name));
         human(flags, format!("  Next: {} status", Paths::command_name()));
         if !placed.is_empty() {
             human(flags, format!("  (placed {})", placed.join(", ")));
@@ -532,7 +532,7 @@ pub(crate) fn unbind_cmd(flags: &Flags, dir: Option<String>) -> Result<i32, CliE
         let ancestor = find_upward(&target).map(|(d, _)| d.to_string_lossy().to_string());
         return Err(CliError::unbind_no_binding(&target.to_string_lossy(), ancestor.as_deref()));
     }
-    if !confirm(flags, &format!("unbind this folder ({}) from amenbo (removes .amenbo and amenbo's managed blocks; the store is kept)", target.to_string_lossy()))? {
+    if !confirm(flags, &format!("unbind this folder ({}) from Amenbo (removes .amenbo and Amenbo's managed blocks; the store is kept)", target.to_string_lossy()))? {
         return Ok(0);
     }
     // Read the pointer before removing it, to report its project_id (best-effort).

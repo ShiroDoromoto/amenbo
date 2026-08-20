@@ -221,7 +221,7 @@ pub fn configuration(harness: &Harness, cmd: &str) -> String {
 /// one text to keep in step with the wording those two carry.
 pub fn request(harness: &Harness, cmd: &str) -> String {
     format!(
-        "Please start this folder's AI on amenbo, by wiring {label}'s session-start hook.\n\
+        "Please start this folder's AI on Amenbo, by wiring {label}'s session-start hook.\n\
          \n\
          Merge the configuration below into `{paste_into}` in this folder. Keep everything that file \
          already holds — add to its hooks rather than replacing them — and create it if it is not \

@@ -488,7 +488,7 @@ fn no_build_for(view: &Discovery, name: &str, origin: Option<&Origin>) -> Error 
     match view.sources.iter().find(|s| &s.url == url) {
         None => Error::NotFound(
             Msg::new(format!(
-                "'{name}' was installed from {url}, which is no longer a registered catalog — register it again to update from it (amenbo updates a plugin only from the catalog it came from)"
+                "'{name}' was installed from {url}, which is no longer a registered catalog — register it again to update from it (Amenbo updates a plugin only from the catalog it came from)"
             ))
             .coded(ErrorCode::NotFoundPluginBuildSourceGone)
             .with("name", name)
@@ -504,7 +504,7 @@ fn no_build_for(view: &Discovery, name: &str, origin: Option<&Origin>) -> Error 
         ),
         Some(_) => Error::NotFound(
             Msg::new(format!(
-                "'{name}' was installed from {url}, which no longer lists it — there is no build to update to (amenbo updates a plugin only from the catalog it came from)"
+                "'{name}' was installed from {url}, which no longer lists it — there is no build to update to (Amenbo updates a plugin only from the catalog it came from)"
             ))
             .coded(ErrorCode::NotFoundPluginBuildDelisted)
             .with("name", name)

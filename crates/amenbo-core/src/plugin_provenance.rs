@@ -144,7 +144,7 @@ pub fn verify_signature(bytes: &[u8], signature: &str, public_key: &str) -> Resu
 /// fingerprint is the handle both sides can quote — the same short form a registration showed.
 fn key_named(public_key: &str) -> String {
     if public_key == CATALOG_PUBLIC_KEY {
-        return "the amenbo catalog key".to_string();
+        return "the Amenbo catalog key".to_string();
     }
     match key_fingerprint(public_key) {
         Ok(fp) => format!("the key pinned for the catalog this plugin came from ({fp})"),
@@ -443,7 +443,7 @@ yO4MZq6nO8TD4ypgwfYImIKz9E1tM3szwA/S9CRXLrH30HP+gQHXcL12wngoJy9uCBgHuaIsrnRo17T3
         let err = verify_asset(ASSET, Some(ASSET_SIG), ASSET_SHA256, CATALOG_PUBLIC_KEY).unwrap_err();
         assert!(format!("{err:?}").contains("does not verify"), "refused on origin");
         assert!(
-            format!("{err:?}").contains("the amenbo catalog key"),
+            format!("{err:?}").contains("the Amenbo catalog key"),
             "and it says which key it was checked against: {err:?}"
         );
     }

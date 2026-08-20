@@ -148,7 +148,7 @@ pub fn parse(json: &str) -> Result<Catalog> {
     if envelope.catalog_v > SUPPORTED_CATALOG_V {
         return Err(Error::Invalid(
             Msg::new(format!(
-                "this plugin catalog is version {} — newer than this amenbo understands ({SUPPORTED_CATALOG_V}). Update amenbo.",
+                "this plugin catalog is version {} — newer than this Amenbo understands ({SUPPORTED_CATALOG_V}). Update Amenbo.",
                 envelope.catalog_v
             ))
             .coded(ErrorCode::InvalidCatalogVersionAhead)
@@ -730,7 +730,7 @@ fn check_pin(url: &str, pinned: Option<&str>, served: Option<&str>) -> Result<()
     let (was, now) = (fingerprint_of(pinned), fingerprint_of(served));
     Err(Error::Invalid(
         Msg::new(format!(
-            "{url} now publishes a different key ({now}, pinned: {was}). amenbo will not accept it on the old consent — unregister the catalog and register it again to trust the new key."
+            "{url} now publishes a different key ({now}, pinned: {was}). Amenbo will not accept it on the old consent — unregister the catalog and register it again to trust the new key."
         ))
         .coded(ErrorCode::InvalidCatalogKeyRotated)
         .with("url", url)

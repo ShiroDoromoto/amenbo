@@ -48,14 +48,14 @@ pub enum SelfUpdateError {
     DevChannel { channel: String },
     /// The running binary lives inside a desktop `.app` bundle (a GUI-managed shim). Replacing it here
     /// would corrupt the bundle; the desktop updater owns replacement instead.
-    #[error("this amenbo is managed by the desktop app; update it from there")]
+    #[error("this Amenbo is managed by the desktop app; update it from there")]
     GuiManaged { exe: PathBuf },
     /// No CLI archive is listed for this platform in the manifest.
     #[error("no CLI archive for {platform} in the release manifest")]
     NoArchive { platform: String },
     /// A rollback was asked for but no retained previous binary (`amenbo.bak`) exists — nothing to
     /// restore. The first `--apply` writes one; a fresh install, or a store already rolled back, has none.
-    #[error("no previous amenbo to roll back to (none retained at {})", .path.display())]
+    #[error("no previous Amenbo to roll back to (none retained at {})", .path.display())]
     NoBackup { path: PathBuf },
     /// Could not resolve the path of the running executable.
     #[error("could not locate the running executable: {0}")]
@@ -64,7 +64,7 @@ pub enum SelfUpdateError {
     #[error("download failed: {0}")]
     Download(String),
     /// The `amenbo` binary could not be read out of the downloaded archive.
-    #[error("could not extract the amenbo binary from the archive: {0}")]
+    #[error("could not extract the Amenbo binary from the archive: {0}")]
     Extract(String),
     /// Writing the extracted binary to a temp file, or swapping it into place, failed.
     #[error("could not replace the running binary: {0}")]

@@ -114,7 +114,7 @@ pub fn manifest(server: &Server) -> String {
             FOLDERS_KEY: {
                 "type": "directory",
                 "title": "Project folders",
-                "description": "The folders this server works in. Each call from the AI names one of them, and each folder's project is whatever amenbo is set up for there.",
+                "description": "The folders this server works in. Each call from the AI names one of them, and each folder's project is whatever Amenbo is set up for there.",
                 "multiple": true,
                 // What the reader gets on a first install — and only a first install. Once they save
                 // the settings screen, their own answer is stored and outranks this, so a bundle

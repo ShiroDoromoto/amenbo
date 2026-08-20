@@ -767,6 +767,56 @@ pub(crate) fn sweep_superseded(dir: &Path, prefix: &str, suffix: &str, keep: &Pa
     removed
 }
 
+/// The rewind points **no build writes any more**, recognised by name.
+///
+/// [`sweep_superseded`] only ever sweeps its own kind, so a name a retired path wrote is walked past by
+/// every sweep there is — and nothing will ever supersede it either, because nothing writes that name a
+/// second time. Each is still a whole copy of a store many versions behind, so on a device that came up
+/// through those paths they simply stay, for good. Naming them here is what gives them the lifetime the
+/// live kinds have had all along.
+///
+/// What is named:
+///
+/// - `pre-products-<stamp>.amenbo-backup` / `pre-project-delete-<stamp>.amenbo-backup` — the whole-store
+///   copies retired migrations took before they ran.
+/// - `store.sqlite*.v7-aside-<stamp>` — the truth source and its `-wal`/`-shm` sidecars, set aside by the
+///   fold into the unified store.
+///
+/// A name goes here only once **no build writes it**: a kind still in use has a live sweep of its own, and
+/// listing it here would delete the store's current way back.
+fn is_retired_rewind_point(name: &str) -> bool {
+    let archive = |prefix: &str| name.starts_with(prefix) && name.ends_with(&format!(".{ARCHIVE_EXT}"));
+    archive("pre-products-")
+        || archive("pre-project-delete-")
+        || (name.starts_with("store.sqlite") && name.contains(".v7-aside-"))
+}
+
+/// Sweep the rewind points of retired kinds out of `dir` ([`is_retired_rewind_point`]).
+///
+/// Called where [`sweep_superseded`] is — by the thing that has just written a newer rewind point, which is
+/// what makes these obsolete in the same breath as the older ones of its own kind. Same best-effort
+/// discipline: a file that will not go stays, and the removed paths come back so the caller can say what
+/// went.
+pub(crate) fn sweep_retired(dir: &Path) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(dir) else { return Vec::new() };
+    let mut removed = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
+        if !is_retired_rewind_point(name) {
+            continue;
+        }
+        if std::fs::remove_file(&path).is_ok() {
+            removed.push(path.display().to_string());
+        }
+    }
+    removed.sort();
+    removed
+}
+
 /// The fast, advisory pre-flight gate: if the manifest declares a store at a generation newer than this
 /// build supports, refuse the archive before touching the live tree (no partial application). The manifest
 /// can be tampered with, so this is a UX-level fast fail; the authoritative generation gate is
@@ -1250,6 +1300,39 @@ mod tests {
             }
         }
         None
+    }
+
+    /// The line between a copy nothing can go back to and the store itself. The v7 asides carry the
+    /// `store.sqlite` stem, so the rule has to reject the live truth source and its `-wal`/`-shm` sidecars
+    /// by the same reading that accepts them — get this wrong and a migration deletes the store it is
+    /// about to migrate.
+    #[test]
+    fn a_retired_rewind_point_is_told_apart_from_the_live_store() {
+        for name in [
+            "pre-products-20260812T064936Z.amenbo-backup",
+            "pre-project-delete-20260812T065801Z.amenbo-backup",
+            "store.sqlite.v7-aside-20260723T091219Z",
+            "store.sqlite-wal.v7-aside-20260723T091219Z",
+            "store.sqlite-shm.v7-aside-20260723T091219Z",
+        ] {
+            assert!(is_retired_rewind_point(name), "{name} is a copy no build writes any more");
+        }
+        for name in [
+            // The live store and its sidecars.
+            "store.sqlite",
+            "store.sqlite-wal",
+            "store.sqlite-shm",
+            // The rewind points that still have a sweep of their own — deleting one here would take the
+            // store's current way back with it.
+            "pre-migrate-20260819T181225Z.amenbo-backup",
+            "pre-erase-20260819T181225Z.amenbo-backup",
+            "store.pre-restore-20260723T091223Z.sqlite",
+            // Whatever else the user keeps beside their store.
+            "holiday-photos.amenbo-backup",
+            "config.json",
+        ] {
+            assert!(!is_retired_rewind_point(name), "{name} is not Amenbo's to delete");
+        }
     }
 
     #[test]

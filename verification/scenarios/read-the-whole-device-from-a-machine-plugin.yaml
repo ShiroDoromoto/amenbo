@@ -10,7 +10,7 @@
 # a project the plugin was never launched in comes back through it.
 #
 # The declaration is written onto the installed manifest by the driver, because no plugin the official
-# catalog serves declares one (see the op's own note) — everything after it is amenbo's.
+# catalog serves declares one (see the op's own note) — everything after it is Amenbo's.
 id: read-the-whole-device-from-a-machine-plugin
 title: A plugin its author declared the machine's is handed the device as its window, and reads the work of a project it was never launched in
 description: >

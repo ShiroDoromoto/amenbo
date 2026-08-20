@@ -15,7 +15,7 @@ description: >
   the first, and what is deliberately left alone. Its non-zero exit is its answer rather than a
   failure — a caller wiring it into a hook reads that exit, so a build that stopped reporting it
   would pass silently while letting refs through. Then wire it: install the hooks into a real
-  repository, read back what is in each slot, re-run over amenbo's own hooks the way a newer build
+  repository, read back what is in each slot, re-run over Amenbo's own hooks the way a newer build
   lands, and take them out again. The text the lint is pointed at comes from `fixtures/lint/`, since
   a scenario file may not carry a bare ref itself.
 steps_cli:
@@ -46,7 +46,7 @@ steps_cli:
   - { type: assert, domain: repo, op: hooks, with: { hook: pre-commit, state: unwired } }
   - { type: assert, domain: repo, op: hooks, with: { hook: commit-msg, state: unwired } }
 
-  # Installed: both slots now hold hooks amenbo wrote, and says so as its own rather than as a
+  # Installed: both slots now hold hooks Amenbo wrote, and says so as its own rather than as a
   # stranger's — which is what later lets it rewrite them and refuse to touch anyone else's.
   - { type: action, domain: repo, op: hooks-install }
   - { type: assert, domain: repo, op: hooks, with: { hook: pre-commit, state: managed } }

@@ -1,21 +1,21 @@
 # Calling a plugin, using what it hands back, and finding out afterwards whether it did anything.
 #
 # The contract on the way out is that **stdout belongs to the plugin**: the return value is meant to
-# be consumed — `eval "$(amenbo plugin run worktree start 42)"` — so amenbo prints no courtesy line
+# be consumed — `eval "$(amenbo plugin run worktree start 42)"` — so Amenbo prints no courtesy line
 # into it, and its own voice, plus the plugin's diagnostics, go to stderr beside it. A single line of
-# amenbo's leaking into that stream corrupts the value at the caller, and nothing but a call to the
+# Amenbo's leaking into that stream corrupts the value at the caller, and nothing but a call to the
 # shipped binary can show whether the two streams really came apart.
 #
 # The reading on the way back is the execution log, and it exists because a hook is fire-and-forget:
 # nobody waits on it, and nothing fails when it fails, so silence has no other explanation anywhere in
-# amenbo. The log is machine-local and deliberately kept out of the shared timeline — which means a
+# Amenbo. The log is machine-local and deliberately kept out of the shared timeline — which means a
 # release that shipped it broken would look exactly like a release that shipped it working. The same
 # command answers for what has *not* run: what is queued for each plugin, and whether anything is
 # working it. That half has no other reading anywhere — what never ran wrote no line.
 #
 # The subject is the official `worktree` plugin's `start` / `finish`, which return the `cd` into a
 # checkout of the task's own. It resolves everything from the repository it is called in, which is the
-# folder amenbo is bound to — a real one for a real plugin.
+# folder Amenbo is bound to — a real one for a real plugin.
 #
 # A call that fails is not driven here: a plugin exiting non-zero is a failed call, and the driver
 # reads that as the run erroring out rather than as an assert coming back false. Asserting a refusal
@@ -33,7 +33,7 @@ description: >
   Finally remove the plugin and confirm the log no longer answers for it.
 steps_cli:
   # The plugin resolves everything it does from the repository it is called in, so there has to be
-  # one — the same shape the folder a person binds amenbo to has.
+  # one — the same shape the folder a person binds Amenbo to has.
   - type: action
     domain: repo
     op: git-init
@@ -61,9 +61,9 @@ steps_cli:
       present: false
 
   # The first thing anyone asks a program they just installed. Its usage sits behind `--help`, where
-  # its author put it, so the flag has to travel through as the plugin's word — amenbo answering in
+  # its author put it, so the flag has to travel through as the plugin's word — Amenbo answering in
   # its place would hide the very text that was asked for, and hide it behind something that looks
-  # like an answer. What proves it arrived is the log: a call amenbo took for itself would leave no
+  # like an answer. What proves it arrived is the log: a call Amenbo took for itself would leave no
   # run here at all. The usage rides stderr, the stream a plugin's own voice goes out on, so the
   # return value stays empty and there is nothing to read with `returned`.
   - type: action
@@ -103,7 +103,7 @@ steps_cli:
       command: start
       task: seed
 
-  # What came back is the plugin's own stdout: one `cd` line into the checkout it made. amenbo's
+  # What came back is the plugin's own stdout: one `cd` line into the checkout it made. Amenbo's
   # account of what happened rode the other stream, and is not in here.
   - type: assert
     domain: plugin
@@ -167,7 +167,7 @@ steps_cli:
   # happened — the driver shuts what is installed away, and the write below is left standing.
   #
   # The plugin is stood in with one that answers at once and does nothing else: what is under test is
-  # what amenbo carries, and the checkout the real program would make from a status change is not part
+  # what Amenbo carries, and the checkout the real program would make from a status change is not part
   # of it.
   - type: action
     domain: plugin
@@ -199,7 +199,7 @@ steps_cli:
       readable: false
 
   # A status change is an event the plugin subscribes to. With nobody resolvable it is delivered to
-  # nobody — and rather than pass it over, amenbo leaves it standing to be handed on later.
+  # nobody — and rather than pass it over, Amenbo leaves it standing to be handed on later.
   - type: action
     domain: task
     op: status

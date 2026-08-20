@@ -1,4 +1,4 @@
-# A refusal about starting a project's AI on amenbo is silent from then on: it takes the report off that
+# A refusal about starting a project's AI on Amenbo is silent from then on: it takes the report off that
 # project's board, and nothing anywhere else says it was ever given. That is what makes this road
 # necessary rather than convenient — a reader who declined, by mistake or before they knew what the
 # report was offering, has nothing left on the board to change their mind with. The record is the only
@@ -23,13 +23,13 @@
 # reading gives nothing of at all. The file the report names is the one line here a reading can close.
 #
 # The world is declared below: the project named there, bound to a folder carrying the provider's own
-# directory with nothing about amenbo in it, and one task on its board — a project that has never held
+# directory with nothing about Amenbo in it, and one task on its board — a project that has never held
 # one is drawing the first loop, which the report stands aside for. The answer is left where a fresh
 # store leaves it, never given, since the road is the one that gives it. What is left to the operator is
 # to open that project and read the report standing on its board. The screen moves at the press, so
 # carry each move out when the run hands that step over.
 id: take-back-a-no-about-starting-this-projects-ai
-title: A project can decline having its AI started on amenbo where it reads the report, and take the refusal back where it is kept
+title: A project can decline having its AI started on Amenbo where it reads the report, and take the refusal back where it is kept
 description: >
   Arrive on a project's board with the report standing on it, and decline there — the one button on the
   report that records anything. Then go to the settings the project keeps for itself, which is the only
@@ -48,7 +48,7 @@ given:
     as: greenhouse
 
   # What raises the report: a bound folder the reader's AI already works in, with settings that do
-  # nothing about amenbo. It is read off the folder's own contents, so it is written there and nowhere
+  # nothing about Amenbo. It is read off the folder's own contents, so it is written there and nowhere
   # else.
   - type: action
     domain: repo

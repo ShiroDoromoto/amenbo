@@ -1,8 +1,8 @@
-# The one offer amenbo makes on its own. Everything else on screen is something the reader went and
+# The one offer Amenbo makes on its own. Everything else on screen is something the reader went and
 # asked for; this arrives unasked, and only after they have kept coming back — five launches across
 # three separate days written on. Asked at the first launch it would be premature, and worse than
 # premature: the no it would collect is kept in the setting forever, from somebody who had not yet
-# decided to keep amenbo at all.
+# decided to keep Amenbo at all.
 #
 # Which is exactly why nothing before this file has ever walked it. The thresholds are reached by
 # living, not by doing: no test in the tree lasts three days, and a build could ship with the
@@ -28,13 +28,13 @@
 # step after the first cannot be carried out at all.
 #
 # What the road wants in front of it is the app open on the board with the hooks question behind it:
-# an offer takes its turn after that one, which is put to someone who has not used amenbo yet. The run
+# an offer takes its turn after that one, which is put to someone who has not used Amenbo yet. The run
 # hands the first step over before it shoots anything, so that is where to stand by the time it does.
 id: be-offered-a-start-at-login
 title: Somebody who keeps coming back is offered a start at login, unasked, and can decline it
 description: >
   The goal is one offer, arriving on its own. A device that has been used for a while — launches
-  tallied, records written on separate days — opens the app, and the offer to start amenbo at login
+  tallied, records written on separate days — opens the app, and the offer to start Amenbo at login
   comes up with nothing pressed to bring it up. Declining it takes it off the screen and writes
   nothing: the setting says off already, and the answer is what keeps the offer from being put a
   second time.

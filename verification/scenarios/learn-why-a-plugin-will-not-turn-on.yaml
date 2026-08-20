@@ -1,5 +1,5 @@
 # A gate that turns on somebody else's judgement. What a value has to look like is the author's to know —
-# amenbo judges none of it — so the switch raises their own check first and opens on nothing but a yes.
+# Amenbo judges none of it — so the switch raises their own check first and opens on nothing but a yes.
 #
 # The two roads part on what they are handed. A terminal is told the gate stayed shut and which settings the
 # check spoke about, as a code and a line it can act on; the author's own sentences are deliberately not sent
@@ -17,7 +17,7 @@
 # Like every line that installs a plugin, the premise goes to the catalog over the network on purpose (see
 # `put-a-plugin-on-the-machine.yaml`). The check itself, the setting it speaks about and the program that
 # answers it are the author's word — no plugin in the official catalog declares any — so all three are
-# written onto what is installed (see those ops' own notes). Everything after that is amenbo's own doing.
+# written onto what is installed (see those ops' own notes). Everything after that is Amenbo's own doing.
 id: learn-why-a-plugin-will-not-turn-on
 title: A plugin whose own check refuses the values does not turn on, and the reader is told as much where they can act on it
 description: >
@@ -135,7 +135,7 @@ steps_cli:
 # move out when the run hands that step over.
 #
 # The two sentences are read by a reading: they are the author's own, and what a build would draw in their
-# place is amenbo's word for a check that said nothing, so which of them is standing there is the whole
+# place is Amenbo's word for a check that said nothing, so which of them is standing there is the whole
 # question. The rest is an eye — what a row says about a gate is the word on a button, and what a form says
 # a field holds is a chip beside it.
 steps_gui:

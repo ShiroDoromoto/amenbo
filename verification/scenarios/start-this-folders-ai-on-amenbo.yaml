@@ -1,20 +1,20 @@
-# The instruction to work with amenbo reaches this folder's AI through a file it is asked to read —
+# The instruction to work with Amenbo reaches this folder's AI through a file it is asked to read —
 # and a file only works if it is read. The session-start hook is the way in that does not depend on
 # that: it arrives through the tool's own protocol, before anything else is asked of the model.
 #
-# amenbo's part in it is text, and nothing else. It does not write the provider's settings file, and
+# Amenbo's part in it is text, and nothing else. It does not write the provider's settings file, and
 # it never says a hook is working — what it can say is that this folder is not wired yet, and hand
 # over the text that asks for the wiring. That text is a request for the AI the reader already works
 # with: it carries the settings, the file they belong in, and that whatever is in that file stays. So
 # the road here is the whole of what a release can break: the folder is told, the text is handed over
-# with the file it names, the wiring lands, and amenbo reads the folder as wired and stops telling the
+# with the file it names, the wiring lands, and Amenbo reads the folder as wired and stops telling the
 # tool that landed it — while a tool nobody wired here reads, on its own row, that it is not.
 #
 # Nothing in it is visible from inside the workspace's own tests: the settings file is a real file in
 # a real folder, and the folder is what answers for it.
 #
 # The screen walks the same road from the other end, and the state both roads start from is declared
-# below: the run's own folder carrying the provider's directory with nothing about amenbo in it, and a
+# below: the run's own folder carrying the provider's directory with nothing about Amenbo in it, and a
 # task on the board of the project that folder answers for — a project that has never held one is
 # drawing the first loop, which the report stands aside for, so a board with nothing on it is a board
 # with no report on it either. The answer is left where a fresh store leaves it, never given: a no is
@@ -22,11 +22,11 @@
 # project — the report is drawn on arrival. The copy is a move the shot follows, so make it when the
 # run hands that step over.
 id: start-this-folders-ai-on-amenbo
-title: A folder that does not start its AI on amenbo says so, hands over what wires it, and stops telling the tool that lands it
+title: A folder that does not start its AI on Amenbo says so, hands over what wires it, and stops telling the tool that lands it
 description: >
   The reader has a folder their AI works in and no wiring in it, which is where everyone starts. The
-  road walks what amenbo does about that: it names the tool it can see in the folder and says the AI
-  is not being started on amenbo; the text that fixes it comes with the file it goes in and carries
+  road walks what Amenbo does about that: it names the tool it can see in the folder and says the AI
+  is not being started on Amenbo; the text that fixes it comes with the file it goes in and carries
   the launch instruction rather than the spec itself; making the edit is the reader's own act — theirs
   to ask an AI of theirs for — so the run stands in for the hand that does it; and afterwards the
   folder reads as wired, with nothing left for that tool to finish and nothing more said to it.
@@ -39,7 +39,7 @@ description: >
   nobody is standing in is only ever found in the sweep.
 given:
   # A folder this reader's AI already works in: the provider's own directory is there, with settings
-  # that do nothing about amenbo. That is the state everyone is in before they are told, and it is the
+  # that do nothing about Amenbo. That is the state everyone is in before they are told, and it is the
   # run's own folder, which is already answering for a project — so both roads read this one folder and
   # the screen road has somewhere to be standing.
   - type: action
@@ -103,8 +103,8 @@ steps_cli:
       carries: agent --json
       paste_into: .claude/settings.json
 
-  # The edit the text asks for. amenbo writes no settings file, so this is the reader's own AI and not
-  # amenbo — the run only stands in for it.
+  # The edit the text asks for. Amenbo writes no settings file, so this is the reader's own AI and not
+  # Amenbo — the run only stands in for it.
   - type: action
     domain: repo
     op: wire-ai
@@ -132,7 +132,7 @@ steps_cli:
   # And the one nobody wired here still says it is not. This is the reader who opens a folder somebody
   # else set up, with a tool of their own: the folder shows no sign of it, so there is nothing to point
   # at and nobody is warned — its own row is the whole of what it gets, and it carries the way to its
-  # text. Left out, that AI works here reading nothing about amenbo, in a folder that looks finished.
+  # text. Left out, that AI works here reading nothing about Amenbo, in a folder that looks finished.
   - type: assert
     domain: repo
     op: ai-launch-tool
@@ -154,7 +154,7 @@ steps_gui:
   # The report, standing on the project's own board with nothing asked and nothing over it. What raises
   # it is the state — a bound folder that is not wired — and it names the provider the folder traces
   # rather than leaving the reader to work out which of five it means, together with the file the text
-  # goes into. This is the line the screen road is here for: amenbo writes no settings file on this
+  # goes into. This is the line the screen road is here for: Amenbo writes no settings file on this
   # surface either, so the report is the whole of what a reader is given, and it stands until the paste
   # lands rather than closing on anything they say.
   - type: assert

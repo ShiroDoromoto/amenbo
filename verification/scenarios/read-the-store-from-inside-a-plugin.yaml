@@ -1,7 +1,7 @@
 # The content behind an id. What reaches a plugin is an event naming a record and nothing of the
-# record itself, so the way to what is in it is amenbo: the plugin runs the binary and reads its
+# record itself, so the way to what is in it is Amenbo: the plugin runs the binary and reads its
 # `--json`. There is no second protocol to keep — the author already has the commands — and what makes
-# the route work is what amenbo puts in the child's environment when it launches it: the store to
+# the route work is what Amenbo puts in the child's environment when it launches it: the store to
 # open, and the window it may read through. Neither is anything a plugin's own working directory could
 # answer, since that directory is whatever its launcher happened to be standing in.
 #
@@ -14,11 +14,11 @@
 #
 # The plugin making the calls is one the driver stands in for (see the op's own note). The plugin the
 # official catalog publishes works everything it does out of the repository it is called in and asks
-# amenbo nothing, so nothing on the shelf walks this road.
+# Amenbo nothing, so nothing on the shelf walks this road.
 id: read-the-store-from-inside-a-plugin
 title: A plugin reads a record back with no facet, is held to the window it was launched with, and still names an author to write
 description: >
-  Install and enable a plugin, and leave it calling amenbo back. Ask it to read a task this scenario
+  Install and enable a plugin, and leave it calling Amenbo back. Ask it to read a task this scenario
   registered, and read the record off what it returns — the call it made named no actor, and the
   window is why it did not have to. Ask it for a task in another project, and read the refusal: the
   window it was handed is the whole of what it may see, and it is not the folder it happens to stand

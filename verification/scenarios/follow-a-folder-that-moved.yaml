@@ -1,5 +1,5 @@
 # Folders move. They are renamed, they are dragged somewhere tidier, they come back out of a backup
-# beside where they were — and none of it is anything amenbo is told about. What it holds is a path,
+# beside where they were — and none of it is anything Amenbo is told about. What it holds is a path,
 # and the path is what stops leading anywhere.
 #
 # Binding the folder again in its new home looks like the answer and is not. A bind records a *new*
@@ -10,9 +10,9 @@
 # it is not visible from the folder's side at all — a pointer lands either way, and both roads leave a
 # folder that answers for the project. The two part company only in the registry.
 #
-# The id is the other half. It is a number the store assigns and publishes in no read amenbo offers,
+# The id is the other half. It is a number the store assigns and publishes in no read Amenbo offers,
 # so a reader who was never shown it cannot pass it — which is why what shows it is the refusal: in a
-# folder whose project has one gone, amenbo stops rather than going quietly to work in whatever is
+# folder whose project has one gone, Amenbo stops rather than going quietly to work in whatever is
 # left, and lines the vanished bindings up by id beside the command that re-points each of them. A
 # build that kept the flag and stopped printing that answer has a flag nobody can reach. So the
 # listing is walked here as a step of its own, and it is where this road learns the number it then
@@ -24,7 +24,7 @@ id: follow-a-folder-that-moved
 title: A folder that moved keeps the binding it always had — re-pointed by id, so whatever was filed at that folder follows it
 description: >
   Bind two folders to one project, move one of them somewhere else — pointer and all, the way a
-  rename or a restore leaves it — and read what amenbo then says: it stops, and offers the vanished
+  rename or a restore leaves it — and read what Amenbo then says: it stops, and offers the vanished
   binding by id. Re-point that binding onto the folder's new home and read the answer back: the same
   id, naming where the folder is now, saying where it pointed before. Then the project's own books,
   which are the half the pointer cannot answer — they lead to the new place, and the path that leads
@@ -70,8 +70,8 @@ steps_cli:
       dir: workshop
       project: pj
 
-  # Moved. Nothing here goes through amenbo — that is the point: a folder is moved by whoever moves
-  # folders, and what amenbo holds only becomes wrong afterwards.
+  # Moved. Nothing here goes through Amenbo — that is the point: a folder is moved by whoever moves
+  # folders, and what Amenbo holds only becomes wrong afterwards.
   - type: action
     domain: folder
     op: move
@@ -89,7 +89,7 @@ steps_cli:
       project: pj
       present: false
 
-  # And amenbo says so rather than working around it — with the id, which is the only place a reader
+  # And Amenbo says so rather than working around it — with the id, which is the only place a reader
   # or a road can get one. Asked from the folder in its new home, which is where its reader is
   # standing: that the question is answered there at all is the pointer having travelled with the
   # folder, since a binding is answered by walking up from where it is asked.

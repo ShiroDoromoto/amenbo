@@ -1,6 +1,6 @@
 # One project, several folders. That is not an edge case — it is what a repository cloned twice, a
 # checkout and its worktree, or one product's plugins each in their own directory actually look like,
-# and amenbo has always allowed it. What was missing is the other half: with the folders standing side
+# and Amenbo has always allowed it. What was missing is the other half: with the folders standing side
 # by side, nothing on a task said which of them the work is done in, and no reader could add it.
 #
 # What this road walks is that sentence being sayable, and nothing more. The folder is carried, not

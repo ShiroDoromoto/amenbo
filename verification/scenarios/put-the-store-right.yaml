@@ -115,8 +115,8 @@ steps_cli:
 
   # ── The face that writes ────────────────────────────────────────────────────────────────────
   # A folder bound by an older build: the binding is sound, and only the pointer left in the folder
-  # is in a shape this build no longer writes. Nothing amenbo does today produces one, which is why
-  # the repair is worth a line — the state it answers for is not reachable by using amenbo normally.
+  # is in a shape this build no longer writes. Nothing Amenbo does today produces one, which is why
+  # the repair is worth a line — the state it answers for is not reachable by using Amenbo normally.
   - type: action
     domain: folder
     op: init
@@ -252,7 +252,7 @@ steps_cli:
 
 # ── The third face of `--fix`, and why it is not walked here ──────────────────────────────────
 # `--fix` also forgets orphan bindings: folder rows no live project claims. That state is not
-# reachable by using amenbo, so there is nothing here for a scenario to put wrong. Deleting a project
+# reachable by using Amenbo, so there is nothing here for a scenario to put wrong. Deleting a project
 # releases every folder bound to it in the same breath — the pointer, the guidance block and the
 # registry row all go — and that is the only operation that drops the project a row points at. A row
 # is left over only when the release itself fails part way, which a scenario driving the shipped

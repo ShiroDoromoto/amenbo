@@ -1,7 +1,7 @@
 # Someone else's plugin, and what it may say to the AI reading this folder's briefing.
 #
 # `amenbo agent --json` is a document an AI follows, so a sentence that lands in it is read as
-# guidance the user put there. An author amenbo has never met can write one — the manifest is theirs
+# guidance the user put there. An author Amenbo has never met can write one — the manifest is theirs
 # — and no machine can rule on whether a sentence is a description or an instruction. So the line is
 # not drawn around the wording: it is drawn around who wrote it. The catalog's badge is the one thing
 # an author cannot grant themselves, and a plugin without it carries no prose into that document at
@@ -17,7 +17,7 @@ title: A plugin from outside the catalog is callable, and none of its author's p
 description: >
   Install a plugin, take the catalog's badge off it so it stands as any stranger's would, and switch
   it on. Read the entry point: the plugin is offered and its calls arrive as lines an AI can type,
-  with the calling form amenbo puts in front of the author's own subcommand. Then read what is not
+  with the calling form Amenbo puts in front of the author's own subcommand. Then read what is not
   there — the occasion the author named, the line beside each call, and the description every
   manifest must carry — none of which reaches a document an AI follows. Finally read the face a
   person reads, where that description is written whoever wrote it: what the split decides is which
@@ -75,7 +75,7 @@ steps_cli:
 
   # The sentence is not gone, it is where its reader is: `plugin list` is what a person reads, and
   # every plugin's description is written there whoever wrote it. What it says is the author's and is
-  # not read back here — where it is readable is amenbo's, and that is what is under test.
+  # not read back here — where it is readable is Amenbo's, and that is what is under test.
   - type: assert
     domain: plugin
     op: listed

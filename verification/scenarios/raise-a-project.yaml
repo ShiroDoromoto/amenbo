@@ -2,7 +2,7 @@
 # only a shot of it ever says.
 #
 # The first loop is the single push that joins the two ends a project starts with no bridge between:
-# the reader asks their AI, the AI writes to amenbo, and what it wrote lands on the board. Every move
+# the reader asks their AI, the AI writes to Amenbo, and what it wrote lands on the board. Every move
 # the interface can make on their behalf it makes — the terminal opens already inside the linked
 # folder, and the request is handed over finished, with no hole left to fill in — so what stays with
 # the reader is launching their own AI and pasting.
@@ -32,7 +32,7 @@ title: A reader who raises a project is left on a screen that leads with the fir
 description: >
   Take the way in that raises a project, give it a name and a folder, and read what the screen it
   ends on offers. The loop leads it — open a terminal, copy the request, watch the tasks arrive — and
-  the request it hands over names AGENTS.md, which is what sends the reader's AI to learn amenbo
+  the request it hands over names AGENTS.md, which is what sends the reader's AI to learn Amenbo
   before it writes anything. The moves that were there before the loop sit underneath it, and the way
   on to the board is last.
 given:

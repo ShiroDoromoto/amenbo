@@ -14,7 +14,7 @@
 # printing it over every row reads exactly like the right one for as long as only one row is looked at.
 #
 # The declaration is written onto the installed manifest by the driver, because no plugin the official
-# catalog serves carries one. Everything after it is amenbo's. The world is stood up before the app is;
+# catalog serves carries one. Everything after it is Amenbo's. The world is stood up before the app is;
 # what is left to the operator is where to start, which is the installed plugins screen.
 id: learn-a-plugin-reads-more-than-this-project
 title: A plugin its author declared the machine's says so on its own row, and the one beside it that declared nothing says nothing

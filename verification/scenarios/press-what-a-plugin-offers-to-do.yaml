@@ -14,7 +14,7 @@
 # really there. What the operation is, and what it asks for, are the author's word — no plugin in the
 # official catalog declares any — so both are written onto what is installed, and the program that answers
 # the press is stood in beside them (see those ops' own notes). Everything from the first step on is
-# amenbo's own doing.
+# Amenbo's own doing.
 #
 # This goal has no terminal road. `plugin run` reaches the author's code from a shell, but it is a
 # different door: it names the call itself, it takes whatever arguments are typed after it, and its answer
@@ -87,7 +87,7 @@ given:
 # hands that step over.
 #
 # Two lines are closed by a reading and the rest by an eye. The author's sentences are the readings — they
-# are the one thing on those shots that neither amenbo nor the interface wrote. The button refusing the hand
+# are the one thing on those shots that neither Amenbo nor the interface wrote. The button refusing the hand
 # is paint, and the box a press asks in is read for being *empty*, and for not drawing back what was typed
 # into it, neither of which a reading of the words on a shot can settle.
 steps_gui:

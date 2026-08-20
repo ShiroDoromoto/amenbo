@@ -1,6 +1,6 @@
 # The folder everyone starts in: a new one, with nothing in it yet — no AI tool's own directory, and so
-# nothing amenbo can read a provider's name off. It is the most common folder there is, and it is exactly
-# where the question about starting this folder's AI on amenbo is worth putting, because nobody has
+# nothing Amenbo can read a provider's name off. It is the most common folder there is, and it is exactly
+# where the question about starting this folder's AI on Amenbo is worth putting, because nobody has
 # started anything here.
 #
 # What is handed over is text, and text for one tool is not text for another: the settings differ, and
@@ -15,7 +15,7 @@
 # screen turning into that tool's.
 #
 # The world is declared below: a project with one folder bound and nothing in it — no provider's
-# directory, nothing about amenbo — and one task on its board, since a project that has never held one
+# directory, nothing about Amenbo — and one task on its board, since a project that has never held one
 # is drawing the first loop, which the report stands aside for. The answer is left where a fresh store
 # leaves it, never given, which is the state the report is drawn from: only a refusal takes it away, and
 # a yes is not wiring. What is left to the operator is to open that project — the report is drawn on
@@ -24,13 +24,13 @@ id: pick-the-tool-a-folder-does-not-name
 title: A folder that shows no sign of any AI tool is handed the catalog, and the tool the reader picks is the tool the text is for
 description: >
   The reader opens a project whose folder nobody has run an AI in yet. What the report carries is not
-  nothing and not a guess: it stands with the first of the tools amenbo knows, and a picker beside it
+  nothing and not a guess: it stands with the first of the tools Amenbo knows, and a picker beside it
   holding the rest. Picking one the folder shows no trace of turns the text into that tool's — its
   settings, and the file they go in — and the button hands that one over. A report that came back empty,
   or a picker whose choice the text does not follow, is the promise this road exists to keep.
 given:
   # The folder is made by the linking and left as it is made — empty. That emptiness is the premise:
-  # amenbo has nothing to read a provider's name off, which is the case the whole road is about.
+  # Amenbo has nothing to read a provider's name off, which is the case the whole road is about.
   - type: action
     domain: project
     op: create
@@ -57,7 +57,7 @@ given:
       target: card
 
 steps_gui:
-  # Something is handed over, where amenbo has no provider's name to go on. With nothing to read off the
+  # Something is handed over, where Amenbo has no provider's name to go on. With nothing to read off the
   # folder, the report leads with the first tool in the catalog rather than an empty line — the file it
   # names is that tool's, which is how a shot tells this apart from the tool picked below. This is the
   # thing under test: a folder with no trace in it must not be the one where the report comes back

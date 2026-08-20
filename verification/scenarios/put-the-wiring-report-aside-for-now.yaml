@@ -18,7 +18,7 @@
 # there to put aside, and nothing to come back to.
 #
 # The world is declared below: the project named there, bound to a folder carrying the provider's own
-# directory with nothing about amenbo in it, and one task on its board — a project that has never held
+# directory with nothing about Amenbo in it, and one task on its board — a project that has never held
 # one is drawing the first loop, which the report stands aside for. The answer is left where a fresh
 # store leaves it, never given, which is the state the report is drawn from. What is left to the
 # operator is to open that project and read the report standing on its board. The screen moves at every
@@ -26,7 +26,7 @@
 id: put-the-wiring-report-aside-for-now
 title: The report about a project's unwired folders can be put aside without answering, and is standing again the next time that project is opened
 description: >
-  The reader is not ready to say yes or no about starting their folders' AI on amenbo, and wants the
+  The reader is not ready to say yes or no about starting their folders' AI on Amenbo, and wants the
   report out of the way for now. Press the button that only clears the screen, and it goes. Walk out of
   the project and back in, and it is there again — nothing was recorded, so nothing was decided, and the
   folders behind it are still waiting. A build that let this press count as a refusal would take the
@@ -41,7 +41,7 @@ given:
     as: greenhouse
 
   # What raises the report: a bound folder the reader's AI already works in, with settings that do
-  # nothing about amenbo. It is read off the folder's own contents, so it is written there and nowhere
+  # nothing about Amenbo. It is read off the folder's own contents, so it is written there and nowhere
   # else.
   - type: action
     domain: repo

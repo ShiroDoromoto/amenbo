@@ -2,7 +2,7 @@
 # the notice whose premise is not met stands ahead of the rest. That is what keeps a screen from
 # putting two jobs up without saying which to do first — and it is bought by leaving the others off.
 #
-# The bill comes due here. Folders that still start their AI without amenbo go on waiting whether or
+# The bill comes due here. Folders that still start their AI without Amenbo go on waiting whether or
 # not the report about them is the notice that won, so a reader who took the board at its word would
 # be reading a list quietly cut short. What makes the single notice a choice of where to act, rather
 # than work disappearing, is the project's own settings holding the whole inventory.
@@ -22,13 +22,13 @@
 # place on.
 #
 # The world is declared below: one project bound to the folder named there, that folder carrying the
-# tool's own directory with nothing about amenbo in it, and no task on its board — which is what puts
+# tool's own directory with nothing about Amenbo in it, and no task on its board — which is what puts
 # the first loop ahead of the report. The answer is left where a fresh store leaves it, never given,
 # since only a refusal would take the report out of the inventory as well. What is left to the operator
 # is to open that project's board. The screen moves once: open the settings when the run hands that
 # step over.
 id: look-over-what-the-board-left-out
-title: The folders still starting their AI without amenbo are listed in the project's own settings, including when the board is carrying another notice entirely
+title: The folders still starting their AI without Amenbo are listed in the project's own settings, including when the board is carrying another notice entirely
 description: >
   Stand on a board that is drawing the first loop, which the wiring report waits behind, and read that
   the report is not up. Then open the project's own settings and find the folder still waiting there.

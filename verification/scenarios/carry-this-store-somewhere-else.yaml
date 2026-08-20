@@ -64,7 +64,7 @@ steps_cli:
       since: settled
       moved: false
 
-  # The picture. It is read back off disk rather than out of amenbo, for the same reason an export is:
+  # The picture. It is read back off disk rather than out of Amenbo, for the same reason an export is:
   # what the other side receives is this document.
   - type: action
     domain: store
@@ -114,7 +114,7 @@ steps_cli:
       project: other
 
   # From here on the calls are made from inside a launched plugin, which is the only place a window is
-  # what it will be in the wild: amenbo puts the store and the window into the child's environment, and
+  # what it will be in the wild: Amenbo puts the store and the window into the child's environment, and
   # no argument the plugin passes widens either.
   - type: action
     domain: plugin

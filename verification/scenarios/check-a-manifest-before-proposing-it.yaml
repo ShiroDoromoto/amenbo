@@ -1,5 +1,5 @@
 # The author's door, and the only plugin line that touches no store at all: a manifest file is held
-# up to the catalog rules before it is ever proposed for the catalog. It is the same reading amenbo
+# up to the catalog rules before it is ever proposed for the catalog. It is the same reading Amenbo
 # does at the install door, which is what makes a self-check worth anything — an author who passes
 # here does not meet a different answer later.
 id: check-a-manifest-before-proposing-it
@@ -11,12 +11,12 @@ description: >
   https, a setting whose default is not among the choices it offers, an agent block that names no occasion,
   a call written as a sentence, a value asked for at a press declaring it is kept, a line
   citing a record of this store, a description text pointing at a page only a base could resolve, one past
-  the size a language is given, a layer amenbo has no name for, and a file that does not even parse — and
+  the size a language is given, a layer Amenbo has no name for, and a file that does not even parse — and
   read back not just that it failed but which rule it failed on. A check that says "invalid" for the wrong
   reason is a check an author cannot act on. Then write the same manifest in another language, in the file
   beside it that is how a translation is supplied, and see that it is read with the manifest: one that lines
   up — its settings form's buttons included — passes, one naming a setting the manifest does not declare is
-  turned down, and one written in a language amenbo is not read in is turned down too.
+  turned down, and one written in a language Amenbo is not read in is turned down too.
 steps_cli:
   - type: action
     domain: repo
@@ -168,7 +168,7 @@ steps_cli:
       ok: false
       problem: not_an_option
 
-  # What a plugin says for itself is the author's own words, and amenbo never rules on them — but a block
+  # What a plugin says for itself is the author's own words, and Amenbo never rules on them — but a block
   # that names no occasion says nothing an AI can act on, so the door turns it down like any other empty
   # line rather than relaying a blank.
   - type: action
@@ -210,7 +210,7 @@ steps_cli:
       ok: false
       problem: empty
 
-  # `cmd` is not prose — it is the call the reader types after the prefix amenbo puts in front. So it is
+  # `cmd` is not prose — it is the call the reader types after the prefix Amenbo puts in front. So it is
   # held to the shape a call has, and a line written as a sentence is turned down while it is still the
   # author's to fix, rather than reaching an AI's entry point reading like an instruction.
   - type: action
@@ -366,7 +366,7 @@ steps_cli:
       ok: false
       problem: too_long
 
-  # The layer a plugin lives at is the author's own declaration, and amenbo knows two of them: a project's
+  # The layer a plugin lives at is the author's own declaration, and Amenbo knows two of them: a project's
   # plugin, and the device's. A third is not a rule to weigh but a word the reading has no meaning for, so
   # the manifest is turned down whole — which is the same wall an install would meet, and the author meets
   # it here instead, before the catalog ever sees it.
@@ -507,7 +507,7 @@ steps_cli:
       ok: false
       problem: not_in_base
 
-  # The language code names the file and the document it will be published as at once, so one amenbo is not
+  # The language code names the file and the document it will be published as at once, so one Amenbo is not
   # read in is a document nothing would ever fetch.
   - type: action
     domain: repo

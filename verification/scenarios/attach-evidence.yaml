@@ -1,7 +1,7 @@
 id: attach-evidence
 title: A file and a link hang on a task, a decision and a comment, and the bytes come back out unchanged
 description: >
-  The one place amenbo carries bytes. Ingesting a file resolves a path, writes a blob under the store
+  The one place Amenbo carries bytes. Ingesting a file resolves a path, writes a blob under the store
   root and hands back a row pointing at it — a chain that build-time tests never walk, since it only
   exists once there is an installed binary and a real store on disk. So the line ends by saving the
   blob back out and comparing it to what went in. `attach open` is deliberately left out: it hands the

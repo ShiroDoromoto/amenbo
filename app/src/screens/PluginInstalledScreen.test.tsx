@@ -447,6 +447,26 @@ describe("the layer a plugin declared", () => {
     ]);
   });
 
+  // The device's row is the same row at the other layer (`AMB-D-601`), and that includes its settings:
+  // the form opens inside it, drawn from the author's schema, before any value was ever read for the
+  // device — a declared box and the save under it, not an empty panel.
+  it("opens the settings form inside the device's own row, boxes and save and all", async () => {
+    hoisted.projects = [{ id: 1, name: "alpha" }];
+    hoisted.installs = [
+      row({
+        name: "worktree",
+        config: [field({ key: "base", label: "Base branch", required: true })],
+        device: onDevice({ requiredUnset: true }),
+      }),
+    ];
+    render();
+
+    expect(container.textContent).toContain(t("plugins.cfg.requiredEmpty"));
+    await act(async () => { button(t("plugins.cfg.open"))!.click(); });
+    expect(boxes().length).toBeGreaterThan(0);
+    expect(button(t("plugins.cfg.save"))).toBeTruthy();
+  });
+
   it("says nothing for a project's plugin, which is every plugin that declared nothing", () => {
     hoisted.projects = [{ id: 1, name: "alpha" }];
     hoisted.installs = [row({ name: "notify", on: [1] })];

@@ -21,7 +21,9 @@
 //! be written leaves the config saying "off", never the reverse. Between two runs the two can still
 //! drift apart, because the registration is something the user can take away and a path that stops
 //! naming this executable, so [`crate::autostart::reconcile`] settles them once as the app comes up
-//! (`AMB-D-546`).
+//! (`AMB-D-546`). One absence is not the user's doing and is read as such: an app that has moved since
+//! the last pass takes its registration with it, and the pass puts it back where the app is now rather
+//! than switching the setting off (`AMB-D-720`).
 //!
 //! A development build has none of it (`AMB-D-547`): the plugin is not registered, and this refuses.
 
@@ -140,6 +142,15 @@ fn take_legacy_registration() -> bool {
     false
 }
 
+/// Where this build runs from, as the absolute path the next pass compares against.
+///
+/// `None` when the OS will not say. A pass that cannot name its own location learns nothing from the
+/// comparison and leaves the recorded one alone, so an absence there reads the way `AMB-D-546` had it.
+#[cfg(desktop)]
+fn running_from() -> Option<String> {
+    std::env::current_exe().ok().map(|p| p.to_string_lossy().into_owned())
+}
+
 /// Write (`enabled`) or remove (`!enabled`) this user's login registration.
 ///
 /// The webview never reaches the plugin itself — that is why no `autostart:*` permission is granted in
@@ -174,27 +185,56 @@ pub enum Fix {
     /// The user wants it and something is registered: write the registration again, so it names the
     /// executable running now rather than wherever this app used to live.
     Rewrite,
-    /// The user wants it and nothing is registered: they removed it from the OS, so the setting goes
-    /// off to match what they can see.
+    /// The user wants it, nothing is registered, and the app is not where it was: the registration
+    /// went with the move rather than being taken away, so it is written again at the place the app
+    /// runs from now (`AMB-D-720`).
+    Reregister,
+    /// The user wants it, nothing is registered, and the app is where it was: they removed it from the
+    /// OS, so the setting goes off to match what they can see.
     TurnSettingOff,
     /// The user does not want it and something is registered: take the registration away.
     Deregister,
 }
 
-/// The whole of the reconciliation rule (`AMB-D-546`), as a truth table over the two states.
+/// The whole of the reconciliation rule (`AMB-D-546`, amended by `AMB-D-720`), as a truth table over
+/// the two states and whether the app itself has moved since the last pass.
 ///
 /// The registered-and-current row is not distinguished from registered-and-stale, and cannot be:
 /// what is registered can be read as a yes or no and offers no way to read what it points at, so
 /// telling the two apart would mean parsing a plist, a desktop entry and a registry value that
 /// another crate writes and may reformat. Writing the registration again covers both — it is what a
 /// stale one needs, and what a current one already says. The user sees the same thing either way; the
-/// cost is one write at launch.
-pub fn fix_for(setting_on: bool, registered: bool) -> Fix {
-    match (setting_on, registered) {
-        (true, true) => Fix::Rewrite,
-        (true, false) => Fix::TurnSettingOff,
-        (false, true) => Fix::Deregister,
-        (false, false) => Fix::Nothing,
+/// cost is one write at launch. That is also why `moved` is read only where nothing is registered:
+/// where something is, the answer is already to write it again.
+///
+/// Nothing registered is the row the move splits. The OS says the same thing whether the user switched
+/// the row off or the app was replaced underneath it, and only one of those is an answer. An app that
+/// is not where the last pass left it was replaced — a macOS `.pkg` swaps the bundle whole — so its
+/// registration is put back rather than read as a no. Where the app has not moved, the absence means
+/// what `AMB-D-546` always took it to mean, and the setting follows what the user can see.
+///
+/// The cost is the one order this cannot recover: a user who moves the app and switches the row off
+/// between the same two starts is read as having only moved it, and gets the registration back.
+/// Whether the app is somewhere other than where the last pass recorded it.
+///
+/// Two answers are needed to compare, and either being absent is the same as agreement: a first pass
+/// has nothing to have moved from, and a pass that cannot read its own location has nothing to compare
+/// with. Both leave the absence of a registration meaning what `AMB-D-546` had it mean, which is the
+/// conservative half — it never writes a registration back on a guess.
+pub fn has_moved(here: Option<&str>, recorded: Option<&str>) -> bool {
+    match (here, recorded) {
+        (Some(now), Some(before)) => now != before,
+        _ => false,
+    }
+}
+
+pub fn fix_for(setting_on: bool, registered: bool, moved: bool) -> Fix {
+    match (setting_on, registered, moved) {
+        (true, true, _) => Fix::Rewrite,
+        (true, false, true) => Fix::Reregister,
+        (true, false, false) => Fix::TurnSettingOff,
+        (false, true, _) => Fix::Deregister,
+        (false, false, _) => Fix::Nothing,
     }
 }
 
@@ -223,23 +263,46 @@ pub fn reconcile(app: &tauri::AppHandle) {
             return;
         }
     };
-    match fix_for(config.autostart, registered || carried_over) {
+    // Where the app is now, against where the last pass left it (`AMB-D-720`).
+    let here = running_from();
+    let moved = has_moved(here.as_deref(), config.autostart_exe.as_deref());
+    let mut settled = false;
+    // A move that was found but could not be answered leaves the recorded location alone, so the next
+    // pass finds the same move and tries again. Recording it would turn the retry into a
+    // `TurnSettingOff` — the very thing this row exists to prevent — over a write that failed once.
+    let mut record_here = true;
+    match fix_for(config.autostart, registered || carried_over, moved) {
         Fix::Nothing => {}
         Fix::Rewrite => {
             if let Err(e) = write(app, true) {
                 log::warn!("autostart: could not point the login registration at this build ({e})");
             }
         }
+        Fix::Reregister => {
+            if let Err(e) = write(app, true) {
+                log::warn!("autostart: this app moved and its login registration did not survive it, and could not be written again here ({e})");
+                record_here = false;
+            }
+        }
         Fix::TurnSettingOff => {
             config.autostart = false;
-            if let Err(e) = config.save(&paths.config_file) {
-                log::warn!("autostart: the login registration is gone but the setting could not follow ({e})");
-            }
+            settled = true;
         }
         Fix::Deregister => {
             if let Err(e) = write(app, false) {
                 log::warn!("autostart: could not take the login registration away ({e})");
             }
+        }
+    }
+    // Record where this pass ran, so the next one can tell a move from the user's own hand. Written
+    // whatever the setting says: it is what the setting will be read against once it is on.
+    if record_here && here.is_some() && here != config.autostart_exe {
+        config.autostart_exe = here;
+        settled = true;
+    }
+    if settled {
+        if let Err(e) = config.save(&paths.config_file) {
+            log::warn!("autostart: what this pass settled could not be written down, so the next one reads the state it left ({e})");
         }
     }
 }
@@ -256,14 +319,42 @@ mod tests {
     #[test]
     fn the_two_states_settle_the_way_the_user_can_see() {
         // Wanted and registered: rewritten, because a registration naming a place this app has moved
-        // out of starts nothing and says nothing about having failed.
-        assert_eq!(fix_for(true, true), Fix::Rewrite);
-        // Wanted but nothing registered: the user took it away from the OS side, and the setting
-        // follows so that the switch and the login agree.
-        assert_eq!(fix_for(true, false), Fix::TurnSettingOff);
+        // out of starts nothing and says nothing about having failed. Whether the app moved does not
+        // enter it — writing it again is already the answer to both.
+        assert_eq!(fix_for(true, true, false), Fix::Rewrite);
+        assert_eq!(fix_for(true, true, true), Fix::Rewrite);
+        // Wanted, nothing registered, and the app is where it was: the user took it away from the OS
+        // side, and the setting follows so that the switch and the login agree.
+        assert_eq!(fix_for(true, false, false), Fix::TurnSettingOff);
         // Not wanted but registered: left over from a switch that was on, and it goes.
-        assert_eq!(fix_for(false, true), Fix::Deregister);
-        assert_eq!(fix_for(false, false), Fix::Nothing);
+        assert_eq!(fix_for(false, true, false), Fix::Deregister);
+        assert_eq!(fix_for(false, true, true), Fix::Deregister);
+        assert_eq!(fix_for(false, false, false), Fix::Nothing);
+        assert_eq!(fix_for(false, false, true), Fix::Nothing);
+    }
+
+    /// The row `AMB-D-720` added, and the one it is told apart from. Both look the same to the OS —
+    /// the setting is on and nothing is registered — and only the app's own location separates them.
+    #[test]
+    fn a_registration_the_move_took_is_not_a_registration_the_user_took() {
+        // The app is not where the last pass left it, so what removed the registration was the move.
+        // Switching the setting off here is what would silently stop every updated mac.
+        assert_eq!(fix_for(true, false, true), Fix::Reregister);
+        // The app has not moved, so the only hand that could have removed it is the user's.
+        assert_eq!(fix_for(true, false, false), Fix::TurnSettingOff);
+    }
+
+    /// The comparison the new row rests on, and the two ways it has nothing to compare.
+    #[test]
+    fn a_location_is_only_a_move_against_one_that_was_recorded() {
+        assert!(has_moved(Some("/Applications/Amenbo.app/Contents/MacOS/amenbo-app"), Some("/Applications/amenbo.app/Contents/MacOS/amenbo-app")));
+        assert!(!has_moved(Some("/Applications/amenbo.app/Contents/MacOS/amenbo-app"), Some("/Applications/amenbo.app/Contents/MacOS/amenbo-app")));
+        // No pass has recorded one yet: a first start is not a move, whatever it finds registered.
+        assert!(!has_moved(Some("/Applications/amenbo.app/Contents/MacOS/amenbo-app"), None));
+        // The OS would not say where this build runs from, so there is nothing to compare and the
+        // recorded one is left standing for the next pass.
+        assert!(!has_moved(None, Some("/Applications/amenbo.app/Contents/MacOS/amenbo-app")));
+        assert!(!has_moved(None, None));
     }
 
     /// The registration a machine carries in from an older door is a registration: the pass that
@@ -272,8 +363,8 @@ mod tests {
     fn a_registration_carried_in_from_the_older_door_keeps_the_answer() {
         let registered_now = false;
         let carried_over = true;
-        assert_eq!(fix_for(true, registered_now || carried_over), Fix::Rewrite);
+        assert_eq!(fix_for(true, registered_now || carried_over, false), Fix::Rewrite);
         // Nothing carried in, and the absence means what it has always meant.
-        assert_eq!(fix_for(true, false), Fix::TurnSettingOff);
+        assert_eq!(fix_for(true, false, false), Fix::TurnSettingOff);
     }
 }

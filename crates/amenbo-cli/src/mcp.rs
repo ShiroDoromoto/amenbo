@@ -261,6 +261,7 @@ fn initialize(params: &Value) -> Value {
 /// started reads as set up the next time the list is pulled.
 fn tools(dirs: &[PathBuf]) -> Value {
     let served = offered(dirs);
+    let cmd = Paths::command_name();
     let folder = json!({
         "type": "string",
         "description": "which of this server's folders to work in — one of the ones listed in this tool's description, written exactly as it is listed there",
@@ -294,7 +295,7 @@ fn tools(dirs: &[PathBuf]) -> Value {
         },
         {
             "name": "run",
-            "description": format!("Run an Amenbo command in one folder and hand back exactly what it wrote. The words are the ones you would type after `amenbo`, one per array element — pull the command's spec with `agent_command` first rather than guessing a flag. Add `--json` yourself where you want machine-readable output. Do not pass `--actor`: this server declares the facet, and one you write is dropped. `bind` and `init` are refused here — ask the person to run either in the folder itself.\n\n{served}"),
+            "description": format!("Run an Amenbo command in one folder and hand back exactly what it wrote. The words are the ones you would type after `{cmd}`, one per array element — pull the command's spec with `agent_command` first rather than guessing a flag. Add `--json` yourself where you want machine-readable output. Do not pass `--actor`: this server declares the facet, and one you write is dropped. `bind` and `init` are refused here — ask the person to run either in the folder itself.\n\n{served}"),
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -302,7 +303,7 @@ fn tools(dirs: &[PathBuf]) -> Value {
                     "args": {
                         "type": "array",
                         "items": { "type": "string" },
-                        "description": "the command and its flags, one word per element, as they would be typed after `amenbo` — for example [\"task\", \"list\", \"--filter\", \"status:todo\", \"--json\"]. Empty runs Amenbo with no arguments, which is today's work",
+                        "description": format!("the command and its flags, one word per element, as they would be typed after `{cmd}` — for example [\"task\", \"list\", \"--filter\", \"status:todo\", \"--json\"]. Empty runs Amenbo with no arguments, which is today's work"),
                     },
                 },
                 "required": [FOLDER_ARG, "args"],
@@ -445,7 +446,10 @@ fn argv_for(name: &str, args: &Value) -> Result<Shaped, (i64, String)> {
             let words = args
                 .get("args")
                 .and_then(Value::as_array)
-                .ok_or_else(|| (INVALID_PARAMS, "run takes `args`: the words to type after amenbo, one per element.".to_string()))?
+                .ok_or_else(|| {
+                    let cmd = Paths::command_name();
+                    (INVALID_PARAMS, format!("run takes `args`: the words to type after `{cmd}`, one per element."))
+                })?
                 .iter()
                 .map(|w| w.as_str().map(str::to_string))
                 .collect::<Option<Vec<String>>>()
@@ -466,7 +470,7 @@ fn argv_for(name: &str, args: &Value) -> Result<Shaped, (i64, String)> {
 ///
 /// Where the caller's words stop being Amenbo's is [`read_line`]'s answer: after `plugin run <name>`
 /// every word is the plugin's (`AMB-D-346`), and a `--actor` standing there is a word on the plugin's
-/// own face, not a facet for amenbo. Taking it away would quietly break a call Amenbo never read.
+/// own face, not a facet for Amenbo. Taking it away would quietly break a call Amenbo never read.
 fn shape(words: &[String]) -> Shaped {
     let line = read_line(words);
     if let Some(refused) = line.subcommand.as_deref().filter(|s| REFUSED.contains(s)) {

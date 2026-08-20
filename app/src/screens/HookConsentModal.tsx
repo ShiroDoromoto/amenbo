@@ -87,7 +87,7 @@ export function HookConsentModal({ onDone }: { onDone?: () => void }) {
   };
 
   return (
-    <div className="hookconsent__overlay">
+    <div className="modal__overlay">
       <div className="hookconsent__modal" role="dialog" aria-modal="true" aria-labelledby="hookconsent-title">
         <div className="hookconsent__title" id="hookconsent-title">{t("hooks.title")}</div>
         <div className="hookconsent__why">{t("hooks.why")}</div>

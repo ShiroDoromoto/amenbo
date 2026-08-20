@@ -82,7 +82,7 @@ export function PluginCrossings({ install, projects }: {
               ))}
             </select>
           )}
-          {/* Not a warning about this machine but about the plugin: an open gate on a build amenbo
+          {/* Not a warning about this machine but about the plugin: an open gate on a build Amenbo
               cannot speak to fires nothing, so saying why beats a switch that appears to work. */}
           {!install.compatible && (
             <div className="pluggate__note">

@@ -417,7 +417,7 @@ const tool = (id: string): AgentHookRequestsDto["tools"][number] => ({
 // The way back out of an answer that is otherwise final (`AMB-D-459`). What the section is judged on is
 // that its three states stay three: a refusal and a project nobody has asked are both silent everywhere
 // else, and this is the one screen that tells them apart.
-describe("the answer about starting this project's AI on amenbo", () => {
+describe("the answer about starting this project's AI on Amenbo", () => {
   it("shows a yes as a yes, with the way back out of it offered", async () => {
     hoisted.consent = true;
     await render([]);

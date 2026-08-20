@@ -816,7 +816,7 @@ fn is_false(flag: &bool) -> bool {
 ///   commands:
 ///     - cmd: <subcommand and arguments>
 ///       does: what it does, and what it returns (one line)
-///       steps: [<the ids of amenbo's own steps this call is a tool for>]
+///       steps: [<the ids of Amenbo's own steps this call is a tool for>]
 /// ```
 ///
 /// **The calling form is Amenbo's to build.** [`cmd`](AgentCommand::cmd) holds the plugin's own command
@@ -1863,7 +1863,7 @@ mod tests {
         let action = &settings.actions["config test"];
         assert_eq!(action.label.as_deref(), Some("テスト送信"), "keyed by the call it raises, never by position");
         assert_eq!(action.ask["api_token"], "API トークン", "and the boxes by the name they are handed over under");
-        assert!(o.extra.is_empty(), "everything it wrote is something amenbo translates");
+        assert!(o.extra.is_empty(), "everything it wrote is something Amenbo translates");
 
         // What was not translated re-emits as absent, never as an empty string standing in for a line
         // the author never wrote.

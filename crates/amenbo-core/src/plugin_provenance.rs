@@ -410,7 +410,7 @@ yO4MZq6nO8TD4ypgwfYImIKz9E1tM3szwA/S9CRXLrH30HP+gQHXcL12wngoJy9uCBgHuaIsrnRo17T3
             text.contains(&key_fingerprint(TEST_PUBKEY).unwrap()),
             "the fingerprint of the key it checked against: {text}"
         );
-        assert!(!text.contains("amenbo catalog key"), "and not the one amenbo ships: {text}");
+        assert!(!text.contains("amenbo catalog key"), "and not the one Amenbo ships: {text}");
     }
 
     // ---- the embedded catalog key ----

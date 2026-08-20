@@ -1084,7 +1084,7 @@ mod tests {
         let solo = hook_body(HookSlot::PreCommit, "amenbo");
 
         // Amenbo gone: a standalone hook must exit 0, not trap the commit.
-        assert_eq!(run_hook(&dir, &solo, "/nonexistent"), 0, "an uninstalled amenbo must not block a commit");
+        assert_eq!(run_hook(&dir, &solo, "/nonexistent"), 0, "an uninstalled Amenbo must not block a commit");
 
         // Amenbo present, the hook's lint fails: the block still stops the commit. The block calls the
         // slot's entry point (`githook-pre-commit`), so that is the argument the shim sees.
@@ -1097,7 +1097,7 @@ mod tests {
 
         // Coexisting, Amenbo gone: the other tool's body below runs and decides — here it fails.
         let coexist = format!("{solo}echo other-tool\nexit 3\n");
-        assert_eq!(run_hook(&dir, &coexist, "/nonexistent"), 3, "amenbo gone, the other tool's hook still runs");
+        assert_eq!(run_hook(&dir, &coexist, "/nonexistent"), 3, "Amenbo gone, the other tool's hook still runs");
 
         // ...and the skip is no longer silent: Amenbo gone, the hook says so on stderr so a leftover hook
         // doing nothing is distinguishable from one that ran and passed.

@@ -633,7 +633,7 @@ mod tests {
         assert_eq!(
             resolve(&third, "worktree").unwrap().trust_root().unwrap().fingerprint().as_deref(),
             Some("334FBDE17706DFB0"),
-            "the catalog's own key, not amenbo's"
+            "the catalog's own key, not Amenbo's"
         );
     }
 
@@ -729,7 +729,7 @@ mod tests {
     fn the_distributable_fetched_is_the_one_published_for_this_platform() {
         use crate::plugin_manifest::Asset;
 
-        let here = Os::here().expect("amenbo runs on an OS its manifests can name");
+        let here = Os::here().expect("Amenbo runs on an OS its manifests can name");
         let other = [Os::Macos, Os::Windows, Os::Linux].into_iter().find(|os| *os != here).unwrap();
 
         let mut m = manifest("worktree");

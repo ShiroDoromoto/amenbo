@@ -318,7 +318,7 @@ describe("the screen where an AI is connected", () => {
     expect(container.textContent).toContain(tf("mcp.written", { path: "/w/downloads/amenbo.mcpb" }));
   });
 
-  it("draws what an older amenbo left apart from the row's own state, with its own removal", async () => {
+  it("draws what an older Amenbo left apart from the row's own state, with its own removal", async () => {
     await render({
       projects: [SHOP],
       apps: [app({ stale: [{ name: "amenbo-shop", folder: "/w/shop", removeRequest: "clear amenbo-shop" }] })],
@@ -429,7 +429,7 @@ describe("the screen where an AI is connected", () => {
 
     const said = container.querySelector(".settings__body > .errortext");
     expect(said?.textContent).toContain(t("app.loadError"));
-    expect(said?.textContent).toContain("the store is locked"); // the door's own words, under amenbo's
+    expect(said?.textContent).toContain("the store is locked"); // the door's own words, under Amenbo's
     expect(container.textContent).not.toContain(t("app.loading"));
     expect(rows()).toHaveLength(0);
   });

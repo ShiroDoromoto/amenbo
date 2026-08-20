@@ -616,7 +616,7 @@ mod tests {
         // so counting it would leave the rule unable to fire at all.
         let block = crate::agents::upsert_managed(None, &crate::agents::managed_block_body("English", "amenbo"));
         std::fs::write(dir.join("AGENTS.md"), &block).unwrap();
-        assert!(!ai_in_use(&dir, &probe(&dir, "amenbo")), "amenbo's own block is not a sign of anyone");
+        assert!(!ai_in_use(&dir, &probe(&dir, "amenbo")), "Amenbo's own block is not a sign of anyone");
 
         // A word of the reader's beside it is. `AGENTS.md` is the case the catalog cannot carry —
         // several vendors read it — and the case this has to answer.

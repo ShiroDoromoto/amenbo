@@ -131,7 +131,7 @@ fn lint_reads_stdin_and_leaves_foreign_refs_alone() {
     let home = unopened_home();
 
     let (out, _, code) = lint(&repo, &home, &["--stdin"], Some("fixes #12, part of PROJ-9 and T-45\n"));
-    assert_eq!(code, 0, "no amenbo ref, so nothing to report: {out}");
+    assert_eq!(code, 0, "no Amenbo ref, so nothing to report: {out}");
 
     let (out, _, code) = lint(&repo, &home, &["--stdin", "--json"], Some("see AMB-T-1\n"));
     assert_eq!(code, 1);
@@ -178,7 +178,7 @@ fn agent_hook_snippet_gives_stdout_to_the_request_and_says_where_it_goes_on_stde
     assert!(err.contains(".claude/settings.json"), "stderr does not name the file it edits: {err}");
     assert!(
         err.contains("Amenbo writes nothing"),
-        "stderr does not say the writing is not amenbo's: {err}"
+        "stderr does not say the writing is not Amenbo's: {err}"
     );
 
     // A tool nobody lists is refused where the argument is read, naming what it takes — so the answer to
@@ -239,7 +239,7 @@ fn a_folder_that_traces_no_tool_says_it_only_where_the_reader_can_name_its_own()
 
     let (_, err, code) = cli.run_both(&["task", "list"]);
     assert_eq!(code, 0);
-    assert!(!err.contains("agent-hook"), "a person was warned about a tool amenbo cannot see: {err}");
+    assert!(!err.contains("agent-hook"), "a person was warned about a tool Amenbo cannot see: {err}");
 
     let doc = cli.json(&["task", "list", "--json"]);
     let report = &doc["setup_incomplete"]["agent_hook"];
@@ -372,7 +372,7 @@ fn the_report_ends_when_every_tool_in_the_catalog_is_wired() {
     let doc = cli.json(&["task", "list", "--json", "--actor", "ai"]);
     assert!(
         doc.get("setup_incomplete").is_none(),
-        "a folder that starts every AI on amenbo has nothing left to finish: {doc}"
+        "a folder that starts every AI on Amenbo has nothing left to finish: {doc}"
     );
 }
 
@@ -587,7 +587,7 @@ fn the_installed_hook_lives_its_whole_life_under_real_git() {
     // Amenbo gone from PATH: even a ref in the message must not trap the commit — `command -v` fails, the
     // block's `|| true` clears it, and a standalone hook lets the commit through.
     let gone = commit("two.txt", "two\n", "chore: closes AMB-T-1655, amenbo gone", &no_amenbo);
-    assert!(gone.status.success(), "an uninstalled amenbo must not trap a commit: {}", String::from_utf8_lossy(&gone.stderr));
+    assert!(gone.status.success(), "an uninstalled Amenbo must not trap a commit: {}", String::from_utf8_lossy(&gone.stderr));
 
     // uninstall stops the gate-keeping: a ref in the message now goes through.
     let removed = cli.json_from(&repo, &["hooks", "uninstall", "--json"]);
@@ -641,13 +641,13 @@ fn the_hook_coexists_with_a_foreign_hook_and_leaves_it_on_uninstall() {
     let _ = std::fs::remove_file(&mark);
     let clean = commit("a.txt", "chore: tidy up");
     assert!(clean.status.success(), "a clean commit must pass: {}", String::from_utf8_lossy(&clean.stderr));
-    assert!(mark.exists(), "the foreign hook must still run when amenbo's block falls through");
+    assert!(mark.exists(), "the foreign hook must still run when Amenbo's block falls through");
 
     // uninstall takes only Amenbo's block; the foreign body stays and keeps running.
     let removed = cli.json_from(&repo, &["hooks", "uninstall", "--json"]);
     assert_eq!(removed["ok"], serde_json::json!(true), "uninstall: {removed}");
     let body = std::fs::read_to_string(hooks_dir.join("commit-msg")).unwrap();
-    assert!(!body.contains("amenbo:hook"), "uninstall left amenbo's managed block behind: {body}");
+    assert!(!body.contains("amenbo:hook"), "uninstall left Amenbo's managed block behind: {body}");
     assert!(body.contains(": >"), "uninstall must leave the foreign hook intact: {body}");
     let _ = std::fs::remove_file(&mark);
     let still = commit("b.txt", "chore: still here");

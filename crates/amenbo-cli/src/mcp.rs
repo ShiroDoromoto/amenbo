@@ -605,7 +605,7 @@ mod tests {
     impl CallAmenbo for Recorder {
         fn call(&self, dir: &Path, args: &[String]) -> Ran {
             self.seen.borrow_mut().push((dir.to_path_buf(), args.to_vec()));
-            Ran { ok: self.ok, text: "what amenbo wrote".to_string() }
+            Ran { ok: self.ok, text: "what Amenbo wrote".to_string() }
         }
     }
 
@@ -686,7 +686,7 @@ mod tests {
         let out = ask(&call_for("agent", GREENHOUSE, json!({})), &caller);
         assert_eq!(caller.last(), vec!["agent", "--json"]);
         assert_eq!(caller.last_dir(), PathBuf::from(GREENHOUSE), "the call runs where it said");
-        assert_eq!(out["result"]["content"][0]["text"], "what amenbo wrote");
+        assert_eq!(out["result"]["content"][0]["text"], "what Amenbo wrote");
         assert_eq!(out["result"]["isError"], false);
     }
 
@@ -896,7 +896,7 @@ mod tests {
         let out = ask(&call_for("agent", SHOP, json!({})), &caller);
         assert!(out.get("error").is_none(), "a tool that ran is not a protocol fault: {out}");
         assert_eq!(out["result"]["isError"], true);
-        assert_eq!(out["result"]["content"][0]["text"], "what amenbo wrote");
+        assert_eq!(out["result"]["content"][0]["text"], "what Amenbo wrote");
     }
 
     #[test]

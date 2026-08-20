@@ -44,7 +44,7 @@ fn every_crossing_a_settings_step_names_is_a_project_that_stands() {
     for f in scenario_files() {
         let scenario = amenbo_scenario::lint_file(&f)
             .unwrap_or_else(|errs| panic!("{} does not lint: {}", f.display(), errs.join("\n")));
-        // The project a run finds itself in before anything is raised: amenbo raises one for the
+        // The project a run finds itself in before anything is raised: Amenbo raises one for the
         // folder the run works in, and calls it after that folder.
         let mut standing: HashSet<&str> =
             [amenbo_verify_cli::scratch::CWD_DIR].into_iter().collect();

@@ -385,7 +385,7 @@ mod tests {
             &dir.join(EXTENSIONS).join("local.mcpb.someone.else").join("manifest.json"),
             r#"{"user_config":{"folders":{"default":["/work/theirs"]}}}"#,
         );
-        assert_eq!(extension(&dir), None, "another extension is not amenbo's");
+        assert_eq!(extension(&dir), None, "another extension is not Amenbo's");
 
         std::fs::remove_dir_all(&dir).ok();
     }

@@ -29,7 +29,7 @@ pub(crate) fn exit_code(out: &std::process::Output) -> i32 {
     match out.status.code() {
         Some(code) => code,
         None => panic!(
-            "the amenbo child was ended by {}, not by a command that failed — no assertion was reached.\n\
+            "the Amenbo child was ended by {}, not by a command that failed — no assertion was reached.\n\
              Re-run before suspecting the change: this has been seen on CI's combined scale+e2e run only.\n\
              stdout: {}\nstderr: {}",
             signal_name(&out.status),

@@ -101,7 +101,7 @@ export function McpAppsScreen({ pick = null }: { pick?: number | null }) {
               <div className="mcp__loading">{t("app.loading")}</div>
             )}
 
-            {/* Said in amenbo's words with the door's own beneath, as the app says it elsewhere: the
+            {/* Said in Amenbo's words with the door's own beneath, as the app says it elsewhere: the
                 first line is what happened, the second is the only part that says why. */}
             {unread && (
               <ErrorNote>
@@ -297,7 +297,7 @@ function McpAppRow({
             {/* Offered only where there is something to remove: a request to delete an entry nobody
                 has would send a reader looking through a file for a line that is not in it. It is not
                 shut on an empty selection, the ticks being no part of it — what it asks for is the
-                whole entry gone, and a reader taking amenbo out has nothing to tick first. */}
+                whole entry gone, and a reader taking Amenbo out has nothing to tick first. */}
             {app.configured && !app.writesFile && (
               <button className="btn" onClick={() => void copy("remove", texts.remove)}>
                 {t("mcp.copyRemove")}
@@ -308,7 +308,7 @@ function McpAppRow({
           {failed && <ErrorNote>{failed}</ErrorNote>}
           {saved && <div className="mcp__saved">{tf("mcp.written", { path: saved })}</div>}
 
-          {/* What an older amenbo left behind (`AMB-D-679`), drawn apart from the row's own state: an
+          {/* What an older Amenbo left behind (`AMB-D-679`), drawn apart from the row's own state: an
               old entry is not this app being set up, it is something to take away. */}
           {app.stale.length > 0 && (
             <div className="mcp__stale">

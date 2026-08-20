@@ -539,7 +539,7 @@ mod tests {
     fn native_arch_is_one_amenbo_distributes() {
         assert!(
             ["arm64", "x64"].contains(&native_arch()),
-            "the machine answered `{}`, which keys nothing amenbo publishes",
+            "the machine answered `{}`, which keys nothing Amenbo publishes",
             native_arch()
         );
     }

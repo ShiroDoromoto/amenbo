@@ -512,7 +512,7 @@ mod tests {
         assert_eq!(report.superseded.len(), 2, "both earlier archives went: {:?}", report.superseded);
         assert!(!old_a.exists() && !old_b.exists());
         assert!(dest.is_file(), "the rewind point this run took is kept");
-        assert!(unrelated.is_file(), "a file that is not a pre-migration archive is not amenbo's to delete");
+        assert!(unrelated.is_file(), "a file that is not a pre-migration archive is not Amenbo's to delete");
         std::fs::remove_dir_all(&home).ok();
     }
 

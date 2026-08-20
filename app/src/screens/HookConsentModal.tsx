@@ -91,7 +91,7 @@ export function HookConsentModal({ onDone }: { onDone?: () => void }) {
       <div className="hookconsent__modal" role="dialog" aria-modal="true" aria-labelledby="hookconsent-title">
         <div className="hookconsent__title" id="hookconsent-title">{t("hooks.title")}</div>
         <div className="hookconsent__why">{t("hooks.why")}</div>
-        {/* That the answer is asked once and covers the repositories amenbo works in — said, because it is
+        {/* That the answer is asked once and covers the repositories Amenbo works in — said, because it is
             what clicking does, and a question that collected a wider consent than it admitted to would be
             the wrong kind of quiet. Said in one line, and without naming them: see the header. */}
         <div className="hookconsent__scope">{t("hooks.scope")}</div>

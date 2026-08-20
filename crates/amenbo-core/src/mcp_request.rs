@@ -1,7 +1,7 @@
-//! What a reader hands the AI already sitting in their app, to have amenbo added to it or taken back
+//! What a reader hands the AI already sitting in their app, to have Amenbo added to it or taken back
 //! out (`AMB-D-672`).
 //!
-//! **The AI is the hand that edits the file**, and the request is worded so that stays true. amenbo
+//! **The AI is the hand that edits the file**, and the request is worded so that stays true. Amenbo
 //! writes nothing here: the text travels through the reader, who decides whether to give it to anyone.
 //! What it asks for is an edit to a file that already exists and already holds other servers — so it
 //! says which file, that everything else in it stays, and that nothing else is to change. Handing over
@@ -11,7 +11,7 @@
 //! **Every app on this road can run a command**, which is why it is this road rather than a file
 //! ([`crate::mcp_apps`]): the AI in the app writes the settings its own app reads, and knows that
 //! document better than a generator does. What the request contributes is the part nobody in the app
-//! can know — where amenbo is installed, which folders the reader chose, and the name the entry has to
+//! can know — where Amenbo is installed, which folders the reader chose, and the name the entry has to
 //! carry so a later read can tell it apart ([`crate::mcp::name`]).
 //!
 //! **The entry is put in place of the old one, not merged into it** (`AMB-D-681`). What the reader
@@ -23,8 +23,8 @@
 //! **Taking it back out is a request too, and not the same one.** A removal names the entry and
 //! nothing else: there is no configuration to carry, and a reader who moved a project or finished with
 //! one is otherwise left editing by hand the thing they were never asked to edit by hand. There are two
-//! of them, because there are two entries to take out: the one amenbo writes today, and the one an
-//! older amenbo left under a name it no longer uses ([`remove_stale`], `AMB-D-679`).
+//! of them, because there are two entries to take out: the one Amenbo writes today, and the one an
+//! older Amenbo left under a name it no longer uses ([`remove_stale`], `AMB-D-679`).
 //!
 //! **What goes is the entry, never the file it sat in.** Both removals say so, because an AI told only
 //! that the entry goes decides for itself what to do with a document the entry emptied — and half of
@@ -80,7 +80,7 @@ pub fn entry(app: &McpApp, server: &Server) -> String {
     }
 }
 
-/// The request that sets amenbo up in one app, for the folders the reader chose.
+/// The request that sets Amenbo up in one app, for the folders the reader chose.
 ///
 /// **It asks for the entry to be replaced, not added to.** What the reader picked on the screen is a
 /// whole selection, and a request that merged into the folders already written there would make the
@@ -145,13 +145,13 @@ pub fn remove(app: &McpApp, server: &Server) -> String {
     )
 }
 
-/// The request that clears out an entry left under a name amenbo no longer writes
+/// The request that clears out an entry left under a name Amenbo no longer writes
 /// (`AMB-D-679`, found by [`crate::mcp_probe`]).
 ///
 /// It names the entry rather than the project, because the two have come apart: the name carries the
 /// slug the project had when the entry was written, and the reader may have renamed that project or
 /// finished with it since. What it says beyond the name is which entry stays — the one in use reads as
-/// a near neighbour of the one being taken out, and "delete the amenbo entry" would be carried out
+/// a near neighbour of the one being taken out, and "delete the Amenbo entry" would be carried out
 /// either way.
 pub fn remove_stale(app: &McpApp, server: &Server, name: &str) -> String {
     format!(
@@ -186,7 +186,7 @@ fn settings(app: &McpApp, server: &Server) -> String {
 ///
 /// **A removal names all of them, because an entry can be in all of them.** An app that keeps its
 /// settings inside a folder keeps a different file per folder, so a reader working two projects can
-/// have amenbo filed twice — and a request naming one of those would take out half of what it says it
+/// have Amenbo filed twice — and a request naming one of those would take out half of what it says it
 /// is taking out, leaving the row it was pressed on still reading "set up". The apps whose settings
 /// are the machine's resolve every folder to the same path, and the repeat is dropped rather than
 /// asked about: one file is one file however many folders arrive.
@@ -425,7 +425,7 @@ mod tests {
     }
 
     /// Clearing out an old entry names that entry, and says which one is not to go with it. Without
-    /// that second half the request reads as "delete the amenbo entry", and the AI acting on it is as
+    /// that second half the request reads as "delete the Amenbo entry", and the AI acting on it is as
     /// likely to take the live one.
     #[test]
     fn clearing_an_old_entry_names_it_and_spares_the_one_in_use() {

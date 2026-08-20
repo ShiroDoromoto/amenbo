@@ -243,7 +243,7 @@ pub struct FannedOut {
 /// no event is written to a queue twice and none is reclaimed before it was copied. The caller stores
 /// [`FannedOut::cursor`] on that same transaction, which is what makes the whole step one atom.
 ///
-/// A row this amenbo does not recognise (an event outside the v1 catalog, an unparseable actor/time) is
+/// A row this Amenbo does not recognise (an event outside the v1 catalog, an unparseable actor/time) is
 /// warned about and skipped, and the cursor still walks past it. On a retention gap the cursor is resynced
 /// to the head and nothing is queued for the lost span (see [`FannedOut::gapped`]).
 ///

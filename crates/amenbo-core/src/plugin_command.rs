@@ -1,14 +1,14 @@
 //! The command face: run a plugin synchronously and hand its stdout back as the invoking command's
 //! return value.
 //!
-//! amenbo has two plugin faces (`AMB-D-352`). The observation hook is asynchronous and fire-and-forget;
+//! Amenbo has two plugin faces (`AMB-D-352`). The observation hook is asynchronous and fire-and-forget;
 //! this is the other one — the **command**, an explicit invocation whose caller *waits for a return
 //! value*. The contract, lifted verbatim from the shape `devtool task start` already proves in the field
 //! (`AMB-D-353`):
 //!
-//! - **stdout is the machine return value** — line-based text amenbo hands back to whoever invoked the
+//! - **stdout is the machine return value** — line-based text Amenbo hands back to whoever invoked the
 //!   command (the AI), as that command's result. `devtool` emits one `cd <dir>` line the caller `eval`s;
-//!   the value is opaque to amenbo, which only relays it.
+//!   the value is opaque to Amenbo, which only relays it.
 //! - **stderr is human diagnostics** — a summary, an error, context — never the return value.
 //! - **the exit code is success or failure.** A non-zero (or signalled) exit is a failed call: the
 //!   return value is *not* used and not handed back — the caller is told it failed instead (`AMB-D-354`,
@@ -27,12 +27,12 @@ use crate::plugin_exec::{PluginInvocation, PluginOutput};
 
 /// What a command-plugin invocation resolved to, under the command contract (`AMB-D-353`/`AMB-D-354`).
 ///
-/// The two arms are the whole contract: a run either produced a return value amenbo relays, or it failed
+/// The two arms are the whole contract: a run either produced a return value Amenbo relays, or it failed
 /// and there is nothing to relay. There is no third "succeeded but ignore the output" state — a command
 /// is invoked *for* its return value.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommandOutcome {
-    /// The plugin exited cleanly. `value` is its stdout — the machine return value amenbo hands back to
+    /// The plugin exited cleanly. `value` is its stdout — the machine return value Amenbo hands back to
     /// the caller as the result of the invoking command, verbatim (any trailing newline included; the
     /// consumer, e.g. a shell `eval`, strips what it does not want). `diagnostic` is its stderr, which a
     /// clean exit carries just as a failed one does: the summary a plugin writes beside its return value is

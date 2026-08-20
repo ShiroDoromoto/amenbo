@@ -1,8 +1,8 @@
 // The first loop — the single push that joins the two ends: the user asks their AI, the AI writes to
-// amenbo, and what it wrote shows up on the board (`AMB-D-414`). Every move the GUI can make on the
+// Amenbo, and what it wrote shows up on the board (`AMB-D-414`). Every move the GUI can make on the
 // user's behalf, it makes: the terminal opens already inside the linked folder, and the request text
 // is handed over finished, with no hole left to fill in. What stays with the user is launching their
-// own AI and pasting — which AI that is, amenbo does not know, and does not ask.
+// own AI and pasting — which AI that is, Amenbo does not know, and does not ask.
 //
 // Where there is no terminal to open — a Linux box without `x-terminal-emulator`, say — the move
 // falls back to handing over the folder's path to copy, so the loop still closes by the user opening

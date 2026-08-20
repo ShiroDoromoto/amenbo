@@ -16,7 +16,7 @@
 //! - **enabled** — the gate at the layer its author declared (`AMB-D-434`/`AMB-D-351`/`AMB-D-601`: the
 //!   project it is called in, or the device; `install ≠ enable`, and running a plugin's arbitrary code is
 //!   exactly what the consent is for);
-//! - **compatible** — this amenbo speaks the payload contract it reads and clears its version floor
+//! - **compatible** — this Amenbo speaks the payload contract it reads and clears its version floor
 //!   (`AMB-D-359`);
 //! - **its config resolves** — secrets to environment variables, text settings to stdin (`AMB-D-356`).
 //!
@@ -25,7 +25,7 @@
 //! command has one plugin and a caller holding out a hand for its return value. Silence would read as an
 //! empty return.
 //!
-//! **What the plugin receives.** Its arguments verbatim on argv — the caller's words, which amenbo neither
+//! **What the plugin receives.** Its arguments verbatim on argv — the caller's words, which Amenbo neither
 //! parses nor rewrites (`AMB-D-346`: the workflow-specific meaning is the plugin's) — and on stdin the
 //! smallest document the wire contract allows: `v` first (`AMB-D-349`), plus its own non-secret config under
 //! `config` when it has any ([`command_stdin`]). There is no event payload, because no event fired.
@@ -206,7 +206,7 @@ struct Raised {
 /// `settings.actions[].cmd`, matched whole. A plugin that declares no `settings` block declares no call
 /// this face can raise, and says so the same way.
 ///
-/// The declared line is split into words and handed over as it stands — amenbo neither parses nor rewrites
+/// The declared line is split into words and handed over as it stands — Amenbo neither parses nor rewrites
 /// what a plugin's own command face is called with (`AMB-D-346`), and the line is held to the call grammar
 /// before it ever reaches a manifest on disk (`AMB-D-572`, [`crate::plugin_validate`]).
 fn declared_call(

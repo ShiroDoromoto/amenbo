@@ -471,7 +471,7 @@ export const ja: Translation = {
     "act.nDecisions.other": "決定{n}件",
     "act.nameless": "（削除済み）",
     "app.loadError": "データを読み込めませんでした。", "app.loading": "読み込み中…",
-    // lint hook consent: the question amenbo asks before writing into .git/hooks
+    // lint hook consent: the question Amenbo asks before writing into .git/hooks
     "hooks.title": "コミットに amenbo の参照が混ざらないようにしますか？",
     "hooks.why": "AMB-T-… のような参照は、それを発行したストアの外では何も意味しません。git のフックを置いて、コミットに混ざる前に止めます。",
     "hooks.scope": "訊くのはこの1回だけです。この答えは、amenbo が扱うリポジトリすべてに——これから追加するものにも——そのまま適用します。",

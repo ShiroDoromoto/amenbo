@@ -1,4 +1,4 @@
-//! The **change signal** — `store.changed`, the one event amenbo fires from the ledger rather than from a
+//! The **change signal** — `store.changed`, the one event Amenbo fires from the ledger rather than from a
 //! write point (`AMB-D-582`).
 //!
 //! What it is for is a reader outside the store that carries a whole copy of its window: it needs to know

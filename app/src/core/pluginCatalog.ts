@@ -60,7 +60,7 @@ export function usePluginCatalog(): { catalog: PluginCatalog; loading: boolean; 
 
 /**
  * Which trust layer an entry sits in (`AMB-D-347`). Two independent facts fold into one ladder here,
- * because they nest: official (the amenbo team wrote it) is always listed as well, and an entry a
+ * because they nest: official (the Amenbo team wrote it) is always listed as well, and an entry a
  * third-party catalog offers is neither.
  */
 export type PluginLayer = "official" | "listed" | "third-party";
@@ -98,7 +98,7 @@ export interface PluginFilter {
   /** Only entries that support this OS (`macos` / `windows` / `linux`), or "" for any. */
   os?: string;
   /**
-   * Only entries at or above this layer, or "" for every layer: `official` is the amenbo team's own,
+   * Only entries at or above this layer, or "" for every layer: `official` is the Amenbo team's own,
    * `listed` also admits what review put on the official index, `third-party` narrows to what only a
    * registered third-party catalog offers.
    */
@@ -220,7 +220,7 @@ export async function probeCatalogSource(url: string): Promise<PluginCatalogProb
  * `false` means it was already registered exactly like this (idempotent, not a failure).
  *
  * Registering is a trust decision, not a bookmark (`AMB-D-389`): a plugin installed from this catalog
- * is verified against **its** key rather than the one amenbo ships. So `agreedFingerprint` is what the
+ * is verified against **its** key rather than the one Amenbo ships. So `agreedFingerprint` is what the
  * consent screen showed, and the door refuses to pin anything else — including the case where the
  * catalog started publishing a different key between the screen and the button.
  */

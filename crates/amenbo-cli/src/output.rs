@@ -131,9 +131,9 @@ pub struct CliError {
 /// Two things are said, and the order is the point. The folders the server *does* serve come first,
 /// because the likeliest mistake is a caller that named the wrong one of a set it was given, and that
 /// mistake is corrected in the next call without troubling anybody. Only then the road that opens this
-/// folder, which is a person's: they add it to a project in amenbo's own window. Naming the host's
+/// folder, which is a person's: they add it to a project in Amenbo's own window. Naming the host's
 /// settings instead would be advice for a different mistake — the set is chosen there, but nothing in
-/// it reaches a folder amenbo has never been told about.
+/// it reaches a folder Amenbo has never been told about.
 fn hint_for_a_caller_with_no_terminal(dirs: &str) -> String {
     let listed = dirs
         .lines()
@@ -170,7 +170,7 @@ impl CliError {
     /// sent down two roads that are both closed. When the run came from a server
     /// ([`amenbo_core::env::mcp_dirs`])
     /// the hint is written for that reader instead — the folders it can actually reach, and the one
-    /// thing that opens this one, which is a person adding it to a project in amenbo's own window.
+    /// thing that opens this one, which is a person adding it to a project in Amenbo's own window.
     pub fn no_pointer(candidate_projects: &[String]) -> CliError {
         let cmd = Paths::command_name();
         let hint = match amenbo_core::env::mcp_dirs() {
@@ -260,7 +260,7 @@ impl CliError {
         }
     }
 
-    /// A folder recorded for this project is gone — moved, renamed, or restored somewhere else. amenbo
+    /// A folder recorded for this project is gone — moved, renamed, or restored somewhere else. Amenbo
     /// does not quietly go and work in whatever is left, so the read stops here (`binding_stale`, core's
     /// own code, since this is core's own refusal — what is added is the way out).
     ///
@@ -316,7 +316,7 @@ impl CliError {
     }
 
     /// Nested-binding guard: a new binding was requested in a **subdirectory** of a tree an ancestor's
-    /// `.amenbo` already manages. A pointer there shadows the ancestor's binding (amenbo run in that
+    /// `.amenbo` already manages. A pointer there shadows the ancestor's binding (Amenbo run in that
     /// subdirectory would resolve to the subdirectory's store, not the parent's) and scatters
     /// `.amenbo`/AGENTS.md/CLAUDE.md through the source tree. Same "respect the existing tree" rule as
     /// `init`'s clobber guard. `--force` is the way through when binding a subdirectory separately is
@@ -343,7 +343,7 @@ impl CliError {
     /// inherited that folder's binding by the upward walk. The worktree is throwaway; the store it would
     /// write to is not — it lives in app-data, outside the worktree, and outlives its deletion. Refusing
     /// beats warning: a warning that can be ignored is prose that merely moved house. The way out is to run
-    /// amenbo in the project folder, never to `bind` this checkout — restoring the binding here is the
+    /// Amenbo in the project folder, never to `bind` this checkout — restoring the binding here is the
     /// accident itself, so it is neither offered nor a way through ([`amenbo_core::worktree`]).
     pub fn nested_worktree(worktree_root: &str, bound_dir: &str) -> CliError {
         CliError {
@@ -456,7 +456,7 @@ impl From<amenbo_core::Error> for CliError {
             )),
             // The refusal states the shape and stops there, which leaves the caller holding the very
             // value that failed: `git log --oneline` prints the short form, so the value nearest to hand
-            // is the one the door will never take. amenbo does not expand it — it never runs git
+            // is the one the door will never take. Amenbo does not expand it — it never runs git
             // (`AMB-D-281`) — so what it can do is name the one command that does.
             E::Invalid(m) if m.code() == Some(ErrorCode::InvalidCommitSha) => Some(
                 "`git log --oneline` prints the short form. Expand it with `git rev-parse <short sha>` and pass what that returns — amenbo never runs git itself."

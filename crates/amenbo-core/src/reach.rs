@@ -10,7 +10,7 @@
 //!   place to stand), what the GUI runs with, and what a plugin declaring `scope: machine` is launched with
 //!   (`AMB-D-601`: its gate is the device's, and the gate is the window).
 //! - [`Reach::Project`] — one project and nothing else. This is where the **AI facet** (`--actor ai`) lands,
-//!   and also where a `scope: project` plugin calling amenbo back lands (`AMB-D-406`) — two ways in that
+//!   and also where a `scope: project` plugin calling Amenbo back lands (`AMB-D-406`) — two ways in that
 //!   reach exactly as far as each other. What closed it is carried along ([`Closed`]) for one reason: a
 //!   refusal has to name something the reader can act on, and a plugin's author cannot act on a binding
 //!   they never made.
@@ -48,7 +48,7 @@
 //! `decision_project` — the very functions that answer that question — would only be circular.
 //!
 //! Out of reach is **[`crate::error::Error::out_of_reach`], never not_found**: we do not deny that a thing
-//! exists, we say only that it cannot be reached from here. And amenbo closes only its own surfaces — an AI
+//! exists, we say only that it cannot be reached from here. And Amenbo closes only its own surfaces — an AI
 //! with a shell can still read files directly, and we do not pretend otherwise.
 
 use crate::error::{Error, Result};

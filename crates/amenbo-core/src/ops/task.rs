@@ -36,9 +36,9 @@ pub(crate) enum TypedKind {
 /// lets a number that `#<n>` alone would leave ambiguous name its type. `None` if the input does not fit the
 /// form. Shared with decision reference resolution (hence `pub(crate)`).
 ///
-/// `AMB-` is what amenbo *renders* ([`crate::idref`]), so accepting it is what makes a ref the user
+/// `AMB-` is what Amenbo *renders* ([`crate::idref`]), so accepting it is what makes a ref the user
 /// copied off the screen paste back in. The bare form stays accepted because reading is the loose side: the
-/// collision the namespace exists to prevent is in foreign text, and text a user hands amenbo directly is
+/// collision the namespace exists to prevent is in foreign text, and text a user hands Amenbo directly is
 /// not foreign.
 pub(crate) fn parse_typed_ref(s: &str) -> Option<(TypedKind, u32)> {
     let (head, num) = crate::idref::strip_namespace(s).split_once('-')?;
@@ -1440,7 +1440,7 @@ mod tests {
         assert_eq!(parse_typed_ref("X-1"), None); // anything but T/D is not a type prefix
         assert_eq!(parse_typed_ref("AMENBO-1"), None); // a multi-character key is not a type prefix
         assert_eq!(parse_typed_ref("T-"), None); // no number
-        // The namespaced form amenbo renders reads back, so a ref pastes in off the screen.
+        // The namespaced form Amenbo renders reads back, so a ref pastes in off the screen.
         assert_eq!(parse_typed_ref(&crate::idref::task(12)), Some((TypedKind::Task, 12)));
         assert_eq!(parse_typed_ref(&crate::idref::decision(3)), Some((TypedKind::Decision, 3)));
         assert_eq!(parse_typed_ref("amb-t-7"), Some((TypedKind::Task, 7))); // the prefix folds case

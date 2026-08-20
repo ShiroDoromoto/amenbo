@@ -5,7 +5,7 @@
 //
 // **Why it warns rather than invites.** A binding is what an AI can reach (`AMB-D-222`), so a project
 // with none is one no AI can read or write. What is left is a task list kept by hand, which is not what
-// amenbo is for. Creation asks for a folder (`AMB-D-528`), so a project reaches this state by having its
+// Amenbo is for. Creation asks for a folder (`AMB-D-528`), so a project reaches this state by having its
 // last one unbound — which is allowed — or by predating that rule.
 //
 // It carries the one move that ends it, and nothing else: what it is short of is a folder.

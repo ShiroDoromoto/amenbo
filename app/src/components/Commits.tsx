@@ -1,4 +1,4 @@
-// The commit-SHA view on a task's detail pane. A task carries many commit SHAs; amenbo
+// The commit-SHA view on a task's detail pane. A task carries many commit SHAs; Amenbo
 // keeps each as an opaque string — it never reads git, verifies the commit, or knows which forge it
 // lives on, so the SHA is shown raw (no clickable forge link — a user who wants one attaches a url,
 // which coexists). The SHA is validated at the ops door, so a bad value comes back as an error the

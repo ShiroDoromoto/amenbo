@@ -8,7 +8,7 @@
 //
 // **Consent is per project, wiring is per folder — and that gap is what this closes.** A reader who
 // answered yes and pasted into one of four folders is, on the record, done: the question has an answer and
-// never comes back, while three folders go on starting their AI without amenbo and nothing says so. A
+// never comes back, while three folders go on starting their AI without Amenbo and nothing says so. A
 // question cannot carry that, because it is not a question — it is work left, and work left belongs on the
 // screen rather than in a dialog.
 //

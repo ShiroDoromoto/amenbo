@@ -5,16 +5,16 @@
 //! `plugins/<name>.json` fetched only for the one plugin someone opened or is installing. A manifest field
 //! therefore belongs to exactly one of two faces — [`ListEntry`], what a browse view draws, and [`Detail`],
 //! what an install needs — and [`split`] is where that assignment is written down. [`join`] is the way
-//! back: amenbo's own gates all read a whole manifest, so a client that fetched both halves puts them
+//! back: Amenbo's own gates all read a whole manifest, so a client that fetched both halves puts them
 //! together once rather than teaching each gate to read two documents.
 //!
-//! **The line lives in amenbo, not in the aggregator.** The catalog repository's CI calls
+//! **The line lives in Amenbo, not in the aggregator.** The catalog repository's CI calls
 //! `plugin validate --json` and publishes what comes back, so it names no manifest field of its own. A
 //! field it had to name would be a field it can fail to name: a copy list in the aggregator drops whatever
-//! amenbo adds after the list was written, silently, and an aggregator deciding which half a field belongs
-//! in is that same list one fork further along. So amenbo emits the two documents and the CI publishes them.
+//! Amenbo adds after the list was written, silently, and an aggregator deciding which half a field belongs
+//! in is that same list one fork further along. So Amenbo emits the two documents and the CI publishes them.
 //!
-//! A field amenbo adds later must be assigned, and `every_manifest_field_is_published_exactly_once` (below)
+//! A field Amenbo adds later must be assigned, and `every_manifest_field_is_published_exactly_once` (below)
 //! is what refuses to let it be forgotten: it reads the serialized manifest's own keys and fails unless each
 //! one appears in exactly one face.
 //!
@@ -28,7 +28,7 @@
 //! one plugin at a time, kept beside the binary, and read offline — and because the entry carries one
 //! `detail_sum` (`AMB-D-386`), which splitting the detail per language would turn into nineteen.
 //!
-//! **Three values on [`ListEntry`] are the catalog's, not the author's**, and amenbo emits them as empty
+//! **Three values on [`ListEntry`] are the catalog's, not the author's**, and Amenbo emits them as empty
 //! slots for the CI to fill: `added_at`, which is knowable only from the catalog repository's git history;
 //! `detail_sum`, the digest of the detail document (`AMB-D-386`); and `featured`, the index's hand
 //! curation (`AMB-D-347`). With the checksums a document away, `detail_sum` is what keeps update detection
@@ -83,7 +83,7 @@ pub struct ListEntry {
     /// **The catalog's slot, emitted empty**: the digest of this plugin's [`Detail`] document
     /// (`AMB-D-386`). Update detection compares it against what the installed copy recorded, so a changed
     /// install stays detectable from the one list fetch even though the checksums themselves now live a
-    /// document away. The CI computes it over the bytes it publishes, which is why amenbo cannot fill it
+    /// document away. The CI computes it over the bytes it publishes, which is why Amenbo cannot fill it
     /// here — the detail document is not yet written when a manifest is validated.
     pub detail_sum: Option<String>,
 }
@@ -108,7 +108,7 @@ pub struct Detail {
     /// That asset's integrity digest.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub checksum: String,
-    /// That asset's minisign signature, produced by the catalog CI with amenbo's catalog key
+    /// That asset's minisign signature, produced by the catalog CI with Amenbo's catalog key
     /// (`AMB-D-371`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
@@ -122,7 +122,7 @@ pub struct Detail {
     pub scope: Scope,
     /// The payload contract version the plugin reads (`AMB-D-349`).
     pub payload_v: u32,
-    /// The minimum amenbo version the plugin needs (`AMB-D-359`).
+    /// The minimum Amenbo version the plugin needs (`AMB-D-359`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub min_amenbo: Option<String>,
     /// The plugin's configuration schema (`AMB-D-356`).
@@ -269,7 +269,7 @@ pub fn split(
     (entry, entries, detail)
 }
 
-/// Put the two documents the catalog serves back together as the one manifest amenbo works from
+/// Put the two documents the catalog serves back together as the one manifest Amenbo works from
 /// (`AMB-D-385`) — the reverse of [`split`], and the shape every gate downstream already speaks.
 ///
 /// An install reads the list once and the detail for the one plugin it is installing; from there on the
@@ -413,7 +413,7 @@ mod tests {
         )])
     }
 
-    /// **The guard on the split.** Every field amenbo serializes on a manifest is published in exactly one
+    /// **The guard on the split.** Every field Amenbo serializes on a manifest is published in exactly one
     /// face, so a field added later can reach neither document nor both only over this test's dead body.
     /// The keys are read off the serialized shapes rather than listed here, because a list here would be
     /// one more copy to forget — which is the failure the split exists to close.
@@ -671,7 +671,7 @@ mod tests {
     }
 
     /// **The curation cannot be self-granted.** A submitter who writes `featured: true` into their own
-    /// manifest is writing a key amenbo does not read, so the entry the catalog publishes still says
+    /// manifest is writing a key Amenbo does not read, so the entry the catalog publishes still says
     /// `false` — the recommendation is the curator's, and there is no field on this path for anyone else
     /// to set. `official` needs the CI to refuse a claim because the manifest carries it; this one is
     /// unreachable from a manifest at all.

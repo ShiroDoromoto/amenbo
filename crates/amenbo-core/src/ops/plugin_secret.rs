@@ -11,7 +11,7 @@
 //! same person's machine, and dropping the secrets there would mean typing every credential in again after
 //! a restore. An `export` must leave them: that road ends in somebody else's hands.
 //!
-//! amenbo does not judge what is secret: the author declares it field by field
+//! Amenbo does not judge what is secret: the author declares it field by field
 //! ([`crate::plugin_manifest::ConfigField::secret`]) and the config write boundary
 //! ([`crate::plugin_config`]) routes by that flag alone.
 

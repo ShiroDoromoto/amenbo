@@ -1,4 +1,4 @@
-//! `hooks` and `agent-hook`, and the two setups amenbo offers at startup — the lint hook, and
+//! `hooks` and `agent-hook`, and the two setups Amenbo offers at startup — the lint hook, and
 //! the line that has an AI tool run `agent` at every session start.
 
 use std::io::IsTerminal;
@@ -20,7 +20,7 @@ use crate::output::{human, print_json, set_setup_report, CliError, Flags};
 /// **This command's stdout belongs to the text**, the way `plugin run`'s belongs to the plugin. What it
 /// prints is meant to be consumed — piped to a clipboard, handed to the AI the reader works with — so a
 /// courtesy line printed alongside it would ride into the request as though it were part of it. Where
-/// the text is going, and that amenbo did not wire anything itself, is said on stderr; under `--json`
+/// the text is going, and that Amenbo did not wire anything itself, is said on stderr; under `--json`
 /// stdout is the document and both the request and the configuration ride inside it.
 ///
 /// `--copy` is that pipe, for the hand that would rather not type it — and it prints the request on
@@ -73,9 +73,9 @@ pub(crate) fn agent_hook_snippet_cmd(flags: &Flags, tool: &str, copy: bool) -> R
 }
 
 /// `amenbo agent-hook answer <yes|no>` — write down what a person answered about starting this folder's
-/// AI on amenbo (`AMB-D-440`).
+/// AI on Amenbo (`AMB-D-440`).
 ///
-/// **The answer only exists if someone is asked, and amenbo asks no one here.** The question is put on a
+/// **The answer only exists if someone is asked, and Amenbo asks no one here.** The question is put on a
 /// terminal a person is watching; on the `--json` face it is carried as a report for the AI reading it,
 /// which is what puts the question to the human. Without a way back in, that face's question could never
 /// be closed and the report would stand for ever — so this is the door: the AI asks, the person answers,
@@ -88,7 +88,7 @@ pub(crate) fn agent_hook_snippet_cmd(flags: &Flags, tool: &str, copy: bool) -> R
 ///
 /// The row is the project's, not the folder's, and replaces whatever it said before — a person may say
 /// yes today and no tomorrow. What carries over is whether the one re-ask has been spent
-/// ([`amenbo_core::harness::Consent::asked_again`]): that is a memory of what amenbo has already put to
+/// ([`amenbo_core::harness::Consent::asked_again`]): that is a memory of what Amenbo has already put to
 /// them, which an answer to the question is no reason to hand back.
 pub(crate) fn agent_hook_answer_cmd(store: &Store, flags: &Flags, yes: bool) -> Result<i32, CliError> {
     use amenbo_core::harness::Consent;
@@ -103,7 +103,7 @@ pub(crate) fn agent_hook_answer_cmd(store: &Store, flags: &Flags, yes: bool) -> 
             exit: 1,
         });
     };
-    // Keep the re-ask's memory: it says what amenbo has already asked, which is a different fact from
+    // Keep the re-ask's memory: it says what Amenbo has already asked, which is a different fact from
     // what was answered.
     let spent = store.harness_consent(project).unwrap_or(None).is_some_and(|had| had.asked_again);
     let answer = Consent { allowed: yes, asked_again: spent };
@@ -114,7 +114,7 @@ pub(crate) fn agent_hook_answer_cmd(store: &Store, flags: &Flags, yes: bool) -> 
             "ok": true,
             "action": "agent-hook.answer",
             "allowed": answer.allowed,
-            // What is left to do after a yes: amenbo writes no settings file, so the wiring is still owed.
+            // What is left to do after a yes: Amenbo writes no settings file, so the wiring is still owed.
             "next": yes.then(|| format!("{cmd} agent-hook snippet <tool>")),
         }));
         return Ok(0);
@@ -269,7 +269,7 @@ pub(crate) fn hooks_cmd(store: &mut Store, flags: &Flags, sub: HooksCmd) -> Resu
 }
 
 /// What an install did, slot by slot — a slot another tool holds gets the block alongside its body, so the
-/// only line here that is not a plain "installed" is the rare slot amenbo could not read as text and so
+/// only line here that is not a plain "installed" is the rare slot Amenbo could not read as text and so
 /// could not join.
 fn render_install(done: &amenbo_core::hooks::InstallReport, cmd: &str) -> String {
     use amenbo_core::hooks::{guidance_line, Installed};
@@ -460,7 +460,7 @@ fn render_tick_status(
     let scheduler = match (reachable, has_a_door, registered) {
         (false, false, _) => "not something amenbo can register on this system yet".to_string(),
         // A door this machine has, asked by a process that is not the one holding the key: this copy of
-        // amenbo sits outside the app bundle the registration is written from.
+        // Amenbo sits outside the app bundle the registration is written from.
         (false, true, _) => "registered by amenbo.app itself, and this copy of amenbo is not inside one".to_string(),
         (true, _, true) => "holding the hourly tick".to_string(),
         (true, _, false) => format!("nothing registered (register it: `{cmd} tick install`)"),
@@ -488,7 +488,7 @@ pub(crate) fn tick_reconcile(store: &mut Store) {
 }
 
 /// Write the veto down, and let a failure to do so pass: the row is a convenience that decides whether
-/// amenbo acts here again, the hook itself is already where the user asked for it, and failing the command
+/// Amenbo acts here again, the hook itself is already where the user asked for it, and failing the command
 /// over the note about it would undo nothing and help no one.
 fn record_optout(store: &Store, project: Option<i64>, opted_out: bool) {
     if let Some(pid) = project {
@@ -496,8 +496,8 @@ fn record_optout(store: &Store, project: Option<i64>, opted_out: bool) {
     }
 }
 
-/// The one moment amenbo asks to write into the user's git plumbing, run before the command the user came
-/// for — because the moment worth asking at is "amenbo ran in this repository at a terminal", not any one
+/// The one moment Amenbo asks to write into the user's git plumbing, run before the command the user came
+/// for — because the moment worth asking at is "Amenbo ran in this repository at a terminal", not any one
 /// command. `hooks` is not routed here at all: its argv already answered the question, its own faces say
 /// what this would say, and skipping it keeps `hooks status` to the one [`amenbo_core::hooks::probe`] it
 /// came for and read-only as its spec promises — this can record consent, and a read command must not.
@@ -508,7 +508,7 @@ fn record_optout(store: &Store, project: Option<i64>, opted_out: bool) {
 ///
 /// It acts on the repository it is standing in, and does not sweep the other bound folders a `yes` also
 /// covers. That is not the answer being narrower than it says: those folders are wired the first time
-/// amenbo runs in them — this same path, asking nothing, because by then the device has answered — and the
+/// Amenbo runs in them — this same path, asking nothing, because by then the device has answered — and the
 /// GUI sweeps them all at its next startup. Sweeping from here would mean a `git` spawn per bound folder on
 /// the way to every `amenbo task list`, which is a cost the CLI pays on every command to finish sooner
 /// something that finishes anyway.
@@ -606,7 +606,7 @@ fn offer_lint_hook(
         HookAction::Nothing => None,
         HookAction::Install => {
             // A slot another tool held, with no block of ours in it, most likely had its hook regenerated —
-            // wiping the block amenbo put there. Re-wiring it is a restoration, so say so rather than report
+            // wiping the block Amenbo put there. Re-wiring it is a restoration, so say so rather than report
             // a plain first-time install.
             let vanished = states.map(|s| s.slots_in(hooks::HookState::Foreign)).unwrap_or_default();
             match hooks::install(cwd, cmd) {
@@ -644,8 +644,8 @@ fn offer_lint_hook(
     }
 }
 
-/// The one question there is, worded from what the slots actually hold: amenbo offers to wire the lint into
-/// every slot — an empty one becomes a small standalone hook, a slot another tool holds gains amenbo's
+/// The one question there is, worded from what the slots actually hold: Amenbo offers to wire the lint into
+/// every slot — an empty one becomes a small standalone hook, a slot another tool holds gains Amenbo's
 /// block alongside its body, so there is one action and no hand-off.
 ///
 /// It says the answer is asked once and covers every repository, because that is what answering it does —
@@ -688,7 +688,7 @@ fn ask_yes_no(prompt: &str) -> Option<bool> {
 /// The session-start hook's two duties, run before the command the user came for (`AMB-D-440`): the one
 /// question, where it can be answered, and the standing report of what is not wired.
 ///
-/// **amenbo writes nothing here.** Every other setup path in this file ends in amenbo writing a file; this
+/// **Amenbo writes nothing here.** Every other setup path in this file ends in Amenbo writing a file; this
 /// one ends in text a person pastes, which is why the report cannot be ended by an answer — only by the
 /// paste landing ([`amenbo_core::harness::setup_notice`]).
 ///
@@ -720,7 +720,7 @@ pub(crate) fn agent_hook_setup(store: &Store, flags: &Flags, lint_asked: bool) {
         ConsentAction::AskAgain => offer_agent_hook(&found, cmd, true),
     };
     if let Some(answer) = answered {
-        // Best-effort, like the lint's note: the row decides only whether amenbo offers again, and failing
+        // Best-effort, like the lint's note: the row decides only whether Amenbo offers again, and failing
         // the command the user actually ran over it would undo nothing.
         let _ = store.set_harness_consent(project, answer);
     }
@@ -750,7 +750,7 @@ fn offer_agent_hook(
         found.iter().filter(|one| one.traced && !one.wired()).collect();
     let mut prompt = String::new();
     if again {
-        // The occasion is a standing yes with nothing wired, and amenbo cannot tell an edit that was never
+        // The occasion is a standing yes with nothing wired, and Amenbo cannot tell an edit that was never
         // asked for from one a clone did not carry — so the wording says the only thing it knows, which is
         // that the setting is not there. Claiming either story would be wrong half the time. It leads, and
         // what the text does still follows it: the first asking was a terminal the reader no longer has.
@@ -759,7 +759,7 @@ fn offer_agent_hook(
         );
     }
     // What a yes buys, in the reader's terms: the text, the hand that makes the edit — theirs, not
-    // amenbo's — and what their AI does differently afterwards. Named where the folder settles on one
+    // Amenbo's — and what their AI does differently afterwards. Named where the folder settles on one
     // tool, and "your tool" where it does not, so the sentence is whole either way.
     let tool = match named.as_slice() {
         [one] => one.label,
@@ -794,14 +794,14 @@ fn offer_agent_hook(
     Some(if again { Consent::answered_again(yes) } else { Consent::answered(yes) })
 }
 
-/// Report that this folder's AI is not being started on amenbo, on every response until it is — the
+/// Report that this folder's AI is not being started on Amenbo, on every response until it is — the
 /// standing signal, where [`offer_agent_hook`] is a one-time question. Under `--json` it lands as a field
 /// on the answer the caller already parses, which is the one surface an AI is sure to read: it can then
-/// hand the human the text, which is the only way this setup ever finishes, since amenbo will not write
+/// hand the human the text, which is the only way this setup ever finishes, since Amenbo will not write
 /// the file itself.
 ///
 /// **The two faces do not report the same set, because they are told which provider by different things**
-/// (`AMB-D-440`: the trace and the self-declaration). A person is shown only what amenbo can point at — a
+/// (`AMB-D-440`: the trace and the self-declaration). A person is shown only what Amenbo can point at — a
 /// provider whose own directory is in this folder, unwired — because a standing warning about a tool there
 /// is no sign of is a line they cannot act on, arriving on every command they run. The `--json` face
 /// carries the catalog as well, since the reader there is the harness itself and knows which one it is even
@@ -845,7 +845,7 @@ fn report_unwired_harnesses(
         set_setup_report(
             "agent_hook",
             json!({
-                // What amenbo can point at: the shortlist a face built for a person is held to, carried
+                // What Amenbo can point at: the shortlist a face built for a person is held to, carried
                 // here too so a reader can tell the providers this folder shows from the rest of the row.
                 "unwired": found.iter().filter(|one| one.traced && !one.wired()).map(|one| json!({
                     "tool": one.id,
@@ -855,7 +855,7 @@ fn report_unwired_harnesses(
                 "any_wired": found.iter().any(harness::Wiring::wired),
                 // Every row of the catalog with what this folder says about it, because a harness that left
                 // no trace in the folder is still the one reading this and can name itself (`AMB-D-440`).
-                // Its own row is the answer it came for — whether *it* is wired — which no set amenbo
+                // Its own row is the answer it came for — whether *it* is wired — which no set Amenbo
                 // picked out by trace can give it.
                 "tools": found.iter().map(|one| json!({
                     "tool": one.id,
@@ -868,7 +868,7 @@ fn report_unwired_harnesses(
                     "fix": (!one.wired()).then(|| format!("{cmd} agent-hook snippet {}", one.id)),
                 })).collect::<Vec<_>>(),
                 // While nobody has answered, the reader here is the one who can put the question to a
-                // person — amenbo cannot, on this face. Naming the way back is what lets that answer land;
+                // person — Amenbo cannot, on this face. Naming the way back is what lets that answer land;
                 // once there is one on record, there is no question left to carry.
                 "record_answer": consent.is_none().then(|| format!("{cmd} agent-hook answer <yes|no>")),
             }),

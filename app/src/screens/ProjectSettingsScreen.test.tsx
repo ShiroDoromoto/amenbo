@@ -20,7 +20,7 @@ const hoisted = vi.hoisted(() => ({
   gated: [] as { name: string; projectId: number; enabled: boolean }[],
   /** Canned answers for the confirm dialog, consumed from the front; once exhausted, everything is OK. */
   answers: [] as boolean[],
-  /** What this project answered about starting its AI on amenbo — null for never asked. */
+  /** What this project answered about starting its AI on Amenbo — null for never asked. */
   consent: null as boolean | null,
   /** What core's per-project walk reports is still waiting to be wired, grouped by harness. */
   waiting: [] as AgentHookWiringDto[],

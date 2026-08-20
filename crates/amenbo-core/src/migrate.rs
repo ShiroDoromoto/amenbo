@@ -11,7 +11,7 @@
 //! 1. **Capture before you move.** One verified `.amenbo-backup` of the whole store — truth source and
 //!    every attachment blob — taken before a single step runs.
 //! 2. **Where it lands is not the user's decision.** `<app-data>/pre-migrate-<stamp>.amenbo-backup`,
-//!    inside amenbo's own data area, never a directory the user owns. The user-placed, off-machine copy
+//!    inside Amenbo's own data area, never a directory the user owns. The user-placed, off-machine copy
 //!    is the deliberate `amenbo backup <path>` gesture and stays that way; this one is a
 //!    machine-local rewind point taken automatically, whose only job is to exist until the migration is
 //!    trusted. The caller shows the human where it went.
@@ -307,7 +307,7 @@ pub fn migrate_into(
 }
 
 /// Production entry point for a store the caller has already located: the real chain, into the archive
-/// path amenbo chooses ([`pre_migration_backup_path`]).
+/// path Amenbo chooses ([`pre_migration_backup_path`]).
 pub fn migrate_store(
     source: &StoreSource,
     base_dir: &Path,
@@ -497,7 +497,7 @@ mod tests {
         let source = store_with_a_row(&home);
         let dest = archive_at(&home);
 
-        // Two archives from earlier migrations, plus a file that is none of amenbo's business.
+        // Two archives from earlier migrations, plus a file that is none of Amenbo's business.
         let old_a = home.join(format!("{PRE_MIGRATE_PREFIX}20260101T000000Z.{ARCHIVE_EXT}"));
         let old_b = home.join(format!("{PRE_MIGRATE_PREFIX}20260202T000000Z.{ARCHIVE_EXT}"));
         let unrelated = home.join(format!("holiday-photos.{ARCHIVE_EXT}"));

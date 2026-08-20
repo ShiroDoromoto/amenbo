@@ -1,6 +1,6 @@
-//! `amenbo lint`: catch an amenbo ref in text on its way out of this store.
+//! `amenbo lint`: catch an Amenbo ref in text on its way out of this store.
 //!
-//! An id amenbo renders means something only to someone holding this store. Anywhere else — a commit
+//! An id Amenbo renders means something only to someone holding this store. Anywhere else — a commit
 //! message, a source comment, a PR body, and after a release the public record — `AMB-T-<n>` is a
 //! reference into nothing: noise the next reader cannot resolve and cannot act on. This module is the
 //! reader that stops one at the door.
@@ -86,7 +86,7 @@ pub fn refs_in_line(line: &str) -> Vec<&str> {
 /// Where the ref starting at `i` ends, or `None` if none starts there.
 ///
 /// The kinds come from the renderer's own list rather than being written out again, so a kind added there
-/// is caught here without anyone remembering to: the lint looks for exactly what amenbo can spell. Trying
+/// is caught here without anyone remembering to: the lint looks for exactly what Amenbo can spell. Trying
 /// each in turn cannot let one shadow another, because the `-` after the code must match too — `AMB-DIM-<n>`
 /// can never be read as `AMB-D` with junk after it, whatever order the kinds come in.
 fn ref_end(bytes: &[u8], i: usize) -> Option<usize> {

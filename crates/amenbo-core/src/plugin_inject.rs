@@ -18,9 +18,9 @@
 //!
 //! **Only this plugin's config is injected.** [`resolve`] is handed one plugin's schema and reads only that
 //! plugin's stored values, so a plugin never sees another's settings — the central-injection promise of
-//! `AMB-D-356` (a plugin reads nothing of its own; amenbo hands it exactly, and only, its own).
+//! `AMB-D-356` (a plugin reads nothing of its own; Amenbo hands it exactly, and only, its own).
 //!
-//! **Resolution happens here, so a plugin reads answers and not amenbo's bookkeeping** (`AMB-D-415`). An
+//! **Resolution happens here, so a plugin reads answers and not Amenbo's bookkeeping** (`AMB-D-415`). An
 //! **unset** field falls back to the author's [`default`](ConfigField::default), and contributes nothing
 //! only when there is none — the store holds no row for an unanswered field, so a manifest that changes its
 //! default reaches every project that never answered. A field whose user chose *none* of its candidates is
@@ -46,8 +46,8 @@ use crate::plugin_manifest::ConfigField;
 use crate::store::Store;
 
 /// The environment-variable prefix a secret config value is injected under. Namespaced under `AMENBO_`
-/// like amenbo's own variables, but with its own `CONFIG_` segment so a secret keyed, say, `home` becomes
-/// `AMENBO_CONFIG_HOME` and never collides with amenbo's reserved `AMENBO_HOME` and its kin. A plugin
+/// like Amenbo's own variables, but with its own `CONFIG_` segment so a secret keyed, say, `home` becomes
+/// `AMENBO_CONFIG_HOME` and never collides with Amenbo's reserved `AMENBO_HOME` and its kin. A plugin
 /// author reads the value at `$AMENBO_CONFIG_<KEY>` (see [`secret_env_name`] for the exact transform).
 pub const SECRET_ENV_PREFIX: &str = "AMENBO_CONFIG_";
 
@@ -159,7 +159,7 @@ pub fn resolve(
 /// `fields` is what the pressed operation declares it asks for, `supplied` what the face collected at the
 /// press. The declaration is what is handed over, not the collection: every declared key becomes a
 /// variable ([`ask_env_name`]), and a key the manifest did not ask for is **refused** rather than dropped
-/// — the caller is amenbo's own settings face, so a name that reaches here unasked-for is a fault in the
+/// — the caller is Amenbo's own settings face, so a name that reaches here unasked-for is a fault in the
 /// face and not something a plugin should be left to notice. A declared key the user left blank is handed
 /// over empty: an ask has no `required` (`AMB-D-664`), so an empty box is an answer, and the author reads
 /// one variable per declared key either way.
@@ -233,7 +233,7 @@ mod tests {
     #[test]
     fn the_env_name_prefixes_and_upper_cases_the_key() {
         assert_eq!(secret_env_name("webhook_url"), "AMENBO_CONFIG_WEBHOOK_URL");
-        // A char outside [A-Za-z0-9] maps to underscore, and the prefix guards amenbo's own vars.
+        // A char outside [A-Za-z0-9] maps to underscore, and the prefix guards Amenbo's own vars.
         assert_eq!(secret_env_name("api.key"), "AMENBO_CONFIG_API_KEY");
         assert_eq!(secret_env_name("home"), "AMENBO_CONFIG_HOME");
     }
@@ -347,7 +347,7 @@ mod tests {
     }
 
     /// Wanting none of the candidates is an answer of its own, and it reaches the plugin **empty** — the
-    /// word the store keeps it under is amenbo's bookkeeping and stops here (`AMB-D-415`). A default behind
+    /// word the store keeps it under is Amenbo's bookkeeping and stops here (`AMB-D-415`). A default behind
     /// it does not come back: it was declined, not left unanswered.
     #[test]
     fn choosing_none_of_them_is_injected_empty() {

@@ -131,7 +131,7 @@ const LANG_LOCALE: Record<Lang, string> = {
  * A tag the platform cannot use falls back to the language's rather than throwing: `Intl` rejects a
  * malformed tag with a `RangeError`, and nothing is stopping a typo from reaching here — the store
  * keeps the value opaque, since what is a usable locale is the formatter's judgement and not
- * something amenbo can settle when the value is written.
+ * something Amenbo can settle when the value is written.
  */
 export function dateLocale(): string {
   const fallback = LANG_LOCALE[currentLang()];

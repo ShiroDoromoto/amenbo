@@ -2,7 +2,7 @@
 //!
 //! A manifest is untrusted third-party input ([`crate::plugin_manifest`] is the *shape*; serde rejects one
 //! missing a required field). The *rules* on top of that shape — a name that fits the id grammar, a
-//! well-formed checksum, a non-empty OS set, an amenbo floor that reads as a version, a config schema
+//! well-formed checksum, a non-empty OS set, an Amenbo floor that reads as a version, a config schema
 //! within the safe floor — are here, so the one truth about them lives in one function. Two callers
 //! share it (`AMB-D-354`):
 //!
@@ -142,9 +142,9 @@ pub const MAX_AGENT_COMMAND_STEPS: usize = 4;
 pub const MAX_AGENT_CMD_WORDS: usize = 8;
 
 /// Ids reserved beyond the disk-layout name (`registry`, via [`is_reserved_plugin_name`]): the badge word
-/// and amenbo's own namespace (`AMB-D-360`). Kept small on purpose — the strict id grammar plus command
+/// and Amenbo's own namespace (`AMB-D-360`). Kept small on purpose — the strict id grammar plus command
 /// namespacing (`AMB-D-346`, a plugin's commands are namespaced by its id) already prevent a plugin from
-/// shadowing an amenbo subcommand, so this need not mirror the CLI's verb list, which would only rot.
+/// shadowing an Amenbo subcommand, so this need not mirror the CLI's verb list, which would only rot.
 const RESERVED_NAMES: &[&str] = &["official", "amenbo", "plugin", "plugins"];
 
 /// A rule a manifest broke. It is the machine-stable half of a [`Problem`] — the human sentence rides in
@@ -220,15 +220,15 @@ pub enum ProblemCode {
     /// (`AMB-D-571`). Whether the id is one this build still has is not asked here — the ref is a name,
     /// and only its spelling is a thing a manifest can get wrong on its own.
     BadStepRef,
-    /// Author text cites an amenbo record — `AMB-D-<n>`, `AMB-T-<n>` and every other spelling of a ref
+    /// Author text cites an Amenbo record — `AMB-D-<n>`, `AMB-T-<n>` and every other spelling of a ref
     /// (`AMB-D-572`). A manifest is not written from inside this store, so a ref in one points at nothing
     /// it can vouch for.
     RecordRef,
-    /// A translation overlay names something the manifest does not have, or something amenbo does not
+    /// A translation overlay names something the manifest does not have, or something Amenbo does not
     /// translate (`AMB-D-621`): a field, a config key, a candidate. Whatever was written under it would
     /// reach no reader, and silence is the one thing an author cannot debug.
     NotInBase,
-    /// A translation is offered in a language amenbo is not read in (`AMB-D-394`). The code names the
+    /// A translation is offered in a language Amenbo is not read in (`AMB-D-394`). The code names the
     /// file it was written in and the document it would be published as, so one outside the list is a
     /// document nothing ever fetches.
     UnknownLanguage,
@@ -361,11 +361,11 @@ pub fn validate_manifest(m: &Manifest) -> Vec<Problem> {
 /// Validate the **translations** an author supplied beside a manifest (`AMB-D-621`), against the manifest
 /// they translate. Empty ⇒ valid, and every problem is collected, as above.
 ///
-/// A translation is not judged as text — amenbo does not read the languages it publishes, and never asks
+/// A translation is not judged as text — Amenbo does not read the languages it publishes, and never asks
 /// whether a line means what the base line means. What it checks is that the overlay *lines up with the
 /// base*, which is the whole of what a machine can know here:
 ///
-/// - **the language is one amenbo is read in** ([`crate::config::LANGUAGES`], `AMB-D-394`). The code
+/// - **the language is one Amenbo is read in** ([`crate::config::LANGUAGES`], `AMB-D-394`). The code
 ///   names the file the author wrote and the document it is published as, so one outside the list is a
 ///   document nothing fetches.
 /// - **everything it names exists in the base** — the field, the config key, the candidate. An overlay
@@ -396,7 +396,7 @@ pub fn validate_overlays(m: &Manifest, translations: &Translations) -> Vec<Probl
 /// the rules that can be asked of the half in hand. The lining-up rules cannot be — which config keys
 /// exist and which candidates a field offers are the detail's, a document this reader has not fetched
 /// and will not fetch to draw a row. What is left is the whole of what a list document carries: a
-/// language amenbo is read in, and a line held to the rule its base line is held to.
+/// language Amenbo is read in, and a line held to the rule its base line is held to.
 pub fn validate_list_overlay(lang: &str, o: &ListEntryOverlay) -> Vec<Problem> {
     let mut problems = Vec::new();
     check_language(&mut problems, lang);
@@ -410,7 +410,7 @@ pub fn validate_list_overlay(lang: &str, o: &ListEntryOverlay) -> Vec<Problem> {
     problems
 }
 
-/// The language an overlay is written in is one amenbo is read in (`AMB-D-394`). Asked once per
+/// The language an overlay is written in is one Amenbo is read in (`AMB-D-394`). Asked once per
 /// language, above whichever face's fields follow, because the code names the file the author wrote and
 /// the document it is published as at the same time: one outside the list is a document nothing fetches.
 fn check_language(problems: &mut Vec<Problem>, lang: &str) {
@@ -639,7 +639,7 @@ pub fn validate_list_entry(e: &ListEntry) -> Vec<Problem> {
 /// may be relayed; anything else and [`crate::plugin_agent`] drops the guide rather than trimming it.
 ///
 /// Exposed on its own because the door is not the last place these rules have to hold. `validate_manifest`
-/// runs at install, and nothing re-runs it when amenbo itself is updated — so a rule added today reaches
+/// runs at install, and nothing re-runs it when Amenbo itself is updated — so a rule added today reaches
 /// only what is installed after today, while yesterday's plugin keeps relaying what yesterday's rules let
 /// through. The manifest is a plain file beside the binary, too: the checksum guards the program, not the
 /// document, and `plugin rollback` writes back one that passed under older rules.
@@ -659,7 +659,7 @@ pub fn validate_agent(m: &Manifest) -> Vec<Problem> {
 /// Exposed for the same reason [`validate_agent`] is — the door is not the last place these rules have to
 /// hold — and this text has a sharper reason still: the control-character rule exists *because*
 /// `plugin config get` prints the string to a terminal, where an author's escape sequence can write over
-/// what amenbo said (`AMB-D-656`). A rule that only ran at install leaves that open for everything
+/// what Amenbo said (`AMB-D-656`). A rule that only ran at install leaves that open for everything
 /// installed before it, and for a manifest edited on disk beside the binary.
 ///
 /// The one field, and not the whole manifest: what a face shows is this paragraph, so this is what it has
@@ -762,7 +762,7 @@ fn check_line(problems: &mut Vec<Problem>, field: &str, value: &str, max: usize)
     }
 }
 
-/// Check a field of author prose cites no amenbo record (`AMB-D-572`).
+/// Check a field of author prose cites no Amenbo record (`AMB-D-572`).
 ///
 /// A ref written into a manifest reads, at the AI's entry point, exactly like one written by the user:
 /// `AMB-D-411 makes this required` is a sentence that borrows this store's authority for a line a third
@@ -798,7 +798,7 @@ fn check_no_record_ref(problems: &mut Vec<Problem>, field: &str, value: &str) {
 ///   `https` rather than merely to *absolute* is the same line [`check_url`] draws everywhere else a
 ///   manifest names an address, and it keeps `file:` and `javascript:` out in the same stroke.
 ///
-/// The no-citing rule comes with it (`AMB-D-572`): this is author prose drawn inside amenbo's own
+/// The no-citing rule comes with it (`AMB-D-572`): this is author prose drawn inside Amenbo's own
 /// window, where `AMB-D-411 makes this required` borrows this store's authority exactly as it would in
 /// `desc` — and the number need not exist for that to work.
 fn check_about(problems: &mut Vec<Problem>, at: &str, about: &str) {
@@ -988,7 +988,7 @@ fn check_checksum(problems: &mut Vec<Problem>, location: &str, checksum: &str) {
     }
 }
 
-/// Check the amenbo floor a manifest declares: absent is fine (no floor), but a floor that is present
+/// Check the Amenbo floor a manifest declares: absent is fine (no floor), but a floor that is present
 /// must be a version something can be compared against.
 ///
 /// The rule is exactly what the comparison later does — [`crate::store::parse_version`], the one parser
@@ -1136,8 +1136,8 @@ impl Supporting {
 /// - **no control character.** `help` is a body, so a newline is text in it and the rest of the control
 ///   range is not; `placeholder` is one line, so a newline is a control character there too. What the rule
 ///   keeps out is a terminal escape sequence: `plugin config get` prints these to a terminal, and an
-///   author's string that can move the cursor can write over what amenbo said (`AMB-D-656`).
-/// - **no citing an amenbo record** (`AMB-D-572`) — author prose drawn inside amenbo's own window, where
+///   author's string that can move the cursor can write over what Amenbo said (`AMB-D-656`).
+/// - **no citing an Amenbo record** (`AMB-D-572`) — author prose drawn inside Amenbo's own window, where
 ///   `AMB-D-411 makes this required` borrows this store's authority exactly as it does in `desc`.
 fn check_supporting_text(
     problems: &mut Vec<Problem>,
@@ -1379,7 +1379,7 @@ fn check_settings(problems: &mut Vec<Problem>, m: &Manifest) {
 /// rules its base is held to (`AMB-D-620`), as [`check_supporting_text`] is.
 ///
 /// The same three rules every author string on this screen keeps: it says something, it fits
-/// [`MAX_ACTION_LABEL_BYTES`], and it cites no amenbo record (`AMB-D-572`) — a button reading
+/// [`MAX_ACTION_LABEL_BYTES`], and it cites no Amenbo record (`AMB-D-572`) — a button reading
 /// `AMB-D-411 requires this` borrows this store's authority for a line a third party wrote. Control
 /// characters go with the last: a label is one line, drawn plain.
 fn check_action_label(problems: &mut Vec<Problem>, at: &str, label: &str) {
@@ -1496,7 +1496,7 @@ fn check_ask(
 ///   a mistake worth naming rather than silently dropping.
 /// - **`reply: true` requires `faces: [cli]`** — the reply is relayed to the caller, and only the CLI face
 ///   has one (the GUI has no caller to hand a reply to). Declaring a reply on any other face set is asking
-///   for something amenbo cannot deliver.
+///   for something Amenbo cannot deliver.
 ///
 /// That each event *name* is a real v1 event is a different rule and a different boundary (`AMB-T-1988`);
 /// this function judges the fire shape only.
@@ -1524,14 +1524,14 @@ fn check_events(problems: &mut Vec<Problem>, m: &Manifest) {
 /// and the command list has a ceiling.
 ///
 /// The block is optional, so a manifest without one has nothing here to break. What the prose *says* is
-/// still never judged: amenbo has no vocabulary for what a third party's plugin is for, and a door that
+/// still never judged: Amenbo has no vocabulary for what a third party's plugin is for, and a door that
 /// ruled on the wording would be the body of knowledge `AMB-D-437` deliberately refuses to hold — which is
 /// also why "this line is written as an instruction" is not a rule here (`AMB-D-572`: a fail-closed door
 /// may only hold what a machine decides with certainty, and refusing an honest plugin costs more than
 /// letting a line of prose through).
 ///
 /// Two things are decidable, and both are held. `cmd` is not prose at all — it is a call — so it is held
-/// to a grammar ([`check_cmd`]), and the prose fields may not cite an amenbo record
+/// to a grammar ([`check_cmd`]), and the prose fields may not cite an Amenbo record
 /// ([`check_no_record_ref`]).
 fn check_agent(problems: &mut Vec<Problem>, m: &Manifest) {
     let Some(agent) = &m.agent else { return };
@@ -1603,7 +1603,7 @@ fn check_steps(problems: &mut Vec<Problem>, location: &str, steps: &[String]) {
 
 /// Is `s` a step ref — `<run>.<step>`, a run's key and a step's id joined by one dot?
 ///
-/// A run's key is written the way amenbo's own runs are keyed (`agentCycle`, `taskShaping`), so letters
+/// A run's key is written the way Amenbo's own runs are keyed (`agentCycle`, `taskShaping`), so letters
 /// and digits after a lowercase first letter; a step's id is the lowercase-kebab identifier the rest of
 /// this module spells names with ([`is_cmd_ident`]). Neither half is checked against what this build
 /// actually emits — that is [`check_steps`]'s note.
@@ -1621,8 +1621,8 @@ fn is_step_ref(s: &str) -> bool {
 /// subcommand and its arguments, with the `amenbo plugin run <name>` the reader prepends left off
 /// ([`crate::plugin_manifest::AgentCommand`]) — so the shape can be written down: a bounded run of words,
 /// each one a literal, a flag or a placeholder ([`is_cmd_word`]). No sentence fits it, so the line has no
-/// room left to carry an instruction, and impersonating an amenbo command is out of reach besides, since
-/// amenbo writes the prefix itself.
+/// room left to carry an instruction, and impersonating an Amenbo command is out of reach besides, since
+/// Amenbo writes the prefix itself.
 ///
 /// The floor comes first and, when it reports, this stops: an empty or over-long `cmd` is one fault, and
 /// naming it twice tells the author nothing the first problem did not.
@@ -2134,7 +2134,7 @@ mod tests {
     }
 
     /// `plugin config get` prints these to a terminal, so an escape sequence in one could write over what
-    /// amenbo said. A newline is the one control character `help` is a body for, and `placeholder` — one
+    /// Amenbo said. A newline is the one control character `help` is a body for, and `placeholder` — one
     /// line inside an input — is not even that.
     #[test]
     fn a_control_character_in_supporting_text_is_refused() {
@@ -2154,7 +2154,7 @@ mod tests {
         assert_eq!(codes(&validate_manifest(&m)), [ProblemCode::ControlChar]);
     }
 
-    /// Author prose drawn inside amenbo's own window, so the rule `desc` and the description text keep
+    /// Author prose drawn inside Amenbo's own window, so the rule `desc` and the description text keep
     /// holds here too (`AMB-D-572`): a manifest is not written from inside this store.
     #[test]
     fn supporting_text_citing_an_amenbo_record_is_refused() {
@@ -2456,7 +2456,7 @@ mod tests {
             assert_eq!(problems[0].location, format!("settings.actions[0].ask[0].{refused}"));
         }
 
-        // A key a later amenbo added is still ignored — the manifest's forward-compatibility rule.
+        // A key a later Amenbo added is still ignored — the manifest's forward-compatibility rule.
         let later = with_settings(
             None,
             vec![SettingsAction {
@@ -2590,7 +2590,7 @@ mod tests {
         m
     }
 
-    /// What a step ref is: a run's key and a step's id, joined by one dot. Both halves of amenbo's own
+    /// What a step ref is: a run's key and a step's id, joined by one dot. Both halves of Amenbo's own
     /// spelling pass — the backbone is `agentCycle`, a cycle is keyed by its own camelCase id — and a
     /// command naming none of them at all is the ordinary case (`AMB-D-571`).
     #[test]
@@ -2658,7 +2658,7 @@ mod tests {
     }
 
     /// A ref naming a step this build does not have is **not** a manifest fault (`AMB-D-571`). The steps
-    /// travel with amenbo while the manifest stays where it was installed, so refusing one here would
+    /// travel with Amenbo while the manifest stays where it was installed, so refusing one here would
     /// fail an author for a rename they had no part in — and, a refused block being turned away whole
     /// (`AMB-D-573`), take their sentences down with it.
     #[test]
@@ -2808,7 +2808,7 @@ mod tests {
     #[test]
     fn a_floor_reads_exactly_as_loosely_as_the_comparison_does() {
         // The door must not be stricter than the parser that later compares against it, or a manifest
-        // amenbo could honour would be rejected for a shape the comparison accepts.
+        // Amenbo could honour would be rejected for a shape the comparison accepts.
         for min in ["1", "1.8", "1.8.0", "1.8.0-rc.1", "1.8.0+build.5"] {
             let mut m = valid();
             m.min_amenbo = Some(min.into());
@@ -2864,7 +2864,7 @@ mod tests {
     }
 
     /// The language is the file's name and the published document's name at once (`AMB-D-394`), so one
-    /// amenbo is not read in is a document nothing would ever fetch.
+    /// Amenbo is not read in is a document nothing would ever fetch.
     #[test]
     fn a_language_amenbo_is_not_read_in_is_refused() {
         let m = valid_with_candidates();
@@ -2879,7 +2879,7 @@ mod tests {
         }
     }
 
-    /// **Everything an overlay names has to exist in the base** (`AMB-D-621`) — a field amenbo does not
+    /// **Everything an overlay names has to exist in the base** (`AMB-D-621`) — a field Amenbo does not
     /// translate, a config key the manifest does not declare, a candidate the field does not offer.
     /// Each would otherwise be text nobody ever sees, which is the one failure an author cannot spot.
     #[test]
@@ -3000,7 +3000,7 @@ mod tests {
     }
 
     /// **Everything the settings layer names has to exist in the base too** (`AMB-D-621`) — the block, the
-    /// operation keyed by its call, the value that operation asks for, and the keys amenbo does not show a
+    /// operation keyed by its call, the value that operation asks for, and the keys Amenbo does not show a
     /// reader at all. Each would otherwise be a translation whose only symptom is that it never appears.
     #[test]
     fn a_translated_settings_block_naming_what_the_base_does_not_have_is_refused() {
@@ -3308,7 +3308,7 @@ mod tests {
         assert!(codes(&validate_manifest(&with_about(both))).contains(&ProblemCode::BadUrl));
     }
 
-    /// **The text cites no amenbo record** (`AMB-D-572`) — it is author prose drawn inside amenbo's own
+    /// **The text cites no Amenbo record** (`AMB-D-572`) — it is author prose drawn inside Amenbo's own
     /// window, where a ref borrows this store's authority exactly as one in `desc` would.
     #[test]
     fn a_description_text_citing_an_amenbo_record_is_refused() {

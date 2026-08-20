@@ -1,4 +1,4 @@
-//! `tick run`: the hourly wake-up the scheduler starts amenbo through, and what it reports for it.
+//! `tick run`: the hourly wake-up the scheduler starts Amenbo through, and what it reports for it.
 //! Its siblings — the answer, and the registration the answer stands beside — are `setup`'s.
 
 use serde_json::json;

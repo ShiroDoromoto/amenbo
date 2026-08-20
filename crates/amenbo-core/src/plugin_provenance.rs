@@ -1,16 +1,16 @@
 //! Provenance verification for a downloaded plugin asset — the trust that turns untrusted network bytes
-//! into something amenbo will run (`AMB-D-371`, `AMB-D-351`).
+//! into something Amenbo will run (`AMB-D-371`, `AMB-D-351`).
 //!
 //! Two fail-closed checks, split by cost and by what they prove:
 //!
 //! - [`verify_checksum`] — the asset's SHA-256 matches the manifest's `checksum` (`sha256:<hex>`). This is
 //!   the **integrity** half, and it is cheap, so it is the check re-run **every time** the on-disk asset
 //!   is used, to catch a post-install swap (`AMB-D-351`).
-//! - [`verify_signature`] — a minisign signature over the asset verifies against amenbo's **catalog public
+//! - [`verify_signature`] — a minisign signature over the asset verifies against Amenbo's **catalog public
 //!   key** (`AMB-D-371`, the catalog-key trust model). This is the **origin** half, and it is heavier, so
 //!   it runs **once** at download: the asset was blessed by the CI of the catalog that lists it.
 //!
-//! [`verify_against`] runs both against the root that catalog answers for — the key amenbo ships for the
+//! [`verify_against`] runs both against the root that catalog answers for — the key Amenbo ships for the
 //! official catalog, the key a registration pinned for any other (`AMB-D-389`) — and is the door an
 //! install (`AMB-T-2050`) and an update (`AMB-D-359`) call before an asset is ever written enabled. An
 //! asset with no signature, or one signed by a key its own catalog is not trusted on, does not verify,
@@ -18,7 +18,7 @@
 //! a plain argument, for a test that must sign its own fixtures.
 //!
 //! **Why the public key ships to every device is safe.** The catalog **private** key lives only in the
-//! catalog CI; every amenbo carries only the **public** key ([`CATALOG_PUBLIC_KEY`]), which can verify
+//! catalog CI; every Amenbo carries only the **public** key ([`CATALOG_PUBLIC_KEY`]), which can verify
 //! but never sign — the same shape as the updater public key in `tauri.conf.json`, and every TLS /
 //! OS-code-signing trust store.
 //!
@@ -34,22 +34,22 @@ use crate::error::{Error, ErrorCode, Msg, Result};
 use minisign_verify::{PublicKey, Signature};
 use sha2::{Digest, Sha256};
 
-/// The one checksum algorithm amenbo understands in a manifest. Pinned to SHA-256 so a manifest cannot
+/// The one checksum algorithm Amenbo understands in a manifest. Pinned to SHA-256 so a manifest cannot
 /// name a weaker digest and quietly downgrade the integrity check.
 const CHECKSUM_PREFIX: &str = "sha256:";
 
-/// amenbo's **catalog public key** — the single trust root for plugin assets (`AMB-D-371`). Key id
+/// Amenbo's **catalog public key** — the single trust root for plugin assets (`AMB-D-371`). Key id
 /// `6272CBB782CB57A0`, deliberately not the updater's key (`2F151276522ADC1D`, in `tauri.conf.json`):
 /// a plugin and a release are blessed by separate roots, so one compromised root does not carry the other.
 ///
 /// This is the public half, which verifies and cannot sign. The private half exists only as a secret of
 /// the catalog CI (`AMB-T-2054`), which signs each published asset and then re-verifies that signature
-/// against its own copy of this key before writing `catalog.json` — so "the key amenbo ships" and "the key
+/// against its own copy of this key before writing `catalog.json` — so "the key Amenbo ships" and "the key
 /// that signed" are proven to be one key on every catalog run. The catalog repository holds the identical
 /// value in `catalog-key.pub`.
 ///
-/// Rotating it takes a new amenbo release: an asset signed by a key no installed amenbo carries verifies
-/// nowhere. That is the fail-closed direction — a key amenbo does not know can never bless anything.
+/// Rotating it takes a new Amenbo release: an asset signed by a key no installed Amenbo carries verifies
+/// nowhere. That is the fail-closed direction — a key Amenbo does not know can never bless anything.
 pub const CATALOG_PUBLIC_KEY: &str = "RWSgV8uCt8tyYg74JbwBblWoE+g7bxSGvK8blkKW7gUo3EuBXaqy5oMR";
 
 /// Verify `bytes` hash to the digest the manifest recorded in `checksum` — the `sha256:<hex>` integrity
@@ -105,7 +105,7 @@ fn decode_sha256_hex(hex: &str) -> Result<[u8; 32]> {
 
 /// Verify a minisign `signature` (the full `.minisig` text) over `bytes` against `public_key` (a minisign
 /// base64 public key) — the origin half of provenance (`AMB-D-371`, catalog-key trust model). A pass means
-/// the bytes were signed by whoever holds the matching private key, i.e. the amenbo catalog CI.
+/// the bytes were signed by whoever holds the matching private key, i.e. the Amenbo catalog CI.
 ///
 /// Fail-closed: a malformed key, a malformed signature, or a signature that does not verify against the
 /// bytes and the key all refuse.
@@ -137,7 +137,7 @@ pub fn verify_signature(bytes: &[u8], signature: &str, public_key: &str) -> Resu
 
 /// How a refusal names the key it checked against.
 ///
-/// "The catalog key" was one key when there was one; there is now the key amenbo ships and the key each
+/// "The catalog key" was one key when there was one; there is now the key Amenbo ships and the key each
 /// registered catalog was pinned with (`AMB-D-389`), and which of them was tried is what tells a reader
 /// what they are looking at: an official asset that fails is a broken publish, while a registered
 /// catalog's is a publisher signing with something other than what its own catalog offered. The
@@ -155,7 +155,7 @@ fn key_named(public_key: &str) -> String {
 /// Verify both halves of provenance on a freshly downloaded asset (`AMB-D-371`) — the door an install
 /// (`AMB-T-1979`) or update (`AMB-D-359`) calls before the asset is trusted. Fail-closed:
 ///
-/// - `signature` of `None` is refused outright — an unsigned asset has no origin amenbo can vouch for
+/// - `signature` of `None` is refused outright — an unsigned asset has no origin Amenbo can vouch for
 ///   (`AMB-D-351`).
 /// - the signature must verify against `public_key` (origin: the key its catalog is trusted on).
 /// - the checksum must match the bytes (integrity: what the manifest recorded).
@@ -181,7 +181,7 @@ pub fn verify_asset(
     Ok(())
 }
 
-/// The key one asset is verified against: amenbo's own for the official catalog, or the key a registered
+/// The key one asset is verified against: Amenbo's own for the official catalog, or the key a registered
 /// catalog was pinned with (`AMB-D-389`).
 ///
 /// It exists to keep "which key" out of a caller's hands now that there is more than one. There is no way
@@ -193,7 +193,7 @@ pub fn verify_asset(
 pub struct TrustRoot(String);
 
 impl TrustRoot {
-    /// The root amenbo ships — the official catalog's, and the only one that needs no registration.
+    /// The root Amenbo ships — the official catalog's, and the only one that needs no registration.
     pub fn official() -> TrustRoot {
         TrustRoot(CATALOG_PUBLIC_KEY.to_string())
     }
@@ -243,7 +243,7 @@ pub fn read_public_key(text: &str) -> Result<String> {
         })
 }
 
-/// The fingerprint amenbo shows for a public key, and the handle the publisher can quote back: the
+/// The fingerprint Amenbo shows for a public key, and the handle the publisher can quote back: the
 /// minisign key id, 16 uppercase hex.
 ///
 /// It is the id minisign itself writes into the `.pub` file's comment line
@@ -252,7 +252,7 @@ pub fn read_public_key(text: &str) -> Result<String> {
 /// the two is comparing the same string, not two encodings of one.
 ///
 /// What the pin holds is the **whole key**, not this; the fingerprint is the short form a human is
-/// shown while consenting (`AMB-D-389`), and the comparison amenbo makes later is over the key itself.
+/// shown while consenting (`AMB-D-389`), and the comparison Amenbo makes later is over the key itself.
 pub fn key_fingerprint(public_key: &str) -> Result<String> {
     use base64::Engine as _;
     // Parse first: the fingerprint is read out of raw bytes, so the key has to be a key before its
@@ -399,8 +399,8 @@ yO4MZq6nO8TD4ypgwfYImIKz9E1tM3szwA/S9CRXLrH30HP+gQHXcL12wngoJy9uCBgHuaIsrnRo17T3
         assert!(verify_asset(ASSET, Some(OTHER_SIG), ASSET_SHA256, TEST_PUBKEY).is_err());
     }
 
-    /// A key that is not the one amenbo ships is named by its fingerprint (`AMB-D-389`). Reading a
-    /// registered catalog's refusal as "the amenbo catalog key" sends the reader after the wrong thing:
+    /// A key that is not the one Amenbo ships is named by its fingerprint (`AMB-D-389`). Reading a
+    /// registered catalog's refusal as "the Amenbo catalog key" sends the reader after the wrong thing:
     /// what failed is the pin their own consent put there.
     #[test]
     fn a_refusal_names_the_pinned_key_it_checked_against() {
@@ -439,7 +439,7 @@ yO4MZq6nO8TD4ypgwfYImIKz9E1tM3szwA/S9CRXLrH30HP+gQHXcL12wngoJy9uCBgHuaIsrnRo17T3
     #[test]
     fn the_catalog_door_refuses_an_asset_signed_by_any_other_key() {
         // The test key is a real minisign key with a real signature over these exact bytes — everything
-        // but the one root amenbo trusts. This is the whole point of embedding a key.
+        // but the one root Amenbo trusts. This is the whole point of embedding a key.
         let err = verify_asset(ASSET, Some(ASSET_SIG), ASSET_SHA256, CATALOG_PUBLIC_KEY).unwrap_err();
         assert!(format!("{err:?}").contains("does not verify"), "refused on origin");
         assert!(
@@ -484,7 +484,7 @@ yO4MZq6nO8TD4ypgwfYImIKz9E1tM3szwA/S9CRXLrH30HP+gQHXcL12wngoJy9uCBgHuaIsrnRo17T3
     }
 
     /// The fingerprint is the id minisign prints, so a publisher quoting their own `.pub` comment and a
-    /// user reading amenbo's prompt are comparing one string.
+    /// user reading Amenbo's prompt are comparing one string.
     #[test]
     fn the_fingerprint_is_the_key_id_minisign_shows() {
         assert_eq!(key_fingerprint(CATALOG_PUBLIC_KEY).unwrap(), "6272CBB782CB57A0");

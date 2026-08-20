@@ -135,10 +135,10 @@ fn a_parent_with_a_child_left_behind_cannot_be_deleted() {
     e.conn().execute("DELETE FROM task WHERE id = 1", []).expect("with no child left, the task goes");
 }
 
-/// The exclusion the same decision names: amenbo's own per-project settings are not concepts anyone points
+/// The exclusion the same decision names: Amenbo's own per-project settings are not concepts anyone points
 /// at, so they still ride the project's cascade. Pinned here because a blanket rewrite of the schema would
 /// take them along silently, and the cost of that is a `project delete` op that has to sweep rows nobody
-/// outside amenbo ever sees.
+/// outside Amenbo ever sees.
 #[test]
 fn amenbos_own_settings_still_go_with_the_project() {
     let e = StoreEngine::open_in_memory().unwrap();

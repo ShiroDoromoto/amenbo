@@ -1,4 +1,4 @@
-//! The stand-in for a target amenbo has not learned to register on.
+//! The stand-in for a target Amenbo has not learned to register on.
 //!
 //! It is not a failure and not a refusal to answer: reading the scheduler still works and says nothing
 //! is held, and the two writes refuse with the plain fact — so a caller reports a target with no door

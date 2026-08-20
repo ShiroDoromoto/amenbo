@@ -5,11 +5,11 @@
 //! enabled is part of the answer that document owes: enabling it was an instruction, and an entry point
 //! that does not carry it leaves the AI working without something the user put there on purpose.
 //!
-//! **amenbo holds no words of its own about a plugin.** What rides here is the author's `agent` block
+//! **Amenbo holds no words of its own about a plugin.** What rides here is the author's `agent` block
 //! ([`AgentGuide`]), read off the manifest beside the binary at the
-//! moment the entry point is asked. No plugin's name appears in amenbo's source (`AMB-D-346`), so a plugin
+//! moment the entry point is asked. No plugin's name appears in Amenbo's source (`AMB-D-346`), so a plugin
 //! renamed, retired or replaced takes its own sentences with it and leaves no stale line behind. The one
-//! thing amenbo does add is the **calling form**: an author writes their own command face, and
+//! thing Amenbo does add is the **calling form**: an author writes their own command face, and
 //! [`entry`] puts `<amenbo> plugin run <name>` in front of it, so what an AI reads is a line it can type.
 //!
 //! **Which plugins reach here is the caller's to decide, and it is the callable ones.** This module takes
@@ -21,7 +21,7 @@
 //! **A plugin that wrote no `agent` block still appears**, with what its manifest says regardless — what
 //! it observes, and for an official one its description besides. It said nothing about how to drive it,
 //! which is different from it not being here: an AI that can see an enabled plugin firing on `task.done`
-//! can reason about what it is watching, and nothing amenbo could invent would be more true than the
+//! can reason about what it is watching, and nothing Amenbo could invent would be more true than the
 //! author's silence.
 //!
 //! **The author's prose rides here only for an official plugin** (`AMB-D-575`). Whether a sentence is an
@@ -49,13 +49,13 @@
 //! The calls it may raise on its own are the author's `agent` block, right here.
 //!
 //! **A call can also be hung where it is a tool** (`AMB-D-571`, [`tools`]): the author names the step of
-//! amenbo's own cycle their call serves, and the step is handed the calling form alone. The shelves stay
+//! Amenbo's own cycle their call serves, and the step is handed the calling form alone. The shelves stay
 //! as they were — the sentences never leave this one — and what crosses is a number and a line to type.
 //!
 //! **The rules are asked here too, not only at the install door** (`AMB-D-573`). A block that no longer
 //! passes them is turned away whole ([`admissible_guide`]) and the caller is handed one line saying so;
 //! the plugin itself stays named, which is where a rule that arrived after the install, or a manifest
-//! edited on disk, stops being something an AI reads as amenbo's.
+//! edited on disk, stops being something an AI reads as Amenbo's.
 
 use std::collections::BTreeMap;
 
@@ -68,7 +68,7 @@ use crate::plugin_subscribe::InstalledPlugin;
 /// they arrive (the installed set is name-sorted, so it reads the same as `plugin list`) — **and the lines
 /// naming every guide turned away on the way** (`AMB-D-573`).
 ///
-/// `command_name` is what amenbo is called on this machine ([`Paths::command_name`](crate::config::Paths::command_name)),
+/// `command_name` is what Amenbo is called on this machine ([`Paths::command_name`](crate::config::Paths::command_name)),
 /// so a build reached by another name hands out lines that name it too.
 ///
 /// The caller shows the lines; nothing here writes to a face. They are one per plugin and no more, since a
@@ -124,7 +124,7 @@ pub fn entry(plugin: &InstalledPlugin, command_name: &str) -> (Value, Option<Str
                 .commands
                 .iter()
                 .map(|c| {
-                    // The author wrote the face; the calling form is amenbo's, assembled from the name
+                    // The author wrote the face; the calling form is Amenbo's, assembled from the name
                     // it just read off disk (`AMB-D-437`). `cmd` is held to a grammar (`AMB-D-572`), so
                     // it is the one thing a third party's sentence cannot ride in on.
                     let mut entry = Map::new();
@@ -149,12 +149,12 @@ pub fn entry(plugin: &InstalledPlugin, command_name: &str) -> (Value, Option<Str
     (Value::Object(out), rejected)
 }
 
-/// **The call lines to hang on amenbo's own steps** (`AMB-D-571`) — the step each one was named by,
+/// **The call lines to hang on Amenbo's own steps** (`AMB-D-571`) — the step each one was named by,
 /// against the lines to show there. The caller is the one holding the assembled document, so hanging
 /// them is its move ([`crate::agent::attach_tools`]); what this answers is which line belongs where.
 ///
-/// **What travels is the calling form and nothing else.** A step's body is amenbo's own working
-/// practice and amenbo answers for every word of it (`AMB-D-437`), so the author's sentences stay in
+/// **What travels is the calling form and nothing else.** A step's body is Amenbo's own working
+/// practice and Amenbo answers for every word of it (`AMB-D-437`), so the author's sentences stay in
 /// their entry, where a reader meets them as the author's. The reference is what closes the gap the
 /// separation left: a step saying *cut a worktree per task* and a plugin that cuts one had no way to
 /// find each other, and an AI told to cut had no hand. A `cmd` is held to a grammar (`AMB-D-572`), so
@@ -162,7 +162,7 @@ pub fn entry(plugin: &InstalledPlugin, command_name: &str) -> (Value, Option<Str
 /// same for a third party as for an official plugin, unlike `when` and `does` (`AMB-D-575`).
 ///
 /// **Direction: the author names the step, never the other way round.** No plugin's name appears in
-/// amenbo's source (`AMB-D-346`), so a step cannot reach for a tool; the tool declares where it is one,
+/// Amenbo's source (`AMB-D-346`), so a step cannot reach for a tool; the tool declares where it is one,
 /// and a machine joins the two by id. A ref naming no step in this document — a step renamed, or a
 /// whole cycle the runtime dropped as inapplicable — simply hangs nowhere.
 ///
@@ -186,7 +186,7 @@ pub fn tools(plugins: &[&InstalledPlugin], command_name: &str) -> BTreeMap<Strin
 }
 
 /// The line an AI can type: the author's own command face with `<amenbo> plugin run <name>` in front of
-/// it — the one thing amenbo contributes to what a plugin says for itself (`AMB-D-437`). The name is the
+/// it — the one thing Amenbo contributes to what a plugin says for itself (`AMB-D-437`). The name is the
 /// one read off disk a moment ago, and the command word is what this build is called.
 fn calling_form(command_name: &str, plugin: &str, cmd: &str) -> String {
     format!("{command_name} plugin run {plugin} {cmd}")
@@ -195,14 +195,14 @@ fn calling_form(command_name: &str, plugin: &str, cmd: &str) -> String {
 /// The author's block if the rules still admit it (`AMB-D-573`), and the line to show when they do not.
 ///
 /// **The rules are asked here, not only at the install door.** `validate_manifest` runs when a plugin is
-/// installed or updated, and nothing runs it again when *amenbo* is: a rule added to this build reaches
+/// installed or updated, and nothing runs it again when *Amenbo* is: a rule added to this build reaches
 /// only what is installed after it, while the plugin installed yesterday keeps relaying what yesterday's
 /// rules admitted. The manifest is also just a file beside the binary — the checksum guards the program,
 /// not the document — and `plugin rollback` writes back one that passed under older rules. So the last
 /// place the guide can be held to them is the moment it is read out, which is here.
 ///
 /// **Turned away whole, never trimmed.** Dropping the offending line and relaying the rest would put the
-/// author's meaning, altered, into a document that carries amenbo's name — a worse thing to hand an AI
+/// author's meaning, altered, into a document that carries Amenbo's name — a worse thing to hand an AI
 /// than one fewer plugin guide. What is left is exactly what a plugin that wrote no block leaves: the
 /// entry stays, so the plugin is still named and what it watches is still readable, and a call is refused
 /// (or not) where calls are ruled on (`AMB-D-351`), not here.
@@ -251,7 +251,7 @@ mod tests {
         }
     }
 
-    /// The same plugin without the catalog's badge — what anyone outside the amenbo team installs as.
+    /// The same plugin without the catalog's badge — what anyone outside the Amenbo team installs as.
     fn third_party(name: &str, agent: Option<AgentGuide>, events: &[&str]) -> InstalledPlugin {
         let mut p = installed(name, agent, events);
         p.manifest.official = false;
@@ -271,7 +271,7 @@ mod tests {
         }
     }
 
-    /// The whole of one official entry, and the one thing amenbo contributes to it: the calling form in
+    /// The whole of one official entry, and the one thing Amenbo contributes to it: the calling form in
     /// front of the author's own face.
     #[test]
     fn an_official_plugin_that_wrote_a_block_hands_back_a_line_an_ai_can_type() {
@@ -445,7 +445,7 @@ mod tests {
     }
 
     /// A third party that only watches wrote nothing but prose, so it is down to the two things it did
-    /// not write: the name the catalog knows it by, and the events amenbo named.
+    /// not write: the name the catalog knows it by, and the events Amenbo named.
     #[test]
     fn a_third_party_that_named_no_command_is_down_to_its_name_and_its_events() {
         let guide = AgentGuide { when: "It only watches".into(), commands: vec![] };
@@ -526,7 +526,7 @@ mod tests {
     }
 
     /// What crosses to a step is the line to type and nothing else: the author's `when` and `does` are
-    /// not in this answer at all, so there is no sentence to relay in amenbo's name.
+    /// not in this answer at all, so there is no sentence to relay in Amenbo's name.
     #[test]
     fn a_call_hangs_on_every_step_its_author_named() {
         let plugin = installed("worktree", Some(guide_at_steps()), &["task.status_changed"]);

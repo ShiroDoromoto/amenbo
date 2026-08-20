@@ -1,7 +1,7 @@
 // Deterministic, server-less identicon: a 5×5 left-right-symmetric glyph whose
 // pattern and hue derive purely from a seed. Same seed → same image on every device,
 // so each facet gets a stable, unique avatar with no upload and no network — matching
-// amenbo's no-server identity model. FacetAvatar seeds it per facet (by kind), so
+// Amenbo's no-server identity model. FacetAvatar seeds it per facet (by kind), so
 // a person's human and AI read as distinct glyphs without any badge (see FacetAvatar).
 
 /** FNV-1a (32-bit): small, deterministic, well-spread over short keys. */

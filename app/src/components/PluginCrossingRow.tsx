@@ -70,7 +70,7 @@ export function PluginCrossingRow({ install, layer, name }: {
       // boxes they are about — so the form is opened rather than left as a button someone has to find.
       if (moved.check && !moved.check.ok) setOpen(true);
     } catch (e) {
-      // A refusal is core's — a build this amenbo cannot speak to, a `required` setting this project
+      // A refusal is core's — a build this Amenbo cannot speak to, a `required` setting this project
       // has no value for — and it is the sentence worth showing beside the place to fix it.
       setError(errText(e));
     } finally {

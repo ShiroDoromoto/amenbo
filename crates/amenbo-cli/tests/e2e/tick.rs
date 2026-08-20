@@ -42,7 +42,7 @@ fn a_tick_takes_each_purposes_turn_once_a_day_and_exits_clean() {
     assert_eq!(exit_code(&out), 0, "stderr: {}", String::from_utf8_lossy(&out.stderr));
 }
 
-/// A device where amenbo has never been used. The scheduler's registration outlives an uninstall and a
+/// A device where Amenbo has never been used. The scheduler's registration outlives an uninstall and a
 /// store that was moved away, so the tick has to meet "there is nothing here" — and meet it by doing
 /// nothing, rather than by raising a store on a schedule nobody is watching.
 #[test]

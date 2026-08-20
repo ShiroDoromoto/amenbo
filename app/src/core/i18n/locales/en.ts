@@ -496,7 +496,7 @@ const ui = {
   // to word, from the bare timestamp the backend sends (see core/i18n/format).
   // app / shell chrome
   "app.loadError": "Failed to load data.", "app.loading": "Loading…",
-  // lint hook consent: the question amenbo asks before writing into .git/hooks
+  // lint hook consent: the question Amenbo asks before writing into .git/hooks
   "hooks.title": "Keep amenbo's refs out of your commits?",
   "hooks.why": "A ref like AMB-T-… means nothing outside the store that issued it. A git hook stops one before it reaches a commit.",
   "hooks.scope": "Asked once. Your answer covers the repositories amenbo works in, now and the ones you add later.",
@@ -530,7 +530,7 @@ const ui = {
   "tickBanner.later": "Later",
   // The other way in: an AI whose host cannot open a folder reaches this project over MCP instead
   // (`AMB-D-671`, `AMB-D-672`, `AMB-D-673`). Folded away on both the creation and the settings screen,
-  // because the reader who has amenbo on the command line needs none of it.
+  // because the reader who has Amenbo on the command line needs none of it.
   // The MCP screen's own heading, said the way the sidebar entrance says it (`nav.mcp`) so the name a
   // reader pressed is the name they arrive at (`AMB-D-690`); `mcp.setupTitle` is the line on a
   // project's settings screen, which names the subject there rather than that road.

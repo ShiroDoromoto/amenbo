@@ -1,9 +1,9 @@
-//! The AI apps amenbo can be reached from over MCP, and where each one keeps the settings that would
+//! The AI apps Amenbo can be reached from over MCP, and where each one keeps the settings that would
 //! reach it (`AMB-D-672`, `AMB-D-673`).
 //!
 //! **Read-only, and a table rather than a code path.** Every app is one [`McpApp`] row in
 //! [`MCP_APPS`]: the name it calls itself, the one file its MCP servers are written in, whether that
-//! file is the machine's or the folder's, what it is written in, and whether amenbo writes it. Listing
+//! file is the machine's or the folder's, what it is written in, and whether Amenbo writes it. Listing
 //! one more app is one more row — the same condition the harness catalog holds to
 //! ([`crate::harness`]), and the reason this is a table at all: three faces stand on it (writing the
 //! file out, wording the request that asks an AI to write it, and saying which apps are already set
@@ -67,7 +67,7 @@ impl Place {
     }
 
     /// The path this place stands for, for the folder being set up. `None` only where the OS will not
-    /// say where the user's home is, which is the same answer amenbo gives about its own store.
+    /// say where the user's home is, which is the same answer Amenbo gives about its own store.
     fn resolve(self, folder: &Path) -> Option<PathBuf> {
         match self {
             Place::Folder(relative) => Some(folder.join(relative)),
@@ -79,7 +79,7 @@ impl Place {
     }
 }
 
-/// One AI app amenbo knows how to be reached from — the catalog row.
+/// One AI app Amenbo knows how to be reached from — the catalog row.
 pub struct McpApp {
     /// The stable token a face names this app by (`claude-desktop`), lowercase and hyphenated. It is
     /// a key, not a rendering: a user reads [`label`](McpApp::label). Where an app is already listed
@@ -99,7 +99,7 @@ pub struct McpApp {
     /// The apps agree on nearly everything about that entry — a command and its arguments — and
     /// disagree about this one word, which is why it is the one part of the document a row carries.
     pub servers_key: &'static str,
-    /// Whether amenbo writes the settings out for this app, rather than wording a request that asks
+    /// Whether Amenbo writes the settings out for this app, rather than wording a request that asks
     /// the reader's AI to write them (`AMB-D-672`).
     ///
     /// It is one app, and the reason is not a preference: an app that can run a command has an AI in
@@ -114,7 +114,7 @@ pub struct McpApp {
     /// It sits beside [`place`](McpApp::place) rather than in it because both are true of that app at
     /// once, and a reader can have set it up either way. A bundle it opened writes nothing into the
     /// settings file (`AMB-T-3156`) — an entry there is one the reader wrote by hand — so an answer
-    /// that asked only the file would miss every reader who took the road amenbo offers, and one that
+    /// that asked only the file would miss every reader who took the road Amenbo offers, and one that
     /// asked only the extensions would miss the reader who wrote their own.
     pub extensions: Option<&'static str>,
 }
@@ -138,13 +138,13 @@ impl McpApp {
     }
 }
 
-/// Every app amenbo lists, in the order a face offers them: the one it writes a file for first, and
+/// Every app Amenbo lists, in the order a face offers them: the one it writes a file for first, and
 /// the rest — which all have an AI of their own to ask — after it.
 pub static MCP_APPS: &[McpApp] = &[
     McpApp {
         id: "claude-desktop",
         label: "Claude Desktop",
-        // The one app on this list that cannot run a command, which is why it is also the one amenbo
+        // The one app on this list that cannot run a command, which is why it is also the one Amenbo
         // writes a file for. `BaseDirs::config_dir()` is the same directory this app's own
         // documentation names on each of the three platforms, so the row carries one path rather
         // than three.
@@ -311,7 +311,7 @@ mod tests {
         }
     }
 
-    /// The one app amenbo writes a file for (`AMB-D-672`). A second one appearing means either a new
+    /// The one app Amenbo writes a file for (`AMB-D-672`). A second one appearing means either a new
     /// app that cannot run a command, or the flag being read as a preference — and the second is what
     /// this catches.
     #[test]

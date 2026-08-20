@@ -12,7 +12,7 @@ use crate::output::{confirm, human, print_json, CliError, CliErrorCode, Flags};
 /// Where an export goes when the caller named no destination and the stream shape is not on offer: a fresh,
 /// timestamped directory under the current one. The name carries the moment so a second export never lands
 /// on the first — `export_bundle` refuses a destination that already exists, and quietly overwriting
-/// someone's data is not amenbo's to do.
+/// someone's data is not Amenbo's to do.
 fn default_export_dir() -> String {
     let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
     format!("amenbo-export-{stamp}")
@@ -28,7 +28,7 @@ fn default_export_dir() -> String {
 /// device's content lands in the caller's terminal — so a closed reach (an AI) does not get it. It is not
 /// refused: taking the data out is the user's, and their AI's, right (no lock-in), and refusing would read
 /// as "you cannot export". Instead the destination is chosen for it and the export goes to a file, which
-/// returns only a path and a count. What the AI can then do with that file is raw file access, which amenbo
+/// returns only a path and a count. What the AI can then do with that file is raw file access, which Amenbo
 /// does not stop.
 ///
 /// **A plugin's window is refused the command outright** (`Reach::refuse_whole_device`, `AMB-D-406`). The
@@ -114,7 +114,7 @@ pub(crate) fn export(store: &Store, flags: &Flags, out: Option<String>) -> Resul
 /// required on the plugin face: they read and record nothing, so there is no actor for one to name
 /// (`stamps_facet`).
 ///
-/// **`snapshot`'s stdout is the document, and `records`' is too.** Anything else amenbo has to say goes to
+/// **`snapshot`'s stdout is the document, and `records`' is too.** Anything else Amenbo has to say goes to
 /// stderr, so the stream stays pipeable — the same rule `export`'s stream shape follows. Neither consults
 /// `--json`: the document is the answer either way, and there is no second shape to ask for.
 pub(crate) fn sync_cmd(store: &Store, flags: &Flags, sub: SyncCmd) -> Result<i32, CliError> {

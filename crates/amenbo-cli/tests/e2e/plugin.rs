@@ -73,7 +73,7 @@ fn plugin_config_writes_by_the_authors_schema_and_never_echoes_a_secret() {
 
 /// A plugin's secrets go out with a backup and stay home on an export (`AMB-D-434`).
 ///
-/// The two doors lead to different places. An export is one-way, out of amenbo and into another tool's
+/// The two doors lead to different places. An export is one-way, out of Amenbo and into another tool's
 /// hands, and a credential that leaves that way is a credential in a file nobody here controls any more
 /// — so the table does not travel. A backup leads back to the same person's own store, and dropping the
 /// secrets there would mean typing every one of them in again after each restore.
@@ -315,7 +315,7 @@ fn bound_project_name(cli: &Cli) -> String {
         .to_string()
 }
 
-/// An open gate is not the same as a plugin that fires (`AMB-D-359`). amenbo updates underneath an
+/// An open gate is not the same as a plugin that fires (`AMB-D-359`). Amenbo updates underneath an
 /// install, so a plugin enabled while it was compatible is later dropped at dispatch — and with only
 /// "enabled" on screen, that silence is readable nowhere but the log. The listing carries the verdict.
 #[test]
@@ -564,7 +564,7 @@ fn plugin_validate_json_carries_the_two_documents_only_when_the_manifest_passes(
 
 /// What a passing manifest hands back: the two documents the catalog serves (`AMB-D-385`) — an `entry`
 /// small enough that everyone can fetch every one of them to draw a list, and a `detail` fetched for the one
-/// plugin being opened or installed. The split is amenbo's, so the aggregator holds no idea of which half a
+/// plugin being opened or installed. The split is Amenbo's, so the aggregator holds no idea of which half a
 /// field belongs in — an idea it could hold only by naming fields, and so fail to name. Between them they
 /// carry the whole manifest, including the fields a hand-written copy list has dropped before (`events`,
 /// `config`). The entry's `added_at` and `detail_sum` (`AMB-D-386`) come back as empty slots: neither can be
@@ -621,7 +621,7 @@ fn plugin_validate_json_splits_the_manifest_into_the_two_documents_the_catalog_s
 
 /// **What an author learns about the layer before they open a catalog PR** (`AMB-D-601`). `scope` is the
 /// author's declaration of whether their plugin is a project's or the device's, and `plugin validate` is
-/// the one place they can find out what amenbo will make of it: a declaration amenbo does not know is
+/// the one place they can find out what Amenbo will make of it: a declaration Amenbo does not know is
 /// refused here exactly as it would be at the install door, and one it does know comes back inside the
 /// detail document the catalog will publish. Absent is the answer that matters most — the entries already
 /// in the catalog write no `scope` at all, and they must keep passing unchanged.
@@ -749,7 +749,7 @@ fn plugin_validate_reads_the_translations_beside_a_manifest_and_publishes_them_b
     );
     assert_eq!(out["entry"]["desc"], "Report what your AI did by email", "the base line is untouched");
 
-    // A language amenbo is not read in, and an overlay naming what the base does not have: both are the
+    // A language Amenbo is not read in, and an overlay naming what the base does not have: both are the
     // author's to fix here, and both are named at once rather than one per run.
     write("mail.xx.yaml", "desc: kein Wort\n");
     write("mail.fr.yaml", "author: Alice\nconfig:\n  smtp_host:\n    label: Serveur SMTP\n");
@@ -846,7 +846,7 @@ fn plugin_catalog_pins_the_key_a_catalog_publishes_and_refuses_a_changed_one() {
     )
     .unwrap();
 
-    // Two real minisign public keys — the catalog key amenbo ships, and the throwaway test key beside it
+    // Two real minisign public keys — the catalog key Amenbo ships, and the throwaway test key beside it
     // in `plugin_provenance`. Which key is which does not matter here; that they are two does.
     const KEY_A: &str = "RWSgV8uCt8tyYg74JbwBblWoE+g7bxSGvK8blkKW7gUo3EuBXaqy5oMR";
     const KEY_B: &str = "RWSw3wZ34b1PMyHu4KajlLhV0SdlMAgQGefo4pFIxv7MgRoWSVpCVXSE";
@@ -887,7 +887,7 @@ fn plugin_catalog_pins_the_key_a_catalog_publishes_and_refuses_a_changed_one() {
     let again = cli.json(&["plugin", "catalog", "add", &url, "--name", "the works", "--yes", "--json"]);
     assert_eq!(again["added"], false, "registering the same catalog again is a no-op");
 
-    // The publisher rotates their key, same URL. amenbo will not take the new one on the old consent.
+    // The publisher rotates their key, same URL. Amenbo will not take the new one on the old consent.
     host.set("/works/catalog-key.pub", &format!("{KEY_B}\n"));
     let (_out, code) = cli.run(&["plugin", "catalog", "add", &url, "--yes"]);
     assert_ne!(code, 0, "a different key is refused, not swallowed");
@@ -963,7 +963,7 @@ fn plugin_enable_refused_by_the_check_names_the_settings_and_not_the_authors_wor
         "the refusal is fail-closed: {listed}"
     );
 
-    // A check that says nothing readable costs the same, and says so in amenbo's own words.
+    // A check that says nothing readable costs the same, and says so in Amenbo's own words.
     install_plugin_that_checks(&cli, "mail", "#!/bin/sh\ncat >/dev/null\nprintf 'looks fine'\n");
     let (silent, code) = cli.run_err(&["plugin", "enable", "mail"]);
     assert_ne!(code, 0);

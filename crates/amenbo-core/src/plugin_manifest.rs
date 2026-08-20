@@ -36,7 +36,7 @@
 //! *not* here: they are fetched lazily for the one plugin a user opens, never for the whole catalog.
 //!
 //! **`official` is catalog-authoritative, not self-declared** (`AMB-D-347`): the badge means the author is
-//! the amenbo team, decided by catalog curation (the PR review / the manifest's directory), never by a
+//! the Amenbo team, decided by catalog curation (the PR review / the manifest's directory), never by a
 //! third party ticking a box. The field lives here because the catalog is the shape, but *who may set it
 //! true* is enforced upstream by the catalog CI and the validator — the type only supplies the safe
 //! default (absent ⇒ `false`).
@@ -50,8 +50,8 @@
 //! one truth about them lives in one place.
 //!
 //! Unknown keys are ignored rather than rejected: forward compatibility is handled by the version-compat
-//! declaration a manifest will carry (`AMB-D-359` — target payload `v` and min amenbo version), which
-//! gates a plugin gracefully instead of failing to parse a manifest a newer amenbo wrote. Denying unknown
+//! declaration a manifest will carry (`AMB-D-359` — target payload `v` and min Amenbo version), which
+//! gates a plugin gracefully instead of failing to parse a manifest a newer Amenbo wrote. Denying unknown
 //! fields would preempt that path (the same reasoning as the stored-blob schema in [`blob`](crate::blob)).
 
 use std::collections::BTreeMap;
@@ -74,8 +74,8 @@ pub enum Os {
 }
 
 impl Os {
-    /// The OS this build is running on, as a manifest spells it. `None` on a platform amenbo's
-    /// vocabulary cannot name — nothing amenbo ships runs there, so nothing declares an asset for it
+    /// The OS this build is running on, as a manifest spells it. `None` on a platform Amenbo's
+    /// vocabulary cannot name — nothing Amenbo ships runs there, so nothing declares an asset for it
     /// either, and every caller's answer is the same: this platform has no distributable.
     pub fn here() -> Option<Os> {
         Os::parse(std::env::consts::OS)
@@ -108,7 +108,7 @@ impl Os {
 ///
 /// What the two ask about is not the same, and deliberately so. A plugin's asset is run **by this
 /// build**, so the arch that picks it is this build's own — an arm64 asset is of no use to an x86_64
-/// amenbo, whatever the machine underneath could run. An update replaces the build itself, so it is
+/// Amenbo, whatever the machine underneath could run. An update replaces the build itself, so it is
 /// aimed at the machine ([`native_arch`](crate::update_check::native_arch), `AMB-D-551`). One
 /// vocabulary, two questions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -118,7 +118,7 @@ pub enum Arch {
 }
 
 impl Arch {
-    /// The arch this build runs on, or `None` for one amenbo's vocabulary cannot name — the same honest
+    /// The arch this build runs on, or `None` for one Amenbo's vocabulary cannot name — the same honest
     /// gap as [`Os::here`]: an unnameable arch matches only an arch-agnostic asset (the `<os>` key), never
     /// an `<os>-<arch>` one.
     pub fn here() -> Option<Arch> {
@@ -174,7 +174,7 @@ pub struct Platform {
 }
 
 impl Platform {
-    /// The platform this build runs on, or `None` when amenbo's vocabulary cannot name its OS (an arch it
+    /// The platform this build runs on, or `None` when Amenbo's vocabulary cannot name its OS (an arch it
     /// cannot name is still a platform — the arch is simply `None`, matching only an arch-agnostic asset).
     pub fn here() -> Option<Platform> {
         Some(Platform { os: Os::here()?, arch: Arch::here() })
@@ -382,7 +382,7 @@ impl<'de> Deserialize<'de> for EventSubscription {
 
 /// The payload contract version a manifest targets when it declares none: the v1 baseline (`AMB-D-349`).
 /// A fixed literal, deliberately *not* [`crate::plugin_payload::VERSION`] — an omitted `payload_v` means
-/// the plugin was written against the original contract, so it must not drift upward as amenbo bumps its
+/// the plugin was written against the original contract, so it must not drift upward as Amenbo bumps its
 /// own `v`.
 fn default_payload_v() -> u32 {
     1
@@ -416,7 +416,7 @@ pub struct Manifest {
     /// URLs only (`AMB-D-640`) — are the validator's, like every other rule (`AMB-T-2984`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub about: Option<String>,
-    /// Who wrote the plugin. For an official plugin this is the amenbo team; it is display text, not the
+    /// Who wrote the plugin. For an official plugin this is the Amenbo team; it is display text, not the
     /// authority on the official badge (that is `official`, set by the catalog).
     pub author: String,
     /// The plugin's source repository, `owner/name` — the GitHub coordinates a detail view reads stars
@@ -442,8 +442,8 @@ pub struct Manifest {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub checksum: String,
     /// The asset's minisign signature (the full `.minisig` text), produced by the catalog CI with the
-    /// amenbo **catalog key** when the manifest is aggregated (`AMB-D-371`). Verified once on download
-    /// against amenbo's embedded catalog public key ([`crate::plugin_provenance`]) — the origin half of
+    /// Amenbo **catalog key** when the manifest is aggregated (`AMB-D-371`). Verified once on download
+    /// against Amenbo's embedded catalog public key ([`crate::plugin_provenance`]) — the origin half of
     /// provenance, next to `checksum`'s integrity half. Absent means unsigned: a third-party asset with no
     /// signature cannot be installed or enabled (`AMB-D-351`). An official plugin is signed too; its extra
     /// GitHub build-provenance attestation is a separate check, not this field.
@@ -470,7 +470,7 @@ pub struct Manifest {
     /// every other value outside its vocabulary does.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub assets: BTreeMap<Platform, Asset>,
-    /// The official badge: the author is the amenbo team. Catalog-authoritative (`AMB-D-347`), never
+    /// The official badge: the author is the Amenbo team. Catalog-authoritative (`AMB-D-347`), never
     /// self-declared — absent means `false`.
     #[serde(default)]
     pub official: bool,
@@ -478,7 +478,7 @@ pub struct Manifest {
     /// `plugins/<name>.json`, and the catalog's value rather than the author's.
     ///
     /// A catalog entry travels as two documents ([`crate::plugin_wire`]): the list half everyone fetches,
-    /// and the detail half an install reads for the one plugin it is installing. A manifest amenbo holds
+    /// and the detail half an install reads for the one plugin it is installing. A manifest Amenbo holds
     /// is the two joined, and this is the field that says *which* detail it was joined with. It is the
     /// comparison material update detection is left with once the checksums live a document away
     /// (`AMB-D-386`): an install records it beside the binary, and a later fetch of the list alone reports
@@ -502,29 +502,29 @@ pub struct Manifest {
     #[serde(default)]
     pub scope: Scope,
     /// The event-payload contract version this plugin reads (`AMB-D-349` — a single integer `v` for the
-    /// whole contract, evolving additively). It lets amenbo notice when its own `v` has moved past what a
+    /// whole contract, evolving additively). It lets Amenbo notice when its own `v` has moved past what a
     /// plugin understands and warn or refuse rather than silently feed it a payload it cannot parse
     /// (`AMB-D-359`). Absent means the v1 baseline — a manifest written before this field targets the
-    /// original contract, not whatever version the reading amenbo happens to be at. This module only
+    /// original contract, not whatever version the reading Amenbo happens to be at. This module only
     /// *carries* the number; the enable/run-time comparison is [`crate::plugin_compat`]'s, not the type's.
     #[serde(default = "default_payload_v")]
     pub payload_v: u32,
-    /// The minimum amenbo version this plugin needs, as a semver string — below it, amenbo warns or
+    /// The minimum Amenbo version this plugin needs, as a semver string — below it, Amenbo warns or
     /// refuses to enable/run the plugin (`AMB-D-359`). Absent means no floor: the plugin declares no
     /// version requirement. Stored opaquely, like `checksum` — this module neither parses nor compares
     /// it; reading it is [`crate::plugin_compat`]'s, so the one truth about version ordering lives with
-    /// the gate that acts on it (a string it cannot parse is a floor amenbo will not claim to meet).
+    /// the gate that acts on it (a string it cannot parse is a floor Amenbo will not claim to meet).
     /// A value that reads as no version at all is refused earlier, at the manifest door
     /// ([`crate::plugin_validate`]), so it does not reach that gate through a fresh install.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub min_amenbo: Option<String>,
-    /// The plugin's configuration schema: a flat list of fields the author declares so amenbo can
+    /// The plugin's configuration schema: a flat list of fields the author declares so Amenbo can
     /// render a form, store the values, and inject them at run time (`AMB-D-356`). Absent means the
     /// plugin takes no configuration — the safe default is an empty schema, so an older manifest with
     /// no `config` key is a plugin with no settings, not a parse error.
     ///
     /// The list is **the whole schema**: no validation rules, and no notion of what a value means (a URL,
-    /// an email) — that judgement is the author's at run time. What amenbo reads here is only which fields
+    /// an email) — that judgement is the author's at run time. What Amenbo reads here is only which fields
     /// exist, which are secret (so the store never sees them — `AMB-D-356`), which are required (so
     /// `enable` is blocked until they are filled — `AMB-D-351`), and what shape each answer takes:
     /// [`ConfigField::field_type`] with its candidates and default (`AMB-D-415`), which is what a form can
@@ -571,7 +571,7 @@ impl Manifest {
     /// two forms are resolved in exactly one place.
     ///
     /// Resolution is **exact then OS-wide** (`AMB-D-384`): the running platform's `<os>-<arch>` key is
-    /// tried first, then its arch-agnostic `<os>` key. A machine whose arch amenbo cannot name
+    /// tried first, then its arch-agnostic `<os>` key. A machine whose arch Amenbo cannot name
     /// ([`Arch::here`] is `None`) skips the exact step and can only match an arch-agnostic asset — an
     /// `<os>-<arch>` build cannot be claimed to run on an arch we cannot even name.
     ///
@@ -617,7 +617,7 @@ pub struct Asset {
     pub signature: Option<String>,
 }
 
-/// **What kind of value a field holds** (`AMB-D-415`) — the one thing about a value amenbo does read, and
+/// **What kind of value a field holds** (`AMB-D-415`) — the one thing about a value Amenbo does read, and
 /// it reads it only to know what to draw and what to accept.
 ///
 /// A field is one of three kinds, and two of them live here: a plain line of text, and a choice among
@@ -625,7 +625,7 @@ pub struct Asset {
 /// beside this, since being hidden is about *where the value is stored*, not about what shape it has.
 ///
 /// **The meaning of the value is still the author's** (`AMB-D-356`). A `Text` field is any line at all;
-/// amenbo does not know a URL from an email. What [`Multi`](FieldType::Multi) adds is not a type system but
+/// Amenbo does not know a URL from an email. What [`Multi`](FieldType::Multi) adds is not a type system but
 /// a shorter road to a right answer: a value the author already knows the candidates for should never be
 /// something the user has to spell.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -657,7 +657,7 @@ impl FieldType {
 /// second follows [`ConfigField::default`]. So the deliberate empty choice is stored as this word, which is
 /// why the validator refuses it as a candidate's own `value`: one string cannot mean both.
 ///
-/// The word is amenbo's, not the author's: what a plugin receives is the resolved value (`AMB-D-415`), so
+/// The word is Amenbo's, not the author's: what a plugin receives is the resolved value (`AMB-D-415`), so
 /// nothing a plugin reads has to know the reserved spelling.
 pub const NONE_SELECTED: &str = "none";
 
@@ -678,16 +678,16 @@ pub struct ConfigOption {
 }
 
 /// One field of a plugin's configuration schema (`AMB-D-356`, `AMB-D-415`). The author declares a flat list
-/// of these in the manifest; amenbo renders each as one form field, routes its value to storage by the
+/// of these in the manifest; Amenbo renders each as one form field, routes its value to storage by the
 /// `secret` flag, and injects it into the plugin at run time.
 ///
-/// **amenbo still carries no notion of what a value means** — no pattern, no validation rule. What it
+/// **Amenbo still carries no notion of what a value means** — no pattern, no validation rule. What it
 /// reads is only: `secret` (where the value is stored and how it is injected), `required` (whether an
 /// unset field blocks `enable`), and — since `AMB-D-415` — [`field_type`](ConfigField::field_type) with
 /// its [`options`](ConfigField::options) and [`default`](ConfigField::default), which say what to draw and
 /// which answers are admissible. The last three are about the *form of the answer*, never about what the
 /// answer signifies. The three `AMB-D-656` adds keep that line: [`help`](ConfigField::help) and
-/// [`placeholder`](ConfigField::placeholder) are text amenbo shows and never reads, and
+/// [`placeholder`](ConfigField::placeholder) are text Amenbo shows and never reads, and
 /// [`readonly`](ConfigField::readonly) says *who writes* the value, not what a written one may be.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConfigField {
@@ -719,8 +719,8 @@ pub struct ConfigField {
     /// One line, plain text, and — like [`help`](ConfigField::help) — off the AI's face.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub placeholder: Option<String>,
-    /// Whether the value is a secret. **The author declares this; amenbo does not judge it** (`AMB-D-356`)
-    /// — amenbo cannot know a webhook URL is sensitive, so it trusts the flag. A secret is stored in the
+    /// Whether the value is a secret. **The author declares this; Amenbo does not judge it** (`AMB-D-356`)
+    /// — Amenbo cannot know a webhook URL is sensitive, so it trusts the flag. A secret is stored in the
     /// store table an `export` must leave (`AMB-D-434`) and injected as an environment variable (off
     /// argv, off logs); a non-secret is stored in the ordinary table and injected on stdin.
     /// Absent means `false` — the safe-for-storage default is *not* secret only for a field the author
@@ -728,7 +728,7 @@ pub struct ConfigField {
     #[serde(default)]
     pub secret: bool,
     /// Whether the field must hold a value before the plugin may be enabled (`AMB-D-351`, fail-closed).
-    /// amenbo only checks presence (a non-empty value); it does not check the value is *valid*. Absent
+    /// Amenbo only checks presence (a non-empty value); it does not check the value is *valid*. Absent
     /// means `false`. Separate from [`default`](ConfigField::default): a field that carries one is never
     /// unanswered, so it does not block `enable` however it is marked here.
     #[serde(default)]
@@ -747,7 +747,7 @@ pub struct ConfigField {
     /// not sit with [`default`](ConfigField::default), though, and the validator says so: a value that has
     /// an answer before anyone generates one is not a generated value.
     ///
-    /// **An older amenbo ignores this key** — [`Manifest`] parsing keeps what it does not know rather than
+    /// **An older Amenbo ignores this key** — [`Manifest`] parsing keeps what it does not know rather than
     /// refusing it, so a field declared readonly stays editable until the user's build reads the key. The
     /// declaration is safe to publish early; it is simply not yet in force.
     #[serde(default, skip_serializing_if = "is_false")]
@@ -806,9 +806,9 @@ fn is_false(flag: &bool) -> bool {
 /// for it, and the calls it answers.
 ///
 /// `amenbo agent --json` is the one document an AI is pointed at, and a plugin the user installed and
-/// enabled is part of the answer that document owes. amenbo has no words of its own for what a third
+/// enabled is part of the answer that document owes. Amenbo has no words of its own for what a third
 /// party's plugin is for, so what rides there is what the author wrote here — read at run time, never
-/// written into amenbo's source (`AMB-D-346`). A plugin renamed or retired takes its own sentences with it.
+/// written into Amenbo's source (`AMB-D-346`). A plugin renamed or retired takes its own sentences with it.
 ///
 /// ```yaml
 /// agent:
@@ -819,7 +819,7 @@ fn is_false(flag: &bool) -> bool {
 ///       steps: [<the ids of amenbo's own steps this call is a tool for>]
 /// ```
 ///
-/// **The calling form is amenbo's to build.** [`cmd`](AgentCommand::cmd) holds the plugin's own command
+/// **The calling form is Amenbo's to build.** [`cmd`](AgentCommand::cmd) holds the plugin's own command
 /// face alone; the entry point puts `amenbo plugin run <name> ` in front of it from the name it just read,
 /// so an AI receives a line it can type. An author writing the whole line would be writing their own name
 /// into it, which is the one thing this shape keeps out.
@@ -828,7 +828,7 @@ fn is_false(flag: &bool) -> bool {
 /// call to appear beside the step it serves names that step in [`AgentCommand::steps`]; the step then
 /// carries the calling form alone, and every sentence about it stays here.
 ///
-/// **The text is the author's one language.** amenbo's own entry point carries its wording in more than
+/// **The text is the author's one language.** Amenbo's own entry point carries its wording in more than
 /// one, and it holds no translation for a plugin's — what was written is what is relayed.
 ///
 /// **Shape only, like the rest of this module**: that `when` says something, and how long and how many the
@@ -847,20 +847,20 @@ pub struct AgentGuide {
 }
 
 /// One call an author puts on the record (`AMB-D-437`): what to type, what comes back, and where in
-/// amenbo's own working cycle it is a tool.
+/// Amenbo's own working cycle it is a tool.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentCommand {
     /// The subcommand and its arguments — without the `amenbo plugin run <name>` the reader prepends.
     pub cmd: String,
     /// One line: what the call does, and what it returns.
     pub does: String,
-    /// **The steps of amenbo's own cycle this call is a tool for** (`AMB-D-571`), each named by id:
+    /// **The steps of Amenbo's own cycle this call is a tool for** (`AMB-D-571`), each named by id:
     /// `<run>.<step>`, where the run is `agentCycle` for the backbone or a cycle's key
     /// (`cycles.worktree` is written `worktree`), and the step is its id within that run. What travels
     /// to a named step is the calling form and nothing else — the sentences stay in this block, where a
-    /// reader meets them as the author's rather than as amenbo's (`AMB-D-437`/`AMB-D-571`).
+    /// reader meets them as the author's rather than as Amenbo's (`AMB-D-437`/`AMB-D-571`).
     ///
-    /// **Naming a step no longer there is not an error.** The steps travel with amenbo while a manifest
+    /// **Naming a step no longer there is not an error.** The steps travel with Amenbo while a manifest
     /// stays where it was installed, and a step can be renamed, retired, or — like the `worktree` cycle
     /// off a git checkout — left out of the run the reader is handed. A ref that resolves to nothing
     /// hangs nowhere and takes nothing with it. Absent means the call is a tool for no step in
@@ -870,7 +870,7 @@ pub struct AgentCommand {
 }
 
 impl AgentCommand {
-    /// A call tied to no step of amenbo's own cycle — what an author writes who names their command
+    /// A call tied to no step of Amenbo's own cycle — what an author writes who names their command
     /// face and stops there.
     pub fn new(cmd: impl Into<String>, does: impl Into<String>) -> Self {
         AgentCommand { cmd: cmd.into(), does: does.into(), steps: Vec::new() }
@@ -895,7 +895,7 @@ impl AgentCommand {
 /// **The call is the command face the plugin already has** (`AMB-D-353`). What is written here is the same
 /// subcommand-and-arguments line [`AgentCommand::cmd`] holds, and the run puts `plugin run <name>` in front
 /// of it — so this block adds no protocol and no second way of speaking to a plugin. It says only *where*
-/// one of the calls a plugin already answers is raised, which is the one thing amenbo was missing: the
+/// one of the calls a plugin already answers is raised, which is the one thing Amenbo was missing: the
 /// values are already injected, and the answer already comes back on stdout.
 ///
 /// **Only these two are reachable from the settings face** (`AMB-D-522`). A call taking arguments a caller
@@ -952,7 +952,7 @@ pub struct SettingsAction {
 /// **One input an operation asks for, for that run alone** (`AMB-D-664`).
 ///
 /// It looks like a [`ConfigField`] and is the opposite of one: a config field is a value the user answers
-/// once and amenbo keeps, and this is a value amenbo never has. So it carries the three things a box needs
+/// once and Amenbo keeps, and this is a value Amenbo never has. So it carries the three things a box needs
 /// to be drawn and handed over, and none of the ones that only make sense for a value with a life after the
 /// press — a `default` is a stored answer to a question that is asked every time, and `required` is a gate
 /// on enabling that this is not on either side of.
@@ -960,7 +960,7 @@ pub struct SettingsAction {
 /// **Those two are refused rather than ignored** ([`crate::plugin_validate`]). They are the keys an author
 /// carries over when they copy a config field, and a key that is quietly dropped costs them a value they
 /// believe is being asked for. Every *other* unknown key is still ignored, as everywhere in this module: a
-/// key a later amenbo adds must not make this one refuse the manifest.
+/// key a later Amenbo adds must not make this one refuse the manifest.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AskField {
     /// The name the value is handed over under — a plain identifier, like a [`ConfigField::key`], since it
@@ -971,7 +971,7 @@ pub struct AskField {
     /// (`AMB-D-620`).
     pub label: String,
     /// Whether the box hides what is typed into it. The author's declaration, as on
-    /// [`ConfigField::secret`] — amenbo does not judge which values are sensitive (`AMB-D-356`).
+    /// [`ConfigField::secret`] — Amenbo does not judge which values are sensitive (`AMB-D-356`).
     ///
     /// Unlike a config field's, this decides only what the screen shows: where the value is stored is not a
     /// question here, because it is not stored. Absent means `false`.
@@ -987,7 +987,7 @@ pub struct AskField {
 /// **What one manifest says in one other language**, keyed by the language code it is written in
 /// (`AMB-D-621`) — `ja`, `zh-Hans`, one of [`crate::config::LANGUAGES`].
 ///
-/// The author writes each language as a file beside the manifest (`plugins/mail.ja.yaml`); amenbo
+/// The author writes each language as a file beside the manifest (`plugins/mail.ja.yaml`); Amenbo
 /// publishes them split across the two catalog documents (`AMB-D-622`, [`crate::plugin_wire::split`]).
 /// Which languages exist is therefore a map, never a field on [`Manifest`]: the manifest is what the
 /// author wrote, and this is what someone else wrote it as.
@@ -1003,12 +1003,12 @@ pub type Translations = BTreeMap<String, ManifestOverlay>;
 /// it in another.
 ///
 /// **Every field is optional**, because a translation is a layer and not a replacement: what an author
-/// did not translate is not missing, it is the base value (`AMB-D-623`), and amenbo never fills a gap on
+/// did not translate is not missing, it is the base value (`AMB-D-623`), and Amenbo never fills a gap on
 /// their behalf. Selecting between the two is the GUI's, which is why nothing here resolves anything.
 ///
 /// **Unknown keys are kept rather than ignored**, unlike [`Manifest`]'s. A manifest ignores what it does
-/// not know so a newer document still parses on an older amenbo; an overlay's unknown key is the
-/// opposite situation — an author translating something amenbo will never show, whose whole symptom is
+/// not know so a newer document still parses on an older Amenbo; an overlay's unknown key is the
+/// opposite situation — an author translating something Amenbo will never show, whose whole symptom is
 /// silence. So the key is carried in [`extra`](ManifestOverlay::extra) and named back to the author by
 /// the validator ([`crate::plugin_validate::validate_overlays`]), while the document still parses, which
 /// is what lets one run report every mistake in it at once.
@@ -1032,7 +1032,7 @@ pub struct ManifestOverlay {
     /// takes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub settings: Option<SettingsOverlay>,
-    /// What this overlay named that amenbo does not translate — kept only so the key can be named back
+    /// What this overlay named that Amenbo does not translate — kept only so the key can be named back
     /// to its author, never read for what it held.
     #[serde(flatten)]
     pub extra: BTreeMap<String, Ignored>,
@@ -1061,7 +1061,7 @@ pub struct SettingsOverlay {
     /// re-ordering their buttons would otherwise silently re-label every language.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub actions: BTreeMap<String, SettingsActionOverlay>,
-    /// What this overlay named that amenbo does not translate, as on [`ManifestOverlay`].
+    /// What this overlay named that Amenbo does not translate, as on [`ManifestOverlay`].
     #[serde(flatten)]
     pub extra: BTreeMap<String, Ignored>,
 }
@@ -1079,7 +1079,7 @@ pub struct SettingsActionOverlay {
     /// translated.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub ask: BTreeMap<String, String>,
-    /// What this overlay named that amenbo does not translate, as on [`ManifestOverlay`].
+    /// What this overlay named that Amenbo does not translate, as on [`ManifestOverlay`].
     #[serde(flatten)]
     pub extra: BTreeMap<String, Ignored>,
 }
@@ -1104,7 +1104,7 @@ pub struct ConfigFieldOverlay {
     /// means the base example.
     ///
     /// An example is not always the same string in every language — a date, an address, a name written
-    /// the way the reader writes one — so it is the author's to restate, not amenbo's to carry over.
+    /// the way the reader writes one — so it is the author's to restate, not Amenbo's to carry over.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub placeholder: Option<String>,
     /// The candidates' labels, in this language — **keyed by the candidate's stored
@@ -1112,7 +1112,7 @@ pub struct ConfigFieldOverlay {
     /// The value itself is what travels to the plugin, so it is never translated.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub options: BTreeMap<String, String>,
-    /// What this overlay named that amenbo does not translate, as on [`ManifestOverlay`].
+    /// What this overlay named that Amenbo does not translate, as on [`ManifestOverlay`].
     #[serde(flatten)]
     pub extra: BTreeMap<String, Ignored>,
 }
@@ -1124,7 +1124,7 @@ pub struct ConfigFieldOverlay {
 /// own stem and its extension, and `None` for anything that is not an overlay of *that* manifest — the
 /// manifest itself included, since its name has no token between the two.
 ///
-/// **The token is not checked against the languages amenbo reads.** A file named in a code from outside
+/// **The token is not checked against the languages Amenbo reads.** A file named in a code from outside
 /// them is still an overlay someone wrote, and the useful answer to it is the validator naming the code
 /// ([`crate::plugin_validate::validate_overlays`]) — not this quietly declining to see the file, which is
 /// the same silence as never having written it.
@@ -1135,7 +1135,7 @@ pub fn overlay_language<'a>(manifest_file: &str, file: &'a str) -> Option<&'a st
     (!lang.is_empty()).then_some(lang)
 }
 
-/// A value amenbo did not read, standing in for whatever an overlay wrote under a key it does not know.
+/// A value Amenbo did not read, standing in for whatever an overlay wrote under a key it does not know.
 /// The key is the whole of what anyone needs — it is what the validator names back to the author — so
 /// the value is discarded on the way in rather than carried around untyped.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -1294,7 +1294,7 @@ mod tests {
     }
 
     /// Arch resolution is exact-then-OS-wide (`AMB-D-384`): `<os>-<arch>` wins, `<os>` is the fallback, and
-    /// a machine whose arch amenbo cannot name matches only the arch-agnostic key.
+    /// a machine whose arch Amenbo cannot name matches only the arch-agnostic key.
     #[test]
     fn asset_for_resolves_arch_exact_then_os_wide() {
         let mut v = full_json();
@@ -1754,7 +1754,7 @@ mod tests {
     }
 
     /// The two keys an author carries over from a config field are kept rather than dropped, so the
-    /// validator can name them back (`AMB-D-664`) — while a key from a later amenbo is ignored, as
+    /// validator can name them back (`AMB-D-664`) — while a key from a later Amenbo is ignored, as
     /// everywhere else in this module.
     #[test]
     fn an_ask_keeps_the_keys_it_does_not_have() {
@@ -1796,7 +1796,7 @@ mod tests {
 
     #[test]
     fn an_unknown_key_is_ignored_for_forward_compatibility() {
-        // A field a newer amenbo added must not make an older one refuse the manifest.
+        // A field a newer Amenbo added must not make an older one refuse the manifest.
         let mut v = full_json();
         v["some_future_field"] = serde_json::json!("whatever a later version wrote");
         let m: Manifest = serde_json::from_value(v).expect("unknown keys are tolerated");
@@ -1807,7 +1807,7 @@ mod tests {
     fn the_compat_declaration_defaults_when_absent() {
         // A manifest written before the compat fields existed still parses: it targets the v1 payload
         // baseline and declares no amenbo-version floor. The default must be the fixed baseline, not the
-        // reading amenbo's current `v` — an old plugin does not silently start claiming a newer contract.
+        // reading Amenbo's current `v` — an old plugin does not silently start claiming a newer contract.
         let mut v = full_json();
         v.as_object_mut().unwrap().remove("payload_v");
         v.as_object_mut().unwrap().remove("min_amenbo");
@@ -1871,7 +1871,7 @@ mod tests {
         assert_eq!(serde_json::to_value(&bare).unwrap(), serde_json::json!({}));
     }
 
-    /// **A key amenbo does not translate is kept, not dropped.** The overlay still parses — so one run
+    /// **A key Amenbo does not translate is kept, not dropped.** The overlay still parses — so one run
     /// can report every mistake in it — and the key is there for the validator to name back to its
     /// author (`AMB-D-621`), which is the whole difference from a manifest's ignored unknowns.
     #[test]
@@ -1898,7 +1898,7 @@ mod tests {
         assert_eq!(overlay_language("mail.yaml", "mail.ja.yaml"), Some("ja"));
         assert_eq!(overlay_language("mail.yaml", "mail.zh-Hans.yaml"), Some("zh-Hans"));
         assert_eq!(overlay_language("mail.json", "mail.pt-BR.json"), Some("pt-BR"));
-        // A code amenbo does not read is still read off the name — the validator is what says so.
+        // A code Amenbo does not read is still read off the name — the validator is what says so.
         assert_eq!(overlay_language("mail.yaml", "mail.xx.yaml"), Some("xx"));
 
         // The manifest is not an overlay of itself, and neither is another plugin's anything.

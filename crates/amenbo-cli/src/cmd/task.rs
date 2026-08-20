@@ -429,7 +429,7 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
 
 // ───────────────────────── task commit ─────────────────────────
 
-/// A task's git commit SHAs: record / list / forget. amenbo stores each SHA opaquely — the ops door
+/// A task's git commit SHAs: record / list / forget. Amenbo stores each SHA opaquely — the ops door
 /// admits only full-length lower-case hex and folds case, and the `(task_id, sha)` index makes a
 /// re-record idempotent. The chain runs history to task, since a public commit carries no store-local
 /// reference.

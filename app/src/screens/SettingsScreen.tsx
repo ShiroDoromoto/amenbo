@@ -307,7 +307,7 @@ function NoteLine({ note }: { note: Note | null }) {
 
 /** Export, under Settings > Data. It writes everything out as a directory — `export.json` plus the
  *  attachments themselves (`attachments/`) — for moving to another tool. It is one-way: there is no
- *  way back in (the only road back into amenbo is restoring a backup). The GUI is a thin call on
+ *  way back in (the only road back into Amenbo is restoring a backup). The GUI is a thin call on
  *  core's single API (`run_export`), and progress comes over the same `data-progress` event and
  *  `DataProgressModal` (cancellable) that backup and restore use. There is only one shape, a single
  *  JSON covering everything. Backup/restore below is a different thing: that one is disaster recovery

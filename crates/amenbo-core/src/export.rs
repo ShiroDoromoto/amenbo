@@ -45,7 +45,7 @@ pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Container/layout version of the whole-device JSON export (distinct from the read-model
 /// `schema_version`). Bump only if the envelope below changes shape — it is a label for whoever reads the
-/// file *outside* amenbo, since nothing reads it back in. Version `2` is
+/// file *outside* Amenbo, since nothing reads it back in. Version `2` is
 /// `{"amenbo_export": …, "tables": {…}}`.
 const EXPORT_VERSION: u32 = 2;
 
@@ -337,7 +337,7 @@ pub fn stream_picked_rows(
 
 // ─────────────────── attachment bytes: the export directory ───────────────────
 //
-// Export is **one-way**: nothing reads it back into amenbo, so whatever it fails to carry is simply lost
+// Export is **one-way**: nothing reads it back into Amenbo, so whatever it fails to carry is simply lost
 // on the way out. Attachment metadata alone (`blob_hash` — a content address that means nothing outside
 // this device) is not "your data, taken with you". So the migration-facing export is a **directory**:
 // `export.json` next to `attachments/`, the blobs laid out under the target they hang on. Bytes are copied
@@ -725,7 +725,7 @@ mod export_tests {
     /// streaming** are in neither, rather than the comment turning up on its own — which is what a
     /// snapshot per statement would produce, and what nothing in the artifact would say. The write goes in
     /// through the progress callback, the one place a test can reach inside the row loop, from a second
-    /// connection: exactly where another amenbo process stands.
+    /// connection: exactly where another Amenbo process stands.
     #[test]
     fn an_export_reads_every_table_from_one_snapshot() {
         /// Enough tasks that the row loop's cancellation poll (every [`CANCEL_POLL_ROWS`] rows) fires

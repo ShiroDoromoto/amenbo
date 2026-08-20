@@ -22,7 +22,7 @@ describe("findRefTokens", () => {
   });
 
   // The namespace is the whole point: a body's `#12` is a GitHub issue and its `T-12` may be another
-  // tracker's, so linking either would hijack a reference that was never amenbo's.
+  // tracker's, so linking either would hijack a reference that was never Amenbo's.
   it("does not pick up a bare #NNN, a bare T-NN, or a ref glued to alphanumerics", () => {
     expect(raws("see #123 and D-85 plus T-45.")).toEqual([]);
     expect(raws("issue#12")).toEqual([]);
@@ -146,7 +146,7 @@ describe("Markdown Mermaid rendering", () => {
 });
 
 describe("external links", () => {
-  // The app window has no address bar and no way back, so a link that leaves amenbo must go to the
+  // The app window has no address bar and no way back, so a link that leaves Amenbo must go to the
   // browser. Everything else — the ref scheme, an anchor — stays in the document.
   it("recognises only http(s) as leaving the app", () => {
     expect(isExternalHref("https://github.com/owner/repo")).toBe(true);
@@ -188,7 +188,7 @@ describe("images", () => {
 });
 
 describe("where a link may go", () => {
-  // The bug this closes: a relative link resolves against amenbo's own origin, so following it
+  // The bug this closes: a relative link resolves against Amenbo's own origin, so following it
   // reloaded the whole app and looked like the plugin detail closing itself.
   it("draws a relative link as text, and keeps an in-document one a link", () => {
     const relative = render("[LICENSE](LICENSE) and [docs](./docs/x.md)");

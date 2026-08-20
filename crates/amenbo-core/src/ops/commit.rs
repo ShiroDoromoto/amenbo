@@ -1,4 +1,4 @@
-//! A task's git commit SHAs (1 task : many commits). amenbo stores each SHA as an opaque string — it
+//! A task's git commit SHAs (1 task : many commits). Amenbo stores each SHA as an opaque string — it
 //! never reads git, checks the commit exists, or knows which forge it lives on. The rows are the anchor
 //! from history back to a task: a public commit carries no store-local reference, so the chain can only
 //! be drawn on the task side.

@@ -560,7 +560,7 @@ export function useAttachments(targetType: AttachTargetType, targetId: number | 
   return data ?? [];
 }
 
-/** One git commit SHA recorded on a task (generated DTO). amenbo stores it opaque — the AI reads git. */
+/** One git commit SHA recorded on a task (generated DTO). Amenbo stores it opaque — the AI reads git. */
 export type TaskCommit = TaskCommitDto;
 
 /** Fetch a task's recorded commit SHAs, oldest first (Tauri: `task_commits`; browser: empty). */

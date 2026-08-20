@@ -178,7 +178,7 @@ pub struct Payload {
     /// cannot say where it is. For a removal the relation cannot be looked up afterwards either, because
     /// looking it up is exactly what the deletion removed; for an addition it cannot be looked up at all,
     /// since a comment is read as part of a task's timeline and never by its own id. Named on its own rather
-    /// than left inside `record` so routing does not depend on knowing amenbo's field names.
+    /// than left inside `record` so routing does not depend on knowing Amenbo's field names.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent: Option<i64>,
     /// The **version the project is now at**, on [`store.changed`](name::STORE_CHANGED) and nowhere else
@@ -324,7 +324,7 @@ impl Payload {
     /// to a payload built by the named constructors, and `new` is carried through verbatim — the row
     /// already holds the new state the emit side composed.
     ///
-    /// Returns `None` for a row this amenbo does not recognise — an `event` outside [`V1_EVENTS`], or an
+    /// Returns `None` for a row this Amenbo does not recognise — an `event` outside [`V1_EVENTS`], or an
     /// `actor` / `at` that does not parse — so the dispatcher can warn and skip rather than fire a payload
     /// it cannot faithfully build.
     pub fn from_outbox_row(row: &crate::store_engine::OutboxRow) -> Option<Self> {

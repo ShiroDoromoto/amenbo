@@ -169,7 +169,7 @@ fn execution_guard_requires_pointer_when_unbound() {
 
 /// Nested-worktree guard: a git worktree cut **inside** a bound folder inherits its `.amenbo` by the upward
 /// walk, so a throwaway checkout could drive the real backlog — the store it writes to lives in app-data and
-/// outlives the worktree. amenbo refuses there, and says where to operate instead without ever offering
+/// outlives the worktree. Amenbo refuses there, and says where to operate instead without ever offering
 /// `bind`, which is neither a way out (restoring the binding in the throwaway is the accident itself) nor a
 /// way through: binding is refused in a nested worktree as squarely as operating is, `--force` and all. The
 /// one command that stays open is `unbind`, the way out. The shapes that merely resemble the hazard — an
@@ -358,7 +358,7 @@ fn init_places_marker_files_and_bind_links_project() {
     assert_eq!(after["binding"]["project_name"], "サイト刷新");
 }
 
-/// Init in a folder that has no `.amenbo` but does carry amenbo's managed block in CLAUDE.md is **not
+/// Init in a folder that has no `.amenbo` but does carry Amenbo's managed block in CLAUDE.md is **not
 /// hard-blocked by the marker alone**. When no living store claims that cwd — a clone, a copy, a leftover
 /// stale marker — init proceeds: it writes `.amenbo`, regenerates the block idempotently and preserves
 /// everything outside the markers (under a single AMENBO_HOME that claim set is always empty).
@@ -393,7 +393,7 @@ fn make_block_stale(path: &std::path::Path) -> String {
     stale
 }
 
-/// A stale block in a bound folder catches up to the current version **just by running amenbo there**, no
+/// A stale block in a bound folder catches up to the current version **just by running Amenbo there**, no
 /// matter who runs it (actor-independent). Afterwards doctor no longer calls that folder stale.
 #[test]
 fn running_amenbo_in_a_bound_folder_follows_its_stale_managed_block() {
@@ -402,7 +402,7 @@ fn running_amenbo_in_a_bound_folder_follows_its_stale_managed_block() {
     let claude = cli.home.join("CLAUDE.md");
     make_block_stale(&claude);
 
-    // Run amenbo in this folder — any command will do, so long as it resolves `.amenbo`.
+    // Run Amenbo in this folder — any command will do, so long as it resolves `.amenbo`.
     cli.run(&["status"]);
 
     let after = std::fs::read_to_string(&claude).unwrap();
@@ -504,7 +504,7 @@ fn doctor_flags_a_stale_block_in_a_folder_you_are_not_in_without_rewriting_it() 
         .unwrap_or_else(|| panic!("should detect stale_managed_block: {flagged}"));
     assert_eq!(issue["severity"], "warning");
     assert!(issue["target"].as_str().unwrap().ends_with("CLAUDE.md"), "the target is CLAUDE.md: {issue}");
-    // Two ways out are offered: run amenbo in that folder, or sync-guide every folder.
+    // Two ways out are offered: run Amenbo in that folder, or sync-guide every folder.
     assert!(issue["fix_hint"].as_str().unwrap().contains("sync-guide"), "points at the re-sync command: {issue}");
     // It is a warning and not an error, so doctor stays ok.
     assert_eq!(flagged["summary"]["error"], 0, "a stale block is a warning, not an error: {flagged}");
@@ -711,7 +711,7 @@ fn project_show_flags_a_bound_folder_another_store_wrote() {
 #[test]
 fn init_and_bind_success_output_states_capability_and_next_step() {
     let cli = Cli::new();
-    // init (human): states the capability (your AI can operate amenbo) and the next step (amenbo status).
+    // init (human): states the capability (your AI can operate Amenbo) and the next step (amenbo status).
     let (out, code) = cli.run(&["init", "--name", "tester"]);
     assert_eq!(code, 0);
     assert!(out.contains("can now operate amenbo"), "init states the capability: {out}");
@@ -942,7 +942,7 @@ fn a_moved_folder_is_re_pointed_by_id_and_the_binding_that_vanished_is_listed_wi
     std::fs::rename(moving.join(".amenbo"), new_home.join(".amenbo")).unwrap();
     std::fs::remove_dir_all(&moving).unwrap();
 
-    // amenbo does not quietly go and work somewhere else: from the folder that is still there, the
+    // Amenbo does not quietly go and work somewhere else: from the folder that is still there, the
     // read stops — and what it hands back is the vanished binding's id and the command that moves it.
     let (code, _, stderr) = run_args_in(&staying, &["bind"]);
     assert_eq!(code, 1, "a folder that is gone stops the read: {stderr}");

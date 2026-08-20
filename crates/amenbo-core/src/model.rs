@@ -309,7 +309,7 @@ pub struct Task {
     /// binding row — never a path, so the folder can be moved or renamed under it. `None` is a task that
     /// names no folder, which is every task unless someone said otherwise: nothing infers a place from
     /// where the task was filed. Having one refuses nothing on its own — no reservation and no worktree
-    /// is stopped for it here; it is expressiveness the surfaces around amenbo may act on.
+    /// is stopped for it here; it is expressiveness the surfaces around Amenbo may act on.
     #[serde(default)]
     pub at_binding_id: Option<i64>,
     pub created_at: Timestamp,
@@ -347,7 +347,7 @@ pub struct TaskDependency {
     pub updated_at: Timestamp,
 }
 
-/// A git commit SHA recorded against a task — one row, one commit (a task carries many). amenbo keeps the
+/// A git commit SHA recorded against a task — one row, one commit (a task carries many). Amenbo keeps the
 /// SHA as an opaque string: it never reads git, verifies the commit exists, or knows which forge it lives
 /// on. It is the anchor from history back to a task: a public commit carries no store-local reference, so
 /// the chain can only be drawn on the task side. `sha` is the full-length lower-case hex the ops layer
@@ -904,7 +904,7 @@ pub const SCHEMA_VERSION: &str = "1";
 /// migration**: one that drops or renames a column or table an older reader's SQL needs. Every write-path
 /// open stamps this version into `store_meta.format_version`. The forward-migration gate compares the
 /// `format_version` a store recorded against this constant, and if `store > FORMAT_VERSION` it fails with
-/// a clear error: this store has been updated by a newer amenbo, so update to the latest one
+/// a clear error: this store has been updated by a newer Amenbo, so update to the latest one
 /// (`amenbo update`). **The chain decides the version.** This constant *is* the end of the version chain
 /// ([`crate::store_engine::migrate::LATEST_VERSION`]), and **a number is never written here**: add one
 /// step and the version goes up; without a step it cannot. The thing that carries a breaking migration is

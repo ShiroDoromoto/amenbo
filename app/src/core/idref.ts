@@ -1,5 +1,5 @@
 // The GUI's side of the ref spelling — the mirror of core's `idref.rs`, which is where the format is
-// decided. Every exposed amenbo ref is `AMB-<kind>-<n>`.
+// decided. Every exposed Amenbo ref is `AMB-<kind>-<n>`.
 //
 // Almost every ref the GUI shows arrives already rendered, as the backend's `ref` field; this module is for
 // the few places that hold nothing but an id (the id chip, an optimistic row created before the backend has
@@ -9,7 +9,7 @@
 // so no amount of checking against the store tells the two apart when the numbers coincide. `AMB-` makes
 // the ref self-declaring, which is what lets body-text detection be a pure pattern.
 
-/** The prefix every user-visible amenbo ref carries. */
+/** The prefix every user-visible Amenbo ref carries. */
 export const NAMESPACE = "AMB";
 
 export type RefSpace = "task" | "decision";
@@ -38,7 +38,7 @@ export const REF_RE = /(?<![A-Za-z0-9])AMB-[TD]-\d+/gi;
 
 /**
  * Read a single ref, whole-string. Reading is the loose side: the bare `#<n>` / `T-<n>` / `D-<n>` forms are
- * still accepted, matching what core's parser takes, because text a user hands amenbo directly — typing
+ * still accepted, matching what core's parser takes, because text a user hands Amenbo directly — typing
  * into the search box — is not the foreign text the namespace guards against.
  */
 export function parseRef(raw: string): { num: number; space: RefSpace } | null {

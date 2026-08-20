@@ -1,6 +1,6 @@
 //! Sync snapshot — the one instant of a project a carrier plugin takes off this device.
 //!
-//! A plugin that carries amenbo's data outward (a viewer, an audit trail, a mirror in another tool)
+//! A plugin that carries Amenbo's data outward (a viewer, an audit trail, a mirror in another tool)
 //! resends **everything** each time (`AMB-D-583`), so what it needs is not a diff but one whole,
 //! internally consistent picture of what it may see. That is this module, and it is a road of its own
 //! rather than a flag on an existing one (`AMB-D-581`): `export` is the whole device on its way to
@@ -34,7 +34,7 @@
 //! size — and a carrier that wants the bytes asks for them by their own road.
 //!
 //! It is plaintext, and deliberately so: this store is plaintext at rest, and encrypting what is carried
-//! is the carrier's job, not amenbo's (`AMB-D-585`). Nothing reads a snapshot back in — the road out is
+//! is the carrier's job, not Amenbo's (`AMB-D-585`). Nothing reads a snapshot back in — the road out is
 //! one-way (`AMB-D-578`).
 //!
 //! **Beside the whole picture, the same rows by id** ([`records_from`]). A carrier reading the ledger is
@@ -42,7 +42,7 @@
 //! — and taking the whole window to see one changed task is the ledger's whole point undone. That read is
 //! here rather than in a module of its own because what makes it safe is what makes the snapshot safe:
 //! the same [`project_predicate`], so a row outside the window falls out of both alike, and the same
-//! `{table: [rows]}` shape, so a carrier holds one form of amenbo's data and not two.
+//! `{table: [rows]}` shape, so a carrier holds one form of Amenbo's data and not two.
 
 use std::io::Write;
 use std::path::Path;
@@ -302,7 +302,7 @@ pub fn stream(reach: Reach, w: &mut impl Write) -> Result<()> {
 
 /// The most record ids one by-id read takes. It is the page a carrier is handed by the feed
 /// (`SYNC_CHANGES_PAGE`), because that is where the ids come from: a carrier that drained one page can
-/// always ask for everything in it, and one that cannot is being asked to keep a queue amenbo never
+/// always ask for everything in it, and one that cannot is being asked to keep a queue Amenbo never
 /// bounded.
 ///
 /// **Over it is refused, not truncated.** A short page of changes is unambiguous — the cursor says where
@@ -683,7 +683,7 @@ mod tests {
         };
         let db = store_file(&dir);
 
-        // A second connection, standing exactly where another amenbo process would.
+        // A second connection, standing exactly where another Amenbo process would.
         let writer = rusqlite::Connection::open(&db).unwrap();
         writer.busy_timeout(std::time::Duration::from_secs(5)).unwrap();
 

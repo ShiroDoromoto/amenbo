@@ -144,7 +144,7 @@ pub fn find_upward(start: &Path) -> Option<(PathBuf, DirBinding)> {
 
 /// Return the nearest `.amenbo` **strictly above** `start` (excluding `start` itself). This is how
 /// nested bindings are detected: running `init`/`bind` in a subdirectory of an already
-/// managed tree drops a new pointer that **shadows** the binding above it — amenbo run in that subdir
+/// managed tree drops a new pointer that **shadows** the binding above it — Amenbo run in that subdir
 /// would resolve to the subdir's project rather than the parent's. `find_upward` would also pick up
 /// `start`'s own `.amenbo`, so to keep re-binding (repointing the same folder at another project)
 /// distinguishable from nesting, we search from the parent up.
@@ -255,7 +255,7 @@ pub fn live_projects_claiming(store: &Store, dir: &Path) -> Vec<i64> {
 /// answer **only when it lands on exactly one live project**; zero or several are returned as still
 /// undecided rather than silently picking a project (`doctor`'s [`legacy_pointers`] surfaces those).
 /// Once resolved, the pointer is rewritten in place into the current shape (`project_id` + `slug`), so
-/// it heals the next time amenbo runs in that folder. A pointer that resolves perfectly well but was
+/// it heals the next time Amenbo runs in that folder. A pointer that resolves perfectly well but was
 /// written in an older shape ([`DirBinding::outdated`]) follows the same road for the same reason —
 /// that is how the store name reaches the pointers that predate it. The write is best-effort: on a read-only
 /// filesystem we resolve, give up quietly, and do not fail a read command. The compatibility read has
@@ -263,7 +263,7 @@ pub fn live_projects_claiming(store: &Store, dir: &Path) -> Vec<i64> {
 /// is gone, and the cost is bounded at a single reverse lookup taken only when `project_id` is `None`.
 /// The same moment is used to bring a stale managed block in the resolved folder's `CLAUDE.md` /
 /// `AGENTS.md` up to the current version ([`crate::agents::follow_stale_block`]): leftovers on the
-/// filesystem can only be fixed when amenbo actually runs in that folder, and since every surface
+/// filesystem can only be fixed when Amenbo actually runs in that folder, and since every surface
 /// resolves `.amenbo` through here, one hook suffices.
 pub fn resolve_upward(store: &Store, start: &Path) -> Option<(PathBuf, DirBinding)> {
     let (dir, binding) = find_upward(start)?;
@@ -363,8 +363,8 @@ pub struct PointerRepair {
 
 /// Fix broken pointers — old-shape ([`legacy_pointers`]) and vanished ([`missing_pointers`]) alike —
 /// **without going to those folders**; both the GUI banner and `doctor --fix` call this. It does in one
-/// pass exactly what [`resolve_upward`] would do the next time amenbo ran in each folder. The only
-/// thing written is each folder's `.amenbo`: amenbo's own file, in a place the user explicitly bound.
+/// pass exactly what [`resolve_upward`] would do the next time Amenbo ran in each folder. The only
+/// thing written is each folder's `.amenbo`: Amenbo's own file, in a place the user explicitly bound.
 /// Folders whose owner is not unambiguous are left untouched — we never silently pick a project, the
 /// same discipline as [`resolve_upward`].
 pub fn repair_pointers(store: &Store) -> PointerRepair {
@@ -413,7 +413,7 @@ pub fn orphan_dirs(store: &Store) -> Vec<String> {
 /// `recoverable` says whether [`resolve_upward`] can upgrade the pointer on its own (whether it lands
 /// on exactly one live project); `None` means a human has to settle it with `bind --project`, which
 /// changes what `doctor` advises. The scan relies on a best-effort index (the registry), so **a folder
-/// absent from this list may still hold an old pointer** — running amenbo in that folder lets
+/// absent from this list may still hold an old pointer** — running Amenbo in that folder lets
 /// [`resolve_upward`] fix it.
 #[derive(Debug, Clone)]
 pub struct LegacyPointer {
@@ -572,7 +572,7 @@ pub struct BoundFolder {
 }
 
 impl BoundFolder {
-    /// Whether the folder is still where the binding says. Asking is what keeps amenbo from **silently
+    /// Whether the folder is still where the binding says. Asking is what keeps Amenbo from **silently
     /// operating somewhere else**: a path recorded here is absolute, so moving, renaming or restoring
     /// the folder elsewhere leaves the row naming nothing. With no main folder to single out, the
     /// question is asked of each of them — and a `false` is a binding to re-point, not a row to drop.
@@ -597,7 +597,7 @@ pub struct Repoint {
     pub retracted: Vec<BoundFolder>,
 }
 
-/// A folder's path in the one spelling amenbo records, matches on, and shows (`AMB-D-703`).
+/// A folder's path in the one spelling Amenbo records, matches on, and shows (`AMB-D-703`).
 ///
 /// `canonicalize` asks the right question — it resolves symlinks, a `.` in the middle, and a relative
 /// path down to one answer — but on Windows it answers in the verbatim `\\?\C:\…` form. That is Win32's
@@ -847,7 +847,7 @@ mod tests {
     }
 
     /// If the managed block in a folder whose pointer we just resolved is out of date, it follows to the
-    /// current version right there — the same occasion, and the same trigger ("amenbo was run in that
+    /// current version right there — the same occasion, and the same trigger ("Amenbo was run in that
     /// folder"), as the lazy rewrite of `.amenbo`.
     #[test]
     fn resolving_a_pointer_follows_that_folder_s_stale_managed_block() {
@@ -864,7 +864,7 @@ mod tests {
         )
         .unwrap();
 
-        // Running amenbo in this folder means resolving its pointer.
+        // Running Amenbo in this folder means resolving its pointer.
         resolve_upward(&store, &dir).expect("the pointer resolves");
 
         let claude = std::fs::read_to_string(dir.join("CLAUDE.md")).unwrap();
@@ -1090,7 +1090,7 @@ mod tests {
         assert!(foreign_pointer(&tmp("foreign-bare")).is_none());
     }
 
-    /// A version-1 pointer gains this store's name where amenbo runs in that folder — but **only where
+    /// A version-1 pointer gains this store's name where Amenbo runs in that folder — but **only where
     /// this store can confirm the pointer is its own** (the id is live here and the slug beside it is
     /// that project's). Ids are per-store primary keys, so taking a folder on a live id alone would let
     /// the first binary to walk in claim what belongs to another store.

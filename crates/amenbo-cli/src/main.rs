@@ -1,4 +1,4 @@
-//! Entry point for the amenbo CLI: parse with clap, delegate to the core (amenbo-core) operations.
+//! Entry point for the Amenbo CLI: parse with clap, delegate to the core (amenbo-core) operations.
 //! The CLI is a thin skin. Output comes in two layers: human-readable, and `--json`.
 //!
 //! What stays here is the way in: startup, the guards that judge where the command was typed and who
@@ -98,7 +98,7 @@ fn restore_sigpipe() {}
 
 fn real_main() -> i32 {
     // What was handed to a plugin is taken out of the command line before the parser sees it — the words
-    // after a plugin's name are not amenbo's to read (see `plugin_words`).
+    // after a plugin's name are not Amenbo's to read (see `plugin_words`).
     let argv: Vec<std::ffi::OsString> = std::env::args_os().collect();
     let handed = plugin_words(&argv);
     let amenbos = match &handed {
@@ -132,7 +132,7 @@ fn real_main() -> i32 {
     // stamping who acted, or drawing how far an AI reaches — must declare one, and gets `facet_required`
     // when it does not. An operation that uses none passes without one and never touches a facet again.
     // Nothing is inferred from the context of the call: an environment variable would propagate into
-    // every process amenbo starts, and a human default would let an undeclared AI write as a person and
+    // every process Amenbo starts, and a human default would let an undeclared AI write as a person and
     // read past its binding.
     //
     // On the plugin face one of those two consumers is already served before the command line is read: the
@@ -183,8 +183,8 @@ fn decide_facet(flag: Option<&str>, require: bool) -> Result<Option<ActorKind>, 
     }
 }
 
-/// amenbo's own flags, as they are spelled on a command line. After `plugin run <name>` these are not
-/// amenbo's any more — every word there is the plugin's (`AMB-D-346`) — which is what the hint below
+/// Amenbo's own flags, as they are spelled on a command line. After `plugin run <name>` these are not
+/// Amenbo's any more — every word there is the plugin's (`AMB-D-346`) — which is what the hint below
 /// exists to say out loud.
 const OWN_FLAGS: &[&str] = &["--actor", "--json", "--quiet", "--yes", "--no-color"];
 
@@ -194,13 +194,13 @@ const FACET_FLAG: &str = "--actor";
 
 /// Say where a flag went, when that is the answer to the failure a person is looking at.
 ///
-/// Everywhere else in amenbo `--json` goes on the end, so that is the habit people bring to `plugin
+/// Everywhere else in Amenbo `--json` goes on the end, so that is the habit people bring to `plugin
 /// run` — where the end belongs to the plugin. The `--actor` they typed is then sitting in the
-/// plugin's argv, amenbo never saw a facet, and what comes back is "facet is unspecified", which
+/// plugin's argv, Amenbo never saw a facet, and what comes back is "facet is unspecified", which
 /// says nothing about the words they actually wrote. This adds the missing half to the hint: the flag
-/// went to the plugin, and here is the same command with amenbo's flags where amenbo can see them.
+/// went to the plugin, and here is the same command with Amenbo's flags where Amenbo can see them.
 ///
-/// It fires on that pairing alone. A plugin is entitled to a `--json` of its own, so a flag amenbo
+/// It fires on that pairing alone. A plugin is entitled to a `--json` of its own, so a flag Amenbo
 /// happens to share a spelling with is not a mistake — only a facet that was typed and never arrived
 /// is, and that is the one this can be sure about.
 fn misplaced_flags_hint(cmd: &Option<Command>, err: CliError) -> CliError {
@@ -212,7 +212,7 @@ fn misplaced_flags_hint(cmd: &Option<Command>, err: CliError) -> CliError {
     if !own.iter().any(|f| f.starts_with(FACET_FLAG)) {
         return err;
     }
-    // Every one of amenbo's flags found is hoisted, not just the facet: leaving a `--json` behind
+    // Every one of Amenbo's flags found is hoisted, not just the facet: leaving a `--json` behind
     // would hand back a corrected line that still does not answer in JSON.
     let corrected = [
         vec![Paths::command_name().to_string()],
@@ -231,9 +231,9 @@ fn misplaced_flags_hint(cmd: &Option<Command>, err: CliError) -> CliError {
     }
 }
 
-/// Split what was handed to the plugin into amenbo's own flags (with the value `--actor` carries) and
+/// Split what was handed to the plugin into Amenbo's own flags (with the value `--actor` carries) and
 /// everything else, each in the order it was written. `--actor=ai` counts as one word, and a bare
-/// `--actor` at the very end counts as itself — a person who wrote either meant amenbo to read it.
+/// `--actor` at the very end counts as itself — a person who wrote either meant Amenbo to read it.
 fn split_own_flags(args: &[String]) -> (Vec<String>, Vec<String>) {
     let (mut own, mut rest) = (Vec::new(), Vec::new());
     let mut it = args.iter().peekable();
@@ -267,7 +267,7 @@ const FLAGS_BEFORE_THE_NAME: &[(&str, bool)] = &[
     ("--project", true),
 ];
 
-/// Does this word spell one of amenbo's flags, and does it take the next word? `--actor=ai` is one word
+/// Does this word spell one of Amenbo's flags, and does it take the next word? `--actor=ai` is one word
 /// and takes nothing further.
 fn flag_before_the_name(word: &str) -> Option<bool> {
     let (head, joined) = match word.split_once('=') {
@@ -284,12 +284,12 @@ fn flag_before_the_name(word: &str) -> Option<bool> {
 /// `None` when this invocation is not a `plugin run` with anything trailing the name.
 ///
 /// **After the name every word is the plugin's** (`AMB-D-346`), and that line cannot be held by the
-/// parser alone: amenbo's flags are global, so the parser answers for one wherever it appears — including
+/// parser alone: Amenbo's flags are global, so the parser answers for one wherever it appears — including
 /// the first word after the name, which the plugin never then sees. A plugin author who puts `--json` or
-/// `--yes` on their own face would find amenbo quietly eating it. So the split is made here, over the raw
+/// `--yes` on their own face would find Amenbo quietly eating it. So the split is made here, over the raw
 /// command line, and the parser is handed only the words up to and including the name.
 ///
-/// The name is the first word after `run` that is not one of amenbo's own (`amenbo plugin run --json
+/// The name is the first word after `run` that is not one of Amenbo's own (`amenbo plugin run --json
 /// worktree …` is the documented place for those). Whatever lands there is the name position, a flag
 /// included — that is where `plugin run --help` goes, and where a flag written one word too late is
 /// reported from.
@@ -305,7 +305,7 @@ fn plugin_words(argv: &[std::ffi::OsString]) -> Option<(usize, Vec<String>)> {
 }
 
 /// Walk the command line to the word standing where a plugin's name goes. Only the path `plugin run`
-/// leads there, so anything else — another subcommand, a stray word, a flag amenbo does not answer for
+/// leads there, so anything else — another subcommand, a stray word, a flag Amenbo does not answer for
 /// before the path is complete — ends the walk with `None` and leaves the line to the parser.
 fn name_position(argv: &[std::ffi::OsString]) -> Option<usize> {
     let mut i = 1;
@@ -324,11 +324,11 @@ fn name_position(argv: &[std::ffi::OsString]) -> Option<usize> {
         }
     }
     // Amenbo's own flags reach one word further than the path does: written here they are still ahead of
-    // the name, and still amenbo's.
+    // the name, and still Amenbo's.
     while let Some(takes_value) = flag_before_the_name(argv.get(i)?.to_str()?) {
         i += if takes_value { 2 } else { 1 };
     }
-    // Whatever stands here is the name — a flag amenbo does not answer for included, since past `run`
+    // Whatever stands here is the name — a flag Amenbo does not answer for included, since past `run`
     // there is nobody else left to read it.
     argv.get(i)?.to_str()?;
     Some(i)
@@ -340,10 +340,10 @@ const HELP_FLAGS: &[&str] = &["--help", "-h"];
 /// Is this a `plugin run` with a help flag standing where the plugin's name goes?
 ///
 /// After the name every word is the plugin's (`AMB-D-346`), `--help` included — which is exactly the
-/// one a plugin's author puts its usage behind, so amenbo answering it would hide the very text the
+/// one a plugin's author puts its usage behind, so Amenbo answering it would hide the very text the
 /// person asked for. `plugin run` therefore carries no help flag of its own and the word travels
 /// through untouched. What is left is the form that names no plugin at all: there, the request is
-/// amenbo's to answer, and the name is the position the flag lands in.
+/// Amenbo's to answer, and the name is the position the flag lands in.
 ///
 /// A plugin cannot be called `--help`: a catalog name is `[a-z0-9-]`, so nothing legitimate is shadowed.
 fn asks_for_own_help(cmd: &Option<Command>) -> bool {
@@ -356,7 +356,7 @@ fn asks_for_own_help(cmd: &Option<Command>) -> bool {
 /// A word starting with a hyphen where the plugin's name goes, and it is not a help flag.
 ///
 /// The position takes hyphens at all so that `--help` has somewhere to land; nothing else written there
-/// can be a plugin (`[a-z0-9-]`, never leading), so it is a flag of amenbo's put one word too late —
+/// can be a plugin (`[a-z0-9-]`, never leading), so it is a flag of Amenbo's put one word too late —
 /// they all go ahead of the name. Saying that is the answer; hunting the catalog for a plugin nobody
 /// could have installed is not.
 fn flag_in_the_name_position(cmd: &Option<Command>) -> Option<CliError> {
@@ -408,7 +408,7 @@ fn print_plugin_run_help() -> i32 {
 ///
 /// False is the narrow set that touches neither: the faces that answer about this build or this machine
 /// (version / update / agent / whoami / config), the ones that place the pointer or read text handed to
-/// them (bind / lint / the git hooks), and the two entry points amenbo starts itself with a store and a
+/// them (bind / lint / the git hooks), and the two entry points Amenbo starts itself with a store and a
 /// window already named (plugin-runner, `plugin validate`). Those never reach a facet, so there is
 /// nothing for an undeclared one to go wrong in. Everything else defaults to true (**fail-closed**: a
 /// variant missed here surfaces `facet_required`, which beats acting on a facet nobody declared).
@@ -438,7 +438,7 @@ fn uses_facet(cmd: &Option<Command>) -> bool {
         // the child works — and a host launching a server is in no position to pass one anyway.
         | Command::Mcp { .. }
         // A runner fires the hooks a facet's own writes already queued: it creates nothing, assigns
-        // nothing, and was handed the store to work (`AMB-T-2175`). So was a plugin calling amenbo back,
+        // nothing, and was handed the store to work (`AMB-T-2175`). So was a plugin calling Amenbo back,
         // whose window comes from the gate it fired through rather than from a facet (`AMB-D-406`).
         | Command::PluginRunner { .. }
         // `validate` reads a manifest file the author names and touches no store at all — unlike the rest
@@ -526,7 +526,7 @@ fn stamps_facet(cmd: &Option<Command>) -> bool {
 /// Must this invocation declare a facet at the door? [`uses_facet`] names the facet's two consumers; this
 /// asks which of them is left for the command line to answer.
 ///
-/// On the **plugin face** — amenbo launched this process as a plugin and handed it a window
+/// On the **plugin face** — Amenbo launched this process as a plugin and handed it a window
 /// ([`window_declared`](amenbo_core::plugin_callback::window_declared)) — the reach is that window
 /// (`AMB-D-406`), and `run` opens the store through it whichever facet is named. The reach-drawing consumer
 /// is therefore already served, and a read there uses no facet at all: the read-back an author is shown
@@ -637,7 +637,7 @@ fn requires_pointer(cmd: &Option<Command>) -> bool {
     )
 }
 
-/// Which folder would this invocation use amenbo in — the one [`refuse_a_nested_worktree`] judges — or
+/// Which folder would this invocation use Amenbo in — the one [`refuse_a_nested_worktree`] judges — or
 /// `None` when the command is outside the guard's reach. Usually the CWD, but `bind --dir <path>` and
 /// `project add --dir <path>` place their pointer elsewhere, and the hazard belongs to the folder that
 /// receives the pointer rather than to the one the command was typed in. A `--dir` that names no directory
@@ -678,7 +678,7 @@ fn nested_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBuf> {
     }
 }
 
-/// Refuse to use amenbo in a git worktree cut inside an amenbo-managed folder, the sibling of the pointer
+/// Refuse to use Amenbo in a git worktree cut inside an amenbo-managed folder, the sibling of the pointer
 /// guard: that one asks whether a binding exists, this one whether the checkout is a place to use one. Such
 /// a worktree inherits the project's `.amenbo` through the upward walk while the store it writes to sits in
 /// app-data and outlives the checkout, so a throwaway environment would drive the real backlog.
@@ -801,14 +801,14 @@ fn advise_linux_system_orphan() {
 }
 
 fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
-    // The **plugin face** (`AMB-D-406`): amenbo launched a plugin, and that plugin is calling amenbo back to
+    // The **plugin face** (`AMB-D-406`): Amenbo launched a plugin, and that plugin is calling Amenbo back to
     // read what its payload only named. The store to open and the window to read it through were handed over
     // in the environment, so both are read here, once, ahead of everything that would otherwise consult this
     // directory — a plugin's is whatever its launcher happened to be in, and nothing here is decided by it.
     // `None` is every other invocation: nothing launched this as a plugin, and the facet and the binding
     // decide the reach as they always have.
     let plugin_window = amenbo_core::plugin_callback::reach_from_env().map_err(CliError::from)?;
-    // Whether this checkout is a place to use amenbo at all is asked before any dispatch: `init` raises a
+    // Whether this checkout is a place to use Amenbo at all is asked before any dispatch: `init` raises a
     // project in the real store and returns below without ever reaching the guards further down, so a
     // refusal that came later would arrive after the damage it exists to prevent. A plugin is outside it for
     // the reason `plugin-runner` is (see `nested_guard_target`): the store it works was named to it, so the
@@ -842,7 +842,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         // diff (no paths), `commit-msg` lints the message file git hands over.
         Some(Command::GithookPreCommit) => return lint_cmd(flags, Vec::new(), false),
         Some(Command::GithookCommitMsg { path }) => return lint_cmd(flags, vec![path.clone()], false),
-        // A plugin runner: amenbo launched this process to work one queue (`AMB-T-2175`). It opens the store
+        // A plugin runner: Amenbo launched this process to work one queue (`AMB-T-2175`). It opens the store
         // it was handed, so it sits ahead of every guard that asks about *this* directory — its own is
         // whatever its launcher happened to be in, and it was never asked to answer for it.
         Some(Command::PluginRunner { plugin, owner, store }) => {
@@ -902,7 +902,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     }
     // The scheduler's own half of that guard, which it is outside of. It resolves no folder, so a missing
     // pointer says nothing about whether there is anything to do — but it must not be the thing that brings
-    // a store into being either, and `Store::open` below would do exactly that on a device where amenbo has
+    // a store into being either, and `Store::open` below would do exactly that on a device where Amenbo has
     // never been used. Reach for this device's store file directly: no store, nothing owed, nothing to say.
     if matches!(cli.command, Some(Command::Tick { sub: TickCmd::Run }))
         && !amenbo_core::config::Paths::resolve().map_err(CliError::from)?.store_file.exists()
@@ -951,7 +951,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
 
     // The startup kick (`AMB-D-399`), ahead of the command and of the network the update check does: a
     // delivery a previous run left standing is picked up now, whatever this invocation was called to do.
-    // A plugin calling amenbo back is not a startup — it is a read from inside a run that was already
+    // A plugin calling Amenbo back is not a startup — it is a read from inside a run that was already
     // driven — so it makes none.
     //
     // Neither does a flush, and for the opposite reason: that command *is* the delivery, and the kick
@@ -1000,13 +1000,13 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     // If this invocation is inside a bound folder, whatever that folder still carries on disk — an outdated
     // managed block, a legacy `.amenbo` — is brought up to the current form here: resolving is what repairs
     // it (`binding::resolve_upward`). Run for every actor, once: it is the AI that reads stale guidance, but
-    // the only chance to fix it is "amenbo ran in that folder", and who ran it is beside the point. Outside a
+    // the only chance to fix it is "Amenbo ran in that folder", and who ran it is beside the point. Outside a
     // binding (an `AMENBO_HOME` sandbox, say) nothing happens.
     if let Ok(cwd) = std::env::current_dir() {
         amenbo_core::binding::resolve_upward(&store, &cwd);
     }
 
-    // Decide this surface's reach once, here — from what amenbo handed a plugin it launched (`plugin_window`,
+    // Decide this surface's reach once, here — from what Amenbo handed a plugin it launched (`plugin_window`,
     // above), and otherwise from the facet and the binding. An AI (`--actor ai`) is confined to the project
     // the `.amenbo` points at; a human sees the whole device
     // (the overview is the human's place). Reach is drawn from the binding alone — `--project` never widens
@@ -1019,7 +1019,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     // never arrive here; that is the shape of the exceptions.
     let mut store = match plugin_window {
         // The plugin face answers first, and for either facet (`AMB-D-406`). A plugin is neither a human nor
-        // an AI — it is a program amenbo started — so its window is not drawn from a facet's default but from
+        // an AI — it is a program Amenbo started — so its window is not drawn from a facet's default but from
         // the gate it fires through: the device for a `machine` plugin, one project for a `project` one. It
         // cannot come from the binding either, since the folder a plugin runs in has none to read.
         Some(reach) => store.with_reach(reach),
@@ -1082,7 +1082,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         let _ = PROJECT_OVERRIDE.set(pid);
     }
 
-    // The two setups amenbo offers, in the order their questions are put. `hooks` is outside both: its argv
+    // The two setups Amenbo offers, in the order their questions are put. `hooks` is outside both: its argv
     // already answered the lint's question, and the harness path can record consent, which `hooks status`
     // promises not to do. So is the tick group: `tick`'s own argv already answers, and the face the
     // scheduler calls is nobody to put a question to.
@@ -1136,7 +1136,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
             // every command's spec.
             let mut spec = if full { agent::build() } else { agent::build_index() };
             // Asked once, and the whole of what plugins put in this document: the shelf they are named
-            // on, and the lines their authors hung on amenbo's own steps. Asking twice would walk the
+            // on, and the lines their authors hung on Amenbo's own steps. Asking twice would walk the
             // disk twice and let the two halves disagree.
             let PluginsAtEntry { list, tools, empty_because } =
                 plugins_for_agent(&store, bound_project(&store));
@@ -1152,9 +1152,9 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                     serde_json::to_value(&vs).unwrap_or(serde_json::Value::Null),
                 );
                 // What the user installed and switched on here (`AMB-D-437`) — in the author's own words
-                // when amenbo is that author, and as the callable line alone when it is not
+                // when Amenbo is that author, and as the callable line alone when it is not
                 // (`AMB-D-575`/`AMB-D-576`). A key of its own, never folded into `cycles`: those are
-                // amenbo's own working practice and amenbo answers for every line of them, while these
+                // Amenbo's own working practice and Amenbo answers for every line of them, while these
                 // are a third party's — kept on a separate shelf so a reader can always tell whose words
                 // they are reading. Runtime like the fields above, and for the same reason: what is
                 // installed and open is the store's answer, not the static spec's.
@@ -1178,7 +1178,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
             if !bound_dir_is_under_git() {
                 amenbo_core::agent::drop_cycle(&mut spec, amenbo_core::agent::Cyc::Worktree);
             }
-            // And where a plugin's author named a step of amenbo's own cycle, hang the line to type on
+            // And where a plugin's author named a step of Amenbo's own cycle, hang the line to type on
             // that step (`AMB-D-571`): the advice and the tool for it are otherwise in one document
             // with no way to reach each other, which leaves an AI told to cut a worktree with no hand.
             // After the cycle drop above, so a step this run does not carry gets nothing hung on it.
@@ -1551,7 +1551,7 @@ mod tests {
         }
     }
 
-    /// Every sub-command must be registered in `agent --json`, or an AI never learns it exists. amenbo is a
+    /// Every sub-command must be registered in `agent --json`, or an AI never learns it exists. Amenbo is a
     /// single local store, so there are no sharing, sync or key commands to account for.
     #[test]
     fn every_clap_leaf_is_in_agent() {
@@ -1650,14 +1650,14 @@ mod tests {
             split(&["start", "--json", "--actor", "ai", "--yes"]),
             ("--json --actor ai --yes".into(), "start".into())
         );
-        // A flag amenbo does not answer for is the plugin's, whatever it looks like.
+        // A flag Amenbo does not answer for is the plugin's, whatever it looks like.
         assert_eq!(split(&["start", "--branch", "main"]), (String::new(), "start --branch main".into()));
         // A bare `--actor` at the end takes no value with it, and the next flag is not eaten as one.
         assert_eq!(split(&["--actor", "--json"]), ("--actor --json".into(), String::new()));
     }
 
     /// The boundary the parser cannot hold: from the plugin's name onward every word is the plugin's,
-    /// amenbo's own spellings included, while the same flags written ahead of the name stay amenbo's.
+    /// Amenbo's own spellings included, while the same flags written ahead of the name stay Amenbo's.
     /// A line that goes anywhere else is left alone for the parser to read as it always has.
     #[test]
     fn the_words_after_a_plugins_name_are_taken_off_the_command_line() {
@@ -1672,14 +1672,14 @@ mod tests {
         assert_eq!(split("amenbo plugin run worktree --actor ai"), Some(("worktree".into(), "--actor ai".into())));
         assert_eq!(handed("amenbo plugin run worktree --json"), Some("--json".into()));
         assert_eq!(handed("amenbo plugin run worktree -y start"), Some("-y start".into()));
-        // Ahead of the name they are amenbo's, and the name is still found past them.
+        // Ahead of the name they are Amenbo's, and the name is still found past them.
         assert_eq!(split("amenbo plugin run --json worktree start"), Some(("worktree".into(), "start".into())));
         assert_eq!(split("amenbo --actor ai plugin run worktree start"), Some(("worktree".into(), "start".into())));
         assert_eq!(split("amenbo plugin run --actor=ai worktree start"), Some(("worktree".into(), "start".into())));
         // Nothing trailing the name: there is nothing to take off, so the line is left whole.
         assert_eq!(handed("amenbo plugin run worktree"), None);
         assert_eq!(handed("amenbo plugin run"), None);
-        // The name position holds whatever was written there, a flag included — that is where amenbo's
+        // The name position holds whatever was written there, a flag included — that is where Amenbo's
         // own help lands, and where a misplaced flag is reported from.
         assert_eq!(handed("amenbo plugin run --help"), None);
         assert_eq!(split("amenbo plugin run --jsn usage"), Some(("--jsn".into(), "usage".into())));

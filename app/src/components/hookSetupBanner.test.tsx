@@ -119,7 +119,7 @@ describe("lint setup banner", () => {
   });
 
   // A block found damaged or stale this session and put back is a warning of its own — the lint had briefly
-  // stopped and amenbo repaired itself. It names the slots restored, and does not read as "still unwired".
+  // stopped and Amenbo repaired itself. It names the slots restored, and does not read as "still unwired".
   it("warns when a block was restored, naming the slots", async () => {
     hoisted.notices = [notice({ unwired: [], restored: ["pre-commit"] })];
     await render(true);

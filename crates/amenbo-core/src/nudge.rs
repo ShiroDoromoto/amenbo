@@ -36,7 +36,7 @@ use crate::store_engine::sql::{Expr, Pred, Select, Sql, Table};
 use crate::store_engine::{StoreEngine, StoreEngineError};
 use crate::time::{local_day_start_utc, Timestamp};
 
-/// A number that says something about how much amenbo has been used here. Two kinds behind one face
+/// A number that says something about how much Amenbo has been used here. Two kinds behind one face
 /// (`AMB-D-543`): most are **counted** off the store when asked, and only what the store cannot answer —
 /// what leaves no record behind — is **tallied** as it happens.
 ///
@@ -51,7 +51,7 @@ pub enum Metric {
     TaskCount,
     /// On how many separate days something was written here, over the last [`ACTIVE_DAYS_WINDOW`] days.
     /// Counted, and windowed — the whole-history version of this reads every record ever written, which
-    /// is the shape that punishes the person who has used amenbo longest.
+    /// is the shape that punishes the person who has used Amenbo longest.
     ActiveDays,
     /// How many times the app has been launched on this device. Tallied: a launch leaves no record.
     LaunchCount,
@@ -131,11 +131,11 @@ pub struct Threshold {
     pub at_least: i64,
 }
 
-/// **The declaration table.** Every nudge amenbo can put, and the whole of what decides it — adding one
+/// **The declaration table.** Every nudge Amenbo can put, and the whole of what decides it — adding one
 /// is adding a line here, and nothing else.
 pub const NUDGES: &[Nudge] = &[Nudge {
     // Start at login, offered once the use is there to justify it (`AMB-D-545`). Asked at the first
-    // launch it would be premature: someone who has not decided to keep amenbo yet is being asked to
+    // launch it would be premature: someone who has not decided to keep Amenbo yet is being asked to
     // let it into their login, and the no that lands then is kept forever.
     id: "autostart",
     // What "used it a while" is worth saying in numbers, and both of these can only be reached by
@@ -250,7 +250,7 @@ fn active_days(engine: &StoreEngine, today: NaiveDate) -> Result<i64> {
     let mut days: BTreeSet<String> = BTreeSet::new();
     // What "used it" means: wrote something, anywhere the store keeps writing — the two records and the
     // two timelines. `updated_at` rather than `created_at`, because coming back to an old task is using
-    // amenbo just as much as making a new one.
+    // Amenbo just as much as making a new one.
     for updated_at in [
         col::task::ALL.updated_at,
         col::decision::ALL.updated_at,

@@ -1,11 +1,11 @@
-// "You have been opening amenbo a while — shall it open itself when you sign in?" (`AMB-D-545`).
+// "You have been opening Amenbo a while — shall it open itself when you sign in?" (`AMB-D-545`).
 //
-// The question is deliberately late. At the first launch nobody has decided to keep amenbo yet, and a
+// The question is deliberately late. At the first launch nobody has decided to keep Amenbo yet, and a
 // no given then is kept: the setting would read "off" forever with nothing ever asking again. So the
 // thresholds in core hold it until the app has been come back to (`crate::nudge`), and this only words
 // what that judgement released.
 //
-// It is put on the ON side, because by the time it appears the person is opening amenbo most days and
+// It is put on the ON side, because by the time it appears the person is opening Amenbo most days and
 // the offer is one fewer thing for them to do. A no costs nothing and is not final either — Settings ›
 // Startup carries the same switch, which is what the hint says.
 import { useState } from "react";

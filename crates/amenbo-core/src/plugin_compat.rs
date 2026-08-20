@@ -1,9 +1,9 @@
-//! The **compatibility gate** — does this amenbo speak what the plugin was written against
+//! The **compatibility gate** — does this Amenbo speak what the plugin was written against
 //! (`AMB-D-359`)?
 //!
 //! A manifest declares two compatibility facts ([`crate::plugin_manifest`] carries them, opaque):
 //! [`payload_v`](Manifest::payload_v), the event-payload contract the plugin reads (`AMB-D-349`), and
-//! [`min_amenbo`](Manifest::min_amenbo), the amenbo version it needs underneath it. This module is the
+//! [`min_amenbo`](Manifest::min_amenbo), the Amenbo version it needs underneath it. This module is the
 //! consuming half: it compares both against the running build and answers with an
 //! [`Incompatibility`], so a plugin that cannot understand what it would be handed is stopped instead
 //! of being fed a payload it will misread.
@@ -16,15 +16,15 @@
 //! - **the subscription resolver** ([`EnabledSubscribers`](crate::plugin_subscribe::EnabledSubscribers))
 //!   warns and drops that one subscriber. Delivery is best-effort (`AMB-D-352`): an event still fires
 //!   for every compatible plugin, because one plugin left behind by a payload bump must not silence the
-//!   others. A plugin can also become incompatible *after* it was enabled — amenbo updates underneath an
+//!   others. A plugin can also become incompatible *after* it was enabled — Amenbo updates underneath an
 //!   install — so the run-time side cannot lean on the enable-time check having run.
 //!
 //! **The payload contract is an equality, not a floor.** `v` moves only on a breaking change
 //! (`AMB-D-349` — additive fields never bump it), so any difference in either direction is a contract
-//! the two sides do not share: an amenbo whose `v` has outgrown the plugin would feed it a payload whose
+//! the two sides do not share: an Amenbo whose `v` has outgrown the plugin would feed it a payload whose
 //! meaning moved, and a plugin declaring a `v` above ours reads a contract this build cannot produce.
 //!
-//! **A floor amenbo cannot read is not a floor it can claim to meet.** The intake door refuses a
+//! **A floor Amenbo cannot read is not a floor it can claim to meet.** The intake door refuses a
 //! `min_amenbo` that does not read as a version ([`plugin_validate`](crate::plugin_validate), by the
 //! same parser this module compares with), so one should not get this far. It is still checked here:
 //! a plugin's manifest is replaced by an update long after it was installed, and this gate is what runs
@@ -39,26 +39,26 @@ use crate::plugin_manifest::Manifest;
 use crate::plugin_payload;
 use crate::store::{parse_version, version_is_newer};
 
-/// Why a plugin cannot run against this amenbo (`AMB-D-359`). Each variant carries both sides of the
+/// Why a plugin cannot run against this Amenbo (`AMB-D-359`). Each variant carries both sides of the
 /// mismatch, so a caller can name the numbers rather than only the verdict.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Incompatibility {
-    /// The payload contract the plugin reads is not the one this amenbo speaks — in either direction
+    /// The payload contract the plugin reads is not the one this Amenbo speaks — in either direction
     /// (see the module docs on why this is an equality).
     Payload {
         /// The contract version the plugin's manifest declares.
         plugin: u32,
-        /// The contract version this amenbo produces ([`plugin_payload::VERSION`]).
+        /// The contract version this Amenbo produces ([`plugin_payload::VERSION`]).
         amenbo: u32,
     },
-    /// The running amenbo is below the plugin's declared floor.
+    /// The running Amenbo is below the plugin's declared floor.
     AmenboTooOld {
         /// The floor the manifest declares.
         min: String,
-        /// The running amenbo version.
+        /// The running Amenbo version.
         running: String,
     },
-    /// The declared floor is not a version this amenbo can compare against.
+    /// The declared floor is not a version this Amenbo can compare against.
     UnreadableFloor {
         /// The uncomparable `min_amenbo` string, as the manifest wrote it.
         min: String,
@@ -145,7 +145,7 @@ pub fn check(manifest: &Manifest) -> Result<(), Incompatibility> {
     check_against(manifest, plugin_payload::VERSION, crate::agent::VERSION)
 }
 
-/// [`check`] against a stated payload contract and amenbo version — the whole comparison, with the
+/// [`check`] against a stated payload contract and Amenbo version — the whole comparison, with the
 /// running build's two constants passed in so it is testable without a time machine.
 fn check_against(
     manifest: &Manifest,
@@ -220,7 +220,7 @@ mod tests {
         assert!(check(&manifest(plugin_payload::VERSION, None)).is_ok());
     }
 
-    /// amenbo outgrew the plugin: `v` moved on a breaking change, so the old plugin is stopped rather
+    /// Amenbo outgrew the plugin: `v` moved on a breaking change, so the old plugin is stopped rather
     /// than fed a payload whose meaning moved (`AMB-D-349` / `AMB-D-359`).
     #[test]
     fn a_plugin_left_behind_by_a_payload_bump_is_incompatible() {
@@ -261,7 +261,7 @@ mod tests {
         assert!(check_against(&manifest(1, Some("1.9.0")), 1, "1.10.0").is_ok());
     }
 
-    /// A floor nobody can compare is reported, not waved through: amenbo cannot claim to meet a version
+    /// A floor nobody can compare is reported, not waved through: Amenbo cannot claim to meet a version
     /// it could not read (see the module docs).
     #[test]
     fn an_unreadable_floor_is_incompatible() {

@@ -1,9 +1,9 @@
-//! amenbo as an app on the other side of MCP reaches it: the command a host starts, and the folders it
+//! Amenbo as an app on the other side of MCP reaches it: the command a host starts, and the folders it
 //! is given (`AMB-D-666`, amended by `AMB-D-679`). A call names one of them, so what an AI chooses is
 //! which folder this call is for — never which folders there are.
 //!
 //! A server is nothing but the command that starts it and the folders it is bound to. Which project
-//! each folder belongs to is worked out by the amenbo the command starts, standing there — so what a
+//! each folder belongs to is worked out by the Amenbo the command starts, standing there — so what a
 //! host is told is a path and an argument, never a project id.
 //!
 //! **The name says the machine, not the project** (`AMB-D-679`). One server can be given several
@@ -11,12 +11,12 @@
 //! project would keep a host showing a list as long as the reader's backlog. So there is a single name
 //! here, and every road writes it: the bundle a host is handed ([`crate::mcp_bundle`]), the request an
 //! app's AI is handed ([`crate::mcp_request`]), and the read that asks later whether an app is already
-//! set up (`AMB-D-673`, [`crate::mcp_probe`]). Setting amenbo up a second time therefore lands on the
+//! set up (`AMB-D-673`, [`crate::mcp_probe`]). Setting Amenbo up a second time therefore lands on the
 //! entry that is already there rather than beside it.
 
 use std::path::{Path, PathBuf};
 
-/// What a host files amenbo under — one name for this machine, whatever folders the server is given
+/// What a host files Amenbo under — one name for this machine, whatever folders the server is given
 /// (`AMB-D-679`).
 ///
 /// It is this build's own command name rather than the product's, for the same reason the channels are
@@ -26,10 +26,10 @@ pub fn name() -> &'static str {
     crate::config::Paths::command_name()
 }
 
-/// Whether `candidate` is a name amenbo filed a server under **before** the name said the machine
+/// Whether `candidate` is a name Amenbo filed a server under **before** the name said the machine
 /// (`AMB-D-679`): `<command>-<the project's slug>`, where [`name`] is now the command alone.
 ///
-/// An entry under one of these keeps working, so nothing about it looks broken — and setting amenbo up
+/// An entry under one of these keeps working, so nothing about it looks broken — and setting Amenbo up
 /// again writes the new name beside it rather than over it, which is the doubling `AMB-D-679` set out
 /// to be rid of. Finding them is therefore a read of its own ([`crate::mcp_probe`]), and clearing one
 /// is a request the reader is handed ([`crate::mcp_request::remove_stale`]).
@@ -61,15 +61,15 @@ fn is_slug_shaped(word: &str) -> bool {
 /// every settings format a host reads can express (`AMB-T-3156`).
 pub const DIR_FLAG: &str = "--dir";
 
-/// amenbo, as an MCP server: what a host is told to run, and where. The name it is filed under is the
+/// Amenbo, as an MCP server: what a host is told to run, and where. The name it is filed under is the
 /// machine's rather than this struct's ([`name`]).
 pub struct Server<'a> {
     /// The folders the server is given, in the order the person chose them (`AMB-D-679`). They are
     /// settled here rather than asked for at install time: the reader is setting up projects they have
-    /// already told amenbo about, and a question asked on the other side would be one they have
+    /// already told Amenbo about, and a question asked on the other side would be one they have
     /// answered already.
     pub folders: &'a [PathBuf],
-    /// The installed amenbo binary a host will run. The caller resolves it — the GUI knows where the
+    /// The installed Amenbo binary a host will run. The caller resolves it — the GUI knows where the
     /// command it ships sits, and a path taken from whatever binary happened to be running would name
     /// the app rather than the command from inside one.
     pub exe: &'a Path,

@@ -60,7 +60,7 @@ pub enum Command {
     },
     /// Version information
     Version,
-    /// Update amenbo to the latest release. By default this opens this OS's one-piece installer
+    /// Update Amenbo to the latest release. By default this opens this OS's one-piece installer
     /// (resolved from the published latest.json, falling back to the releases page) in your browser.
     /// Pass --apply to self-update the standalone CLI in place instead — download the new CLI archive
     /// over TLS and swap this binary, no installer, no elevation (CLI-only installs; a GUI-managed CLI
@@ -86,7 +86,7 @@ pub enum Command {
     },
     /// Show this store's identity (display name / hardware-copy check)
     Whoami,
-    /// Initialize a folder so an AI launched there may operate amenbo (it does not read or write the
+    /// Initialize a folder so an AI launched there may operate Amenbo (it does not read or write the
     /// project's contents — source or files). The store itself lives in app-data; only the `.amenbo`
     /// pointer and AGENTS.md (the AI guide) are placed in the folder
     Init {
@@ -97,7 +97,7 @@ pub enum Command {
         language: Option<String>,
         /// create a new store and overwrite even if a `.amenbo` pointer already exists (default rejects
         /// it = prevents clobbering the production pointer; use `bind` to re-bind to an existing store).
-        /// It does not reach a git worktree cut inside a managed tree: amenbo is refused there, and the
+        /// It does not reach a git worktree cut inside a managed tree: Amenbo is refused there, and the
         /// project this would raise outlives the checkout that asked for it
         #[arg(long)]
         force: bool,
@@ -122,13 +122,13 @@ pub enum Command {
         /// bind even when this folder is already inside an amenbo-managed tree (a parent has a
         /// `.amenbo`). Off by default so a stray bind in a source subdirectory cannot shadow the
         /// root pointer (and scatter `.amenbo`/AGENTS.md/CLAUDE.md there). It does not reach a git
-        /// worktree cut inside that tree: amenbo is refused there whatever pointer it holds, so
+        /// worktree cut inside that tree: Amenbo is refused there whatever pointer it holds, so
         /// binding one could only write a pointer nothing would read
         #[arg(long)]
         force: bool,
     },
 
-    /// Remove this folder's `.amenbo` binding (and amenbo's managed blocks in AGENTS.md/CLAUDE.md),
+    /// Remove this folder's `.amenbo` binding (and Amenbo's managed blocks in AGENTS.md/CLAUDE.md),
     /// keeping the store itself. Many-to-one: only this folder's pointer is removed; other folders
     /// bound to the same store are untouched. Use --dir to unbind another folder
     Unbind {
@@ -137,9 +137,9 @@ pub enum Command {
         dir: Option<String>,
     },
 
-    /// Re-sync amenbo's managed guidance block in bound folders to this binary's current version. A folder
-    /// follows on its own the moment you run amenbo in it, so this is for the folders you have not been in
-    /// (and for a block amenbo could not write). Idempotent and low-churn: a folder's CLAUDE.md/AGENTS.md is
+    /// Re-sync Amenbo's managed guidance block in bound folders to this binary's current version. A folder
+    /// follows on its own the moment you run Amenbo in it, so this is for the folders you have not been in
+    /// (and for a block Amenbo could not write). Idempotent and low-churn: a folder's CLAUDE.md/AGENTS.md is
     /// rewritten only when its managed block actually changed, each folder's own language label is preserved,
     /// and your content outside the markers is untouched. Targets every locally bound folder by
     /// default; pass --dir to resync just one
@@ -267,7 +267,7 @@ pub enum Command {
     },
     /// Export data — everything on this device, as JSON. That is the only shape: export
     /// exists for migrating into other tools, and neither an excerpt nor a human-readable table serves
-    /// that. Export is **one-way**: the way back into amenbo is a `backup` archive and `restore`,
+    /// that. Export is **one-way**: the way back into Amenbo is a `backup` archive and `restore`,
     /// not this output.
     ///
     /// One thing stays behind: a plugin's **secrets** (`AMB-D-434`). This file goes out to another tool
@@ -314,7 +314,7 @@ pub enum Command {
         path: Option<String>,
     },
 
-    /// Find amenbo refs (`AMB-T-<n>`, `AMB-D-<n>`, …) in text on its way out of this store — a commit
+    /// Find Amenbo refs (`AMB-T-<n>`, `AMB-D-<n>`, …) in text on its way out of this store — a commit
     /// message, a diff, a file — and exit non-zero if there are any.
     ///
     /// An id names something only someone holding this store can look up; anywhere else it is a
@@ -336,13 +336,13 @@ pub enum Command {
         stdin: bool,
     },
 
-    /// The entry point amenbo's own `pre-commit` hook calls — it lints the staged diff, the same as a bare
+    /// The entry point Amenbo's own `pre-commit` hook calls — it lints the staged diff, the same as a bare
     /// `lint`. Hidden because it exists for the hook, not the hand: the managed block names this fixed line so
     /// the hook's behaviour can grow in later versions without every installed hook being rewritten.
     #[command(hide = true)]
     GithookPreCommit,
 
-    /// The entry point amenbo's own `commit-msg` hook calls — it lints the message file git hands the hook.
+    /// The entry point Amenbo's own `commit-msg` hook calls — it lints the message file git hands the hook.
     /// Hidden for the same reason as `githook-pre-commit`: it is the hook's fixed line, not a command for the
     /// hand (`lint <file>` is that).
     #[command(hide = true)]
@@ -353,7 +353,7 @@ pub enum Command {
 
     /// The entry point a **plugin runner** is launched through: it works one plugin's queue of observation
     /// events to its end, in a process of its own, and exits (`AMB-D-399`, `AMB-T-2175`). Hidden because
-    /// amenbo launches it — never a hand. It is not a daemon: it is started only when there is a queue and a
+    /// Amenbo launches it — never a hand. It is not a daemon: it is started only when there is a queue and a
     /// free lease, and there is nothing to stop, since it ends when its queue is empty.
     ///
     /// It takes the store as an argument rather than resolving one: a runner must work the store the drive
@@ -371,11 +371,11 @@ pub enum Command {
 
     /// Manage the git hooks that run `amenbo lint`: `pre-commit` for the staged diff, and `commit-msg`
     /// for the message, which is the only place git offers it. Installing writes into your git plumbing,
-    /// which amenbo does not do unasked: it asks once — for the lint as a feature, on this device — and
+    /// which Amenbo does not do unasked: it asks once — for the lint as a feature, on this device — and
     /// that one answer covers the repositories it works in, the ones bound later included. These are the
     /// explicit faces of that: `install` wires this repository (and takes back an earlier `uninstall`
     /// here), `uninstall` opts this one out so a device-wide yes does not re-wire it, and both are usable
-    /// any time, whatever was answered. amenbo touches only the hooks it wrote, which it marks as its own:
+    /// any time, whatever was answered. Amenbo touches only the hooks it wrote, which it marks as its own:
     /// a hook from husky, lefthook, or your own hand is never overwritten and never removed, and install
     /// steps around it, wiring the slots it may own and naming the line to add to the rest.
     Hooks {
@@ -383,12 +383,12 @@ pub enum Command {
         sub: HooksCmd,
     },
 
-    /// Manage the hourly tick: the one plain timer amenbo asks this machine's scheduler to hold, so
+    /// Manage the hourly tick: the one plain timer Amenbo asks this machine's scheduler to hold, so
     /// that what has to happen on time happens with no app open and nothing resident. What is
-    /// registered carries no meaning — it wakes amenbo once an hour, and amenbo works out once awake
+    /// registered carries no meaning — it wakes Amenbo once an hour, and Amenbo works out once awake
     /// what is due — so however many things come to depend on it, this stays one row in your system
     /// settings, and switching that row off stops all of them. Registering writes into your
-    /// scheduler, which amenbo does not do unasked: it asks once, for the tick as a feature, on this
+    /// scheduler, which Amenbo does not do unasked: it asks once, for the tick as a feature, on this
     /// device. These are the explicit faces of that — `install` is that yes, `uninstall` is that no,
     /// and `status` shows the answer beside what the scheduler actually holds.
     Tick {
@@ -398,9 +398,9 @@ pub enum Command {
 
     /// Hand over the configuration that makes an AI tool run `amenbo agent` when a session starts — the
     /// session-start hook, which reaches the model over the protocol instead of hoping the managed block
-    /// in CLAUDE.md/AGENTS.md is read. **amenbo never writes a provider's settings**: this hands you the
+    /// in CLAUDE.md/AGENTS.md is read. **Amenbo never writes a provider's settings**: this hands you the
     /// text and the file to put it in, and pasting is yours. Not `hooks`, which is git's plumbing and is
-    /// amenbo's to write.
+    /// Amenbo's to write.
     AgentHook {
         #[command(subcommand)]
         sub: AgentHookCmd,
@@ -456,7 +456,7 @@ pub enum Command {
     /// has exactly one gate, at the layer its author declared — `AMB-D-434`/`AMB-D-601`). `run` is the one command that
     /// actually *calls* a plugin on purpose: its command face, whose return value comes back to you
     /// (`AMB-D-353`). `validate` is
-    /// the author's side — it runs the same rules amenbo enforces at
+    /// the author's side — it runs the same rules Amenbo enforces at
     /// the door (a well-formed id, checksum, OS set and config schema — `AMB-D-354`/`AMB-D-360`/`AMB-D-356`)
     /// over a manifest file you point it at, so you can self-check before opening a catalog PR, and it
     /// alone reads no store and needs no binding.
@@ -474,7 +474,7 @@ pub enum PluginCmd {
     /// Exits non-zero if the manifest is invalid, so it drops into a pre-submit check.
     ///
     /// The translations beside it are read with it (`AMB-D-621`): every sibling
-    /// `<name>.<lang>.<ext>` is checked against the manifest it translates — the language is one amenbo
+    /// `<name>.<lang>.<ext>` is checked against the manifest it translates — the language is one Amenbo
     /// is read in, everything it names exists in the base, and the text obeys the cap its base field
     /// obeys.
     Validate {
@@ -492,7 +492,7 @@ pub enum PluginCmd {
 
     /// Install a plugin from the catalogs: resolve the name across the official catalog and every
     /// registered one (official wins a clash), fetch its asset, verify its provenance fail-closed — the
-    /// signature against the key that catalog answers for, amenbo's own or the one pinned at registration
+    /// signature against the key that catalog answers for, Amenbo's own or the one pinned at registration
     /// (`AMB-D-371`/`AMB-D-389`), then the checksum of the distributable published for this OS
     /// (`AMB-D-351`/`AMB-D-381`) — and lay it down under the app-data `plugins/` directory, with a note of
     /// which catalog it came from, which is where `plugin update` will go back to. **Installing never
@@ -551,17 +551,17 @@ pub enum PluginCmd {
     /// verbatim**, so a plugin that returns a directory to enter drops straight into a shell:
     /// `eval "$(amenbo plugin run worktree start 123)"`, or `iex (amenbo plugin run worktree start 123)`
     /// in PowerShell — the line a plugin returns is written to go through either (`AMB-D-444`), because
-    /// amenbo hands it over without knowing which shell asked. Its stderr — the human-facing diagnostics — is
+    /// Amenbo hands it over without knowing which shell asked. Its stderr — the human-facing diagnostics — is
     /// relayed to stderr, and a plugin that exits non-zero is a failed call whose return value is
     /// discarded rather than handed on (`AMB-D-354`).
     ///
-    /// Everything after the name is the plugin's, passed through untouched — dashes and all: amenbo
+    /// Everything after the name is the plugin's, passed through untouched — dashes and all: Amenbo
     /// neither parses nor rewrites it, because what the words mean is the plugin's business (`AMB-D-346`).
     /// That covers `--help`, which is where a plugin's author puts its usage: the word travels through and
     /// the plugin answers it. Only the form that names no plugin — `amenbo plugin run --help` — has nobody
     /// else to answer, and there the help you get back is this command's.
     ///
-    /// The corollary is that amenbo's own flags have to come *before* the plugin's name
+    /// The corollary is that Amenbo's own flags have to come *before* the plugin's name
     /// (`amenbo plugin run --json worktree …`), since after it every word is the plugin's. Refused when the
     /// plugin is not installed, not enabled (`install ≠ enable`, `AMB-D-351`), or not compatible with this
     /// build (`AMB-D-359`) — a caller waiting on a return value is told why there is none.
@@ -609,7 +609,7 @@ pub enum PluginCmd {
     /// (`AMB-D-399`).
     ///
     /// Delivery normally rides along with whatever you were doing: a write fans its events out and starts a
-    /// runner per queue, and amenbo makes no command wait for a plugin. When a runner is killed mid-queue,
+    /// runner per queue, and Amenbo makes no command wait for a plugin. When a runner is killed mid-queue,
     /// or a fan-out dies half-done, what is left waits for the next write — which may be days away. This is
     /// the door for pushing it through on purpose: the queues are worked **in this process**, so it returns
     /// once they are empty and can say how much left each one, rather than starting a runner nobody watches.
@@ -626,14 +626,14 @@ pub enum PluginCmd {
     /// Bring an installed plugin onto the build the catalog publishes — or, with `--check`, only report
     /// which installs it has moved past (`AMB-D-359`).
     ///
-    /// **A plugin is updated from the catalog it was installed from** (`AMB-D-389`), which amenbo recorded
+    /// **A plugin is updated from the catalog it was installed from** (`AMB-D-389`), which Amenbo recorded
     /// beside it. Not from whichever catalog carries the name today: a second catalog publishing a name you
     /// already have offers your install nothing, so a distributor cannot change hands under an update. The
     /// visible edge of that is a plugin whose own catalog has dropped it — there is no build to move to, and
-    /// the refusal names the catalog it asked. An install made before amenbo recorded this is looked for in
+    /// the refusal names the catalog it asked. An install made before Amenbo recorded this is looked for in
     /// the official catalog; re-installing it records where it really comes from.
     ///
-    /// Detection is the catalog amenbo already fetches whole laid beside the manifest sitting next to
+    /// Detection is the catalog Amenbo already fetches whole laid beside the manifest sitting next to
     /// each installed binary — no central server, and no per-plugin request. A manifest carries no
     /// version number, so what is compared is `detail_sum` (`AMB-D-438`): one digest per catalog entry,
     /// over the whole document an install acts on — the assets, the config schema, the compatibility
@@ -643,14 +643,14 @@ pub enum PluginCmd {
     /// door — the bytes that arrive must be the bytes the entry published. It reports *different*, not
     /// *newer* — the catalog is the authority on what is published, including a rollback.
     ///
-    /// **Nothing is ever applied on amenbo's own account**: naming a plugin, or `--all`, is the whole
+    /// **Nothing is ever applied on Amenbo's own account**: naming a plugin, or `--all`, is the whole
     /// consent. Applying re-walks the install door over the new asset — the catalog signature, then this
     /// OS's checksum (`AMB-D-351`) — and retains the build it replaced beside the new one, so there is
     /// something to go back to. It **keeps** the plugin's gate and every setting the new build still
     /// declares: an update is not a re-install, and wiping a plugin's settings wholesale is `uninstall`'s
     /// job (`AMB-D-357`). What it does take is a value under a key the new build has **stopped** declaring
     /// (`AMB-D-456`) — nothing would read it again, and a rollback does not bring it back. Any step that refuses —
-    /// a build this amenbo cannot speak to, an asset that will not verify, a new schema whose `required`
+    /// a build this Amenbo cannot speak to, an asset that will not verify, a new schema whose `required`
     /// settings have no value where the plugin is enabled — leaves the working plugin exactly as it was.
     /// That last check is asked of **every** gate the plugin is enabled at, not of the folder you happen to
     /// be in (`AMB-D-434`): one update replaces the build for all of them, so a project short of a value
@@ -747,7 +747,7 @@ pub enum PluginCatalogCmd {
 #[derive(Subcommand, Debug)]
 pub enum PluginConfigCmd {
     /// Store one setting's value, for this project (`AMB-D-434`). The key must be one the plugin's
-    /// manifest declares — that declaration is what says whether the value is a secret, and amenbo never
+    /// manifest declares — that declaration is what says whether the value is a secret, and Amenbo never
     /// guesses (`AMB-D-356`). An empty value clears the setting rather than storing a blank.
     ///
     /// A setting that offers candidates takes them comma-separated, and `none` to choose none of them;
@@ -783,7 +783,7 @@ pub enum AgentHookCmd {
     /// it carries the settings this build's launch instruction goes in, the file they belong in, and
     /// that whatever is already in that file stays. **stdout is that text and nothing else**, so it
     /// pipes to a clipboard (`amenbo agent-hook snippet claude-code | pbcopy`); where it is going, and
-    /// that amenbo wired nothing, is said on stderr. `--copy` hands it to this machine's clipboard
+    /// that Amenbo wired nothing, is said on stderr. `--copy` hands it to this machine's clipboard
     /// instead, printing it on stderr as it goes so it is read before it is handed on. Opens no store:
     /// it needs no bound folder, and reads nothing about this one.
     Snippet {
@@ -795,11 +795,11 @@ pub enum AgentHookCmd {
         copy: bool,
     },
 
-    /// Record what a person answered when asked whether this folder's AI may be started on amenbo —
-    /// the way an AI writes back an answer it obtained on amenbo's behalf, since amenbo puts no
+    /// Record what a person answered when asked whether this folder's AI may be started on Amenbo —
+    /// the way an AI writes back an answer it obtained on Amenbo's behalf, since Amenbo puts no
     /// question to a non-interactive face. **It records the answer and touches nothing else**: no
     /// settings file is read or written here, so a `yes` still leaves the wiring to be done
-    /// (`agent-hook snippet <tool>` is the text that asks for it), and a `no` only means amenbo stops
+    /// (`agent-hook snippet <tool>` is the text that asks for it), and a `no` only means Amenbo stops
     /// asking — the text stays available. The answer is kept per project, so it covers every folder
     /// bound to it.
     Answer {
@@ -820,14 +820,14 @@ fn harness_ids() -> clap::builder::PossibleValuesParser {
 
 #[derive(Subcommand, Debug)]
 pub enum HooksCmd {
-    /// Write the lint hooks, and record that this project consented. A slot amenbo did not write is
+    /// Write the lint hooks, and record that this project consented. A slot Amenbo did not write is
     /// stepped around rather than overwritten — the rest are still wired, and the one line to add by
-    /// hand is named; re-running over amenbo's own hooks rewrites them, which is how a newer build's
+    /// hand is named; re-running over Amenbo's own hooks rewrites them, which is how a newer build's
     /// hooks land. Only an install with no slot to write at all is refused.
     Install,
 
-    /// Remove the lint hooks amenbo wrote, and record that this project does not want them. The mirror
-    /// of install, refusal for refusal: a hook amenbo did not write is not amenbo's to delete, and with
+    /// Remove the lint hooks Amenbo wrote, and record that this project does not want them. The mirror
+    /// of install, refusal for refusal: a hook Amenbo did not write is not Amenbo's to delete, and with
     /// nothing of ours there it records the answer and does nothing else.
     Uninstall,
 
@@ -851,7 +851,7 @@ pub enum TickCmd {
 
     /// Show what the scheduler is holding and what this device answered — the two facts, side by
     /// side. They are read independently on purpose, so a registration you switched off yourself is
-    /// something amenbo can see rather than something it talks over.
+    /// something Amenbo can see rather than something it talks over.
     Status,
 
     /// The face the scheduler itself calls, once an hour (`AMB-D-706`). Hidden because a scheduler calls
@@ -1331,7 +1331,7 @@ pub enum TaskCmd {
         name: Option<String>,
     },
     /// Record / list / forget the git commit SHAs that implemented a task — the anchor from
-    /// history back to a task (amenbo stores each SHA opaquely and never reads git)
+    /// history back to a task (Amenbo stores each SHA opaquely and never reads git)
     Commit {
         #[command(subcommand)]
         sub: TaskCommitCmd,
@@ -1353,7 +1353,7 @@ pub enum TaskCmd {
 }
 
 /// A task's git commit SHAs (`add`/`list`/`rm`) — the anchor from history back to a task, since a
-/// public commit carries no store-local reference. amenbo stores each SHA as an opaque full-length
+/// public commit carries no store-local reference. Amenbo stores each SHA as an opaque full-length
 /// hex string: it never reads git, verifies the commit, or knows which forge it lives on.
 #[derive(Subcommand, Debug)]
 pub enum TaskCommitCmd {

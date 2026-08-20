@@ -14,9 +14,9 @@
 //!   installed rather than half-installed.
 //! - the **executable**, named after the plugin itself (`<name>`, plus the platform's `.exe` suffix). The
 //!   name is a convention, not a manifest field: the catalog entry says where to *fetch* an asset, never
-//!   what to run, so nothing a third party writes can point amenbo's spawn at another path.
+//!   what to run, so nothing a third party writes can point Amenbo's spawn at another path.
 //! - `source.json` — which catalog it came from ([`Origin`], `AMB-D-389`). A separate file because the
-//!   manifest is the *catalog's* document and this is amenbo's note about it; written before the manifest,
+//!   manifest is the *catalog's* document and this is Amenbo's note about it; written before the manifest,
 //!   so anything that reads as installed has it.
 //! - `i18n.json` — what the catalog said about it in other languages ([`translations`], `AMB-D-622`).
 //!   Separate for the same reason, and here rather than fetched because the face that reads it — the
@@ -29,7 +29,7 @@
 //!
 //! **Reading is not the door.** A manifest's *rules* are enforced fail-closed where untrusted input enters
 //! — the install/intake door (`AMB-D-354`, [`crate::plugin_validate`]). What is on disk here passed it
-//! *then*, which is not the same as passing it now: the rules travel with amenbo and the manifest does
+//! *then*, which is not the same as passing it now: the rules travel with Amenbo and the manifest does
 //! not, so a build carrying a newer rule meets documents admitted under older ones, and the file is a
 //! plain one beside the binary that the checksum never covered. So this layer still checks only what it
 //! can — that the files exist, parse, and agree on the name — and the rules are re-asked where what they
@@ -71,7 +71,7 @@ pub const TRANSLATIONS_FILE_NAME: &str = "i18n.json";
 /// catalog read as a different origin from the one beside it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Origin {
-    /// The official catalog — the shelf amenbo ships a key for, and the only one needing no registration.
+    /// The official catalog — the shelf Amenbo ships a key for, and the only one needing no registration.
     Official,
     /// A catalog the user registered, named by the URL it was registered under (the identity the
     /// registration list keys on).
@@ -107,7 +107,7 @@ pub fn source_path(paths: &Paths, name: &str) -> PathBuf {
 
 /// Which catalog this install came from, or `None` when nothing says.
 ///
-/// `None` is an install amenbo cannot place: one laid down by hand, or one made before the record
+/// `None` is an install Amenbo cannot place: one laid down by hand, or one made before the record
 /// existed. It is not "the official catalog" — the caller decides what an unknown origin resolves
 /// against, and is the one that can say so in a message.
 ///

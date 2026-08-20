@@ -839,7 +839,7 @@ const REFERENCE_RESTRICTS: &str =
 
 /// The tables v10 rewrites, and how many references each of them declared. The count is what makes the
 /// rewrite exact: a table that has grown a reference since would otherwise have that one changed too,
-/// silently and outside what the decision named. What is deliberately absent is amenbo's own settings for
+/// silently and outside what the decision named. What is deliberately absent is Amenbo's own settings for
 /// a project — `plugin_config`, `plugin_enable`, `hook_optout` — which keep their cascade.
 const RESTRICTED_TABLES: &[(&str, usize)] = &[
     ("task_comment", 1),
@@ -1400,7 +1400,7 @@ mod tests {
     /// legitimately carry their columns in different order (see [`admit_rejected_task_status`]); the count
     /// is what says every reference moved rather than the first one found.
     ///
-    /// It also pins the exclusion the decision named: amenbo's own per-project settings come out still
+    /// It also pins the exclusion the decision named: Amenbo's own per-project settings come out still
     /// cascading. A rewrite that swept the whole schema would take those too, silently, and only a delete
     /// op growing a sweep it never needed would eventually say so.
     #[test]

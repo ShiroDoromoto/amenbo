@@ -21,7 +21,7 @@ import { Icon } from "./Icon";
  *
  * **The update is applied from here.** Taking one is the common case and it needs no judgement, so it costs
  * no navigation: the button runs the same `plugin update` core does for the CLI, gates and all. What does
- * need judgement — a build this amenbo cannot speak to, or a new schema whose `required` settings are unset —
+ * need judgement — a build this Amenbo cannot speak to, or a new schema whose `required` settings are unset —
  * is not offered as a button but named, with the way to the screen where it can be resolved. That split is
  * the whole reason this is a banner and not a notification: it is quiet when there is nothing to decide.
  *

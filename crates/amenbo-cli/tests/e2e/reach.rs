@@ -14,7 +14,7 @@ fn agent_json_is_self_describing() {
     let a = cli.json(&["agent", "--json"]);
     assert_eq!(a["version"], env!("CARGO_PKG_VERSION"));
     assert!(a["commands"].as_array().unwrap().len() >= 20);
-    // amenbo is one local store: the spec is single-shaped (personal mode), and no sharing / sync / key /
+    // Amenbo is one local store: the spec is single-shaped (personal mode), and no sharing / sync / key /
     // multi-device surface appears anywhere.
     assert_eq!(a["mode"], "personal");
     assert!(!a["commands"]

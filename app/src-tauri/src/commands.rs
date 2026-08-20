@@ -2308,9 +2308,9 @@ fn provision_project(name: &str) -> Result<(Store, i64), CmdError> {
     Ok((store, project_id))
 }
 
-/// Turn the chosen folder into **a new amenbo project**. The flow: (1) if a `.amenbo` already exists
+/// Turn the chosen folder into **a new Amenbo project**. The flow: (1) if a `.amenbo` already exists
 /// (in the folder or above it), refuse and respect what is there (`init_pointer_exists`); (2) if
-/// there is no `.amenbo` but an amenbo managed block is present, **do not refuse on the marker
+/// there is no `.amenbo` but an Amenbo managed block is present, **do not refuse on the marker
 /// alone** — look up living projects in the bindings registry and branch (the same shape as guard 2
 /// in the CLI's `init`): exactly one living project means the pointer was lost and we **recover** it
 /// (`recover_lost_pointer`); several means `init_ambiguous_owners`, offering the candidates; none
@@ -2320,7 +2320,7 @@ fn provision_project(name: &str) -> Result<(Store, i64), CmdError> {
 /// we place there is `.amenbo` and the managed block of guidance. The project's name is the `name`
 /// the creation screen passes, falling back to the folder's basename if it is omitted. A marker is
 /// thin and is no proof of ownership (it is a borrowed surface, carried along by clones, copies and
-/// sync), so the truth about ownership is taken from amenbo's own artifacts (`.amenbo` plus the
+/// sync), so the truth about ownership is taken from Amenbo's own artifacts (`.amenbo` plus the
 /// bindings registry) — and the reverse lookup counts **only the projects that still read back**: a
 /// deleted project's rows are physically gone, while the teardown that forgets its bindings entry is
 /// best-effort, so an entry can outlive the project it names. Recover onto one of those and the folder
@@ -2635,7 +2635,7 @@ pub fn project_bind_folder(project_id: i64, dir: String) -> Result<WriteAck, Cmd
 }
 
 /// Folder management on the project settings screen: unbind this folder (the Tauri path for
-/// `unbind`). Removes only the folder's `.amenbo` pointer and amenbo's managed block (AGENTS.md /
+/// `unbind`). Removes only the folder's `.amenbo` pointer and Amenbo's managed block (AGENTS.md /
 /// CLAUDE.md), and forgets the folder in the registry — many folders map to one project, so the
 /// other folders pointing at the same project are left alone. **The store itself is never deleted**:
 /// this severs a binding, it does not remove a store. Confirming the destructive part is the GUI's
@@ -3538,7 +3538,7 @@ pub fn hook_notices() -> Result<Vec<HookNoticeDto>, CmdError> {
 }
 
 /// Write down what the user answered to the [`HookOfferDto`], and carry it out. The answer is the
-/// **device's** — one click, once, covering every repository amenbo works in and the ones bound after —
+/// **device's** — one click, once, covering every repository Amenbo works in and the ones bound after —
 /// so it lands in `config.hook_consent` and not against whichever project happened to be on screen.
 ///
 /// The record is what decides whether the question is ever asked again, so it is written **only when an
@@ -3649,7 +3649,7 @@ fn agent_hook_tool(harness: &amenbo_core::harness::Harness, cmd: &str) -> AgentH
 /// ([`Consent::answered_again`](amenbo_core::harness::Consent::answered_again)) is what keeps the re-ask
 /// to one — a caller cannot get that wrong, because it never says.
 ///
-/// **Nothing is wired by answering.** amenbo writes no provider settings file, so a yes buys the text and
+/// **Nothing is wired by answering.** Amenbo writes no provider settings file, so a yes buys the text and
 /// not the wiring, and the row keeps reporting until the wiring lands.
 ///
 /// Call it **only when there is an answer**: the row's "close" records nothing, and the project stays
@@ -3666,7 +3666,7 @@ pub fn agent_hook_answer(project_id: i64, yes: bool) -> Result<(), CmdError> {
     Ok(())
 }
 
-/// What this project answered about starting its AI on amenbo: `true` for yes, `false` for no, and
+/// What this project answered about starting its AI on Amenbo: `true` for yes, `false` for no, and
 /// `None` for a project that has never been asked. Three values and not two — a screen that folded
 /// "never asked" into "no" would report a refusal nobody gave, and a refusal is the one answer that
 /// silences the standing row (`AMB-D-459`, `AMB-D-460`).
@@ -3755,7 +3755,7 @@ pub fn agent_hook_project_wiring(project_id: i64) -> Result<Vec<AgentHookWiringD
 
 /// Whether an app already reaches **this folder** over MCP (`AMB-D-680`) — the same read-back the
 /// settings screen draws its rows from ([`amenbo_core::mcp_probe`]), asked here of one folder rather
-/// than of a project. There is no second way of reading it: an entry amenbo would not report as set up
+/// than of a project. There is no second way of reading it: an entry Amenbo would not report as set up
 /// is not one this may act on either.
 ///
 /// **The entry has to name this folder**, and not merely be there — which is why the folders it reaches
@@ -3801,7 +3801,7 @@ pub fn agent_hook_requests(project_id: i64) -> Result<AgentHookRequestsDto, CmdE
     Ok(AgentHookRequestsDto { tools, dirs })
 }
 
-/// The amenbo a host will run: the command shipped beside this build's own binary.
+/// The Amenbo a host will run: the command shipped beside this build's own binary.
 ///
 /// A bundle and a request both name a path rather than a command word, because the host that runs it
 /// is not a shell and has no `PATH` of the reader's to look one up in. The CLI ships as a sidecar next
@@ -3833,7 +3833,7 @@ fn mcp_exe() -> std::path::PathBuf {
 /// The folders every project a server could be pointed at is worked in, in the store's own order.
 ///
 /// One folder per project — the first it has bound. A server answers about the folder it is sent to
-/// rather than about a project (the amenbo it starts works the project out from where it stands), so
+/// rather than about a project (the Amenbo it starts works the project out from where it stands), so
 /// where a project has several, any one of them reaches the same backlog; the one named is written
 /// into the text the reader is handed, so nothing about which is silent. A project with none is not
 /// here at all: there is nowhere to point a server, and a row offering to would write an entry naming
@@ -3980,7 +3980,7 @@ pub fn mcp_request_for(app: String, project_ids: Vec<i64>) -> Result<McpRequestD
 /// (`AMB-D-672`).
 ///
 /// The folder is the reader's to choose, asked for on the surface: what happens to this file next is
-/// that they open it, so it has to land somewhere they can find. amenbo writes nothing into the app's
+/// that they open it, so it has to land somewhere they can find. Amenbo writes nothing into the app's
 /// own settings — the file is the hand-over, and the app is the thing that reads it.
 #[tauri::command]
 pub fn mcp_bundle_write(project_ids: Vec<i64>, into_dir: String) -> Result<String, CmdError> {
@@ -4003,7 +4003,7 @@ pub fn mcp_bundle_write(project_ids: Vec<i64>, into_dir: String) -> Result<Strin
 }
 
 /// Fix a broken `.amenbo` (old format, or gone) **right there**. The repair button on the startup
-/// health banner calls it. Core already knows how — run amenbo in that folder and `resolve_upward`
+/// health banner calls it. Core already knows how — run Amenbo in that folder and `resolve_upward`
 /// quietly fixes it — so we put the same fix within reach in the banner, and the user does not have
 /// to go hunting through the settings screen. All it writes is each folder's `.amenbo`; the store is
 /// untouched, so there is no snapshot to refetch.
@@ -4082,7 +4082,7 @@ fn list_lines(
 }
 
 /// The language every translated field falls back to (`AMB-D-394`) — the one the author wrote the
-/// manifest in, and the one amenbo's own catalog documents are published in.
+/// manifest in, and the one Amenbo's own catalog documents are published in.
 const BASE_LANGUAGE: &str = amenbo_core::config::LANGUAGES[0];
 
 /// Hand the GUI the merged plugin catalog for browsing (`AMB-D-347`): the official catalog plus every
@@ -4097,7 +4097,7 @@ const BASE_LANGUAGE: &str = amenbo_core::config::LANGUAGES[0];
 /// the view. The fetch goes off the main thread via `spawn_blocking`, because a dead source is only
 /// found out by waiting for its timeout.
 ///
-/// `lang` is the language the reader is reading amenbo in, and it is the caller's to say
+/// `lang` is the language the reader is reading Amenbo in, and it is the caller's to say
 /// (`AMB-D-623`): the list half of a translation is a document per language (`AMB-D-622`), so the one
 /// being asked for has to travel with the ask. It rides on the row beside the base line rather than
 /// over it — a plugin this language has no line for is drawn in English, and the row says nothing
@@ -4574,7 +4574,7 @@ pub fn plugin_config_read(
 /// Install one plugin from the catalog by name (`AMB-D-351`) — the GUI's half of `plugin install`.
 ///
 /// Every gate is core's ([`amenbo_core::plugin_install::install`]): the name resolves against the catalog,
-/// the asset is verified fail-closed against amenbo's own catalog key and the manifest's checksum, and
+/// the asset is verified fail-closed against Amenbo's own catalog key and the manifest's checksum, and
 /// only then is anything written. This command adds no trust of its own, and cannot: the key is not a
 /// parameter down there.
 ///
@@ -4671,7 +4671,7 @@ pub fn plugin_set_enabled(
 /// What the author's check said, as the settings form reads it (`AMB-D-664`) — `None` for a plugin that
 /// declares none, which is every plugin written before the block existed.
 ///
-/// The sentences travel whole and are drawn plain: amenbo does not read them (`AMB-D-356`), and the form
+/// The sentences travel whole and are drawn plain: Amenbo does not read them (`AMB-D-356`), and the form
 /// puts each one where it belongs — the per-field lines beside their boxes, the `message` at the head.
 fn checked_dto(checked: &amenbo_core::plugin_check::Checked) -> Option<PluginCheckDto> {
     match checked {
@@ -4698,7 +4698,7 @@ fn checked_dto(checked: &amenbo_core::plugin_check::Checked) -> Option<PluginChe
 ///
 /// This side does what the CLI's does and no more: find the field the key names in the installed
 /// manifest, and settle which project the value is for. The author's `secret` flag on that field is what
-/// routes the value — a secret to `plugin_secret`, text to `plugin_config` — and **amenbo never decides
+/// routes the value — a secret to `plugin_secret`, text to `plugin_config` — and **Amenbo never decides
 /// secrecy here**; a key the manifest does not declare has no routing rule, so it is refused rather than
 /// guessed at.
 ///
@@ -4753,8 +4753,8 @@ pub fn plugin_settings_check(
     name: String,
     project_id: Option<i64>,
 ) -> Result<Option<PluginCheckDto>, CmdError> {
-    // A read handle, as the press beside it takes: the run writes nothing of amenbo's, and what the
-    // plugin has to write it writes by calling amenbo back (`AMB-D-406`).
+    // A read handle, as the press beside it takes: the run writes nothing of Amenbo's, and what the
+    // plugin has to write it writes by calling Amenbo back (`AMB-D-406`).
     let store = &open_store_read()?;
     let installed = amenbo_core::plugin_installed::read(&store.paths, &name)?;
     let layer = amenbo_core::plugin_layer::Layer::of(installed.manifest.scope, project_id)?;
@@ -4792,7 +4792,7 @@ pub fn plugin_settings_action(
     project_id: Option<i64>,
 ) -> Result<PluginActionRanDto, CmdError> {
     // A read handle, though this runs somebody's code: the press writes nothing of its own, and what the
-    // plugin has to write it writes by calling amenbo back (`AMB-D-406`) — which is a door of its own, and
+    // plugin has to write it writes by calling Amenbo back (`AMB-D-406`) — which is a door of its own, and
     // not one to hold shut for however long a `setup` takes (`AMB-D-664` puts no bound on a press).
     {
         let store = &open_store_read()?;
@@ -4904,7 +4904,7 @@ pub async fn plugin_updates(
             .into_iter()
             .map(|u| {
                 // The two gates that hold an update back, in the order the apply path applies them: a build
-                // this amenbo cannot speak to is not an improvement, and a schema that grew a `required`
+                // this Amenbo cannot speak to is not an improvement, and a schema that grew a `required`
                 // field an enabled plugin has no value for is not one either.
                 let (hold, missing) = if amenbo_core::plugin_compat::check(&u.available).is_err() {
                     (Some("incompatible".to_string()), Vec::new())
@@ -4932,7 +4932,7 @@ pub async fn plugin_updates(
 /// Put the catalog's build of one plugin in place (`AMB-D-359`) — the GUI's `plugin update <name>`, the
 /// button the update banner offers so no screen has to be visited to take an update.
 ///
-/// Every gate is core's ([`amenbo_core::plugin_update::apply`]): the asset is re-verified against amenbo's
+/// Every gate is core's ([`amenbo_core::plugin_update::apply`]): the asset is re-verified against Amenbo's
 /// catalog key and its checksum, the previous build is retained as a `.bak`, and the gate and every setting
 /// the new build still declares are carried over untouched — the values of keys it has stopped declaring
 /// are purged there, once the build is in place (`AMB-D-456`). The one gate this side adds is the config
@@ -5403,7 +5403,7 @@ mod tests {
 
     /// What a verdict reaches the screen as (`AMB-D-664`). The three states are three answers: a plugin
     /// with no check has nothing to draw, one that answered carries the author's sentences whole, and one
-    /// that said nothing readable carries none of them — the silence is amenbo's own reading of the run.
+    /// that said nothing readable carries none of them — the silence is Amenbo's own reading of the run.
     #[test]
     fn a_verdict_reaches_the_form_whole_and_a_silence_reaches_it_as_a_silence() {
         use amenbo_core::plugin_check::{Checked, Silence, Verdict};
@@ -5726,7 +5726,7 @@ mod tests {
         plugin_config_set("notify".into(), "events".into(), String::new(), Some(project_id)).unwrap();
         assert_eq!(field(Some(project_id), "events").value, None, "the setting is gone");
 
-        // A key the manifest does not declare has no routing rule — amenbo does not invent one.
+        // A key the manifest does not declare has no routing rule — Amenbo does not invent one.
         assert!(plugin_config_set("notify".into(), "nope".into(), "x".into(), Some(project_id)).is_err());
 
         // And a write with no project named is refused rather than aimed somewhere.
@@ -5809,7 +5809,7 @@ mod tests {
     }
 
     /// What the market reads for the one plugin someone opened (`AMB-D-385`): the detail document's own
-    /// fields — the switch, the events, the settings — plus the one judgement amenbo adds, whether this
+    /// fields — the switch, the events, the settings — plus the one judgement Amenbo adds, whether this
     /// build can run the thing at all. Driven off the caches, with the network pointed nowhere, because
     /// falling back to them is how the market answers offline anyway.
     #[test]
@@ -7155,7 +7155,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// A folder with no `.amenbo` but an amenbo managed block — a stale marker left by a clone, a
+    /// A folder with no `.amenbo` but an Amenbo managed block — a stale marker left by a clone, a
     /// copy, or debris — is **not hard-blocked**. A marker is no proof of ownership, so when no
     /// living project in the registry claims it, init carries on: it brings a project into being and
     /// writes the pointer.
@@ -7526,8 +7526,8 @@ mod tests {
                 .id
         };
         // A folder leads to that project, the way one does after `init`, and the question about starting
-        // its AI on amenbo is answered with a no. Both are issues of their own — a project no folder leads
-        // to, and a folder whose AI does not start on amenbo — so without them the "plain store" below
+        // its AI on Amenbo is answered with a no. Both are issues of their own — a project no folder leads
+        // to, and a folder whose AI does not start on Amenbo — so without them the "plain store" below
         // would start two warnings down.
         let home_dir = amenbo_scratch::scratch("app-doctor-dir");
         {
@@ -8674,7 +8674,7 @@ mod tests {
                 .unwrap()
                 .id
         };
-        // Bound the way the GUI binds one — which writes amenbo's own managed block into this folder's
+        // Bound the way the GUI binds one — which writes Amenbo's own managed block into this folder's
         // `CLAUDE.md` and `AGENTS.md`. That is the state every folder here starts in, and it is not a
         // sign of anyone: what follows is about what the reader adds to it.
         let bound = |project: i64, leaf: &str| -> std::path::PathBuf {
@@ -8709,7 +8709,7 @@ mod tests {
             "a hook nothing would ever run is not work left",
         );
 
-        // The same folder, once the reader has written instructions of their own beside amenbo's block.
+        // The same folder, once the reader has written instructions of their own beside Amenbo's block.
         // That is an AI being worked with here, so the report is back — and it is the whole catalog, the
         // folder still pointing at no one provider.
         let claude = only_dir.join("CLAUDE.md");

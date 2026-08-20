@@ -53,7 +53,7 @@ pub use write::WriteTx;
 pub const META_SCHEMA_VERSION: &str = "schema_version";
 /// The monotonic store **format version** scalar. Unlike the frozen `schema_version` ("1"),
 /// this integer is bumped only by a migration that destroys old readers (drops/renames a column or
-/// table the old side's read SQL needs), so a lagging binary can detect a store that a newer amenbo
+/// table the old side's read SQL needs), so a lagging binary can detect a store that a newer Amenbo
 /// forward-migrated past what it understands. Written on the write-path open; **missing = v0**
 /// (compat baseline — stores predating the guard, no flag day). See [`crate::model::FORMAT_VERSION`]
 /// and [`engine::read_format_version`].

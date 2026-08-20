@@ -1,9 +1,9 @@
-// The one moment amenbo asks to write into the user's git plumbing, which on this surface is a modal.
+// The one moment Amenbo asks to write into the user's git plumbing, which on this surface is a modal.
 // **It is one question, once on this device** — not one per repository. Whether it is due at all is
 // core's to say (`hooks::reconcile`, via `fetchHookOffer`); nothing here decides that.
 //
 // It is a consent gate, not a consultation. Nobody wants an AMB-T-… in their commits, so there is no
-// judgement to delegate: the question is whether amenbo may wire the lint, and the answers are yes and no.
+// judgement to delegate: the question is whether Amenbo may wire the lint, and the answers are yes and no.
 // What it takes to honour a yes — which repositories are bound, an empty slot, a hooks directory the whole
 // team shares, a stranger already in the other slot — is core's to work out (`hooks::install`), and none of
 // it is put on screen. Core only ever asks when a yes could write something, so the yes button is never dead.
@@ -14,7 +14,7 @@
 // `hooks uninstall`.
 //
 // The answer still has three values against the modal's two buttons. "Not now" is not a no: a no is
-// recorded and never asked again, while dismissing leaves the device unanswered, which is a state amenbo
+// recorded and never asked again, while dismissing leaves the device unanswered, which is a state Amenbo
 // keeps deliberately (a surface that could not get an answer must not invent one). Esc is that third value,
 // which is why it must not be wired to `answer(false)` — pressing it would then mean "never ask me again".
 import { useEffect, useState } from "react";

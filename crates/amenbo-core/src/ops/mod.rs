@@ -7,7 +7,7 @@
 //! dimensions before the project row itself) and equally the rows hanging off them: comments, dependency
 //! edges, commit anchors, dimension values, assignments, decision links. Each of those is a row a person
 //! can point at, and a row deleted by a constraint is deleted where no code can see it — so what goes must
-//! go through an op that read its id first (`AMB-D-403`). Only amenbo's own per-project settings
+//! go through an op that read its id first (`AMB-D-403`). Only Amenbo's own per-project settings
 //! (`plugin_config` / `plugin_enable`) ride the schema, having nothing to tell.
 //!
 //! The polymorphic `attachment` (a reference discriminated by `target_type`) is the one child no constraint
@@ -512,7 +512,7 @@ impl Ref {
     }
 }
 
-/// Read a reference string as an **id** — `AMB-P-<n>` as amenbo renders it, or the bare `<n>`. The id
+/// Read a reference string as an **id** — `AMB-P-<n>` as Amenbo renders it, or the bare `<n>`. The id
 /// *is* the conversational number, so this one parser covers the id arm of every resolver that takes either
 /// a name or an id (project / dimension / dimension value). Empty, blank or non-decimal input gives `None` —
 /// as an id it matches nothing.

@@ -699,7 +699,7 @@ pub fn read_manifest(archive: &Path) -> Result<ArchiveManifest> {
 
 /// Refuse an archive whose container layout this build does not read — in **both** directions, before the
 /// live tree (or the manifest's own shape) is touched at all. Older: written for the N-store layout, for
-/// which this build has neither the type nor anywhere to put a second store; the rewind path is the amenbo
+/// which this build has neither the type nor anywhere to put a second store; the rewind path is the Amenbo
 /// that wrote it. Newer: it may hold entries this build does not know to place, and for a
 /// disaster-recovery tool, dropping them silently is worse than refusing (no partial application).
 fn ensure_layout_readable(layout: u32) -> Result<()> {
@@ -736,7 +736,7 @@ pub fn restore_dest() -> PathBuf {
 /// **One rewind point per kind, and it is the newest one**: delete every file in `dir` whose name is
 /// `<prefix>…<suffix>`, except `keep` — the one just written.
 ///
-/// amenbo takes a copy of the whole store before it moves it or destroys part of it: the pre-migration
+/// Amenbo takes a copy of the whole store before it moves it or destroys part of it: the pre-migration
 /// archive ([`crate::migrate`]), the pre-restore aside a restore sets the replaced store to, and the
 /// pre-erase archive a `hard-erase` stands on ([`pre_erase_backup`]). Each is a whole copy of the store
 /// (truth source *and* every attachment blob), so **a new rewind point supersedes the old one the moment it
@@ -777,7 +777,7 @@ fn preflight_generation_gate(manifest: &ArchiveManifest) -> Result<()> {
     let found = manifest.store.format_version;
     if found > max {
         // Named, like the open-time gate: the archive records the app version that produced it, and that
-        // version reads its own store — so the refusal can say which amenbo to run instead of "the latest",
+        // version reads its own store — so the refusal can say which Amenbo to run instead of "the latest",
         // which nobody can act on offline.
         let app = &manifest.producer_app_version;
         return Err(Error::Invalid(
@@ -1677,7 +1677,7 @@ mod tests {
 
     /// `hard-erase` stands on an archive of the whole store, and taking a new one sweeps what earlier
     /// erases left — each of those still carrying the very content its erase destroyed. An archive the
-    /// *user* placed is not amenbo's to sweep, so it stays.
+    /// *user* placed is not Amenbo's to sweep, so it stays.
     #[test]
     fn pre_erase_backup_keeps_only_the_newest_rewind_point() {
         let base = scratch("pre-erase-sweep");

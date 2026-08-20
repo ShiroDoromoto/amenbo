@@ -371,7 +371,7 @@ describe("moving a gate from the list", () => {
     expect(container.textContent).not.toContain(tn("plugins.droppedQueued", 0));
   });
 
-  // An open gate on a build amenbo cannot speak to fires nothing, so the switch says why instead of moving.
+  // An open gate on a build Amenbo cannot speak to fires nothing, so the switch says why instead of moving.
   it("refuses to enable a plugin this build cannot speak to, and names the mismatch", () => {
     hoisted.projects = [{ id: 1, name: "alpha" }];
     hoisted.installs = [
@@ -388,7 +388,7 @@ describe("moving a gate from the list", () => {
   });
 });
 
-// An open gate is not a plugin that fires (`AMB-D-359`): a build amenbo cannot speak to is handed no
+// An open gate is not a plugin that fires (`AMB-D-359`): a build Amenbo cannot speak to is handed no
 // event, so the row has to say that rather than let "enabled" stand for "working".
 describe("a plugin this build cannot speak to", () => {
   it("reads as enabled-but-silent, not as enabled", () => {
@@ -457,7 +457,7 @@ describe("the layer a plugin declared", () => {
   });
 });
 
-// The settings a plugin's author declared (`AMB-D-356`), drawn as a form amenbo generates. amenbo judges
+// The settings a plugin's author declared (`AMB-D-356`), drawn as a form Amenbo generates. Amenbo judges
 // nothing in it: a text box and a masked pair are the two kinds there are, every value is the project's
 // on screen, and all of them go out through the one write boundary.
 describe("the settings form", () => {
@@ -762,7 +762,7 @@ describe("what the author's own code says on the form", () => {
     expect(container.textContent).toContain("SCENARIO — there is a space in it");
   });
 
-  // A silence is amenbo's reading of a run, with nothing of the plugin's in it (`AMB-D-354`) — so the
+  // A silence is Amenbo's reading of a run, with nothing of the plugin's in it (`AMB-D-354`) — so the
   // form says what happened in its own words and leaves the reason to the execution log.
   it("says the check did not answer when it said nothing readable", async () => {
     hoisted.projects = [{ id: 7, name: "alpha" }];

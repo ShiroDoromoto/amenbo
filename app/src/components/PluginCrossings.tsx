@@ -39,7 +39,7 @@ export function PluginCrossings({ install, projects }: {
   const rest = projects.filter((p) => !shown.includes(p));
 
   // The device layer is not a shorter project list — it is a different row, with nothing to add beside
-  // it. The one warning that still belongs under it is the build's: an open gate on a plugin this amenbo
+  // it. The one warning that still belongs under it is the build's: an open gate on a plugin this Amenbo
   // cannot speak to fires nothing, wherever that gate sits.
   if (install.device) {
     return (

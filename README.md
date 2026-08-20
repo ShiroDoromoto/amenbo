@@ -21,7 +21,7 @@
 
 **[amenbo.work](https://amenbo.work/en/)** — the site: what this is for, and the installers.
 
-The context you build up with an AI is locked inside that AI. amenbo keeps it on your
+The context you build up with an AI is locked inside that AI. Amenbo keeps it on your
 machine instead: tasks and decisions as connected records in one SQLite store, which an
 agent writes through the CLI and you read in the desktop app.
 
@@ -46,7 +46,7 @@ agent writes through the CLI and you read in the desktop app.
 
 <div align="center">
 
-<img src="assets/gui-board.png" alt="The amenbo desktop app: a board with To do / In progress / Blocked / Done columns, where each card shows its priority, its assignee — some of them the AI — and its AMB-T id" width="880">
+<img src="assets/gui-board.png" alt="The Amenbo desktop app: a board with To do / In progress / Blocked / Done columns, where each card shows its priority, its assignee — some of them the AI — and its AMB-T id" width="880">
 
 <sub>The desktop app — the same store the CLI writes to, on a board.</sub>
 
@@ -60,7 +60,7 @@ agent writes through the CLI and you read in the desktop app.
 - [Installing and updating](#installing-and-updating)
 - [Commands](#commands)
 - [Making your AI agent read the spec](#making-your-ai-agent-read-the-spec-optional)
-- [Reaching amenbo from an AI that cannot open a folder](#reaching-amenbo-from-an-ai-that-cannot-open-a-folder)
+- [Reaching Amenbo from an AI that cannot open a folder](#reaching-amenbo-from-an-ai-that-cannot-open-a-folder)
 - [Encryption at rest](#encryption-at-rest)
 - [Contributing](#contributing)
 - [License](#license)
@@ -96,7 +96,7 @@ Design points:
 - **IDs**: the id **is** the conversational number — a task whose id is `<n>` is shown
   as `AMB-T-<n>`, a decision whose id is `<n>` as `AMB-D-<n>`. Numbers are device-global
   (one number names one task anywhere, no project context needed) and come from two
-  sibling spaces, which the kind code disjoins. Every ref amenbo shows carries the
+  sibling spaces, which the kind code disjoins. Every ref Amenbo shows carries the
   `AMB-` namespace, so it is self-declaring: another tracker's `T-<n>` is never
   mistaken for one of these. Reading is looser than writing — the bare forms
   (`<n>` / `#<n>` / `T-<n>` / `D-<n>`) still parse, so a ref pastes straight back.
@@ -136,7 +136,7 @@ files select the exact version above that.
 
 Go appears in the tree, but it is not a third toolchain to install: it builds only
 `devtool/`, the optional helper that gives a task its own throwaway dev GUI (see
-[devtool/README.md](devtool/README.md)). Nothing else reads it, so amenbo builds,
+[devtool/README.md](devtool/README.md)). Nothing else reads it, so Amenbo builds,
 tests and ships without Go — `make devtool` is the only target that asks for it.
 
 **Building the GUI is macOS-only.** The Tauri `.app` links the native WebKit
@@ -224,7 +224,7 @@ override the location (useful for tests and explicit setups).
 <details>
 <summary>Per-OS installers, in-place CLI self-update, and verifying a download</summary>
 
-On macOS and Windows amenbo ships as a single installer that carries both the GUI and
+On macOS and Windows Amenbo ships as a single installer that carries both the GUI and
 the CLI (a `.pkg` and an NSIS `.exe`), published on this repository's
 [Releases](https://github.com/ShiroDoromoto/amenbo/releases). Download the one for
 your platform and run it — it installs the desktop app and puts the `amenbo` CLI on
@@ -247,7 +247,7 @@ version skew.
 
 To update, download the latest installer and run it again — it replaces both the
 desktop app and the CLI at once (on Linux the new AppImage replaces the GUI, and the
-CLI updates on its own path). amenbo notices when a newer version is out (see the
+CLI updates on its own path). Amenbo notices when a newer version is out (see the
 update check below) and points you at that installer. A **standalone CLI** (installed
 without the desktop app) can also update itself in place: `amenbo update --apply`
 downloads the new CLI over TLS and swaps this binary — no installer, no elevation. A
@@ -255,7 +255,7 @@ CLI installed alongside the desktop app is managed by it and is updated with the
 not on its own (`--apply` there points you back to the installer). An `--apply` keeps the
 binary it replaces beside the new one, so `amenbo update --rollback` undoes the last update
 offline — no download — if the new version misbehaves. Either way, applying an update is
-always your explicit call — amenbo never updates itself in the background.
+always your explicit call — Amenbo never updates itself in the background.
 
 **Verifying a download (optional).** Every release is built by this repository's
 public CI, and each asset carries a build attestation signed with the release
@@ -270,14 +270,14 @@ gh attestation verify amenbo-darwin-arm64.pkg --repo ShiroDoromoto/amenbo
 A pass means the bytes you are about to run came from this repo's release workflow.
 Substitute your platform's asset name.
 
-On the network, amenbo keeps two layers apart. **Feature-side communication stays
+On the network, Amenbo keeps two layers apart. **Feature-side communication stays
 at zero**: no telemetry, no phone-home, no central server — your task data never
 leaves your device. What does go out is **infra-side**, and there are two kinds.
 
-The **update check** reads a small manifest from amenbo's own update endpoint to
+The **update check** reads a small manifest from Amenbo's own update endpoint to
 notice when a newer version is out. That request carries no task data, is on
 by default, and can be turned off (`amenbo config set update_check false`, or
-`AMENBO_UPDATE_CHECK=0`). The check only reads that manifest; amenbo never updates
+`AMENBO_UPDATE_CHECK=0`). The check only reads that manifest; Amenbo never updates
 itself in the background — downloading and applying a new version is always something you
 set off yourself (`amenbo update`, or `amenbo update --apply` for the standalone CLI).
 
@@ -524,7 +524,7 @@ Output and conventions:
   resulting resource) under `--json`.
 - Destructive operations (`delete`, …) prompt by default; pass `--yes`/`-y` for
   non-interactive use. Exit codes: `0` success, `1` error, `2` bad arguments.
-- `export` is one way: amenbo writes your data out, and has no command that reads
+- `export` is one way: Amenbo writes your data out, and has no command that reads
   it back in. Putting your own data back is `restore` from a `backup` archive.
 
 **Crash & corruption safety.** The store is a SQLite database in WAL mode, so a
@@ -534,7 +534,7 @@ to the last consistent state. Two complementary nets sit on top, with distinct r
 - **`amenbo export`** — a portable, human-readable dump you can run anytime. This is
   the format for *migration, inspection, and data ownership* (no lock-in), and it is
   **one way**: it hands your data to whatever you move to next, and nothing reads it
-  back into amenbo (the way back is a `backup` archive and `restore`). It covers
+  back into Amenbo (the way back is a `backup` archive and `restore`). It covers
   **everything** — this device's database, every project in it — and there is no
   narrower shape: an excerpt or a human-readable table would not get you moved. With
   `--out <dir>` it writes a directory: `export.json` (the records) next to
@@ -554,11 +554,11 @@ to the last consistent state. Two complementary nets sit on top, with distinct r
   the snapshot is gated on its generation before anything
   is swapped in (all-or-nothing), the previous truth source is set aside with a timestamp, and
   a mid-swap failure rolls back — so a bad restore can never leave you worse off. An archive
-  from a *newer* amenbo is refused (update first), and so is one written before the store became a
-  single database (restore it with the amenbo that wrote it). Both prompt and allow cancellation.
+  from a *newer* Amenbo is refused (update first), and so is one written before the store became a
+  single database (restore it with the Amenbo that wrote it). Both prompt and allow cancellation.
   Restore replaces the database rather than reading it, so it is the one command that still runs
   when this build cannot open the store at all — which is what makes the backup a real way back
-  when a *newer* amenbo has already carried your data past this one (there is no downgrade).
+  when a *newer* Amenbo has already carried your data past this one (there is no downgrade).
   Save the archive wherever your own backup regime keeps files — an external drive, an iCloud
   folder — so it survives a lost PC; recovery needs no key or passphrase on any machine.
 - **Older archives** — an archive written before the store consolidation (several stores plus a
@@ -566,14 +566,14 @@ to the last consistent state. Two complementary nets sit on top, with distinct r
   wrote it. That shape is the only place several stores still appear — a device this build opens
   holds one database, and its archives carry one snapshot.
 
-Neither carries key material: amenbo holds no secrets or encryption keys at all, so a
+Neither carries key material: Amenbo holds no secrets or encryption keys at all, so a
 backup or export has nothing sensitive to include (machine-local identity — the display
 name and hardware binding — is likewise left out of an archive, so a restore never
 overwrites the destination machine's identity). The store itself is plaintext (see *Encryption at rest*
 below), so an archive or snapshot is self-contained — recovery needs no key or
 passphrase on any machine.
 
-On every open amenbo also runs a read-only integrity check of the store and prints a
+On every open Amenbo also runs a read-only integrity check of the store and prints a
 warning if anything looks off — it never repairs automatically (use `amenbo doctor --fix`
 for that, which also reclaims attachment files nothing references any more). Turn it off
 with `amenbo config set startup_integrity_check false`. The app warns on launch too, and
@@ -606,7 +606,7 @@ you launch it in is the boundary, and you draw it with `init` / `bind`.
 
 Whether the agent actually runs `amenbo agent --json` still depends on the agent
 reading that block. To have the instruction arrive over the protocol instead, wire
-your tool's **session-start hook** — an **opt-in** step whose text amenbo hands
+your tool's **session-start hook** — an **opt-in** step whose text Amenbo hands
 you:
 
 ```sh
@@ -628,12 +628,12 @@ on its own schedule, so a copy in this file would go stale with nobody noticing.
 The command reads the catalog inside the binary you are running, which an update
 replaces.
 
-**amenbo writes no settings file.** `agent-hook snippet` puts that text on stdout
+**Amenbo writes no settings file.** `agent-hook snippet` puts that text on stdout
 and nothing else — so it pipes into a clipboard — and says on stderr which file it
 is about; `--copy` takes the clipboard route and prints the text on stderr as it
 goes, so you read it before you hand it on. Whether to give it to an AI, and what
-that AI then changes, stays yours. When amenbo asks whether this folder's AI may
-be started on amenbo at all, `agent-hook answer <yes|no>` records what you said and
+that AI then changes, stays yours. When Amenbo asks whether this folder's AI may
+be started on Amenbo at all, `agent-hook answer <yes|no>` records what you said and
 touches no settings file either; a `no` only stops the asking, and the text stays
 available.
 
@@ -645,9 +645,9 @@ hook adds over the block is reach, not content — the instruction arrives over 
 protocol instead of depending on a file being read. It also closes the gap where
 `init` writes the block mid-session (so it does not bind until the *next* one).
 
-**"Wired" is as far as anyone can tell you.** amenbo reads those settings files
+**"Wired" is as far as anyone can tell you.** Amenbo reads those settings files
 and reports whether the wiring is written in them; it never claims the hook fires.
-What happens after that is outside amenbo — some providers load project-level
+What happens after that is outside Amenbo — some providers load project-level
 settings only under trust, some do not feed a session-start hook's output into the
 context at all, and a release has been known to stop it firing. This is why the
 managed block stays in place whatever the hook says: it is the one receiver that
@@ -655,7 +655,7 @@ survives every provider.
 
 </details>
 
-## Reaching amenbo from an AI that cannot open a folder
+## Reaching Amenbo from an AI that cannot open a folder
 
 <details>
 <summary>The MCP server: one folder per server, three tools, and the two things it will not pass through</summary>
@@ -665,14 +665,14 @@ itself. Some cannot — a chat that has no terminal, or a tool whose commands ru
 a sandbox somewhere other than your machine. For those, `amenbo mcp` speaks **MCP**
 (JSON-RPC on stdin/stdout), and the host you configure starts it.
 
-It is a **mediator, not a second amenbo**. Every tool call re-runs the same
+It is a **mediator, not a second Amenbo**. Every tool call re-runs the same
 executable in the folder that call named and hands back what that run wrote, so
 the startup, the integrity check and the reach are the CLI's own — and a folder
 that is not bound is refused in the words you would read typing there yourself.
 
 |  | CLI | MCP |
 | --- | --- | --- |
-| How the AI reaches amenbo | runs `amenbo` itself | calls a tool on a server the host started |
+| How the AI reaches Amenbo | runs `amenbo` itself | calls a tool on a server the host started |
 | Where the project comes from | the folder the AI was started in | the folder the call names, out of the ones in the host's settings |
 | How many projects one setup reaches | whichever folder it is standing in | the folders you listed, one per call |
 | Which commands | all of them | all of them, less `bind` and `init` |
@@ -709,7 +709,7 @@ settings screen carries a folded line pointing at that screen; the screen that h
 just made one carries a plain line instead, and following it opens the screen with
 the project you came from already ticked.
 
-One app cannot run a command at all, so for that one amenbo writes a file you open
+One app cannot run a command at all, so for that one Amenbo writes a file you open
 and the app takes the server from it — with your selection baked in as the value
 its own settings open on; every other app has an AI of its own, which is handed the
 request and does the merge, the same way `agent-hook snippet` does. The settings
@@ -733,7 +733,7 @@ typing it only leaves a process waiting for a protocol nobody is speaking.
 <details>
 <summary>Plaintext store; on-device secrecy via full-disk encryption</summary>
 
-The truth source is **plaintext** SQLite. amenbo does not encrypt the store at the
+The truth source is **plaintext** SQLite. Amenbo does not encrypt the store at the
 application layer — on-device secrecy is delegated to the operating system's
 full-disk encryption (FileVault on macOS, BitLocker on Windows), the standard
 whole-disk protection for a single-machine, local-only tool. There is nothing to
@@ -757,12 +757,12 @@ please open an issue to discuss first; see [CONTRIBUTING.md](CONTRIBUTING.md). T
 part means holding to the [Code of Conduct](CODE_OF_CONDUCT.md). To report a security
 vulnerability, don't use a public issue — follow [SECURITY.md](SECURITY.md).
 
-**Extending amenbo takes no pull request.** A plugin is just an executable in any
-language: amenbo hands it JSON on stdin and reads what it writes back. The contract an
+**Extending Amenbo takes no pull request.** A plugin is just an executable in any
+language: Amenbo hands it JSON on stdin and reads what it writes back. The contract an
 author works to — the two faces, the manifest, enabling, signatures — is
 **[Writing a plugin](https://github.com/ShiroDoromoto/amenbo-plugins/blob/main/docs/writing-a-plugin.md)**
 (also [in Japanese](https://github.com/ShiroDoromoto/amenbo-plugins/blob/main/docs/writing-a-plugin.ja.md)); `amenbo plugin validate <manifest>`
-checks a manifest against the same rules amenbo enforces at its door.
+checks a manifest against the same rules Amenbo enforces at its door.
 
 **Handing plugins out takes no server either.** A catalog is three static files, which a
 user registers by URL — the usual reason to run one is a closed shelf: plugins you have
@@ -773,8 +773,8 @@ how to make and rotate the signing key your users pin, is
 
 ## License
 
-Apache License 2.0 — see [LICENSE](LICENSE). Copyright the amenbo authors.
+Apache License 2.0 — see [LICENSE](LICENSE). Copyright the Amenbo authors.
 
-The license covers the code. It does **not** grant any right in the **amenbo name or
+The license covers the code. It does **not** grant any right in the **Amenbo name or
 the logo** (the water strider): Apache-2.0 grants no trademark rights, so a fork that
 redistributes this code must carry its own name and mark.

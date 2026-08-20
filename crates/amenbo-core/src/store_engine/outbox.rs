@@ -1,6 +1,6 @@
 //! The **plugin observation outbox** — the transactional event log a plugin's dispatcher drains.
 //!
-//! amenbo fires *semantic* lifecycle events at the edge of a plugin — `task.created`,
+//! Amenbo fires *semantic* lifecycle events at the edge of a plugin — `task.created`,
 //! `task.status_changed`, `comment.added` and their kin (see [`crate::plugin_payload`]). Those events
 //! are carried on this outbox, a table separate in every way from the [`change_feed`](super::read):
 //!

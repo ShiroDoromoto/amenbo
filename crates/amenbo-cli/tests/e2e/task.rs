@@ -977,7 +977,7 @@ fn commit_filter_walks_git_back_to_the_task() {
 
 /// The door admits full hex only (`AMB-D-281`), and the value nearest to hand is the one it refuses:
 /// `git log --oneline` prints the short form. So the refusal says the shape *and* names the one command
-/// that gets you the other spelling — amenbo does not run it, since it never reads git at all.
+/// that gets you the other spelling — Amenbo does not run it, since it never reads git at all.
 #[test]
 fn a_short_sha_is_refused_with_the_way_to_the_full_one() {
     let cli = Cli::new();

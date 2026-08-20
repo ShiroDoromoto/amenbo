@@ -1,7 +1,7 @@
 //! The MCP server as a host meets it: a real `amenbo mcp` process, driven over its own two streams.
 //!
 //! What only a real process can show is the part the unit tests stub out — that a tool call reaches
-//! amenbo at all, and that it reaches it **in the folder the call named**. Every server here is
+//! Amenbo at all, and that it reaches it **in the folder the call named**. Every server here is
 //! started from a folder that is bound to nothing, so an answer that could only have come from a
 //! folder in the set is the proof (`AMB-D-666`, `AMB-D-679`).
 
@@ -151,8 +151,8 @@ fn a_host_shakes_hands_lists_the_tools_and_calls_them() {
     server.stop();
 }
 
-/// A refusal amenbo wrote is the tool's own answer, in amenbo's own words. Anything else and the host
-/// reports that the tool broke, and what amenbo said is lost.
+/// A refusal Amenbo wrote is the tool's own answer, in Amenbo's own words. Anything else and the host
+/// reports that the tool broke, and what Amenbo said is lost.
 #[test]
 fn what_amenbo_refuses_reaches_the_caller_as_amenbo_wrote_it() {
     let cli = Cli::new();
@@ -167,7 +167,7 @@ fn what_amenbo_refuses_reaches_the_caller_as_amenbo_wrote_it() {
     server.stop();
 }
 
-/// `run` types the caller's own words at amenbo, in the folder the server was given — and the facet it
+/// `run` types the caller's own words at Amenbo, in the folder the server was given — and the facet it
 /// types is this server's, whatever the caller wrote (`AMB-D-668`).
 #[test]
 fn run_reaches_the_bound_folder_and_the_facet_is_never_the_caller_s() {

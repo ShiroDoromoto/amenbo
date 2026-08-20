@@ -1,9 +1,9 @@
-// Where an AI is connected to amenbo (`AMB-D-681`).
+// Where an AI is connected to Amenbo (`AMB-D-681`).
 //
 // **The screen is the app's, not the project's.** A server is one per app, and it reaches as many
 // folders as the reader chose (`AMB-D-679`) — so the question this screen asks is "which projects may
 // this app reach", once per app, rather than "which apps hold this project", once per project. An
-// entrance on each project would put the reader in front of the second setup asking amenbo to work
+// entrance on each project would put the reader in front of the second setup asking Amenbo to work
 // out whether they meant to add or to replace.
 //
 // **What a row hands over is the whole selection, every time.** The request asks for the entry to be
@@ -64,7 +64,7 @@ export function McpAppsScreen({ pick = null }: { pick?: number | null }) {
   // Read it again when the reader comes back to the window. On the request road the writer is the
   // other app's AI, so `onWritten` never fires here; and `mcp_probe` reads those settings files
   // directly rather than the store, so `store-changed` does not carry the change either. Coming back
-  // is the only moment amenbo has, and one read then is enough — a row still saying "not set up" is
+  // is the only moment Amenbo has, and one read then is enough — a row still saying "not set up" is
   // read as a failure, and sends the reader to hand over the same request a second time. Both events
   // are listened for, as `installReconcileTriggers` does, since a window can come back by either.
   useEffect(() => {

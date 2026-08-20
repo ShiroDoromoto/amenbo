@@ -93,7 +93,7 @@ fn runner_argv() -> Option<(String, String, String)> {
 }
 
 /// Work one plugin's observation-event queue and return, instead of starting the app — what this executable
-/// does when amenbo launched it as a runner (`AMB-D-399`, `AMB-T-2175`). `true` when that is what happened,
+/// does when Amenbo launched it as a runner (`AMB-D-399`, `AMB-T-2175`). `true` when that is what happened,
 /// which is the caller's signal to start nothing else: no window, no watcher, no migration screen.
 ///
 /// The app is the runner for the events it queued itself, because a runner is *this same executable, re-run*:
@@ -117,10 +117,10 @@ pub fn run_plugin_runner() -> bool {
 /// uses ([`amenbo_core::update_check::native_arch`]); the operating system half has no such
 /// question, no one running a Windows build on a Mac.
 ///
-/// The vocabulary here is the updater plugin's, which is neither amenbo's nor wharfy's: `darwin`
+/// The vocabulary here is the updater plugin's, which is neither Amenbo's nor wharfy's: `darwin`
 /// for macOS, and `aarch64` / `x86_64` where wharfy writes `arm64` / `x64`. Naming the key outright
 /// also settles which one is read — the plugin otherwise tries a bundle-type-suffixed key first,
-/// and the manifest amenbo publishes (`scripts/build-tauri-manifest.sh`) has only the plain ones.
+/// and the manifest Amenbo publishes (`scripts/build-tauri-manifest.sh`) has only the plain ones.
 /// `None` is "nothing to say": an operating system or an architecture with no name in that
 /// vocabulary leaves the plugin on its own default, which is what it had before this.
 #[cfg(desktop)]
@@ -188,7 +188,7 @@ pub fn run() {
       // closed no matter who asks: the front end is never offered the update either (`upstream_release`
       // in commands.rs), and neither half depends on the other holding.
       //
-      // What it is aimed at is the machine rather than this build (`updater_target`), so an amenbo
+      // What it is aimed at is the machine rather than this build (`updater_target`), so an Amenbo
       // running under emulation lands on the native one the next time the user applies an update,
       // instead of fetching its own kind forever.
       #[cfg(desktop)]

@@ -1,9 +1,9 @@
-//! The one place an id becomes the string a user sees — every exposed amenbo ref is `AMB-<kind>-<n>`.
+//! The one place an id becomes the string a user sees — every exposed Amenbo ref is `AMB-<kind>-<n>`.
 //!
 //! The value is untouched: a ref renders the INTEGER primary key, which *is* the conversational number.
 //! Only the spelling is namespaced.
 //!
-//! **Why the `AMB-` namespace.** A bare `T-<n>` collides with other trackers a user runs alongside amenbo
+//! **Why the `AMB-` namespace.** A bare `T-<n>` collides with other trackers a user runs alongside Amenbo
 //! (Jira keys are free-form, single-letter ones included), so no amount of checking the store apart tells a
 //! foreign `T-<n>` from ours — the numbers coincide. `AMB-` makes the ref self-declaring instead, which is
 //! what lets [`crate::agent`]'s lint contract key on a pure pattern with no store to consult.
@@ -12,7 +12,7 @@
 //! [`strip_namespace`] read it back off — so a parser can never fall out of step with what the screen shows,
 //! and no surface spells a ref its own way.
 
-/// The prefix every user-visible amenbo ref carries.
+/// The prefix every user-visible Amenbo ref carries.
 pub const NAMESPACE: &str = "AMB";
 
 /// What an exposed ref names. The letter is display-only for every kind but [`RefKind::Task`] and

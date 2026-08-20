@@ -795,7 +795,7 @@ export async function fetchAgentHookRequests(projectId: number): Promise<AgentHo
  * `AMB-D-681`).
  *
  * Read when the screen opens rather than on every store tick: what it reads is settings files on
- * other apps' disks, which nothing amenbo does can move. The browser iteration answers with nothing —
+ * other apps' disks, which nothing Amenbo does can move. The browser iteration answers with nothing —
  * there is no app on this machine to ask about.
  */
 export async function fetchMcpSetup(): Promise<McpSetupDto | null> {
@@ -835,7 +835,7 @@ export async function saveMcpBundle(projectIds: number[]): Promise<string | null
  *
  * **Call it only when there is an answer.** On this surface that means the row's "no" — the close button
  * records nothing and leaves the project unanswered, which is the same third value `answerHookOffer` has
- * no room for (`AMB-D-460`). A yes wires nothing either: amenbo writes no provider settings file, so what
+ * no room for (`AMB-D-460`). A yes wires nothing either: Amenbo writes no provider settings file, so what
  * a yes buys is the text, and the row keeps reporting until the paste lands.
  */
 export async function answerAgentHookOffer(projectId: number, yes: boolean): Promise<void> {
@@ -844,7 +844,7 @@ export async function answerAgentHookOffer(projectId: number, yes: boolean): Pro
 }
 
 /**
- * What this project answered about starting its AI on amenbo — true, false, or null where it has never
+ * What this project answered about starting its AI on Amenbo — true, false, or null where it has never
  * been asked. The third value is the one the project settings screen exists to show: a refusal is the
  * answer that takes the standing row away, and an unanswered project looks no different once the wiring
  * has landed.

@@ -31,18 +31,18 @@ pub fn home() -> Option<OsString> {
 /// ([`crate::plugin_callback`]).
 pub const PLUGIN_REACH_VAR: &str = "AMENBO_PLUGIN_REACH";
 
-/// `AMENBO_PLUGIN_REACH` — how far the plugin amenbo just launched may read (`AMB-D-406`): `all`, or a
-/// project's `AMB-P-<n>` ref. Set by amenbo on a plugin's process and read back when that plugin calls
+/// `AMENBO_PLUGIN_REACH` — how far the plugin Amenbo just launched may read (`AMB-D-406`): `all`, or a
+/// project's `AMB-P-<n>` ref. Set by Amenbo on a plugin's process and read back when that plugin calls
 /// `amenbo` again; unset everywhere else, where the facet and the binding decide the reach as usual.
 pub fn plugin_reach() -> Option<String> {
     var(PLUGIN_REACH_VAR)
 }
 
 /// The name of [`path`], for the one surface that **writes** it rather than reads it: a plugin is started
-/// with amenbo's own directory in front of this list ([`crate::plugin_exec`]).
+/// with Amenbo's own directory in front of this list ([`crate::plugin_exec`]).
 pub const PATH_VAR: &str = "PATH";
 
-/// `PATH` — the OS's own list of directories a bare command name is looked up in. amenbo reads it for one
+/// `PATH` — the OS's own list of directories a bare command name is looked up in. Amenbo reads it for one
 /// purpose: to hand a plugin that same list with its own directory in front, so the `amenbo` a plugin is
 /// told to call (`AMB-D-406`) is there to be found even when the process was started by a scheduler rather
 /// than by a shell (`AMB-D-716`).
@@ -86,7 +86,7 @@ pub fn perf() -> Option<String> {
 }
 
 /// `NO_COLOR` — the cross-tool convention (no-color.org) for "do not emit ANSI escapes". It is the one
-/// variable here amenbo does not name itself, because that is the whole point of it: a person turns
+/// variable here Amenbo does not name itself, because that is the whole point of it: a person turns
 /// colour off once, for every tool they run, rather than per tool.
 ///
 /// **Presence alone is the signal, whatever the value** — that is what the convention says, so an empty
@@ -111,7 +111,7 @@ pub fn update_json_url() -> Option<String> {
     var("AMENBO_UPDATE_JSON_URL")
 }
 
-/// `AMENBO_PLUGIN_CATALOG_URL` — override the plugin catalog amenbo fetches
+/// `AMENBO_PLUGIN_CATALOG_URL` — override the plugin catalog Amenbo fetches
 /// ([`crate::plugin_catalog::OFFICIAL_CATALOG_URL`]), so development and manual testing can point at a
 /// staging catalog without touching the published one.
 pub fn plugin_catalog_url() -> Option<String> {

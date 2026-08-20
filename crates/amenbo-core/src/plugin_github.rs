@@ -8,7 +8,7 @@
 //! per repository, lazily, and only for an entry a user chose to open — never for a list.
 //!
 //! **Nothing here is trusted, and nothing here decides anything.** These are display figures: an
-//! install is gated by the asset's signature against amenbo's own key (`AMB-D-371`), never by a star
+//! install is gated by the asset's signature against Amenbo's own key (`AMB-D-371`), never by a star
 //! count. The README arrives as Markdown text and is rendered by the front end, which allows no raw
 //! HTML. It is asked for only where it would be drawn ([`Readme`]): a plugin whose author wrote a
 //! description of it has that on its detail face instead, so nothing goes and gets the README
@@ -19,7 +19,7 @@
 //! fetch-on-every-open would run a browsing user into a wall in twenty clicks. Facts are therefore
 //! cached per repository, on disk, and a cache inside [`FRESH_FOR`] answers with no request at all —
 //! the same discipline as the catalog cache, with a window sized to the limit rather than to
-//! freshness. amenbo sends no credentials: there is no account to attach one to, and a plugin's star
+//! freshness. Amenbo sends no credentials: there is no account to attach one to, and a plugin's star
 //! count is public.
 //!
 //! Being offline costs the numbers, not the view: every request fails on its own, a partial answer
@@ -61,7 +61,7 @@ const CACHE_DIR_NAME: &str = "github";
 /// requests fail independently, and a repository with no release simply has no download count.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RepoFacts {
-    /// Stargazers — `AMB-D-347`'s stand-in for popularity, since amenbo counts no installs.
+    /// Stargazers — `AMB-D-347`'s stand-in for popularity, since Amenbo counts no installs.
     pub stars: Option<u64>,
     /// Downloads of the current release's assets, summed. `None` when the repository has published no
     /// release. The figure includes whatever else pulls an asset (CI, mirrors), so it is a scale, not
@@ -201,7 +201,7 @@ fn api_url() -> String {
     crate::env::github_api_url().unwrap_or_else(|| GITHUB_API_URL.to_string())
 }
 
-/// A repository reference amenbo will act on: exactly `owner/name`, both made of the characters
+/// A repository reference Amenbo will act on: exactly `owner/name`, both made of the characters
 /// GitHub allows in one. The check is what keeps a catalog's string out of the parts of a URL it has
 /// no business reaching — a query, another host, a path segment above the cache directory.
 fn checked_repo(repo: &str) -> Result<String> {
@@ -291,7 +291,7 @@ struct FetchError {
     rate_limited: bool,
 }
 
-/// One GET against the GitHub API. amenbo identifies itself (GitHub refuses a request with no
+/// One GET against the GitHub API. Amenbo identifies itself (GitHub refuses a request with no
 /// `User-Agent`) and sends nothing else — no token, no cookie, no user data.
 fn get(url: &str, accept: &str) -> std::result::Result<String, FetchError> {
     let agent: ureq::Agent =

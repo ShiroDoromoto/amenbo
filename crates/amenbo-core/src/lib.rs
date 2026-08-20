@@ -1,4 +1,4 @@
-//! amenbo's core library: the domain model, persistence, operations and export live here, and the CLI,
+//! Amenbo's core library: the domain model, persistence, operations and export live here, and the CLI,
 //! the GUI and AI agents are thin skins over it. There is no central server — the data is portable and
 //! local-first — and the conceptual model it exposes is one coherent, CLI- and AI-native whole.
 

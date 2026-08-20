@@ -1,9 +1,9 @@
 //! The `amenbo agent --json` spec — the single source of truth for an AI agent. This spec alone
-//! teaches everything an AI needs to operate amenbo: the philosophy, every command and flag, the
+//! teaches everything an AI needs to operate Amenbo: the philosophy, every command and flag, the
 //! workflow, the rules, and what state to read. It lives in core so the CLI (`amenbo agent`) and the
 //! GUI (the command palette / ⌘K Tauri command) are both fed from the same source. That every
 //! subcommand in `cli.rs` shows up here is held by an integration test on the CLI side, which
-//! catches a command that was never registered. amenbo is a single local store — there is no
+//! catches a command that was never registered. Amenbo is a single local store — there is no
 //! sharing, sync, key or multi-device face — so the spec always returns the one personal shape
 //! (`mode: personal`).
 
@@ -642,7 +642,7 @@ pub fn retarget_prose(text: &str) -> String {
 }
 
 /// A command name that is a plain English noun as often as it is a command, and so cannot be read as
-/// one in prose: "a minimum amenbo version" is about the product, not a line to type. Retargeting it
+/// one in prose: "a minimum Amenbo version" is about the product, not a line to type. Retargeting it
 /// would rename the product; not retargeting it costs one prose mention of `amenbo version`, which
 /// the examples carry anyway.
 const NOT_A_COMMAND_IN_PROSE: [&str; 1] = ["version"];
@@ -970,7 +970,7 @@ fn agent_cycle() -> Value {
 
 /// cold path: the trigger-indexed catalog the backbone branches to. Each cycle separates a
 /// `backbone` — what always applies within that cycle, in order — from `optional` items, done only
-/// when the item's `trigger` situation matches. This is how amenbo *shows what you can do* without
+/// when the item's `trigger` situation matches. This is how Amenbo *shows what you can do* without
 /// directing you to do it: the AI self-gates on the trigger.
 ///
 /// The items are [`Step`]s, the same structure the hot path is written in, so every one of them has
@@ -1382,11 +1382,11 @@ const BACKBONE: &str = "agentCycle";
 ///
 /// The join is one-directional and that is the point. A plugin's manifest names a step
 /// ([`crate::plugin_agent::tools`] is where the naming is read); nothing here names a plugin, so
-/// amenbo's source stays free of any plugin's name (`AMB-D-346`) and this spec keeps saying the same
+/// Amenbo's source stays free of any plugin's name (`AMB-D-346`) and this spec keeps saying the same
 /// true thing with none installed. What lands is the line to type and nothing around it — the words
 /// about it are on the `plugins` shelf, where a reader can tell whose they are (`AMB-D-437`).
 ///
-/// **A ref that names nothing here is dropped, not reported.** The steps travel with amenbo and a
+/// **A ref that names nothing here is dropped, not reported.** The steps travel with Amenbo and a
 /// manifest stays where it was installed, so a ref can outlive the step it named; the runtime also
 /// drops whole cycles that do not apply (the `worktree` cycle off a git checkout), which would make an
 /// accurate ref look like a broken one. Either way the reader loses a line they had no use for.
@@ -1428,7 +1428,7 @@ fn cmd(name: &str, summary: &str, flags: Value, examples: Value) -> Value {
     json!({ "name": name, "summary": summary, "flags": flags, "examples": examples })
 }
 
-/// Lists what amenbo can do, phrased by intent and neutral about order. Each capability names the
+/// Lists what Amenbo can do, phrased by intent and neutral about order. Each capability names the
 /// commands that realise it in `commands`; no sequence, no recommended workflow — capability first.
 /// Only commands that actually exist in `all_commands()` may be named, which the
 /// `capabilities_reference_real_commands` test enforces, catching both a typo and a command nobody
@@ -2810,7 +2810,7 @@ mod tests {
     }
 
     /// A ref naming nothing in this document is dropped where it falls, and never invents what it
-    /// names. The steps travel with amenbo while a manifest stays where it was installed, so an
+    /// names. The steps travel with Amenbo while a manifest stays where it was installed, so an
     /// unknown ref is the ordinary end of a step renamed or a cycle the runtime left out — not an
     /// error to raise at a reader who cannot act on it.
     #[test]
@@ -3051,7 +3051,7 @@ mod tests {
     /// The other half of the retarget: prose that tells the reader to type something must move too,
     /// while prose that names the product must not. Both directions are checked on the dev spelling,
     /// where the two spellings finally differ — and the second is the one that needs a test, since a
-    /// rule loose enough to catch every command would also rename the product ("a newer amenbo").
+    /// rule loose enough to catch every command would also rename the product ("a newer Amenbo").
     #[test]
     fn retargeting_prose_moves_commands_and_leaves_the_product_alone() {
         let mut dev = spec_as_authored();

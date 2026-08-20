@@ -67,7 +67,7 @@ pub(crate) fn signal_name(_status: &std::process::ExitStatus) -> String {
 
 /// `args` with the inputs every call needs but almost no test is *about*, filled in.
 ///
-/// The facet, declared on the command line — `--actor <facet>` appended, which is the one input amenbo
+/// The facet, declared on the command line — `--actor <facet>` appended, which is the one input Amenbo
 /// is to take it by (`AMB-D-408`). A test that declares its own facet in `args` is left alone, so
 /// `--actor ai` in a call still means what it says. The flag beats anything the environment carries, so
 /// a run is the same whatever the shell the tests were started from had set.
@@ -129,7 +129,7 @@ impl Cli {
     }
 
     /// Run `--json` from a different CWD against the same `AMENBO_HOME`. Needed to exercise behaviour
-    /// **outside** a bound folder — a folder you never run amenbo in gets no automatic follow-up.
+    /// **outside** a bound folder — a folder you never run Amenbo in gets no automatic follow-up.
     pub(crate) fn json_from(&self, cwd: &std::path::Path, args: &[&str]) -> Value {
         let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &self.home)

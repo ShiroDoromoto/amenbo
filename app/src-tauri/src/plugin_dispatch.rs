@@ -35,7 +35,7 @@ use amenbo_core::{plugin_installed, Store};
 /// subcommand.
 ///
 /// It is deliberately not something a user would land on: an app started this way puts up no window, and the
-/// only caller is amenbo itself.
+/// only caller is Amenbo itself.
 pub const RUNNER_FLAG: &str = "--plugin-runner";
 
 /// The argv prefix core re-runs this executable through — the flag, and nothing else. Core follows it with

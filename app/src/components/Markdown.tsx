@@ -8,8 +8,8 @@
 // HTML is not allowed (no rehype-raw).
 //
 // Nothing here ever navigates the window. The app is a single page with no address bar and no way
-// back, so a followed link either strands the user outside amenbo or — for a link that resolves
-// against amenbo's own origin — reloads the SPA and drops it back at its opening screen. So a link is
+// back, so a followed link either strands the user outside Amenbo or — for a link that resolves
+// against Amenbo's own origin — reloads the SPA and drops it back at its opening screen. So a link is
 // sorted by what it names: a ref opens in the app, an http(s) URL opens in the browser, `#section`
 // stays in the document, and anything else (a relative path, an unknown scheme) is drawn as its text.
 //
@@ -19,7 +19,7 @@
 // a note, a comment and a decision body have no such origin, so they leave it unset and a relative
 // link there stays inert.
 //
-// An image is never drawn as one. amenbo's own bodies keep images in attachments rather than inline
+// An image is never drawn as one. Amenbo's own bodies keep images in attachments rather than inline
 // (`conventions.markdown`), and a body from outside — a plugin's README — cannot draw one either: the
 // app's CSP allows no remote image, so the browser would put a broken-image frame where the picture
 // was. What still carries meaning is the alt text, most visibly in the badge row a README opens with,
@@ -217,7 +217,7 @@ async function openRef(raw: string, nav: RefNav): Promise<void> {
   else nav.selectDecision?.(target.id);
 }
 
-/** A link that leaves amenbo: it keeps its href (copy-link, and what the status bar shows) and the
+/** A link that leaves Amenbo: it keeps its href (copy-link, and what the status bar shows) and the
  * click is diverted to the browser instead of the webview. */
 function browserLink(href: string, children: ReactNode) {
   return (
@@ -273,7 +273,7 @@ export function Markdown({ children, linkBase }: {
         }
         // An http(s) link goes to the browser, never to this window. The app window has no address
         // bar and no way back, so letting the webview follow a link would strand the user outside
-        // amenbo with the app gone — and a rendered README (`AMB-D-347`) is mostly such links.
+        // Amenbo with the app gone — and a rendered README (`AMB-D-347`) is mostly such links.
         if (href && isExternalHref(href)) return browserLink(href, children);
         // A link inside the document (`#section`) stays a link, and following it only moves the scroll
         // position. The jump is made here rather than left to the browser, whose own is document-wide:
@@ -289,7 +289,7 @@ export function Markdown({ children, linkBase }: {
           );
         }
         // A relative link — a README's `LICENSE`, `./docs/x.md` — must never be followed as written: it
-        // resolves against *this app's* origin, so the webview lands on amenbo's own index.html, the
+        // resolves against *this app's* origin, so the webview lands on Amenbo's own index.html, the
         // whole SPA reloads and comes back at its opening screen, which reads as the detail closing
         // itself. Resolved against the repository it was written in, it names a real file and goes to
         // the browser like any other outside link.

@@ -1,4 +1,4 @@
-//! The `tick` domain: the machine's own scheduler waking amenbo, and what amenbo works out once it
+//! The `tick` domain: the machine's own scheduler waking Amenbo, and what Amenbo works out once it
 //! is awake.
 //!
 //! **The wake is the assert.** A tick leaves a day mark behind and nothing else a reader can ask

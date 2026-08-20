@@ -51,7 +51,7 @@ impl Driver<'_> {
                 Ok(Outcome::action(format!("copied the fixture {from} to {path} ({} bytes)", bytes.len())))
             }
             // The hooks are written into a git repository, so the scenario has to stand one up first.
-            // This is the one step that is not amenbo — everything it proves is about what amenbo
+            // This is the one step that is not Amenbo — everything it proves is about what Amenbo
             // then does to a repository that is really there.
             //
             // It leaves a `main` with one commit on it, rather than the branchless state a bare
@@ -84,7 +84,7 @@ impl Driver<'_> {
                 ])?;
                 Ok(Outcome::action("made the run's folder a git repository on `main`".to_string()))
             }
-            // The edit the handed-over text asks for. amenbo writes no settings file, so this stands
+            // The edit the handed-over text asks for. Amenbo writes no settings file, so this stands
             // in for the AI the reader gives that text to — and it takes both halves of the answer
             // from the build under test: the configuration the request carries, and the file the
             // build says it belongs in. Writing either of them down here instead would leave the road
@@ -111,7 +111,7 @@ impl Driver<'_> {
                 std::fs::write(&full, configuration).map_err(|e| format!("could not write {into}: {e}"))?;
                 Ok(Outcome::action(format!("made the edit {tool}'s text asks for, in {into}")))
             }
-            // An app already reaching this folder over MCP. amenbo hands that entry over on screen, and
+            // An app already reaching this folder over MCP. Amenbo hands that entry over on screen, and
             // the one app it writes a file for takes a bundle a person opens — so there is nothing to
             // ask the build for here, and the shape below is the driver's own. What that costs is
             // drift, and it costs it the safe way round: an entry the build no longer reads leaves the
@@ -138,7 +138,7 @@ impl Driver<'_> {
                     None => self.session.cwd.clone(),
                 };
                 let full = folder.join(self.inside(place)?);
-                // The folder the entry binds the server to, canonical: that is the form amenbo records
+                // The folder the entry binds the server to, canonical: that is the form Amenbo records
                 // a binding in, and the two have to be the same word for the entry to be read as this
                 // folder's.
                 let folder = std::fs::canonicalize(&folder).unwrap_or(folder);
@@ -146,7 +146,7 @@ impl Driver<'_> {
                     "command": "amenbo",
                     "args": ["mcp", "--dir", folder.to_string_lossy()],
                 });
-                // Filed under the launch command's own name, which is what amenbo looks for. This
+                // Filed under the launch command's own name, which is what Amenbo looks for. This
                 // harness drives a release build and refuses anything else, so that name is `amenbo`
                 // here — a dev build files its own, and is never what is under test.
                 let mut entries = serde_json::Map::new();
@@ -219,7 +219,7 @@ impl Driver<'_> {
                     ),
                 ))
             }
-            // Whether this folder starts its AI on amenbo, read off the report amenbo carries on
+            // Whether this folder starts its AI on Amenbo, read off the report Amenbo carries on
             // every response until it does. There is no command that answers this on its own, and
             // that is the design: the answer travels on whatever the reader was already running, so
             // it reaches an AI that never thought to ask.
@@ -231,7 +231,7 @@ impl Driver<'_> {
                 // `any_wired` is the answer while the report stands, and on this face it stands
                 // until every tool in the catalog is wired — the reader here names its own, so one
                 // provider wired leaves the rest still worth carrying. A report gone silent is that
-                // same fact at its limit, and both readings say this folder starts its AI on amenbo.
+                // same fact at its limit, and both readings say this folder starts its AI on Amenbo.
                 let is_wired = report.is_null() || report["any_wired"].as_bool() == Some(true);
                 let points_at = named.is_none_or(|tool| {
                     report["unwired"]
@@ -242,7 +242,7 @@ impl Driver<'_> {
                 Ok(Outcome::assert(
                     pass,
                     format!(
-                        "this folder {} its AI on amenbo{} (expected {}, {})",
+                        "this folder {} its AI on Amenbo{} (expected {}, {})",
                         if is_wired { "starts" } else { "does not start" },
                         match named {
                             Some(tool) if points_at => format!(", and {tool} is named as unwired"),

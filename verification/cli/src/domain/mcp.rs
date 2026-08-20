@@ -1,4 +1,4 @@
-//! The `mcp` domain: amenbo reached over a protocol rather than typed at.
+//! The `mcp` domain: Amenbo reached over a protocol rather than typed at.
 //!
 //! Every other domain here drives the shipped binary one invocation at a time and reads what it
 //! printed. This one drives it as a **server**: started once for a set of folders, kept alive for the
@@ -7,7 +7,7 @@
 //! command has an exit code.
 //!
 //! **The binary is the same one, in the same isolated store.** A server that reached anywhere else
-//! would be a second amenbo and would prove nothing about the one under test, so it is spawned
+//! would be a second Amenbo and would prove nothing about the one under test, so it is spawned
 //! through the same invocation the rest of the driver uses: the run's `AMENBO_HOME`, and the folders
 //! the step names.
 //!

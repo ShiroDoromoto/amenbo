@@ -14,7 +14,7 @@
 //!
 //! Usage: `verify-all [<scenario-or-dir>...] [--bin <amenbo>] [--json] [--keep]`
 //!   positional  scenario `.yaml` files and/or directories to scan (default: `scenarios/`)
-//!   `--bin`     path to the amenbo binary to drive (default: `$AMENBO_BIN`, else `amenbo` on PATH)
+//!   `--bin`     path to the Amenbo binary to drive (default: `$AMENBO_BIN`, else `amenbo` on PATH)
 //!   `--json`    emit a machine-readable aggregate instead of the human summary
 //!   `--keep`    leave each throwaway store in place for inspection
 //!

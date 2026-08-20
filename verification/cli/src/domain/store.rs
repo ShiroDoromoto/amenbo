@@ -1,4 +1,4 @@
-//! The `store` domain: this device's amenbo rather than anything filed in it — what comes out
+//! The `store` domain: this device's Amenbo rather than anything filed in it — what comes out
 //! (`export`), what is set aside (`backup`), what goes back in (`restore`), whether it is sound,
 //! and the settings it keeps.
 
@@ -97,7 +97,7 @@ impl Driver<'_> {
             // filed spread back over that many separate days.
             //
             // It is the reach `age-blobs` makes, one file in rather than one out: state a road has to
-            // arrive at and cannot reach by using amenbo. Nothing it leaves is a shape amenbo would
+            // arrive at and cannot reach by using Amenbo. Nothing it leaves is a shape Amenbo would
             // not have written itself — the scalars are the ones it tallies into, and a record whose
             // `updated_at` sits on an earlier day is a record somebody touched that day.
             "worn-in" => {
@@ -123,7 +123,7 @@ impl Driver<'_> {
         match op {
             "snapshot" => {
                 let path = self.artifact_ref(with, "target")?;
-                // A word that must not be in what amenbo handed out. Read as bytes and searched for
+                // A word that must not be in what Amenbo handed out. Read as bytes and searched for
                 // verbatim: a value stored in the clear is in the clear whatever the layout around
                 // it is, and that is the whole question — no claim about what the archive *does*
                 // carry is made here.
@@ -272,7 +272,7 @@ impl Driver<'_> {
 
     /// Is the object an earlier step bound in the document written by another? The document is read
     /// off disk as it stands, because that document is the whole promise of the capability: what the
-    /// other side receives is this file, not what amenbo would say about it.
+    /// other side receives is this file, not what Amenbo would say about it.
     ///
     /// Two capabilities hand one out and the question put to both is the same, so the reading is one:
     /// `exported` names an archive, whose records lie in an `export.json` beside the attachment files,
@@ -330,7 +330,7 @@ fn judge_check(tool: &str, want: bool, v: &serde_json::Value) -> Outcome {
     )
 }
 
-/// Whether what amenbo wrote at `path` carries `needle` anywhere in its bytes, and how many bytes
+/// Whether what Amenbo wrote at `path` carries `needle` anywhere in its bytes, and how many bytes
 /// were read to say so. What a `store` action hands out is one file for a backup and a whole folder
 /// for an export, so both shapes are walked — a value that leaked into any one file in there leaked.
 fn carries_text(path: &Path, needle: &str) -> Result<(bool, u64), String> {
@@ -429,7 +429,7 @@ fn wear_in(home: &Path, launches: i64, days: i64) -> Result<String, String> {
         .map_err(sql)?;
     }
 
-    // The first-launch day is the reader's day and not UTC — that is the day amenbo writes there,
+    // The first-launch day is the reader's day and not UTC — that is the day Amenbo writes there,
     // and a scalar two builds disagree about is worse than one nobody reads. The instants above are
     // UTC for the same reason from the other side: that is how every record in the store carries one.
     let first_day: String = conn

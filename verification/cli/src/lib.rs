@@ -13,7 +13,7 @@
 //! report. The steps themselves live in [`domain`], one module per domain, and are reached by
 //! handing each step to the domain it names.
 
-/// The throwaway store an amenbo run is given. Public because every bin in this crate needs it:
+/// The throwaway store an Amenbo run is given. Public because every bin in this crate needs it:
 /// asking the shipped binary anything at all means giving it a home that is not the user's.
 pub mod scratch;
 
@@ -161,7 +161,7 @@ pub(crate) struct Driver<'a> {
     /// which reads the same whether the answer mentioned it or not.
     last_unbind: Option<serde_json::Value>,
     /// What the last `bind --rebind` answered. Kept for the same reason again, and here it is the id:
-    /// no read amenbo offers publishes a binding's, so which row moved is said once, as it moves.
+    /// no read Amenbo offers publishes a binding's, so which row moved is said once, as it moves.
     last_rebind: Option<serde_json::Value>,
     /// Where each folder a step moved used to stand, under the name the road calls it by. A moved
     /// folder is the one thing a later step cannot ask the session for — asking places it, and a path
@@ -241,7 +241,7 @@ impl<'a> Driver<'a> {
     /// — the pointer that decides what a run reaches is found by walking up from the CWD — so those
     /// steps ask their question from inside the folder they are asking about.
     fn invoke_in(&self, cwd: &Path, args: &[&str]) -> Result<std::process::Output, String> {
-        // The facet goes on the command line, which is the one input amenbo is to take it by; a call
+        // The facet goes on the command line, which is the one input Amenbo is to take it by; a call
         // that names its own is left alone.
         let mut with_facet = args.to_vec();
         if !args.contains(&"--actor") {
@@ -372,7 +372,7 @@ impl<'a> Driver<'a> {
         Ok(p)
     }
 
-    /// The code a refusal came back with, but only while a step is expecting one. amenbo prints the
+    /// The code a refusal came back with, but only while a step is expecting one. Amenbo prints the
     /// error object on **stderr** and leaves stdout empty, so a refusal is read off the stream it is
     /// actually on rather than the one a result would come back on. `None` when no refusal is
     /// expected, when the command succeeded, or when the failure carries no error object at all —
@@ -406,7 +406,7 @@ impl<'a> Driver<'a> {
         }
     }
 
-    /// Run an operation the step says amenbo will turn away, and judge the refusal — the guard in
+    /// Run an operation the step says Amenbo will turn away, and judge the refusal — the guard in
     /// front of an operation is only proven by meeting it, and a driver that reads every non-zero
     /// exit as its own failure can never write that line down.
     ///
@@ -469,7 +469,7 @@ impl<'a> Driver<'a> {
     }
 
     /// Judge an assert by handing it to the domain that answers for it. Two ops are named for what
-    /// they are about rather than for a domain of their own: a document amenbo handed out — an
+    /// they are about rather than for a domain of their own: a document Amenbo handed out — an
     /// export's archive, a carrier's snapshot — is read for whatever kind of row is looked for in it.
     fn assert(&self, domain: Domain, op: &str, with: &Args) -> Result<Outcome, String> {
         if op == "exported" || op == "synced" {
@@ -559,7 +559,7 @@ impl<'a> Driver<'a> {
     }
 
     /// Where to stand for a step that names a `project:` — the folder this run linked to it when the
-    /// premise raised it. Some of what amenbo holds is held per project, and a terminal says which
+    /// premise raised it. Some of what Amenbo holds is held per project, and a terminal says which
     /// project it means by standing in a folder bound to that one; there is no flag for it. A step
     /// that names none gets `None`, which is the run's own working directory: bound to nothing, and
     /// so answering to the store's default project.

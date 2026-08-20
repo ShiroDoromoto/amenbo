@@ -41,12 +41,12 @@ impl Driver<'_> {
                 self.last_unbind = Some(v);
                 Ok(Outcome::action(format!("unbound {path}")))
             }
-            // Leave the folder's pointer in the shape an older amenbo wrote: a `project_id` that is
-            // not the integer key. Nothing amenbo ships writes one any more, and that is the point —
+            // Leave the folder's pointer in the shape an older Amenbo wrote: a `project_id` that is
+            // not the integer key. Nothing Amenbo ships writes one any more, and that is the point —
             // this is the state on disk that `doctor --fix` exists to put right, so the scenario has
             // to make it, exactly as `repo write-file` makes the file a person already had.
             //
-            // It is written from outside the folder rather than by running anything in it: amenbo
+            // It is written from outside the folder rather than by running anything in it: Amenbo
             // heals the pointer of a folder it is run in, so a visit would undo this before the
             // repair under test ever saw it.
             "legacy-pointer" => {
@@ -86,7 +86,7 @@ impl Driver<'_> {
             }
             // The folder goes and stands somewhere else, with everything lying in it — its pointer
             // above all, which is what makes the new place the same folder rather than a bare
-            // directory. Nothing here touches amenbo: to the registry a rename, a move and a restore
+            // directory. Nothing here touches Amenbo: to the registry a rename, a move and a restore
             // beside the original are one event, and it is one it is never told about.
             //
             // Where it stood is remembered canonically and *before* it goes: the registry records the
@@ -229,7 +229,7 @@ impl Driver<'_> {
                     ),
                 ))
             }
-            // amenbo does not go quietly to work in whatever is left of a project one of whose folders
+            // Amenbo does not go quietly to work in whatever is left of a project one of whose folders
             // has vanished: the read stops, and the answer lines the gone bindings up by id beside the
             // command that re-points them. Asked from a folder that is still there — the moved one's
             // new home is one, since the pointer travelled with it.
@@ -335,7 +335,7 @@ impl Driver<'_> {
 
     /// The id of the binding still pointing at `gone`, read the way the reader reading it does: from
     /// what `bind` answers in a folder whose project has one that vanished. Asking is the only way —
-    /// a binding's id is in no read amenbo offers — which is exactly why the answer carries it.
+    /// a binding's id is in no read Amenbo offers — which is exactly why the answer carries it.
     fn vanished_id(&self, ask_from: &Path, gone: &Path) -> Result<i64, String> {
         let err = self.refusal_in(ask_from, &["bind", "--json"])?;
         let code = err["code"].as_str().unwrap_or_default();

@@ -94,7 +94,7 @@ impl Driver {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Step {
     /// A domain operation that changes state — or, with `refused:` among its args, one the
-    /// scenario says amenbo will turn away.
+    /// scenario says Amenbo will turn away.
     Action {
         domain: Domain,
         op: String,
@@ -161,27 +161,27 @@ pub enum Domain {
     /// A classification axis and its values. The axis and its value are named by the words a user
     /// types — a dimension is reached by name, not by an id an earlier step bound.
     Dimension,
-    /// This device's amenbo itself, rather than anything filed in it: its configuration, the
+    /// This device's Amenbo itself, rather than anything filed in it: its configuration, the
     /// identity it answers `whoami` with, the build in place — and the store as a whole, which is
     /// what comes out of it (`export`), what is set aside (`backup`), what goes back in (`restore`)
     /// and whether it is sound (`doctor`).
     Store,
     /// A folder and the project its `.amenbo` pointer names — what an AI launched there may reach.
     Folder,
-    /// A file or a link hung on a task, a decision or a comment — the one place amenbo carries bytes.
+    /// A file or a link hung on a task, a decision or a comment — the one place Amenbo carries bytes.
     Attachment,
-    /// The working folder amenbo is used from, rather than anything in the store: the files a person
+    /// The working folder Amenbo is used from, rather than anything in the store: the files a person
     /// has lying there, and the git repository the lint hooks stand in front of the commits of.
     Repo,
     /// A plugin on this machine: what is installed, whose gate is open, what a call returned, and
     /// what the execution log kept. Named by the name it carries in the catalog, never by a binding.
     Plugin,
-    /// amenbo reached the other way round: a server the host of an AI starts, spoken to over
+    /// Amenbo reached the other way round: a server the host of an AI starts, spoken to over
     /// JSON-RPC rather than typed at. A domain of its own because what a road walks here is the
     /// protocol — a server standing for one folder, the tools it publishes, and what a call through
     /// one comes back with — and none of that is a record in the store.
     Mcp,
-    /// The hourly wake-up: the machine's own scheduler starting amenbo, what amenbo works out once
+    /// The hourly wake-up: the machine's own scheduler starting Amenbo, what Amenbo works out once
     /// it is awake — and the device's consent to any of it, which is the one part of the
     /// tick a person meets on a screen: the band that puts the question across the app, and the
     /// settings row that holds the answer afterwards. A domain of its own because all of it is about
@@ -450,7 +450,7 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "bind", required: &["dir"], refs: &["project"], strings: &["dir"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "unbind", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "sync-guide", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
-    // A pointer left in the shape an older amenbo wrote, in a folder that is bound. Nothing amenbo
+    // A pointer left in the shape an older Amenbo wrote, in a folder that is bound. Nothing Amenbo
     // does today writes one — it is the state a repair exists for, so a scenario about the repair has
     // to put the folder in it, the way `repo write-file` puts a file a person already had.
     OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "legacy-pointer", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
@@ -517,8 +517,8 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-init", required: &[], refs: &[], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-install", required: &[], refs: &[], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-uninstall", required: &[], refs: &[], strings: &[], binds: false },
-    // The paste that starts this folder's AI on amenbo at every session, put where the build says it
-    // goes. amenbo hands the text over and never writes that file, so somebody has to do it for the
+    // The paste that starts this folder's AI on Amenbo at every session, put where the build says it
+    // goes. Amenbo hands the text over and never writes that file, so somebody has to do it for the
     // road to carry on — the driver stands in for the hand that pastes, the way `write-file` stands
     // in for a file a person already had. `tool` is the provider, by the name the build's own
     // catalog answers to.
@@ -537,7 +537,7 @@ const REGISTRY: &[OpSpec] = &[
     // that wrote into it would be setting the person driving it up as a side effect of a road.
     //
     // Unlike `wire-ai` this cannot ask the build for what to write: the entry an app is set up from is
-    // handed over on screen, and the one app amenbo writes a file for takes a bundle a person opens.
+    // handed over on screen, and the one app Amenbo writes a file for takes a bundle a person opens.
     // So the shape is the driver's, and it drifts the safe way round — an entry the build no longer
     // reads leaves the folder unreached, which turns the road that says the report went red rather
     // than green.
@@ -555,7 +555,7 @@ const REGISTRY: &[OpSpec] = &[
     //
     // Choosing which tool the text is for, where more than one is on offer. It is the move that says the
     // offer is a catalog and not a single line: a folder that points at no provider is handed every one
-    // amenbo knows, and the only way to show they are all reachable is to reach one the folder shows no
+    // Amenbo knows, and the only way to show they are all reachable is to reach one the folder shows no
     // trace of and read the text change to it (`ai-launch-notice` on that tool's own file).
     //
     // And dropping the answer, which is a move of its own rather than a third answer: it puts the project
@@ -584,7 +584,7 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-request-pick", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "ai-launch-request-copy", required: &["tool"], refs: &[], strings: &["tool"], binds: false },
     // The other way in for an AI whose host cannot open a folder at all, which is folded away until it
-    // is asked for. Most readers never need it — somebody working from a terminal has amenbo already —
+    // is asked for. Most readers never need it — somebody working from a terminal has Amenbo already —
     // so it is one item to walk past, and everything about it is behind this one move.
     //
     // Opening it is a step of the road rather than something the operator does on the way, and for the
@@ -618,9 +618,9 @@ const REGISTRY: &[OpSpec] = &[
     // that retained pair back, and consumes it, so a second one has nothing to return to.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "update", required: &["name"], refs: &[], strings: &["name"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "rollback", required: &["name"], refs: &[], strings: &["name"], binds: false },
-    // An installed plugin left recording a build the catalog has moved past. What amenbo calls an update
+    // An installed plugin left recording a build the catalog has moved past. What Amenbo calls an update
     // is the installed manifest's checksum differing from the catalog's, and a scenario cannot reach that
-    // state by using amenbo: the catalog publishes one build, and the trust model means no other one can
+    // state by using Amenbo: the catalog publishes one build, and the trust model means no other one can
     // be signed into existence to install first. So the driver writes the disagreement, and the real
     // catalog is the build that is moved to — the same idea as `folder legacy-pointer`.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "stale-manifest", required: &["name"], refs: &[], strings: &["name"], binds: false },
@@ -634,7 +634,7 @@ const REGISTRY: &[OpSpec] = &[
     // `required: true` writes the flag that says the plugin cannot work without an answer, which is what
     // an enable at a crossing holding no value for it is refused over. It is a word on this declaration
     // rather than an op of its own: the field written is the same field, and what the flag changes is
-    // what amenbo then does about an empty one.
+    // what Amenbo then does about an empty one.
     //
     // `readonly: true` writes the flag that says the value is the plugin's own to fill in and not the
     // user's. It is a word on this declaration for the reason `required` is: the field
@@ -650,12 +650,12 @@ const REGISTRY: &[OpSpec] = &[
     // both halves are unreachable for the same reason and are written by the same door.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-setting", required: &["name", "key"], refs: &[], strings: &["name", "key", "label"], binds: false },
     // An installed plugin declaring a setting its author marked secret. Which settings a plugin takes
-    // is the author's word and amenbo never invents one, so the only honest way to reach this state is
+    // is the author's word and Amenbo never invents one, so the only honest way to reach this state is
     // for a plugin that declares one to be published — and no plugin in the official catalog does. The
     // secret route (off the store, off every backup, injected as an environment variable) is the half
     // of `plugin config` that fails silently and in plain text, so it is not left unwalked until one
     // is: the driver writes the declaration onto the installed manifest, the way `stale-manifest`
-    // writes the disagreement it needs. Everything after it is amenbo's own doing.
+    // writes the disagreement it needs. Everything after it is Amenbo's own doing.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-secret", required: &["name", "key"], refs: &[], strings: &["name", "key", "label"], binds: false },
     // An installed plugin declaring a setting whose answers its author listed, and the one that stands
     // while nobody has answered. Same reason as `declare-secret`: which settings a plugin takes is the
@@ -682,13 +682,13 @@ const REGISTRY: &[OpSpec] = &[
     // is a door no install reaches. `cmd` is the call the check raises.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-check", required: &["name", "cmd"], refs: &[], strings: &["name", "cmd"], binds: false },
     // An installed plugin saying, in its author's words, when to reach for it and what to type. What a
-    // plugin says for itself is written in its manifest and amenbo invents none of it, so this is the
+    // plugin says for itself is written in its manifest and Amenbo invents none of it, so this is the
     // author's block arriving the only way it can — written onto the installed manifest, the way
     // `declare-secret` writes a declaration no published plugin carries. Which is also why the scenario
     // does not read the catalog's own wording back: an author may reword their block any day, and a line
-    // asserting today's sentence would go red on a change amenbo had no part in. `when` is the occasion;
-    // `cmd` and `does` are one call, which is enough to see the calling form amenbo puts in front of it.
-    // `steps` is where that call says it is a tool — the ids of amenbo's own steps, comma-separated, the
+    // asserting today's sentence would go red on a change Amenbo had no part in. `when` is the occasion;
+    // `cmd` and `does` are one call, which is enough to see the calling form Amenbo puts in front of it.
+    // `steps` is where that call says it is a tool — the ids of Amenbo's own steps, comma-separated, the
     // way an author writes them. It is the author's word too, and no published plugin writes one yet, so
     // the road to a step carrying a tool is only walkable once a block here declares it.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-agent", required: &["name", "when"], refs: &[], strings: &["name", "when", "cmd", "does", "steps"], binds: false },
@@ -697,10 +697,10 @@ const REGISTRY: &[OpSpec] = &[
     // saying nothing means `project`, and **every plugin the official catalog serves says nothing** — so
     // the device layer is a state no install reaches, and the road a machine-wide plugin walks is only
     // walkable once this writes the declaration onto the installed manifest. Everything after it is
-    // amenbo's own: which rows the enable opens, and how wide a window the run is handed.
+    // Amenbo's own: which rows the enable opens, and how wide a window the run is handed.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-scope", required: &["name", "scope"], refs: &[], strings: &["name", "scope"], binds: false },
     // An installed plugin that is nobody's but its author's. The badge is the catalog's to grant and no
-    // author can write it onto themselves, which is what makes it the one thing amenbo can safely split
+    // author can write it onto themselves, which is what makes it the one thing Amenbo can safely split
     // a stranger from a colleague by — and it is also why a road cannot reach a stranger by installing
     // one: every plugin the official catalog serves comes back badged. So the badge is taken off the
     // installed manifest here, the way `declare-agent` writes the block onto it, and what follows is the
@@ -711,7 +711,7 @@ const REGISTRY: &[OpSpec] = &[
     // so the only place it can be seen arriving is inside the run, and only a plugin willing to say
     // what it was given can say it. None of the published ones is (they use their settings, they do
     // not report them), so the driver stands one in that prints its injected config and nothing else.
-    // What it reads back is amenbo's own doing: which value, at which tier, and whether there is one
+    // What it reads back is Amenbo's own doing: which value, at which tier, and whether there is one
     // left at all.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "echo-program", required: &["name"], refs: &[], strings: &["name"], binds: false },
     // An installed plugin whose program answers a press with a line of its own. An operation raised from
@@ -722,7 +722,7 @@ const REGISTRY: &[OpSpec] = &[
     // So the driver stands one in that writes its one line, naming what it was asked for.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "press-program", required: &["name"], refs: &[], strings: &["name"], binds: false },
     // An installed plugin whose program answers the check with a verdict. Whether the values are usable is
-    // the author's judgement and amenbo makes none of its own, so the only thing that can say no is a
+    // the author's judgement and Amenbo makes none of its own, so the only thing that can say no is a
     // program that says it — and no published plugin declares a check to answer at all. `ok` is that
     // judgement, which the road picks rather than the program: the same values are the ones a fixed answer
     // could never turn away and then let through. `message` is the sentence for the head of the form and
@@ -732,28 +732,28 @@ const REGISTRY: &[OpSpec] = &[
     // A plugin has one program, so this stands in for whatever was standing there before — `press-program`
     // included. A road walks the one it is about.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "check-program", required: &["name", "ok"], refs: &[], strings: &["name", "message", "field", "field_message"], binds: false },
-    // An installed plugin whose program calls amenbo back. A payload names a record and carries none of
+    // An installed plugin whose program calls Amenbo back. A payload names a record and carries none of
     // it, so the route to the content is the binary itself, run from inside the plugin with the store and
-    // the window amenbo put in its environment — and no plugin in the official catalog takes it (the one
+    // the window Amenbo put in its environment — and no plugin in the official catalog takes it (the one
     // published there works out everything it does from the repository it is called in). So the only
     // witness that the environment really arrives, that a call made through it needs no facet, and that
     // the window is what bounds it, is a plugin that makes the call: the driver stands one in, the way
     // `echo-program` stands in the only witness an injected secret has. Its faces are `read` and `write`,
-    // each taking the id of a task an earlier step bound and handing everything under `args` to amenbo
+    // each taking the id of a task an earlier step bound and handing everything under `args` to Amenbo
     // verbatim — so the call under test is written in the scenario rather than buried in the driver.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "read-back-program", required: &["name"], refs: &[], strings: &["name"], binds: false },
     // An installed plugin that takes `seconds` to answer. A queue only holds rows while its plugin is
     // still on one — the runner takes the row off the moment the plugin replies, whichever end it
-    // reached — so a backlog is not a state a scenario can arrive at by using amenbo: it would be
+    // reached — so a backlog is not a state a scenario can arrive at by using Amenbo: it would be
     // racing the runner it just started. Every plugin the catalog publishes answers in the time a
     // process takes to start, and slowness is exactly what the backlog display exists to diagnose, so
     // the driver leaves one answering slowly, the way `declare-secret` writes a declaration no
     // published plugin carries. `seconds` is the window the asserts after it have to read in.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "slow-program", required: &["name", "seconds"], refs: &[], strings: &["name"], binds: false },
-    // Whether amenbo can read what is installed at all — the one way to leave a write's delivery
+    // Whether Amenbo can read what is installed at all — the one way to leave a write's delivery
     // standing. Delivery rides along with the write that caused it, so anything a scenario writes is
     // carried out before the next step: a push by hand has something to carry only where that drive
-    // never happened. amenbo skips it when the installed plugins will not read, since it will not walk
+    // never happened. Amenbo skips it when the installed plugins will not read, since it will not walk
     // its cursor past events a subscriber list it could not resolve was never offered — so the event
     // stays where the write appended it, queued to nobody, with no runner started. `readable` is both
     // halves: `false` leaves the next write undelivered, `true` gives the directory back, which
@@ -947,7 +947,7 @@ const REGISTRY: &[OpSpec] = &[
     // What a `store` action left behind: the archive on disk, and whether an export carries the row
     // for an object an earlier step made. `from` names the export the same way `target` names the
     // object, so both sides are checked back to a binding. `absent` asks the archive's bytes for a
-    // word that must not be in them — the one question about a file amenbo hands out that needs no
+    // word that must not be in them — the one question about a file Amenbo hands out that needs no
     // reading of its layout, and the only way to say a secret really stayed out of it.
     OpSpec { kind: Kind::Assert, domain: Domain::Store, op: "snapshot", required: &["target"], refs: &["target"], strings: &["absent", "contains"], binds: false },
     // What the number a carrier asks for did between two steps. `since` names the version an earlier
@@ -985,17 +985,17 @@ const REGISTRY: &[OpSpec] = &[
     // The repository-side gates: what the lint found in a file, and what is in a hook slot.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "lint", required: &["path", "hits"], refs: &[], strings: &["path"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "hooks", required: &["hook", "state"], refs: &[], strings: &["hook", "state"], binds: false },
-    // Whether anything in this folder starts its AI on amenbo at session start (`wired`), and — while
+    // Whether anything in this folder starts its AI on Amenbo at session start (`wired`), and — while
     // nothing does — which provider the folder is told about by name (`tool`). The two are one
-    // question asked from either end: the answer amenbo carries on every response until the paste
+    // question asked from either end: the answer Amenbo carries on every response until the paste
     // lands, and the silence that follows it.
     //
     // `wired` is the whole vocabulary here. A folder is wired or it is not: whether the hook then
-    // fires, and whether what it injects reaches the model, is outside amenbo, so nothing here says
+    // fires, and whether what it injects reaches the model, is outside Amenbo, so nothing here says
     // enabled and nothing says it works.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch", required: &["wired"], refs: &[], strings: &["tool"], binds: false },
     // The same report read on one tool's own row (`tool`), and whether that row says wired (`wired`).
-    // `ai-launch` above answers for the folder as a whole, and names only what amenbo can point at —
+    // `ai-launch` above answers for the folder as a whole, and names only what Amenbo can point at —
     // a provider whose directory is right there. This one answers for a provider the folder shows no
     // sign of, which is the reader that opens a folder somebody else wired with a tool of their own:
     // it knows which harness it is where nothing in the folder does, and its own row is the only place
@@ -1004,7 +1004,7 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-tool", required: &["tool", "wired"], refs: &[], strings: &["tool"], binds: false },
     // The text handed over to make that happen: what it carries (`carries` — the launch instruction,
     // which is the one part of it that is not the provider's own shape) and the file it says to put
-    // it in (`paste_into`). What is under test is the handing over, since amenbo's whole part in this
+    // it in (`paste_into`). What is under test is the handing over, since Amenbo's whole part in this
     // is the text: a snippet that named the wrong file, or that injected something other than the
     // launch instruction, would leave a reader pasting in good faith and no better off.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-text", required: &["tool", "carries"], refs: &[], strings: &["tool", "carries", "paste_into"], binds: false },
@@ -1073,7 +1073,7 @@ const REGISTRY: &[OpSpec] = &[
     // read where nothing is being reported, which is a state `ai-launch-notice` cannot be asked in: its
     // own line names a report, and `present: false` there is the absence rather than a way in.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "ai-launch-request", required: &["tool", "paste_into"], refs: &[], strings: &["tool", "paste_into"], binds: false },
-    // One app's row on the screen `mcp-open` opens: whether that app already reaches amenbo at all, the
+    // One app's row on the screen `mcp-open` opens: whether that app already reaches Amenbo at all, the
     // folder its entry names when it does, and — where the road is about them — the projects standing
     // ticked on it.
     //
@@ -1093,7 +1093,7 @@ const REGISTRY: &[OpSpec] = &[
     // is not something the presence of text can settle. Named with a `dir`, the folder is the reading —
     // it is the reader's own path, which the interface has no word of its own for.
     OpSpec { kind: Kind::Assert, domain: Domain::Repo, op: "mcp-app", required: &["app", "set"], refs: &[], strings: &["app", "dir"], binds: false },
-    // Which of the two roads that same row offers: the file amenbo writes for the one app that cannot
+    // Which of the two roads that same row offers: the file Amenbo writes for the one app that cannot
     // run a command, or the request handed to the AI every other app has of its own. One row draws one
     // of them, and which it is is the catalog's word rather than the screen's.
     //
@@ -1109,7 +1109,7 @@ const REGISTRY: &[OpSpec] = &[
     // file names those folders and the request carries them — so an empty selection has nothing to hand
     // anybody, and the road has to say so before it is pressed rather than after: a request handed over
     // naming no folder is written into another app's settings as an entry that cannot run, and by then
-    // it is in a file amenbo does not own.
+    // it is in a file Amenbo does not own.
     //
     // It takes `road` for the same reason `mcp-road` does: which button a row carries is the catalog's
     // word, so the step names the one it means by what that button does.
@@ -1123,15 +1123,15 @@ const REGISTRY: &[OpSpec] = &[
     // that is to be ticked and says the rest are to be left clear: a build that added to what was there
     // instead would pass a road that only ever named one.
     //
-    // It is an action rather than an assert because what it produces leaves amenbo — a request goes to
+    // It is an action rather than an assert because what it produces leaves Amenbo — a request goes to
     // the clipboard and a file goes wherever the reader picks — so what is read afterwards is the app
     // it was carried into (`mcp-in-app`) and the row itself, read again.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "mcp-choose", required: &["app", "projects"], refs: &[], strings: &["app"], binds: false },
-    // Where that file ends up: the app itself, with amenbo standing among its servers and a tool of
-    // amenbo's under it. One app only, and the one the file road is for — it is the single app whose
-    // settings amenbo writes with nobody in between, so a format it got wrong is amenbo's fault and
+    // Where that file ends up: the app itself, with Amenbo standing among its servers and a tool of
+    // Amenbo's under it. One app only, and the one the file road is for — it is the single app whose
+    // settings Amenbo writes with nobody in between, so a format it got wrong is Amenbo's fault and
     // nothing catches it short of the app reading the file. Every other app is handed a request its own
-    // AI carries out, and what amenbo owns there is the wording, which a harness can hold up on its own.
+    // AI carries out, and what Amenbo owns there is the wording, which a harness can hold up on its own.
     //
     // Named tool by tool for the reason the protocol road names them so: what a road is about is one
     // tool being reachable, and the whole set would fail on a tool nobody was asking about.
@@ -1227,7 +1227,7 @@ const REGISTRY: &[OpSpec] = &[
     // not on the sentence beside it: the same fact is published both ways on purpose, so that a
     // machine has something to read without parsing a line written in the reader's own language.
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "folders-left", required: &["left"], refs: &[], strings: &[], binds: false },
-    // What amenbo says in a folder whose project has one that vanished: it stops, rather than going
+    // What Amenbo says in a folder whose project has one that vanished: it stops, rather than going
     // quietly to work in whatever is left — and the answer lines the gone bindings up **by id**,
     // beside the command that re-points each of them.
     //
@@ -1242,7 +1242,7 @@ const REGISTRY: &[OpSpec] = &[
     // and the path it named before (`previously`, the folder that moved).
     //
     // Read off that answer and not off the store, for the reason `folders-left` is: a binding's id is
-    // in no read amenbo offers, so the state left behind is the same shape whether the row moved or a
+    // in no read Amenbo offers, so the state left behind is the same shape whether the row moved or a
     // new one was recorded under a new number. What tells the two apart is the answer saying which
     // row it was, and it says it once. So this has to **follow its `rebind`**.
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "repointed", required: &["dir", "previously"], refs: &[], strings: &["dir", "previously"], binds: false },
@@ -1280,7 +1280,7 @@ const REGISTRY: &[OpSpec] = &[
     // others do. There is no read to ask, and the screen is the only witness.
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "none-linked", required: &["absent"], refs: &[], strings: &["absent"], binds: false },
     // What a project with no work in it yet hands its reader: the loop that joins the two ends — the
-    // reader asks their AI, the AI writes to amenbo, and what it wrote lands on the board. Every move
+    // reader asks their AI, the AI writes to Amenbo, and what it wrote lands on the board. Every move
     // the interface can make on their behalf it makes, so what the screen carries is a terminal
     // already inside the linked folder and a request finished enough to paste.
     //
@@ -1317,7 +1317,7 @@ const REGISTRY: &[OpSpec] = &[
     // question is only whether the plugin is there at all), what the last call returned on its own
     // stdout, and what the execution log kept of a run.
     // `desc` asks whether the author's one required sentence is readable here — not what it says. The
-    // wording is the author's and they may change it any day, while where it is readable is amenbo's
+    // wording is the author's and they may change it any day, while where it is readable is Amenbo's
     // and is the whole of what the split between a colleague's plugin and a stranger's decides.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "listed", required: &["name"], refs: &[], strings: &["name"], binds: false },
     // The layer its author declared, said in words on the row where the plugin is managed. What one
@@ -1427,7 +1427,7 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "asks", required: &["name", "key", "label"], refs: &[], strings: &["name", "key", "label", "candidate"], binds: false },
     // The three readings a pressed operation leaves, each asked apart from the others because each is a
     // different promise. `press-said` is the line the run left on the form — the author's own words,
-    // quoted whole the way a row's line is, since what a build could draw instead is amenbo's own sentence
+    // quoted whole the way a row's line is, since what a build could draw instead is Amenbo's own sentence
     // and nothing on the screen says which of the two is standing there. `press-asks` is the box in front
     // of that: the words the press asks under, and that it is holding nothing — which on a second press is
     // the whole of what "handed to this run and kept nowhere" looks like from outside. `press-shut` is the
@@ -1439,7 +1439,7 @@ const REGISTRY: &[OpSpec] = &[
     // What the author's check said, where a reader meets it: one sentence at the head of the settings form,
     // and one beside each box the verdict named. `key` picks which of the two is being read — named, it is
     // the line under that setting; left out, the one over the whole form. Both are quoted whole for the
-    // reason a row's line is: where the check said nothing amenbo draws a sentence of its own in the same
+    // reason a row's line is: where the check said nothing Amenbo draws a sentence of its own in the same
     // place, and the screen does not say which of the two is standing there.
     //
     // A screen road alone. A terminal meets the same verdict as the reason an enable was refused, which is
@@ -1531,10 +1531,10 @@ const REGISTRY: &[OpSpec] = &[
     // What an AI is told about this plugin where it reads how to work in this folder — the `plugins` key
     // of the entry point. `present` is whether the plugin is offered there at all, which is the gate's
     // answer and not the install's: an installed plugin nobody switched on is one a call would refuse,
-    // and naming it would spend a reader's turn learning what amenbo already knew.
+    // and naming it would spend a reader's turn learning what Amenbo already knew.
     //
     // `when` is the author's own line, read back to prove it is relayed rather than paraphrased. `cmd` is
-    // the author's own command face, and what is checked is what amenbo puts *in front* of it — the
+    // the author's own command face, and what is checked is what Amenbo puts *in front* of it — the
     // calling form is assembled from the name read off disk, so what an AI receives is a line it can
     // type. The command word itself is left out of the step: a build reached by another name hands out
     // lines naming it, and that is the point rather than a mismatch.
@@ -1542,7 +1542,7 @@ const REGISTRY: &[OpSpec] = &[
     // `because` is for the other half of the key: when nothing is offered, the entry point says which
     // empty-handed state this is, and a reader who cannot tell "nothing installed" from "nothing
     // switched on here" cannot tell which move would fix it. It is matched as a fragment rather than a
-    // sentence — what is under test is that the right state is named, not today's wording, which amenbo
+    // sentence — what is under test is that the right state is named, not today's wording, which Amenbo
     // is free to reword without breaking a promise. Whichever reading a step asks for, the document is
     // held to its own floor first: a reason stands exactly where there is nothing to list.
     //
@@ -1553,13 +1553,13 @@ const REGISTRY: &[OpSpec] = &[
     // under, comma-separated — what an author wrote and this reader does not get, whether because the
     // author is a stranger or because what they wrote no longer passes the rules.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "at-entry", required: &["name", "present"], refs: &[], strings: &["name", "when", "cmd", "because", "absent"], binds: false },
-    // The other half of the same document: a step of amenbo's own working cycle, and whether this
+    // The other half of the same document: a step of Amenbo's own working cycle, and whether this
     // plugin's call is hanging on it. The two shelves are kept apart on purpose — a step's body is
-    // amenbo's own and a plugin's sentences stay in its entry — so what crosses is the line to type and
+    // Amenbo's own and a plugin's sentences stay in its entry — so what crosses is the line to type and
     // the id the author named it by, and this is the reading that says the join really happened.
     //
     // `step` is that id (`<run>.<step>`, as the author writes it) and `cmd` the call's own face, since
-    // what hangs there is the calling form amenbo builds, not the bare subcommand. `present: false` is
+    // what hangs there is the calling form Amenbo builds, not the bare subcommand. `present: false` is
     // the reading with more work to do: a step nobody named, and a ref naming a step this build does not
     // have, both leave a document where nothing hung — which is what says an unknown ref costs a reader
     // one absent line and nothing else.
@@ -1570,7 +1570,7 @@ const REGISTRY: &[OpSpec] = &[
     // catalog rules. `ok` is the verdict, and `problem` names the code a failing one must report —
     // a manifest can be wrong in more ways than one, and a line about the wrong reason proves nothing.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "validated", required: &["path", "ok"], refs: &[], strings: &["path", "problem"], binds: false },
-    // amenbo spoken to rather than typed at. A host starts one server for a set of folders, and
+    // Amenbo spoken to rather than typed at. A host starts one server for a set of folders, and
     // everything after that goes over the two streams — so the road is the protocol's shape rather
     // than the store's: stand a server, read what it publishes, call through it, read what came back.
     //
@@ -1618,7 +1618,7 @@ const REGISTRY: &[OpSpec] = &[
     // hourly tick, a road asking whether one is held would read their registration and go red.
     OpSpec { kind: Kind::Assert, domain: Domain::Tick, op: "holds", required: &["changed"], refs: &[], strings: &[], binds: false },
     // The other half of the tick is the device's consent, and it is met on a screen:
-    // a band across the whole app puts the question, and a row in amenbo's own settings holds the
+    // a band across the whole app puts the question, and a row in Amenbo's own settings holds the
     // answer afterwards. Screen roads alone, the next four ops — the terminal's way in is
     // `tick install`, which asks nothing — so the CLI driver never meets them as steps.
     //
@@ -1784,7 +1784,7 @@ fn may_stand(domain: Domain, op: &str) -> bool {
 /// `translated` is the same row in the author's other languages, keyed by language code, and it is
 /// checked against the base row rather than on its own: translating a `label` on an entry that
 /// declares no `setting` publishes a label for a field nobody will see, and translating an `about`
-/// on an entry that describes itself nowhere is the text amenbo's own manifest check refuses — both
+/// on an entry that describes itself nowhere is the text Amenbo's own manifest check refuses — both
 /// being the same mistake one language along.
 fn offers_problems(value: &serde_yaml::Value) -> Vec<String> {
     let Some(rows) = value.as_sequence() else {
@@ -1902,7 +1902,7 @@ fn translated_problems(row: &serde_yaml::Value) -> Vec<String> {
                 "`translated.{lang}.label` names a `setting`, so one has to be declared"
             ));
         }
-        // The same rule amenbo holds a real manifest to: there is nothing to translate where the
+        // The same rule Amenbo holds a real manifest to: there is nothing to translate where the
         // author described the plugin in no language at all.
         if words.get("about").is_some() && row.get("about").is_none() {
             problems.push(format!(
@@ -2131,7 +2131,7 @@ impl Scenario {
             }
 
             // The shelf a stood catalog serves — the one arg written as a list of rows rather than
-            // as a word. Its rows are a document's fields, not amenbo's arguments, so the loader
+            // as a word. Its rows are a document's fields, not Amenbo's arguments, so the loader
             // reads them here instead of through `strings`: a row is where a typo would otherwise
             // travel all the way to a catalog served with a blank line under a name.
             if let Some(v) = step.with().get("offers") {
@@ -2142,7 +2142,7 @@ impl Scenario {
 
             // The words a declaration carries in the author's other languages — the same kind of
             // arg one tier in, and read here for the same reason: what it holds is a form's fields,
-            // not amenbo's arguments, so `strings` has no shape to hold it to. A row's `offers`
+            // not Amenbo's arguments, so `strings` has no shape to hold it to. A row's `offers`
             // carries its own copy of this, checked against the row it sits on; here there is no row
             // to check against, so the shape is the whole of what can be said.
             if let Some(v) = step.with().get("translated") {
@@ -2505,7 +2505,7 @@ steps_cli:
         assert!(errs.iter().any(|e| e.message.contains("`required` must be a boolean")));
     }
 
-    /// The refusal vocabulary: an action may declare that amenbo will turn it away, and the code it
+    /// The refusal vocabulary: an action may declare that Amenbo will turn it away, and the code it
     /// will be turned away with. The op and its args are the ordinary ones — what is under test is
     /// the guard in front of them, not a second spelling of the command.
     #[test]
@@ -2801,7 +2801,7 @@ steps_cli:
         assert!(errs.iter().any(|e| e.message.contains("`translated.de.desc` must be a string")), "{errs:?}");
 
         // And the text an opened panel is read by, held the same way its line is — including to the
-        // base row, which is where amenbo's own manifest check holds it too.
+        // base row, which is where Amenbo's own manifest check holds it too.
         let errs = stand("        - { name: standup, desc: d, about: 12 }").unwrap_err();
         assert!(errs.iter().any(|e| e.message.contains("`about` must be a string")), "{errs:?}");
 
@@ -2826,7 +2826,7 @@ steps_cli:
     }
 
     /// The words a declared field carries in another language are held to their own shape, for the
-    /// reason a shelf's rows are: they are a form's fields rather than amenbo's arguments, so nothing
+    /// reason a shelf's rows are: they are a form's fields rather than Amenbo's arguments, so nothing
     /// else would catch a typo before it reached a screen as a blank.
     #[test]
     fn a_declarations_other_languages_are_held_to_the_shape_a_form_reads() {

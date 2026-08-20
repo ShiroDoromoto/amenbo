@@ -119,7 +119,7 @@ func TestInstanceNamesRoundTrip(t *testing.T) {
 	// What must NOT read as an instance. The shared dev app is permanent, and a name carrying
 	// anything but digits is someone's own build — the sweep deletes what it recognises, so
 	// recognising too much is the expensive direction.
-	for _, name := range []string{"amenbo (dev).app", "amenbo.app", "amenbo (dev wip).app", "amenbo (dev 21)", "Safari.app"} {
+	for _, name := range []string{"amenbo (dev).app", "Amenbo.app", "amenbo (dev wip).app", "amenbo (dev 21)", "Safari.app"} {
 		if got := taskIDFromBundleName(name); got != "" {
 			t.Errorf("%q was read as instance %q", name, got)
 		}
@@ -150,7 +150,7 @@ func TestProcessMarkerIsTheBundlePath(t *testing.T) {
 // being the app (as an argument of something else, and as a neighbouring instance whose id starts
 // with this one's).
 func TestPIDRunningFromPicksTheAppProcess(t *testing.T) {
-	const ps = `  501 /Users/x/Applications/amenbo.app/Contents/MacOS/amenbo-app
+	const ps = `  501 /Users/x/Applications/Amenbo.app/Contents/MacOS/amenbo-app
   777 /Applications/amenbo (dev).app/Contents/MacOS/amenbo-app
   999 /Applications/amenbo (dev 21310).app/Contents/MacOS/amenbo-app
  1234 /Applications/amenbo (dev 2131).app/Contents/MacOS/amenbo-app

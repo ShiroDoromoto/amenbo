@@ -10,7 +10,7 @@
 //! Usage: `verify-gui <scenario.yaml> --app <bundle.app> [--evidence <dir>] [--screen <path>]
 //!                    [--json]`
 //!        `verify-gui <scenario.yaml> --print`
-//!   `--app`      the installed `.app` bundle to launch and shoot (e.g. `~/Applications/amenbo.app`)
+//!   `--app`      the installed `.app` bundle to launch and shoot (e.g. `~/Applications/Amenbo.app`)
 //!   `--evidence` where the shots + manifest land (default: a fresh dir under the temp tree)
 //!   `--screen`   path to the screen tool (default: scripts/screen.swift in the repo)
 //!   `--json`     emit the manifest path, verdict and step count as JSON instead of the summary

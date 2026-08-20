@@ -11,7 +11,12 @@
 CARGO_BIN := $(HOME)/.cargo/bin
 APPS_DIR  := /Applications
 BUNDLE_DIR := app/src-tauri/target/release/bundle/macos
-GUI_APP     := $(BUNDLE_DIR)/amenbo.app
+# What tauri names the prod bundle and every artifact derived from it — `productName` in
+# app/src-tauri/tauri.conf.json, which is the source of truth. It is written here once because make
+# cannot read that JSON, and every path below joins onto it rather than spelling the name again.
+# The dev channel keeps its own lowercase name (GUI_DEV_NAME): it is not a name a user reads.
+GUI_NAME    := Amenbo
+GUI_APP     := $(BUNDLE_DIR)/$(GUI_NAME).app
 
 # The dev GUI comes in two shapes, and AMB-T-ID picks which one every dev-GUI target builds and
 # installs. Unset is the shared dev app: one permanent bundle, the place to keep a grown setup
@@ -92,11 +97,11 @@ MAC_GUI_ARCH   ?= arm64
 $(if $(filter $(MAC_GUI_ARCH),arm64 amd64),,$(error MAC_GUI_ARCH must be arm64 or amd64 (got: $(MAC_GUI_ARCH))))
 MAC_GUI_TRIPLE := $(if $(filter arm64,$(MAC_GUI_ARCH)),aarch64,x86_64)-apple-darwin
 MAC_BUNDLE_DIR := app/src-tauri/target/$(MAC_GUI_TRIPLE)/release/bundle
-MAC_GUI_APP    := $(MAC_BUNDLE_DIR)/macos/amenbo.app
-# GUI dmg: tauri names it `<productName>_<version>_<arch>.dmg` (prod productName=amenbo).
+MAC_GUI_APP    := $(MAC_BUNDLE_DIR)/macos/$(GUI_NAME).app
+# GUI dmg: tauri names it `<productName>_<version>_<arch>.dmg`, so GUI_NAME is what it leads with.
 # We copy it to a stable name under dist/ as a non-installer supplement (NOT a wharfy
 # bundle — the mac release bundle is the unified .pkg, see dist-gui-mac).
-GUI_DMG_SRC  := $(MAC_BUNDLE_DIR)/dmg/amenbo_$(VERSION)_$(if $(filter arm64,$(MAC_GUI_ARCH)),aarch64,x64).dmg
+GUI_DMG_SRC  := $(MAC_BUNDLE_DIR)/dmg/$(GUI_NAME)_$(VERSION)_$(if $(filter arm64,$(MAC_GUI_ARCH)),aarch64,x64).dmg
 GUI_DMG_DIST := $(DIST_DIR)/amenbo-app-darwin-$(MAC_GUI_ARCH).dmg
 # Unified installer: the .pkg drops the GUI in /Applications AND puts the
 # bundled CLI on PATH (postinstall symlink). This is the primary mac installer;
@@ -190,7 +195,7 @@ help:
 	@echo "make lock         - re-resolve the lockfiles outside the workspace (app/src-tauri/Cargo.lock and verification/Cargo.lock): both reach core by path, so a workspace bump leaves them behind; CI fails a PR whose lock is stale"
 	@echo "make hooks        - enable the git hooks (core.hooksPath=.githooks): pre-commit runs the tree guards over the staged diff, commit-msg holds the message to the same vocabulary"
 	@echo "make devtool      - build the optional parallel-development helper to ~/.cargo/bin/devtool (needs Go; amenbo itself builds and tests without it)"
-	@echo "make gui          - build the prod GUI (amenbo.app / work.amenbo.app)"
+	@echo "make gui          - build the prod GUI ($(GUI_NAME).app / work.amenbo.app)"
 	@echo "make gui-dev      - build the dev GUI ($(GUI_DEV_NAME).app / $(GUI_DEV_ID))"
 	@echo "make install-gui     - [retired] the prod GUI ships in the unified installer; release with make release"
 	@echo "make install-gui-dev - build the dev GUI and put it in $(APPS_DIR)/$(GUI_DEV_NAME).app"
@@ -302,7 +307,7 @@ dist-gui-mac:
 	@# Updater artifact: tar the signed and STAPLED .app (AppleDouble-free) and minisign-sign it, only
 	@# when the signing key is present (release CI). Skipped silently for keyless dev/dist builds.
 	@if [ -n "$$TAURI_SIGNING_PRIVATE_KEY" ]; then \
-	  COPYFILE_DISABLE=1 tar czf "$(MAC_UPDATER_DIST)" -C "$(MAC_BUNDLE_DIR)/macos" amenbo.app; \
+	  COPYFILE_DISABLE=1 tar czf "$(MAC_UPDATER_DIST)" -C "$(MAC_BUNDLE_DIR)/macos" "$(GUI_NAME).app"; \
 	  ( cd app && npx tauri signer sign "$(CURDIR)/$(MAC_UPDATER_DIST)" ); \
 	  echo "→ $(MAC_UPDATER_DIST) (+ .sig)"; \
 	else \
@@ -781,7 +786,7 @@ gui:
 	@scripts/write-tick-plist.sh $(TICK_LABEL)
 	cd app && npm run tauri build -- $(call tick-config,$(TICK_LABEL))
 	@scripts/codesign-local.sh sign "$(GUI_APP)"
-	@echo "→ amenbo.app (prod): app/src-tauri/target/release/bundle/macos/amenbo.app"
+	@echo "→ $(GUI_NAME).app (prod): $(GUI_APP)"
 
 ## Dev GUI: the dev identifier/productName/executable name and the dev AMENBO_APP_NAME. AMB-T-ID=<id>
 ## swaps all four for that task's throwaway instance (see the GUI_DEV_* block above), and the tick's
@@ -800,13 +805,13 @@ gui-dev:
 	@echo "→ $(GUI_DEV_NAME).app (dev; $(GUI_DEV_ID))"
 
 ## Applying the prod GUI locally is retired (it is distributed via the unified installer). Replacing
-## /Applications' prod amenbo.app locally clobbers the Developer ID signed, notarized build with a
+## /Applications' prod Amenbo.app locally clobbers the Developer ID signed, notarized build with a
 ## self-signed one — which changes the Designated Requirement and so drops the notification
 ## authorization — and causes version skew and keychain re-prompts. Apply prod only via tag push → public CI → the promote
 ## workflow → the unified installer.
 install-gui:
 	@echo "✗ the prod GUI's 'make install-gui' is retired (it is distributed via the unified installer)."
-	@echo "  Replacing the prod amenbo.app locally clobbers the release-signed build."
+	@echo "  Replacing the prod $(GUI_NAME).app locally clobbers the release-signed build."
 	@echo "  install prod : take the unified installer from the GitHub Release (ShiroDoromoto/amenbo) (mac .pkg / win NSIS / linux AppImage)"
 	@echo "  dev GUI      : make install-gui-dev (amenbo (dev).app)"
 	@echo "  release      : tag push → public CI (release.yml builds prerelease + attestation) → verify → the promote workflow. The local gate is make release"

@@ -49,7 +49,7 @@ trap cleanup EXIT
 # payload sits under a nested <component>.pkg/Payload rather than at the top — find it either way.
 echo "→ existing-store check: extract the shipped CLI from $PKG"
 pkgutil --expand-full "$PKG" "$WORK/pkg" >/dev/null
-CLI="$(find "$WORK/pkg" -type f -path '*/amenbo.app/Contents/MacOS/amenbo' 2>/dev/null | head -1)"
+CLI="$(find "$WORK/pkg" -type f -path '*/Amenbo.app/Contents/MacOS/amenbo' 2>/dev/null | head -1)"
 [ -n "$CLI" ] && [ -x "$CLI" ] || { echo "✗ no CLI sidecar inside the .pkg (the bundle is broken)"; exit 1; }
 
 # Clone the real app-data. logs/ and the archives are not store state — they are large and nothing

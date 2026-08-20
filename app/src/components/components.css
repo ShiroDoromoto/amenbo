@@ -852,16 +852,22 @@ button.feed__target:hover { color: var(--c-accent); }
 .palette__cmd { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--c-accent-text); }
 
 /* ---------- the shared modal chrome ---------- */
-/* The backdrop and card the screens with no chrome of their own put themselves in: the migration
-   report, the restart gate, the dimension manager, a plugin's detail and the data progress. Shared
-   rather than a block each, unlike the three blocks below — those differ by feature and are
-   restyled one at a time, while this one is the plain "a modal is open" look, and `outsideClose`
-   reads `.modal__overlay` as the mark of one. A screen that wants its own card puts it inside the
+/* `.modal__overlay` is the backdrop **every** modal wears, the feature blocks below included. It is
+   not only a look: `outsideClose` reads it as the mark of an open modal, so a backdrop that carries
+   a class of its own instead is invisible there, and grabbing it closes the right pane behind the
+   modal the reader is still in. One class is what keeps the two from drifting apart.
+
+   The card is the part a feature may keep to itself, and those blocks do. `.modal__card` is the
+   plain one, for the screens with no chrome of their own: the migration report, the restart gate,
+   the dimension manager and the data progress. A screen that brings its own card puts it inside the
    overlay and leaves `.modal__card` off (PluginDetail does, with `.plugdet`).
 
-   It carried the name `.setup__*` until the first-run setup it was written for went away, taking the
-   definitions with it and leaving these five wearing a name for a screen that no longer exists. */
+   The pair carried the name `.setup__*` until the first-run setup it was written for went away,
+   taking the definitions with it and leaving five screens wearing a name for a screen that had gone. */
 .modal__overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); padding: var(--s-5); }
+/* Over another modal rather than beside it: the rejection asks its question from the status control
+   of a task the reader may have opened from one. */
+.modal__overlay--raised { z-index: 60; }
 .modal__card { width: min(440px, 100%); background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-6); }
 /* Wide enough for the migration report, whose paths and version pairs read badly wrapped. */
 .modal__card--wide { width: min(680px, 100%); max-height: 84vh; overflow-y: auto; }
@@ -872,8 +878,8 @@ button.feed__target:hover { color: var(--c-accent); }
 /* ---------- the lint hook consent modal (HookConsentModal) ---------- */
 /* The question the status pull-down asks before a rejection (RejectReasonModal). Its own block rather
    than a share of the hook consent's: the two happen to look alike, and a modal borrowing another
-   feature's class names cannot be restyled without touching that feature. */
-.rejectask__overlay { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); padding: var(--s-5); }
+   feature's class names cannot be restyled without touching that feature. The backdrop is the one
+   exception — it is `.modal__overlay` for all of them, which is what `outsideClose` reads. */
 .rejectask__modal { width: min(480px, 100%); background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
 .rejectask__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); margin-bottom: var(--s-2); }
 .rejectask__why { font-size: var(--fs-xs); color: var(--c-text-muted); margin-bottom: var(--s-3); }
@@ -883,7 +889,6 @@ button.feed__target:hover { color: var(--c-accent); }
 .rejectask__action--go { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
 .rejectask__action:disabled { opacity: 0.5; cursor: default; }
 
-.hookconsent__overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); padding: var(--s-5); }
 .hookconsent__modal { width: min(520px, 100%); max-height: 82vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-6); }
 .hookconsent__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); margin-bottom: var(--s-3); }
 .hookconsent__why { margin-bottom: var(--s-3); }
@@ -903,7 +908,6 @@ button.feed__target:hover { color: var(--c-accent); }
 /* ---------- a usage nudge (NudgeHost and the views it puts) ---------- */
 /* An offer, not a gate: the same modal shape as the consent question, one size down, and its decline is
    the plain button rather than a muted one — nothing here is being asked permission for. */
-.nudge__overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); padding: var(--s-5); }
 .nudge__modal { width: min(460px, 100%); max-height: 82vh; overflow-y: auto; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-5); }
 .nudge__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); margin-bottom: var(--s-3); }
 .nudge__why { margin-bottom: var(--s-4); }

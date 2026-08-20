@@ -2,7 +2,8 @@
  * While the right pane is open, decides whether a pointerdown outside it counts as "clicked the blank body, so
  * close" — a pure function over the DOM, free of React and therefore testable. Grabbing blank space in the list
  * closes the pane, but the chrome that is not blank space is excluded: the pane itself and modals
- * (.modal__overlay) are ignored; a row or card in the list ([data-pane-select]) leaves the switch to its onClick
+ * (.modal__overlay, the one backdrop class every modal wears — `modalOverlay.test.ts` holds that) are
+ * ignored; a row or card in the list ([data-pane-select]) leaves the switch to its onClick
  * (closing on pointerdown and relying on the following click to re-select fails — the reflow moves the row out
  * from under the click and all that happens is the close); and the TopBar (.topbar) is ignored too (closing on
  * pointerdown would have closeRight push "no selection" onto the history, and the goBack of the following click

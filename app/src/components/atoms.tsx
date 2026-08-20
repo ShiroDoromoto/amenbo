@@ -160,7 +160,7 @@ function RejectReasonModal({ id, onCancel, onReject }: {
   const submit = () => { if (reason) onReject(reason); };
   return createPortal(
     <div
-      className="rejectask__overlay"
+      className="modal__overlay modal__overlay--raised"
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => { e.stopPropagation(); if (e.target === e.currentTarget) onCancel(); }}
     >

@@ -54,7 +54,7 @@ export function AutostartNudge({ onClose }: { onClose: () => void }) {
   // error over a value that is not changing. What keeps the question from coming back is the log core
   // wrote when this was put, not anything recorded here.
   return (
-    <div className="nudge__overlay">
+    <div className="modal__overlay">
       <div className="nudge__modal" role="dialog" aria-modal="true" aria-labelledby="nudge-autostart-title">
         <div className="nudge__title" id="nudge-autostart-title">{t("nudge.autostart.title")}</div>
         {/* The settings row's own sentence, because it is the same offer said to the same person — one

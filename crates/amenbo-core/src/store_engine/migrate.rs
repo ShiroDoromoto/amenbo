@@ -256,7 +256,7 @@ pub const STEPS: &[Step] = &[
     },
     Step {
         to: 16,
-        name: "add harness_consent, a project's answer on being asked to start its AI on amenbo",
+        name: "add harness_consent, a project's answer on being asked to start its AI on Amenbo",
         // `AMB-D-440`. The genesis batch creates a table an older store is missing at open, so this DDL
         // has usually run before the chain reaches here — writing it down anyway is what makes the chain
         // say when the table arrived, rather than leaving a reader of the frozen shapes to guess.
@@ -1427,7 +1427,7 @@ mod tests {
             for table in ["plugin_config", "plugin_enable"] {
                 assert!(
                     declared_sql(&engine, table).contains(REFERENCE_CASCADES),
-                    "a store born at v{born} stopped cascading `{table}`, which is amenbo's own setting"
+                    "a store born at v{born} stopped cascading `{table}`, which is Amenbo's own setting"
                 );
             }
             std::fs::remove_dir_all(&dir).ok();
@@ -1468,7 +1468,7 @@ mod tests {
                 );
                 assert!(
                     sql.contains(REFERENCE_CASCADES),
-                    "a store born at v{born} stopped cascading `{table}`, which is amenbo's own setting"
+                    "a store born at v{born} stopped cascading `{table}`, which is Amenbo's own setting"
                 );
                 let held: i64 = engine
                     .conn()

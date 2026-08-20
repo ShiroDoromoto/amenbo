@@ -8,7 +8,7 @@ assignees: ''
 
 ## The problem
 
-What are you trying to do, and where does amenbo get in the way today?
+What are you trying to do, and where does Amenbo get in the way today?
 
 ## What you'd like
 

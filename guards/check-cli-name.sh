@@ -24,13 +24,13 @@
 #     purpose, in its runnable lines and its prose alike, and retargeted as the spec is handed out;
 #     tests in that file hold the rule.
 #
-# Recall is bounded by the list of command words below, and that is the intended trade: a name
+# Recall is bounded by the list of command words it reads, and that is the intended trade: a name
 # followed by a real subcommand is a command someone is being told to type, while `amenbo` followed
-# by anything else is prose about the product ("a newer amenbo (1.9) is available"), which must keep
+# by anything else is prose about the product ("a newer Amenbo (1.9) is available"), which must keep
 # the product's name. A command word missing from the list only means one fewer catch, never a false
-# alarm — which is why `version` is left out of it: it doubles as a plain noun ("a minimum amenbo
-# version"), and a guard that makes an author rewrite correct prose is worse than one that catches
-# one case fewer.
+# alarm. The list lives in guards/cli-command-words.txt, where its own reasoning is written, because
+# check-product-name.sh reads it from the other side — the same shape is the one lowercase spelling
+# that guard steps over — and a list kept in two places is a list that drifts.
 #
 # Usage: guards/check-cli-name.sh          (no args; scans the two crates' src trees)
 # Exit codes: 0 = every worded command takes its name from command_name(), 1 = one is hardcoded.
@@ -40,8 +40,9 @@ root=$(cd "$(dirname "$0")/.." && pwd)
 trees=("$root/crates/amenbo-core/src" "$root/crates/amenbo-cli/src")
 skip="$root/crates/amenbo-core/src/agent.rs"
 
-# The top-level command words, as the CLI registers them.
-words='agent|update|config|whoami|init|bind|unbind|status|activity|sync-guide|doctor|validate|lint|hooks|project|dimension|task|comment|decision|attach|export|backup|restore|hard-erase|plugin'
+# The top-level command words, as the CLI registers them — declared once, read by two guards.
+words=$(sed 's/#.*//' "$root/guards/cli-command-words.txt" | tr -s '[:space:]' '\n' | grep -v '^$' | paste -sd'|' -)
+[ -n "$words" ] || { echo "✗ cli name: guards/cli-command-words.txt names no command" >&2; exit 1; }
 
 rc=0
 found=""

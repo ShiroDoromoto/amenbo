@@ -20,7 +20,7 @@ A clear description of the bug.
 
 ## Version and platform
 
-- amenbo version (`amenbo --version`):
+- Amenbo version (`amenbo --version`):
 - OS and version:
 - CLI or GUI:
 

@@ -136,7 +136,7 @@ fn unreadable(value: &str) -> Error {
     let project_ref = format!("{}-{}-<n>", idref::NAMESPACE, RefKind::Project.code());
     Error::invalid(
         format!(
-            "{REACH_ENV}='{value}' is not a reach amenbo wrote — it is set when amenbo launches a plugin, \
+            "{REACH_ENV}='{value}' is not a reach Amenbo wrote — it is set when Amenbo launches a plugin, \
              and holds '{ALL_REACH}' or a project's {project_ref} ref. Unset it to run outside a plugin."
         ),
     )

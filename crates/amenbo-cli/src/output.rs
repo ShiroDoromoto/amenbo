@@ -141,7 +141,7 @@ fn hint_for_a_caller_with_no_terminal(dirs: &str) -> String {
         .map(|dir| format!("\n  • {dir}"))
         .collect::<String>();
     format!(
-        "The commands that would set a project up here — init and bind — are not served over MCP, so neither is a road you can take.\nThe folders this server works in:{listed}\nIf you meant one of those, name it in the next call. To work in *this* folder, ask the person to add it to a project in amenbo's own window (the project's folders) — that is the only thing that opens it, and it takes no terminal."
+        "The commands that would set a project up here — init and bind — are not served over MCP, so neither is a road you can take.\nThe folders this server works in:{listed}\nIf you meant one of those, name it in the next call. To work in *this* folder, ask the person to add it to a project in Amenbo's own window (the project's folders) — that is the only thing that opens it, and it takes no terminal."
     )
 }
 
@@ -190,7 +190,7 @@ impl CliError {
         };
         CliError {
             code: CliErrorCode::NoPointer.as_str(),
-            message: "This folder is not linked to amenbo (no .amenbo found).".to_string(),
+            message: "This folder is not linked to Amenbo (no .amenbo found).".to_string(),
             hint: Some(hint),
             exit: 1,
         }
@@ -206,7 +206,7 @@ impl CliError {
         CliError {
             code: CliErrorCode::InitPointerExists.as_str(),
             message: format!(
-                "This folder ({dir}) is already linked to amenbo (project {project_id}){data_note}. init was refused because it would create a new project and overwrite the pointer."
+                "This folder ({dir}) is already linked to Amenbo (project {project_id}){data_note}. init was refused because it would create a new project and overwrite the pointer."
             ),
             hint: Some({
                 let cmd = Paths::command_name();
@@ -251,7 +251,7 @@ impl CliError {
         CliError {
             code: CliErrorCode::ProjectDirBound.as_str(),
             message: format!(
-                "This folder ({dir}) is already linked to amenbo (project {project_id}), so no new project was created."
+                "This folder ({dir}) is already linked to Amenbo (project {project_id}), so no new project was created."
             ),
             hint: Some(format!(
                 "Pass a folder nothing is linked to, or re-point this one at another existing project with `{cmd} bind --project <name or id> --dir {dir}`."
@@ -349,10 +349,10 @@ impl CliError {
         CliError {
             code: CliErrorCode::NestedWorktree.as_str(),
             message: format!(
-                "This is a git worktree ({worktree_root}) cut inside an amenbo-managed folder, so it inherited the binding of {bound_dir} from above. Deleting the worktree would not undo what amenbo wrote: the store lives outside it."
+                "This is a git worktree ({worktree_root}) cut inside an Amenbo-managed folder, so it inherited the binding of {bound_dir} from above. Deleting the worktree would not undo what Amenbo wrote: the store lives outside it."
             ),
             hint: Some(format!(
-                "Operate amenbo in the project folder itself ({bound_dir}). Cut worktrees outside it, where there is no binding to inherit."
+                "Operate Amenbo in the project folder itself ({bound_dir}). Cut worktrees outside it, where there is no binding to inherit."
             )),
             exit: 1,
         }
@@ -459,7 +459,7 @@ impl From<amenbo_core::Error> for CliError {
             // is the one the door will never take. Amenbo does not expand it — it never runs git
             // (`AMB-D-281`) — so what it can do is name the one command that does.
             E::Invalid(m) if m.code() == Some(ErrorCode::InvalidCommitSha) => Some(
-                "`git log --oneline` prints the short form. Expand it with `git rev-parse <short sha>` and pass what that returns — amenbo never runs git itself."
+                "`git log --oneline` prints the short form. Expand it with `git rev-parse <short sha>` and pass what that returns — Amenbo never runs git itself."
                     .to_string(),
             ),
             _ => None,
@@ -732,7 +732,7 @@ mod tests {
         let hint = hint_for_a_caller_with_no_terminal("/work/shop\n/work/greenhouse\n");
         assert!(hint.contains("/work/shop"), "the folders it could have named: {hint}");
         assert!(hint.contains("/work/greenhouse"), "all of them: {hint}");
-        assert!(hint.contains("amenbo's own window"), "and the road a person walks: {hint}");
+        assert!(hint.contains("Amenbo's own window"), "and the road a person walks: {hint}");
         for closed in ["init --name", "bind --project"] {
             assert!(!hint.contains(closed), "`{closed}` cannot be reached from here: {hint}");
         }

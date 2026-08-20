@@ -224,7 +224,7 @@ fn misplaced_flags_hint(cmd: &Option<Command>, err: CliError) -> CliError {
     .join(" ");
     CliError {
         hint: Some(format!(
-            "`{}` went to the plugin, not to amenbo — after `plugin run {name}` every word is the plugin's. Put amenbo's flags before it:\n  {corrected}",
+            "`{}` went to the plugin, not to Amenbo — after `plugin run {name}` every word is the plugin's. Put Amenbo's flags before it:\n  {corrected}",
             own.join(" ")
         )),
         ..err
@@ -375,7 +375,7 @@ fn flag_in_the_name_position(cmd: &Option<Command>) -> Option<CliError> {
         code: "invalid_value",
         message: format!("'{name}' is a flag, not a plugin's name"),
         hint: Some(format!(
-            "amenbo's flags go before the plugin's name — after it every word is the plugin's:\n  {corrected}"
+            "Amenbo's flags go before the plugin's name — after it every word is the plugin's:\n  {corrected}"
         )),
         exit: 2,
     })
@@ -794,7 +794,7 @@ fn store_reachable() -> bool {
 fn advise_linux_system_orphan() {
     if amenbo_core::self_update::linux_system_orphan_present() {
         eprintln!(
-            "⚠ An older system-wide amenbo is still installed under /usr/bin. Remove it with your \
+            "⚠ An older system-wide Amenbo is still installed under /usr/bin. Remove it with your \
              package manager: `sudo apt remove amenbo` (or `dpkg -r amenbo` / `rpm -e amenbo`)."
         );
     }
@@ -984,7 +984,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
     if let Some(rel) = upstream.as_ref() {
         if rel.is_newer_than(agent::VERSION) {
             eprintln!(
-                "⚠ A newer amenbo ({}) is available (this build is {}). Run `{} update` to install it, or see {}",
+                "⚠ A newer Amenbo ({}) is available (this build is {}). Run `{} update` to install it, or see {}",
                 rel.version,
                 agent::VERSION,
                 Paths::command_name(),
@@ -1205,7 +1205,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                 }));
             } else {
                 let suffix = if channel == "amenbo" { String::new() } else { format!(" ({channel})") };
-                human(flags, format!("amenbo {}{}", agent::VERSION, suffix));
+                human(flags, format!("Amenbo {}{}", agent::VERSION, suffix));
                 human(flags, format!("format: store v{} (this build opens up to v{})", vs.format_version, vs.max_supported_format));
                 if let Some(line) = unstamped_line() {
                     human(flags, line);
@@ -1215,7 +1215,7 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                 }
                 if vs.update_available {
                     human(flags, format!(
-                        "update available — a newer amenbo ({}) is out. Run `{} update` to get the installer.",
+                        "update available — a newer Amenbo ({}) is out. Run `{} update` to get the installer.",
                         vs.newer_version.as_deref().unwrap_or("—"),
                         Paths::command_name(),
                     ));

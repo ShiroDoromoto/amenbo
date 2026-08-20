@@ -332,7 +332,7 @@ fn init_places_marker_files_and_bind_links_project() {
     assert!(cli.home.join(".amenbo").is_file());
     for f in ["AGENTS.md", "CLAUDE.md"] {
         let body = std::fs::read_to_string(cli.home.join(f)).unwrap();
-        assert!(body.contains("<!-- amenbo:begin (managed v3) -->"), "{f} has the versioned managed marker");
+        assert!(body.contains("<!-- amenbo:begin (managed v4) -->"), "{f} has the versioned managed marker");
         assert!(body.contains("<!-- amenbo:end -->"), "{f} has the end marker");
         assert!(body.contains("agent --json"), "{f} points at agent --json");
     }
@@ -379,7 +379,7 @@ fn init_proceeds_despite_a_stale_managed_block_without_a_living_owner() {
     // The block is regenerated at the current version (agent pointer and all) and the prose outside survives.
     let body = std::fs::read_to_string(&claude).unwrap();
     assert!(body.contains("User guidance that must survive (Class P)."), "preserves Class P outside the markers: {body}");
-    assert!(body.contains("<!-- amenbo:begin (managed v3) -->") && body.contains("<!-- amenbo:end -->"), "the block is rewritten at the current version");
+    assert!(body.contains("<!-- amenbo:begin (managed v4) -->") && body.contains("<!-- amenbo:end -->"), "the block is rewritten at the current version");
     assert!(body.contains("agent --json"), "the block is regenerated to the current version: {body}");
     assert!(!body.contains("stale block content carried in from a clone"), "stale content between the markers is replaced with the current version: {body}");
 }
@@ -387,7 +387,7 @@ fn init_proceeds_despite_a_stale_managed_block_without_a_living_owner() {
 /// Write the block back to the old, unversioned `(managed)` marker: a block left stale on disk by an upgrade.
 fn make_block_stale(path: &std::path::Path) -> String {
     let before = std::fs::read_to_string(path).unwrap();
-    let stale = before.replace("<!-- amenbo:begin (managed v3) -->", "<!-- amenbo:begin (managed) -->");
+    let stale = before.replace("<!-- amenbo:begin (managed v4) -->", "<!-- amenbo:begin (managed) -->");
     assert_ne!(before, stale, "the downgrade actually changes the markers");
     std::fs::write(path, &stale).unwrap();
     stale
@@ -406,7 +406,7 @@ fn running_amenbo_in_a_bound_folder_follows_its_stale_managed_block() {
     cli.run(&["status"]);
 
     let after = std::fs::read_to_string(&claude).unwrap();
-    assert!(after.contains("<!-- amenbo:begin (managed v3) -->"), "just launching follows to the current version: {after}");
+    assert!(after.contains("<!-- amenbo:begin (managed v4) -->"), "just launching follows to the current version: {after}");
     assert!(!after.contains("(managed) -->"), "the old markers do not remain: {after}");
     // Having caught up, the folder is not reported as stale.
     let doctor = cli.json(&["doctor", "--json"]);
@@ -714,7 +714,7 @@ fn init_and_bind_success_output_states_capability_and_next_step() {
     // init (human): states the capability (your AI can operate Amenbo) and the next step (amenbo status).
     let (out, code) = cli.run(&["init", "--name", "tester"]);
     assert_eq!(code, 0);
-    assert!(out.contains("can now operate amenbo"), "init states the capability: {out}");
+    assert!(out.contains("can now operate Amenbo"), "init states the capability: {out}");
     assert!(out.contains("amenbo status"), "init points at the next step: {out}");
     assert!(out.contains("(placed"), "placed files are a light parenthetical: {out}");
 

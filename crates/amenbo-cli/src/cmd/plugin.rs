@@ -886,7 +886,7 @@ fn plugin_list_cmd(store: &Store, flags: &Flags) -> Result<i32, CliError> {
                 // The consequence, not just the verdict: an open gate reads as "this one is working"
                 // until the line says otherwise, and that gap is the whole point of showing this here.
                 let effect = if on.is_empty() && !device {
-                    "cannot run against this amenbo"
+                    "cannot run against this Amenbo"
                 } else {
                     "enabled, but nothing fires"
                 };

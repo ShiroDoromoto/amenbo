@@ -30,7 +30,7 @@ pub fn message(issue: &DoctorIssue) -> String {
             p(issue, "order_key")
         ),
         DoctorIssueKind::StaleManagedBlock => format!(
-            "The amenbo managed block in {path} is stale (v{} < v{}): a binary update changed the template.",
+            "The Amenbo managed block in {path} is stale (v{} < v{}): a binary update changed the template.",
             p(issue, "version"),
             p(issue, "current"),
         ),
@@ -70,12 +70,12 @@ pub fn message(issue: &DoctorIssue) -> String {
             p(issue, "name"),
         ),
         DoctorIssueKind::UnwiredFolder => format!(
-            "{dir} does not start its AI on amenbo: {} is set up here and is not wired to run it at \
+            "{dir} does not start its AI on Amenbo: {} is set up here and is not wired to run it at \
              session start, so an AI reads the guidance only if it goes looking.",
             p(issue, "tools"),
         ),
         DoctorIssueKind::UnwiredFolderAmbiguous => format!(
-            "{dir} does not start its AI on amenbo, and shows no sign of which tool is used there, so \
+            "{dir} does not start its AI on Amenbo, and shows no sign of which tool is used there, so \
              nothing can say which wiring is missing."
         ),
     }
@@ -129,7 +129,7 @@ pub fn fix_hint(issue: &DoctorIssue) -> String {
         ),
         DoctorIssueKind::UnwiredFolder | DoctorIssueKind::UnwiredFolderAmbiguous => format!(
             "`{cmd} agent-hook snippet <tool>` prints the text that asks an AI to wire it; give that \
-             text to the AI you run in the folder. amenbo writes no settings file on your behalf, so \
+             text to the AI you run in the folder. Amenbo writes no settings file on your behalf, so \
              nothing here ends until the wiring lands in theirs."
         ),
     }

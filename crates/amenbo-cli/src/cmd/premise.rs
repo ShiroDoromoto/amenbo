@@ -21,7 +21,7 @@ use crate::output::{human, Flags};
 pub(crate) fn warn_if_premise_added_to_reserved(store: &Store, id: i64, what: &str) {
     match store.task(id) {
         Ok(Some(t)) if t.status == TaskStatus::InProgress => eprintln!(
-            "⚠ {task} is reserved (in progress) — {what}. Its holder is not notified now; they will see it on their next amenbo command.",
+            "⚠ {task} is reserved (in progress) — {what}. Its holder is not notified now; they will see it on their next Amenbo command.",
             task = task_label(id),
         ),
         Ok(_) => {}
@@ -44,7 +44,7 @@ pub(crate) fn warn_if_premise_added_to_reserved(store: &Store, id: i64, what: &s
 pub(crate) fn warn_if_unsettled_under_reserved(did: i64, detail: &amenbo_core::view::DecisionDetail, act: &str) {
     for t in detail.linked_tasks.iter().filter(|t| t.status == TaskStatus::InProgress) {
         eprintln!(
-            "⚠ {task} is reserved (in progress) and rests on {decision} — {act} leaves that premise unsettled. Its holder is not notified now; they will see it on their next amenbo command.",
+            "⚠ {task} is reserved (in progress) and rests on {decision} — {act} leaves that premise unsettled. Its holder is not notified now; they will see it on their next Amenbo command.",
             task = task_label(t.id),
             decision = decision_label(did),
         );

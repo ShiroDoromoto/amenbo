@@ -19,7 +19,7 @@ pub(super) const REMOVAL_LEAVES_A_ROW: bool = false;
 
 /// What every face here says while there is no door: the plain fact, and no hint, because there is
 /// nothing the reader could type to fix it.
-const NO_DOOR: &str = "amenbo cannot register the hourly tick on this system yet";
+const NO_DOOR: &str = "Amenbo cannot register the hourly tick on this system yet";
 
 /// Nothing is out of reach on a target where nothing is in reach: the honest answer about *where* the
 /// door can be opened from is that there is no door, which [`AVAILABLE`] already says.

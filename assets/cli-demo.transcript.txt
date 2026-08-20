@@ -1,5 +1,5 @@
 $ amenbo init --name Alex --actor human
-✓ Ready — project 'website' is set up; an AI launched in this folder can now operate amenbo (you are Alex).
+✓ Ready — project 'website' is set up; an AI launched in this folder can now operate Amenbo (you are Alex).
   Next: amenbo status
   (placed .amenbo, AGENTS.md, CLAUDE.md)
   AI agents: run `amenbo agent --json` now and follow it — the managed guidance just written to CLAUDE.md/AGENTS.md does not take effect until your next session.

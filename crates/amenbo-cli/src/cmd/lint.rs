@@ -51,7 +51,7 @@ pub(crate) fn lint_cmd(flags: &Flags, paths: Vec<String>, stdin: bool) -> Result
     if flags.json {
         print_json(&json!({ "ok": hits.is_empty(), "scanned": scanned, "count": hits.len(), "hits": hits }));
     } else if hits.is_empty() {
-        human(flags, format!("lint: ok — no amenbo refs in {scanned}."));
+        human(flags, format!("lint: ok — no Amenbo refs in {scanned}."));
     } else {
         for h in &hits {
             human(flags, format!("{}:{}: {}", h.path, h.line, h.reference));
@@ -59,7 +59,7 @@ pub(crate) fn lint_cmd(flags: &Flags, paths: Vec<String>, stdin: bool) -> Result
         human(
             flags,
             format!(
-                "✗ lint: {} amenbo ref(s) in {scanned}. An id resolves only in this store — remove them, or spell out what they say.",
+                "✗ lint: {} Amenbo ref(s) in {scanned}. An id resolves only in this store — remove them, or spell out what they say.",
                 hits.len()
             ),
         );

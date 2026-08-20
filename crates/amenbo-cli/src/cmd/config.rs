@@ -64,7 +64,7 @@ pub(crate) fn config(store: &mut Store, flags: &Flags, sub: Option<ConfigCmd>) -
         human(flags, format!("default view: {}", store.config.default_view.as_str()));
         human(flags, "sync: not available in this build (local-first)");
         human(flags, format!("startup integrity check (startup_integrity_check): {} (read-only doctor at open; warnings only)", if store.config.startup_integrity_check { "on" } else { "off" }));
-        human(flags, format!("update check (update_check): {} (asks amenbo's update endpoint whether a newer release is out; infra-side only, no user data; timeout + silent-fail + cached; AMENBO_UPDATE_CHECK=0 overrides)", if store.config.update_check { "on" } else { "off" }));
+        human(flags, format!("update check (update_check): {} (asks Amenbo's update endpoint whether a newer release is out; infra-side only, no user data; timeout + silent-fail + cached; AMENBO_UPDATE_CHECK=0 overrides)", if store.config.update_check { "on" } else { "off" }));
     }
     Ok(0)
 }

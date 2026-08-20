@@ -88,7 +88,7 @@ impl CallAmenbo for SelfCall {
     fn call(&self, dir: &Path, args: &[String]) -> Ran {
         let exe = match std::env::current_exe() {
             Ok(exe) => exe,
-            Err(e) => return Ran { ok: false, text: format!("Cannot find the amenbo executable: {e}") },
+            Err(e) => return Ran { ok: false, text: format!("Cannot find the Amenbo executable: {e}") },
         };
         // No shell in between (`AMB-D-667`): the executable is invoked directly, so nothing in an
         // argument is read as syntax by anybody. stdin is closed because this process's own stdin is
@@ -100,7 +100,7 @@ impl CallAmenbo for SelfCall {
             .stdin(Stdio::null())
             .output();
         match out {
-            Err(e) => Ran { ok: false, text: format!("Cannot run amenbo in {}: {e}", dir.display()) },
+            Err(e) => Ran { ok: false, text: format!("Cannot run Amenbo in {}: {e}", dir.display()) },
             Ok(out) => {
                 let stdout = String::from_utf8_lossy(&out.stdout).trim_end().to_string();
                 let stderr = String::from_utf8_lossy(&out.stderr).trim_end().to_string();
@@ -114,8 +114,8 @@ impl CallAmenbo for SelfCall {
                     .into_iter()
                     .find(|s| !s.is_empty())
                     .unwrap_or_else(|| match out.status.code() {
-                        Some(code) => format!("amenbo exited with {code} and said nothing."),
-                        None => "amenbo was ended before it said anything.".to_string(),
+                        Some(code) => format!("Amenbo exited with {code} and said nothing."),
+                        None => "Amenbo was ended before it said anything.".to_string(),
                     });
                 Ran { ok: false, text }
             }
@@ -294,7 +294,7 @@ fn tools(dirs: &[PathBuf]) -> Value {
         },
         {
             "name": "run",
-            "description": format!("Run an amenbo command in one folder and hand back exactly what it wrote. The words are the ones you would type after `amenbo`, one per array element — pull the command's spec with `agent_command` first rather than guessing a flag. Add `--json` yourself where you want machine-readable output. Do not pass `--actor`: this server declares the facet, and one you write is dropped. `bind` and `init` are refused here — ask the person to run either in the folder itself.\n\n{served}"),
+            "description": format!("Run an Amenbo command in one folder and hand back exactly what it wrote. The words are the ones you would type after `amenbo`, one per array element — pull the command's spec with `agent_command` first rather than guessing a flag. Add `--json` yourself where you want machine-readable output. Do not pass `--actor`: this server declares the facet, and one you write is dropped. `bind` and `init` are refused here — ask the person to run either in the folder itself.\n\n{served}"),
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -302,7 +302,7 @@ fn tools(dirs: &[PathBuf]) -> Value {
                     "args": {
                         "type": "array",
                         "items": { "type": "string" },
-                        "description": "the command and its flags, one word per element, as they would be typed after `amenbo` — for example [\"task\", \"list\", \"--filter\", \"status:todo\", \"--json\"]. Empty runs amenbo with no arguments, which is today's work",
+                        "description": "the command and its flags, one word per element, as they would be typed after `amenbo` — for example [\"task\", \"list\", \"--filter\", \"status:todo\", \"--json\"]. Empty runs Amenbo with no arguments, which is today's work",
                     },
                 },
                 "required": [FOLDER_ARG, "args"],
@@ -471,7 +471,7 @@ fn shape(words: &[String]) -> Shaped {
     let line = read_line(words);
     if let Some(refused) = line.subcommand.as_deref().filter(|s| REFUSED.contains(s)) {
         return Shaped::Refused(format!(
-            "`{refused}` is not served over MCP: it writes the pointer that says which project a folder is, and the folders this server works in are the person's to choose. Ask the person to run `{} {refused} …` in the folder itself, or to add the folder to a project in amenbo's own window.",
+            "`{refused}` is not served over MCP: it writes the pointer that says which project a folder is, and the folders this server works in are the person's to choose. Ask the person to run `{} {refused} …` in the folder itself, or to add the folder to a project in Amenbo's own window.",
             Paths::command_name()
         ));
     }

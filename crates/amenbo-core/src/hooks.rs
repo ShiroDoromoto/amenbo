@@ -219,9 +219,9 @@ pub fn hook_block(slot: HookSlot, cmd: &str) -> String {
     let call = slot.hook_call(cmd);
     format!(
         "{HOOK_BEGIN_MARKER}\n\
-         # Refuses this commit when {subject} carries an amenbo ref (AMB-T-… / AMB-D-…): an id resolves\n\
+         # Refuses this commit when {subject} carries an Amenbo ref (AMB-T-… / AMB-D-…): an id resolves\n\
          # only in the store that issued it, so it says nothing to a reader outside. The {name} slot is\n\
-         # where git offers {subject}. amenbo owns only the lines between these two markers — the rest of\n\
+         # where git offers {subject}. Amenbo owns only the lines between these two markers — the rest of\n\
          # this file is left as it is, so this sits happily alongside another tool's hook. Remove it with\n\
          # `{cmd} hooks uninstall`, or delete the markers. When {cmd} is not on PATH the commit is allowed\n\
          # but a warning says the lint was skipped; bypass one commit with `git commit --no-verify`.\n\
@@ -580,7 +580,7 @@ pub fn install(dir: &Path, cmd: &str) -> Result<InstallReport> {
     if report.installed.is_empty() && !report.refused.is_empty() {
         return Err(Error::Conflict(Msg::new(
             format!(
-                "amenbo cannot add its block to the hooks here without changing a file it does not own. Add these lines yourself:\n{}",
+                "Amenbo cannot add its block to the hooks here without changing a file it does not own. Add these lines yourself:\n{}",
                 guidance_block(report.refused.clone(), cmd, "    ")
             ),
         )));

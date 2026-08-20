@@ -428,7 +428,7 @@ pub(crate) fn migrate_at_startup(flags: &Flags) -> Result<(), CliError> {
             );
         }
         eprintln!(
-            "  Older amenbo builds can no longer open this store — update them (`{} update`, or reinstall from the latest installer; GUI and CLI ship together).",
+            "  Older Amenbo builds can no longer open this store — update them (`{} update`, or reinstall from the latest installer; GUI and CLI ship together).",
             Paths::command_name()
         );
     }
@@ -484,7 +484,7 @@ pub(crate) fn run_restore(
         .map_err(|e| CliError {
             code: "restore_error",
             message: e.to_string(),
-            hint: Some(format!("On a too-new archive, update amenbo first (`{} update`).", Paths::command_name())),
+            hint: Some(format!("On a too-new archive, update Amenbo first (`{} update`).", Paths::command_name())),
             exit: 1,
         })?;
     if flags.json {

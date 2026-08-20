@@ -404,11 +404,11 @@ fn open_rejects_a_store_from_a_newer_binary_on_both_paths() {
         Err(e) => e,
     };
     assert_eq!(write_err.code(), "format_ahead", "a stable code the GUI can branch to a dedicated screen on");
-    assert!(write_err.message_en().contains("newer amenbo"), "the sentence: {}", write_err.message_en());
+    assert!(write_err.message_en().contains("newer Amenbo"), "the sentence: {}", write_err.message_en());
     assert!(write_err.message_en().contains(&format!("v{future}")), "names the store's version");
     // One installer ships everything, so a user at this gate already has the newer build: tell them
     // to restart, not to update.
-    assert!(write_err.message_en().contains("restart amenbo"), "it says restart: {}", write_err.message_en());
+    assert!(write_err.message_en().contains("restart Amenbo"), "it says restart: {}", write_err.message_en());
 
     // Read path: refused too — a read reaches for the newer binary's schema just as a write does.
     let read_err = match Store::open_read_at(paths.clone()) {
@@ -416,7 +416,7 @@ fn open_rejects_a_store_from_a_newer_binary_on_both_paths() {
         Err(e) => e,
     };
     assert_eq!(read_err.code(), "format_ahead", "the read path returns the same code");
-    assert!(read_err.message_en().contains("newer amenbo"), "the sentence: {}", read_err.message_en());
+    assert!(read_err.message_en().contains("newer Amenbo"), "the sentence: {}", read_err.message_en());
 
     // The gate neither damages nor waves through: the store's version is still `future` — a refused
     // open does not stamp it back down to ours.

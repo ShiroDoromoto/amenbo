@@ -80,7 +80,7 @@ pub(super) fn register() -> Result<()> {
     std::fs::create_dir_all(&dir).map_err(|e| wrote(&format!("create {}", dir.display()), e))?;
 
     let exe = std::env::current_exe()
-        .map_err(|e| Error::Invalid(Msg::new(format!("Cannot find amenbo's own path: {e}"))))?;
+        .map_err(|e| Error::Invalid(Msg::new(format!("Cannot find Amenbo's own path: {e}"))))?;
     // Written over whatever is there rather than merged into it. These two files are Amenbo's own —
     // their names say so — and rewriting them is exactly what points a timer at the build running now
     // after an upgrade, which is the contract `register` is idempotent for.
@@ -131,7 +131,7 @@ fn unit_dir() -> Result<PathBuf> {
 fn service_unit(exe: &str) -> String {
     format!(
         "[Unit]\n\
-         Description=amenbo hourly tick\n\
+         Description=Amenbo hourly tick\n\
          \n\
          [Service]\n\
          Type=oneshot\n\
@@ -144,7 +144,7 @@ fn service_unit(exe: &str) -> String {
 /// turn outright, and the tick's whole promise is that a day owed something eventually gets it.
 fn timer_unit() -> String {
     "[Unit]\n\
-     Description=amenbo hourly tick\n\
+     Description=Amenbo hourly tick\n\
      \n\
      [Timer]\n\
      OnCalendar=hourly\n\

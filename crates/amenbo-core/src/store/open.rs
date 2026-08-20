@@ -51,7 +51,7 @@ fn ensure_truth_source_in_place(base: &std::path::Path) -> Result<()> {
     if crate::archive::has_legacy_layout(base) {
         return Err(Error::invalid(
             "this device's store predates the consolidation — it is still N stores under `stores/` plus `root/`, \
-             and this build reads one database and can no longer fold that layout. install amenbo 0.1.9 (the last \
+             and this build reads one database and can no longer fold that layout. install Amenbo 0.1.9 (the last \
              build that folds), run `amenbo migrate` there, then update again (nothing is lost: the data is \
              untouched where it is, and that migration backs the store up before it moves anything)",
         ));
@@ -62,7 +62,7 @@ fn ensure_truth_source_in_place(base: &std::path::Path) -> Result<()> {
     Err(Error::invalid(
         "this device's store still carries the old truth-source name (`oplog.sqlite`) — it has not been opened \
          for writing since before the consolidation, and this build neither renames it nor reads the \
-         pre-consolidation shape behind it. install amenbo 0.1.9 (the last build that migrates it), run \
+         pre-consolidation shape behind it. install Amenbo 0.1.9 (the last build that migrates it), run \
          `amenbo migrate` there, then update again (nothing is lost: that migration backs the store up before \
          it moves anything)",
     ))
@@ -102,7 +102,7 @@ pub(crate) fn ensure_format_supported(stamp: &crate::store_engine::FormatStamp) 
     // store — no network needed. Older stores that carry no name fall back to the generic "reinstall
     // from the latest installer".
     let fix = match stamp.set_by.as_deref() {
-        Some(app) => format!("use amenbo {app} or newer — that is the version that wrote this store"),
+        Some(app) => format!("use Amenbo {app} or newer — that is the version that wrote this store"),
         None => {
             let cmd = crate::config::Paths::command_name();
             format!("reinstall from the latest installer (GUI + CLI ship together) or run `{cmd} update`")
@@ -110,7 +110,7 @@ pub(crate) fn ensure_format_supported(stamp: &crate::store_engine::FormatStamp) 
     };
     Err(Error::format_ahead(
         format!(
-            "this store was updated by a newer amenbo (format v{store_format}); this build supports up to v{max}. restart amenbo — if it is already running, it is still the old process. if restarting does not help, {fix}. there is no downgrade: to go back, restore the pre-migration backup the update left behind"
+            "this store was updated by a newer Amenbo (format v{store_format}); this build supports up to v{max}. restart Amenbo — if it is already running, it is still the old process. if restarting does not help, {fix}. there is no downgrade: to go back, restore the pre-migration backup the update left behind"
         ),
     ))
 }
@@ -138,7 +138,7 @@ pub(crate) fn ensure_integer_keyed(engine: &StoreEngine) -> Result<()> {
 fn legacy_keyed_refusal() -> Error {
     Error::invalid(
         "this store predates the consolidation — its rows are still ULID-keyed, and this build reads the \
-         integer-keyed shape and can no longer re-key one. install amenbo 0.1.9 (the last build that \
+         integer-keyed shape and can no longer re-key one. install Amenbo 0.1.9 (the last build that \
          migrates it), run `amenbo migrate` there, then update again (nothing is lost: that migration \
          backs the store up before it moves anything)",
     )

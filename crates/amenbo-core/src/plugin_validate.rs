@@ -418,7 +418,7 @@ fn check_language(problems: &mut Vec<Problem>, lang: &str) {
         problems.push(Problem::new(
             format!("i18n[{lang}]"),
             ProblemCode::UnknownLanguage,
-            format!("'{lang}' is not a language amenbo is read in"),
+            format!("'{lang}' is not a language Amenbo is read in"),
         ));
     }
 }
@@ -432,7 +432,7 @@ fn check_overlay(problems: &mut Vec<Problem>, m: &Manifest, lang: &str, o: &Mani
         problems.push(Problem::new(
             at(key),
             ProblemCode::NotInBase,
-            format!("'{key}' is not something amenbo shows a reader in their own language"),
+            format!("'{key}' is not something Amenbo shows a reader in their own language"),
         ));
     }
 
@@ -482,7 +482,7 @@ fn check_overlay(problems: &mut Vec<Problem>, m: &Manifest, lang: &str, o: &Mani
             problems.push(Problem::new(
                 format!("{loc}.{extra}"),
                 ProblemCode::NotInBase,
-                format!("'{extra}' is not something amenbo shows a reader in their own language"),
+                format!("'{extra}' is not something Amenbo shows a reader in their own language"),
             ));
         }
         if let Some(label) = &field.label {
@@ -557,7 +557,7 @@ fn check_settings_overlay(
         problems.push(Problem::new(
             format!("{loc}.{extra}"),
             ProblemCode::NotInBase,
-            format!("'{extra}' is not something amenbo shows a reader in their own language"),
+            format!("'{extra}' is not something Amenbo shows a reader in their own language"),
         ));
     }
 
@@ -575,7 +575,7 @@ fn check_settings_overlay(
             problems.push(Problem::new(
                 format!("{at}.{extra}"),
                 ProblemCode::NotInBase,
-                format!("'{extra}' is not something amenbo shows a reader in their own language"),
+                format!("'{extra}' is not something Amenbo shows a reader in their own language"),
             ));
         }
         if let Some(label) = &action.label {
@@ -779,7 +779,7 @@ fn check_no_record_ref(problems: &mut Vec<Problem>, field: &str, value: &str) {
         problems.push(Problem::new(
             field,
             ProblemCode::RecordRef,
-            format!("{field} must not cite an amenbo record ('{found}')"),
+            format!("{field} must not cite an Amenbo record ('{found}')"),
         ));
     }
 }

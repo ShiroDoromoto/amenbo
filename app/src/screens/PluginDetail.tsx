@@ -64,7 +64,7 @@ export function PluginDetail({ entry, install, onOpenInstalled, onClose }: {
   }, [onClose]);
 
   return (
-    <div className="setup__overlay" onClick={onClose}>
+    <div className="modal__overlay" onClick={onClose}>
       <div className="plugdet" onClick={(e) => e.stopPropagation()}>
         <div className="plugdet__head">
           <strong className="plugdet__name">{entry.name}</strong>

@@ -22,7 +22,7 @@ beforeEach(() => {
       </ul>
       <div id="blank">blank body space</div>
     </div>
-    <div class="setup__overlay"><button id="modal-btn">ok</button></div>
+    <div class="modal__overlay"><button id="modal-btn">ok</button></div>
     <div id="pane"><input id="pane-input" /></div>
   `;
   rightpane = document.getElementById("pane") as HTMLElement;

@@ -45,79 +45,79 @@ struct Labels {
 /// `Правка` and not `Редактировать` — because a menu that translates literally reads as foreign
 /// even when every word is right.
 const EN: Labels = Labels {
-  about: "About amenbo", check_updates: "Check for Updates",
+  about: "About Amenbo", check_updates: "Check for Updates",
   edit: "Edit", window: "Window", file: "File", help: "Help", exit: "Exit",
 };
 const JA: Labels = Labels {
-  about: "amenbo について", check_updates: "更新を確認",
+  about: "Amenbo について", check_updates: "更新を確認",
   edit: "編集", window: "ウインドウ", file: "ファイル", help: "ヘルプ", exit: "終了",
 };
 const ZH_HANS: Labels = Labels {
-  about: "关于 amenbo", check_updates: "检查更新",
+  about: "关于 Amenbo", check_updates: "检查更新",
   edit: "编辑", window: "窗口", file: "文件", help: "帮助", exit: "退出",
 };
 const ZH_HANT: Labels = Labels {
-  about: "關於 amenbo", check_updates: "檢查更新",
+  about: "關於 Amenbo", check_updates: "檢查更新",
   edit: "編輯", window: "視窗", file: "檔案", help: "說明", exit: "結束",
 };
 const KO: Labels = Labels {
-  about: "amenbo 정보", check_updates: "업데이트 확인",
+  about: "Amenbo 정보", check_updates: "업데이트 확인",
   edit: "편집", window: "윈도우", file: "파일", help: "도움말", exit: "종료",
 };
 const ES: Labels = Labels {
-  about: "Acerca de amenbo", check_updates: "Buscar actualizaciones",
+  about: "Acerca de Amenbo", check_updates: "Buscar actualizaciones",
   edit: "Edición", window: "Ventana", file: "Archivo", help: "Ayuda", exit: "Salir",
 };
 const PT_BR: Labels = Labels {
-  about: "Sobre o amenbo", check_updates: "Verificar atualizações",
+  about: "Sobre o Amenbo", check_updates: "Verificar atualizações",
   edit: "Editar", window: "Janela", file: "Arquivo", help: "Ajuda", exit: "Sair",
 };
 const FR: Labels = Labels {
-  about: "À propos d’amenbo", check_updates: "Rechercher les mises à jour",
+  about: "À propos d’Amenbo", check_updates: "Rechercher les mises à jour",
   edit: "Édition", window: "Fenêtre", file: "Fichier", help: "Aide", exit: "Quitter",
 };
 const DE: Labels = Labels {
-  about: "Über amenbo", check_updates: "Nach Updates suchen",
+  about: "Über Amenbo", check_updates: "Nach Updates suchen",
   edit: "Bearbeiten", window: "Fenster", file: "Datei", help: "Hilfe", exit: "Beenden",
 };
 const IT: Labels = Labels {
-  about: "Informazioni su amenbo", check_updates: "Verifica aggiornamenti",
+  about: "Informazioni su Amenbo", check_updates: "Verifica aggiornamenti",
   edit: "Modifica", window: "Finestra", file: "File", help: "Aiuto", exit: "Esci",
 };
 const RU: Labels = Labels {
-  about: "О программе amenbo", check_updates: "Проверить обновления",
+  about: "О программе Amenbo", check_updates: "Проверить обновления",
   edit: "Правка", window: "Окно", file: "Файл", help: "Справка", exit: "Выход",
 };
 const HI: Labels = Labels {
-  about: "amenbo के बारे में", check_updates: "अपडेट जाँचें",
+  about: "Amenbo के बारे में", check_updates: "अपडेट जाँचें",
   edit: "संपादन", window: "विंडो", file: "फ़ाइल", help: "सहायता", exit: "बाहर निकलें",
 };
 const ID: Labels = Labels {
-  about: "Tentang amenbo", check_updates: "Periksa Pembaruan",
+  about: "Tentang Amenbo", check_updates: "Periksa Pembaruan",
   edit: "Edit", window: "Jendela", file: "Berkas", help: "Bantuan", exit: "Keluar",
 };
 const VI: Labels = Labels {
-  about: "Giới thiệu về amenbo", check_updates: "Kiểm tra bản cập nhật",
+  about: "Giới thiệu về Amenbo", check_updates: "Kiểm tra bản cập nhật",
   edit: "Chỉnh sửa", window: "Cửa sổ", file: "Tệp", help: "Trợ giúp", exit: "Thoát",
 };
 const TH: Labels = Labels {
-  about: "เกี่ยวกับ amenbo", check_updates: "ตรวจสอบการอัปเดต",
+  about: "เกี่ยวกับ Amenbo", check_updates: "ตรวจสอบการอัปเดต",
   edit: "แก้ไข", window: "หน้าต่าง", file: "ไฟล์", help: "ช่วยเหลือ", exit: "ออก",
 };
 const TR: Labels = Labels {
-  about: "amenbo Hakkında", check_updates: "Güncellemeleri Denetle",
+  about: "Amenbo Hakkında", check_updates: "Güncellemeleri Denetle",
   edit: "Düzen", window: "Pencere", file: "Dosya", help: "Yardım", exit: "Çıkış",
 };
 const PL: Labels = Labels {
-  about: "O programie amenbo", check_updates: "Sprawdź aktualizacje",
+  about: "O programie Amenbo", check_updates: "Sprawdź aktualizacje",
   edit: "Edycja", window: "Okno", file: "Plik", help: "Pomoc", exit: "Zakończ",
 };
 const NL: Labels = Labels {
-  about: "Over amenbo", check_updates: "Controleren op updates",
+  about: "Over Amenbo", check_updates: "Controleren op updates",
   edit: "Bewerken", window: "Venster", file: "Bestand", help: "Help", exit: "Afsluiten",
 };
 const UK: Labels = Labels {
-  about: "Про amenbo", check_updates: "Перевірити оновлення",
+  about: "Про Amenbo", check_updates: "Перевірити оновлення",
   edit: "Редагування", window: "Вікно", file: "Файл", help: "Довідка", exit: "Вихід",
 };
 
@@ -195,7 +195,7 @@ pub fn build<R: tauri::Runtime>(handle: &tauri::AppHandle<R>) -> tauri::Result<M
   #[cfg(target_os = "macos")]
   {
     // The first submenu becomes the application menu; macOS localizes the predefined items itself.
-    let mut app_menu = SubmenuBuilder::new(handle, "amenbo").item(&about);
+    let mut app_menu = SubmenuBuilder::new(handle, "Amenbo").item(&about);
     if let Some(check_updates) = &check_updates {
       app_menu = app_menu.separator().item(check_updates);
     }

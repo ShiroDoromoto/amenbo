@@ -56,8 +56,8 @@ const ui = {
   "firstloop.s2btn": "Copy the request",
   "firstloop.copied": "Copied",
   "firstloop.s3title": "The tasks it registers appear here",
-  "firstloop.s3hint": "The moment your AI writes to amenbo, the board you are looking at shows it.",
-  "firstloop.prompt": "This folder is managed with amenbo. Run {cmd} agent --json and follow it, managing the work in amenbo as you go.",
+  "firstloop.s3hint": "The moment your AI writes to Amenbo, the board you are looking at shows it.",
+  "firstloop.prompt": "This folder is managed with Amenbo. Run {cmd} agent --json and follow it, managing the work in Amenbo as you go.",
   "noFolder.title": "This project has no folder linked",
   "noFolder.hint": "An AI launched in the linked folder can operate this project. The folder is what a terminal opens in, and where the request goes.",
   "noFolder.btn": "Link a folder",
@@ -90,13 +90,13 @@ const ui = {
   "projset.folderNoPointer": "not linked", "projset.folderNoPointerHint": "This folder has no .amenbo, so an AI launched here does not resolve to this project. Re-link to write the pointer back.",
   "projset.folderOtherStore": "other store",
   "projset.folderOtherStoreHint": "This folder's .amenbo belongs to “{recorded}”, and this build is “{running}”. A command run there is refused, so an AI launched here does not reach this project. Re-link to hand the folder to “{running}”.",
-  "projset.harness": "Starting your AI on amenbo",
-  "projset.harnessHint": "What this project answered when it was asked to have its AI run this work on amenbo. Clearing the answer puts the notice back the next time you open this project.",
+  "projset.harness": "Starting your AI on Amenbo",
+  "projset.harnessHint": "What this project answered when it was asked to have its AI run this work on Amenbo. Clearing the answer puts the notice back the next time you open this project.",
   "projset.harnessAnswer": "Answer",
   "projset.harnessYes": "Yes",
   "projset.harnessNo": "No",
   "projset.harnessUnanswered": "Not asked yet",
-  "projset.harnessWaiting": "Folders here that still start their AI without amenbo",
+  "projset.harnessWaiting": "Folders here that still start their AI without Amenbo",
   "projset.harnessClear": "Clear the answer",
   "projset.harnessRequest": "The text for your AI",
   "projset.harnessRequestHint": "Pick the tool you work with and copy the text for it. It is here whether or not this project is wired already.",
@@ -216,8 +216,8 @@ const ui = {
   "smartview.inbox": "Inbox @me", "smartview.activity": "Activity",
   "smartview.due": "Due",
   "smartview.dueStop": "Overdue or due today", "smartview.dueHeed": "Due tomorrow",
-  "mailbox.notifyTitle": "amenbo inbox", "mailbox.notifyBody.one": "{n} item needs your attention", "mailbox.notifyBody.other": "{n} items need your attention",
-  "mailbox.notifyFailed": "Couldn't show an OS notification (allow amenbo notifications in system settings)",
+  "mailbox.notifyTitle": "Amenbo inbox", "mailbox.notifyBody.one": "{n} item needs your attention", "mailbox.notifyBody.other": "{n} items need your attention",
+  "mailbox.notifyFailed": "Couldn't show an OS notification (allow Amenbo notifications in system settings)",
   "pager.range": "{from}–{to} of {total}", "pager.page": "page {page}/{pages}",
   // members screen
   // settings screen
@@ -238,16 +238,16 @@ const ui = {
   "settings.autostart": "Start at login",
   "settings.autostartOn": "On",
   "settings.autostartOff": "Off",
-  "settings.autostartNote": "Opens amenbo when you sign in to this computer, exactly as opening it yourself does. What arrived in your inbox while it was closed is gathered up the next time it opens, so being up earlier is noticing earlier.",
+  "settings.autostartNote": "Opens Amenbo when you sign in to this computer, exactly as opening it yourself does. What arrived in your inbox while it was closed is gathered up the next time it opens, so being up earlier is noticing earlier.",
   // The hourly tick, on the settings screen. The band says why the timer is wanted (`tickBanner.*`);
   // this says where things stand and how to change them.
   "settings.dueWarning": "Due warnings",
   "settings.tick": "Hourly check",
   "settings.tickOn": "On",
   "settings.tickOff": "Off",
-  "settings.tickNote": "On, this computer's scheduler wakes amenbo once an hour to look for tasks whose day is near, and the warning goes out through the plugins you have switched on. Off takes that registration away, and nothing of ours is left running.",
+  "settings.tickNote": "On, this computer's scheduler wakes Amenbo once an hour to look for tasks whose day is near, and the warning goes out through the plugins you have switched on. Off takes that registration away, and nothing of ours is left running.",
   "settings.tickRowRemains": "macOS keeps its own record of the row, so it stays in your login items — with nothing behind it.",
-  "nudge.autostart.title": "Open amenbo when you sign in?",
+  "nudge.autostart.title": "Open Amenbo when you sign in?",
   "nudge.autostart.yes": "Yes, open it at login (recommended)",
   "nudge.autostart.no": "No thanks",
   "nudge.autostart.hint": "Settings › Startup switches it back whenever you like.",
@@ -265,7 +265,7 @@ const ui = {
   "settings.logsNote": "Reporting a bug? Open this folder and attach what is in it (the diagnostic log, plus the perf log if you turned it on). No task or decision content is written to either.",
   "settings.exportImport": "Export",
   "settings.exportJson": "Export",
-  "settings.dataNote": "Your data is stored locally on your device and never locked into a proprietary binary. Export writes everything (all projects) out into one folder — for migrating to other tools, one way: portable JSON (export.json) plus the attachment files themselves (attachments/, laid out under the task or decision they hang on). The way back into amenbo is restoring a backup.",
+  "settings.dataNote": "Your data is stored locally on your device and never locked into a proprietary binary. Export writes everything (all projects) out into one folder — for migrating to other tools, one way: portable JSON (export.json) plus the attachment files themselves (attachments/, laid out under the task or decision they hang on). The way back into Amenbo is restoring a backup.",
   "settings.exportDialogTitle": "Export to (a folder is created)",
   "settings.exportDone": "Exported ({kb} KB, {attachments} attachment(s))",
   "settings.exportMissing": " · {missing} attachment(s) had no file left to take",
@@ -311,13 +311,13 @@ const ui = {
   "settings.dataOpPhase.copying": "Writing",
   "settings.dataOpPhase.exporting": "Exporting",
   "settings.dataOpPhase.migrating": "Updating",
-  "restart.title": "amenbo has been updated",
-  "restart.intro": "Another process updated the store to a newer format. This window is the old amenbo, still in memory. What you see is already stale, and it will not refresh again.",
-  "restart.how": "Restarting reopens it with the new amenbo already on disk (the GUI and the CLI ship together).",
+  "restart.title": "Amenbo has been updated",
+  "restart.intro": "Another process updated the store to a newer format. This window is the old Amenbo, still in memory. What you see is already stale, and it will not refresh again.",
+  "restart.how": "Restarting reopens it with the new Amenbo already on disk (the GUI and the CLI ship together).",
   "restart.button": "Restart",
-  "restart.failed": "Could not restart. Quit amenbo and open it again.",
+  "restart.failed": "Could not restart. Quit Amenbo and open it again.",
   "restart.stuck.title": "If restarting does not help",
-  "restart.stuck.intro": "Then the amenbo on disk is still the old one. There is no downgrade — the way back is the pre-migration backup the update left behind.",
+  "restart.stuck.intro": "Then the Amenbo on disk is still the old one. There is no downgrade — the way back is the pre-migration backup the update left behind.",
   "restart.stuck.how": "Either install the newer version (the GUI and the CLI ship together), or restore from that backup on the command line:",
   "restart.stuck.command": "{cmd} restore <pre-migration backup (.amenbo-backup)>",
   "restart.stuck.where": "The pre-migration backup sits in the same folder as this device's store, named starting with pre-migrate-.",
@@ -325,13 +325,13 @@ const ui = {
   "migrate.intro": "Carrying this device's store from format v{from} to v{to} ({steps} step(s)). A whole pre-migration backup is taken first.",
   "migrate.preparing": "Getting ready to update this device's store. If another process (the command line) got here first, this waits for it to finish.",
   "migrate.space": "The pre-migration backup needs ~{required} MiB (archive ~{archive} MiB + staging ~{staging} MiB). ~{free} MiB is free.",
-  "migrate.safety": "Do not quit amenbo until this is done. If it fails, the store is put back exactly as it was.",
+  "migrate.safety": "Do not quit Amenbo until this is done. If it fails, the store is put back exactly as it was.",
   "migrate.doneTitle": "Your data has been updated",
   "migrate.doneIntro": "The store is now at format v{version}.",
   "migrate.backupTo": "The store as it was",
   "migrate.superseded.one": "Removed {n} older pre-migration backup nothing can go back to (only the newest one is a way back).", "migrate.superseded.other": "Removed {n} older pre-migration backups nothing can go back to (only the newest one is a way back).",
-  "migrate.olderBuilds": "Older versions of amenbo can no longer open this store (the GUI and the CLI ship together).",
-  "migrate.continue": "Open amenbo",
+  "migrate.olderBuilds": "Older versions of Amenbo can no longer open this store (the GUI and the CLI ship together).",
+  "migrate.continue": "Open Amenbo",
   "migrate.failedTitle": "The update failed",
   "migrate.retry": "Try again",
   // activity screen
@@ -389,7 +389,7 @@ const ui = {
   "plugins.trustTitle": "Register {url} as a source.",
   "plugins.fingerprint": "Signing key fingerprint",
   "plugins.trustNote": "Plugins installed from this catalog will be verified on this key. Check it against the fingerprint its publisher states.",
-  "plugins.keyChangeNote": "If this catalog's key changes, amenbo stops there. Trusting a new one means removing it and registering it again.",
+  "plugins.keyChangeNote": "If this catalog's key changes, Amenbo stops there. Trusting a new one means removing it and registering it again.",
   "plugins.noKeyNote": "This catalog publishes no key. You can browse it, and nothing on it can be installed.",
   "plugins.alreadyRegistered": "This URL is already registered. Only the name changes — and the key, if none is pinned yet.",
   "plugins.sourceName": "Name", "plugins.sourceCancel": "Cancel", "plugins.trustAndAdd": "Trust and register",
@@ -421,7 +421,7 @@ const ui = {
   "plugins.gate.offEverywhere": "Off everywhere",
   "plugins.gate.device": "This device",
   "plugins.gate.addProject": "Add a project…",
-  "plugins.incompatible": "This build of amenbo cannot run it",
+  "plugins.incompatible": "This build of Amenbo cannot run it",
   "plugins.droppedQueued.one": "{n} waiting event was dropped. Nothing arrives while it is off, and enabling it again starts from now.", "plugins.droppedQueued.other": "{n} waiting events were dropped. Nothing arrives while it is off, and enabling it again starts from now.",
   // the installed screen (the "manage what you have" tab)
   "plugins.installedCount": "{count} installed",
@@ -453,7 +453,7 @@ const ui = {
   "plugins.updates.apply": "Update", "plugins.updates.applyAll": "Update all",
   "plugins.updates.applying": "Updating…",
   "plugins.updates.applied": "Updated {count} (gates, settings and secrets are unchanged)",
-  "plugins.updates.holdIncompatible": "{name}: this build of amenbo cannot run the new one",
+  "plugins.updates.holdIncompatible": "{name}: this build of Amenbo cannot run the new one",
   "plugins.updates.holdSettings": "{name}: the new build needs setting(s) not provided ({keys})",
   "plugins.updates.open": "Open installed",
   "plugins.updates.check": "Check for updates", "plugins.updates.checking": "Checking…",
@@ -497,9 +497,9 @@ const ui = {
   // app / shell chrome
   "app.loadError": "Failed to load data.", "app.loading": "Loading…",
   // lint hook consent: the question Amenbo asks before writing into .git/hooks
-  "hooks.title": "Keep amenbo's refs out of your commits?",
+  "hooks.title": "Keep Amenbo's refs out of your commits?",
   "hooks.why": "A ref like AMB-T-… means nothing outside the store that issued it. A git hook stops one before it reaches a commit.",
-  "hooks.scope": "Asked once. Your answer covers the repositories amenbo works in, now and the ones you add later.",
+  "hooks.scope": "Asked once. Your answer covers the repositories Amenbo works in, now and the ones you add later.",
   "hooks.where": "{project} — {dir}",
   "hooks.yes": "Yes (recommended)",
   "hooks.no": "No",
@@ -507,13 +507,13 @@ const ui = {
   "hookSetup.title": "The lint is not running on your commits",
   "hookSetup.where": "{project} — {dir}",
   "hookSetup.unwired": "{slots}: no hook there. `{cmd}` installs it.",
-  "hookRestored.title": "amenbo restored its lint block",
+  "hookRestored.title": "Amenbo restored its lint block",
   "hookRestored.slots": "{slots}: the block had been changed or removed — restored it to the current version.",
   // The standing row on a project's own screen — the whole of what the GUI says about the session-start
   // hook. It speaks for one project and names that project's folders, and the last of its buttons is the
   // "no" that ends it.
-  "agentHookWiring.title": "Have your AI read amenbo at the start of every session",
-  "agentHookWiring.what": "{tool}: give the text below to your AI to edit {file}, and your AI reads how to work with amenbo at the start of every session and records the work as tasks.",
+  "agentHookWiring.title": "Have your AI read Amenbo at the start of every session",
+  "agentHookWiring.what": "{tool}: give the text below to your AI to edit {file}, and your AI reads how to work with Amenbo at the start of every session and records the work as tasks.",
   "agentHookWiring.folders.one": "The folder still waiting (paste the text once):",
   "agentHookWiring.folders.other": "The folders still waiting (paste the text once in each):",
   "agentHookWiring.pick": "Which tool do you use here?",
@@ -524,7 +524,7 @@ const ui = {
   // The offer to be woken once an hour, put across the whole app. The band says why the timer is
   // wanted; the settings row (`tickSetting.*`) says what is set now and how to change it.
   "tickBanner.title": "Be told before a task's day comes",
-  "tickBanner.what": "Once an hour amenbo wakes, looks for tasks whose day is near, and sends the warning on through the plugins you have switched on. It runs from this computer's own scheduler, so nothing stays running in the background.",
+  "tickBanner.what": "Once an hour Amenbo wakes, looks for tasks whose day is near, and sends the warning on through the plugins you have switched on. It runs from this computer's own scheduler, so nothing stays running in the background.",
   "tickBanner.start": "Start checking due dates",
   "tickBanner.never": "Don't show this again",
   "tickBanner.later": "Later",
@@ -537,7 +537,7 @@ const ui = {
   "mcp.title": "Connect via MCP",
   "mcp.setupTitle": "Reach your projects from an AI",
   "mcp.open": "Connect over MCP (for an AI that cannot open a folder)",
-  "mcp.hint": "An app reaches the projects you choose for it, through one server. Choose them once per app — amenbo writes the whole choice each time.",
+  "mcp.hint": "An app reaches the projects you choose for it, through one server. Choose them once per app — Amenbo writes the whole choice each time.",
   "mcp.configured": "Set up",
   "mcp.unconfigured": "Not set up",
   "mcp.write": "Save the settings file",
@@ -551,7 +551,7 @@ const ui = {
   // over replaces rather than adds (`AMB-D-690`).
   "mcp.handover": "The projects you tick are what the request and the file are made of. Handing one over replaces this app's entry whole — the folders it already reaches included.",
   "mcp.noProjects": "No project has a folder yet, so there is nowhere to point a server.",
-  "mcp.stale": "Left by an older amenbo",
+  "mcp.stale": "Left by an older Amenbo",
   "app.crashTitle": "Something went wrong",
   "app.crashHint": "The screen failed to render. Reload to recover — your data is safe.",
   "app.crashReload": "Reload",
@@ -568,7 +568,7 @@ const ui = {
   "health.repairing": "Repairing…",
   "health.repaired.one": "Repaired the pointers of {n} folder", "health.repaired.other": "Repaired the pointers of {n} folders",
   "update.title": "An update is available",
-  "update.hint": "A newer version has been published. You can update in place from here — it is applied only when you press this button; amenbo never updates itself silently.",
+  "update.hint": "A newer version has been published. You can update in place from here — it is applied only when you press this button; Amenbo never updates itself silently.",
   "update.open": "Update now",
   "update.checking": "Checking for the update…",
   "update.downloading": "Downloading… {pct}%",
@@ -596,7 +596,7 @@ const ui = {
   "id.copyTip": "Click to copy task ID", "id.copied": "Copied",
   "facet.human": "Human", "facet.ai": "AI", "facet.named": "{name} ({facet})",
   // onboarding
-  "onboard.welcome": "Welcome to amenbo",
+  "onboard.welcome": "Welcome to Amenbo",
   "onboard.tagline": "People and AI, one team. No server required. Your data never leaves your device.",
   "onboard.createLabel": "Create a project", "onboard.createHint": "Give it a name to create a new project",
   "onboard.createGo": "Create in app",
@@ -650,11 +650,11 @@ const err: Partial<Record<ErrorCode, string>> = {
   binding_stale: "The linked project directory was not found: {path}",
   // The refusals the Tauri layer raises itself, for contexts core knows nothing about. Their
   // sentences live here rather than in Rust, so the reader gets them in their own language.
-  init_pointer_exists: "This folder (or one above it) is already bound to an amenbo project: {path}",
+  init_pointer_exists: "This folder (or one above it) is already bound to an Amenbo project: {path}",
   init_ambiguous_owners:
     "Several living projects claim this folder ({candidates}), so the lost marker cannot be put back for one of them: {path}",
   binding_nested_tree:
-    "This folder is already inside an amenbo-managed tree (bound at {path}). Binding a subfolder would hide the pointer above it.",
+    "This folder is already inside an Amenbo-managed tree (bound at {path}). Binding a subfolder would hide the pointer above it.",
   migration_failed: "The store's update failed.",
   migration_running: "The store is being updated. Wait for it to finish.",
   plugin_catalog_consent_required:
@@ -682,7 +682,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   // What the engine said is a line in the diagnostic log, not a sentence for a reader: it names none
   // of what they were doing and nothing they could act on. This says the two things they can act on.
   storage_error:
-    "The store could not be read or written, and nothing was changed. Restart amenbo and try again — if it keeps happening, send what Settings > Logs holds.",
+    "The store could not be read or written, and nothing was changed. Restart Amenbo and try again — if it keeps happening, send what Settings > Logs holds.",
   not_found_task: "Task {ref} was not found.",
   not_found_decision: "Decision {ref} was not found.",
   not_found_project: "Project {ref} was not found.",
@@ -711,11 +711,11 @@ const err: Partial<Record<ErrorCode, string>> = {
   invalid_backup_dest_is_dir: "{path} is a folder. A backup is written as one file — give a file name.",
   invalid_backup_dest_exists: "{path} already exists, and a backup overwrites nothing — choose another name.",
   invalid_restore_source_is_dir: "{path} is a folder. Restoring takes one backup file.",
-  invalid_restore_not_an_archive: "{path} is not an amenbo backup file.",
+  invalid_restore_not_an_archive: "{path} is not an Amenbo backup file.",
   invalid_restore_missing_snapshot: "{path} carries no data — the backup file is damaged. Nothing here was changed.",
-  invalid_restore_layout_too_old: "This backup is in an older format (v{layout}); this version reads v{min} and later. Restore it with the amenbo that wrote it. Nothing was changed.",
-  invalid_restore_layout_too_new: "This backup is in a newer format (v{layout}); this version reads up to v{max}. Update amenbo and try again. Nothing was changed.",
-  invalid_restore_archive_newer: "This backup came from amenbo v{app}, whose data is at v{found} — past the v{max} this version reads. Use amenbo v{app} or later. Nothing was changed.",
+  invalid_restore_layout_too_old: "This backup is in an older format (v{layout}); this version reads v{min} and later. Restore it with the Amenbo that wrote it. Nothing was changed.",
+  invalid_restore_layout_too_new: "This backup is in a newer format (v{layout}); this version reads up to v{max}. Update Amenbo and try again. Nothing was changed.",
+  invalid_restore_archive_newer: "This backup came from Amenbo v{app}, whose data is at v{found} — past the v{max} this version reads. Use Amenbo v{app} or later. Nothing was changed.",
   invalid_export_dest_exists: "{path} already exists. Export makes a new folder — choose a name that is free.",
   invalid_migration_no_space: "There is not enough free space for the backup taken before updating: ~{need} MiB is needed (archive ~{archive} MiB + staging ~{staging} MiB), and ~{free} MiB is free at {dir}. Free up space and try again — nothing has been changed yet.",
   invalid_migration_rolled_back: "The update failed and your data was put back exactly as it was ({failure}). The backup taken before it started is kept at {at}.",
@@ -741,7 +741,7 @@ const err: Partial<Record<ErrorCode, string>> = {
     "A broken install of “{name}” is in the way ({reason}). Remove it first.",
   invalid_catalog_unreadable: "The plugin catalog could not be read ({reason}).",
   invalid_catalog_version_ahead:
-    "This catalog is version {version}, newer than this amenbo understands ({supported}). Update amenbo.",
+    "This catalog is version {version}, newer than this Amenbo understands ({supported}). Update Amenbo.",
   invalid_catalog_detail_swapped:
     "The catalog's detail page for “{name}” is not the document the catalog listed.",
   invalid_catalog_detail_unreadable:
@@ -775,7 +775,7 @@ const err: Partial<Record<ErrorCode, string>> = {
     "What the catalog serves for “{name}” holds no “{program}” inside it.",
   invalid_plugin_manifest_unwritable: "“{name}” could not be written to this device ({reason}).",
   invalid_plugin_checksum_format:
-    "The catalog records a checksum in a form amenbo does not know ({checksum}).",
+    "The catalog records a checksum in a form Amenbo does not know ({checksum}).",
   invalid_plugin_checksum_mismatch:
     "The bytes served are not the ones the catalog recorded, so nothing was installed.",
   invalid_plugin_checksum_length: "A checksum is 64 hex characters; this one is {length}.",
@@ -798,13 +798,13 @@ const err: Partial<Record<ErrorCode, string>> = {
   invalid_plugin_config_value_control_chars: "A setting cannot hold control characters.",
   // One refusal over the verdict that caused it. `{reasons}` is the part below, written from its own
   // template — the same three verdicts read under both of these sentences.
-  invalid_plugin_incompatible: "“{name}” does not run on this amenbo: {reasons}.",
+  invalid_plugin_incompatible: "“{name}” does not run on this Amenbo: {reasons}.",
   invalid_plugin_update_incompatible:
-    "The build of “{name}” the catalog publishes does not run on this amenbo ({reasons}). Nothing was replaced — the installed build is untouched.",
+    "The build of “{name}” the catalog publishes does not run on this Amenbo ({reasons}). Nothing was replaced — the installed build is untouched.",
   plugin_incompatible_payload:
-    "it reads event payload v{plugin}, and this amenbo speaks v{amenbo}",
-  plugin_incompatible_amenbo_old: "it needs amenbo {min} or newer, and this is {running}",
-  plugin_incompatible_floor_unreadable: "the minimum amenbo version it names cannot be read (“{min}”)",
+    "it reads event payload v{plugin}, and this Amenbo speaks v{amenbo}",
+  plugin_incompatible_amenbo_old: "it needs Amenbo {min} or newer, and this is {running}",
+  plugin_incompatible_floor_unreadable: "the minimum Amenbo version it names cannot be read (“{min}”)",
 };
 
 // doctor issue kind → template (`{name}` interpolated from the issue's params).
@@ -818,7 +818,7 @@ const doctor = {
     fix: "Re-order the tasks and it resolves itself.",
   },
   stale_managed_block: {
-    message: "The AI guidance (amenbo managed block) in {path} is stale (v{version} → v{current}).",
+    message: "The AI guidance (Amenbo managed block) in {path} is stale (v{version} → v{current}).",
     fix: "“Resync” brings this folder's guidance up to date (your own content is preserved).",
   },
   legacy_pointer: {
@@ -856,11 +856,11 @@ const doctor = {
     fix: "Add a folder in Project settings > Folders.",
   },
   unwired_folder: {
-    message: "{dir} does not start its AI on amenbo: {tools} is set up here and is not wired to run it at session start.",
-    fix: "In Project settings > Folders, copy the text amenbo offers and give it to the AI you run in that folder — amenbo writes no settings file for you.",
+    message: "{dir} does not start its AI on Amenbo: {tools} is set up here and is not wired to run it at session start.",
+    fix: "In Project settings > Folders, copy the text Amenbo offers and give it to the AI you run in that folder — Amenbo writes no settings file for you.",
   },
   unwired_folder_ambiguous: {
-    message: "{dir} does not start its AI on amenbo, and shows no sign of which tool is used there.",
+    message: "{dir} does not start its AI on Amenbo, and shows no sign of which tool is used there.",
     fix: "In Project settings > Folders, pick the tool you use there and give its text to that AI.",
   },
 } satisfies Record<DoctorIssueKind, DoctorTemplate>;

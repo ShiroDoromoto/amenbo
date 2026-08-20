@@ -102,7 +102,7 @@ steps_gui:
     with:
       nudge: autostart
       present: true
-      shows: "Open amenbo when you sign in?"
+      shows: "Open Amenbo when you sign in?"
 
   - type: action
     domain: store
@@ -117,4 +117,4 @@ steps_gui:
     with:
       nudge: autostart
       present: false
-      shows: "Open amenbo when you sign in?"
+      shows: "Open Amenbo when you sign in?"

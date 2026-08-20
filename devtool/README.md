@@ -94,6 +94,33 @@ devtool provisions no Amenbo store of its own.
 All of this is macOS-only, which is where the dev GUI is installed at all;
 elsewhere the `devgui` commands are no-ops.
 
+#### The record the instance leaves in Background Task Management
+
+Installing the tick from an instance (or turning its login item on) registers it
+with macOS under a label of its own — `work.amenbo.tick.amenbo-dev-<id>`,
+parented to `work.amenbo.app.dev.<id>` — and **that registration is not
+`devgui rm`'s to take back**. Deleting the bundle does not remove it, and
+`SMAppService`'s unregister only flips it to `disabled` (both measured). macOS
+exposes no per-item delete either: `sfltool` offers `resetbtm` alone, which
+wipes every app on the machine.
+
+So a `sfltool dumpbtm` read during verification can hold rows for numbers nobody
+will type again. **Tell them apart by identifier**: the row under test is
+`2.work.amenbo.app` / `8.work.amenbo.tick` with nothing after it, and anything
+carrying `.dev.<id>` or `-dev-<id>` is an instance's. The `Name` cannot do that
+job — it freezes at whatever was registered first and never updates.
+
+They do not accumulate forever, though. Measured 2026-08-21: the rows an earlier
+round of tick verification left (3354 / 3355 / 3358 / 3359) are gone, while
+production's own two kept counting their generations up — so no `resetbtm` ran.
+The machine had rebooted in between and nothing in the log names the removal, so
+the reboot is what fits, not what is proven.
+
+What does survive every reboot is launchd's disabled ledger
+(`launchctl print-disabled gui/$(id -u)`), which still names instances torn down
+long ago. It holds a label and nothing else, and `launchctl` writes entries
+there without ever deleting one.
+
 ## Commands
 
 ### `devtool devgui seed <id>`

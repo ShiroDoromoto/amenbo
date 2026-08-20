@@ -1226,7 +1226,7 @@ export async function pickBackupPath(): Promise<string | null> {
   const path = await save({
     title: t("settings.backupDialogTitle"),
     defaultPath: `amenbo-backup-${backupStamp()}.${WORLD_ARCHIVE_EXT}`,
-    filters: [{ name: "amenbo backup", extensions: [WORLD_ARCHIVE_EXT] }],
+    filters: [{ name: "Amenbo backup", extensions: [WORLD_ARCHIVE_EXT] }],
   });
   return typeof path === "string" ? path : null;
 }
@@ -1247,7 +1247,7 @@ export async function pickRestoreArchive(): Promise<string | null> {
     title: t("settings.restoreDialogTitle"),
     multiple: false,
     directory: false,
-    filters: [{ name: "amenbo backup", extensions: [WORLD_ARCHIVE_EXT] }],
+    filters: [{ name: "Amenbo backup", extensions: [WORLD_ARCHIVE_EXT] }],
   });
   return typeof picked === "string" ? picked : null;
 }

@@ -119,7 +119,7 @@ pub enum Command {
         /// `bind` gives when it finds a folder gone
         #[arg(long, value_name = "BINDING-ID", requires = "project")]
         rebind: Option<i64>,
-        /// bind even when this folder is already inside an amenbo-managed tree (a parent has a
+        /// bind even when this folder is already inside an Amenbo-managed tree (a parent has a
         /// `.amenbo`). Off by default so a stray bind in a source subdirectory cannot shadow the
         /// root pointer (and scatter `.amenbo`/AGENTS.md/CLAUDE.md there). It does not reach a git
         /// worktree cut inside that tree: Amenbo is refused there whatever pointer it holds, so

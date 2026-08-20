@@ -1,4 +1,4 @@
-//! Is this folder a **git worktree cut inside an amenbo-managed tree**? A `.amenbo` is found by walking
+//! Is this folder a **git worktree cut inside an Amenbo-managed tree**? A `.amenbo` is found by walking
 //! upward ([`crate::binding::find_upward`]), so a worktree cut *inside* a managed project folder inherits
 //! that project's binding — and while the worktree is throwaway, the store it would write to is not: that
 //! one lives in app-data, outside the checkout, and survives its deletion, so a throwaway environment can
@@ -83,7 +83,7 @@ pub struct Nested {
     pub bound_dir: PathBuf,
 }
 
-/// Is the CWD inside a git worktree that was cut **within** an amenbo-managed tree? `Some` is the refusal;
+/// Is the CWD inside a git worktree that was cut **within** an Amenbo-managed tree? `Some` is the refusal;
 /// `None` means there is nothing to refuse. Both conditions must hold: the CWD is inside a linked worktree
 /// ([`Checkout::Worktree`] — a submodule is not one), and a `.amenbo` sits **strictly above the worktree
 /// root**. The search starts above that root, so a pointer within the worktree — including one

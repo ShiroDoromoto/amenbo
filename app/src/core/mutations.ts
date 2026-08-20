@@ -584,7 +584,7 @@ export async function fetchBoundFolders(projectId: number): Promise<BoundFolderD
  * Folder management on the project settings screen: bind an existing folder to this existing project
  * (the Tauri path for `bind --project`). It drops a `.amenbo` pointer and the AI guide into the folder,
  * which is what lets an AI started there operate on this project. If an ancestor is already an
- * amenbo-managed tree, Rust refuses with `binding_nested_tree`. Outside Tauri this is a no-op.
+ * Amenbo-managed tree, Rust refuses with `binding_nested_tree`. Outside Tauri this is a no-op.
  */
 export async function bindFolder(projectId: number, dir: string): Promise<void> {
   if (!inTauri()) return;

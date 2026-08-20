@@ -124,7 +124,7 @@ function BindCard({ projects, onBound }: { projects: Project[]; onBound: (id: nu
       await bindFolder(projectId, dir);
       onBound(projectId);
     } catch (e) {
-      // Folders already nested under an amenbo-managed tree, and the like, are refused by Rust with a coded error.
+      // Folders already nested under an Amenbo-managed tree, and the like, are refused by Rust with a coded error.
       setError(errText(e));
     } finally {
       setBusy(false);

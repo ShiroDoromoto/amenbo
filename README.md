@@ -277,7 +277,10 @@ leaves your device. What does go out is **infra-side**, and there are two kinds.
 The **update check** reads a small manifest from Amenbo's own update endpoint to
 notice when a newer version is out. That request carries no task data, is on
 by default, and can be turned off (`amenbo config set update_check false`, or
-`AMENBO_UPDATE_CHECK=0`). The check only reads that manifest; Amenbo never updates
+`AMENBO_UPDATE_CHECK=0`). Only a released Amenbo makes it at all: a build that did not
+come out of the release workflow has no version to be measured against that manifest, so it
+does not ask — which is also what keeps this repository's own builds and test runs off the
+endpoint. The check only reads that manifest; Amenbo never updates
 itself in the background — downloading and applying a new version is always something you
 set off yourself (`amenbo update`, or `amenbo update --apply` for the standalone CLI).
 

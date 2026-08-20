@@ -340,6 +340,11 @@ fn personal_mode_has_no_sharing_commands() {
 /// no self-update, `update` is the only road for someone who wants a newer build, and answering "init
 /// first" would shut out exactly the people stuck on an old one or fresh off an install. Reach already
 /// confines the AI, so these two need no second gate by location — hence the ai facet here.
+///
+/// The manifest URL is overridden because a test binary carries no release stamp, and an unstamped
+/// build declines `update` outright rather than naming an installer. The override says "ask here
+/// instead", which is what puts this run back on the road a shipped build takes; the kill switch is
+/// still what keeps it off the network, so nothing is fetched from the address either.
 #[test]
 fn version_and_update_answer_without_a_pointer() {
     let dir = temp_home();
@@ -349,6 +354,7 @@ fn version_and_update_answer_without_a_pointer() {
             .env_remove("AMENBO_HOME")
             .env_remove("AMENBO_PROJECT_DIR")
             .env("AMENBO_UPDATE_CHECK", "0") // no upstream lookup (hermetic)
+            .env("AMENBO_UPDATE_JSON_URL", "http://127.0.0.1:1/latest.json") // a shipped build's road, without the endpoint
             .current_dir(&dir)
             .args(with_defaults(args, "ai"))
             .output()
@@ -386,6 +392,9 @@ fn update_apply_declines_gracefully_without_manifest() {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_amenbo"));
         cmd.env_remove("AMENBO_HOME")
             .env_remove("AMENBO_PROJECT_DIR")
+            // A test binary is unstamped, which is its own refusal; the override puts it on the road a
+            // shipped build takes, so what is exercised here is the unreachable manifest and nothing else.
+            .env("AMENBO_UPDATE_JSON_URL", "http://127.0.0.1:1/latest.json")
             .current_dir(&dir)
             .args(with_defaults(args, "ai"));
         if check_off {
@@ -405,6 +414,52 @@ fn update_apply_declines_gracefully_without_manifest() {
     assert_eq!(code, Some(1), "no manifest, no self-update: {err}");
     let v: Value = serde_json::from_str(err.trim()).unwrap_or_else(|_| panic!("error JSON: {err}"));
     assert_eq!(v["error"]["code"], "io_error", "a plain io error, not a panic: {err}");
+}
+
+/// **A build the release workflow did not stamp asks nothing, with nothing set to stop it.** This is
+/// the case every other test in the tree writes `AMENBO_UPDATE_CHECK=0` for; here that env var is
+/// deliberately absent, along with the URL override, so what answers is the rule itself rather than a
+/// kill switch somebody remembered. A forgotten spawn now falls to *not asking* instead of reaching
+/// the production endpoint — and both faces say which build it is rather than claiming to be current.
+#[test]
+fn an_unstamped_build_declines_to_check_for_updates() {
+    let dir = temp_home();
+    std::fs::create_dir_all(&dir).unwrap();
+    let run = |args: &[&str]| {
+        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+            .env_remove("AMENBO_HOME")
+            .env_remove("AMENBO_PROJECT_DIR")
+            // Nothing is set here on purpose: no kill switch, no override.
+            .env_remove("AMENBO_UPDATE_CHECK")
+            .env_remove("AMENBO_UPDATE_JSON_URL")
+            .current_dir(&dir)
+            .args(with_defaults(args, "ai"))
+            .output()
+            .expect("failed to run the binary");
+        (
+            out.status.code(),
+            String::from_utf8_lossy(&out.stdout).to_string(),
+            String::from_utf8_lossy(&out.stderr).to_string(),
+        )
+    };
+
+    let (code, out, err) = run(&["update", "--print", "--json"]);
+    assert_eq!(code, Some(0), "declining is an answer, not a failure: {err}");
+    let v: Value = serde_json::from_str(out.trim()).unwrap_or_else(|_| panic!("update JSON: {out}"));
+    assert_eq!(v["reason"], "unstamped_build", "it names the build, not the network: {out}");
+    assert_eq!(v["update_available"], false, "nothing was asked, so nothing is available: {out}");
+    // Nothing was queried, so nothing upstream is claimed — not a version, not an installer.
+    assert!(v["latest_version"].is_null(), "no version is claimed: {out}");
+    assert!(v["url"].is_null(), "no installer is named: {out}");
+    assert_eq!(v["opened"], false, "and nothing is opened: {out}");
+
+    // `--apply` declines the same way, and plainly (exit 0) — there was never a manifest to fail on.
+    let (code, out, err) = run(&["update", "--apply", "--json"]);
+    assert_eq!(code, Some(0), "a build that cannot be measured is not an error: {err}");
+    let v: Value = serde_json::from_str(out.trim()).unwrap_or_else(|_| panic!("apply JSON: {out}"));
+    assert_eq!(v["action"], "self_update");
+    assert_eq!(v["updated"], false, "no swap happened: {out}");
+    assert_eq!(v["reason"], "unstamped_build", "for the same named reason: {out}");
 }
 
 /// `amenbo update --rollback` undoes the last `--apply` offline. Two network-free checks of the wiring:

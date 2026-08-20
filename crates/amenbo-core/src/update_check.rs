@@ -13,11 +13,18 @@
 //! and swapping the binary in place — is [`crate::self_update`]'s job (the standalone CLI), which
 //! reuses the [`LatestRelease`] fetched here.
 //!
-//! One channel is outside all of that: a **development build never queries at all**
-//! ([`is_disabled`]). Its version is normally *behind* what production's manifest names, so every
-//! answer this module could hand it is either an offer to install production over itself or a claim
-//! to be current that it cannot make. Withholding the material closes both, for every caller, with
-//! no traffic.
+//! Two kinds of build are outside all of that, and both for the same reason — the manifest names a
+//! version they cannot be measured against, so every answer this module could hand them is either an
+//! offer to install production over themselves or a claim to be current that they cannot make
+//! ([`is_disabled`]). A **development build never queries at all**: its version is normally *behind*
+//! what production's manifest names. Neither does a build the release workflow did not stamp
+//! ([`crate::build_stamp::is_release_build`]) — a working tree wears the released number before the
+//! release that publishes it, so it is the same mismatch in the other direction. That second arm is
+//! what keeps the test suites, `make verify` and any local build off the production endpoint by
+//! construction, rather than by every spawn remembering to set `AMENBO_UPDATE_CHECK=0`: a forgotten
+//! one now falls to *not asking*. An unstamped build that was pointed somewhere else to ask
+//! (`AMENBO_UPDATE_JSON_URL`) is not withheld — that override is how a test drives the query against
+//! a manifest of its own, and it never names the production endpoint.
 //!
 //! The module does nothing but query and fetch. Comparing the fetched version against the running
 //! binary to derive `update_available` is the caller's job (it is folded into
@@ -266,23 +273,51 @@ struct CacheEnvelope {
     release: LatestRelease,
 }
 
-/// Whether the query is **disabled**: the build is on the development channel, or the config is off
-/// (`enabled = false`), or the `AMENBO_UPDATE_CHECK` env var asks for it to be off. The env var wins
-/// over the config — it is the hard kill switch — and the channel wins over both, being a fact of
-/// the build rather than a preference: there is no answer a dev build could act on (see the module
-/// header). Kept pure by taking all three as arguments; [`is_disabled`] below is what reads the
-/// environment and the channel.
-fn disabled(enabled: bool, env_off: bool, dev_channel: bool) -> bool {
-    dev_channel || !enabled || env_off
+/// Whether the query is **disabled**: the build is on the development channel, or it carries no
+/// release stamp and was pointed at no manifest of its own, or the config is off (`enabled = false`),
+/// or the `AMENBO_UPDATE_CHECK` env var asks for it to be off. The env var wins over the config — it
+/// is the hard kill switch — and the two facts of the build win over both, being facts rather than
+/// preferences: there is no answer either build could act on (see the module header). Kept pure by
+/// taking all five as arguments; [`is_disabled`] below is what reads the environment, the channel and
+/// the stamp.
+fn disabled(
+    enabled: bool,
+    env_off: bool,
+    dev_channel: bool,
+    release_build: bool,
+    url_overridden: bool,
+) -> bool {
+    dev_channel || withheld_from_build(release_build, url_overridden) || !enabled || env_off
 }
 
-/// Whether the query is disabled, effectively — the channel, the config toggle and the env override
-/// combined.
+/// Whether the query is withheld because the binary is not a release artifact: no stamp, and no
+/// `AMENBO_UPDATE_JSON_URL` naming somewhere else to ask. The override is what lets a test point the
+/// query at its own manifest — the production endpoint is only ever reached by a build that shipped.
+fn withheld_from_build(release_build: bool, url_overridden: bool) -> bool {
+    !release_build && !url_overridden
+}
+
+/// Whether the query is disabled, effectively — the channel, the release stamp, the config toggle and
+/// the env override combined.
 pub fn is_disabled(enabled: bool) -> bool {
     disabled(
         enabled,
         crate::env::update_check_disabled(),
         crate::config::Paths::is_dev_channel(),
+        crate::build_stamp::is_release_build(),
+        crate::env::update_json_url().is_some(),
+    )
+}
+
+/// Whether *this* build is the one the query is withheld from for want of a release stamp
+/// ([`withheld_from_build`]). The CLI asks so it can word the refusal — a local build that says
+/// "no newer version detected" is claiming something it never went and looked at (`AMB-D-378`
+/// names the same stamp, for migrations).
+#[must_use]
+pub fn is_withheld_from_build() -> bool {
+    withheld_from_build(
+        crate::build_stamp::is_release_build(),
+        crate::env::update_json_url().is_some(),
     )
 }
 
@@ -344,8 +379,8 @@ fn fetch(url: &str) -> Option<LatestRelease> {
 /// out; silent on failure; caches its result.**
 ///
 /// - `enabled` is [`crate::config::Config::update_check`]. Disabled — by that toggle, by the env
-///   kill switch, or by being a development build ([`is_disabled`]) — means `None` immediately, with
-///   no traffic.
+///   kill switch, by being a development build, or by carrying no release stamp ([`is_disabled`]) —
+///   means `None` immediately, with no traffic.
 /// - A fresh cache entry (within the TTL) is returned as-is, again with no traffic.
 /// - If the entry is stale or absent, we query upstream exactly once, with a timeout, and update the
 ///   cache on success.
@@ -616,16 +651,48 @@ mod tests {
         assert!(opened.contains("-update."), "the update copy is what gets opened: {opened}");
     }
 
+    /// A stamped production build, which is where the preferences are the only thing deciding.
+    const SHIPPED: bool = true;
+    /// No `AMENBO_UPDATE_JSON_URL`: the query would go to the production endpoint.
+    const NO_URL: bool = false;
+
     #[test]
     fn disabled_by_channel_config_or_env() {
-        assert!(disabled(false, false, false), "config off means disabled");
-        assert!(disabled(true, true, false), "the env override wins over config, so disabled");
-        assert!(disabled(false, true, false), "both off, disabled");
-        assert!(!disabled(true, false, false), "config on with no env override means enabled");
+        assert!(disabled(false, false, false, SHIPPED, NO_URL), "config off means disabled");
+        assert!(disabled(true, true, false, SHIPPED, NO_URL), "the env override wins over config, so disabled");
+        assert!(disabled(false, true, false, SHIPPED, NO_URL), "both off, disabled");
+        assert!(!disabled(true, false, false, SHIPPED, NO_URL), "config on with no env override means enabled");
         // The channel is a fact of the build, so it outranks every preference: a dev build is
         // disabled however the toggle and the env var are set.
-        assert!(disabled(true, false, true), "a dev build is disabled with everything else on");
-        assert!(disabled(false, true, true), "a dev build stays disabled when the rest is off too");
+        assert!(disabled(true, false, true, SHIPPED, NO_URL), "a dev build is disabled with everything else on");
+        assert!(disabled(false, true, true, SHIPPED, NO_URL), "a dev build stays disabled when the rest is off too");
+    }
+
+    /// The stamp decides the same way the channel does, and the override is the one way past it: the
+    /// production endpoint is reached by a shipped build and by nothing else, so a spawn that forgets
+    /// `AMENBO_UPDATE_CHECK=0` falls to not asking rather than to asking production.
+    #[test]
+    fn only_a_stamped_build_reaches_the_production_endpoint() {
+        assert!(!disabled(true, false, false, true, NO_URL), "a shipped build asks the default endpoint");
+        assert!(disabled(true, false, false, false, NO_URL), "an unstamped build asks nothing");
+        assert!(!disabled(true, false, false, false, true), "pointed elsewhere, it asks that instead");
+        // The preferences still hold over the override: it names where to ask, not whether to.
+        assert!(disabled(false, false, false, false, true), "config off still means disabled");
+        assert!(disabled(true, true, false, false, true), "the env kill switch still wins");
+        // And the channel outranks the override too — a dev build has no manifest to be measured
+        // against whatever it is pointed at.
+        assert!(disabled(true, false, true, false, true), "a dev build stays disabled when pointed elsewhere");
+    }
+
+    /// The predicate the CLI words its refusal from is the stamp arm alone — not the channel, not the
+    /// preferences.
+    #[test]
+    fn the_withheld_predicate_is_the_stamp_arm_alone() {
+        assert!(withheld_from_build(false, false), "unstamped and unpointed is what is withheld");
+        assert!(!withheld_from_build(true, false), "a shipped build is not");
+        assert!(!withheld_from_build(false, true), "nor is one pointed at its own manifest");
+        // The test binary is itself unstamped, so the live reading agrees with the rule.
+        assert!(!crate::build_stamp::is_release_build(), "a test binary is never a release artifact");
     }
 
     #[test]

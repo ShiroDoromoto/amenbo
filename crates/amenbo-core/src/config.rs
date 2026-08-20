@@ -383,8 +383,10 @@ pub struct Config {
     /// even this infrastructure query — the privacy escape hatch. The query is **infrastructure
     /// traffic only**; the core guarantee of zero functional traffic (no user data ever leaves the
     /// machine) is untouched. The env var `AMENBO_UPDATE_CHECK=0` overrides the config and disables
-    /// it outright — a hard kill switch for CI. The query has a timeout, fails silently, and caches
-    /// its result ([`crate::update_check`]). **A local setting; never synced.**
+    /// it outright — a hard kill switch for CI, though a build CI produced is unstamped and so does
+    /// not ask in the first place ([`crate::update_check::is_disabled`]). The query has a timeout,
+    /// fails silently, and caches its result ([`crate::update_check`]). **A local setting; never
+    /// synced.**
     #[serde(default = "default_true")]
     pub update_check: bool,
     /// Whether the GUI is registered to start when the user logs in to the OS (`AMB-D-541`).

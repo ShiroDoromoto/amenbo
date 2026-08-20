@@ -1,6 +1,6 @@
 # Pre-distribution verification
 
-This subsystem verifies the **shipped / installed** amenbo build as a black box, before a
+This subsystem verifies the **shipped / installed** Amenbo build as a black box, before a
 release goes out. It is deliberately separate from `make test`, which exercises the
 build-time workspace artifacts.
 
@@ -51,7 +51,7 @@ A scenario is **one goal and the steps that reach it** — the path a reader act
 feature out of a list. What this gate defends is the release, and what a release breaks is a path.
 
 - **The file is named after the path**, and the scenario's `id` is the file's stem. Nothing pins the
-  set's size or its names to amenbo's own capability list: that list stays the feature inventory
+  set's size or its names to Amenbo's own capability list: that list stays the feature inventory
   `amenbo agent --json` prints, and it is not the denominator of anything here.
 - **A step belongs to the path it is on**, whichever commands it takes on the way. A path crosses
   several capabilities by definition — that is what makes it a path — so the question a step answers
@@ -105,7 +105,7 @@ The loopback is the other side of that. A third-party catalog is trusted on the 
 publishes beside its `catalog.json`, and a key is *served*, never written down — so a scenario that
 walks the pin (`plugin catalog-stand`) has the run publish a catalog of its own on a port, and names
 it by the `as:` binding rather than by a URL it could not have known. `catalog-rotate-key` serves the
-other of two keys from the same address, which is a publisher rotating theirs as amenbo sees it. The
+other of two keys from the same address, which is a publisher rotating theirs as Amenbo sees it. The
 host is `amenbo-static-host`, shared with the main workspace's own tests.
 
 What that catalog puts on its shelf is the scenario's to write, under `offers:` — the one arg written
@@ -199,7 +199,7 @@ from this repository.
 
 **The world a road starts from is stood up before the app is.** A scenario's [`given:`](#given--the-world-a-road-starts-from)
 is walked by the CLI the same bundle ships (`Contents/MacOS/amenbo`), pointed at that same throwaway
-store: the build under test stands up its own world, rather than whichever amenbo the operator has
+store: the build under test stands up its own world, rather than whichever Amenbo the operator has
 on `PATH`. It runs before the launch, since a store is read as the app comes up, and before there is
 an evidence directory, so a premise that could not be stood up leaves no shots of a half-built
 world. Where it stops is the screen's own moves — `steps_gui` is the operator's to walk, and a
@@ -426,7 +426,7 @@ refers back to it with `target:` — an op that joins two objects names the seco
 (`decision link`'s `task:`), and every such key is checked back to an earlier binding, not just
 `target:`.
 
-The last four are not things filed in a store: `store` is this device's amenbo itself — its
+The last four are not things filed in a store: `store` is this device's Amenbo itself — its
 settings, the identity it answers `whoami` with, the build in place, and the store as a whole
 (`export`, `backup`, `restore`, the integrity reads) — `folder` is a directory and the project its
 `.amenbo` names, `repo` is the folder the run works in as a place with files and a git history, and
@@ -446,7 +446,7 @@ Those names are answered from what the run moved instead. A folder name also tra
 a task is worked in, and are placed and read the same way the `folder` steps' are. A **plugin** is
 named the way the catalog names it (`name: worktree`), which is what every one of its commands takes.
 
-`plugin run` is the one place where a step's arguments are not amenbo's. Everything after the
+`plugin run` is the one place where a step's arguments are not Amenbo's. Everything after the
 plugin's name belongs to the plugin, so `command:` is the word its own face takes, `task:` hands it
 the id of a task an earlier step created, and `args:` carries anything else through verbatim. The
 value that comes back is read by the `returned` assert, which has to **follow its call**: a command
@@ -467,13 +467,13 @@ the other two.
 One domain is not in the store at all. **`repo`** is the folder the run works in: `write-file` puts
 a file there (what an attachment ingests, what the lint is pointed at), `copy-fixture` puts one
 there from `fixtures/`, and `git-init` makes the folder a git repository, which is the only way the
-hook slots are real enough to write into. `wire-ai` is the same kind of stand-in one tier up: amenbo
+hook slots are real enough to write into. `wire-ai` is the same kind of stand-in one tier up: Amenbo
 hands over the text that starts a folder's AI on it and writes no settings file itself, so the road
 past that point exists only if someone pastes — and it pastes what the build under test handed over,
 into the file that build named. All of it stays inside the run's own throwaway folder — a
 path that is absolute, or that climbs out with `..`, is refused.
 
-One more is not in the store either, and is not a command at all. **`mcp`** is amenbo reached over a
+One more is not in the store either, and is not a command at all. **`mcp`** is Amenbo reached over a
 protocol rather than typed at: `serve` starts one server for one folder and holds it up
 for the rest of the road, `call` calls a tool on it with the words a caller sends, and `offers` and
 `answered` read what it published and what came back. It is a domain of its own because a protocol
@@ -482,7 +482,7 @@ a tool that ran and refused comes back as a *result* marked in error rather than
 which is what an assert there is written against.
 
 And one is nobody typing at all — on its command side. **`tick`** is the machine's own scheduler
-starting amenbo once an hour, and what amenbo works out once it is awake: `woken` carries out one
+starting Amenbo once an hour, and what Amenbo works out once it is awake: `woken` carries out one
 turn and judges what came back, which is the whole of what a scheduler ever gets — a tick leaves a
 day mark and nothing else a reader can ask for, so being woken *is* the reading. `holds` reads what
 the run *did* to the registration — `changed: false` being "left the machine as it was found".
@@ -499,7 +499,7 @@ screen — so these are screen roads alone, the terminal's way in (`tick install
 nothing. `banner` reads whether the band offering the hourly check is standing across the app, up
 only while the device is unanswered, a dated task is open and a `task.due` subscriber is enabled
 somewhere; `banner-answer` gives one of its three answers (`start` / `never` / `later`); `setting`
-and `set` read and move the row in amenbo's own settings that holds the answer afterwards — the one
+and `set` read and move the row in Amenbo's own settings that holds the answer afterwards — the one
 way a no is taken back. A road that answers `start`, or moves the row to `on`, registers the timer
 for real, so it takes that back (the row to `off`) before it ends, and what it asserts in between
 stays on the answer's side of the line `holds` draws: the answer having landed, never the machine's
@@ -519,7 +519,7 @@ a pointer whose id and slug both check out is the one nothing but the name can t
 build the catalog has moved past, which is what `plugin update` puts right — the catalog publishes one
 build, and an asset is trusted only by the key of the catalog that served it, so there is no second
 build to install first and no way to sign one into existence. Three of the `plugin declare-…` ops put a setting into what an
-installed plugin says it takes: what a plugin takes is the author's word, amenbo never invents a field,
+installed plugin says it takes: what a plugin takes is the author's word, Amenbo never invents a field,
 and **no plugin in the official catalog declares one at all** — so every road through `plugin config`
 would go unwalked until one does. `declare-setting` writes the plain kind, the line a reader types and
 reads back; `declare-secret` writes the flag that sends a value down the other road, which fails
@@ -553,32 +553,32 @@ every plugin the catalog publishes answers in the time a process takes to start.
 leaves one answering with the config it was handed, which is the only witness a setting's delivery has:
 it travels on the child process — as an environment variable for a secret, in the stdin document for
 everything else — and the published plugins use their settings rather than report them.
-`plugin read-back-program` leaves one calling amenbo back, which is the only witness the read-back
+`plugin read-back-program` leaves one calling Amenbo back, which is the only witness the read-back
 route has: an event names a record and carries none of it, so the content is fetched by running the
-binary with the store and the window amenbo handed over — and the published plugins work everything
-out from the repository they are called in, asking amenbo nothing. `plugin unbadge` takes the catalog's badge off an installed
+binary with the store and the window Amenbo handed over — and the published plugins work everything
+out from the repository they are called in, asking Amenbo nothing. `plugin unbadge` takes the catalog's badge off an installed
 plugin, which is the only way a road meets a stranger's: the badge is the catalog's to grant and an
 author who could write it onto themselves would be the reason it is worth nothing, so every plugin
 the official catalog serves arrives with it and no install reaches the state a user is in the moment
 they install from anywhere else. `plugin installed-dir` shuts what
 is installed away and gives it back, which is the only way a write's delivery is left standing:
 delivery rides along with the write that caused it, so a push made by hand carries something only
-where that drive never ran — and amenbo skips it exactly when the installed plugins will not read.
+where that drive never ran — and Amenbo skips it exactly when the installed plugins will not read.
 They are the
 same idea as `repo write-file`: the
-state on disk a scenario has to arrive at, and cannot reach by using amenbo, the driver makes. Reach
-for one only when the line under test is what amenbo does about that state.
+state on disk a scenario has to arrive at, and cannot reach by using Amenbo, the driver makes. Reach
+for one only when the line under test is what Amenbo does about that state.
 
 One of them puts nothing wrong — it puts time. `store worn-in` leaves the store reading as one
 somebody has been coming back to: the launches this device has tallied, and the days its records were
-written on. Both are what amenbo holds an unasked offer behind, and neither is reachable by doing
+written on. Both are what Amenbo holds an unasked offer behind, and neither is reachable by doing
 anything — a launch tally is raised by the app coming up, and days are days, so a run that tried to
 earn this would have to last a week. It is written straight onto the store, which is the one place a
-driver reaches past the binary's face: the two scalars amenbo tallies into, and one record moved back
+driver reaches past the binary's face: the two scalars Amenbo tallies into, and one record moved back
 per day asked for (the store has to hold at least that many). A store is a plain SQLite file — no
 shipped path keys one — so this crate carries `rusqlite` for that single op and for nothing else.
 
-`fixtures/` is for text a scenario cannot hold itself. This tree's prose rule keeps a bare amenbo
+`fixtures/` is for text a scenario cannot hold itself. This tree's prose rule keeps a bare Amenbo
 reference out of every `.yaml`, and the lint has nothing to find unless a file really carries one —
 so the file carries it and the scenario names the file.
 
@@ -615,7 +615,7 @@ rather than an error. The `store doctor` assert reads its verdict through `ok`, 
 — a kind out of doctor's own list — when what is under test is a single problem appearing or going:
 most of what doctor raises is a warning, and a warning leaves `ok` alone. A `store snapshot` assert
 takes `absent: <text>` when what is under test is something that must **not** have left the store: what
-amenbo handed out is read as bytes — one file for a backup, the whole folder for an export — and the
+Amenbo handed out is read as bytes — one file for a backup, the whole folder for an export — and the
 word is looked for verbatim, which needs no reading of the layout around it. A `plugin config` assert
 takes `secret: true` for the same kind of question one tier up: the read says the setting is a secret,
 and does not hand the value over with it. It takes `state:` for the question a value cannot answer for
@@ -627,7 +627,7 @@ screen's alone, `equals` being how the same value is read where there is no box.
 Both it and the `plugin config-set` beside it take `project:`, the crossing the value is held at — a
 setting belongs to one, and a terminal says which by standing in a folder bound to it, so the driver
 stands in that project's folder before it types. Naming none is the folder the run itself works from,
-which answers to the project amenbo raised for it; a premise that leaves it out while the road reads
+which answers to the project Amenbo raised for it; a premise that leaves it out while the road reads
 the value at a crossing of its own writes somewhere neither road then looks. That word is the
 terminal's alone — on screen the row the settings are opened inside has already answered it, and the
 GUI harness turns it away — and it travels as a word rather than as a binding, so a test over the
@@ -679,7 +679,7 @@ takes for granted, or — where filing is what the road is about — one piece o
 already standing on that board.
 
 **A road that opens a project names one that is there**: a project the world raised, or `cwd` — the
-project a run already stands in, which amenbo raises for the folder the run works in and calls after
+project a run already stands in, which Amenbo raises for the folder the run works in and calls after
 it. The name travels as a word rather than as a binding, so nothing in the lint or the render would
 catch a road sending an operator to hunt a list for a project nobody made; a test over the scenario
 set holds it instead.
@@ -689,7 +689,7 @@ road makes is one the premise never saw. So a second project a road only reads a
 a narrowing has to have something to leave out — is stood up in the premise whole, with the records
 in it, and the road is left holding the narrowing alone.
 
-The same goes for anything a screen road hands to amenbo from outside it. Hanging a file is a move on
+The same goes for anything a screen road hands to Amenbo from outside it. Hanging a file is a move on
 a record and not a way of making one, so the bytes have to be lying in the run's folder before the
 step that attaches them: `repo write-file` is how they get there, and a road that asks for a file
 nobody wrote stalls on the operator having nothing to pick.
@@ -699,7 +699,7 @@ walks.
 
 The list holds two premises that are not records at all, and both stand up the passage of time —
 the one world a road can only be given, every other premise being something somebody could have done
-a moment before the run. `store worn-in` is how much amenbo has been used on this device, which they
+a moment before the run. `store worn-in` is how much Amenbo has been used on this device, which they
 could only have done over days; `tick deferred` is a day having passed — or not — since the band was
 put off, which no run can wait out, the band being judged once at launch.
 
@@ -717,7 +717,7 @@ in their own sequence, so a premise and a step never both call themselves the fi
 
 ### `refused:` — the step that is right to fail
 
-Some of what amenbo promises is a **refusal**: a reserve of a task another session holds comes back
+Some of what Amenbo promises is a **refusal**: a reserve of a task another session holds comes back
 `already_reserved`, one whose premises are unmet comes back `not_ready`, and a write outside an AI's
 reach comes back `out_of_reach`. A driver that reads every non-zero exit as its own failure cannot
 write that line down at all — so an action names the code it expects to be turned away with:
@@ -797,8 +797,8 @@ written out again.
 
 `repo mcp-in-app` walks off that screen and is one road's for a further reason: what it reads is another
 program, opened by hand with the file the fold just handed over. It is written for the one app whose
-settings amenbo writes itself, with nobody in between — everywhere else a reader's own AI does the edit,
-and what amenbo owns there is the wording, which is held up without leaving this workspace. The step is a
+settings Amenbo writes itself, with nobody in between — everywhere else a reader's own AI does the edit,
+and what Amenbo owns there is the wording, which is held up without leaving this workspace. The step is a
 `Review` whichever way it goes, since the shot a run takes is of the build under test and the window that
 settles this one is not; the instruction asks the attending AI for that picture instead. It is walked once
 a release, and going further — the app's own AI making a task through the server — is a round trip walked

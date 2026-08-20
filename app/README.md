@@ -1,6 +1,6 @@
 # amenbo app (GUI)
 
-Desktop GUI for amenbo: a Tauri shell (Rust host) wrapping a Vite + React +
+Desktop GUI for Amenbo: a Tauri shell (Rust host) wrapping a Vite + React +
 TypeScript front end, wired to `amenbo-core` and shipped inside the unified
 per-OS installer alongside the CLI. Every screen reads and writes the same local
 SQLite store the CLI does, and repaints live when another process (the CLI, a

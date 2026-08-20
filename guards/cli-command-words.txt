@@ -1,0 +1,38 @@
+# The CLI's top-level command words, as it registers them — one per line, `#` comments ignored.
+#
+# Declared here because two guards read the same list from opposite sides, and a list kept twice is a
+# list that drifts:
+#   - check-cli-name.sh: `amenbo <word>` is a command someone is being told to type, so its name has
+#     to come from command_name() rather than be spelled in.
+#   - check-product-name.sh: the same shape is the one place a lowercase `amenbo` is right in prose,
+#     so it is what that guard steps over.
+#
+# `version` is deliberately absent. It doubles as a plain noun ("a minimum amenbo version"), so
+# listing it would make check-cli-name.sh miss a real hardcoded name and make check-product-name.sh
+# step over a real prose slip. Leaving it out costs each guard nothing but one catch fewer in a shape
+# neither can read; the same argument governs any word added here.
+agent
+update
+config
+whoami
+init
+bind
+unbind
+status
+activity
+sync-guide
+doctor
+validate
+lint
+hooks
+project
+dimension
+task
+comment
+decision
+attach
+export
+backup
+restore
+hard-erase
+plugin

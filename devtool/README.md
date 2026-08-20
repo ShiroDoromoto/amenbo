@@ -1,6 +1,6 @@
 # devtool
 
-amenbo's portable developer-support CLI — a single static Go binary (no runtime,
+Amenbo's portable developer-support CLI — a single static Go binary (no runtime,
 no venv) you can drop into any project regardless of its language.
 
 On macOS it gives a task its own throwaway **dev GUI** — bundle, app-data and
@@ -11,7 +11,7 @@ demand.
 
 ## Build
 
-It is **optional**, and so is its toolchain: amenbo builds, tests and ships
+It is **optional**, and so is its toolchain: Amenbo builds, tests and ships
 without Go, and nothing outside this directory depends on it. Build it only if
 you want it.
 
@@ -23,14 +23,14 @@ make devtool        # builds to ~/.cargo/bin/devtool
 ## Model
 
 The checkout a task is written in is a git worktree **outside the repo**, in a
-sibling dir, cut by amenbo's official `worktree` plugin:
+sibling dir, cut by Amenbo's official `worktree` plugin:
 
 ```
 <repo>/../<repo-name>-worktrees/<id>/    git worktree checkout on task/<id>
 ```
 
 devtool reads that layout and cuts none of it. Three tools, three jobs, and none
-of them reaching into another's: **amenbo** holds the backlog, the **`worktree`
+of them reaching into another's: **Amenbo** holds the backlog, the **`worktree`
 plugin** holds git, and **devtool** holds the one piece of isolation neither can
 give — a GUI bundle, which is installed machine-wide and so cannot live in a
 checkout at all.
@@ -43,7 +43,7 @@ Two concerns are kept physically apart:
 - **Debug verification** (does my code work) → the worktree's **dev build**
   against a **throwaway store** (e.g. `make verify`), inside the worktree.
 
-Because the worktree has no repo `.amenbo` in its ancestry, amenbo commands run
+Because the worktree has no repo `.amenbo` in its ancestry, Amenbo commands run
 there cannot reach the real backlog — they fall to an isolated/throwaway store.
 That is the containment guarantee, and it also makes `make verify` isolate
 cleanly (no `.amenbo` ancestor to hijack the mktemp store).
@@ -89,7 +89,7 @@ instance's own store — never in the shared one, which no task may edit.
 devtool seeds and reclaims the instance; the Makefile builds it. That split is
 deliberate — a bundle costs minutes to build and ~38MB on disk, so only the
 tasks that actually look at a GUI pay for one. Beyond that instance's app-data,
-devtool provisions no amenbo store of its own.
+devtool provisions no Amenbo store of its own.
 
 All of this is macOS-only, which is where the dev GUI is installed at all;
 elsewhere the `devgui` commands are no-ops.
@@ -118,7 +118,7 @@ instance the ordinary way never types it. Details:
 
 ### `devtool devgui cli <id> [--no-build] -- <amenbo args…>`
 
-Runs an amenbo command against **the store the task's own dev GUI reads**, so a
+Runs an Amenbo command against **the store the task's own dev GUI reads**, so a
 screen can be given something to show. A dev GUI shows what is in its store: a
 rejected task, a card with a due date, a plugin in some state all have to be
 *put there* before the screen that renders them can be looked at.
@@ -138,13 +138,13 @@ through. The other way in is to rebuild the CLI with
 
 Details worth knowing:
 
-- **Arguments go after `--`.** Without it a `--json` of amenbo's would be read
+- **Arguments go after `--`.** Without it a `--json` of Amenbo's would be read
   as a flag of devtool's.
-- **The exit code is amenbo's**, so a seeding step that failed fails visibly.
+- **The exit code is Amenbo's**, so a seeding step that failed fails visibly.
 - **It runs in the store's own directory.** Relative paths resolve there, and a
   `bind` writes its `.amenbo` beside the store it points into — which `devgui
   rm` reclaims with the rest of the instance. In the worktree that same pointer
-  would be a live one for *any* amenbo run there, the production binary
+  would be a live one for *any* Amenbo run there, the production binary
   included, which is the reach the worktree is kept outside the repo to deny.
 - **The binary still introduces itself by its own channel** (it was not built
   with `AMENBO_APP_NAME`), so what is keyed to the channel rather than the store
@@ -276,7 +276,7 @@ devtool fixtures refresh --catalog ../amenbo-plugins
 
 It runs the same aggregation the catalog's CI runs, in the one way a developer
 can: the split into a list entry and an install detail is `plugin validate --json`'s,
-so nothing here holds a second copy of amenbo's schema, and what is added is what
+so nothing here holds a second copy of Amenbo's schema, and what is added is what
 only an aggregation knows — the digest of the detail as written, when the manifest
 first landed (git), and the curation list's recommendation. Validation needs a
 build that carries the plugin commands, so it uses **this checkout's** (`--amenbo`
@@ -373,7 +373,7 @@ plugin was handed and how each run ended (`amenbo plugin log`).
 **The manifest is the JSON form**, the file a plugin repo already keeps for its
 own hand-install. A `.yaml` one is refused rather than converted: what an install
 lays down is JSON, and a converter here would be a second reading of a contract
-amenbo owns.
+Amenbo owns.
 
 **Without `--program` it installs devtool's stand-in** — a script that records
 each document it is handed and answers nothing — so "what does a subscriber
@@ -395,5 +395,5 @@ window that closes with something still waiting is reported as that.
 ## Env
 
 - `AMENBO_HOME` — not read, **set**: `devgui cli` puts the task's own store there
-  for the CLI it runs. It is amenbo's own isolation seam, the same one
+  for the CLI it runs. It is Amenbo's own isolation seam, the same one
   `make verify` points at a mktemp store.

@@ -103,7 +103,7 @@ fn service() -> objc2::rc::Retained<SMAppService> {
 /// command to type, because which one that is depends on who is asking.
 fn out_of_bundle() -> Error {
     Error::invalid(
-        "the hourly tick is registered by amenbo.app itself, and this process is not running from inside it",
+        "the hourly tick is registered by Amenbo.app itself, and this process is not running from inside it",
     )
 }
 

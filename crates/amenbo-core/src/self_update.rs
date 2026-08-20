@@ -377,9 +377,9 @@ mod tests {
         assert!(!is_gui_managed(Path::new("/Users/alice/.local/bin/amenbo")));
         assert!(!is_gui_managed(Path::new("/usr/local/bin/amenbo")));
         assert!(is_gui_managed(Path::new(
-            "/Users/alice/Applications/amenbo.app/Contents/MacOS/amenbo"
+            "/Users/alice/Applications/Amenbo.app/Contents/MacOS/amenbo"
         )));
-        assert!(is_gui_managed(Path::new("/Applications/amenbo.app/Contents/MacOS/amenbo")));
+        assert!(is_gui_managed(Path::new("/Applications/Amenbo.app/Contents/MacOS/amenbo")));
     }
 
     /// The Linux system-wide orphan is detected only when a per-user build is what ran and a `/usr/bin`

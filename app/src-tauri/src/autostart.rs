@@ -87,6 +87,11 @@ mod login_item {
     ///
     /// Only a plist naming this app's bundle is touched — the file is in the user's own directory, and
     /// the name alone is not enough to be sure it is ours.
+    ///
+    /// That name is the **old** one, and stays lowercase however the bundle is spelled today: a plist
+    /// only exists here because a version that wrote one through the plugin put it there, and every
+    /// such version lived in `amenbo.app`. Spelling it the way the app is spelled now would match
+    /// nothing, and the plist left behind would go on starting the app beside the login item.
     pub fn take_legacy_plist() -> bool {
         let Some(dirs) = directories::UserDirs::new() else {
             return false;

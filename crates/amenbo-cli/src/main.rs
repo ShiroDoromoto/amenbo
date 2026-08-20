@@ -790,7 +790,8 @@ fn store_reachable() -> bool {
 /// under `/usr/bin` (root-owned); the per-user build cannot retire those, and by policy it advises
 /// rather than auto-strips them. On stderr (so `--json` stdout stays clean), no-op off Linux or once the
 /// packages are gone — mirroring the "newer version available" advisory it sits beside. The package name
-/// is the productName (`amenbo`); `apt` covers Debian/Ubuntu, `dpkg -r` / `rpm -e` the rest.
+/// stays lowercase `amenbo` — it is what those retired packages were built under, not what the
+/// product is called today. `apt` covers Debian/Ubuntu, `dpkg -r` / `rpm -e` the rest.
 fn advise_linux_system_orphan() {
     if amenbo_core::self_update::linux_system_orphan_present() {
         eprintln!(

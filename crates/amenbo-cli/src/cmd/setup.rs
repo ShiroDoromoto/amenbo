@@ -461,7 +461,7 @@ fn render_tick_status(
         (false, false, _) => "not something Amenbo can register on this system yet".to_string(),
         // A door this machine has, asked by a process that is not the one holding the key: this copy of
         // Amenbo sits outside the app bundle the registration is written from.
-        (false, true, _) => "registered by amenbo.app itself, and this copy of Amenbo is not inside one".to_string(),
+        (false, true, _) => "registered by Amenbo.app itself, and this copy of Amenbo is not inside one".to_string(),
         (true, _, true) => "holding the hourly tick".to_string(),
         (true, _, false) => format!("nothing registered (register it: `{cmd} tick install`)"),
     };

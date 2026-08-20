@@ -180,7 +180,7 @@ chmod +x "$SCRIPTS/postinstall"
 # LaunchServices registration for the same bundle id (work.amenbo.app) and lands
 # the payload *there* instead of /Applications. On an end-user machine the id is
 # unregistered so it still installs to /Applications, but on a dev box where a
-# target/…/bundle/macos/amenbo.app is registered the .pkg redirects into target/.
+# target/…/bundle/macos/Amenbo.app is registered the .pkg redirects into target/.
 # --analyze emits a component list (one dict per bundle); flip BundleIsRelocatable
 # to false on each so --install-location is honoured unconditionally.
 pkgbuild --analyze --root "$STAGE" "$PLIST" >/dev/null

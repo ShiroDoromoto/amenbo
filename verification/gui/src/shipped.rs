@@ -30,7 +30,7 @@ pub fn ensure_release_build(bundle: &Path) -> Result<(), String> {
     }
     Err(format!(
         "`{}` did not come out of the release workflow, and verification shoots what ships. Point \
-         `--app` at an installed amenbo.app, or at the bundle the workflow built.",
+         `--app` at an installed Amenbo.app, or at the bundle the workflow built.",
         bundle.display()
     ))
 }

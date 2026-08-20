@@ -262,7 +262,7 @@ cargo run -p amenbo-scenario --bin emit -- scenarios/delegate-to-ai.yaml
 cd verification
 # launch the installed bundle against a throwaway store and shoot one shot per step:
 cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/delegate-to-ai.yaml \
-  --app ~/Applications/amenbo.app
+  --app ~/Applications/Amenbo.app
 ```
 
 `--app` is the bundle itself, not a name: what is verified before a release is the `.app` the
@@ -404,7 +404,7 @@ through a pipe:
 cd verification
 mkfifo /tmp/go
 cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/link-a-folder.yaml \
-  --app ~/Applications/amenbo.app --json < /tmp/go &
+  --app ~/Applications/Amenbo.app --json < /tmp/go &
 exec 3>/tmp/go   # hold the writing side open — otherwise the first echo closes it, which is the end
                  # of input, and the run stops rather than carrying on to the next step
 # … stand the screen where the step just handed over says (the screen tool), then release its shot:

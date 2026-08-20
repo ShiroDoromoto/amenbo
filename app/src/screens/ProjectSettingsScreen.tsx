@@ -234,7 +234,7 @@ function FoldersSection({ projectId }: { projectId: number }) {
       await bindFolder(projectId, dir);
       await reload();
     } catch (e) {
-      // Folders already nested under an amenbo-managed tree, and the like, are refused by Rust with a coded error (binding_nested_tree).
+      // Folders already nested under an Amenbo-managed tree, and the like, are refused by Rust with a coded error (binding_nested_tree).
       setError(errText(e));
     } finally {
       setBusy(false);

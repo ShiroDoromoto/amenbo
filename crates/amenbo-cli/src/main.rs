@@ -678,7 +678,7 @@ fn nested_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBuf> {
     }
 }
 
-/// Refuse to use Amenbo in a git worktree cut inside an amenbo-managed folder, the sibling of the pointer
+/// Refuse to use Amenbo in a git worktree cut inside an Amenbo-managed folder, the sibling of the pointer
 /// guard: that one asks whether a binding exists, this one whether the checkout is a place to use one. Such
 /// a worktree inherits the project's `.amenbo` through the upward walk while the store it writes to sits in
 /// app-data and outlives the checkout, so a throwaway environment would drive the real backlog.

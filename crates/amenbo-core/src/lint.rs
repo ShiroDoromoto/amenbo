@@ -9,7 +9,7 @@
 //! is decided by the text alone: no store is opened, no id is resolved, nothing is checked for existence.
 //! That is what lets the answer be identical in a working copy, in CI where there is no store to find, and
 //! over any text at all — the "degraded without a store" caveat simply does not arise. It is also why a
-//! dangling `AMB-T-<n>` is a hit like any other: what leaks is the amenbo-shaped reference, and whether
+//! dangling `AMB-T-<n>` is a hit like any other: what leaks is the Amenbo-shaped reference, and whether
 //! the number is live has no bearing on the reader who cannot follow it.
 //!
 //! **What it does not do.** It reads and reports; it never edits (there is no `--fix`).

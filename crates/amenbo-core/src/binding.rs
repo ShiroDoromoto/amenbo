@@ -499,7 +499,7 @@ impl Registry {
             .unwrap_or_default()
     }
 
-    /// **Every folder** this machine records as amenbo-managed (ascending, deduped, across projects).
+    /// **Every folder** this machine records as Amenbo-managed (ascending, deduped, across projects).
     /// `doctor`'s stale managed-block detection walks this set; paths that have vanished are skipped
     /// quietly by the walker's existence check.
     pub fn all_dirs(&self) -> Vec<String> {

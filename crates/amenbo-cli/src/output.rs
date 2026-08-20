@@ -328,7 +328,7 @@ impl CliError {
         CliError {
             code: CliErrorCode::BindingNestedTree.as_str(),
             message: format!(
-                "This folder is already inside an amenbo-managed tree (bound at {ancestor_dir}). Binding a subdirectory would shadow that pointer."
+                "This folder is already inside an Amenbo-managed tree (bound at {ancestor_dir}). Binding a subdirectory would shadow that pointer."
             ),
             hint: Some(if forceable {
                 "Run bind from the managed root instead, or pass --force to intentionally bind this subdirectory.".to_string()
@@ -339,7 +339,7 @@ impl CliError {
         }
     }
 
-    /// Nested-worktree guard: the CWD sits in a git worktree cut **inside** an amenbo-managed folder, so it
+    /// Nested-worktree guard: the CWD sits in a git worktree cut **inside** an Amenbo-managed folder, so it
     /// inherited that folder's binding by the upward walk. The worktree is throwaway; the store it would
     /// write to is not — it lives in app-data, outside the worktree, and outlives its deletion. Refusing
     /// beats warning: a warning that can be ignored is prose that merely moved house. The way out is to run

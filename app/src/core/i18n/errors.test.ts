@@ -79,7 +79,7 @@ describe("errLabel", () => {
 
   it("writes a Tauri-raised refusal in the reader's language, from its fields alone", () => {
     expect(errLabel(nestedTree, "ja")).toBe(
-      "このフォルダは既に amenbo の管理ツリーの中にあります（/work/repo で紐付け済み）。サブフォルダを紐付けると上位のポインタが隠れます。",
+      "このフォルダは既に Amenbo の管理ツリーの中にあります（/work/repo で紐付け済み）。サブフォルダを紐付けると上位のポインタが隠れます。",
     );
     expect(errLabel(nestedTree, "en")).toContain("bound at /work/repo");
     // The English it arrives with is what a reader gets only where no template exists, so the
@@ -115,7 +115,7 @@ describe("errLabel", () => {
     for (const lang of Object.keys(DICTIONARIES) as (keyof typeof DICTIONARIES)[]) {
       const line = errLabel(storageError, lang);
       expect(line, lang).not.toContain("disk I/O error");
-      expect(line, lang).toContain("amenbo");
+      expect(line, lang).toContain("Amenbo");
     }
   });
 

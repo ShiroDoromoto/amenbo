@@ -5,7 +5,7 @@ import { fetchDevBadge, openExternalUrl } from "../core/mutations";
 import { t } from "../core/i18n";
 import { Icon } from "../components/Icon";
 
-/** The product page, opened in the default browser by clicking "Amenbo" in the TopBar. */
+/** The product page, opened in the default browser by clicking "amenbo" in the TopBar. */
 const PRODUCT_URL = "https://amenbo.work/";
 
 /** How long the rainbow flash lasts (ms). Must match the CSS animation-duration. */
@@ -111,7 +111,7 @@ export function TopBar({
           }
         }}
       >
-        Amenbo
+        amenbo
       </span>
     </div>
   );

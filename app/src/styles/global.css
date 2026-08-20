@@ -158,13 +158,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
   margin-right: calc(var(--s-2) - var(--s-4));
   color: var(--c-brand-mark);
 }
-/* "Amenbo" is a link that opens the product page (https://amenbo.work/) in the default
+/* "amenbo" is a link that opens the product page (https://amenbo.work/) in the default
    browser. */
 .topbar__ws { font-weight: var(--fw-bold); font-size: var(--fs-lg); cursor: pointer; }
 .topbar__ws:hover { text-decoration: underline; }
 .topbar__ws:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; border-radius: 2px; }
 /* The reflect flourish: the moment an external write (AI/CLI) reaches the GUI, a rainbow
-   sweeps across the "Amenbo" wordmark for an instant. Kept short (700ms, matching
+   sweeps across the "amenbo" wordmark for an instant. Kept short (700ms, matching
    REFLECT_FLASH_MS on the JS side) and soft, so the white text stays readable. */
 @keyframes topbar-ws-rainbow {
   from { background-position: 0% 50%; }

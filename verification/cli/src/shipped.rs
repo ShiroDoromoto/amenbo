@@ -30,7 +30,7 @@ pub fn ensure_release_build(bin: &Path) -> Result<(), String> {
     }
     Err(format!(
         "`{}` did not come out of the release workflow, and verification drives what ships. Point \
-         `--bin` at an installed amenbo, or at the artifact the workflow built.",
+         `--bin` at an installed Amenbo, or at the artifact the workflow built.",
         bin.display()
     ))
 }

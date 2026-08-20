@@ -7,7 +7,7 @@
 //! whole set of scenarios is run and aggregated by the sibling bin `verify-all`.
 //!
 //! Usage: `verify-cli <scenario.yaml> [--bin <amenbo>] [--json] [--keep]`
-//!   `--bin`  path to the amenbo binary to drive (default: `$AMENBO_BIN`, else `amenbo` on PATH)
+//!   `--bin`  path to the Amenbo binary to drive (default: `$AMENBO_BIN`, else `amenbo` on PATH)
 //!   `--json` emit a machine-readable result instead of the human summary
 //!   `--keep` leave the throwaway store in place for inspection
 //!

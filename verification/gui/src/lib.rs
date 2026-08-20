@@ -401,12 +401,12 @@ impl Instructor {
     /// answers, under. Author's words again, read the same way and for the same reason.
     ///
     /// `checked` reads the same kind of sentence one door earlier — what the author's check said about the
-    /// values, over the form or beside the box it named. Their words again, and told from amenbo's own
+    /// values, over the form or beside the box it named. Their words again, and told from Amenbo's own
     /// sentence in that same place by which of the two is standing there.
     ///
     /// `press-said` is the fourth of that family, one press along: the line an operation left on the
     /// form. It is the author's own sentence, and what a build would draw in its place where the program
-    /// said nothing is amenbo's — so the two are told apart by which of them is standing there, and a
+    /// said nothing is Amenbo's — so the two are told apart by which of them is standing there, and a
     /// reading settles that.
     ///
     /// Its two neighbours are `Review`s. `press-asks` reads a box that is *empty*, which is what a value
@@ -816,7 +816,7 @@ impl Instructor {
             // Coming back is part of the step and not a note beside it: the setting is on a screen of
             // its own, and the assert after this one is about a listing somewhere else.
             (Domain::Store, "set-language") => format!(
-                "In amenbo's own settings, set the language the interface is read in to the one whose code is \"{}\", then return to the screen the road was on.",
+                "In Amenbo's own settings, set the language the interface is read in to the one whose code is \"{}\", then return to the screen the road was on.",
                 req(with, "language")?
             ),
             // The view a project raised without one of its own comes up in, changed where a reader
@@ -828,7 +828,7 @@ impl Instructor {
             // Returning is part of the step for the same reason too: what this setting decides is on
             // another screen entirely, and the road walks there next.
             (Domain::Store, "set-default-view") => format!(
-                "In amenbo's own settings, set the view a newly created project opens in to the one stored as \"{}\", then return to the screen the road was on.",
+                "In Amenbo's own settings, set the view a newly created project opens in to the one stored as \"{}\", then return to the screen the road was on.",
                 req(with, "view")?
             ),
             (Domain::Plugin, "open-entry") => format!(
@@ -943,7 +943,7 @@ impl Instructor {
             // report is not among them: it records nothing and is spent the moment the project is opened
             // again, which is a road that ends where it started rather than one this scenario walks.
             (Domain::Repo, "ai-launch-consent") => match req(with, "answer")? {
-                "no" => "On the report about this project's folders, press the button that declines having their AI started on amenbo.".to_string(),
+                "no" => "On the report about this project's folders, press the button that declines having their AI started on Amenbo.".to_string(),
                 other => {
                     return Err(format!("action `ai-launch-consent` does not know the answer `{other}`"))
                 }
@@ -972,7 +972,7 @@ impl Instructor {
             // one: what it leaves behind is the project as it was before it was ever asked, and which
             // answer was there is said by the assert in front of it.
             (Domain::Repo, "ai-launch-consent-clear") => {
-                "In this project's own settings, press the button that clears its answer about starting its AI on amenbo."
+                "In this project's own settings, press the button that clears its answer about starting its AI on Amenbo."
                     .to_string()
             }
             // The same two moves on the settings screen. They name that screen rather than a report,
@@ -980,7 +980,7 @@ impl Instructor {
             // reported and the operator sent to a report would find no such thing. What they are for is
             // the reader who wired one tool and moved to another, and the pick is the half that proves
             // the catalog is standing behind it — a tool the folder shows no trace of is reachable only
-            // if every one amenbo knows is on offer.
+            // if every one Amenbo knows is on offer.
             (Domain::Repo, "ai-launch-request-pick") => format!(
                 "In this project's own settings, choose \"{}\" among the tools it offers the text for.",
                 req(with, "tool")?
@@ -994,7 +994,7 @@ impl Instructor {
             // it, since a fold that opened onto nothing is the state every assert after this reads
             // against.
             (Domain::Repo, "mcp-open") => {
-                "Open the screen where an AI is connected — the one that lists the apps amenbo knows, \
+                "Open the screen where an AI is connected — the one that lists the apps Amenbo knows, \
                  each row folded to its name, whether it is set up, and the folders it reaches. Open it \
                  again where the road has already been on it: what a row says has to be read now, not \
                  remembered from before the road left, and it comes back with every row folded."
@@ -1038,9 +1038,9 @@ impl Instructor {
             // evidence of an answer the store never received. The row has two positions, so the one
             // to leave it in is named by what it does rather than by the word drawn on it.
             (Domain::Tick, "set") => match req(with, "position")? {
-                "on" => "In amenbo's own settings, move the hourly check's row to the position that turns the check on — the answer becomes a yes and the timer is registered."
+                "on" => "In Amenbo's own settings, move the hourly check's row to the position that turns the check on — the answer becomes a yes and the timer is registered."
                     .to_string(),
-                "off" => "In amenbo's own settings, move the hourly check's row to the position that turns the check off — the answer becomes a no and the registration is taken away."
+                "off" => "In Amenbo's own settings, move the hourly check's row to the position that turns the check off — the answer becomes a no and the registration is taken away."
                     .to_string(),
                 other => {
                     return Err(format!("action `set` does not know the position `{other}`"))
@@ -1297,7 +1297,7 @@ impl Instructor {
                 }
             }
             // The line a press left on the form. It is quoted whole for the reason a row's line is: where
-            // the author's program said nothing, amenbo draws a sentence of its own in that same place,
+            // the author's program said nothing, Amenbo draws a sentence of its own in that same place,
             // and nothing on the screen says which of the two is standing there.
             (Domain::Plugin, "press-said") => format!(
                 "Confirm the settings form for \"{}\" draws \"{}\" beside the operation that was pressed.",
@@ -1475,7 +1475,7 @@ impl Instructor {
             ),
             (Domain::Repo, "ai-launch-notice") => match present(with) {
                 true => format!(
-                    "Confirm the project's board carries the report about starting its folders' AI on amenbo, with nothing asked and nothing over it: \"{}\" is named, with \"{}\" as the file its text goes into.",
+                    "Confirm the project's board carries the report about starting its folders' AI on Amenbo, with nothing asked and nothing over it: \"{}\" is named, with \"{}\" as the file its text goes into.",
                     req(with, "tool")?,
                     req(with, "paste_into")?
                 ),
@@ -1500,8 +1500,8 @@ impl Instructor {
             // back out of it is doing, since that is the half a reader acts on: an answer is there to be
             // taken back, and where there is none the button that would take it back must be shut.
             (Domain::Repo, "ai-launch-answer") => match req(with, "answer")? {
-                "yes" => "Confirm this project's own settings say it answered yes to having its AI started on amenbo, with the way to clear that answer open.".to_string(),
-                "no" => "Confirm this project's own settings say it answered no to having its AI started on amenbo, with the way to clear that answer open — a refusal takes the report away for good, so this is the only way back.".to_string(),
+                "yes" => "Confirm this project's own settings say it answered yes to having its AI started on Amenbo, with the way to clear that answer open.".to_string(),
+                "no" => "Confirm this project's own settings say it answered no to having its AI started on Amenbo, with the way to clear that answer open — a refusal takes the report away for good, so this is the only way back.".to_string(),
                 "unanswered" => "Confirm this project's own settings say it has not been answered for — neither a yes nor a no — and that there is nothing left to clear.".to_string(),
                 other => {
                     return Err(format!("assert `ai-launch-answer` does not know the answer `{other}`"))
@@ -1548,7 +1548,7 @@ impl Instructor {
             // wording of them.
             (Domain::Repo, "mcp-road") => match req(with, "road")? {
                 "file" => format!(
-                    "With the row for \"{}\" open, confirm it offers a file to be written and opened — amenbo's own, not this app's settings — and offers no request to hand an AI.",
+                    "With the row for \"{}\" open, confirm it offers a file to be written and opened — Amenbo's own, not this app's settings — and offers no request to hand an AI.",
                     req(with, "app")?
                 ),
                 "request" => format!(
@@ -1581,9 +1581,9 @@ impl Instructor {
             }
             // The file taken the rest of the way: into the app it was written for, and read there. The
             // line carries what the operator has to have in place before the step can be walked at all,
-            // because none of it is amenbo's to stand up — an app that has not been updated, or has
+            // because none of it is Amenbo's to stand up — an app that has not been updated, or has
             // nobody signed in, draws no servers whatever the file says, and the step would read as a
-            // format amenbo got wrong.
+            // format Amenbo got wrong.
             //
             // It also asks for the shot, which no other step has to: every other one is closed by the
             // run's own shot of the build under test, and the window that settles this one belongs to
@@ -1592,9 +1592,9 @@ impl Instructor {
                 "Take the file this road just offered into \"{}\"'s own settings — merging it with what \
                  is already there — and start that app again. Answer nothing it does not ask you to: \
                  the folders arrive with the file, and a build that made you fill them in is the miss \
-                 this step is watching for. With it updated and signed in beforehand, confirm amenbo \
+                 this step is watching for. With it updated and signed in beforehand, confirm Amenbo \
                  stands among the servers it lists and the tool \"{}\" is under it. Shoot that app's \
-                 window yourself and keep the picture with this run: the shot taken here is of amenbo, \
+                 window yourself and keep the picture with this run: the shot taken here is of Amenbo, \
                  which is not where the answer is.",
                 req(with, "app")?,
                 req(with, "tool")?
@@ -1612,7 +1612,7 @@ impl Instructor {
             // shown is the inventory itself: the list is on the project's own settings, and the folder is
             // in it under its own heading rather than among the ones bound to the project.
             (Domain::Repo, "ai-launch-waiting") => format!(
-                "Confirm this project's own settings list the folder \"{}\" among the ones still starting their AI without amenbo — in that list, not the one of folders bound to the project, and standing there whatever notice the board was carrying.",
+                "Confirm this project's own settings list the folder \"{}\" among the ones still starting their AI without Amenbo — in that list, not the one of folders bound to the project, and standing there whatever notice the board was carrying.",
                 req(with, "dir")?
             ),
             // Which of the three answers the form is holding. The state is the whole question here:
@@ -1697,9 +1697,9 @@ impl Instructor {
             // and off is also where a device nobody asked stands, the row having two positions over
             // the answer's three states.
             (Domain::Tick, "setting") => match req(with, "position")? {
-                "on" => "Confirm the hourly check's row in amenbo's own settings stands in the position that has the check on — the one that holds a yes and a registered timer."
+                "on" => "Confirm the hourly check's row in Amenbo's own settings stands in the position that has the check on — the one that holds a yes and a registered timer."
                     .to_string(),
-                "off" => "Confirm the hourly check's row in amenbo's own settings stands in the position that has the check off — the one that holds no registration."
+                "off" => "Confirm the hourly check's row in Amenbo's own settings stands in the position that has the check off — the one that holds no registration."
                     .to_string(),
                 other => {
                     return Err(format!("assert `setting` does not know the position `{other}`"))
@@ -2572,7 +2572,7 @@ steps_gui:
 
     /// What the author's own check said, in both of the places a verdict reaches a reader: the sentence
     /// over the form, and the line beside the box it named. Each is sent to OCR on its own words, since
-    /// what a build would draw there instead is amenbo's sentence — and the two are told apart by nothing
+    /// what a build would draw there instead is Amenbo's sentence — and the two are told apart by nothing
     /// else. The instruction says which of the two places is being read, because an eye handed only the
     /// words would close the step off either.
     #[test]
@@ -3413,7 +3413,7 @@ steps_gui:
         assert_eq!(exp, Expectation { text: "agent --json".to_string(), present: false });
     }
 
-    /// Starting a folder's AI on amenbo, as the screen walks it: the report standing on the board, and
+    /// Starting a folder's AI on Amenbo, as the screen walks it: the report standing on the board, and
     /// the button that takes a copy of the text. The file it names is the reading — it appears nowhere
     /// else on that board — so a shot taken where the report is not standing is a red and not a shot of
     /// the same words somewhere else.
@@ -3491,7 +3491,7 @@ steps_gui:
         assert!(ins.expectation(&steps[3]).is_none(), "a button's label is an eye's to close");
     }
 
-    /// A road amenbo has no such thing as is refused where it is written, not met halfway through a run.
+    /// A road Amenbo has no such thing as is refused where it is written, not met halfway through a run.
     #[test]
     fn an_mcp_road_the_screen_does_not_offer_is_refused() {
         let yaml = r#"

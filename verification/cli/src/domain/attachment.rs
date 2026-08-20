@@ -1,4 +1,4 @@
-//! The `attachment` domain: the one place amenbo carries bytes. Hanging a file or a link on a
+//! The `attachment` domain: the one place Amenbo carries bytes. Hanging a file or a link on a
 //! task, a decision or a comment — the three owners differ only in the command that takes them —
 //! and reading it back as a row, in its owner's list, and as the bytes coming out again.
 

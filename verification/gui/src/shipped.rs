@@ -36,16 +36,16 @@ pub fn ensure_release_build(bundle: &Path) -> Result<(), String> {
 }
 
 /// The CLI inside a mac app bundle. Named rather than searched for: the installer puts one CLI in
-/// one place, and a harness that went looking would be reading whichever amenbo it found first.
+/// one place, and a harness that went looking would be reading whichever Amenbo it found first.
 ///
 /// It answers two questions with one path. Which build this is, above — and, once that is settled,
 /// what the run stands the scenario's world up with: the world a road starts from is raised by the
-/// bundle under test, never by whichever amenbo the operator has on `PATH`.
+/// bundle under test, never by whichever Amenbo the operator has on `PATH`.
 pub fn sidecar(bundle: &Path) -> Result<PathBuf, String> {
     let cli = bundle.join("Contents/MacOS/amenbo");
     if !cli.is_file() {
         return Err(format!(
-            "`{}` ships no CLI at {} — every installed amenbo carries one, so this is not a bundle \
+            "`{}` ships no CLI at {} — every installed Amenbo carries one, so this is not a bundle \
              a run can ask about",
             bundle.display(),
             cli.display()

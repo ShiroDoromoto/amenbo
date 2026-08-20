@@ -4,7 +4,7 @@
 //! shared, so the verification workspace stays independent of the main one (it drives the
 //! shipped binary as a black box).
 //!
-//! The isolation an amenbo run needs is two things, both required: `AMENBO_HOME` pointed at a
+//! The isolation an Amenbo run needs is two things, both required: `AMENBO_HOME` pointed at a
 //! throwaway dir (the ONLY thing that keeps a run out of the real app-data tree — an isolated
 //! CWD alone does not, since `init` with no `.amenbo` in sight creates a store under the real
 //! root), and a CWD with no `.amenbo` ancestor. One [`session`] hands back both, plus the
@@ -33,7 +33,7 @@ fn root() -> PathBuf {
 pub struct Session {
     pub home: PathBuf,
     pub cwd: PathBuf,
-    /// Where the files a run asks amenbo to write land — an export directory, a backup archive.
+    /// Where the files a run asks Amenbo to write land — an export directory, a backup archive.
     /// Beside the store rather than inside it: what `export` and `backup` produce is meant to be
     /// carried away, and a scenario that wrote it into the store would be exporting its own export.
     pub artifacts: PathBuf,
@@ -42,7 +42,7 @@ pub struct Session {
 }
 
 /// The name of the folder a run works in, which is also **the name of the project it finds itself
-/// in**: amenbo calls a project after the folder it was raised for, so a road that opens a board
+/// in**: Amenbo calls a project after the folder it was raised for, so a road that opens a board
 /// without standing a project up opens this one. A screen road naming it in an instruction is naming
 /// this word, which is why it is a constant rather than a literal in one line of one function.
 pub const CWD_DIR: &str = "cwd";

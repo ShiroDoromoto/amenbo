@@ -12,11 +12,11 @@ use crate::{opt_bool, path_str, req_bool, req_i64, req_str, unmapped, Driver, Ou
 /// Where a stood catalog publishes its index — the URL a registration is given.
 const CATALOG_PATH: &str = "/catalog.json";
 
-/// And where it publishes its signing key. amenbo looks for the key **beside** the `catalog.json` it
+/// And where it publishes its signing key. Amenbo looks for the key **beside** the `catalog.json` it
 /// was given, so this path is not a choice: it follows from the one above.
 const CATALOG_KEY_PATH: &str = "/catalog-key.pub";
 
-/// Where one plugin's second document is published. amenbo resolves it beside the `catalog.json` it
+/// Where one plugin's second document is published. Amenbo resolves it beside the `catalog.json` it
 /// was given, so this follows from [`CATALOG_PATH`] the same way the key's path does.
 fn detail_path(name: &str) -> String {
     format!("/plugins/{name}.json")
@@ -89,7 +89,7 @@ impl Offer {
     /// The row, as the list document carries it.
     ///
     /// `detail_sum` is left off. It is the catalog CI's slot — the digest that keeps update detection
-    /// riding on the one list fetch — and amenbo reads it as optional, checking the pairing only where
+    /// riding on the one list fetch — and Amenbo reads it as optional, checking the pairing only where
     /// an entry declares one. A run that stands its own shelf up publishes both halves in the same
     /// breath, so there is nothing here for a digest to catch that the publishing could get wrong.
     fn entry(&self) -> serde_json::Value {
@@ -288,9 +288,9 @@ impl Driver<'_> {
             "run" => {
                 let name = req_str(with, "name")?.to_string();
                 let command = req_str(with, "command")?.to_string();
-                // Everything after `plugin run <name>` belongs to the plugin, so amenbo's own flags
+                // Everything after `plugin run <name>` belongs to the plugin, so Amenbo's own flags
                 // have to be said before the subcommand — appended, they would reach the plugin as
-                // arguments and amenbo would see no facet at all.
+                // arguments and Amenbo would see no facet at all.
                 let mut args: Vec<String> =
                     vec!["--actor".into(), "human".into(), "--json".into(), "plugin".into(), "run".into()];
                 args.push(name.clone());
@@ -339,7 +339,7 @@ impl Driver<'_> {
                 Ok(Outcome::action(format!("put `{name}`'s retained build back")))
             }
             // Leaving an installed plugin recording a build the catalog has moved past — the state an
-            // update exists for, which no sequence of amenbo commands can arrive at (see the registry).
+            // update exists for, which no sequence of Amenbo commands can arrive at (see the registry).
             // Every distributable's digest goes, not this platform's alone: which one the machine
             // running the scenario resolves to is not this driver's to work out, and a manifest whose
             // digests all disagree with the catalog is outdated on any of them.
@@ -365,11 +365,11 @@ impl Driver<'_> {
                     "left `{name}` recording a detail document the catalog no longer names"
                 )))
             }
-            // Adding a plain line to what an installed plugin says it takes. amenbo reads the schema
+            // Adding a plain line to what an installed plugin says it takes. Amenbo reads the schema
             // off the installed manifest and never invents a field, so this is the author's declaration
             // arriving the only way it can while no published plugin carries one (see the registry).
             // What the scenario then walks — where the value is kept, what a read gives back, what
-            // clearing it does — is amenbo's own, untouched.
+            // clearing it does — is Amenbo's own, untouched.
             "declare-setting" => {
                 let name = req_str(with, "name")?;
                 let key = req_str(with, "key")?;
@@ -504,10 +504,10 @@ impl Driver<'_> {
                 Ok(Outcome::action(format!("`{name}` now has `{cmd}` judge its settings before its gate opens")))
             }
             // Standing in a program that answers that check. Whether values are usable is the author's
-            // judgement and amenbo makes none of its own (see the registry), so a no is a thing only a
+            // judgement and Amenbo makes none of its own (see the registry), so a no is a thing only a
             // program can say — and which way it answers is the scenario's to choose, since the road that
             // matters is the same values turned away and then let through. The document goes to stdout,
-            // where amenbo reads a verdict from; anything the run wants to say for a log goes nowhere here.
+            // where Amenbo reads a verdict from; anything the run wants to say for a log goes nowhere here.
             "check-program" => {
                 let name = req_str(with, "name")?;
                 let ok = req_bool(with, "ok")?;
@@ -551,7 +551,7 @@ impl Driver<'_> {
                 if !path.exists() {
                     return Err(format!("`{name}` has no program at {} to stand in for", path.display()));
                 }
-                // `AMENBO_ASK_` is amenbo's own prefix for what a press asked for, and the whole value is
+                // `AMENBO_ASK_` is Amenbo's own prefix for what a press asked for, and the whole value is
                 // taken rather than the variable's name, since what the form draws is read by an eye. A
                 // press that asked for nothing leaves the line saying so, which is the reading a road
                 // about a button that runs outright wants. The script ends cleanly whatever it found:
@@ -619,13 +619,13 @@ impl Driver<'_> {
             // the device's. It arrives here for the same reason a declared setting does:
             // the layer is the author's word, a manifest saying nothing means `project`, and no plugin
             // the official catalog serves says anything — so there is no install that reaches a
-            // machine-wide plugin. What follows is amenbo's own doing: which rows the enable opens, and
+            // machine-wide plugin. What follows is Amenbo's own doing: which rows the enable opens, and
             // how wide a window a launched run is handed.
             "declare-scope" => {
                 let name = req_str(with, "name")?;
                 let scope = req_str(with, "scope")?;
                 // The vocabulary is closed, and a word outside it would be written onto the manifest
-                // and read back as a manifest amenbo cannot parse — a failure two steps from the typo.
+                // and read back as a manifest Amenbo cannot parse — a failure two steps from the typo.
                 if !matches!(scope, "project" | "machine") {
                     return Err(format!(
                         "`{scope}` is not a layer a manifest declares — it is `project` or `machine`"
@@ -646,7 +646,7 @@ impl Driver<'_> {
                     _ => format!("`{name}` is installed as one project's now"),
                 }))
             }
-            // The badge off, so what is installed is a stranger's. Nothing a road does with amenbo can
+            // The badge off, so what is installed is a stranger's. Nothing a road does with Amenbo can
             // reach this state: the badge is the catalog's to grant, every plugin the official catalog
             // serves arrives with it, and an author who could write it onto themselves would be the
             // reason the split is worth nothing. So it comes off the installed manifest here — and what
@@ -670,7 +670,7 @@ impl Driver<'_> {
             // their settings rather than report them (see the registry) — so this one prints its
             // injected config and stops there. Both roads, because a setting travels by the one its
             // author's `secret` flag chose: an environment variable for a secret, the stdin document
-            // for the rest. The `AMENBO_CONFIG_` prefix is amenbo's own; the callback variables beside
+            // for the rest. The `AMENBO_CONFIG_` prefix is Amenbo's own; the callback variables beside
             // it are left out, because what is under test is the value a plugin was told, not the door
             // it can read back through.
             "echo-program" => {
@@ -680,7 +680,7 @@ impl Driver<'_> {
                     return Err(format!("`{name}` has no program at {} to stand in for", path.display()));
                 }
                 // `grep` finding nothing is a non-zero exit, and a command run that exits non-zero is a
-                // failure amenbo reports rather than a return value — so the script ends by saying it
+                // failure Amenbo reports rather than a return value — so the script ends by saying it
                 // is fine. Handed nothing, it returns nothing, which is exactly the reading a scenario
                 // asking whether a secret is gone needs. The stdin document is echoed verbatim: what a
                 // non-secret setting is worth to a run is a key in it, and the whole point of a value
@@ -692,7 +692,7 @@ impl Driver<'_> {
                     "left `{name}` answering with the config it is handed, and nothing else"
                 )))
             }
-            // Standing in a program that calls amenbo back, so the read-back path has a witness. What a
+            // Standing in a program that calls Amenbo back, so the read-back path has a witness. What a
             // plugin is handed when it is launched is the store to open and the window to read through,
             // and both travel in its environment — the script below names neither, which is the whole of
             // what is under test: a read goes through with no facet written anywhere, a read past the
@@ -700,7 +700,7 @@ impl Driver<'_> {
             // this route (see the registry), so there is nothing to ask but a stand-in.
             //
             // Eight faces. `read`, `write` and `records` name a task and hand everything after the id to
-            // amenbo as it was written, so the call each step makes is readable in the scenario. `take`
+            // Amenbo as it was written, so the call each step makes is readable in the scenario. `take`
             // and `keep` name no task, because the calls they make — `export` and `backup` — ask for the
             // whole device rather than for anything a window could hold, which is why they are refused
             // outright. `version`, `carry`, `changes` and `records` are the road that *is* the window,
@@ -723,7 +723,7 @@ impl Driver<'_> {
                 }
                 // A refusal is what half of this goes to find, and a plugin exiting non-zero is a failed
                 // call rather than a value — so both streams are gathered into the return value and the
-                // program ends cleanly whatever amenbo said.
+                // program ends cleanly whatever Amenbo said.
                 std::fs::write(
                     &path,
                     format!(
@@ -753,15 +753,15 @@ impl Driver<'_> {
                 .map_err(|e| format!("could not write {}: {e}", path.display()))?;
                 make_runnable(&path)?;
                 Ok(Outcome::action(format!(
-                    "left `{name}` calling amenbo back with the store and window it is handed"
+                    "left `{name}` calling Amenbo back with the store and window it is handed"
                 )))
             }
             // Leaving an installed plugin answering slowly, so its queue has something in it to read.
             // A row comes off a queue the moment the plugin replies, so a backlog is a window and not
-            // a state amenbo can be asked for (see the registry): what is queued while a plugin is
+            // a state Amenbo can be asked for (see the registry): what is queued while a plugin is
             // still on it is the only backlog there is. The program is replaced rather than the
             // manifest edited — how long a plugin takes is the program's own doing, and nothing about
-            // the install is being lied about. Everything after it is amenbo's: the queue, the lease
+            // the install is being lied about. Everything after it is Amenbo's: the queue, the lease
             // and the runner are its own, and the events are ones the plugin really subscribes to.
             "slow-program" => {
                 let name = req_str(with, "name")?;
@@ -769,7 +769,7 @@ impl Driver<'_> {
                 if seconds <= 0 {
                     return Err("`seconds` has to be a window an assert can read in".to_string());
                 }
-                // `<home>/plugins/<name>/<name>` — the executable amenbo runs, under the plugin's own
+                // `<home>/plugins/<name>/<name>` — the executable Amenbo runs, under the plugin's own
                 // name. A shell script stands in for it: every plugin the catalog publishes ships a
                 // binary, and no binary can be written here that sleeps.
                 let path = self.session.home.join("plugins").join(name).join(name);
@@ -786,7 +786,7 @@ impl Driver<'_> {
                     "left `{name}` taking {seconds}s to answer, so what is queued for it stays queued"
                 )))
             }
-            // Closing amenbo's view of what is installed, and opening it again — the only way to leave a
+            // Closing Amenbo's view of what is installed, and opening it again — the only way to leave a
             // write's delivery standing (see the registry). Delivery rides along with the write that
             // caused it, so every event a scenario writes is already carried out by the time the next
             // step runs; with the directory shut, the drive behind the write resolves nobody, hands
@@ -856,7 +856,7 @@ impl Driver<'_> {
                 )))
             }
             // The publisher rotates their key, at the same URL. Nothing about the catalog moves —
-            // that is the point: what amenbo has to notice is the key alone.
+            // that is the point: what Amenbo has to notice is the key alone.
             "catalog-rotate-key" => {
                 let name = req_str(with, "target")?;
                 let stood = self
@@ -878,7 +878,7 @@ impl Driver<'_> {
                     argv.extend_from_slice(&["--name", name]);
                 }
                 // `--yes` is the consent a registration takes when the catalog publishes a key: this
-                // is a non-interactive run, and amenbo refuses to pin a trust root without being told
+                // is a non-interactive run, and Amenbo refuses to pin a trust root without being told
                 // so. A catalog with no key to pin never asks, so passing it costs that case nothing.
                 let v = self.run_json(&argv)?;
                 // Adding fetches the catalog once, so the count it comes back with is what a first
@@ -915,7 +915,7 @@ impl Driver<'_> {
                 // here is the whole of what the split between a colleague's plugin and a stranger's
                 // decides — the sentence is not dropped, it is kept where its reader is. What it says is
                 // deliberately not read back: the wording is the author's to change any day, and a line
-                // holding them to today's would go red on a change amenbo had no part in.
+                // holding them to today's would go red on a change Amenbo had no part in.
                 if let Some(want) = opt_bool(with, "desc") {
                     let said = row.and_then(|r| r["desc"].as_str()).unwrap_or_default();
                     let pass = said.is_empty() != want;
@@ -1074,7 +1074,7 @@ impl Driver<'_> {
                         ));
                     }
                 }
-                // What amenbo adds: the author wrote `<cmd>`, and what an AI receives has to be a line
+                // What Amenbo adds: the author wrote `<cmd>`, and what an AI receives has to be a line
                 // it can type — `<the command word> plugin run <name> <cmd>`. The word in front is this
                 // build's own name, so it is read back rather than dictated.
                 if let Some(face) = with.get("cmd").and_then(|v| v.as_str()) {
@@ -1109,9 +1109,9 @@ impl Driver<'_> {
                 ))
             }
             // The same document, read where the author said their call belongs. `at-entry` reads the
-            // shelf a plugin's own words sit on; this reads the step amenbo wrote, and asks whether the
+            // shelf a plugin's own words sit on; this reads the step Amenbo wrote, and asks whether the
             // line to type is hanging there. Nothing else about the step is read: what a reader is owed
-            // at a step is amenbo's own sentence plus, at most, a call they can make.
+            // at a step is Amenbo's own sentence plus, at most, a call they can make.
             "at-step" => {
                 let name = req_str(with, "name")?;
                 let named = req_str(with, "step")?;
@@ -1124,7 +1124,7 @@ impl Driver<'_> {
                     return Err(format!("`{named}` is no step id — a run and the step within it, `<run>.<step>`"));
                 };
                 let step = hung_on(&v, run, id);
-                // The line amenbo builds, not the face the author wrote: the command word in front is
+                // The line Amenbo builds, not the face the author wrote: the command word in front is
                 // this build's own name, so it is read back off the line rather than dictated here.
                 let tail = format!(" plugin run {name} {face}");
                 let hung: Vec<&str> = step.clone().unwrap_or_default();
@@ -1657,7 +1657,7 @@ fn make_runnable(path: &Path) -> Result<(), String> {
         .map_err(|e| format!("could not make {} runnable: {e}", path.display()))
 }
 
-/// Open or shut `path` to its owner — the directory holding the installed plugins, which amenbo either
+/// Open or shut `path` to its owner — the directory holding the installed plugins, which Amenbo either
 /// reads or does not.
 ///
 /// Unix-only for the same reason standing a program in is: the permission bit that decides a read is a unix
@@ -1693,7 +1693,7 @@ fn make_runnable(path: &Path) -> Result<(), String> {
 /// The two runs keep their steps in different places, and both are read here: the backbone's are one
 /// list, a cycle's are two buckets — which bucket a step sits in is the cycle's business and no part of
 /// the name. `None` says this document has no such step, which is a different answer from a step with
-/// nothing on it: a run left out because it does not apply here, or an id no build of amenbo has, both
+/// nothing on it: a run left out because it does not apply here, or an id no build of Amenbo has, both
 /// land in the first, and a scenario walking that case reads the same emptiness for a reason worth
 /// naming in the report.
 fn hung_on<'a>(doc: &'a serde_json::Value, run: &str, id: &str) -> Option<Vec<&'a str>> {
@@ -1839,7 +1839,7 @@ mod tests {
         assert_eq!(entry["official"], true, "the claim is the document's, and it is served as written");
         assert_eq!(entry["detail_sum"], serde_json::Value::Null, "a shelf standing beside its own details declares no digest");
 
-        // Beside it, under the path amenbo resolves from the catalog's own URL.
+        // Beside it, under the path Amenbo resolves from the catalog's own URL.
         let detail = served(&docs, "/plugins/standup.json");
         assert_eq!(detail["name"], "standup", "the name is the join between the two documents");
         assert_eq!(detail["config"][0]["key"], "channel");

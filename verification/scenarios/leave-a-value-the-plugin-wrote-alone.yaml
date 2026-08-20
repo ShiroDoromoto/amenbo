@@ -1,7 +1,7 @@
 # A setting whose value is not the user's to give. Some of what a plugin takes it works out for itself —
 # an address its own setup registered, a key it generated — and writes back through the door every value
 # goes in by. What the author declares about such a field is who fills it in, and the whole
-# of what amenbo does with that word is on the screen: no box to type in, and no button to take the value
+# of what Amenbo does with that word is on the screen: no box to type in, and no button to take the value
 # away. Pressing one would not correct anything; it would break the plugin that wrote it.
 #
 # The two roads therefore say opposite things about the same field, and both are the point. A terminal
@@ -37,7 +37,7 @@ given:
 
   # Who fills a setting in is the author's word like everything else it takes, and no plugin in the
   # official catalog declares a setting at all — so the declaration is written onto the installed
-  # manifest here (see the op's own note). Everything after it is amenbo's own doing.
+  # manifest here (see the op's own note). Everything after it is Amenbo's own doing.
   - type: action
     domain: plugin
     op: declare-setting

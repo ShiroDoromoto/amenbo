@@ -1,4 +1,4 @@
-# A setting whose answers the author listed. amenbo learns the list and nothing else — not what a
+# A setting whose answers the author listed. Amenbo learns the list and nothing else — not what a
 # candidate means, only that it was offered — which is enough to keep a person from having to spell a
 # value, and enough to turn away one nobody offered.
 #
@@ -27,7 +27,7 @@ given:
 
   # Which candidates a setting offers is the author's word, and no published plugin offers any — so the
   # declaration is put onto the installed manifest here (see the op's own note). From the first step on,
-  # everything is amenbo's own doing.
+  # everything is Amenbo's own doing.
   - type: action
     domain: plugin
     op: declare-choice
@@ -126,7 +126,7 @@ steps_cli:
       key: events
       state: unanswered
 
-  # A candidate nobody offered. The list is the one thing amenbo does know about this value, so a
+  # A candidate nobody offered. The list is the one thing Amenbo does know about this value, so a
   # misspelling is turned away here rather than stored to match nothing at run time — and a refusal
   # leaves the setting standing where it was.
   - type: action

@@ -12,7 +12,7 @@ description: >
   Take it away through the door an empty value opens, and see the read say the project holds nothing.
   Then a key the manifest never declared: it is refused, because a plugin is told only what its author
   said it takes. Finally the other route a value can take: a setting the author marked secret is filled
-  in, and the read says it is set without saying what it is — while of the two files amenbo hands a
+  in, and the read says it is set without saying what it is — while of the two files Amenbo hands a
   person, the backup carries the value home and the export leaves it behind. Then the two ends nothing
   else can see: a run is asked what it was handed, and answers with the secret; and a plugin removed
   with one still set is installed again, to be handed nothing.
@@ -23,10 +23,10 @@ steps_cli:
     with:
       name: worktree
 
-  # What a plugin takes is its author's word and amenbo invents none of it — and no plugin in the
+  # What a plugin takes is its author's word and Amenbo invents none of it — and no plugin in the
   # official catalog declares a setting at all, so a road that fills one in has nothing to fill in until
   # the declaration is written onto the installed manifest (see the op's own note). Everything after it
-  # is amenbo's own doing.
+  # is Amenbo's own doing.
   - type: action
     domain: plugin
     op: declare-setting
@@ -119,7 +119,7 @@ steps_cli:
       key: token
       set: true
 
-  # The two files amenbo hands a person, and the secret goes out with one and not the other. A backup
+  # The two files Amenbo hands a person, and the secret goes out with one and not the other. A backup
   # is the road home — a restore that dropped the credentials would mean typing every one of them in
   # again — and an export is one-way, into another tool's hands, where a credential in the clear is one
   # nobody here controls any more. Both are asked for the token verbatim: what it looks like inside an

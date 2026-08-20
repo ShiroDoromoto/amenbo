@@ -1,4 +1,4 @@
-# The road for an AI that cannot run amenbo itself. A chat with no terminal, or a tool whose commands
+# The road for an AI that cannot run Amenbo itself. A chat with no terminal, or a tool whose commands
 # run in a sandbox somewhere other than this machine, reaches a project the other way round: the host
 # starts `amenbo mcp` for the folders a person chose, and everything after that goes over the two
 # streams.
@@ -75,7 +75,7 @@ steps_cli:
 
   # The spec, read whole, for the folder this call names. It is the first thing an AI does here and
   # the reason `run` needs no tool of its own per command: what can be typed is described once, by
-  # amenbo.
+  # Amenbo.
   - type: action
     domain: mcp
     op: call

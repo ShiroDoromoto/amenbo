@@ -1,5 +1,5 @@
 # Taking everything out. Export is the one-way door of data sovereignty: it is what a user leaves
-# with when they leave amenbo, so what matters is not that the command exits 0 but that the document
+# with when they leave Amenbo, so what matters is not that the command exits 0 but that the document
 # it wrote holds their work — records from every corner of the store, not just the one the export was
 # started from.
 id: leave-amenbo-with-your-data
@@ -7,7 +7,7 @@ title: Everything on the device comes out in one document — the task, the deci
 description: >
   Seed a store the way real use fills it — a task, a decision, and a note on the task's timeline —
   then take the whole thing out and read the written document back off disk. The document is what
-  another tool receives, so it is what is asserted against; asking amenbo what it exported would only
+  another tool receives, so it is what is asserted against; asking Amenbo what it exported would only
   ask the store the same question twice. The last line holds the other half of "one way": the export
   is a copy, and the store still has everything after it.
 steps_cli:

@@ -125,7 +125,7 @@ steps_cli:
       target: in-house
       pinned_key: true
 
-  # The publisher rotates their key at the same URL. amenbo will not accept the new one on the old
+  # The publisher rotates their key at the same URL. Amenbo will not accept the new one on the old
   # consent: a pin that gave way the moment the far end changed would make registering a catalog a
   # formality rather than a standing answer to "trusted on what?".
   - type: action

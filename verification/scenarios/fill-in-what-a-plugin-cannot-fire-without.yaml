@@ -47,7 +47,7 @@ given:
 
   # What a plugin cannot work without is its author's word like everything else it takes, and no plugin
   # in the official catalog declares a setting at all — so the declaration is written onto the installed
-  # manifest here (see the op's own note). Everything after it is amenbo's own doing.
+  # manifest here (see the op's own note). Everything after it is Amenbo's own doing.
   - type: action
     domain: plugin
     op: declare-setting

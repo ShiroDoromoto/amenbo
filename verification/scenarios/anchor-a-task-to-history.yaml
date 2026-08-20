@@ -1,11 +1,11 @@
 # A public commit carries no store-local reference, so the chain from history back to a task is one
-# amenbo keeps at its own end: the SHA is recorded on the task, and the task is found by the SHA.
+# Amenbo keeps at its own end: the SHA is recorded on the task, and the task is found by the SHA.
 # Both directions are walked here, since a recorded SHA nothing can look up is a chain with one end.
 id: anchor-a-task-to-history
 title: A task keeps the commit SHAs that carried it out, and is found by any one of them
 description: >
   Record two commit SHAs on a task, look the task up by one of them, then forget that one and read
-  back what is left. amenbo stores a SHA as an opaque string — it never reads git — so what this
+  back what is left. Amenbo stores a SHA as an opaque string — it never reads git — so what this
   proves is the store's own round trip: recorded, listed, searchable, and removable one at a time.
 steps_cli:
   - type: action

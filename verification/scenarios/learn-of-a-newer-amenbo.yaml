@@ -1,4 +1,4 @@
-# How a user is told there is a newer amenbo, and how they are sent to get it. The check is the one
+# How a user is told there is a newer Amenbo, and how they are sent to get it. The check is the one
 # capability whose subject is the shipped build itself, so it is also the one that cannot be
 # exercised anywhere but on a shipped build.
 #

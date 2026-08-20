@@ -13,18 +13,18 @@
 # be absent from.
 #
 # The world is two projects, each with a folder of its own, differing in one thing. One is reached over
-# MCP and shows no sign of an AI being worked with in it — amenbo's own managed block is in it, as it
-# is in every folder amenbo bound, and that is not a sign of anybody. The other carries a provider's
-# directory with settings that do nothing about amenbo, which is where every reader starts. A card on
+# MCP and shows no sign of an AI being worked with in it — Amenbo's own managed block is in it, as it
+# is in every folder Amenbo bound, and that is not a sign of anybody. The other carries a provider's
+# directory with settings that do nothing about Amenbo, which is where every reader starts. A card on
 # each board spends the first loop, so a board with no report on it is a board the report left rather
 # than one the first loop is standing on. The answer is left where a fresh store leaves it, never
 # given: a refusal would silence the report too, and this road needs it silent for the one reason
 # under test.
 id: not-be-asked-to-wire-a-folder-only-mcp-reaches
-title: A folder an app already reaches over MCP is not asked to start its AI on amenbo at session start
+title: A folder an app already reaches over MCP is not asked to start its AI on Amenbo at session start
 description: >
   The reader set an app up to reach one of their folders over MCP, and works in another from a
-  terminal. Both are bound to amenbo, and only one of them can run a session-start hook at all.
+  terminal. Both are bound to Amenbo, and only one of them can run a session-start hook at all.
 
   The road reads the two boards against each other. The folder that shows a provider it uses is
   reported, by name, with the file the text goes into — the state everyone starts in. The folder only
@@ -36,7 +36,7 @@ description: >
   shell — who never learns their folder is unwired, the report being the only place it is said.
 given:
   # The folder a terminal AI works in: the provider's own directory, with settings that do nothing
-  # about amenbo. This is the state the report exists for, and the road's control.
+  # about Amenbo. This is the state the report exists for, and the road's control.
   - type: action
     domain: project
     op: create

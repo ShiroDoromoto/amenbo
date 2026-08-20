@@ -18,7 +18,7 @@
 # value that never changes and drawn under words that do, and translating the two together is the
 # mistake that would send an answer nobody chose to a plugin.
 #
-# The language is changed on amenbo's own settings screen, which is not the screen the form is on — so
+# The language is changed on Amenbo's own settings screen, which is not the screen the form is on — so
 # the way back is walked as steps rather than assumed. What is under test is the words the form comes
 # back drawn in, not whether it repainted without anyone moving.
 #

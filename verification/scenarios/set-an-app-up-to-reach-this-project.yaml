@@ -18,7 +18,7 @@
 # no list of apps there, nothing folded, and no row to read a state off.
 #
 # The world is declared below: one project bound to the folder named there, an ordinary card on its
-# board, and that folder already carrying one app's own settings with amenbo's entry in them. That last
+# board, and that folder already carrying one app's own settings with Amenbo's entry in them. That last
 # is written out here rather than asked of the build under test, which is the opposite of what
 # `wire-ai` does one road over, and for a reason: nothing the shipped CLI hands over carries this text —
 # both faces that produce it are the screen's — and the name the entry is found under is a compatibility
@@ -27,10 +27,10 @@
 # it again would stop recognising every entry already out there, and this road going red is that being
 # said out loud.
 id: set-an-app-up-to-reach-this-project
-title: One screen says which apps already reach amenbo, for which folders, and hands each one the road its app can walk — and what is ticked there comes back off the app it was carried into
+title: One screen says which apps already reach Amenbo, for which folders, and hands each one the road its app can walk — and what is ticked there comes back off the app it was carried into
 description: >
   The reader wants an AI that cannot open a folder to reach their projects. One screen lists the apps
-  amenbo knows. One of them already holds a server and says so with the folder its entry names — a
+  Amenbo knows. One of them already holds a server and says so with the folder its entry names — a
   folder that is not any of this reader's projects, which is exactly why the folder is drawn at all.
   The rest are not set up, and each row offers the one road its app can walk: a request for the apps
   that have an AI of their own, a file for the one that cannot run a command.
@@ -42,9 +42,9 @@ description: >
   What this road stands against is a fold that lists apps and says nothing about them: "set up" with no
   folder under it, or one button drawn for every row.
 
-  Then the file road is walked to its end, off amenbo's screen and into the app it was written for: the
-  one app amenbo writes settings for with nobody in between, asked whether it reads them — amenbo among
-  the servers it lists, with a tool of amenbo's under it.
+  Then the file road is walked to its end, off Amenbo's screen and into the app it was written for: the
+  one app Amenbo writes settings for with nobody in between, asked whether it reads them — Amenbo among
+  the servers it lists, with a tool of Amenbo's under it.
 given:
   # The project and the folder it is bound to. A project with no folder has nowhere to point a server,
   # and the fold draws nothing at all — so the folder is the premise the whole road stands on.
@@ -56,7 +56,7 @@ given:
       dir: workspace
 
   # One app already reaching this project: the entry a reader's own AI would have written, under the
-  # name amenbo answers to. The folder it names is deliberately not the folder these settings sit in —
+  # name Amenbo answers to. The folder it names is deliberately not the folder these settings sit in —
   # an entry can name any folder, and reading back the one it names is the whole reason the screen
   # draws it.
   - type: action
@@ -158,15 +158,15 @@ steps_gui:
         - Greenhouse
 
   # And the file taken the rest of the way, into the app it was written for. This is the one place the
-  # road leaves amenbo's own screen, and the one app it has to: everywhere else a reader's own AI writes
-  # the settings and amenbo holds only the wording, but here amenbo writes the file itself and it lands
-  # with nobody in between. A format got wrong is amenbo's fault, and nothing this side of the app
+  # road leaves Amenbo's own screen, and the one app it has to: everywhere else a reader's own AI writes
+  # the settings and Amenbo holds only the wording, but here Amenbo writes the file itself and it lands
+  # with nobody in between. A format got wrong is Amenbo's fault, and nothing this side of the app
   # reading it would say so.
   #
-  # What the app is asked for is the whole of what the file is for — amenbo among its servers, and a
-  # tool of amenbo's under it, which is the server having started. Going further, to the app's AI making
+  # What the app is asked for is the whole of what the file is for — Amenbo among its servers, and a
+  # tool of Amenbo's under it, which is the server having started. Going further, to the app's AI making
   # a task, is one round trip walked once and not per release: what is on the other side of it is
-  # somebody else's product, which changes without amenbo changing.
+  # somebody else's product, which changes without Amenbo changing.
   - type: assert
     domain: repo
     op: mcp-in-app

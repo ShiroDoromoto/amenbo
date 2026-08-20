@@ -51,6 +51,22 @@ pub(crate) fn unstamped_line() -> Option<&'static str> {
         .then_some("build: local — this binary did not come out of the release workflow")
 }
 
+/// What `update` and `update --apply` say to a build the release workflow did not stamp: the query is
+/// withheld from it ([`amenbo_core::update_check::is_withheld_from_build`]), so there is no manifest
+/// to name a version from and nothing honest to open. Worded here once, because both faces refuse it
+/// for the same reason. The channel is *not* folded in — a dev build is unstamped too, but its own
+/// answer is the more specific one, and each face asks the channel in its own body (the guard
+/// `guards/check-dev-selfupdate.sh` holds it to that).
+fn unstamped_refusal() -> (String, &'static str) {
+    (
+        format!(
+            "This build of {} did not come out of the release workflow — it does not check for updates.",
+            Paths::command_name()
+        ),
+        "Install a released Amenbo to be told about newer ones.",
+    )
+}
+
 /// The explicit update route: look up this OS's all-in-one installer URL in latest.json and open it. There
 /// is no self-update — opening is all it does. Because the user asked for it, the lookup runs regardless of
 /// the config toggle **and regardless of the detection cache's TTL** (`AMB-D-463`): it goes and asks, rather
@@ -60,10 +76,13 @@ pub(crate) fn unstamped_line() -> Option<&'static str> {
 /// unchanged — the fresh query shares the fall-back-to-stale contract with the cached one. Callable from
 /// outside a binding, so it never touches the store.
 ///
-/// A development build answers differently, and before any of that: the installer this would open is
-/// production's, and the manifest it would name a version from is withheld from a dev build
-/// (`update_check::is_disabled`), which would leave it saying "no newer version detected" about a
-/// build that is normally behind. So it says what is true instead, opens nothing, and sends no traffic.
+/// Two builds answer differently, and before any of that: the installer this would open is
+/// production's, and the manifest it would name a version from is withheld from both
+/// (`update_check::is_disabled`), which would leave either saying "no newer version detected" about a
+/// build it never measured. So each says what is true instead, opens nothing, and sends no traffic. A
+/// **development build** is behind production by construction; a build the **release workflow did not
+/// stamp** wears the released number without being that release. The channel is asked first, because
+/// a dev build is unstamped as well and its own answer is the more specific one.
 pub(crate) fn update_cmd(flags: &Flags, print: bool) -> Result<i32, CliError> {
     if Paths::is_dev_channel() {
         if flags.json {
@@ -80,6 +99,25 @@ pub(crate) fn update_cmd(flags: &Flags, print: bool) -> Result<i32, CliError> {
         } else {
             human(flags, format!("{} is a development build — it does not update itself.", Paths::command_name()));
             human(flags, "Rebuild it from source (`make install-dev`) to move it forward.");
+        }
+        return Ok(0);
+    }
+    if amenbo_core::update_check::is_withheld_from_build() {
+        let (line, hint) = unstamped_refusal();
+        if flags.json {
+            print_json(&json!({
+                "action": "update",
+                "current_version": agent::VERSION,
+                // Nothing was queried, so claim nothing about upstream — do not pad these.
+                "latest_version": serde_json::Value::Null,
+                "update_available": false,
+                "reason": "unstamped_build",
+                "url": serde_json::Value::Null,
+                "opened": false,
+            }));
+        } else {
+            human(flags, line);
+            human(flags, hint);
         }
         return Ok(0);
     }
@@ -122,9 +160,9 @@ pub(crate) fn update_cmd(flags: &Flags, print: bool) -> Result<i32, CliError> {
 /// (`AMB-D-463`): declining to apply an update is a refusal, and a refusal must not rest on an entry up
 /// to 24 hours old. Callable from outside a binding (a CLI-only user updates without a store), so it
 /// never touches the store. The
-/// three "correctly declined" outcomes (already current / GUI-managed / a development build) are
-/// reported as plain messages with a zero exit; genuine failures (download, extract, swap, no archive)
-/// are errors.
+/// four "correctly declined" outcomes (already current / GUI-managed / a development build / a build
+/// the release workflow did not stamp) are reported as plain messages with a zero exit; genuine
+/// failures (download, extract, swap, no archive) are errors.
 pub(crate) fn self_update_cmd(flags: &Flags) -> Result<i32, CliError> {
     use amenbo_core::self_update::{self, SelfUpdateError};
     let latest = amenbo_core::update_check::check_fresh(true);
@@ -147,6 +185,25 @@ pub(crate) fn self_update_cmd(flags: &Flags) -> Result<i32, CliError> {
             } else {
                 human(flags, declined.to_string());
                 human(flags, "Rebuild it from source (`make install-dev`) to move it forward.");
+            }
+            return Ok(0);
+        }
+        // The same withholding in its other shape: an unstamped build was never handed a manifest, so
+        // reporting the network would be naming the wrong reason.
+        if amenbo_core::update_check::is_withheld_from_build() {
+            let (line, hint) = unstamped_refusal();
+            if flags.json {
+                print_json(&json!({
+                    "action": "self_update",
+                    "updated": false,
+                    "reason": "unstamped_build",
+                    "current_version": agent::VERSION,
+                    "latest_version": serde_json::Value::Null,
+                    "message": line,
+                }));
+            } else {
+                human(flags, line);
+                human(flags, hint);
             }
             return Ok(0);
         }

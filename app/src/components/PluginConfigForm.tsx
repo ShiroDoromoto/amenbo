@@ -32,9 +32,9 @@ import {
  * way back to that last one is the same button that empties any other field, wearing the name of what it
  * does here.
  *
- * **The form is generic and amenbo judges nothing in it.** What the author declares is the *shape of the
+ * **The form is generic and Amenbo judges nothing in it.** What the author declares is the *shape of the
  * answer* — a line, a masked pair for a secret, a set of candidates — never what a value must look like:
- * that stays the plugin author's to check at run time, and what amenbo enforces is the floor under any
+ * that stays the plugin author's to check at run time, and what Amenbo enforces is the floor under any
  * value (a byte cap, no control characters) at the one write boundary every face shares.
  *
  * **A secret is written, never read back.** It never leaves core — the form has only "held / not held"
@@ -168,7 +168,7 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
   };
 
   // One boundary call per field that changed. They are sequential on purpose: each is its own write,
-  // and a refusal on the third must leave the first two written rather than roll back a store amenbo
+  // and a refusal on the third must leave the first two written rather than roll back a store Amenbo
   // never promised to.
   const onSave = () =>
     run(async () => {

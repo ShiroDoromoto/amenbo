@@ -1,4 +1,4 @@
-// The offer to let amenbo be woken once an hour, put across the whole app (`AMB-D-718`). Until it is
+// The offer to let Amenbo be woken once an hour, put across the whole app (`AMB-D-718`). Until it is
 // answered the due warning is silent, and nothing anywhere says so — `amenbo tick install` is the only
 // other way in, and a reader who has not met the command line has no way of learning it exists.
 //

@@ -70,7 +70,7 @@ pub fn resolve_directive(perf_log: Option<PerfLog>) -> String {
     if crate::config::Paths::is_dev_channel() {
         return PerfLog::BudgetOnly.directive().to_string();
     }
-    // amenbo (prod) channel is OFF by default — only env/config can turn it on.
+    // Amenbo (prod) channel is OFF by default — only env/config can turn it on.
     if crate::config::Paths::APP_NAME == "amenbo" {
         return PerfLog::Off.directive().to_string();
     }

@@ -183,7 +183,7 @@ fn execute(hook: &Hook, bound: Option<Duration>, heartbeat: Option<Heartbeat<'_>
                 error = %error,
                 "plugin hook could not be launched; ignored"
             );
-            // The launch failure itself is the diagnosis here, and it is amenbo's message, not the
+            // The launch failure itself is the diagnosis here, and it is Amenbo's message, not the
             // plugin's — there was no child to write one.
             run(Outcome::NotLaunched, None, Duration::ZERO, &error.to_string())
         }

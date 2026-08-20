@@ -1,5 +1,5 @@
-//! The hourly tick: the one plain timer amenbo asks this machine's scheduler to hold (`AMB-D-707`),
-//! whether it may ask at all, and what amenbo does once that timer wakes it (`AMB-D-706`).
+//! The hourly tick: the one plain timer Amenbo asks this machine's scheduler to hold (`AMB-D-707`),
+//! whether it may ask at all, and what Amenbo does once that timer wakes it (`AMB-D-706`).
 //!
 //! Two halves, joined by nothing but the hour:
 //!
@@ -8,12 +8,12 @@
 //! | whether we are woken | the answer on record ([`TickConsent`]), what the scheduler holds ([`probe`]), the rule that settles the two ([`fix_for`]), and whether there is a question to put at all ([`banner_shows`]) |
 //! | what is done once awake | the declaration table ([`PURPOSES`]), the day mark that holds a purpose to one turn a day ([`once_a_day`]), and the entry that walks them ([`run`]) |
 //!
-//! **What is registered carries no meaning.** It wakes amenbo once an hour, and amenbo decides once
+//! **What is registered carries no meaning.** It wakes Amenbo once an hour, and Amenbo decides once
 //! awake what is due. That is the whole reason there is one: a second use never becomes a second
-//! timer, so the path that rewrites the OS's own settings every time amenbo grows does not exist. The
+//! timer, so the path that rewrites the OS's own settings every time Amenbo grows does not exist. The
 //! user sees one row, and switching it off stops everything behind it.
 //!
-//! Registering writes into the machine's scheduler, which amenbo does not do unasked, so it asks —
+//! Registering writes into the machine's scheduler, which Amenbo does not do unasked, so it asks —
 //! **once for the tick as a feature, on this device** ([`TickConsent`], kept in
 //! [`crate::config::Config::tick_consent`]). The same shape as the lint's [`crate::hooks::HookConsent`],
 //! and for the same reason: nobody wants the tick on Tuesdays but not Wednesdays, so asking more than
@@ -28,13 +28,13 @@
 //! **The answer and the registration are two independent facts.** The answer says what was consented
 //! to and never what the scheduler holds, which is [`probe`]'s answer and is read from the OS every
 //! time. The row is the user's to switch off from their own settings, and an answer read as a mirror
-//! of the OS would leave amenbo claiming a timer that is not there. The two meet in exactly one place,
+//! of the OS would leave Amenbo claiming a timer that is not there. The two meet in exactly one place,
 //! [`fix_for`].
 //!
 //! **What goes inside a registration is not here.** A plist, a scheduler task and a systemd unit are
 //! not one shape with three spellings, so each OS writes its own, and the build picks one. Three points from
 //! `AMB-D-707` are not writing style but whether the premise holds at all, and every door has to meet
-//! them: macOS registers through `SMAppService` so the row carries amenbo's name rather than the
+//! them: macOS registers through `SMAppService` so the row carries Amenbo's name rather than the
 //! developer's; all three need the missed-run setting turned on explicitly, none having it by default;
 //! and Windows has to have both battery gates turned off, or a laptop off its charger runs no tick at
 //! all.
@@ -124,7 +124,7 @@ pub enum TickFix {
 /// moved gets the timer pointed at it again. The cost is one write per startup, once a door exists.
 ///
 /// A registration the user removed is **not** written back. The lint makes the opposite call, and the
-/// difference is what the two features are: a git hook is amenbo's own file in a repository's plumbing,
+/// difference is what the two features are: a git hook is Amenbo's own file in a repository's plumbing,
 /// while the tick is a row in the user's system settings with a switch on it. Undoing that switch from
 /// under them would make it not a switch — so the answer follows what they can see
 /// ([`TickFix::TakeTheAnswerBack`]), back to unanswered, which is what leaves the offer able to be put
@@ -144,7 +144,7 @@ pub fn fix_for(consent: Option<TickConsent>, registered: bool) -> TickFix {
 
 /// Whether this build has a door into this machine's scheduler at all.
 ///
-/// False is not a failure and not a refusal to answer: it is the honest state of a target amenbo has
+/// False is not a failure and not a refusal to answer: it is the honest state of a target Amenbo has
 /// not learned to register on, and every face here says so rather than half-doing the work. While it is
 /// false [`probe`] is `false`, and [`register`] and [`unregister`] refuse.
 ///
@@ -159,7 +159,7 @@ pub fn available() -> bool {
 ///
 /// macOS is the one that does. It keeps its own record of a background item, and `unregister` does not
 /// reach it: the row stays in Login Items with the toggle reading as allowed, while nothing runs behind
-/// it. There is no further move for amenbo to make — so this is here to be *said*, at the moment the
+/// it. There is no further move for Amenbo to make — so this is here to be *said*, at the moment the
 /// registration is taken away, rather than to be acted on. Left unsaid, the row reads as "it did not
 /// work"; said first, it is just how the OS keeps its list.
 ///
@@ -236,7 +236,7 @@ pub fn relaunch_target() -> Option<std::path::PathBuf> {
 
 
 
-/// Is the scheduler holding amenbo's tick right now? Read from the OS, every time — never from the
+/// Is the scheduler holding Amenbo's tick right now? Read from the OS, every time — never from the
 /// answer on record (see the module docs).
 pub fn probe() -> Result<bool> {
     platform::probe()
@@ -308,7 +308,7 @@ pub fn settle(consent: Option<TickConsent>) -> Option<Option<TickConsent>> {
 ///
 /// | condition | why it is asked |
 /// |---|---|
-/// | this build has a door ([`available`]) | on a target amenbo cannot register on, "start checking" is a button with nothing behind it |
+/// | this build has a door ([`available`]) | on a target Amenbo cannot register on, "start checking" is a button with nothing behind it |
 /// | nobody here has answered | an answer given is not a question to put again ([`TickConsent`]) |
 /// | **later** was not pressed today | that button's whole meaning is one day of quiet ([`crate::overview::tick_banner_later`]) |
 /// | an open task carries a due day | the warning only ever speaks about `done:false` work with a day on it |
@@ -365,7 +365,7 @@ fn warning_has_a_carrier(store: &Store, installed: &[InstalledPlugin]) -> Result
     Ok(false)
 }
 
-/// One thing amenbo may have to do when it is woken: the id its day mark is kept under, and the work.
+/// One thing Amenbo may have to do when it is woken: the id its day mark is kept under, and the work.
 pub struct Purpose {
     /// What the day mark is keyed by. It names a line of the table compiled into this binary, so no row of
     /// the store can hold it — and a mark left under an id no build declares any more is inert, which is
@@ -821,7 +821,7 @@ mod tests {
     }
 
     /// The rule the hourly wake-up rests on: within one calendar day the work is carried out once, however
-    /// many times amenbo is woken, and the next day it is owed again (`AMB-D-708`).
+    /// many times Amenbo is woken, and the next day it is owed again (`AMB-D-708`).
     #[test]
     fn a_purpose_takes_one_turn_a_day_however_often_the_tick_is_woken() {
         let engine = StoreEngine::open_in_memory().unwrap();

@@ -188,7 +188,7 @@ mod tests {
         assert_eq!(demo_commands(tape), vec!["amenbo task list --actor human"]);
     }
 
-    /// And an amenbo command run off camera stays out of it — the transcript is the film's own text, so
+    /// And an Amenbo command run off camera stays out of it — the transcript is the film's own text, so
     /// a line the viewer never sees run must not appear in what the film is held to.
     #[test]
     fn an_amenbo_command_run_off_camera_is_not_picked_up() {

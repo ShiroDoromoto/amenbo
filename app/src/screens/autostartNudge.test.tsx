@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The one nudge amenbo puts today: the offer to start at login. Only the boundary is stubbed (core's
+// The one nudge Amenbo puts today: the offer to start at login. Only the boundary is stubbed (core's
 // `config_set_autostart`, and which build this is); the modal's own branching runs for real.
 //
 // What these guard is who is asked and what an answer costs. A build with no login registration to

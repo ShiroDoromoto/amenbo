@@ -16,7 +16,7 @@ use crate::time::Timestamp;
 
 /// **The** ready predicate — every read that projects `ready` derives it here, so the task card, the
 /// task detail and the reserve guard cannot come to disagree about what "this can be started" means.
-/// Four premises, all of them the user's own rather than amenbo's: no blocker still open, no linked
+/// Four premises, all of them the user's own rather than Amenbo's: no blocker still open, no linked
 /// decision still unsettled, the declared start day arrived, and the task's creation finished. No
 /// `start_on` means nothing was declared about when to start, which is not a reason to hold the task
 /// back.

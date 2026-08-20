@@ -81,7 +81,7 @@ pub fn teardown_deleted_project(store: &Store, project_id: i64) -> Result<Teardo
 /// The registered string is the path as canonicalised at bind time, so — in case the path handed in here is
 /// not the canonical one — forget the canonical form too (the same shape `unbind` has). What is forgotten is
 /// the `(project, dir)` pair, not the folder: `forget_dir` is `unbind`'s move, where the folder itself is
-/// leaving amenbo, and using it here would unbind the folder from every project that holds it.
+/// leaving Amenbo, and using it here would unbind the folder from every project that holds it.
 fn release_folder(store: &Store, dir: &str, project_id: i64, registry: &mut Registry) -> bool {
     let path = Path::new(dir);
     let ours = folder_still_ours(store, path, project_id);

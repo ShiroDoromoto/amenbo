@@ -18,7 +18,7 @@ use crate::cmd::place::{bound_project, project_name, project_required};
 use crate::output::{confirm, human, print_json, CliError, Flags};
 
 /// **The plugins the agent spec names** (`AMB-D-437`): what this project can actually call — described in
-/// the words their authors wrote where those authors are the amenbo team, and by the line to type alone
+/// the words their authors wrote where those authors are the Amenbo team, and by the line to type alone
 /// where they are not (`AMB-D-575`/`AMB-D-576`, [`amenbo_core::plugin_agent`]) — and, off the same set,
 /// the lines to hang on the steps their authors named (`AMB-D-571`).
 ///
@@ -27,7 +27,7 @@ use crate::output::{confirm, human, print_json, CliError, Flags};
 /// author declared** (`AMB-D-434`/`AMB-D-601` — the gate of the project this folder is bound to, so a
 /// project's plugin open elsewhere is not open here; a device plugin's one gate is open here as soon as it
 /// is open at all), and able to run against this build (`AMB-D-359`). Naming one the call would refuse is worse than
-/// leaving it out, since the AI spends a turn learning what amenbo already knew.
+/// leaving it out, since the AI spends a turn learning what Amenbo already knew.
 ///
 /// `project` is the effective context — the folder's binding, or a human's `--project` ([`bound_project`])
 /// — and not the caller's reach: the reach narrows an AI to its own project, but a human's is every
@@ -36,7 +36,7 @@ use crate::output::{confirm, human, print_json, CliError, Flags};
 ///
 /// **An empty list comes back with the reason it is empty**, because several different states fall to the
 /// same empty array and a reader who cannot tell them apart spends a turn finding out (a run outside a
-/// binding, nothing installed, everything installed needing a different amenbo, nothing switched on here).
+/// binding, nothing installed, everything installed needing a different Amenbo, nothing switched on here).
 /// Best-effort, like the rest of this runtime seam: a base directory that cannot be listed answers with
 /// that as the reason rather than an entry point that fails to answer.
 pub(crate) fn plugins_for_agent(store: &Store, project: Option<i64>) -> PluginsAtEntry {
@@ -142,15 +142,15 @@ impl PluginsAtEntry {
 ///
 /// **The translations beside it are read with it** (`AMB-D-621`): every sibling file named
 /// `<name>.<lang>.<ext>` is an overlay of this manifest, and the pair is checked together — a language
-/// amenbo is not read in, a key the base does not declare, and text past the cap its base field obeys are
+/// Amenbo is not read in, a key the base does not declare, and text past the cap its base field obeys are
 /// all things an author can only be told here, while the file is still theirs to fix.
 ///
-/// On `--json` a passing manifest also carries what amenbo read, as the documents the catalog serves
+/// On `--json` a passing manifest also carries what Amenbo read, as the documents the catalog serves
 /// (`AMB-D-385`): the `entry` everyone fetches to draw the list, the `detail` fetched for one plugin at a
 /// time, and `entry_i18n` — the list half of the translations, one per language, for the CI to key by
 /// plugin name into `catalog.<lang>.json` (`AMB-D-622`). The detail half rides inside `detail` already,
-/// every language at once, so there is no third key for it. The catalog aggregator publishes what amenbo
-/// hands it rather than keeping its own list of fields to copy, which silently drops a field amenbo later
+/// every language at once, so there is no third key for it. The catalog aggregator publishes what Amenbo
+/// hands it rather than keeping its own list of fields to copy, which silently drops a field Amenbo later
 /// adds. All of it rides back only when the manifest passes: a parse error read nothing, and a
 /// rule-breaking manifest is refused at the door.
 pub(crate) fn plugin_validate_cmd(flags: &Flags, path: String) -> Result<i32, CliError> {
@@ -200,11 +200,11 @@ pub(crate) fn plugin_validate_cmd(flags: &Flags, path: String) -> Result<i32, Cl
             })
             .collect();
         let mut out = json!({ "ok": problems.is_empty(), "path": path, "count": problems.len(), "problems": arr });
-        // When the manifest passes, hand the caller what amenbo *read*, as the two documents the catalog
+        // When the manifest passes, hand the caller what Amenbo *read*, as the two documents the catalog
         // serves (`AMB-D-385`): the `entry` everyone fetches to draw the list, and the `detail` fetched for
-        // one plugin at a time. The split is amenbo's (`amenbo_core::plugin_wire`), so a consumer (the
+        // one plugin at a time. The split is Amenbo's (`amenbo_core::plugin_wire`), so a consumer (the
         // catalog's aggregator) publishes both without keeping its own list of which fields to copy or which
-        // half each belongs to — a list that silently drops any field amenbo later adds (`AMB-T-2105` lost
+        // half each belongs to — a list that silently drops any field Amenbo later adds (`AMB-T-2105` lost
         // `scope`/`events` that way). Together they are the whole manifest: `plugin_wire::join` puts them
         // back, and `skip_serializing_if` keeps an omitted optional field omitted, so what comes back
         // round-trips what the author wrote. `entry` carries `added_at`, `detail_sum` and `featured` as empty
@@ -258,7 +258,7 @@ fn parse_catalog_document<T: serde::de::DeserializeOwned>(
 /// language order — `plugins/mail.yaml` finding `plugins/mail.ja.yaml` and its siblings.
 ///
 /// Which name is an overlay of which manifest is [`overlay_language`](amenbo_core::plugin_manifest::overlay_language)'s
-/// to answer; walking the directory is this. A file whose language token is not one amenbo reads is
+/// to answer; walking the directory is this. A file whose language token is not one Amenbo reads is
 /// returned all the same, so the validator can name the code rather than the file silently going unread.
 fn overlays_beside(manifest: &str) -> Result<Vec<(String, String)>, CliError> {
     let path = std::path::Path::new(manifest);
@@ -469,7 +469,7 @@ fn plugin_layer(
 
 /// The declared field this key names, or a refusal that lists the keys the author *did* declare. The
 /// manifest is the only thing that says whether a value is a secret (`AMB-D-356`), so a key it does not
-/// declare has no storage rule and cannot be written — guessing one is precisely what amenbo must not do.
+/// declare has no storage rule and cannot be written — guessing one is precisely what Amenbo must not do.
 fn plugin_config_field(
     plugin: &amenbo_core::plugin_subscribe::InstalledPlugin,
     key: &str,
@@ -588,13 +588,13 @@ fn plugin_config_shown(
     }
 }
 
-/// What amenbo has to say about a field beside the value, and the author's paragraph after it
+/// What Amenbo has to say about a field beside the value, and the author's paragraph after it
 /// (`AMB-D-656`) — the lines drawn under the value line, indented so they read as belonging to it.
 ///
-/// Two things in this order, and the order is the point. **`readonly` is amenbo's own sentence**: the value
+/// Two things in this order, and the order is the point. **`readonly` is Amenbo's own sentence**: the value
 /// is the plugin's to write, so a reader who was about to type one learns that before reading a word the
-/// author wrote. **`help` is the author's**, and it comes last, after everything amenbo says — a paragraph
-/// drawn between two of amenbo's lines is a paragraph that can be mistaken for one.
+/// author wrote. **`help` is the author's**, and it comes last, after everything Amenbo says — a paragraph
+/// drawn between two of Amenbo's lines is a paragraph that can be mistaken for one.
 ///
 /// The `help` rules are re-asked here, not only at the install door
 /// ([`validate_config_help`](amenbo_core::plugin_validate::validate_config_help), `AMB-D-573`), and a
@@ -775,7 +775,7 @@ fn plugin_install_cmd(store: &Store, flags: &Flags, name: &str) -> Result<i32, C
 ///
 /// **An open gate is not the same as a plugin that fires**, so the listing carries the compatibility
 /// verdict beside it (`AMB-D-359`). The dispatch resolver warns and drops a plugin this build cannot speak
-/// to — and amenbo updates underneath an install, so a plugin enabled while it was compatible can stop
+/// to — and Amenbo updates underneath an install, so a plugin enabled while it was compatible can stop
 /// firing without anyone touching it. Left to "enabled" alone, that state is readable only in the log.
 ///
 /// It also carries the "update available" mark (`AMB-D-359`): the last-fetched catalog holds a different
@@ -1547,7 +1547,7 @@ fn refuse_update_leaving_required_unset(
 /// moves that state ([`amenbo_core::plugin_trust`]). There is still no `--scope`: a plugin has one switch,
 /// and *where* it sits is its author's declaration rather than a choice at the call
 /// (`AMB-D-434` / `AMB-D-601`), so this command always means one thing. Fail-closed three times over: on the
-/// plugin's compatibility declarations ([`amenbo_core::plugin_compat`], `AMB-D-359` — a plugin this amenbo
+/// plugin's compatibility declarations ([`amenbo_core::plugin_compat`], `AMB-D-359` — a plugin this Amenbo
 /// cannot speak to is refused before anything is written), on the author's `required` settings, probed
 /// at the layer that gate is for, and on the author's own check if the manifest names one
 /// ([`amenbo_core::plugin_check`], `AMB-D-664`).
@@ -1710,16 +1710,16 @@ fn plugin_uninstall_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<
 /// `plugin run <name> [args...]` — call a plugin's command face and relay what it returned
 /// (`AMB-D-353`).
 ///
-/// **This command's stdout belongs to the plugin.** No courtesy line of amenbo's is printed there: the
+/// **This command's stdout belongs to the plugin.** No courtesy line of Amenbo's is printed there: the
 /// return value is meant to be consumed (`eval "$(…)"`, `iex (…)`), and anything mixed in would corrupt
-/// it — in either shell, since the line is written to go through both (`AMB-D-444`). amenbo's
+/// it — in either shell, since the line is written to go through both (`AMB-D-444`). Amenbo's
 /// own voice goes to stderr, where the plugin's diagnostics are relayed too — first, so they read as
 /// context ahead of the value rather than commentary after it. Under `--json` stdout is the document, as
 /// everywhere else, and the return value rides inside it.
 ///
 /// A plugin that exits non-zero is a failed call: its return value is discarded (`AMB-D-354`) and this
-/// exits 1 — amenbo's own "something went wrong" code, not the plugin's number. Relaying that number
-/// instead would collide with the exit codes amenbo itself contracts (2 is bad arguments, whatever the
+/// exits 1 — Amenbo's own "something went wrong" code, not the plugin's number. Relaying that number
+/// instead would collide with the exit codes Amenbo itself contracts (2 is bad arguments, whatever the
 /// plugin meant by it), so it is reported in the message and in `--json` instead of impersonated.
 fn plugin_run_cmd(
     store: &Store,
@@ -2027,7 +2027,7 @@ mod tests {
     }
 
     /// What a terminal reader is told about the field itself (`AMB-D-656`): who writes the value, and the
-    /// paragraph the author wrote — in that order, so amenbo has finished speaking before the author
+    /// paragraph the author wrote — in that order, so Amenbo has finished speaking before the author
     /// starts. A field that declared neither says nothing extra, which is every field written before these
     /// keys existed.
     #[test]

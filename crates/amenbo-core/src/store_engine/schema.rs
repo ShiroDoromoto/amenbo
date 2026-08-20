@@ -50,7 +50,7 @@
 //! happens to it when its parent goes. The rule is that **the schema never silently deletes a row that
 //! stands for a concept** (`AMB-D-403`): deleting an entity's subtree is something a delete op does
 //! explicitly, in code a reviewer can read, not something a `CASCADE` does behind it. A row a `CASCADE`
-//! removed never passed through that op, so there is no place amenbo could learn it went — and an
+//! removed never passed through that op, so there is no place Amenbo could learn it went — and an
 //! observation event is appended at the op's write point (`AMB-D-367`), which means a `CASCADE` decides
 //! today that nobody will ever be told. The line is therefore drawn by **what the row is**, not by what
 //! kind of relation holds it:
@@ -58,7 +58,7 @@
 //! | what the row is | example | `ON DELETE` |
 //! |---|---|---|
 //! | a concept someone can point at | a comment, a dependency edge, a decision↔task link, a commit anchor, a classification value | `RESTRICT` (+ the delete op takes the children first) |
-//! | amenbo's own settings for a project | `plugin_config`, `plugin_secret`, `plugin_enable`, `hook_optout`, `harness_consent` | `CASCADE` |
+//! | Amenbo's own settings for a project | `plugin_config`, `plugin_secret`, `plugin_enable`, `hook_optout`, `harness_consent` | `CASCADE` |
 //! | the same settings, written at the **device** layer (`AMB-D-601`) | a `plugin_config` / `plugin_secret` / `plugin_enable` row whose `project_id` is NULL | the cascade never reaches them — no project holds them |
 //! | optional entity reference (keep the child, drop the reference) | none in the registry today | `SET NULL` |
 //!
@@ -654,7 +654,7 @@ datasets! {
         established_at: ts_opt,
     }
 
-    // A git commit SHA a task carries (1 task : many commits). amenbo stores the SHA as an opaque
+    // A git commit SHA a task carries (1 task : many commits). Amenbo stores the SHA as an opaque
     // string and never reads git — the anchor from history back to a task. `sha` is the full-length
     // lower-case hex the ops layer normalises to and admits at the door (40 = SHA-1, 64 = SHA-256);
     // short forms, refs and revisions are refused before they can land.
@@ -886,7 +886,7 @@ plain_tables! {
     ///
     /// `record` is the other thing the event cannot be asked for later: the **vanished record's own
     /// shape**, as JSON, on the events whose record is gone by the time anyone reads them (`AMB-D-407`).
-    /// A live record is read back by name — a plugin calls amenbo (`AMB-D-406`) — so only what cannot be
+    /// A live record is read back by name — a plugin calls Amenbo (`AMB-D-406`) — so only what cannot be
     /// read is carried, and it is written at the append for the same reason `project` is: this is the last
     /// instant the row exists. The store does not interpret it, here or anywhere: what a subscriber needs
     /// out of a deleted record is the subscriber's to decide. `NULL` on every other event, and on a
@@ -1038,7 +1038,7 @@ plain_tables! {
         task_id: integer("PRIMARY KEY"),
     }
 
-    /// The **lint-hook opt-out** — the projects amenbo must not wire the lint into on its own. A row is
+    /// The **lint-hook opt-out** — the projects Amenbo must not wire the lint into on its own. A row is
     /// written by `hooks uninstall`: an explicit act on one repository, which the device-wide answer
     /// (`config.hook_consent`) would otherwise undo at the next startup by installing again.
     ///
@@ -1053,7 +1053,7 @@ plain_tables! {
         project_id: integer("PRIMARY KEY REFERENCES project(id) ON DELETE CASCADE"),
     }
 
-    /// The **AI-harness consent** — whether amenbo may offer to have this project's folder start its AI
+    /// The **AI-harness consent** — whether Amenbo may offer to have this project's folder start its AI
     /// on `amenbo agent` (`AMB-D-440`). One row per project, and the row is the answer: a project with no
     /// row has never been asked, which is what keeps "asked and refused" apart from "never asked".
     ///

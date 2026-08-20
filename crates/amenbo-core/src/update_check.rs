@@ -1,8 +1,8 @@
 //! Querying the update endpoint.
 //!
-//! amenbo keeps its **functional traffic at zero**: local-first, no central server, no user data
+//! Amenbo keeps its **functional traffic at zero**: local-first, no central server, no user data
 //! ever leaving the machine. That core is untouched; what this module owns is the one piece of
-//! **infrastructure traffic** — noticing that a newer release exists. It queries amenbo's own
+//! **infrastructure traffic** — noticing that a newer release exists. It queries Amenbo's own
 //! update endpoint, which answers with the manifest wharfy's release step publishes as
 //! `latest.json`: a version plus minimal metadata, carrying no user data.
 //!
@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
 
-/// The default endpoint: amenbo's own update service, answering with the manifest the release step
+/// The default endpoint: Amenbo's own update service, answering with the manifest the release step
 /// publishes as `latest.json`. Asking here rather than at the release itself is what keeps where a
 /// version is announced apart from where the release is hosted (`AMB-D-717`).
 ///
@@ -120,7 +120,7 @@ impl LatestRelease {
 /// Map the machine onto wharfy's `assets` platform key (`os-arch`). We follow wharfy's vocabulary:
 /// the OS matches `std::env::consts::OS` verbatim (macOS → `macos`, plus `windows` and `linux`), and
 /// the arch is [`native_arch`] — the machine's own, not the running binary's (`AMB-D-551`). So a Mac
-/// with Apple silicon answers `macos-arm64` whether the amenbo asking is the arm64 build or the
+/// with Apple silicon answers `macos-arm64` whether the Amenbo asking is the arm64 build or the
 /// Intel one under Rosetta. This is also the key of the CLI archive (the suffix-less one);
 /// [`installer_asset_key`] appends the kind to get the installer key.
 #[must_use]
@@ -140,7 +140,7 @@ pub fn current_platform_key() -> String {
 /// Where the OS has no answer — it does not emulate, it was not asked in a way it understands, or
 /// this is a platform with no ask at all — the running binary's own arch is the answer, which is
 /// what this returned before there was a question. Mapping it is the same rewrite wharfy's names
-/// use: `aarch64` → `arm64`, `x86_64` → `x64`, anything else verbatim (an arch amenbo does not
+/// use: `aarch64` → `arm64`, `x86_64` → `x64`, anything else verbatim (an arch Amenbo does not
 /// distribute simply keys nothing).
 #[must_use]
 pub fn native_arch() -> &'static str {
@@ -176,7 +176,7 @@ fn machine_arch() -> Option<&'static str> {
 
 /// Ask Windows what machine it is, which is the one question `IsWow64Process2` answers directly:
 /// its second out-parameter is the native machine, whatever the process itself was built for. An
-/// arch amenbo has no token for — and a call the OS turns away — is left to the caller's fallback.
+/// arch Amenbo has no token for — and a call the OS turns away — is left to the caller's fallback.
 #[cfg(windows)]
 fn machine_arch() -> Option<&'static str> {
     use windows_sys::Win32::System::SystemInformation::{
@@ -533,7 +533,7 @@ mod tests {
         assert!(key.ends_with(&format!("-{}", native_arch())));
     }
 
-    /// The arches amenbo distributes are the two it has tokens for, and a machine answering as one
+    /// The arches Amenbo distributes are the two it has tokens for, and a machine answering as one
     /// of them is what every asset key rests on.
     #[test]
     fn native_arch_is_one_amenbo_distributes() {

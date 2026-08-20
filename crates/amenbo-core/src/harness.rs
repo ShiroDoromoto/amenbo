@@ -1,5 +1,5 @@
 //! The AI harnesses that can be wired to run `amenbo agent` when a session starts, and the text each one
-//! is wired with (`AMB-D-440`). **Read-only**: nothing here writes to a user's provider settings. amenbo
+//! is wired with (`AMB-D-440`). **Read-only**: nothing here writes to a user's provider settings. Amenbo
 //! asks, detects, and hands over the text — the wiring stays in the user's hands.
 //!
 //! **What is handed over is a request, not a file.** [`request`] is addressed to the AI the reader
@@ -10,7 +10,7 @@
 //!
 //! **What a probe can claim, and what it cannot.** [`probe`] answers whether a folder's settings for a
 //! harness *say* to run the launch command when a session starts. Whether the hook then fires, and
-//! whether its output reaches the model, is outside amenbo: some providers load project-level settings
+//! whether its output reaches the model, is outside Amenbo: some providers load project-level settings
 //! only under a trust prompt, some do not use a session-start hook's stdout for injection at all, and
 //! versions have regressed on both. So the vocabulary here is **wired / unwired** — never "enabled", and
 //! never a guarantee.
@@ -31,7 +31,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-/// One AI harness amenbo knows how to be wired into — the catalog row (`AMB-D-440`).
+/// One AI harness Amenbo knows how to be wired into — the catalog row (`AMB-D-440`).
 ///
 /// The fields split in two: [`places`](Harness::places) and [`event`](Harness::event) are what a probe
 /// reads, and [`paste_into`](Harness::paste_into) with [`template`](Harness::template) are what a
@@ -71,7 +71,7 @@ pub struct Harness {
     pub json_layers: u8,
 }
 
-/// Every harness amenbo lists, in the order a face offers them. The five settings-only providers of the
+/// Every harness Amenbo lists, in the order a face offers them. The five settings-only providers of the
 /// first catalog (`AMB-D-440`).
 pub static HARNESSES: &[Harness] = &[
     Harness {
@@ -211,7 +211,7 @@ pub fn configuration(harness: &Harness, cmd: &str) -> String {
 /// the [`configuration`] (`AMB-D-440`).
 ///
 /// **The reader's AI is the hand that edits the file**, which is what the wording has to make true.
-/// amenbo still writes nothing — the request travels through the reader, who decides whether to give it
+/// Amenbo still writes nothing — the request travels through the reader, who decides whether to give it
 /// to anyone — but the work it asks for is an edit to an existing file, so it says so: which file, that
 /// what is already in there stays, and that nothing else is to change. Handing over a whole settings
 /// document instead left that judgment with the reader, who then had to merge by hand exactly when their
@@ -253,7 +253,7 @@ fn json_escaped(text: &str, layers: u8) -> String {
 
 /// What a folder says about one harness: wired, and where it says so (`AMB-D-440`). `wired_at` is the
 /// file the wiring was read from — a user told "unwired" while a file of theirs says otherwise needs to
-/// know which file amenbo looked at.
+/// know which file Amenbo looked at.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Wiring {
     /// The harness this answers for ([`Harness::id`]).
@@ -323,16 +323,16 @@ pub fn ai_in_use(dir: &Path, found: &[Wiring]) -> bool {
 
 /// Whether an instruction file holds a word the **reader** put there.
 ///
-/// Its being on disk says nothing on its own: binding a folder writes amenbo's own managed block into
+/// Its being on disk says nothing on its own: binding a folder writes Amenbo's own managed block into
 /// both of these files ([`crate::agents::upsert_into_dir`]), and every folder this is asked about is
 /// bound — so a rule reading their presence would never once fire. What counts is content outside that
-/// block, or a file amenbo never wrote into at all.
+/// block, or a file Amenbo never wrote into at all.
 fn instructed(path: &Path) -> bool {
     let Ok(text) = std::fs::read_to_string(path) else {
         return false;
     };
     match crate::agents::strip_managed(&text) {
-        // Nothing of amenbo's in it, so the whole file is the reader's.
+        // Nothing of Amenbo's in it, so the whole file is the reader's.
         None => !text.trim().is_empty(),
         Some(theirs) => !theirs.trim().is_empty(),
     }
@@ -375,7 +375,7 @@ fn contains_ignoring_case(text: &str, needle: &str) -> bool {
     text.to_ascii_lowercase().contains(&needle.to_ascii_lowercase())
 }
 
-/// A project's answer to being asked whether amenbo may have its folder start an AI on `amenbo agent`
+/// A project's answer to being asked whether Amenbo may have its folder start an AI on `amenbo agent`
 /// (`AMB-D-440`) — the row of `harness_consent`, read and written through [`crate::overview`].
 ///
 /// There is no `Unanswered` variant: never having answered is the *absence* of a row (`Option::None`),
@@ -441,7 +441,7 @@ pub enum ConsentAction {
 ///
 /// 1. **A refusal** is silent from there on, whatever the folder holds.
 /// 2. **Never asked, and already wired**: somebody wired this by hand, and that is the answer. Recording
-///    it rather than asking is what stops amenbo putting a question whose answer is on disk in front of
+///    it rather than asking is what stops Amenbo putting a question whose answer is on disk in front of
 ///    it.
 /// 3. **Never asked, nothing wired**: the one question — and only where it can be answered.
 /// 4. **A standing yes with nothing wired**: asked once more, and only once. The wiring can go for
@@ -449,7 +449,7 @@ pub enum ConsentAction {
 ///    worth one question — and no more than one, because the answer cannot fix it.
 ///
 /// **Once ever, not once per absence.** The re-ask is spent when it is answered and never comes back:
-/// this question's failure mode is nagging about a file amenbo will not write, and the user who wants it
+/// this question's failure mode is nagging about a file Amenbo will not write, and the user who wants it
 /// again can ask for the text whenever they like.
 ///
 /// A machine caller is never asked (`can_ask`), and nothing is recorded when it is not — the unanswered
@@ -487,7 +487,7 @@ pub struct Notice {
     pub unwired: Vec<Wiring>,
     /// Whether anything at all is wired here. A folder with one provider wired and another traced and
     /// unwired still has something to say, but it is not the same thing as a folder where nothing starts
-    /// its AI on amenbo at all.
+    /// its AI on Amenbo at all.
     pub any_wired: bool,
 }
 
@@ -498,9 +498,9 @@ pub struct Notice {
 /// - **A refusal** (`allowed: false`). The report exists to finish a setup, and a reader who said no has
 ///   no setup pending. The text stays there for the asking.
 /// - **A folder that is wired, with no traced provider left out.** Something here starts the AI on
-///   amenbo, which is the whole of what this was about.
+///   Amenbo, which is the whole of what this was about.
 ///
-/// A standing yes does **not** silence it: consent is not wiring, and amenbo writes no settings file, so
+/// A standing yes does **not** silence it: consent is not wiring, and Amenbo writes no settings file, so
 /// the only thing that ends this report is the configuration actually landing in the file.
 pub fn setup_notice(found: &[Wiring], consent: Option<Consent>) -> Option<Notice> {
     if consent.is_some_and(|answer| !answer.allowed) {
@@ -538,12 +538,12 @@ pub fn setup_incomplete(found: &[Wiring], consent: Option<Consent>) -> bool {
 /// The harnesses to put in front of a reader who has asked for the text, in catalog order: the ones the
 /// folder points at, or — where it points at none — the catalog (`AMB-D-440`).
 ///
-/// **A reader who says yes must be handed something.** [`Notice::unwired`] is what amenbo can *name*, and
+/// **A reader who says yes must be handed something.** [`Notice::unwired`] is what Amenbo can *name*, and
 /// a folder that traces no provider names none: the offer there is not a shorter list but the whole
 /// catalog, out of which the reader picks the tool they know they use. Anything else takes a yes and gives
 /// nothing back, which is the state a folder nobody has run an AI in yet is always in.
 ///
-/// **What is offered stays inside the catalog**, even when nothing is traced. amenbo can only see wiring
+/// **What is offered stays inside the catalog**, even when nothing is traced. Amenbo can only see wiring
 /// it knows the shape of ([`probe`]), so a text written for some provider outside it would land somewhere
 /// no probe reads — and the report, which only the wiring ends, would go on saying this folder is unwired
 /// for ever.
@@ -846,7 +846,7 @@ mod tests {
     }
 
     /// What the standing report says, state by state. It is the wiring that ends it, never the answer:
-    /// amenbo writes no settings file, so a yes leaves the setup exactly as unfinished as it found it.
+    /// Amenbo writes no settings file, so a yes leaves the setup exactly as unfinished as it found it.
     #[test]
     fn the_report_ends_when_the_wiring_lands_or_the_reader_says_no() {
         let bare = |id: &'static str, traced| Wiring { id, label: id, wired_at: None, traced };
@@ -934,12 +934,12 @@ mod tests {
         );
 
         // Where the folder does point somewhere, that is the offer: the reader is not asked to pick out of
-        // five when amenbo can already see which one they use.
+        // five when Amenbo can already see which one they use.
         let traced = [bare("claude-code", true), bare("cursor", false)];
         let notice = setup_notice(&traced, None).unwrap();
         assert_eq!(offered(&notice).iter().map(|h| h.id).collect::<Vec<_>>(), ["claude-code"]);
 
-        // Everything offered is a row of the catalog — amenbo only sees wiring it knows the shape of, so a
+        // Everything offered is a row of the catalog — Amenbo only sees wiring it knows the shape of, so a
         // text for anything else would land where no probe reads and the report would never end.
         for harness in offered(&notice) {
             assert!(find(harness.id).is_some(), "{} is offered and not listed", harness.id);

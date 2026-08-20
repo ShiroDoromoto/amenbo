@@ -17,11 +17,11 @@ import { DismissButton } from "./DismissButton";
 //
 //   - unwired — the lint is wired to nothing in these slots, empty or held by another tool alike, so the refs
 //     it exists to catch are going out uncaught. `hooks install` is the fix — it writes a standalone hook, or
-//     slips amenbo's block in beside another tool's. A warning, and it reads as one. (There is no separate
+//     slips Amenbo's block in beside another tool's. A warning, and it reads as one. (There is no separate
 //     hand-off any more: coexisting is always possible, so a stranger's slot is just a slot to install into.)
 //   - restored — a block of ours was found damaged or stale this session and put back (something had changed
 //     or removed it — a tool regenerating its hook, a hand-edit). Nothing is unfinished and nothing is asked;
-//     it is a heads-up that amenbo repaired itself, so the reader knows the lint had briefly stopped.
+//     it is a heads-up that Amenbo repaired itself, so the reader knows the lint had briefly stopped.
 //
 // It renders only once the modal is done asking (`asked`), because asking about the hooks and warning about the
 // hooks in the same breath says one thing twice. That order is what the notice is read after, too: `hook_offer`'s

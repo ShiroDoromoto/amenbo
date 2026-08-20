@@ -1,4 +1,4 @@
-//! The typed SQL layer amenbo builds on rusqlite.
+//! The typed SQL layer Amenbo builds on rusqlite.
 //!
 //! It is not an ORM and not a driver: it is the thin layer that makes three failures hand-built SQL
 //! can only meet at runtime impossible to write.

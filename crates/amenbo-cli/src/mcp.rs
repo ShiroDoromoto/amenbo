@@ -18,7 +18,7 @@
 //! be wrong about where it meant.
 //!
 //! Three tools (`AMB-D-667`): `agent` and `agent_command`, which read the spec, and `run`, which
-//! carries the caller's own words to any of amenbo's commands. Passing them through is what keeps
+//! carries the caller's own words to any of Amenbo's commands. Passing them through is what keeps
 //! `amenbo agent` the single description of what can be typed — one command per typed tool would put
 //! that description in two places and spend a host's tool budget on it. What passing through costs is
 //! that everything is allowed unless it is named, and two things are named: the facet is the server's
@@ -68,7 +68,7 @@ pub struct Ran {
     pub text: String,
 }
 
-/// How a tool call reaches amenbo, in the folder it named. The server's own implementation re-runs
+/// How a tool call reaches Amenbo, in the folder it named. The server's own implementation re-runs
 /// this executable; the tests put a recorder here, so what the argument shaping produces can be read
 /// without forking anything.
 pub trait CallAmenbo {
@@ -80,7 +80,7 @@ struct SelfCall {
     /// The whole set, as the child is told it — one folder per line, under
     /// [`amenbo_core::env::MCP_DIRS_VAR`]. A child cannot work the set out for itself (its argv is the
     /// caller's words and its CWD is one folder), and the one refusal that has to name it — no pointer
-    /// here, and no way to place one from this side — is written down there, in amenbo's own words.
+    /// here, and no way to place one from this side — is written down there, in Amenbo's own words.
     serving: String,
 }
 
@@ -134,7 +134,7 @@ impl CallAmenbo for SelfCall {
 ///
 /// Whether a folder that *is* there is bound, whether this build can read its store, whether it is a
 /// worktree nobody should work in — none of those are asked here. They are the child's to answer, in
-/// the folder it runs in, so the host reads amenbo's own words instead of a second opinion this process
+/// the folder it runs in, so the host reads Amenbo's own words instead of a second opinion this process
 /// formed about a folder it never opened.
 ///
 /// It writes nothing on stdout of its own: that stream is the protocol's.
@@ -347,7 +347,7 @@ enum Shaped {
 
 /// Run one tool call. `Err` is a protocol fault — a tool nobody serves, an argument that is not there —
 /// which is the caller's mistake to correct. Everything the model is meant to *read* comes back as `Ok`
-/// with `isError`: amenbo's own refusal, and this server's, which the model has to see in order to hand
+/// with `isError`: Amenbo's own refusal, and this server's, which the model has to see in order to hand
 /// it to the person instead of trying again.
 fn call(params: &Value, caller: &dyn CallAmenbo, dirs: &[PathBuf]) -> Result<Value, (i64, String)> {
     let name = params
@@ -464,9 +464,9 @@ fn argv_for(name: &str, args: &Value) -> Result<Shaped, (i64, String)> {
 /// writes recorded as the person's and its reach widened past the bound project, so the value is never
 /// the caller's to choose. And `bind` / `init` are refused outright.
 ///
-/// Where the caller's words stop being amenbo's is [`read_line`]'s answer: after `plugin run <name>`
+/// Where the caller's words stop being Amenbo's is [`read_line`]'s answer: after `plugin run <name>`
 /// every word is the plugin's (`AMB-D-346`), and a `--actor` standing there is a word on the plugin's
-/// own face, not a facet for amenbo. Taking it away would quietly break a call amenbo never read.
+/// own face, not a facet for amenbo. Taking it away would quietly break a call Amenbo never read.
 fn shape(words: &[String]) -> Shaped {
     let line = read_line(words);
     if let Some(refused) = line.subcommand.as_deref().filter(|s| REFUSED.contains(s)) {
@@ -481,16 +481,16 @@ fn shape(words: &[String]) -> Shaped {
 }
 
 /// How the caller's line reads to the parser: the subcommand it names, and where its words stop being
-/// amenbo's own.
+/// Amenbo's own.
 struct Line {
-    /// The first word that is not one of amenbo's flags — `None` for a line that is all flags, which is
-    /// amenbo with no command (today's work).
+    /// The first word that is not one of Amenbo's flags — `None` for a line that is all flags, which is
+    /// Amenbo with no command (today's work).
     subcommand: Option<String>,
     /// Everything from here on belongs to a plugin; `words.len()` when nothing does.
     plugin_tail: usize,
 }
 
-/// Walk the caller's words the way the parser will: over amenbo's own flags, to the subcommand, and — on
+/// Walk the caller's words the way the parser will: over Amenbo's own flags, to the subcommand, and — on
 /// the one path that leads there — past `plugin run` to the plugin's name.
 fn read_line(words: &[String]) -> Line {
     let mut i = 0;
@@ -510,12 +510,12 @@ fn read_line(words: &[String]) -> Line {
                 i += 1;
                 step = path.next();
             }
-            // Any other word means this line goes somewhere else entirely, and all of it is amenbo's.
+            // Any other word means this line goes somewhere else entirely, and all of it is Amenbo's.
             _ => break,
         }
         if step.is_none() {
             // `plugin run` is complete. Amenbo's own flags may still stand ahead of the name, and the
-            // name itself is amenbo's to read; everything after it is the plugin's.
+            // name itself is Amenbo's to read; everything after it is the plugin's.
             while let Some(takes_value) = words.get(i).and_then(|w| flag_before_the_name(w)) {
                 i += if takes_value { 2 } else { 1 };
             }
@@ -525,7 +525,7 @@ fn read_line(words: &[String]) -> Line {
     Line { subcommand, plugin_tail: words.len() }
 }
 
-/// The caller's words with every facet of theirs taken out of amenbo's own half of the line.
+/// The caller's words with every facet of theirs taken out of Amenbo's own half of the line.
 fn without_the_callers_facet(words: &[String], plugin_tail: usize) -> Vec<String> {
     let mut kept = Vec::with_capacity(words.len());
     let mut i = 0;
@@ -799,14 +799,14 @@ mod tests {
     }
 
     /// After `plugin run <name>` every word is the plugin's (`AMB-D-346`) — including one spelled like
-    /// amenbo's facet, which amenbo never reads there.
+    /// Amenbo's facet, which Amenbo never reads there.
     #[test]
     fn a_word_of_the_plugin_s_own_is_left_alone() {
         assert_eq!(
             ran(&["plugin", "run", "worktree", "start", "3127", "--actor", "human"]),
             vec!["--actor", "ai", "plugin", "run", "worktree", "start", "3127", "--actor", "human"],
         );
-        // Amenbo's own flags may stand ahead of the name, and one there is still amenbo's.
+        // Amenbo's own flags may stand ahead of the name, and one there is still Amenbo's.
         assert_eq!(
             ran(&["plugin", "run", "--json", "worktree", "--actor", "human"]),
             vec!["--actor", "ai", "plugin", "run", "--json", "worktree", "--actor", "human"],
@@ -867,7 +867,7 @@ mod tests {
         assert!(caller.seen.borrow().is_empty(), "nothing is run for a call that cannot be shaped");
     }
 
-    /// `--yes` is never added (`AMB-D-667`): a destructive command asked for over MCP stops at amenbo's
+    /// `--yes` is never added (`AMB-D-667`): a destructive command asked for over MCP stops at Amenbo's
     /// own confirmation, which is what makes it the person's to give.
     #[test]
     fn nothing_is_added_beyond_the_facet() {
@@ -884,8 +884,8 @@ mod tests {
         assert!(caller.seen.borrow().is_empty());
     }
 
-    /// A refusal amenbo wrote reaches the model as the tool's own answer, not as a transport fault —
-    /// otherwise the host reports "the tool broke" and what amenbo actually said is lost.
+    /// A refusal Amenbo wrote reaches the model as the tool's own answer, not as a transport fault —
+    /// otherwise the host reports "the tool broke" and what Amenbo actually said is lost.
     #[test]
     fn a_refusal_comes_back_as_the_tool_s_result() {
         let caller = Recorder::failing();

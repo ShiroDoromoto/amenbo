@@ -41,7 +41,7 @@ pub(crate) fn version_unbound(flags: &Flags) -> Result<i32, CliError> {
 }
 
 /// What a build says about where it came from, and only when that is worth a line: a binary the
-/// release workflow did not produce. The stamp is the one thing about a running amenbo that no
+/// release workflow did not produce. The stamp is the one thing about a running Amenbo that no
 /// version number, channel or path reveals ([`amenbo_core::build_stamp`]) — the number is the same
 /// on both sides of a release, and a locally built binary answers to the production channel unless
 /// it was built for the dev one. A shipped build stays silent here because it is the ordinary case;

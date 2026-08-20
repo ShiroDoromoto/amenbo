@@ -292,7 +292,7 @@ describe("the screen where an AI is connected", () => {
   });
 
   // The removal is not a selection: it asks for the whole entry gone, so an empty one is no reason to
-  // shut it — a reader taking amenbo back out has nothing to tick first.
+  // shut it — a reader taking Amenbo back out has nothing to tick first.
   it("leaves the removal live with nothing ticked", async () => {
     await render({ projects: [SHOP], apps: [app({ configured: true, folders: ["/w/elsewhere"] })] });
     await openRow();
@@ -324,7 +324,7 @@ describe("the screen where an AI is connected", () => {
       apps: [app({ stale: [{ name: "amenbo-shop", folder: "/w/shop", removeRequest: "clear amenbo-shop" }] })],
     });
 
-    // Not set up — an old entry is not this app holding the server amenbo writes today.
+    // Not set up — an old entry is not this app holding the server Amenbo writes today.
     expect(container.textContent).toContain(t("mcp.unconfigured"));
 
     await openRow();

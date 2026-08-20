@@ -138,7 +138,7 @@ function removedParts(r: PluginRemoved): string {
  * ordinary state — so the plugin's line leads with the name and lets the rows below say where it stands,
  * rather than badging "installed" on a screen where everything is.
  *
- * **An open gate is not the same as a plugin that fires** (`AMB-D-359`). A build this amenbo cannot speak
+ * **An open gate is not the same as a plugin that fires** (`AMB-D-359`). A build this Amenbo cannot speak
  * to — a payload contract that is not ours, a version floor above us — is handed no event, whatever its
  * switch says. So an incompatible plugin wears that instead of the plain "enabled", and the rows below it
  * carry core's own reason: an enabled plugin sitting silent is exactly the state a badge has to name.

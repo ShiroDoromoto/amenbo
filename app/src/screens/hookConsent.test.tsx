@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// The modal that asks whether amenbo may wire the lint hooks. Only the boundary is stubbed (core's
+// The modal that asks whether Amenbo may wire the lint hooks. Only the boundary is stubbed (core's
 // `hook_offer` / `hook_answer`); the modal's own branching runs for real.
 //
 // What these guard is the three-valued answer, which is why this modal exists at all rather than a native
@@ -142,7 +142,7 @@ describe("the lint hook consent modal", () => {
 
   // The point of the whole screen: it asks for permission and nothing else. Slots, strangers, shared hooks
   // directories, the lines to paste — and the list of repositories the answer covers — are core's business.
-  // Putting any of them here would hand the user amenbo's problem, which is how this modal grew a button that
+  // Putting any of them here would hand the user Amenbo's problem, which is how this modal grew a button that
   // could not be pressed.
   it("puts no plumbing in front of the user — only the question", async () => {
     hoisted.offer = offer();

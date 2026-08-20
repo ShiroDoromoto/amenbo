@@ -232,7 +232,7 @@ describe("the project's standing wiring row", () => {
     expect(text).not.toContain("`amenbo agent`");
   });
 
-  // The point of the surface: amenbo writes no settings file, so the wiring only happens if the text reaches
+  // The point of the surface: Amenbo writes no settings file, so the wiring only happens if the text reaches
   // the clipboard.
   it("copies the text, and says it did", async () => {
     hoisted.waiting = [waiting({ tool: tool({ request: "REQUEST-A" }) })];

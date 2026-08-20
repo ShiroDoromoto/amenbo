@@ -1,8 +1,8 @@
-//! The plugin catalog as amenbo holds it — **one** fetch of the whole index, cached on disk
+//! The plugin catalog as Amenbo holds it — **one** fetch of the whole index, cached on disk
 //! (`AMB-D-347`), and one small document per plugin someone actually opens or installs (`AMB-D-385`).
 //!
 //! The unit of retrieval is the catalog, never the plugin: the catalog repository's CI aggregates every
-//! reviewed manifest into a single `catalog.json` on a static host, and amenbo fetches that one file.
+//! reviewed manifest into a single `catalog.json` on a static host, and Amenbo fetches that one file.
 //! Browsing, searching, sorting and paging then happen entirely on the local copy — no per-plugin request,
 //! so the cost of discovery does not grow with the number of plugins.
 //!
@@ -24,10 +24,10 @@
 //! silent, so a catalog that is quietly losing entries is visible. A detail document is checked the same
 //! way where it is used: it must be the one the entry asked for, and — when the entry declares a digest —
 //! the bytes it declared. The envelope itself is fail-closed the other way: a `catalog_v` from the future
-//! is refused whole, because amenbo cannot know what a newer envelope means.
+//! is refused whole, because Amenbo cannot know what a newer envelope means.
 //!
 //! **The catalog carries no signature, and needs none.** Trust rests on each asset's signature, and on
-//! the key that signature has to verify against: the one amenbo ships
+//! the key that signature has to verify against: the one Amenbo ships
 //! ([`crate::plugin_provenance::CATALOG_PUBLIC_KEY`]) for the official catalog, and the key a registered
 //! catalog published — pinned on the user's consent — for its own (`AMB-D-389`). A swapped catalog buys
 //! nothing: its assets still have to pass that door at install.
@@ -56,7 +56,7 @@ use std::time::Duration;
 /// ([`crate::env::plugin_catalog_url`]).
 pub const OFFICIAL_CATALOG_URL: &str = "https://shirodoromoto.github.io/amenbo-plugins/catalog.json";
 
-/// The envelope version this amenbo understands. It versions the *envelope*, not the entries: an entry
+/// The envelope version this Amenbo understands. It versions the *envelope*, not the entries: an entry
 /// grows by adding fields that older clients ignore, so this number moves only if the shape around
 /// `plugins` changes. A catalog declaring a higher one is refused ([`parse`]).
 pub const SUPPORTED_CATALOG_V: u32 = 1;
@@ -78,7 +78,7 @@ const FETCH_TIMEOUT: Duration = Duration::from_secs(10);
 /// This is the boundary that lets a check ride along with something a user did anyway — opening a view,
 /// listing what is installed — instead of needing a resident timer to poll: a trigger arriving inside the
 /// window is answered from disk, and only one outside it costs a fetch. The value is deliberately the
-/// same hour amenbo's own update check settles on (`AMB-D-362`), for the same reason: a fix that is
+/// same hour Amenbo's own update check settles on (`AMB-D-362`), for the same reason: a fix that is
 /// published is worth reaching within the day, and an hour is short enough for that without turning
 /// discovery into traffic.
 pub const FRESH_FOR: Duration = Duration::from_secs(60 * 60);
@@ -93,7 +93,7 @@ struct Envelope {
     plugins: Vec<serde_json::Value>,
 }
 
-/// Why one entry did not make it into the catalog amenbo holds. Kept rather than discarded so a catalog
+/// Why one entry did not make it into the catalog Amenbo holds. Kept rather than discarded so a catalog
 /// that is silently shedding entries can be seen (`AMB-D-354`).
 #[derive(Clone, Debug)]
 pub enum Dropped {
@@ -107,7 +107,7 @@ pub enum Dropped {
     Duplicate { name: String },
 }
 
-/// A catalog, as amenbo holds it after intake.
+/// A catalog, as Amenbo holds it after intake.
 #[derive(Clone, Debug)]
 pub struct Catalog {
     /// When the catalog CI generated this copy, verbatim from the envelope.
@@ -134,7 +134,7 @@ fn catalog_url() -> String {
 /// Parse a catalog document, running every entry through the validator on the way in (`AMB-D-354`).
 ///
 /// Fail-closed at two different scales. The **envelope** is all-or-nothing: unparseable JSON, or a
-/// `catalog_v` newer than [`SUPPORTED_CATALOG_V`], refuses the whole document — amenbo will not guess at
+/// `catalog_v` newer than [`SUPPORTED_CATALOG_V`], refuses the whole document — Amenbo will not guess at
 /// a shape it does not know. An **entry** is dropped on its own ([`Dropped`]), leaving the rest of the
 /// catalog usable, because one bad manifest is not a reason to have no catalog.
 pub fn parse(json: &str) -> Result<Catalog> {
@@ -376,7 +376,7 @@ fn detail_path(name: &str) -> String {
 }
 
 /// Where one plugin's detail document is published: alongside `catalog.json`, under `plugins/`. Derived
-/// from the catalog URL rather than configured separately, so an override that points amenbo at a test
+/// from the catalog URL rather than configured separately, so an override that points Amenbo at a test
 /// catalog (`AMENBO_PLUGIN_CATALOG_URL`) moves both documents together — one address, one publisher.
 fn detail_url(catalog_url: &str, name: &str) -> String {
     beside(catalog_url, &detail_path(name))
@@ -513,7 +513,7 @@ fn read_detail(json: &str, entry: &ListEntry) -> Result<Detail> {
 // catalog published beside its `catalog.json`, taken once and pinned, with the fingerprint put in front
 // of the person agreeing to it (`probe_source` works out what is being agreed to; `add_source` writes
 // it). What that key is *for* is the install path: an asset off a registered catalog verifies against
-// **that catalog's** key rather than the one amenbo ships, so the trust root stays "the keeper of the
+// **that catalog's** key rather than the one Amenbo ships, so the trust root stays "the keeper of the
 // shelf vouched for what is on it" one shelf down. A catalog that publishes no key is browsable and
 // installs nothing.
 //
@@ -540,7 +540,7 @@ fn sources_file(paths: &Paths) -> PathBuf {
 /// against (`AMB-D-389`).
 ///
 /// The key is what makes registering more than a bookmark. Trust for an official plugin rests on the key
-/// amenbo ships (`AMB-D-371`); for a registered catalog it rests on **that catalog's** key, taken at
+/// Amenbo ships (`AMB-D-371`); for a registered catalog it rests on **that catalog's** key, taken at
 /// registration and pinned, so what installs later is what the same publisher signed. `key` of `None` is
 /// a catalog that published none: browsable, and nothing from it installs.
 ///
@@ -574,7 +574,7 @@ struct SourcesFile {
     sources: Vec<StoredSource>,
 }
 
-/// A record as the file may hold it. amenbo wrote a bare URL before a catalog was more than an address,
+/// A record as the file may hold it. Amenbo wrote a bare URL before a catalog was more than an address,
 /// and those registrations stay registered: they read as a source with no pinned key, which is exactly
 /// what they are — the user consented to seeing the catalog, never to a key. Pinning one is a new
 /// consent, taken the next time they register it.
@@ -651,7 +651,7 @@ pub struct SourceProbe {
     pub url: String,
     /// What to call it if the user offers no name of their own.
     pub suggested_name: String,
-    /// The key this catalog publishes, or `None` when it publishes none amenbo could fetch.
+    /// The key this catalog publishes, or `None` when it publishes none Amenbo could fetch.
     pub key: Option<String>,
     /// The short form of [`key`](SourceProbe::key) to show while asking.
     pub fingerprint: Option<String>,
@@ -678,7 +678,7 @@ impl SourceProbe {
 /// key will not parse: a broken key document is a signal, not an absence.
 ///
 /// **A key that changed is refused here, and that is the pin doing its job** (`AMB-D-389`). A publisher
-/// who rotates their key is asking for trust again, so amenbo will not swallow the new one on the
+/// who rotates their key is asking for trust again, so Amenbo will not swallow the new one on the
 /// strength of the old consent: the way through is to unregister and register again, which puts the new
 /// fingerprint in front of the person deciding.
 pub fn probe_source(paths: &Paths, url: &str) -> Result<SourceProbe> {
@@ -848,7 +848,7 @@ pub struct DiscoveredSource {
     /// catalog.
     pub name: String,
     /// The fingerprint of the key this catalog's assets verify against (`AMB-D-389`) — pinned at
-    /// registration, or amenbo's own embedded key for the official catalog. `None` is a catalog that
+    /// registration, or Amenbo's own embedded key for the official catalog. `None` is a catalog that
     /// published none: browsable, and nothing from it installs.
     pub fingerprint: Option<String>,
     /// Whether this is the official catalog (always merged first, always wins a name clash).
@@ -871,7 +871,7 @@ pub struct DiscoveredSource {
 /// Provenance belongs to the merge, not to the document: a catalog file says nothing about where it
 /// itself came from, and once the fold is done every entry sits in one list with that fact otherwise
 /// lost. It is not decoration — the trust layers are two independent axes (`AMB-D-347`), and only one
-/// of them rides on the manifest. Whether the author is the amenbo team is
+/// of them rides on the manifest. Whether the author is the Amenbo team is
 /// [`Manifest::official`](crate::plugin_manifest::Manifest::official); whether an entry was reviewed
 /// into the official index is this.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -902,11 +902,11 @@ impl DiscoveredEntry {
         }
     }
 
-    /// The trust root this entry's asset must verify against (`AMB-D-389`): amenbo's own key for the
+    /// The trust root this entry's asset must verify against (`AMB-D-389`): Amenbo's own key for the
     /// official catalog, the pinned key for a registered one.
     ///
     /// A registered catalog that published no key has no root, and that is a refusal rather than a
-    /// fallback to amenbo's — falling back would mean an asset nobody's key signed passing the door
+    /// fallback to Amenbo's — falling back would mean an asset nobody's key signed passing the door
     /// (`AMB-D-351`). What such a catalog offers can be browsed and read about; installing from it takes
     /// the publisher publishing a key, and the user registering it again.
     pub fn trust_root(&self) -> Result<crate::plugin_provenance::TrustRoot> {
@@ -1035,7 +1035,7 @@ impl Discovery {
 /// ([`DiscoveredEntry`]), which the fold is the only place that still knows.
 ///
 /// **The badge and the recommendation survive the merge only from the official index.** Both are the
-/// index's word rather than the author's (`AMB-D-347`): `official` says the amenbo team wrote the plugin,
+/// index's word rather than the author's (`AMB-D-347`): `official` says the Amenbo team wrote the plugin,
 /// which the official index's CI establishes and refuses to take on a manifest's say-so, and `featured` is
 /// that index's hand curation. A catalog anyone can publish is not where either question is answered —
 /// letting it answer them for its own entries would hand out the strongest mark a reader trusts, and
@@ -1311,7 +1311,7 @@ pub fn list_translations(paths: &Paths, view: &Discovery, lang: &str) -> ListTra
 /// just fetched carries every language's form labels, and the line a browse row draws is in the language
 /// documents a browse already paid for, so the two halves together are what this machine can say about
 /// the plugin without going back to the network. Fetching nineteen more here would be paying for
-/// eighteen languages nobody on this machine reads, at the one moment amenbo is already downloading a
+/// eighteen languages nobody on this machine reads, at the one moment Amenbo is already downloading a
 /// binary — and a language the reader never browsed in is one whose line they were seeing in English
 /// anyway.
 pub(crate) fn cached_list_overlays(
@@ -1459,7 +1459,7 @@ mod tests {
     #[test]
     fn an_entry_that_fails_the_validator_is_dropped() {
         // Well-formed JSON, but a name the on-disk layout reserves. The catalog CI should have caught
-        // it; intake checks anyway, because the delivery path is not what amenbo trusts.
+        // it; intake checks anyway, because the delivery path is not what Amenbo trusts.
         let json = catalog_json(vec![entry_json("registry"), entry_json("good")]);
         let catalog = parse(&json).unwrap();
         assert_eq!(catalog.entries.len(), 1);
@@ -1483,7 +1483,7 @@ mod tests {
 
     #[test]
     fn an_unknown_entry_field_is_ignored_rather_than_fatal() {
-        // The catalog grows by adding fields; an older amenbo must keep reading it.
+        // The catalog grows by adding fields; an older Amenbo must keep reading it.
         let mut entry = entry_json("worktree");
         entry["stars_next_version"] = serde_json::json!(42);
         let catalog = parse(&catalog_json(vec![entry])).unwrap();
@@ -1673,7 +1673,7 @@ mod tests {
     }
 
     /// The two documents are published together, so the address of one is the address of the other: an
-    /// override that points amenbo at a test catalog moves the details with it.
+    /// override that points Amenbo at a test catalog moves the details with it.
     #[test]
     fn a_detail_sits_beside_the_catalog_that_listed_it() {
         assert_eq!(
@@ -1983,7 +1983,7 @@ mod tests {
         );
     }
 
-    /// Nor can it call its own entries official: the badge says the amenbo team wrote the plugin, which
+    /// Nor can it call its own entries official: the badge says the Amenbo team wrote the plugin, which
     /// is the official index's to establish (`AMB-D-347`), so the merge keeps it only from there.
     #[test]
     fn discover_keeps_the_official_badge_only_from_the_official_catalog() {
@@ -2192,7 +2192,7 @@ mod tests {
         );
     }
 
-    /// A language amenbo is not read in is a document nothing would ever fetch, so nothing in one is
+    /// A language Amenbo is not read in is a document nothing would ever fetch, so nothing in one is
     /// drawn — and a document that will not parse at all is simply no translations.
     #[test]
     fn a_document_in_a_language_amenbo_does_not_read_draws_nothing() {

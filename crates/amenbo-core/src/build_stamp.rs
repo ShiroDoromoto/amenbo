@@ -1,7 +1,7 @@
 //! **Is this binary a release artifact?** — the build-time stamp, and the gate it feeds
 //! (`AMB-D-378`).
 //!
-//! A store migration is the one irreversible thing amenbo does to a user's data (`AMB-D-231`): the
+//! A store migration is the one irreversible thing Amenbo does to a user's data (`AMB-D-231`): the
 //! chain moves the format forward, and the released app can no longer open what an unreleased build
 //! carried past it. Everything else about a local build is harmless — it reads, it writes, it can be
 //! thrown away.
@@ -15,7 +15,7 @@
 //!
 //! **The stamp closes it.** `AMENBO_BUILD=release` is set in the release workflow's environment and
 //! nowhere else — not in the Makefile, not in a plain `cargo build` — so it is present in exactly the
-//! binaries public CI produced. There is no other way a distributed amenbo is built: every artifact
+//! binaries public CI produced. There is no other way a distributed Amenbo is built: every artifact
 //! comes from `_release.yml`, and the `script` channel ships those same bytes.
 //!
 //! **What the gate refuses is narrow**, and all four conditions must hold ([`refuses_migration`]): an
@@ -28,7 +28,7 @@
 //! verification exists to walk the bytes that ship, so its drivers refuse anything else — and the
 //! only thing they can ask a binary is a question it answers, which is why [`is_release_build`] is
 //! reported by the `version` face (`release_build` in its `--json`). Nothing else about a running
-//! amenbo tells the two apart: the version number is the released one on both sides of a release,
+//! Amenbo tells the two apart: the version number is the released one on both sides of a release,
 //! and a locally built binary answers to the production channel unless it was built for the dev one.
 //!
 //! **The hatch is a run, not a build.** `AMENBO_ALLOW_UNSTAMPED_MIGRATE=1`

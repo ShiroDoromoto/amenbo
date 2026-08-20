@@ -21,7 +21,7 @@
  * into (`AMB-D-533`).
  *
  * `firstLoop` comes before `agentHookWiring`: the wiring takes effect from the next session on, and a
- * reader who has never seen amenbo hold a task cannot tell what the setup is for (`AMB-D-516`). The loop
+ * reader who has never seen Amenbo hold a task cannot tell what the setup is for (`AMB-D-516`). The loop
  * is spent by the first task to land — and that same task is what brings the wiring notice up.
  */
 export const BOARD_NOTICES = ["linkFolder", "firstLoop", "agentHookWiring"] as const;

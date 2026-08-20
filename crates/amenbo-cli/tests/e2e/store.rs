@@ -12,7 +12,7 @@ use harness::*;
 
 /// `amenbo export` streams the whole single-DB store out as portable JSON (a thin wrapper over core's
 /// `export_json`). There is exactly one shape — no excerpts, no markdown/csv. The envelope carries an
-/// `amenbo_export` header, and its reader lives outside amenbo: nothing reads it back in.
+/// `amenbo_export` header, and its reader lives outside Amenbo: nothing reads it back in.
 #[test]
 fn whole_device_export_streams_the_tables() {
     let cli = Cli::new();
@@ -136,7 +136,7 @@ fn whole_device_backup_restore_round_trips() {
 }
 
 /// The recovery has to work on the store it exists for. There is no downgrade, so the only way back from a
-/// store a newer amenbo carried past this build is the pre-migration backup — which means `restore` has to
+/// store a newer Amenbo carried past this build is the pre-migration backup — which means `restore` has to
 /// run on exactly the store every other command refuses (`format_ahead`). It replaces the truth source
 /// wholesale, so it never reads the one it replaces, and it therefore sits ahead of the open.
 #[test]
@@ -152,7 +152,7 @@ fn restore_replaces_a_store_this_build_cannot_open() {
     let archive = cli.home.join("pre-migrate.amenbo-backup");
     cli.json(&["backup", archive.to_str().unwrap(), "--json"]);
 
-    // Put the live store one generation past what this build opens — what a newer amenbo's migration
+    // Put the live store one generation past what this build opens — what a newer Amenbo's migration
     // leaves behind on a device whose other copy is still the old one.
     {
         let engine = StoreEngine::open(&cli.home.join("store.sqlite")).unwrap();
@@ -300,7 +300,7 @@ fn version_and_format_state_are_visible() {
 
 /// The `version` face says whether this binary came out of the release workflow. Pre-distribution
 /// verification reads that answer to decide whether what is in front of it may be driven at all, and
-/// nothing else about a running amenbo tells the two apart — the version number is the released one
+/// nothing else about a running Amenbo tells the two apart — the version number is the released one
 /// on both sides of a release. A binary built for a test is not a release artifact, so the honest
 /// answer here is `false`; what it must never be is absent, since a missing answer is a driver that
 /// cannot tell a shipped build from somebody's working tree.

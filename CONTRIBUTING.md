@@ -2,7 +2,7 @@
 
 **Issues are welcome. For pull requests, please open an issue to discuss first.**
 
-amenbo is maintained by one person. Bug reports, questions, and feature ideas are
+Amenbo is maintained by one person. Bug reports, questions, and feature ideas are
 genuinely wanted — open an issue. But please don't send a pull request out of the
 blue: start with an issue so we can agree on the shape of the change before you
 spend time on it. An unsolicited PR may be declined even if the code is good, simply

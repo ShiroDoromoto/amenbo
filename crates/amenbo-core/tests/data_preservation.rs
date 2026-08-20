@@ -1,5 +1,5 @@
 //! Data-preservation tests: nothing is lost, nothing is corrupted. Keeping the user's local data
-//! intact is amenbo's one non-negotiable duty, so this file pins it as invariants of the truth
+//! intact is Amenbo's one non-negotiable duty, so this file pins it as invariants of the truth
 //! source `store.sqlite` (WAL plus explicit backup/restore). What is pinned here:
 //! - **Concurrent writers.** SQLite's writer exclusion serialises concurrent writes to one store:
 //!   no lost update under contention, and a final reopen reads every record back intact.
@@ -382,7 +382,7 @@ fn open_rejects_a_store_from_a_newer_binary_on_both_paths() {
         add_task(&mut s, "seed");
     }
 
-    // Simulate a store a newer amenbo has migrated forward: set its version one above our ceiling.
+    // Simulate a store a newer Amenbo has migrated forward: set its version one above our ceiling.
     let future = amenbo_core::model::FORMAT_VERSION + 1;
     {
         let engine = StoreEngine::open(&db_path(&paths)).unwrap();
@@ -483,7 +483,7 @@ fn a_rejected_open_does_not_touch_the_physical_schema() {
         add_task(&mut s, "seed");
     }
 
-    // Make it look like a store a newer amenbo migrated forward, and plant the structure an old
+    // Make it look like a store a newer Amenbo migrated forward, and plant the structure an old
     // binary's migration would want to touch.
     let future = amenbo_core::model::FORMAT_VERSION + 1;
     {

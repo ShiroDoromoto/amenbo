@@ -433,7 +433,7 @@ pub struct Config {
     /// Optional avatar image for the AI facet. Same contract as [`Config::human_avatar`].
     #[serde(default)]
     pub ai_avatar: Option<String>,
-    /// **May amenbo wire its lint into your git hooks?** — asked once, for the lint as a feature, and
+    /// **May Amenbo wire its lint into your git hooks?** — asked once, for the lint as a feature, and
     /// never again ([`crate::hooks`]). `None` is the unanswered state, which is what makes "asked and
     /// refused" different from "never asked". It lives here rather than against a project because the
     /// answer is not about a project: the same person answers the same way in every repository they have,
@@ -445,7 +445,7 @@ pub struct Config {
     /// leave this alone.
     #[serde(default)]
     pub hook_consent: Option<crate::hooks::HookConsent>,
-    /// **May amenbo have this machine's scheduler wake it once an hour?** — asked once, for the tick as
+    /// **May Amenbo have this machine's scheduler wake it once an hour?** — asked once, for the tick as
     /// a feature, and never again ([`crate::tick`]). `None` is the unanswered state, the same shape as
     /// [`Config::hook_consent`] and for the same reason. It lives here because the device is the only
     /// scale it has: one machine holds one timer, so there is nothing narrower to record it against.
@@ -537,7 +537,7 @@ pub fn default_project_name(lang: Option<&str>) -> String {
     if is_japanese(lang) { "プロジェクト" } else { "Project" }.to_string()
 }
 
-/// **The languages amenbo is read in** (`AMB-D-394`) — Tier 2 and up, spelled the way every document
+/// **The languages Amenbo is read in** (`AMB-D-394`) — Tier 2 and up, spelled the way every document
 /// keyed by one spells it. `en` leads because it is where everything falls back to: an unset setting,
 /// a code from outside this list, and a value nobody translated all end there.
 ///
@@ -545,7 +545,7 @@ pub fn default_project_name(lang: Option<&str>) -> String {
 /// answer: which codes exist at all. A plugin's translation overlay is named by its code
 /// (`plugins/<name>.<lang>.yaml`, `AMB-D-621`) and refused when the code is not one of these
 /// ([`crate::plugin_validate::validate_overlays`]), and the GUI carries the same list as `LANGS`
-/// (`app/src/core/i18n/lang.ts`) — a code amenbo accepted that the GUI cannot read would be a
+/// (`app/src/core/i18n/lang.ts`) — a code Amenbo accepted that the GUI cannot read would be a
 /// translation nobody ever sees.
 ///
 /// Chinese and Portuguese are carried by script and region rather than by language alone: Simplified

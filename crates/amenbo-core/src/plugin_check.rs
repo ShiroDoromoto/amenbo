@@ -4,7 +4,7 @@
 //! `required` asks whether a field holds *something* ([`plugin_trust`](crate::plugin_trust)); nobody but
 //! the author's code can say whether what it holds is a webhook that exists, a password that goes with its
 //! user, or a pair of fields that contradict each other. So a manifest may name one call for it
-//! ([`Settings::check`](crate::plugin_manifest::Settings::check)) and amenbo raises it at the two moments
+//! ([`Settings::check`](crate::plugin_manifest::Settings::check)) and Amenbo raises it at the two moments
 //! the answer can still be acted on:
 //!
 //! - **when the plugin is enabled** — a verdict that is not a yes leaves the gate shut
@@ -110,7 +110,7 @@ impl Checked {
 }
 
 /// What the author's check said about the values it was handed (`AMB-D-664`) — the document a run writes on
-/// stdout, read into the three things amenbo does anything with.
+/// stdout, read into the three things Amenbo does anything with.
 ///
 /// ```json
 /// { "v": 1, "ok": false, "fields": { "smtp_password": "there is a space in it" }, "message": "…" }
@@ -118,7 +118,7 @@ impl Checked {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Verdict {
     /// Whether the values are usable. The gate turns on this alone: the sentences below it are for the
-    /// reader, and amenbo does not read them (`AMB-D-356` — judging a value is the author's).
+    /// reader, and Amenbo does not read them (`AMB-D-356` — judging a value is the author's).
     pub ok: bool,
     /// One sentence about the settings as a whole, for the head of the form. Absent when the check wrote
     /// none, and an empty one is none.
@@ -143,7 +143,7 @@ impl Verdict {
     }
 }
 
-/// Why a raised check said nothing this build can act on (`AMB-D-354`) — amenbo's own reading of the run,
+/// Why a raised check said nothing this build can act on (`AMB-D-354`) — Amenbo's own reading of the run,
 /// with no word of the plugin's in it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Silence {
@@ -162,7 +162,7 @@ pub enum Silence {
 
 impl Silence {
     /// The stable word for it — what a face puts in its own sentence, and what the reason reads as in a log
-    /// line's stderr when amenbo is the one who wrote it.
+    /// line's stderr when Amenbo is the one who wrote it.
     pub fn as_str(self) -> &'static str {
         match self {
             Silence::NotLaunched => "it would not start",
@@ -227,7 +227,7 @@ fn read(
         stderr: stderr.to_string(),
     };
     match waited {
-        // The launch failure is amenbo's own sentence: there was no child to write one.
+        // The launch failure is Amenbo's own sentence: there was no child to write one.
         Err(error) => (
             Checked::Silent(Silence::NotLaunched),
             line(Outcome::NotLaunched, None, Duration::ZERO, &error.to_string()),
@@ -261,11 +261,11 @@ fn read(
 
 /// Read a check's stdout as a verdict, or `None` for one this build cannot act on (`AMB-D-354`).
 ///
-/// Strict where the shape is amenbo's business and forgiving where it is the author's: the version marker,
+/// Strict where the shape is Amenbo's business and forgiving where it is the author's: the version marker,
 /// `ok`, and the type of every value are held to the contract, while a line about a setting the manifest
 /// does not declare is dropped and the rest of the verdict stands. A sentence past the cap or carrying
 /// control characters is not dropped but refused whole — the same floor a stored value is held to
-/// ([`plugin_config::check_value`](crate::plugin_config::check_value)) — because a verdict amenbo has
+/// ([`plugin_config::check_value`](crate::plugin_config::check_value)) — because a verdict Amenbo has
 /// edited is no longer the author's answer, and this one is about to be put in front of a person.
 fn verdict(stdout: &str, declared: &[ConfigField]) -> Option<Verdict> {
     let document: Value = serde_json::from_str(stdout.trim()).ok()?;
@@ -299,7 +299,7 @@ fn verdict(stdout: &str, declared: &[ConfigField]) -> Option<Verdict> {
     Some(Verdict { ok, message, fields })
 }
 
-/// One sentence out of a verdict, held to the floor amenbo puts under every author string it shows
+/// One sentence out of a verdict, held to the floor Amenbo puts under every author string it shows
 /// (`AMB-D-664`): a string, within [`MAX_VERDICT_TEXT_BYTES`], with no control characters in it. `None` is
 /// what makes the whole verdict unreadable.
 fn sentence(said: &Value) -> Option<String> {
@@ -395,7 +395,7 @@ mod tests {
     }
 
     /// A sentence past the floor refuses the whole verdict rather than being trimmed: what would be shown
-    /// otherwise is amenbo's edit of the author's answer.
+    /// otherwise is Amenbo's edit of the author's answer.
     #[test]
     fn a_sentence_past_the_floor_refuses_the_verdict() {
         let long = "x".repeat(MAX_VERDICT_TEXT_BYTES + 1);

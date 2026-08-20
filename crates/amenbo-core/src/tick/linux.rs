@@ -5,7 +5,7 @@
 //! are written into the reader's own configuration directory, held by the session's own systemd, and
 //! the row they draw in a settings pane is theirs to switch off. The cost is the other half of that
 //! symmetry — a user manager exists while the user is logged in, so logging out stops the tick. Turning
-//! that off would take `enable-linger`, which is a machine-wide grant nobody asked amenbo for, so the
+//! that off would take `enable-linger`, which is a machine-wide grant nobody asked Amenbo for, so the
 //! units are left as they are and the tick sleeps with the session.
 //!
 //! **A timer and a service, because systemd separates when from what.** The timer says once an hour and
@@ -21,7 +21,7 @@
 //! `AMB-D-707` set out for all three doors does not hold here.
 //!
 //! What the scheduler holds is read back with `is-enabled` and nothing else. Its exit status is the
-//! whole answer — `0` enabled, `1` disabled, `4` no such unit — so amenbo never parses a unit file back
+//! whole answer — `0` enabled, `1` disabled, `4` no such unit — so Amenbo never parses a unit file back
 //! to find out what it wrote, which is the same restraint [`crate::tick::TickFix::Rewrite`] is built on.
 
 use std::path::PathBuf;
@@ -81,7 +81,7 @@ pub(super) fn register() -> Result<()> {
 
     let exe = std::env::current_exe()
         .map_err(|e| Error::Invalid(Msg::new(format!("Cannot find amenbo's own path: {e}"))))?;
-    // Written over whatever is there rather than merged into it. These two files are amenbo's own —
+    // Written over whatever is there rather than merged into it. These two files are Amenbo's own —
     // their names say so — and rewriting them is exactly what points a timer at the build running now
     // after an upgrade, which is the contract `register` is idempotent for.
     let (timer, service) = (timer(), service());
@@ -119,7 +119,7 @@ pub(super) fn unregister() -> Result<()> {
 
 /// Where a user's own units live — `$XDG_CONFIG_HOME/systemd/user`, which is `~/.config/systemd/user`
 /// unless the reader moved their configuration. It is asked for the same way every other per-user path
-/// in amenbo is, so a machine that has moved it is followed rather than written past.
+/// in Amenbo is, so a machine that has moved it is followed rather than written past.
 fn unit_dir() -> Result<PathBuf> {
     directories::BaseDirs::new()
         .map(|d| d.config_dir().join("systemd").join("user"))
@@ -156,7 +156,7 @@ fn timer_unit() -> String {
 }
 
 /// Run a `systemctl --user` line and insist it succeeded — for the writes, where a failure the caller
-/// cannot see would leave amenbo claiming a timer nobody holds.
+/// cannot see would leave Amenbo claiming a timer nobody holds.
 fn run(args: &[&str]) -> Result<()> {
     match systemctl(args)? {
         Some(0) => Ok(()),
@@ -199,7 +199,7 @@ mod tests {
     use super::*;
 
     /// The two lines a default would get wrong, and the one that pairs the units. They are read off the
-    /// text because that is the whole of what amenbo writes — systemd is what acts on it, and a machine
+    /// text because that is the whole of what Amenbo writes — systemd is what acts on it, and a machine
     /// to act on is not something a build-time test has.
     #[test]
     fn the_units_carry_what_the_defaults_leave_out() {
@@ -226,7 +226,7 @@ mod tests {
     }
 
     /// The units are the user's own, so they are written where that user's configuration lives —
-    /// `~/.config` unless the machine says otherwise, never a path amenbo made up.
+    /// `~/.config` unless the machine says otherwise, never a path Amenbo made up.
     #[test]
     fn the_units_are_written_under_this_users_own_configuration() {
         let dir = unit_dir().expect("a user has a configuration directory");

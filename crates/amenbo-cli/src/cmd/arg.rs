@@ -59,7 +59,7 @@ pub(crate) fn pos_from_keys(top: bool, bottom: bool, before: Option<i64>, after:
 ///
 /// Bodies here are Markdown, and in practice they are thick with code spans — which a shell eats out of
 /// a double-quoted `--text` argument by command substitution, silently, taking the word with it. `-` lets
-/// the text reach amenbo without passing through word expansion at all (a heredoc piped in).
+/// the text reach Amenbo without passing through word expansion at all (a heredoc piped in).
 ///
 /// `-` is the spelling because it is the only one that works on every body option: omitting the flag is
 /// already spoken for and means something different per command ("empty" on an add, "leave it alone" on

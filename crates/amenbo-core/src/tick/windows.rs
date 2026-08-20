@@ -24,7 +24,7 @@
 //! the call is the task, and the file is gone.
 //!
 //! What is held is read back with `/Query` and nothing else — its exit status is the whole answer, so
-//! amenbo never parses a task definition back to find out what it wrote, which is the same restraint
+//! Amenbo never parses a task definition back to find out what it wrote, which is the same restraint
 //! [`crate::tick::TickFix::Rewrite`] is built on.
 
 use std::path::PathBuf;
@@ -173,7 +173,7 @@ fn xml_path() -> PathBuf {
 }
 
 /// Run a `schtasks` line and insist it succeeded — for the write, where a failure the caller cannot see
-/// would leave amenbo claiming a task nobody holds.
+/// would leave Amenbo claiming a task nobody holds.
 fn run(args: &[&str]) -> Result<()> {
     match schtasks(args)? {
         Some(0) => Ok(()),
@@ -214,8 +214,8 @@ fn wrote(path: &std::path::Path, e: std::io::Error) -> Error {
 mod tests {
     use super::*;
 
-    /// The three settings a default gets wrong, read off the document amenbo hands the scheduler —
-    /// which is the whole of what amenbo writes, the scheduler being what acts on it.
+    /// The three settings a default gets wrong, read off the document Amenbo hands the scheduler —
+    /// which is the whole of what Amenbo writes, the scheduler being what acts on it.
     #[test]
     fn the_definition_turns_off_both_battery_gates_and_catches_up_missed_turns() {
         let xml = definition(r"C:\Program Files\amenbo\amenbo.exe");

@@ -343,7 +343,7 @@ function FoldersSection({ projectId }: { projectId: number }) {
 }
 
 /**
- * What this project answered about starting its AI on amenbo, and the way back out of that answer
+ * What this project answered about starting its AI on Amenbo, and the way back out of that answer
  * (`AMB-D-459`, `AMB-D-460`).
  *
  * A no is silence from then on: the standing row it ends is the surface the answer is given on, so once

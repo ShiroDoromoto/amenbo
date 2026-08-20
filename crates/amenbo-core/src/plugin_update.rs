@@ -1,11 +1,11 @@
 //! **Which installed plugins the catalog has moved past, and putting the new build in place** —
 //! detection and application, the two halves of an update (`AMB-D-359`).
 //!
-//! There is no central server to ask, and there is no per-plugin request: the catalog amenbo already
+//! There is no central server to ask, and there is no per-plugin request: the catalog Amenbo already
 //! fetches whole ([`plugin_catalog`], `AMB-D-347`) is the current index, and the manifest beside each
 //! installed binary ([`plugin_installed`]) is what this machine has. Detection is those two lists laid
 //! side by side, and nothing more — applying an update is a separate, explicit act, and it is the second
-//! half of this module ([`apply`]). Nothing here is automatic: amenbo never applies an update on its own
+//! half of this module ([`apply`]). Nothing here is automatic: Amenbo never applies an update on its own
 //! account (`AMB-D-359` — the same explicit-consent posture as `install ≠ enable`).
 //!
 //! **Applying re-walks the install door, it does not shortcut it.** The bytes go through
@@ -382,7 +382,7 @@ pub fn backup_translations_path(paths: &Paths, name: &str) -> PathBuf {
 /// Refuses, leaving the install untouched, when the plugin is not installed (that is `plugin install`'s
 /// door), when the catalog it came from does not list it (installed by hand, delisted since, or a record
 /// too old to name a catalog — [`no_build_for`] says which), when the offered build cannot run on this
-/// amenbo, when the caller's `approve` gate holds it
+/// Amenbo, when the caller's `approve` gate holds it
 /// back (a new `required` setting an enabled plugin has no value for — `AMB-D-359`), or when its asset does
 /// not verify.
 ///
@@ -399,10 +399,10 @@ pub fn apply(
 ) -> Result<Option<Replaced>> {
     let paths = &store.paths.clone();
     let installed = plugin_installed::read(paths, name)?;
-    // Unreachable on a platform amenbo ships for, and a refusal rather than "nothing to do" if it ever is
+    // Unreachable on a platform Amenbo ships for, and a refusal rather than "nothing to do" if it ever is
     // reached: a caller who named a plugin is owed the reason, not a silent no-op. Asked here rather than
     // left to the download, which refuses in the vocabulary of what the *plugin* supports — true, and not
-    // the answer when the gap is that amenbo has no name for this machine at all.
+    // the answer when the gap is that Amenbo has no name for this machine at all.
     Platform::here().ok_or_else(|| {
         Error::Invalid(
             Msg::new(format!(
@@ -571,7 +571,7 @@ fn replace(
     root: &crate::plugin_provenance::TrustRoot,
     origin: &Origin,
 ) -> Result<Replaced> {
-    // A build this amenbo cannot speak to is not an improvement. Refusing here keeps a working plugin
+    // A build this Amenbo cannot speak to is not an improvement. Refusing here keeps a working plugin
     // working — the alternative is replacing it with one that will be dropped at dispatch.
     if let Err(why) = plugin_compat::check(&update.available) {
         return Err(why.into_update_error(&update.name));
@@ -1352,7 +1352,7 @@ mod tests {
         );
     }
 
-    /// A build this amenbo cannot speak to is refused before the network is reached, and the working
+    /// A build this Amenbo cannot speak to is refused before the network is reached, and the working
     /// install is left exactly as it was (`AMB-D-359` — failing safe).
     #[test]
     fn an_incompatible_new_build_is_refused_with_the_install_untouched() {

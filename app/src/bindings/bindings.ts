@@ -48,7 +48,7 @@ avatar?: string, };
  */
 export type AgentHookRequestsDto = { 
 /**
- * Every harness amenbo knows, in catalog order, each with the text that asks for its wiring.
+ * Every harness Amenbo knows, in catalog order, each with the text that asks for its wiring.
  */
 tools: Array<AgentHookToolDto>, 
 /**
@@ -393,7 +393,7 @@ dir: string,
  */
 cmd: string, 
 /**
- * Slots with no block of ours (empty, or another tool's hook without amenbo's block), which
+ * Slots with no block of ours (empty, or another tool's hook without Amenbo's block), which
  * `hooks install` wires.
  */
 unwired: Array<string>, 
@@ -404,20 +404,20 @@ unwired: Array<string>,
 restored: Array<string>, };
 
 /**
- * The question waiting to be put to the user: may amenbo wire its lint into your git hooks?
+ * The question waiting to be put to the user: may Amenbo wire its lint into your git hooks?
  *
  * **There is one of it, ever** — not one per repository. It carries only what the wording needs, which is
  * the name of this build, and nothing about where an answer would land. Which repositories are bound,
  * which slots are empty, which a stranger holds, whether the hooks directory is one the whole team shares
  * — all of that is `amenbo_core::hooks::install`'s to act on, and none of it is a fork in the user's
  * road: nobody wants an AMB-T-… in their commits *here* but not *there*, so a screen that laid the
- * machinery out — or listed the folders — would be asking them to solve amenbo's problem. What is still
+ * machinery out — or listed the folders — would be asking them to solve Amenbo's problem. What is still
  * unwired afterwards is the setup banner's to report ([`HookNoticeDto`]), where it is a statement rather
  * than a question.
  */
 export type HookOfferDto = { 
 /**
- * What this build of amenbo is called on the command line, which is what its hooks will actually
+ * What this build of Amenbo is called on the command line, which is what its hooks will actually
  * run and what its guidance tells the user to type. The dev channel answers `amenbo-dev`, so the
  * name travels rather than being spelled into the wording.
  */
@@ -430,7 +430,7 @@ cmd: string, };
 export type LinkedTaskRefDto = { id: number, name: string, ref?: string, status: "todo" | "in_progress" | "done" | "blocked" | "rejected", };
 
 /**
- * One app amenbo can be reached from over MCP, as a screen draws its row (`AMB-D-672`,
+ * One app Amenbo can be reached from over MCP, as a screen draws its row (`AMB-D-672`,
  * `AMB-D-673`, `AMB-D-681`).
  */
 export type McpAppDto = { 
@@ -443,12 +443,12 @@ app: string,
  */
 label: string, 
 /**
- * Whether amenbo writes this one a file to open, rather than handing over a request
+ * Whether Amenbo writes this one a file to open, rather than handing over a request
  * (`AMB-D-672`). It is what decides which button the row draws.
  */
 writesFile: boolean, 
 /**
- * Whether this app already holds amenbo's server (`AMB-D-673`).
+ * Whether this app already holds Amenbo's server (`AMB-D-673`).
  */
 configured: boolean, 
 /**
@@ -457,7 +457,7 @@ configured: boolean,
  */
 folders: Array<string>, 
 /**
- * The entries this app still holds under a name amenbo used to write (`AMB-D-679`), each with
+ * The entries this app still holds under a name Amenbo used to write (`AMB-D-679`), each with
  * the request that clears it. They are drawn apart from the row's own state: an old entry is not
  * this app being set up, it is something to take away.
  */
@@ -482,7 +482,7 @@ folder: string, };
  *
  * They are fetched as the ticks move rather than when a button is pressed: the surface both shows a
  * text and copies it, and a button that had to go and ask first could hand over an empty clipboard
- * with no second chance to notice. Empty for the app amenbo writes a file for — there is no request
+ * with no second chance to notice. Empty for the app Amenbo writes a file for — there is no request
  * to give anybody there, and the button beside it writes the file instead.
  */
 export type McpRequestDto = { add: string, remove: string, };
@@ -501,12 +501,12 @@ export type McpSetupDto = {
  */
 projects: Array<McpProjectDto>, 
 /**
- * Every app amenbo knows, in the catalog's order.
+ * Every app Amenbo knows, in the catalog's order.
  */
 apps: Array<McpAppDto>, };
 
 /**
- * One entry left behind under a name amenbo no longer writes, as a row offers to clear it.
+ * One entry left behind under a name Amenbo no longer writes, as a row offers to clear it.
  *
  * The request travels with it for the reason [`McpRequestDto`]'s do not have to: nothing the reader
  * picks changes it, so it is settled the moment the row is drawn.
@@ -646,7 +646,7 @@ export type PlainRefDto = { id: string, name: string, };
  * **One operation the settings form may raise** (`AMB-D-664`) — a button, and whatever that press has to
  * ask for before it can run.
  *
- * `cmd` is not shown to anyone: it is the name the press hands back, and the only thing amenbo will
+ * `cmd` is not shown to anyone: it is the name the press hands back, and the only thing Amenbo will
  * raise a call by ([`plugin_settings_action`](crate::commands::plugin_settings_action)). What is drawn is the label, plain — no Markdown and no
  * link, like every other author string on this screen (`AMB-D-656`).
  */
@@ -788,7 +788,7 @@ ageSeconds?: number, };
  */
 export type PluginCatalogSourceDto = { url: string, 
 /**
- * What to call it: the name given at registration, or amenbo's own for the official catalog.
+ * What to call it: the name given at registration, or Amenbo's own for the official catalog.
  */
 name: string, 
 /**
@@ -820,7 +820,7 @@ export type PluginCheckDto = {
 ok: boolean, 
 /**
  * Whether the check answered at all. `false` is a run that said nothing this build can read — the
- * fail-closed silence (`AMB-D-354`), which carries no sentence of the author's and so gets amenbo's.
+ * fail-closed silence (`AMB-D-354`), which carries no sentence of the author's and so gets Amenbo's.
  */
 answered: boolean, 
 /**
@@ -836,7 +836,7 @@ fields: Record<string, string>, };
 
 /**
  * One setting a plugin's author declared, and what this machine currently holds for it
- * (`AMB-D-356`) — everything the generic form needs to draw a row and nothing amenbo judges for
+ * (`AMB-D-356`) — everything the generic form needs to draw a row and nothing Amenbo judges for
  * itself.
  *
  * The value is the one the project on screen holds, and nothing stands under it (`AMB-D-434`): absent
@@ -903,7 +903,7 @@ labelI18n?: string, };
  * for the one plugin someone opened, never for the list (`AMB-D-385`).
  *
  * It answers what a reader wants before installing and the list deliberately does not carry: what it
- * will watch, what it will want to be told, and whether this build of amenbo can speak to it at all. The install coordinates in the same document — the URL, the checksum,
+ * will watch, what it will want to be told, and whether this build of Amenbo can speak to it at all. The install coordinates in the same document — the URL, the checksum,
  * the signature — are not here: they are the install path's, verified there over the bytes served
  * (`AMB-D-371`), and a face that displayed them would invite reading them as the assurance they are not.
  */
@@ -936,7 +936,7 @@ aboutI18n?: string,
  */
 scope: "project" | "machine", 
 /**
- * Whether this build of amenbo can run it (`AMB-D-359`). Asked here so the answer arrives before an
+ * Whether this build of Amenbo can run it (`AMB-D-359`). Asked here so the answer arrives before an
  * install rather than at the enable that would refuse.
  */
 compatible: boolean, 
@@ -1050,7 +1050,7 @@ droppedQueued: number,
  * nothing is checked on the way out — and on a plugin that declares no check.
  *
  * A verdict here with `enabled: false` is the refusal: the gate did not move, and the reason is the
- * author's sentences rather than one of amenbo's.
+ * author's sentences rather than one of Amenbo's.
  */
 check?: PluginCheckDto, };
 
@@ -1088,7 +1088,7 @@ device?: PluginDeviceRowDto,
 scope: "project" | "machine", 
 /**
  * Whether this build can speak to it at all (`AMB-D-359`). An open gate on an incompatible plugin
- * fires nothing, and amenbo updates underneath an install, so this is not derivable from a gate.
+ * fires nothing, and Amenbo updates underneath an install, so this is not derivable from a gate.
  */
 compatible: boolean, 
 /**
@@ -1224,7 +1224,7 @@ availableDetailSum?: string,
 /**
  * Why this one needs a decision before it can be applied, or absent when it can just be applied
  * (`AMB-D-359`: send the user to a screen only when judgment is required). `incompatible` — the
- * offered build cannot run on this amenbo; `settings` — it declares `required` settings this machine
+ * offered build cannot run on this Amenbo; `settings` — it declares `required` settings this machine
  * has no value for, and the plugin is enabled.
  */
 hold?: "incompatible" | "settings", 
@@ -1755,7 +1755,7 @@ draft: boolean,
 premiseChange?: PremiseChangeDto, };
 
 /**
- * One git commit SHA recorded on a task. amenbo keeps the SHA as an opaque string — it
+ * One git commit SHA recorded on a task. Amenbo keeps the SHA as an opaque string — it
  * never reads git, verifies the commit, or knows which forge it lives on; the AI does that with
  * `git show <sha>`. `createdByKind` is who recorded it (the GUI's actor is always human).
  */

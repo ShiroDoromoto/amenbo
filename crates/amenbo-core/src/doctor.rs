@@ -58,9 +58,9 @@ pub enum DoctorIssueKind {
     StartAfterDue,
     /// A live project no folder on this machine leads to — nothing can operate it.
     ProjectWithoutFolder,
-    /// A bound folder that does not start its AI on amenbo, and that names the tools it is waiting on.
+    /// A bound folder that does not start its AI on Amenbo, and that names the tools it is waiting on.
     UnwiredFolder,
-    /// A bound folder that does not start its AI on amenbo and shows no sign of which tool it uses.
+    /// A bound folder that does not start its AI on Amenbo and shows no sign of which tool it uses.
     UnwiredFolderAmbiguous,
 }
 
@@ -105,7 +105,7 @@ impl DoctorIssueKind {
     /// Only a broken store is an `error`. The environment issues have not broken anything in the store — they
     /// only mean a human's or an AI's path into it is misaligned — so they are `warning`s and do not knock
     /// `ok` down. [`Self::DeadRef`] is a warning for the same reason from the other side: every row is intact
-    /// and every constraint holds, and what has rotted is a sentence inside a body — prose amenbo stores and
+    /// and every constraint holds, and what has rotted is a sentence inside a body — prose Amenbo stores and
     /// does not own. Severity is an attribute of the kind, so whoever builds an issue does not get to choose
     /// it.
     pub const fn severity(self) -> &'static str {
@@ -223,11 +223,11 @@ pub fn report(store: &Store) -> crate::error::Result<DoctorResult> {
 }
 
 /// When a binary update bumps the managed-block template's version, every already-bound folder keeps its old
-/// block. Running amenbo in such a folder repairs it ([automatic catch-up](crate::agents::follow_stale_block))
-/// — but **a folder nobody runs amenbo in is repaired by nobody**, and that residue is what this looks for.
+/// block. Running Amenbo in such a folder repairs it ([automatic catch-up](crate::agents::follow_stale_block))
+/// — but **a folder nobody runs Amenbo in is repaired by nobody**, and that residue is what this looks for.
 /// It scans the `CLAUDE.md` / `AGENTS.md` of every folder this machine records as bound and warns about any
 /// whose version trails the current one. **It rewrites nothing** — detection is side-effect-free. The fixes
-/// are `sync-guide` (all folders) or simply running amenbo in the folder (that one folder).
+/// are `sync-guide` (all folders) or simply running Amenbo in the folder (that one folder).
 fn stale_managed_block_issues(store: &Store) -> Vec<DoctorIssue> {
     use crate::agents::{stale_bound_blocks, MANAGED_BLOCK_VERSION};
     let in_reach = crate::binding::dirs_in_reach(store);
@@ -274,7 +274,7 @@ pub fn pointer_issues(store: &Store) -> Vec<DoctorIssue> {
 /// Warns about a **legacy-format `.amenbo`** left in a bound folder — one whose `project_id` is a ULID, a
 /// string that will not read back as an integer, so today the folder looks bound to no project at all.
 ///
-/// A folder that resolves to a single live project (`recoverable`) is fixed simply by running amenbo there:
+/// A folder that resolves to a single live project (`recoverable`) is fixed simply by running Amenbo there:
 /// `resolve_upward` quietly rewrites the pointer into the current format, and the message says so. One that
 /// does not resolve can only be settled by a human with `bind --project`. The fixes differ, so the kinds do
 /// too.
@@ -377,9 +377,9 @@ fn project_without_folder_issues(store: &Store) -> crate::error::Result<Vec<Doct
         .collect())
 }
 
-/// Warns about a bound folder that **does not start its AI on amenbo** (`AMB-D-535`). An AI launched
+/// Warns about a bound folder that **does not start its AI on Amenbo** (`AMB-D-535`). An AI launched
 /// there reads the guidance only if it happens to read the managed block; the session-start hook is what
-/// makes it read at every session, and amenbo writes no settings file, so the wiring lands only when a
+/// makes it read at every session, and Amenbo writes no settings file, so the wiring lands only when a
 /// person hands their AI the text (`AMB-D-440`).
 ///
 /// The warning already printed on every command can only name a tool the folder shows a trace of — a
@@ -438,7 +438,7 @@ mod tests {
 
     /// A store holding one project **with a folder** — a store nothing is wrong with. Two things make it
     /// that: a project no folder leads to is itself an issue ([`project_without_folder_issues`]), and a
-    /// folder that does not start its AI on amenbo is another ([`unwired_folder_issues`]), so a fixture
+    /// folder that does not start its AI on Amenbo is another ([`unwired_folder_issues`]), so a fixture
     /// missing either would put every test that starts from "nothing raised yet" a warning down. The
     /// wiring is answered with a refusal rather than a settings file: it is the shortest way to say this
     /// fixture is not about the hook.
@@ -495,7 +495,7 @@ mod tests {
         );
     }
 
-    /// A folder whose AI does not start on amenbo is raised until the wiring lands or the reader says no —
+    /// A folder whose AI does not start on Amenbo is raised until the wiring lands or the reader says no —
     /// and which of the two kinds it is turns on whether the folder shows any sign of the tool used there,
     /// because that is what decides whether the fix can name one.
     #[test]

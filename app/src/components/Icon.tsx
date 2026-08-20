@@ -284,7 +284,7 @@ const ART: Record<IconName, ReactNode> = {
   ),
 
   // ----- the marks on the moves the reader makes on their own machine, outside the store -----
-  // A folder — the one thing on disk amenbo asks for. Choosing one, opening one in the file
+  // A folder — the one thing on disk Amenbo asks for. Choosing one, opening one in the file
   // manager and re-linking one are the same object under three verbs, so they are the one mark.
   folder: (
     <path d="M2.8 6.6a2 2 0 0 1 2-2h4.1l2.3 2.7h8a2 2 0 0 1 2 2v9.1a2 2 0 0 1-2 2H4.8a2 2 0 0 1-2-2V6.6z" />
@@ -308,7 +308,7 @@ const ART: Record<IconName, ReactNode> = {
       <path d="M8 14.2h8" />
     </>
   ),
-  // A clipboard — text copied for pasting somewhere amenbo cannot reach: a shell, or the reader's
+  // A clipboard — text copied for pasting somewhere Amenbo cannot reach: a shell, or the reader's
   // own AI. The clip is what separates it from the plain sheet the search hits use.
   clipboard: (
     <>
@@ -326,7 +326,7 @@ const ART: Record<IconName, ReactNode> = {
     </>
   ),
   // A star — how many people have starred a plugin's repository on GitHub. It counts something
-  // outside amenbo, which is why it sits beside the download figure and not among the record marks.
+  // outside Amenbo, which is why it sits beside the download figure and not among the record marks.
   star: (
     <path d="M12 3.2l2.7 5.5 6.1.9-4.4 4.3 1 6-5.4-2.8-5.4 2.8 1-6L3.2 9.6l6.1-.9z" />
   ),

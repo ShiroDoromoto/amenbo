@@ -1,15 +1,15 @@
-//! `lint`, and the two git hook faces that call it — reading text for an amenbo ref on its way
+//! `lint`, and the two git hook faces that call it — reading text for an Amenbo ref on its way
 //! out of this store. Opens no store, so it runs anywhere, CI included.
 
 use serde_json::json;
 
 use crate::output::{human, print_json, CliError, Flags};
 
-/// `amenbo lint`: report the amenbo refs in text on its way out of this store, and exit non-zero if there
+/// `amenbo lint`: report the Amenbo refs in text on its way out of this store, and exit non-zero if there
 /// are any. The exit code is the whole verdict, because the callers that matter are machines: a git hook
 /// and CI both judge by it, and an AI runs this before it commits — so a hit is not rendered as a
 /// `CliError`, since the run succeeded and what it found is the finding. `--quiet` silences the report and
-/// leaves the code, for a caller that wants only the verdict; the hook amenbo installs does not pass it,
+/// leaves the code, for a caller that wants only the verdict; the hook Amenbo installs does not pass it,
 /// because a person whose commit was just refused has to be told what refused it. It opens no store: it
 /// reads the text it is handed and judges it on the `AMB-` prefix alone.
 pub(crate) fn lint_cmd(flags: &Flags, paths: Vec<String>, stdin: bool) -> Result<i32, CliError> {

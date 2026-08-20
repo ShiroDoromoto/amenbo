@@ -147,7 +147,7 @@ function reloadConfig(): void {
 
 /**
  * Install one plugin by name (Tauri: `plugin_install`). Every gate is core's: the catalog resolve, the
- * signature against amenbo's own key and the checksum over the bytes served — a refusal anywhere throws
+ * signature against Amenbo's own key and the checksum over the bytes served — a refusal anywhere throws
  * with the reason, and nothing is written (`AMB-D-371`).
  *
  * It lands **inert**: the row it returns is an installed plugin whose gate is open nowhere — which is

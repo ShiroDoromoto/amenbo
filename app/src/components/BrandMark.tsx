@@ -1,4 +1,4 @@
-// The amenbo brand mark, at the top left of the TopBar. The paths are copied from
+// The Amenbo brand mark, at the top left of the TopBar. The paths are copied from
 // `assets/brand/mark-small.svg` — the origin cut for sizes below 32 pixels, where the delivered
 // mark's stroke is thinner than a pixel and comes out pale grey — and held inline rather than
 // resolved as an asset (`AMB-D-686`), so it draws the same in the browser and in Tauri. A new

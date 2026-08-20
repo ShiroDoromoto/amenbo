@@ -2,7 +2,7 @@
 //! (`AMB-D-356`).
 //!
 //! A plugin's settings are declared by its author as a flat schema of [`ConfigField`]s
-//! ([`crate::plugin_manifest`]); each field carries a `secret` flag. amenbo does **not** judge what is
+//! ([`crate::plugin_manifest`]); each field carries a `secret` flag. Amenbo does **not** judge what is
 //! secret — it routes by that flag alone, and both roads lead to a row of **this project's**
 //! (`AMB-D-434`), addressed the same way (`(project, plugin, field_key)`):
 //!
@@ -21,7 +21,7 @@
 //! is the author's**, read off the plugin's manifest by the caller and handed in as `field` — this
 //! function never guesses whether a key is a secret.
 //!
-//! **The safe floor** (`AMB-D-354`) is amenbo's "unbreakable floor": a per-value byte cap and a
+//! **The safe floor** (`AMB-D-354`) is Amenbo's "unbreakable floor": a per-value byte cap and a
 //! control-character reject, whose only purpose is to stop a runaway value from bloating the store —
 //! it never judges whether a value is *meaningful* (a valid URL, an email); that is the
 //! plugin author's at run time. The fuller manifest-shape validation is `AMB-T-1988`'s; what lives here is
@@ -42,7 +42,7 @@
 //! [`NONE_SELECTED`] for "none of them", and — by the clear path above — no row at all for "not answered
 //! yet", which is the state the author's [`default`](ConfigField::default) speaks for. The word is resolved
 //! away on the far side ([`crate::plugin_inject`]), so what a plugin reads is an answer and never a
-//! spelling amenbo picked.
+//! spelling Amenbo picked.
 
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::plugin_layer::Layer;
@@ -85,8 +85,8 @@ pub fn check_value(value: &str) -> Result<()> {
 
 /// Enforce what a [`Multi`](FieldType::Multi) field accepts as an answer (`AMB-D-415`): the candidates its
 /// author declared, joined by commas and each named once, or [`NONE_SELECTED`] on its own. A text field
-/// takes any line, so it passes untouched — this is not amenbo learning what a value *means* (`AMB-D-354`
-/// leaves that to the plugin); it is the one thing amenbo does know, because the author told it the whole
+/// takes any line, so it passes untouched — this is not Amenbo learning what a value *means* (`AMB-D-354`
+/// leaves that to the plugin); it is the one thing Amenbo does know, because the author told it the whole
 /// list.
 ///
 /// It sits at the boundary rather than in a form so that both faces refuse alike: a checkbox group cannot
@@ -405,7 +405,7 @@ pub fn intersections(
 /// once each, whichever gates want them.
 ///
 /// It answers empty, letting the update through, in every case where there is nothing to break: a build this
-/// amenbo cannot run anyway (the write path refuses it with its own wording), a plugin that is not installed,
+/// Amenbo cannot run anyway (the write path refuses it with its own wording), a plugin that is not installed,
 /// and — the common case — a plugin enabled nowhere, which fires nothing and whose own enable gate will catch
 /// an empty `required` when it is next turned on.
 pub fn required_unset_for_update(

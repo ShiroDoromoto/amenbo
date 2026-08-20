@@ -18,21 +18,21 @@
 //! whose settings are the machine's is asked once however many folders arrive: the folder is not read
 //! in resolving that path, and asking again per folder would be one file read over and over.
 //!
-//! **What is read is the entry amenbo would have written**, found by the name every road writes it
+//! **What is read is the entry Amenbo would have written**, found by the name every road writes it
 //! under ([`crate::mcp::name`]). An app holding some other MCP server is not holding this one,
 //! and a reader who wrote their own entry by hand under that name is a reader who set it up.
 //!
 //! **The app that takes a bundle is asked twice**, because a bundle it opened writes nothing into the
 //! settings file (`AMB-T-3156`): what it leaves is an extension of its own, and asking only the file
-//! would answer "not set up" to every reader who took the road amenbo offers. So the file is read as
+//! would answer "not set up" to every reader who took the road Amenbo offers. So the file is read as
 //! for any other app — an entry there is one the reader wrote by hand, and theirs is the one they will
 //! look for — and where it says nothing the extension answers ([`extension`]).
 //!
-//! **What amenbo used to write is read too, and answered apart.** The name moved from the project's to
+//! **What Amenbo used to write is read too, and answered apart.** The name moved from the project's to
 //! the machine's (`AMB-D-679`), and an entry under the old one goes on working — so it is invisible to
 //! a reader and to a read that only asks after the name in use, while a fresh setup lands beside it
 //! rather than on it. Those are gathered as [`Setup::stale`], never folded into
-//! [`set`](Setup::set): the question "is this app set up" is about the entry amenbo writes today, and
+//! [`set`](Setup::set): the question "is this app set up" is about the entry Amenbo writes today, and
 //! an old one is the separate question of what to clear away ([`crate::mcp_request::remove_stale`]).
 //!
 //! **Every failure is "not set up".** A settings file that is missing, unreadable, or does not parse
@@ -62,7 +62,7 @@ pub struct Setup {
     pub id: &'static str,
     /// The app's own name, so a face can draw this row without a second lookup.
     pub label: &'static str,
-    /// Whether that app holds an entry for amenbo's server at all.
+    /// Whether that app holds an entry for Amenbo's server at all.
     pub set: bool,
     /// Every folder those entries reach, in the order they were read, without repeats. It is asked
     /// apart from [`set`](Setup::set) because the two can disagree: an entry someone edited by hand
@@ -78,8 +78,8 @@ pub struct Setup {
     /// screen: those say what would be written next, not where what is already there lives
     /// ([`crate::mcp_request::remove`]).
     pub at: Vec<PathBuf>,
-    /// The entries this app still holds under a name amenbo used to write, by name
-    /// ([`crate::mcp::is_superseded_name`]). Empty for a reader who never set amenbo up under the old
+    /// The entries this app still holds under a name Amenbo used to write, by name
+    /// ([`crate::mcp::is_superseded_name`]). Empty for a reader who never set Amenbo up under the old
     /// scheme, which is every reader who arrived after `AMB-D-679`.
     pub stale: Vec<Stale>,
 }
@@ -187,7 +187,7 @@ fn settings_files(app: &McpApp, server: &Server) -> Vec<(Option<PathBuf>, PathBu
     found
 }
 
-/// The folders amenbo's own extension is set up for, or `None` where this app is not holding one.
+/// The folders Amenbo's own extension is set up for, or `None` where this app is not holding one.
 ///
 /// **The answer is in two places and the order is the whole of it** (`AMB-T-3157`). What the reader
 /// saved is kept beside the extension, and outranks everything: it is what the host puts on the
@@ -214,7 +214,7 @@ fn extension(dir: &Path) -> Option<Vec<PathBuf>> {
         .and_then(|document| document.get("user_config")?.get(key)?.get("default")?.as_array())
         .map(|folders| paths(folders));
 
-    // Neither file there at all: whatever else is under this directory, amenbo's extension is not.
+    // Neither file there at all: whatever else is under this directory, Amenbo's extension is not.
     // Uninstalling takes both away together (`AMB-T-3156`), so their absence is the answer.
     if saved.is_none() && installed.is_none() {
         return None;
@@ -240,7 +240,7 @@ fn paths(values: &[serde_json::Value]) -> Vec<PathBuf> {
 /// An entry whose arguments are missing, or are not a list, is read as an entry that carries none
 /// rather than as no entry at all: what makes one an entry is that a name is filed there, and the
 /// alternative would tell a reader who hand-edited theirs into that state that they had never set
-/// amenbo up.
+/// Amenbo up.
 fn entries(app: &McpApp, path: &Path) -> Option<Vec<(String, Vec<String>)>> {
     let text = std::fs::read_to_string(path).ok()?;
     match app.format {
@@ -380,7 +380,7 @@ mod tests {
         let dir = scratch("none");
         assert_eq!(extension(&dir), None, "nothing on disk");
 
-        // Somebody else's extension is not this one: the id is the manifest amenbo wrote.
+        // Somebody else's extension is not this one: the id is the manifest Amenbo wrote.
         write(
             &dir.join(EXTENSIONS).join("local.mcpb.someone.else").join("manifest.json"),
             r#"{"user_config":{"folders":{"default":["/work/theirs"]}}}"#,
@@ -422,7 +422,7 @@ mod tests {
 
     /// Somebody else's server is not this one, however close its name reads — the name is what the
     /// answer turns on, and it is matched whole. Neither is it something to offer to delete: an entry
-    /// amenbo never wrote is not amenbo's to name.
+    /// Amenbo never wrote is not Amenbo's to name.
     #[test]
     fn an_entry_under_another_name_is_not_this_one() {
         let dir = scratch("names");
@@ -440,7 +440,7 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// The entry in use and the ones an older amenbo left, read apart in one pass. A reader who set two
+    /// The entry in use and the ones an older Amenbo left, read apart in one pass. A reader who set two
     /// projects up under the old scheme has two to clear, and each names the folder it was bound to —
     /// which is the only thing telling them apart on screen.
     #[test]
@@ -470,7 +470,7 @@ mod tests {
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// An old entry on its own leaves the app not set up: it is the name amenbo writes today that the
+    /// An old entry on its own leaves the app not set up: it is the name Amenbo writes today that the
     /// question is about, and answering "set up" off an entry the reader is being asked to delete would
     /// leave them with nothing.
     #[test]

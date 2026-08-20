@@ -2,7 +2,7 @@
 //! upward ([`crate::binding::find_upward`]), so a worktree cut *inside* a managed project folder inherits
 //! that project's binding — and while the worktree is throwaway, the store it would write to is not: that
 //! one lives in app-data, outside the checkout, and survives its deletion, so a throwaway environment can
-//! drive the real backlog. The asymmetry is made by amenbo's own binding mechanism, so amenbo is what closes
+//! drive the real backlog. The asymmetry is made by Amenbo's own binding mechanism, so Amenbo is what closes
 //! it, and [`nested`] is the predicate the CLI refuses on. It keys on where the worktree root sits rather
 //! than on where the pointer sits, so a `.amenbo` written *inside* the checkout is never read and buys no
 //! passage: `--force` means "overwrite the pointer already there", which says nothing about this hazard.
@@ -79,7 +79,7 @@ fn checkout(start: &Path) -> Option<(PathBuf, Checkout)> {
 pub struct Nested {
     /// The root of the worktree the CWD sits in.
     pub worktree_root: PathBuf,
-    /// The folder whose `.amenbo` the worktree was cut inside — where amenbo is meant to be run instead.
+    /// The folder whose `.amenbo` the worktree was cut inside — where Amenbo is meant to be run instead.
     pub bound_dir: PathBuf,
 }
 

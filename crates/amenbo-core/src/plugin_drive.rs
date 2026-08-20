@@ -172,7 +172,7 @@ pub fn unfinished(engine: &StoreEngine) -> Result<bool> {
 /// Pick up what a previous run left behind, and only then — the **startup kick** both faces make
 /// (`AMB-D-399`).
 ///
-/// Startup is the one moment amenbo can catch a delivery nobody is going to trigger again: a run cut short
+/// Startup is the one moment Amenbo can catch a delivery nobody is going to trigger again: a run cut short
 /// leaves its rows standing, and what would move them next is the next *write*, which may be days away or
 /// never — a day spent reading only would leave them there. Driving from here covers both layers at once,
 /// since a drive fans the outbox out and then starts a runner for every queue that has work

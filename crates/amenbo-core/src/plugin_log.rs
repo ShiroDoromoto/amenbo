@@ -17,12 +17,12 @@
 //!   no field a secret could ride in — the exclusion is structural, not a filter that could be forgotten.
 //! - **Bounded by construction** (`AMB-D-361`): the last [`RUNS_PER_PLUGIN`] runs of each plugin, each with
 //!   at most [`MAX_STDERR_BYTES`] of stderr. The whole file is therefore bounded by what is installed, and
-//!   there is no long history to rotate — a deeper one is a logging plugin's business, not amenbo's.
+//!   there is no long history to rotate — a deeper one is a logging plugin's business, not Amenbo's.
 //! - **Never fatal.** A log this cannot write is a `warn` and nothing else; the hook it describes has
 //!   already run.
 //!
 //! **Concurrency, the way the activity ledger does it** ([`crate::activity_log`]): hooks run on their own
-//! threads, and several amenbo processes can fire at once, so an append is one `write` on an `O_APPEND`
+//! threads, and several Amenbo processes can fire at once, so an append is one `write` on an `O_APPEND`
 //! handle — atomic in its offset-and-write, hence the line cap and the deliberate [`std::io::Write::write`]
 //! over `write_all`. The trim that keeps each plugin's ring is a read-modify-write, which atomic appends
 //! cannot protect, so it takes a `try_lock` sidecar and **skips** when someone else holds it: overshooting

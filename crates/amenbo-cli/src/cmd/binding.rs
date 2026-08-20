@@ -32,7 +32,7 @@ pub(crate) fn whoami(store: &Store, flags: &Flags) -> Result<i32, CliError> {
 }
 
 /// The guidance for AI agents that `amenbo init` leaves in the current folder.
-/// Idempotently upserts the managed block of generic amenbo guidance (Class A) into **both** `AGENTS.md` and
+/// Idempotently upserts the managed block of generic Amenbo guidance (Class A) into **both** `AGENTS.md` and
 /// `CLAUDE.md` under `dir`. Only what lies between the markers is ours; the user's own Class P content is
 /// preserved (no file → create, markers present → replace the block, markers absent → append at the end).
 /// The command reference is not duplicated here — `{CMD} agent --json` is its single source of truth, which
@@ -46,7 +46,7 @@ pub(crate) fn upsert_agent_guidance(dir: &std::path::Path, lang_code: Option<&st
 }
 
 /// When a new binary raises the managed-block template version, folders bound earlier keep the old one. A
-/// folder somebody walks into repairs itself — running amenbo there brings it forward
+/// folder somebody walks into repairs itself — running Amenbo there brings it forward
 /// ([`amenbo_core::binding::resolve_upward`]). This command is for the folders nobody walks into, and for
 /// blocks that could not be rewritten at the time (the leftovers `doctor` keeps flagging as
 /// `stale_managed_block`): it resyncs the `CLAUDE.md` / `AGENTS.md` of every bound folder to the current
@@ -114,9 +114,9 @@ pub(crate) fn init_cmd(flags: &Flags, name: Option<String>, language: Option<Str
                 ));
             }
             // No pointer (we did not return above), but this CWD already has a CLAUDE.md/AGENTS.md carrying
-            // an amenbo managed block. A marker alone is not grounds to hard-block: it is a thin, borrowed
+            // an Amenbo managed block. A marker alone is not grounds to hard-block: it is a thin, borrowed
             // surface that a clone, a copy or a sync carries along, so it proves nothing about ownership.
-            // Ownership lives in amenbo's own artifacts (`.amenbo` plus the bindings registry), so branch on
+            // Ownership lives in Amenbo's own artifacts (`.amenbo` plus the bindings registry), so branch on
             // what the registry's reverse lookup says: which live projects claim this cwd.
             if store_exists && amenbo_core::agents::dir_has_managed_block(&cwd) {
                 let store = Store::open_at(paths.clone()).map_err(CliError::from)?;
@@ -207,7 +207,7 @@ pub(crate) fn init_cmd(flags: &Flags, name: Option<String>, language: Option<Str
             registry.claim_project_ref(project_id, cwd.to_string_lossy());
             let _ = store.save_bindings(&registry);
         }
-        // Idempotently upsert the generic amenbo guidance (the managed block) into both AGENTS.md and
+        // Idempotently upsert the generic Amenbo guidance (the managed block) into both AGENTS.md and
         // CLAUDE.md. Only the space between the markers is ours; the user's Class P content is preserved.
         // English base plus a directive naming the user's language.
         placed.extend(upsert_agent_guidance(&cwd, lang_code.as_deref()));
@@ -227,7 +227,7 @@ pub(crate) fn init_cmd(flags: &Flags, name: Option<String>, language: Option<Str
         }
         // init writes the managed block mid-session, and a block written mid-session does not bind the
         // session that is running — it takes effect at the next one. So tell the AI that just ran init to run
-        // `agent` right now, and close that gap. The command name follows the channel (amenbo / amenbo-dev).
+        // `agent` right now, and close that gap. The command name follows the channel (Amenbo / amenbo-dev).
         human(flags, format!(
             "  AI agents: run `{} agent --json` now and follow it — the managed guidance just written to CLAUDE.md/AGENTS.md does not take effect until your next session.",
             Paths::command_name(),

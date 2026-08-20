@@ -23,7 +23,7 @@
 //!    (`AMB-D-381`): a per-OS `assets` entry, or the single `url` of an entry that is one file everywhere.
 //!    An OS outside the declared set is a binary that was never built to run here.
 //! 5. **Verify provenance fail-closed** ([`crate::plugin_provenance::verify_against`], `AMB-D-371`):
-//!    the minisign signature against **the key that catalog answers for** — amenbo's own for the official
+//!    the minisign signature against **the key that catalog answers for** — Amenbo's own for the official
 //!    index, the pinned key for a registered one (`AMB-D-389`) — then that distributable's checksum, both
 //!    over the exact bytes the URL served. Unsigned, signed by another key, or a digest that does not
 //!    match, and nothing is written. Which key is not a caller's to pick: the root travels with the
@@ -191,7 +191,7 @@ fn sound_languages(m: &Manifest, translations: Translations) -> Translations {
 }
 
 /// The plugin's executable, off the network and through the trust gates — the *only* way bytes named by a
-/// manifest become bytes amenbo will write.
+/// manifest become bytes Amenbo will write.
 ///
 /// Platform, provenance and packaging in one call, because taking them apart is how a caller ends up
 /// with a partial chain: [`crate::plugin_update`] replaces an installed binary through exactly this
@@ -329,7 +329,7 @@ fn published_for(manifest: &Manifest, here: Platform) -> Result<crate::plugin_ma
     })
 }
 
-/// Fetch the asset, with the same short-lived agent the rest of amenbo's downloads use and a
+/// Fetch the asset, with the same short-lived agent the rest of Amenbo's downloads use and a
 /// download-sized read cap. The bytes are returned rather than streamed to disk: nothing is written
 /// anywhere until provenance has passed over the whole asset.
 fn download(url: &str) -> Result<Vec<u8>> {
@@ -618,7 +618,7 @@ mod tests {
         assert_eq!(resolve(&view, "slack").unwrap_err().code(), "not_found_plugin_in_catalog");
     }
 
-    /// The trust root follows the catalog the entry came from (`AMB-D-389`): amenbo's own key for the
+    /// The trust root follows the catalog the entry came from (`AMB-D-389`): Amenbo's own key for the
     /// official index, the catalog's pinned key for a registered one.
     #[test]
     fn an_entry_is_verified_against_its_own_catalogs_key() {
@@ -638,7 +638,7 @@ mod tests {
     }
 
     /// A registered catalog that published no key has no root, and an install off it is refused rather
-    /// than falling back to amenbo's — that fallback would be an unsigned-by-anyone asset going in.
+    /// than falling back to Amenbo's — that fallback would be an unsigned-by-anyone asset going in.
     #[test]
     fn a_catalog_with_no_pinned_key_cannot_be_installed_from() {
         let view = served_view(vec![entry_json("worktree")], false, None);
@@ -894,7 +894,7 @@ mod tests {
     }
 
     /// Where a member sits in the archive decides nothing: the bytes are read out and written to the
-    /// path amenbo computes, so an entry buried under directories lands in the same home as any other.
+    /// path Amenbo computes, so an entry buried under directories lands in the same home as any other.
     /// This is what makes the archive's own paths unable to steer a write.
     #[test]
     fn the_archives_own_path_never_decides_where_the_program_lands() {
@@ -990,7 +990,7 @@ mod tests {
         let m = manifest_with_a_form("worktree");
         let published = Translations::from([
             ("ja".to_string(), overlay(Some("一行"), Some("基点にするブランチ"))),
-            // A language amenbo is not read in — a document nothing would ever fetch.
+            // A language Amenbo is not read in — a document nothing would ever fetch.
             ("xx".to_string(), overlay(Some("a line"), None)),
             // A form field this manifest does not declare: text nobody would ever see.
             ("de".to_string(), {

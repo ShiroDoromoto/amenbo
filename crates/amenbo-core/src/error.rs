@@ -342,8 +342,8 @@ pub enum ErrorCode {
     InvalidRestoreNotAnArchive,
     InvalidRestoreMissingSnapshot,
     // An archive this build cannot read, in either direction. Each names the version it found against
-    // the one it can take, so the reader can tell "restore this with the amenbo that wrote it" from
-    // "update amenbo and try again" — and the newer-store gate names the very build to run.
+    // the one it can take, so the reader can tell "restore this with the Amenbo that wrote it" from
+    // "update Amenbo and try again" — and the newer-store gate names the very build to run.
     InvalidRestoreLayoutTooOld,
     InvalidRestoreLayoutTooNew,
     InvalidRestoreArchiveNewer,

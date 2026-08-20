@@ -59,8 +59,8 @@
 //!
 //! The price is the window between the child returning and that transaction committing: a crash inside it
 //! re-delivers an event that already ran. There is no acknowledgement a plugin could write to close it,
-//! because amenbo cannot see what the other side did with the event either way (`AMB-D-399`) — which is why
-//! the contract asks a plugin to be safe to run twice, rather than asking amenbo to be sure.
+//! because Amenbo cannot see what the other side did with the event either way (`AMB-D-399`) — which is why
+//! the contract asks a plugin to be safe to run twice, rather than asking Amenbo to be sure.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -85,7 +85,7 @@ const RUN_PAGE: i64 = 256;
 ///
 /// A plugin is run once per event and cannot see its own queue, so batching — one message for the fifty
 /// events a project deletion emitted, rather than fifty — is something only the runner can make possible.
-/// It does not do the batching: amenbo delivers as fast as it can, in order (`AMB-D-399`), and what a
+/// It does not do the batching: Amenbo delivers as fast as it can, in order (`AMB-D-399`), and what a
 /// plugin does with the number is the plugin's business. It only says what it knows.
 ///
 /// **The number counts exactly as far as the run reaches, which is why the name carries `REACH`**

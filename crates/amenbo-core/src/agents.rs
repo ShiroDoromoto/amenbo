@@ -1,5 +1,5 @@
-//! Safely injects amenbo's generic guidance (Class A) into the user's own `CLAUDE.md` / `AGENTS.md`.
-//! amenbo owns **only what sits between the markers** `<!-- amenbo:begin (managed vN) -->` …
+//! Safely injects Amenbo's generic guidance (Class A) into the user's own `CLAUDE.md` / `AGENTS.md`.
+//! Amenbo owns **only what sits between the markers** `<!-- amenbo:begin (managed vN) -->` …
 //! `<!-- amenbo:end -->`. The begin marker carries a **format version** (an unversioned `(managed)`
 //! counts as version 1); detection, replacement and strip all go through
 //! [prefix match + version extraction](find_begin_marker) rather than an exact string compare, so
@@ -15,7 +15,7 @@
 
 /// Format version of the begin marker. An unversioned `(managed)` counts as version 1; the newest
 /// version this binary writes is 3 (`(managed v3)`). Bumping the version is how a binary update
-/// whose block template changed can tell an existing folder's block is out of date: run amenbo in
+/// whose block template changed can tell an existing folder's block is out of date: run Amenbo in
 /// that folder and [`follow_stale_block`] brings it up to the current version by itself, while the
 /// folders you have not been in are [detected](stale_bound_blocks) by `doctor` and
 /// [fixed](resync_bound_blocks) by `sync-guide`.
@@ -81,7 +81,7 @@ pub fn launch_instruction(cmd: &str) -> String {
 /// language to talk to the human in. `cmd` is the launch command name
 /// ([`crate::config::Paths::command_name`] — `amenbo` in production, `amenbo-dev` on the dev
 /// channel) and is used **only where a command is invoked** — the product name, `.amenbo` and the
-/// flags amenbo takes are fixed and channel-independent. `language_label` is what
+/// flags Amenbo takes are fixed and channel-independent. `language_label` is what
 /// `config::language_label` returns (e.g. `Japanese`).
 pub fn managed_block_body(language_label: &str, cmd: &str) -> String {
     format!(
@@ -128,7 +128,7 @@ pub fn upsert_managed(existing: Option<&str>, body: &str) -> String {
     }
 }
 
-/// Whether `dir` already holds a `CLAUDE.md` or `AGENTS.md` carrying an amenbo managed block.
+/// Whether `dir` already holds a `CLAUDE.md` or `AGENTS.md` carrying an Amenbo managed block.
 /// The clobber guard for init/bind: an existing managed block means the folder may already be set
 /// up for another project, so do not walk over it unasked.
 pub fn dir_has_managed_block(dir: &std::path::Path) -> bool {
@@ -196,7 +196,7 @@ pub fn upsert_into_dir(dir: &std::path::Path, lang_code: Option<&str>, cmd: &str
 
 /// Whether `dir`'s managed block is **stale** (either `CLAUDE.md` or `AGENTS.md` carries a version
 /// below the current [`MANAGED_BLOCK_VERSION`]). A file with no block is never called stale —
-/// anything amenbo does not own is out of scope.
+/// anything Amenbo does not own is out of scope.
 fn has_stale_block(dir: &std::path::Path) -> bool {
     ["CLAUDE.md", "AGENTS.md"].iter().any(|name| {
         std::fs::read_to_string(dir.join(name))
@@ -208,7 +208,7 @@ fn has_stale_block(dir: &std::path::Path) -> bool {
 
 /// **Follow on startup**: when the one resolved bound folder's managed block is stale, quietly
 /// bring it up to the current version. Called from [`crate::binding::resolve_upward`] (the only
-/// path that resolves a `.amenbo`), so stale guidance is gone the moment you run amenbo in that
+/// path that resolves a `.amenbo`), so stale guidance is gone the moment you run Amenbo in that
 /// folder. Returns the files actually rewritten (empty when there was nothing to do). It touches
 /// **that folder only**; the other folders are detected by [`stale_bound_blocks`]
 /// (`doctor`) and fixed by [`resync_bound_blocks`] (`sync-guide` and the GUI) — there is no second
@@ -216,7 +216,7 @@ fn has_stale_block(dir: &std::path::Path) -> bool {
 /// is false and [`upsert_into_dir`] is not even called, so mtimes and commit diffs do not move for
 /// nothing. The language label is kept from the existing block (`lang_code = None`). **A file it
 /// cannot write does not kill the command**: [`upsert_into_dir`] simply leaves it out of `touched`,
-/// so amenbo still runs on a read-only filesystem.
+/// so Amenbo still runs on a read-only filesystem.
 pub fn follow_stale_block(dir: &std::path::Path, cmd: &str) -> Vec<&'static str> {
     if !has_stale_block(dir) {
         return Vec::new();
@@ -331,7 +331,7 @@ pub fn strip_managed(text: &str) -> Option<String> {
     })
 }
 
-/// Removes amenbo's managed block from `AGENTS.md` and `CLAUDE.md` under `dir` — the inverse of
+/// Removes Amenbo's managed block from `AGENTS.md` and `CLAUDE.md` under `dir` — the inverse of
 /// [`upsert_into_dir`], for `unbind`. The user's content outside the markers is preserved, and a
 /// file left empty once the block is gone is deleted: an AGENTS.md that bind/init had created with
 /// just the block disappears here, putting the folder back the way it was before it was bound.
@@ -699,7 +699,7 @@ mod tests {
     #[test]
     fn follow_upgrades_a_stale_block_in_place_and_keeps_its_language() {
         // An unversioned block in a bound folder is quietly brought up to the current version the
-        // moment amenbo runs there. The existing block's language label (Japanese) is kept, and the
+        // moment Amenbo runs there. The existing block's language label (Japanese) is kept, and the
         // Class P content outside the markers is untouched.
         let dir = scratch_dir("follow-stale");
         let legacy_ja = format!(
@@ -739,8 +739,8 @@ mod tests {
 
     #[test]
     fn follow_leaves_a_folder_with_no_managed_block_alone() {
-        // Anything amenbo does not own is out of scope: a hand-written CLAUDE.md with no block is
-        // not rewritten, and the absent AGENTS.md is **not created** — merely running amenbo does
+        // Anything Amenbo does not own is out of scope: a hand-written CLAUDE.md with no block is
+        // not rewritten, and the absent AGENTS.md is **not created** — merely running Amenbo does
         // not sprout files in the user's filesystem.
         let dir = scratch_dir("follow-noblock");
         std::fs::write(dir.join("CLAUDE.md"), "# hand-written only\n").unwrap();
@@ -754,7 +754,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn follow_survives_a_file_it_cannot_write() {
-        // A failed write must not kill the command — amenbo still runs on a read-only filesystem:
+        // A failed write must not kill the command — Amenbo still runs on a read-only filesystem:
         // the file it could not write is left out of touched, with no panic and no Err.
         use std::os::unix::fs::PermissionsExt;
         let dir = scratch_dir("follow-readonly");

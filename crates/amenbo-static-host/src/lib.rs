@@ -1,6 +1,6 @@
-//! The host a test points amenbo at when a path has to be *fetched*.
+//! The host a test points Amenbo at when a path has to be *fetched*.
 //!
-//! Every route amenbo takes to the network — a catalog, the key beside it, a detail document, an asset —
+//! Every route Amenbo takes to the network — a catalog, the key beside it, a detail document, an asset —
 //! is reached by URL, and a file on disk cannot stand in for one being fetched. So a test that walks such
 //! a route needs something answering on a port, and the four things it needs of it are always the same:
 //! a port nobody else took, a body per path, a 404 for everything else, and **the ability to change what
@@ -8,7 +8,7 @@
 //! outside.
 //!
 //! It is deliberately not a web server. There is no concurrency, no keep-alive, no content type and no
-//! method: connections are answered one at a time, in order, because what is on the other end is amenbo
+//! method: connections are answered one at a time, in order, because what is on the other end is Amenbo
 //! fetching one document and then the next. Test support only, never linked into a shipped binary.
 //!
 //! It is a crate of its own rather than a helper inside one suite because the same host is wanted from

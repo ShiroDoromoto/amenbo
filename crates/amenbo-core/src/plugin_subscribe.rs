@@ -15,7 +15,7 @@
 //!   — fires nothing at all, which is the fail-safe side: the alternative is opening a gate in a project
 //!   the user never opened one in;
 //! - it **subscribes** — the event's name is in its manifest [`events`](crate::plugin_manifest::Manifest::events);
-//! - it is **compatible** — this amenbo speaks the payload contract it reads and clears the version floor
+//! - it is **compatible** — this Amenbo speaks the payload contract it reads and clears the version floor
 //!   it declares ([`plugin_compat::check`](crate::plugin_compat::check), `AMB-D-359`);
 //! - it resolves — its config reads cleanly ([`plugin_inject::resolve`],
 //!   `AMB-D-356`), splitting the plugin's own settings into secret env vars and text stdin config.
@@ -70,7 +70,7 @@ pub struct InstalledPlugin {
     /// The plugin's manifest — the subscription list (`events`) and config schema this resolver reads.
     pub manifest: Manifest,
     /// Which catalog it was installed from, or `None` for an install that records none — placed by hand,
-    /// or made before amenbo wrote the record down. Nothing in this module reads it; it rides along
+    /// or made before Amenbo wrote the record down. Nothing in this module reads it; it rides along
     /// because it is part of what one install *is* on disk, and the update path is where it is spent
     /// ([`plugin_update`](crate::plugin_update)).
     pub origin: Option<Origin>,
@@ -135,7 +135,7 @@ impl Subscribers for EnabledSubscribers<'_> {
                 continue;
             };
             // Compatible with this build (`AMB-D-359`). Checked here and not only at `enable`, because
-            // amenbo updates underneath an install: a plugin enabled against the old payload contract is
+            // Amenbo updates underneath an install: a plugin enabled against the old payload contract is
             // dropped rather than fed one it cannot read — best-effort like a config that will not
             // resolve, so the event still fires for everyone else (`AMB-D-352`).
             if let Err(incompatible) = crate::plugin_compat::check(&plugin.manifest) {
@@ -351,7 +351,7 @@ mod tests {
     }
 
     /// Enabled and subscribed, but incompatible with this build: it is dropped with a warning rather than
-    /// fired (`AMB-D-359`) — enable-time is not the only door, since amenbo can update underneath it.
+    /// fired (`AMB-D-359`) — enable-time is not the only door, since Amenbo can update underneath it.
     #[test]
     fn an_incompatible_plugin_does_not_fire() {
         let (mut store, _dir, p) = store_in_a_project("incompatible");

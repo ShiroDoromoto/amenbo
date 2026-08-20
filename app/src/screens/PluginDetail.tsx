@@ -32,7 +32,7 @@ import { Icon } from "../components/Icon";
 // before the repository is asked anything.
 //
 // The figures never gate anything. What may be installed is decided by the asset's signature against
-// amenbo's own key (`AMB-D-371`); a star count is a display figure, and a download count includes
+// Amenbo's own key (`AMB-D-371`); a star count is a display figure, and a download count includes
 // whatever else pulls an asset, so both are read as a sense of scale and nothing more.
 
 export function PluginDetail({ entry, install, onOpenInstalled, onClose }: {
@@ -142,7 +142,7 @@ export function PluginDetail({ entry, install, onOpenInstalled, onClose }: {
  *
  * Everything here is the author's declaration, read **before** anything is installed: what layer it lives
  * at, what it will be woken for, and what it will want to be told — a secret among those is the line worth
- * seeing in advance, since it means handing over a credential. The one judgement is amenbo's own:
+ * seeing in advance, since it means handing over a credential. The one judgement is Amenbo's own:
  * a build this version cannot speak to says so here rather than at the enable that would refuse it.
  *
  * The layer is **said, not offered** (`AMB-D-601`). It is the author's declaration and there is nothing for

@@ -1,4 +1,4 @@
-//! What amenbo puts around a repository: the lint that reads a staged diff or a commit message, the
+//! What Amenbo puts around a repository: the lint that reads a staged diff or a commit message, the
 //! git hook that runs it on every commit, and the paste an AI's session start is handed.
 
 mod harness;
@@ -157,8 +157,8 @@ fn lint_outside_a_repository_says_so_plainly() {
 
 /// `agent-hook snippet` hands over a request for the reader's own AI, and stdout carries nothing but it:
 /// the text is meant to reach that AI through a pipe or a clipboard, and one courtesy line landing in with
-/// it would read as part of what is being asked for. amenbo's own voice — where the text is going, and that
-/// amenbo wired nothing itself — is on stderr (`AMB-D-440`).
+/// it would read as part of what is being asked for. Amenbo's own voice — where the text is going, and that
+/// Amenbo wired nothing itself — is on stderr (`AMB-D-440`).
 #[test]
 fn agent_hook_snippet_gives_stdout_to_the_request_and_says_where_it_goes_on_stderr() {
     let cli = Cli::new();
@@ -188,7 +188,7 @@ fn agent_hook_snippet_gives_stdout_to_the_request_and_says_where_it_goes_on_stde
     assert!(err.contains("claude-code") && err.contains("gemini-cli"), "the refusal lists no tools: {err}");
 }
 
-/// A folder whose AI is not started on amenbo says so on every response until it is — and under `--json`
+/// A folder whose AI is not started on Amenbo says so on every response until it is — and under `--json`
 /// it says so in a field, which is the one surface an AI is sure to read (`AMB-D-440`). The provider it
 /// names is the one the folder shows a trace of, and the fix is the command that prints the text.
 #[test]
@@ -297,7 +297,7 @@ fn wire(cli: &Cli, tool: &str) {
     std::fs::write(into, configuration).unwrap();
 }
 
-/// Once the wiring has landed the warning stops — and only then. It is the file that ends it, since amenbo
+/// Once the wiring has landed the warning stops — and only then. It is the file that ends it, since Amenbo
 /// never writes that file itself.
 #[test]
 fn a_wired_folder_stops_warning_the_person_who_wired_it() {
@@ -376,7 +376,7 @@ fn the_report_ends_when_every_tool_in_the_catalog_is_wired() {
     );
 }
 
-/// The question amenbo cannot put on the `--json` face is closed from the outside: the report names the
+/// The question Amenbo cannot put on the `--json` face is closed from the outside: the report names the
 /// command that writes the answer back, an AI puts the question to the human, and recording their answer
 /// takes the question off the report (`AMB-D-440`). The wiring is a separate fact, so the report itself
 /// stands — nothing has been wired.
@@ -450,7 +450,7 @@ fn agent_hook_snippet_json_carries_the_request_the_configuration_and_its_destina
     assert!(configuration.contains(" agent --json"), "{doc}");
 }
 
-/// The lint-hook probe asks git where the hooks live, and that one spawn rides every amenbo command. What
+/// The lint-hook probe asks git where the hooks live, and that one spawn rides every Amenbo command. What
 /// is held here is the **count**, counted by putting a `git` on `PATH` that logs each call and delegates to
 /// the real one — not a wall-clock number, because the cost is process startup, which says more about the
 /// machine (a `/usr/bin/git` that is an xcrun shim costs double a real one) than about this code, while
@@ -524,7 +524,7 @@ fn real_git_path() -> String {
 /// Build a `bin` dir holding a `git` symlink — so a fully-controlled `PATH` can still run git — and, when
 /// `with_amenbo`, an `amenbo` symlink to this build. The hook's `command -v amenbo` has to resolve to the
 /// binary under test, not whatever is installed on the machine running the suite; and "uninstalled" has to
-/// mean a `PATH` that holds no amenbo at all, which the machine's own `PATH` cannot promise. Returns the dir
+/// mean a `PATH` that holds no Amenbo at all, which the machine's own `PATH` cannot promise. Returns the dir
 /// as the whole `PATH` value.
 #[cfg(unix)]
 fn hook_path(bin: &std::path::Path, with_amenbo: bool) -> String {
@@ -541,10 +541,10 @@ fn hook_path(bin: &std::path::Path, with_amenbo: bool) -> String {
 }
 
 /// The whole life of an installed hook, driven through real `git commit`: a ref in the staged diff is
-/// refused, a ref in the message is refused, a clean commit goes through, an amenbo gone from `PATH` never
+/// refused, a ref in the message is refused, a clean commit goes through, an Amenbo gone from `PATH` never
 /// traps a commit, and `uninstall` stops the gate-keeping. The unit tests see the install/strip logic and
 /// the generated shell each in isolation; only this runs git the way a user does — and both shipped bugs (a
-/// ref slipping through, an uninstalled amenbo trapping every commit) lived past where those tests looked.
+/// ref slipping through, an uninstalled Amenbo trapping every commit) lived past where those tests looked.
 #[cfg(unix)]
 #[test]
 fn the_installed_hook_lives_its_whole_life_under_real_git() {
@@ -584,7 +584,7 @@ fn the_installed_hook_lives_its_whole_life_under_real_git() {
     let clean = commit("one.txt", "one\n", "chore: tidy up", &with_amenbo);
     assert!(clean.status.success(), "a clean commit must go through: {}", String::from_utf8_lossy(&clean.stderr));
 
-    // amenbo gone from PATH: even a ref in the message must not trap the commit — `command -v` fails, the
+    // Amenbo gone from PATH: even a ref in the message must not trap the commit — `command -v` fails, the
     // block's `|| true` clears it, and a standalone hook lets the commit through.
     let gone = commit("two.txt", "two\n", "chore: closes AMB-T-1655, amenbo gone", &no_amenbo);
     assert!(gone.status.success(), "an uninstalled amenbo must not trap a commit: {}", String::from_utf8_lossy(&gone.stderr));
@@ -596,8 +596,8 @@ fn the_installed_hook_lives_its_whole_life_under_real_git() {
     assert!(after.status.success(), "uninstall must remove the gate: {}", String::from_utf8_lossy(&after.stderr));
 }
 
-/// Installed beside another tool's hook, amenbo guards without disturbing it, and `uninstall` takes only
-/// amenbo's block — the other tool's hook keeps running. amenbo's block sits after the shebang and runs
+/// Installed beside another tool's hook, Amenbo guards without disturbing it, and `uninstall` takes only
+/// Amenbo's block — the other tool's hook keeps running. Amenbo's block sits after the shebang and runs
 /// first, and when it passes, control falls through to the foreign body.
 #[cfg(unix)]
 #[test]
@@ -632,7 +632,7 @@ fn the_hook_coexists_with_a_foreign_hook_and_leaves_it_on_uninstall() {
             .unwrap()
     };
 
-    // A ref in the message is still refused — amenbo's block runs before the foreign body ever gets control.
+    // A ref in the message is still refused — Amenbo's block runs before the foreign body ever gets control.
     let blocked = commit("a.txt", "chore: closes AMB-T-1655");
     assert!(!blocked.status.success(), "the coexisting block must still refuse a ref");
     assert!(!mark.exists(), "a refused commit must not have reached the foreign body");
@@ -643,7 +643,7 @@ fn the_hook_coexists_with_a_foreign_hook_and_leaves_it_on_uninstall() {
     assert!(clean.status.success(), "a clean commit must pass: {}", String::from_utf8_lossy(&clean.stderr));
     assert!(mark.exists(), "the foreign hook must still run when amenbo's block falls through");
 
-    // uninstall takes only amenbo's block; the foreign body stays and keeps running.
+    // uninstall takes only Amenbo's block; the foreign body stays and keeps running.
     let removed = cli.json_from(&repo, &["hooks", "uninstall", "--json"]);
     assert_eq!(removed["ok"], serde_json::json!(true), "uninstall: {removed}");
     let body = std::fs::read_to_string(hooks_dir.join("commit-msg")).unwrap();

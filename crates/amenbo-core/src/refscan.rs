@@ -39,7 +39,7 @@ pub struct ProseRef {
 ///
 /// Only [`RefKind::Task`] and [`RefKind::Decision`] come back. They are the two spaces a body is written to
 /// point at — the numbers a person types and an agent follows — and a ref this filters out is not a ref
-/// this module missed: the other kinds ([`RefKind::TaskComment`], a dimension, an attachment) are ids amenbo
+/// this module missed: the other kinds ([`RefKind::TaskComment`], a dimension, an attachment) are ids Amenbo
 /// renders into its own output, not references a reader chases through a body.
 pub fn refs_in_prose(md: &str) -> Vec<ProseRef> {
     let mut out = Vec::new();
@@ -140,7 +140,7 @@ mod tests {
         assert_eq!(found("| a | b |\n|---|---|\n| AMB-T-5 | x |"), vec!["AMB-T-5"]);
     }
 
-    /// Only the two spaces a body points at. The other kinds amenbo can spell are ids it renders into its
+    /// Only the two spaces a body points at. The other kinds Amenbo can spell are ids it renders into its
     /// own output, and reading one here would invent a reference nobody wrote.
     #[test]
     fn only_the_task_and_decision_spaces_come_back() {

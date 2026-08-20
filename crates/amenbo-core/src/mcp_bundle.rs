@@ -1,7 +1,7 @@
 //! The one file Claude Desktop takes a server from — an `.mcpb` bundle carrying the server this
 //! machine already has (`AMB-D-672`).
 //!
-//! **Why a bundle and not a settings document.** Every other app amenbo lists can run a command, so
+//! **Why a bundle and not a settings document.** Every other app Amenbo lists can run a command, so
 //! the road there is to ask the AI already sitting in it to write the settings itself
 //! ([`crate::mcp_apps`]). This one cannot run anything, so there is nobody in it to ask — and it is
 //! also the only one that takes a server by being handed a file (`AMB-T-3122`). The file is what is
@@ -9,11 +9,11 @@
 //! puts the server in.
 //!
 //! **What is inside is a pointer, not a program.** A bundle may carry the server's own code; this one
-//! carries none. amenbo is already on the machine — a whole installer put it there — so what the
+//! carries none. Amenbo is already on the machine — a whole installer put it there — so what the
 //! manifest names is the binary that is standing, and the arguments that start it (`AMB-D-666`).
-//! Shipping a copy of amenbo inside would be a second amenbo to keep in step with the first.
+//! Shipping a copy of Amenbo inside would be a second Amenbo to keep in step with the first.
 //!
-//! **The folders are the host's to keep here, and amenbo's only to start with** (`AMB-D-681`). Every
+//! **The folders are the host's to keep here, and Amenbo's only to start with** (`AMB-D-681`). Every
 //! other app is handed the set written out; this one keeps it in a setting of its own, so what the
 //! manifest carries is the field, a placeholder standing where the folders go, and the choice the
 //! reader already made as that field's opening value. It is an opening value in the strict sense:
@@ -101,8 +101,8 @@ pub fn manifest(server: &Server) -> String {
                         and the way to use them, for the folders set below.",
         "author": { "name": AUTHOR },
         // The one place this app differs from every other: the folders the server works in are the
-        // host's to keep, not amenbo's (`AMB-D-681`). What is declared here is the field they live
-        // in, and what is written into it is the choice the reader already made in amenbo — so the
+        // host's to keep, not Amenbo's (`AMB-D-681`). What is declared here is the field they live
+        // in, and what is written into it is the choice the reader already made in Amenbo — so the
         // reader who installs this and does nothing else is already set up for that folder.
         //
         // **`required` is not written, deliberately.** With it, the host counts the field as

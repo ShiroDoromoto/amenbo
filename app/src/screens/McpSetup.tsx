@@ -10,7 +10,7 @@
 // fold to ask them.
 //
 // **Folded away, because most readers do not need it.** Somebody working from the command line has
-// amenbo already; the offer is for the reader whose AI cannot open a folder at all. Folded, it is a
+// Amenbo already; the offer is for the reader whose AI cannot open a folder at all. Folded, it is a
 // line they can walk past.
 import { useState } from "react";
 import { t } from "../core/i18n";

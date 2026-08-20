@@ -32,7 +32,7 @@ describe("pickBoardNotice", () => {
 
   // The order is the decision, so it is pinned rather than inferred: with no folder there is nowhere to
   // open a terminal, nowhere to paste and nothing to wire (`AMB-D-533`), and the wiring means nothing to a
-  // reader who has not yet seen amenbo hold a task (`AMB-D-516`).
+  // reader who has not yet seen Amenbo hold a task (`AMB-D-516`).
   it("orders the folder ahead of the loop, and the loop ahead of the wiring", () => {
     expect([...BOARD_NOTICES]).toEqual(["linkFolder", "firstLoop", "agentHookWiring"]);
   });

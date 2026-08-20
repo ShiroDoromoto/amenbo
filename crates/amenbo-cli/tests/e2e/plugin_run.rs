@@ -1,4 +1,4 @@
-//! The boundary a plugin is called across: which flags stay amenbo's and which reach the plugin, the
+//! The boundary a plugin is called across: which flags stay Amenbo's and which reach the plugin, the
 //! facet a call carries over it, the events that fire one, and the log that says how each run
 //! ended.
 
@@ -10,7 +10,7 @@ use serde_json::Value;
 
 use harness::*;
 
-/// The read-back a plugin makes (`AMB-D-406`) is the one read that needs no facet: amenbo launched the
+/// The read-back a plugin makes (`AMB-D-406`) is the one read that needs no facet: Amenbo launched the
 /// process and handed it the window (`AMENBO_PLUGIN_REACH`), so the reach is already fixed and `--actor`
 /// would decide nothing. That is what the author's documentation shows — `amenbo task show <id> --json`,
 /// no facet — and what `AMB-T-2460` found stopping with facet_required. A write from the same plugin still
@@ -68,9 +68,9 @@ fn a_plugin_reads_back_with_no_facet_and_still_declares_one_to_write() {
 }
 
 /// `plugin run` hands everything after the plugin's name to the plugin, dashes and all — so a facet
-/// written where every other amenbo command takes it, on the end, never reaches amenbo. The failure is
+/// written where every other Amenbo command takes it, on the end, never reaches amenbo. The failure is
 /// `facet_required`, and on its own it says nothing about the `--actor ai` the person can see they typed.
-/// The hint closes that gap, and closes it only there: a plugin may carry a flag of amenbo's spelling
+/// The hint closes that gap, and closes it only there: a plugin may carry a flag of Amenbo's spelling
 /// for reasons of its own, so what fires this is a facet that was written and did not arrive.
 #[test]
 fn a_facet_written_after_plugin_run_is_named_where_the_call_failed() {
@@ -99,13 +99,13 @@ fn a_facet_written_after_plugin_run_is_named_where_the_call_failed() {
         "and hands back the same call with the flag where amenbo can see it: {stderr}"
     );
 
-    // Nothing of amenbo's among what the plugin was handed: no facet was written anywhere, so the
+    // Nothing of Amenbo's among what the plugin was handed: no facet was written anywhere, so the
     // plugin's argv is not the explanation and is not pointed at.
     let (stderr, code) = spawn(&["plugin", "run", "worktree", "start", "--branch", "main"]);
     assert_eq!(code, 2, "still refused, for the plain reason: {stderr}");
     assert!(!stderr.contains("went to the plugin"), "nothing to name here: {stderr}");
 
-    // And with the facet where amenbo reads it, the call gets as far as the plugin — which is not
+    // And with the facet where Amenbo reads it, the call gets as far as the plugin — which is not
     // installed here, and that is a different failure entirely.
     let (stderr, code) = spawn(&["--actor", "ai", "plugin", "run", "worktree", "start", "1"]);
     assert_ne!(code, 0, "the plugin is not installed: {stderr}");
@@ -113,10 +113,10 @@ fn a_facet_written_after_plugin_run_is_named_where_the_call_failed() {
 }
 
 /// `--help` after the plugin's name is the plugin's word like every other one (`AMB-D-346`) — and it is
-/// the word that matters most there, because a plugin's usage is what its author puts behind it. amenbo
+/// the word that matters most there, because a plugin's usage is what its author puts behind it. Amenbo
 /// answering in its place would hide the very text the person asked for.
 ///
-/// One form is still amenbo's: `plugin run --help` names no plugin, so there is nobody else to ask. It is
+/// One form is still Amenbo's: `plugin run --help` names no plugin, so there is nobody else to ask. It is
 /// answered before the facet and the pointer are, the way every other help request is.
 #[cfg(unix)]
 #[test]
@@ -139,7 +139,7 @@ fn a_help_flag_reaches_the_plugin_and_only_the_nameless_form_is_amenbos() {
         assert_eq!(code, 0, "the call reached the plugin: {stdout}");
         assert!(stdout.contains(&format!("the plugin's usage: {help}")), "the plugin answered: {stdout}");
 
-        // Naming no plugin: amenbo's own help, and no facet declared anywhere — a help request never
+        // Naming no plugin: Amenbo's own help, and no facet declared anywhere — a help request never
         // needed one.
         let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
             .env("AMENBO_HOME", &cli.home)
@@ -171,11 +171,11 @@ fn a_help_flag_reaches_the_plugin_and_only_the_nameless_form_is_amenbos() {
     assert!(stderr.contains("plugin run usage"), "and hands back where the flag belongs: {stderr}");
 }
 
-/// A flag amenbo happens to share a spelling with is the plugin's too, and the word right after the name
-/// is where the sharing bites: amenbo's flags are global, so the parser would answer for one written
+/// A flag Amenbo happens to share a spelling with is the plugin's too, and the word right after the name
+/// is where the sharing bites: Amenbo's flags are global, so the parser would answer for one written
 /// there and the plugin would never see it. An author is entitled to put `--json` on their own face.
 ///
-/// The other side of the same line: written **ahead** of the name, those flags are amenbo's — that is the
+/// The other side of the same line: written **ahead** of the name, those flags are Amenbo's — that is the
 /// place its own help names for them, and moving the boundary must not take that away.
 #[cfg(unix)]
 #[test]
@@ -190,7 +190,7 @@ fn amenbos_own_flags_are_the_plugins_from_the_name_onward() {
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
     cli.json(&["plugin", "enable", "usage", "--json"]);
 
-    // One word past the name: the position amenbo's own flags reach in every other command.
+    // One word past the name: the position Amenbo's own flags reach in every other command.
     for flag in ["--json", "--yes", "-y", "--quiet", "--no-color"] {
         let (stdout, code) = cli.run(&["--actor", "human", "plugin", "run", "usage", flag]);
         assert_eq!(code, 0, "the call reached the plugin: {stdout}");
@@ -200,7 +200,7 @@ fn amenbos_own_flags_are_the_plugins_from_the_name_onward() {
     let (stdout, _) = cli.run(&["--actor", "human", "plugin", "run", "usage", "--actor", "ai"]);
     assert!(stdout.contains("handed: --actor ai"), "both words reached the plugin: {stdout}");
 
-    // Ahead of the name they are still amenbo's: this one asks amenbo to answer in JSON, and the
+    // Ahead of the name they are still Amenbo's: this one asks Amenbo to answer in JSON, and the
     // plugin's return value rides inside that document rather than being printed raw.
     let (stdout, code) = cli.run(&["plugin", "run", "--json", "--actor", "human", "usage", "hello"]);
     assert_eq!(code, 0, "{stdout}");
@@ -375,10 +375,10 @@ fn a_plugin_reads_its_own_project_back_and_no_other() {
     let outside = cli.json(&["task", "add", "--title", "外の仕事", "--project", &other_id, "--json"]);
     let outside_id = id_str(&outside["task"]["id"]);
 
-    // A project-scoped plugin whose whole body is two calls back into amenbo, each answer kept in a file so
+    // A project-scoped plugin whose whole body is two calls back into Amenbo, each answer kept in a file so
     // the test reads exactly what the plugin saw. It declares its facet like any other caller (`AMB-D-408`)
     // — and declares `human`, the facet that normally reaches the whole device, so what narrows these two
-    // calls can only be the window amenbo handed it.
+    // calls can only be the window Amenbo handed it.
     install_plugin(&cli, "reader", serde_json::json!([]));
     let answers = cli.home.join("answers");
     std::fs::create_dir_all(&answers).unwrap();

@@ -4,7 +4,7 @@
 // Detection is core's and nothing is duplicated here: `plugin_updates` compares what this machine holds
 // against the catalog it already fetches. **How far it goes is the trigger's to say** (`AMB-D-462`). The
 // automatic ones — a focus return, opening a plugin screen — read through the catalog's freshness boundary, so
-// the face can re-ask at every moment that matters while amenbo still holds no timer and opens no connection
+// the face can re-ask at every moment that matters while Amenbo still holds no timer and opens no connection
 // it would not have opened anyway (`AMB-D-331`'s posture, applied to plugins). An explicit "check now" goes to
 // the catalog instead: what the boundary saves is the cost of the automatic triggers, and a press is not one
 // of them.
@@ -132,7 +132,7 @@ function reloadAfterApply(): void {
 
 /**
  * Apply one plugin's update (Tauri: `plugin_update_apply`). Every gate is core's — the asset is re-verified
- * against amenbo's catalog key and its checksum, the previous build is retained as a `.bak`, and the gate,
+ * against Amenbo's catalog key and its checksum, the previous build is retained as a `.bak`, and the gate,
  * settings and secrets are carried over — so a refusal here is a message to show, not a state to guess at.
  *
  * `false` means there was nothing to apply: the catalog publishes the build already installed.

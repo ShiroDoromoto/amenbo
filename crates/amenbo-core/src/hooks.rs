@@ -1,5 +1,5 @@
-//! The lint hooks: whether amenbo may write them into a repository's `.git/hooks`, and what is in those
-//! slots right now. Installing means writing into the user's git plumbing, which amenbo does not do unasked,
+//! The lint hooks: whether Amenbo may write them into a repository's `.git/hooks`, and what is in those
+//! slots right now. Installing means writing into the user's git plumbing, which Amenbo does not do unasked,
 //! so it asks — **once for the lint as a feature, and never again**. The answer is one bit for the whole
 //! device ([`HookConsent`], kept in [`crate::config::Config::hook_consent`]), not one per repository: the
 //! same reasoning that stops it being asked once per [`HookSlot`] stops it being asked once per repository.
@@ -10,7 +10,7 @@
 //! is already known. A yes therefore reaches the repositories bound after it was given, without a second
 //! question.
 //!
-//! The one thing that *is* per repository is an **opt-out**: `uninstall` records that amenbo must not wire
+//! The one thing that *is* per repository is an **opt-out**: `uninstall` records that Amenbo must not wire
 //! this one on its own again (`hook_optout`, read and written through [`crate::store::Store`] and
 //! implemented in [`crate::overview`]). It is not consent — the user is never asked about a repository —
 //! it is the memory of an explicit act, and without it a yes on record would put back at the next startup
@@ -19,14 +19,14 @@
 //! The answer and the hooks on disk are two independent facts: the answer says what was consented to and
 //! never what `.git/hooks` holds, which is [`probe`]'s answer and is read from the filesystem every time —
 //! reading the answer as a mirror of the disk breaks the moment a hook is deleted or added by hand, so the
-//! two meet in exactly one place, [`reconcile`]. amenbo owns only **what sits between its markers**: a
+//! two meet in exactly one place, [`reconcile`]. Amenbo owns only **what sits between its markers**: a
 //! managed block ([`HOOK_BEGIN_MARKER`] … [`HOOK_END_MARKER`], the same shape as the block in `CLAUDE.md` /
 //! `AGENTS.md`, [`crate::agents`]). Into an empty slot it writes the block as a standalone hook; into a slot
 //! another tool holds — husky, lefthook, a hand-written script — it slips the block in **right after the
-//! shebang**, so amenbo's lint and the other tool's hook both run, and running first means the lint fires
+//! shebang**, so Amenbo's lint and the other tool's hook both run, and running first means the lint fires
 //! even if the other hook exits early. Everything outside the markers is left exactly as it was, and
-//! [`uninstall`] strips only the block, deleting the file only when nothing but amenbo's block was in it.
-//! Coexisting is the rule, refused only where amenbo cannot add its block without touching a file it does
+//! [`uninstall`] strips only the block, deleting the file only when nothing but Amenbo's block was in it.
+//! Coexisting is the rule, refused only where Amenbo cannot add its block without touching a file it does
 //! not own ([`InstallReport::refused`]): a hook whose bytes will not read back as text, or one git
 //! **tracks** — a committed hook in a `core.hooksPath` dir, where a change would surface in `git status`
 //! and could be committed into the user's repo (`.git/info/exclude` silences only untracked files). Both
@@ -51,9 +51,9 @@ use crate::error::{Error, Msg, Result};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum HookConsent {
-    /// Wire the lint. It covers every repository amenbo works in, including the ones bound after the
+    /// Wire the lint. It covers every repository Amenbo works in, including the ones bound after the
     /// answer was given: consent is to the feature, and binding a folder is the user's own act of putting
-    /// that folder's work in amenbo's hands. A repository that says otherwise says it with `uninstall`
+    /// that folder's work in Amenbo's hands. A repository that says otherwise says it with `uninstall`
     /// (see the module docs' opt-out), not by being asked again.
     Yes,
     /// Don't wire it anywhere, and don't ask again. It answers the question for good, but it forbids
@@ -65,14 +65,14 @@ pub enum HookConsent {
 /// same device as [`crate::agents::MANAGED_BLOCK_VERSION`]: bump it when the block's body changes, and a
 /// block written by an older build is recognised as ours and rewritten rather than mistaken for a
 /// stranger's. v3 is where the standalone hook became a marker-delimited block that can coexist with
-/// another tool's hook in the same slot; v4 makes a standalone block exit cleanly when amenbo is not on
-/// PATH (an uninstalled amenbo must not turn a leftover hook into a commit-blocking trap); v6 makes that
+/// another tool's hook in the same slot; v4 makes a standalone block exit cleanly when Amenbo is not on
+/// PATH (an uninstalled Amenbo must not turn a leftover hook into a commit-blocking trap); v6 makes that
 /// same clean exit say so on stderr, so a leftover hook that is silently doing nothing is distinguishable
 /// from one that ran and passed.
 pub const HOOK_MARKER_VERSION: u32 = 6;
 
 /// Version-independent prefix of the begin marker. Detection matches on this rather than on
-/// [`HOOK_BEGIN_MARKER`] whole, so a block written by any version of amenbo is still known to be ours.
+/// [`HOOK_BEGIN_MARKER`] whole, so a block written by any version of Amenbo is still known to be ours.
 const BEGIN_PREFIX: &str = "# amenbo:hook begin (managed";
 /// Close of the begin marker. The version token (` vN`) sits between the prefix and this close.
 const BEGIN_SUFFIX: &str = ")";
@@ -113,7 +113,7 @@ impl HookSlot {
         }
     }
 
-    /// How this slot calls the lint by hand — the line the guidance offers a user to add to a hook amenbo
+    /// How this slot calls the lint by hand — the line the guidance offers a user to add to a hook Amenbo
     /// will not touch (a tracked one). It names the plain public command, `commit-msg` handing over the
     /// message file git gives it as `$1` and `pre-commit` linting the staged diff, which is the bare
     /// command's default.
@@ -124,7 +124,7 @@ impl HookSlot {
         }
     }
 
-    /// What amenbo's own managed block runs. It calls a slot-named entry point (`githook-pre-commit` /
+    /// What Amenbo's own managed block runs. It calls a slot-named entry point (`githook-pre-commit` /
     /// `githook-commit-msg`) rather than `lint` directly, so the line written into the hook stays fixed
     /// while what the slot does can grow: the shim is thin and delegates, and a later version can change
     /// the behaviour without rewriting every installed hook. `commit-msg` still hands over git's `$1`.
@@ -145,7 +145,7 @@ impl HookSlot {
 }
 
 /// The block's version in `text`, or `None` when there is no marker of ours — i.e. when the text is not a
-/// hook amenbo wrote. Recognises the current begin marker and, failing that, the legacy single-line marker
+/// hook Amenbo wrote. Recognises the current begin marker and, failing that, the legacy single-line marker
 /// an older standalone hook carried. Mirrors [`crate::agents::managed_block_version`]; an unparsable token
 /// reads as version 1, staying conservative (it is still ours).
 fn marker_version(text: &str) -> Option<u32> {
@@ -162,7 +162,7 @@ fn version_after(text: &str, prefix: &str) -> Option<u32> {
     Some(token.strip_prefix('v').and_then(|n| n.parse::<u32>().ok()).unwrap_or(1))
 }
 
-/// The byte range of amenbo's managed block in `text` — from the begin marker through the end marker —
+/// The byte range of Amenbo's managed block in `text` — from the begin marker through the end marker —
 /// or `None` when the current block markers are not both present (a legacy single-line hook has no such
 /// block, and neither does a stranger's). What [`install`] swaps and [`uninstall`] strips.
 fn find_hook_block(text: &str) -> Option<(usize, usize)> {
@@ -177,10 +177,10 @@ fn find_hook_block(text: &str) -> Option<(usize, usize)> {
 pub enum HookState {
     /// Nothing there. The lint runs on nobody's commit.
     Unwired,
-    /// A hook carrying amenbo's managed block, at `version`. The block is ours to rewrite and ours to
+    /// A hook carrying Amenbo's managed block, at `version`. The block is ours to rewrite and ours to
     /// remove; anything around it in the file is not.
     Managed { version: u32 },
-    /// A hook with no block of ours — husky, lefthook, a hand-written script, and no amenbo markers yet.
+    /// A hook with no block of ours — husky, lefthook, a hand-written script, and no Amenbo markers yet.
     /// [`install`] adds the block **alongside** the existing body (right after the shebang), leaving that
     /// body untouched; the one it cannot is a file whose bytes will not read back as text.
     Foreign,
@@ -194,24 +194,24 @@ impl HookState {
     }
 }
 
-/// amenbo's managed block for `slot`, markers and all — the unit amenbo owns and the only thing it writes,
+/// Amenbo's managed block for `slot`, markers and all — the unit Amenbo owns and the only thing it writes,
 /// whether the slot was empty or already held another tool's hook. `cmd` is the launch command (`amenbo`
 /// in production, `amenbo-dev` in development) so the block calls the channel that installed it.
 ///
 /// It guards on `cmd` being on `PATH` rather than assuming it: a block that blocked every commit because
-/// amenbo was uninstalled would be a trap, and this is a convenience, not a gate the repository depends on.
-/// When amenbo *is* present, a failing lint stops the commit (`|| exit 1`); when it passes, control falls
+/// Amenbo was uninstalled would be a trap, and this is a convenience, not a gate the repository depends on.
+/// When Amenbo *is* present, a failing lint stops the commit (`|| exit 1`); when it passes, control falls
 /// through to whatever the rest of the file holds — which is how the block coexists with another tool's
 /// hook. It uses no `exec` for that reason: `exec` would replace the process and the other tool's hook
 /// would never run.
 ///
 /// The trailing `|| { … ; true; }` is what keeps the uninstall promise while breaking the silence. In a
 /// *standalone* hook the block is the last thing in the file, so its exit status becomes the hook's — and
-/// `command -v` failing (amenbo gone) leaves a non-zero status that would abort every commit. The group
+/// `command -v` failing (Amenbo gone) leaves a non-zero status that would abort every commit. The group
 /// warns on stderr and then `true`s, turning that into a clean exit that says why it did nothing, without
 /// touching the two paths that must keep working: a failing lint still `exit 1`s (a hard exit reached before
 /// the `||`), and a coexisting hook still falls through to the tool's own body below (the group ends in
-/// `true`, so control continues). The warning fires only when amenbo is off PATH — for an installed user it
+/// `true`, so control continues). The warning fires only when Amenbo is off PATH — for an installed user it
 /// never prints, so it is loud exactly when the hook would otherwise be silently doing nothing.
 pub fn hook_block(slot: HookSlot, cmd: &str) -> String {
     let name = slot.name();
@@ -230,14 +230,14 @@ pub fn hook_block(slot: HookSlot, cmd: &str) -> String {
     )
 }
 
-/// The whole file for a slot amenbo owns outright — a shebang and its managed block, and nothing else.
+/// The whole file for a slot Amenbo owns outright — a shebang and its managed block, and nothing else.
 /// What [`install`] writes into an empty slot; a slot another tool holds gets the block slipped into the
 /// existing file instead ([`install`]).
 pub fn hook_body(slot: HookSlot, cmd: &str) -> String {
     format!("#!/bin/sh\n{}\n", hook_block(slot, cmd))
 }
 
-/// Put amenbo's block into `existing` (the slot's current contents, `None` when the file is not there) and
+/// Put Amenbo's block into `existing` (the slot's current contents, `None` when the file is not there) and
 /// return the whole new file. The mirror of [`crate::agents::upsert_managed`], slot-flavoured:
 ///
 /// - **no file** → the standalone [`hook_body`];
@@ -276,7 +276,7 @@ fn insert_after_shebang(text: &str, block: &str) -> String {
     }
 }
 
-/// Take amenbo's block back out of a hook's `text`. `None` when there is nothing of ours in it;
+/// Take Amenbo's block back out of a hook's `text`. `None` when there is nothing of ours in it;
 /// `Some(None)` when what is left is only a shebang (the file was ours entirely and should be deleted);
 /// `Some(Some(t))` when another tool's body remains and the file should be rewritten to `t`.
 fn strip_block(text: &str) -> Option<Option<String>> {
@@ -293,7 +293,7 @@ fn strip_block(text: &str) -> Option<Option<String>> {
     text.contains(LEGACY_PREFIX).then_some(None)
 }
 
-/// The one line to add to `slot`'s hook when amenbo must not touch it. What [`install`] hands back instead
+/// The one line to add to `slot`'s hook when Amenbo must not touch it. What [`install`] hands back instead
 /// of writing when a slot is a stranger's, and what the unwired report shows in the same case.
 pub fn guidance_line(slot: HookSlot, cmd: &str) -> String {
     format!("{} || exit 1", slot.lint_call(cmd))
@@ -322,10 +322,10 @@ pub fn hooks_dir(dir: &Path) -> Option<PathBuf> {
 /// Would git show a hook written here? That is the whole of the difference between a hook that stays on
 /// this machine and one that lands in everybody's checkout. `.git/hooks` is outside the working tree, so
 /// nothing there is ever git's to show; a `core.hooksPath` aimed into the tree (`.githooks`, `.husky`) is
-/// the repository's own versioned decision, and a file amenbo drops in it surfaces in `git status` and
+/// the repository's own versioned decision, and a file Amenbo drops in it surfaces in `git status` and
 /// rides out on the next `git add -A`. Which is why [`install`] pairs a shared write with
 /// [`exclude_locally`] rather than refusing it: the lint is not optional, so the write happens either way
-/// and it is amenbo's job — not the user's — to keep it off everybody else's machine.
+/// and it is Amenbo's job — not the user's — to keep it off everybody else's machine.
 fn hooks_are_shared(dir: &Path, hooks: &Path) -> bool {
     let Some(root) = worktree_root(dir) else {
         return false;
@@ -389,8 +389,8 @@ fn is_ignored(dir: &Path, path: &Path) -> bool {
 /// Does git **track** `path` — is it in the index or a committed file? `ls-files --error-unmatch` exits 0
 /// only for a tracked path. Unlike an untracked file, a tracked one cannot be hidden by
 /// `.git/info/exclude`, so a modification to it shows in `git status` and can be committed. That is why
-/// amenbo must not slip its block into a foreign hook git tracks: it cannot own it and cannot hide the
-/// change, so it would be leaving amenbo's lines in the user's versioned tree to be committed by mistake.
+/// Amenbo must not slip its block into a foreign hook git tracks: it cannot own it and cannot hide the
+/// change, so it would be leaving Amenbo's lines in the user's versioned tree to be committed by mistake.
 /// A hook under `.git/hooks` is never tracked (it is inside the git dir, outside the working tree), so this
 /// only ever fires for a hook a `core.hooksPath` puts in the tree — `.githooks`, `.husky` — that the
 /// repository has committed.
@@ -474,13 +474,13 @@ impl HookStates {
         self.iter().filter(|&(_, s)| s == state).map(|(slot, _)| slot).collect()
     }
 
-    /// Does amenbo own every slot? The one shape in which the lint is fully wired, and the one in which
+    /// Does Amenbo own every slot? The one shape in which the lint is fully wired, and the one in which
     /// [`reconcile`] has nothing left to write.
     pub fn all_managed(self) -> bool {
         self.iter().all(|(_, s)| s.is_managed())
     }
 
-    /// Does amenbo own any slot at all? Its own block on disk is the disk's way of saying yes.
+    /// Does Amenbo own any slot at all? Its own block on disk is the disk's way of saying yes.
     pub fn any_managed(self) -> bool {
         self.iter().any(|(_, s)| s.is_managed())
     }
@@ -490,7 +490,7 @@ impl HookStates {
 /// are no hooks to have, and no question to ask. This is the only source of truth for the hooks' existence.
 /// One `git` call locates the directory and every slot is read from it, so a caller that wants both the
 /// question and the report pays for one spawn by asking once and passing the answer around. A hook whose
-/// bytes will not read back as text — a binary, or one we may not open — is a stranger's: what amenbo
+/// bytes will not read back as text — a binary, or one we may not open — is a stranger's: what Amenbo
 /// wrote, it can always read.
 pub fn probe(dir: &Path) -> Option<HookStates> {
     let hooks = hooks_dir(dir)?;
@@ -525,17 +525,17 @@ pub enum Installed {
 /// What [`install`] did, slot by slot: what it wrote, and the rare slot it could not.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct InstallReport {
-    /// The slots amenbo wrote, each with what writing it amounted to.
+    /// The slots Amenbo wrote, each with what writing it amounted to.
     pub installed: Vec<(HookSlot, Installed)>,
-    /// The slots amenbo could not add its block to, and left to their owner. Two reasons, both rare: the
+    /// The slots Amenbo could not add its block to, and left to their owner. Two reasons, both rare: the
     /// hook's contents will not read back as text (a binary, or one it may not open), or git **tracks** it
     /// — a committed hook in a `core.hooksPath` dir — so a modification would show in `git status` and could
-    /// be committed into the user's repo, which amenbo will not risk. The caller offers [`guidance_line`]
+    /// be committed into the user's repo, which Amenbo will not risk. The caller offers [`guidance_line`]
     /// for each. Empty in every ordinary repository.
     pub refused: Vec<HookSlot>,
 }
 
-/// Put amenbo's lint block into every slot of `dir`: an empty slot becomes a standalone hook, a slot of
+/// Put Amenbo's lint block into every slot of `dir`: an empty slot becomes a standalone hook, a slot of
 /// ours is rewritten in place, and a slot another tool holds gains the block **alongside** its body rather
 /// than being refused — coexisting is always possible, so the old all-or-nothing hand-off is gone. The one
 /// slot it cannot write is a hook whose bytes will not read back as text ([`InstallReport::refused`]): there
@@ -562,7 +562,7 @@ pub fn install(dir: &Path, cmd: &str) -> Result<InstallReport> {
             Err(_) => None,
         };
         let was_ours = existing.as_deref().is_some_and(|t| marker_version(t).is_some());
-        // A foreign hook that git tracks is one amenbo cannot slip its block into: the change would show in
+        // A foreign hook that git tracks is one Amenbo cannot slip its block into: the change would show in
         // `git status` and could be committed into the user's repo, and `.git/info/exclude` cannot hide a
         // tracked file. Coexisting is only ever silent for a hook under `.git/hooks` or an untracked one in
         // a `core.hooksPath` dir — so leave a tracked stranger's hook to its owner (hand-off), not touched.
@@ -589,7 +589,7 @@ pub fn install(dir: &Path, cmd: &str) -> Result<InstallReport> {
 }
 
 /// The lines to add by hand, one per slot, each indented by `indent` — what a caller shows for the slots
-/// amenbo will not write.
+/// Amenbo will not write.
 pub fn guidance_block(slots: Vec<HookSlot>, cmd: &str, indent: &str) -> String {
     slots
         .into_iter()
@@ -598,9 +598,9 @@ pub fn guidance_block(slots: Vec<HookSlot>, cmd: &str, indent: &str) -> String {
         .join("\n")
 }
 
-/// Take amenbo's block back out of every slot of `dir` that carries it, and return those slots. The mirror
-/// of [`install`]: a slot amenbo shares with another tool keeps the other tool's body — only the block
-/// between the markers goes, and the file is deleted only when nothing but amenbo's block was in it. A slot
+/// Take Amenbo's block back out of every slot of `dir` that carries it, and return those slots. The mirror
+/// of [`install`]: a slot Amenbo shares with another tool keeps the other tool's body — only the block
+/// between the markers goes, and the file is deleted only when nothing but Amenbo's block was in it. A slot
 /// with nothing of ours is already the asked-for state, so there is nothing to refuse and nothing to error
 /// over; the only failure is not being in a git repository at all.
 pub fn uninstall(dir: &Path) -> Result<Vec<HookSlot>> {
@@ -716,7 +716,7 @@ pub struct HookContext {
     /// such thing (see the module docs).
     pub consent: Option<HookConsent>,
     /// Has this repository been opted out — did `uninstall` run here? It is the only per-repository fact
-    /// in the question, and it is a veto rather than an answer: it stops amenbo acting here on its own,
+    /// in the question, and it is a veto rather than an answer: it stops Amenbo acting here on its own,
     /// and says nothing about the device's answer or about any other repository.
     pub opted_out: bool,
     /// Can this surface actually get an answer? An interactive terminal and the GUI's dialog can; a
@@ -733,7 +733,7 @@ pub enum HookAction {
     /// a caller that asks it must record the answer on the device ([`crate::config::Config::hook_consent`])
     /// rather than against the repository it happened to be standing in. One question covers every slot
     /// and every repository, because what is being asked is whether the lint may write at all, and where
-    /// it writes is amenbo's business rather than anything the user holds an opinion about.
+    /// it writes is Amenbo's business rather than anything the user holds an opinion about.
     Ask,
     /// [`install`] without asking: the device already said yes, and some slot here is not yet ours — empty,
     /// or holding another tool's hook the block can join. This is how a yes reaches a folder bound long
@@ -1065,7 +1065,7 @@ mod tests {
         std::process::Command::new(&file).env("PATH", path).arg("/dev/null").status().unwrap().code().unwrap()
     }
 
-    /// The uninstall promise, at the shell: an amenbo that is gone from `PATH` must let a commit through, not
+    /// The uninstall promise, at the shell: an Amenbo that is gone from `PATH` must let a commit through, not
     /// abort it. A standalone block is the last thing in its file, so before the `|| { …; true; }` its
     /// `command -v` failure was the hook's exit — a trap on every commit. The two paths that must keep working
     /// are pinned too: a failing lint still stops the commit, and a block with another tool's body below falls
@@ -1083,23 +1083,23 @@ mod tests {
         };
         let solo = hook_body(HookSlot::PreCommit, "amenbo");
 
-        // amenbo gone: a standalone hook must exit 0, not trap the commit.
+        // Amenbo gone: a standalone hook must exit 0, not trap the commit.
         assert_eq!(run_hook(&dir, &solo, "/nonexistent"), 0, "an uninstalled amenbo must not block a commit");
 
-        // amenbo present, the hook's lint fails: the block still stops the commit. The block calls the
+        // Amenbo present, the hook's lint fails: the block still stops the commit. The block calls the
         // slot's entry point (`githook-pre-commit`), so that is the argument the shim sees.
         fake_amenbo("#!/bin/sh\ncase \"$1\" in githook-*) exit 1 ;; esac\nexit 0\n");
         assert_eq!(run_hook(&dir, &solo, bin.to_str().unwrap()), 1, "a failing lint still stops the commit");
 
-        // amenbo present, lint passes: through.
+        // Amenbo present, lint passes: through.
         fake_amenbo("#!/bin/sh\nexit 0\n");
         assert_eq!(run_hook(&dir, &solo, bin.to_str().unwrap()), 0, "a passing lint lets the commit through");
 
-        // Coexisting, amenbo gone: the other tool's body below runs and decides — here it fails.
+        // Coexisting, Amenbo gone: the other tool's body below runs and decides — here it fails.
         let coexist = format!("{solo}echo other-tool\nexit 3\n");
         assert_eq!(run_hook(&dir, &coexist, "/nonexistent"), 3, "amenbo gone, the other tool's hook still runs");
 
-        // ...and the skip is no longer silent: amenbo gone, the hook says so on stderr so a leftover hook
+        // ...and the skip is no longer silent: Amenbo gone, the hook says so on stderr so a leftover hook
         // doing nothing is distinguishable from one that ran and passed.
         let file = dir.join("hook");
         std::fs::write(&file, &solo).unwrap();
@@ -1116,7 +1116,7 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
-    /// The point of the marker: what amenbo wrote is recognised as amenbo's, and nothing else is — a
+    /// The point of the marker: what Amenbo wrote is recognised as Amenbo's, and nothing else is — a
     /// hand-written hook that calls the lint names us without being ours, and is still the user's file.
     #[test]
     fn a_written_hook_is_recognised_as_ours_and_a_strangers_is_not() {
@@ -1135,7 +1135,7 @@ mod tests {
     }
 
     /// An older marker still reads as ours, which is what lets a body change ship as a rewrite rather than
-    /// as amenbo failing to recognise its own hook. An unparsable version stays conservative for the same
+    /// as Amenbo failing to recognise its own hook. An unparsable version stays conservative for the same
     /// reason: ours, so we may rewrite it, and never mistaken for a stranger's.
     #[test]
     fn an_older_marker_is_still_ours() {
@@ -1188,9 +1188,9 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
-    /// Coexistence end to end: a slot husky holds gains amenbo's block **alongside** husky's body, with the
+    /// Coexistence end to end: a slot husky holds gains Amenbo's block **alongside** husky's body, with the
     /// block right after the shebang so it runs first, and husky's line intact below it. The empty slot
-    /// becomes a standalone hook. Uninstall then strips only amenbo's block from husky's slot — husky is
+    /// becomes a standalone hook. Uninstall then strips only Amenbo's block from husky's slot — husky is
     /// left exactly as it was — and deletes the standalone one.
     #[test]
     fn a_strangers_hook_gains_the_block_alongside_it_and_uninstall_leaves_husky_intact() {
@@ -1284,9 +1284,9 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
-    /// A hook git **tracks** in a `core.hooksPath` dir is one amenbo will not touch: a change to it would
+    /// A hook git **tracks** in a `core.hooksPath` dir is one Amenbo will not touch: a change to it would
     /// show in `git status` and could be committed into the user's repo, and `.git/info/exclude` cannot hide
-    /// a tracked file. So amenbo hands that slot off (refused) and leaves the file byte-for-byte, while still
+    /// a tracked file. So Amenbo hands that slot off (refused) and leaves the file byte-for-byte, while still
     /// wiring the empty slot beside it. This is the leak an earlier build caused — it coexist-injected into a
     /// versioned `.githooks` hook and left the block staged in the user's tree.
     #[test]
@@ -1324,7 +1324,7 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
-    /// An **untracked** stranger's hook in the same shared dir *is* coexisted with — amenbo hides its own
+    /// An **untracked** stranger's hook in the same shared dir *is* coexisted with — Amenbo hides its own
     /// write with `.git/info/exclude`, so there is nothing to leak. Being tracked is the whole of the
     /// difference, not the shared dir.
     #[test]
@@ -1355,7 +1355,7 @@ mod tests {
     /// The whole of the shared-directory guard, stated the way it is felt: after an install, `git status` is
     /// as empty as it was before. A `core.hooksPath` aimed into the tree is the repository's own versioned
     /// choice — everybody's `.githooks`, not this machine's — so a hook dropped there would ride out on the
-    /// next `git add -A` and land amenbo's lint on people who never installed amenbo. Writing it and naming
+    /// next `git add -A` and land Amenbo's lint on people who never installed amenbo. Writing it and naming
     /// it in `.git/info/exclude` keeps both halves: the lint runs for whoever said yes, and git never sees
     /// it. Nothing is asked and nothing is reported, because neither is the user's problem.
     #[test]
@@ -1454,7 +1454,7 @@ mod tests {
     #[test]
     fn restore_blocks_heals_a_damaged_block_and_keeps_a_coexisting_body() {
         let dir = git_repo("heal");
-        // pre-commit: husky + a damaged amenbo block (end marker stripped). commit-msg: a healthy block.
+        // pre-commit: husky + a damaged Amenbo block (end marker stripped). commit-msg: a healthy block.
         let damaged = format!(
             "#!/bin/sh\n{}\nnpx husky run pre-commit\n",
             hook_block(HookSlot::PreCommit, "amenbo").replace(&format!("\n{HOOK_END_MARKER}"), "")

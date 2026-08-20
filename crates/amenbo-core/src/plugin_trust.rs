@@ -13,18 +13,18 @@
 //! rather than a device-wide one to fall back on.
 //!
 //! **Enabling is the consent** (`AMB-D-434`). Running somebody else's code is what turning a plugin on
-//! means, so the act is the permission and amenbo keeps no separate answer beside it. That also makes the
+//! means, so the act is the permission and Amenbo keeps no separate answer beside it. That also makes the
 //! rows safe to carry whole: they ride `export` and `backup` (a restore must not silently switch a
 //! project's plugins off) and say the same thing wherever they land, which is what a device-local answer
 //! beside them could never do.
 //!
 //! **Fail-closed on `required`** (`AMB-D-351`). A plugin whose manifest marks a setting `required` cannot be
-//! enabled until that setting holds a value: [`enable`] refuses, naming the empty fields. amenbo checks
+//! enabled until that setting holds a value: [`enable`] refuses, naming the empty fields. Amenbo checks
 //! **presence only** — whether a value is *valid* is the plugin author's at run time (`AMB-D-356`). Where a
 //! value lives is the caller's to resolve and report through `has_value`; this boundary does not reach into
 //! storage itself.
 //!
-//! **And fail-closed on the author's own check** (`AMB-D-664`). Presence is all amenbo can judge, so a
+//! **And fail-closed on the author's own check** (`AMB-D-664`). Presence is all Amenbo can judge, so a
 //! manifest may name a call that judges the rest ([`crate::plugin_check`]), and [`enable`] takes the
 //! verdict it produced: anything but a yes leaves the gate shut, a check nobody declared changes nothing.
 //! The verdict is raised by the caller and refused here, which is what keeps the two halves where they
@@ -67,7 +67,7 @@ pub fn require_project(project: Option<i64>) -> Result<i64> {
 
 /// The `required` fields of `fields` that have no value per the caller's `has_value` probe — the reason an
 /// [`enable`] would be refused. An empty result means every required field is satisfied. Presence is all
-/// amenbo checks (`AMB-D-351`); the author validates meaning at run time (`AMB-D-356`).
+/// Amenbo checks (`AMB-D-351`); the author validates meaning at run time (`AMB-D-356`).
 ///
 /// **A field carrying a `default` is never unanswered** (`AMB-D-415`), so it is not held against an enable
 /// however it is marked: the store holding nothing for it means the author's value is in force, and that is
@@ -156,7 +156,7 @@ pub fn effective_enabled_in(store: &Store, plugin: &str, layer: Layer) -> Result
 /// per-field lines are the GUI settings form's — the face that has a person in front of it — while this
 /// refusal travels to whoever called `enable`, the CLI and its `--json` included. So the refusal repeats
 /// the keys the check spoke about, which are the form's own words, and the rest of the verdict stays with
-/// the caller that is going to draw it. A check that said nothing at all names no keys: it is amenbo's own
+/// the caller that is going to draw it. A check that said nothing at all names no keys: it is Amenbo's own
 /// sentence about a run that did not answer, and there is nothing of the plugin's in it.
 ///
 /// **And the two are told apart by code**, which is the half a reader of `--json` has instead of the
@@ -451,7 +451,7 @@ mod tests {
         assert!(!effective_enabled_in(&store, "mail", Layer::Project(p)).unwrap());
     }
 
-    /// A check that said nothing costs the same as one that said no — and says so in amenbo's own words,
+    /// A check that said nothing costs the same as one that said no — and says so in Amenbo's own words,
     /// since there is no answer of the plugin's to repeat.
     #[test]
     fn a_check_that_said_nothing_refuses_enable_too() {

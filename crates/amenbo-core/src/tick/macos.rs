@@ -3,7 +3,7 @@
 //!
 //! **Why the bundle and not `~/Library/LaunchAgents`.** A plist written straight into that directory
 //! belongs to no bundle, so macOS files it as a legacy agent and lists it under the developer's name
-//! (`AMB-D-549`). A user looking for amenbo in their settings does not find it, and `AMB-D-707`'s
+//! (`AMB-D-549`). A user looking for Amenbo in their settings does not find it, and `AMB-D-707`'s
 //! "one row, and switching it off stops everything" goes with it. An agent registered through
 //! `SMAppService` is listed under the app.
 //!
@@ -58,9 +58,9 @@ pub(super) const AVAILABLE: bool = true;
 
 /// macOS keeps its own record of a background item, and taking the registration away does not take
 /// that record with it: the row stays in Login Items, under the app, with the toggle still reading as
-/// allowed. `AMB-T-3339` measured it on a machine that had never carried amenbo's label before, so it
+/// allowed. `AMB-T-3339` measured it on a machine that had never carried Amenbo's label before, so it
 /// is not the residue of an earlier build — `unregister` had done its work (the agent's record read
-/// disabled, and launchd held no job), and the row was there all the same. Nothing further is amenbo's
+/// disabled, and launchd held no job), and the row was there all the same. Nothing further is Amenbo's
 /// to take away, which is why this is a fact to say rather than a state to fix.
 pub(super) const REMOVAL_LEAVES_A_ROW: bool = true;
 

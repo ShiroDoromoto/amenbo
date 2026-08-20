@@ -2335,7 +2335,7 @@ pub fn project_add_folder(dir: String, name: Option<String>) -> Result<WriteAck,
         return Err(CmdError::coded(
             "init_pointer_exists",
             format!(
-                "this folder (or an ancestor) is already bound to an amenbo project: {}",
+                "this folder (or an ancestor) is already bound to an Amenbo project: {}",
                 bound_dir.display()
             ),
             serde_json::json!({ "path": bound_dir.display().to_string() }),
@@ -2615,7 +2615,7 @@ pub fn project_bind_folder(project_id: i64, dir: String) -> Result<WriteAck, Cmd
         return Err(CmdError::coded(
             "binding_nested_tree",
             format!(
-                "this folder is already inside an amenbo-managed tree (bound at {}); binding a subfolder would shadow that pointer",
+                "this folder is already inside an Amenbo-managed tree (bound at {}); binding a subfolder would shadow that pointer",
                 bound_dir.display()
             ),
             serde_json::json!({ "path": bound_dir.display().to_string() }),

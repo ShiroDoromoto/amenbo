@@ -240,7 +240,7 @@ mod tests {
     fn a_coded_refusal_carries_values_and_one_language() {
         let e = CmdError::coded(
             "binding_nested_tree",
-            "this folder is already inside an amenbo-managed tree (bound at /work/repo)",
+            "this folder is already inside an Amenbo-managed tree (bound at /work/repo)",
             serde_json::json!({ "path": "/work/repo" }),
         );
 

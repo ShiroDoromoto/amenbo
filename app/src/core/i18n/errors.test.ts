@@ -37,7 +37,7 @@ const notFoundTask: CmdError = {
 // gets is the template here, built from the fields.
 const nestedTree: CmdError = {
   code: "binding_nested_tree",
-  message_en: "this folder is already inside an amenbo-managed tree (bound at /work/repo); binding a subfolder would shadow that pointer",
+  message_en: "this folder is already inside an Amenbo-managed tree (bound at /work/repo); binding a subfolder would shadow that pointer",
   fields: { path: "/work/repo" },
 };
 

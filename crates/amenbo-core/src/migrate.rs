@@ -229,8 +229,9 @@ pub struct MigrationReport {
     pub backup: Option<BackupReport>,
     /// The chain's own account of what ran (empty when the store was already current).
     pub run: Run,
-    /// The pre-migration archives from earlier migrations that this run's own backup superseded, and which
-    /// it therefore deleted ([`archive::sweep_superseded`]). Empty when there were none.
+    /// The older whole-store copies this run's own backup superseded, and which it therefore deleted: the
+    /// pre-migration archives earlier migrations left ([`archive::sweep_superseded`]) and the ones retired
+    /// paths left behind ([`archive::sweep_retired`]). Empty when there were none.
     pub superseded: Vec<String>,
 }
 
@@ -287,8 +288,13 @@ pub fn migrate_into(
     //     stands. Whatever earlier migrations left behind is not a rewind point any more: nothing
     //     can go back to it, and every one of them is a whole copy of the store. Sweep them here, not after
     //     the chain, so a migration that keeps failing and being retried cannot pile them up either.
-    let superseded =
-        archive::sweep_superseded(dest.parent().unwrap_or(Path::new(".")), PRE_MIGRATE_PREFIX, &format!(".{ARCHIVE_EXT}"), dest);
+    //     The same breath retires what the paths *this build no longer has* left there: those names have no
+    //     sweep of their own and never will, so a device that came up through them carries whole copies of a
+    //     store many versions behind until something here names them.
+    let dir = dest.parent().unwrap_or(Path::new("."));
+    let mut superseded = archive::sweep_superseded(dir, PRE_MIGRATE_PREFIX, &format!(".{ARCHIVE_EXT}"), dest);
+    superseded.extend(archive::sweep_retired(dir));
+    superseded.sort();
 
     // 2. Run the chain, holding the store's swap lock: an open that lands mid-chain is turned away with
     //    `store_busy` (retryable) rather than reading a store that is halfway between two versions. Both
@@ -513,6 +519,37 @@ mod tests {
         assert!(!old_a.exists() && !old_b.exists());
         assert!(dest.is_file(), "the rewind point this run took is kept");
         assert!(unrelated.is_file(), "a file that is not a pre-migration archive is not Amenbo's to delete");
+        std::fs::remove_dir_all(&home).ok();
+    }
+
+    /// The copies a retired path left have no sweep of their own — nothing writes those names again, so
+    /// nothing ever supersedes them. This run's archive is what retires them, and the report says so, the
+    /// same as for the ones of its own kind.
+    #[test]
+    fn a_migration_also_retires_the_copies_no_build_writes_any_more() {
+        let home = scratch("retired");
+        let source = store_with_a_row(&home);
+        let dest = archive_at(&home);
+
+        let retired = [
+            home.join(format!("pre-products-20260812T064936Z.{ARCHIVE_EXT}")),
+            home.join(format!("pre-project-delete-20260812T065801Z.{ARCHIVE_EXT}")),
+            home.join("store.sqlite.v7-aside-20260723T091219Z"),
+            home.join("store.sqlite-wal.v7-aside-20260723T091219Z"),
+            home.join("store.sqlite-shm.v7-aside-20260723T091219Z"),
+        ];
+        for f in &retired {
+            std::fs::write(f, b"old").unwrap();
+        }
+        let report =
+            migrate_into(&source, &home, &dest, "S", RENAME_CANARY, &mut announce_ignore, &mut crate::progress::ignore)
+                .unwrap();
+
+        assert_eq!(report.superseded.len(), retired.len(), "every retired copy went: {:?}", report.superseded);
+        for f in &retired {
+            assert!(!f.exists(), "{} is still there", f.display());
+        }
+        assert!(source.db_path.is_file(), "the live store is not a retired copy");
         std::fs::remove_dir_all(&home).ok();
     }
 

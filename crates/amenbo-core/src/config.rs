@@ -400,6 +400,20 @@ pub struct Config {
     /// neither the switch nor a registration (`AMB-D-547`).
     #[serde(default)]
     pub autostart: bool,
+    /// **Where this app ran, the last time the login registration was settled** — the absolute path
+    /// of its executable, written by the GUI's reconciliation pass on every start.
+    ///
+    /// It exists to tell two absences apart that look identical to the OS: a registration the user
+    /// took away, and one that went with the app itself when the app moved (`AMB-D-720`). A macOS
+    /// `.pkg` replaces the bundle whole, so a rename moves the executable and the login row does not
+    /// survive it; reading that as the user having said no would switch [`Config::autostart`] off
+    /// under everyone who updated. The comparison against this path is what separates the two.
+    ///
+    /// Unset means no pass has ever recorded one, which is not a move: the first pass reads an
+    /// absence the way `AMB-D-546` always did. **A local setting; never synced** — it names a path on
+    /// this machine.
+    #[serde(default)]
+    pub autostart_exe: Option<String>,
     /// Logging level for the perf instrumentation (`off` / `budget-only` / `verbose`). **Defaults to
     /// `None` (unset)**, deferring to the channel/build default: on (`budget-only`) for
     /// amenbo-dev/debug, off for amenbo/release. The `AMENBO_PERF` env var overrides everything.
@@ -500,6 +514,7 @@ impl Default for Config {
             startup_integrity_check: true,
             update_check: true,
             autostart: false,
+            autostart_exe: None,
             perf_log: None,
             attachment_limits: crate::blob::CapacityPolicy::default(),
             human_name: None,

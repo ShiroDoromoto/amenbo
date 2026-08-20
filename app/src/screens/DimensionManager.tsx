@@ -22,8 +22,8 @@ export function DimensionManager({ projectId, onClose }: { projectId: number; on
   const project = snap.projects.find((p) => p.id === projectId);
   const dims = project?.dimensions ?? [];
   return (
-    <div className="setup__overlay" onClick={onClose}>
-      <div className="setup__modal dimmgr" onClick={(e) => e.stopPropagation()}>
+    <div className="modal__overlay" onClick={onClose}>
+      <div className="modal__card dimmgr" onClick={(e) => e.stopPropagation()}>
         <div className="dimmgr__head">
           <span className="dimmgr__title">{t("dimmgr.title")}</span>
           <button className="btn" onClick={onClose}>{t("dimmgr.close")}</button>

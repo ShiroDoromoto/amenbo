@@ -72,10 +72,10 @@ export function MigrationScreen({
   }, [status.stage, onDone]);
 
   return (
-    <div className="setup__overlay">
-      <div className="setup__modal setup__modal--wide">
-        <div className="setup__hero">
-          <div className="setup__goose"><Icon name="goose" size="lg" /></div>
+    <div className="modal__overlay">
+      <div className="modal__card modal__card--wide">
+        <div className="modal__hero">
+          <div className="modal__goose"><Icon name="goose" size="lg" /></div>
           <h2>{t(status.stage === "done" ? "migrate.doneTitle" : "migrate.title", lang)}</h2>
           <p className="muted">
             {status.stage === "done" && status.report

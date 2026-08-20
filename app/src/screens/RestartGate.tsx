@@ -55,10 +55,10 @@ export function RestartGate() {
   }
 
   return (
-    <div className="setup__overlay">
-      <div className="setup__modal">
-        <div className="setup__hero">
-          <div className="setup__goose"><Icon name="goose" size="lg" /></div>
+    <div className="modal__overlay">
+      <div className="modal__card">
+        <div className="modal__hero">
+          <div className="modal__goose"><Icon name="goose" size="lg" /></div>
           <h2>{t("restart.title", lang)}</h2>
           <p className="muted">{t("restart.intro", lang)}</p>
         </div>

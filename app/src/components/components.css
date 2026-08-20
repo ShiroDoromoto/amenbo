@@ -851,6 +851,24 @@ button.feed__target:hover { color: var(--c-accent); }
 .palette__input { width: 100%; border: none; border-bottom: 1px solid var(--c-border); padding: var(--s-4); font-size: var(--fs-lg); background: none; outline: none; }
 .palette__cmd { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--c-accent-text); }
 
+/* ---------- the shared modal chrome ---------- */
+/* The backdrop and card the screens with no chrome of their own put themselves in: the migration
+   report, the restart gate, the dimension manager, a plugin's detail and the data progress. Shared
+   rather than a block each, unlike the three blocks below — those differ by feature and are
+   restyled one at a time, while this one is the plain "a modal is open" look, and `outsideClose`
+   reads `.modal__overlay` as the mark of one. A screen that wants its own card puts it inside the
+   overlay and leaves `.modal__card` off (PluginDetail does, with `.plugdet`).
+
+   It carried the name `.setup__*` until the first-run setup it was written for went away, taking the
+   definitions with it and leaving these five wearing a name for a screen that no longer exists. */
+.modal__overlay { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.45); padding: var(--s-5); }
+.modal__card { width: min(440px, 100%); background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25); padding: var(--s-6); }
+/* Wide enough for the migration report, whose paths and version pairs read badly wrapped. */
+.modal__card--wide { width: min(680px, 100%); max-height: 84vh; overflow-y: auto; }
+.modal__hero { text-align: center; margin-bottom: var(--s-5); }
+.modal__hero h2 { margin: var(--s-3) 0 var(--s-1); }
+.modal__goose { font-size: var(--fs-display-lg); line-height: 1; }
+
 /* ---------- the lint hook consent modal (HookConsentModal) ---------- */
 /* The question the status pull-down asks before a rejection (RejectReasonModal). Its own block rather
    than a share of the hook consent's: the two happen to look alike, and a modal borrowing another

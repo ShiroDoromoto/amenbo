@@ -21,27 +21,32 @@ use amenbo_core::Store;
 /// A store with one plugin installed by hand — a manifest declaring one setting and a check to raise over
 /// it, plus a shell script standing in for the executable — and one project to enable it in.
 fn store_with_check(label: &str, script: &str) -> (Store, i64) {
+    store_with_check_at(label, script, None)
+}
+
+/// The same, for a plugin whose manifest declares the layer it lives at (`AMB-D-601`) — `None` writes no
+/// `scope`, which is the `project` every road but the device's walks.
+fn store_with_check_at(label: &str, script: &str, scope: Option<&str>) -> (Store, i64) {
     let base = amenbo_scratch::scratch(label);
     let paths = Paths::at(base.clone());
     let home = paths.plugin_dir("mail");
     std::fs::create_dir_all(&home).unwrap();
-    std::fs::write(
-        home.join("manifest.json"),
-        serde_json::json!({
-            "name": "mail",
-            "desc": "a plugin that judges its own settings",
-            "author": "amenbo",
-            "repo": "amenbo/amenbo-plugin-test",
-            "os": ["macos", "linux"],
-            "category": "workflow",
-            "url": "https://example.invalid/plugin.tar.gz",
-            "checksum": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-            "config": [{ "key": "smtp_user", "label": "User" }],
-            "settings": { "check": "config check" },
-        })
-        .to_string(),
-    )
-    .unwrap();
+    let mut manifest = serde_json::json!({
+        "name": "mail",
+        "desc": "a plugin that judges its own settings",
+        "author": "amenbo",
+        "repo": "amenbo/amenbo-plugin-test",
+        "os": ["macos", "linux"],
+        "category": "workflow",
+        "url": "https://example.invalid/plugin.tar.gz",
+        "checksum": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "config": [{ "key": "smtp_user", "label": "User" }],
+        "settings": { "check": "config check" },
+    });
+    if let Some(scope) = scope {
+        manifest["scope"] = serde_json::Value::String(scope.to_string());
+    }
+    std::fs::write(home.join("manifest.json"), manifest.to_string()).unwrap();
     let program = home.join("mail");
     std::fs::write(&program, script).unwrap();
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -269,4 +274,44 @@ fn a_check_that_cannot_start_refuses_too() {
     .unwrap_err();
     assert!(err.message_en().contains("did not answer"), "{}", err.message_en());
     assert!(!effective_enabled_in(&store, "mail", Layer::Project(project)).unwrap());
+}
+
+/// The same check, raised from a face standing in no project — which is the only way a device-wide plugin
+/// is ever enabled (`AMB-D-601`). The GUI's device row hands no project and the CLI outside a bound folder
+/// has none to hand, so every road to this gate arrives without one; a build that asked for a project here
+/// refused the enable outright, on a plugin whose window is the whole device and needs none.
+#[test]
+fn a_device_wide_check_runs_from_no_project_and_opens_the_device_gate() {
+    let (mut store, _project) = store_with_check_at(
+        "check-device-yes",
+        &answering(r#"{"v":1,"ok":true,"message":"signed in"}"#),
+        Some("machine"),
+    );
+
+    let plugin = amenbo_core::plugin_installed::read(&store.paths, "mail").unwrap();
+    let checked = plugin_check::run(&store, &plugin, None, PATIENT).unwrap();
+    enable(&mut store, "mail", Layer::Device, &plugin.manifest.config, |_| true, &checked).unwrap();
+
+    assert_eq!(checked.verdict().unwrap().message.as_deref(), Some("signed in"));
+    assert!(effective_enabled_in(&store, "mail", Layer::Device).unwrap());
+}
+
+/// And the same gate held shut by the same judgement. Fail-closed is not something the project layer owns:
+/// a device-wide check that says no leaves the plugin off for the whole machine, which is the half that a
+/// road only walking the yes could not tell apart from a check nobody raised.
+#[test]
+fn a_device_wide_check_that_says_no_holds_the_device_gate_shut() {
+    let (mut store, _project) = store_with_check_at(
+        "check-device-no",
+        &answering(r#"{"v":1,"ok":false,"fields":{"smtp_user":"no such mailbox"}}"#),
+        Some("machine"),
+    );
+
+    let plugin = amenbo_core::plugin_installed::read(&store.paths, "mail").unwrap();
+    let checked = plugin_check::run(&store, &plugin, None, PATIENT).unwrap();
+    let err = enable(&mut store, "mail", Layer::Device, &plugin.manifest.config, |_| true, &checked)
+        .unwrap_err();
+
+    assert!(err.message_en().contains("smtp_user"), "{}", err.message_en());
+    assert!(!effective_enabled_in(&store, "mail", Layer::Device).unwrap());
 }

@@ -254,7 +254,7 @@ export async function runPluginAction(
   supplied: Record<string, string>,
   layer: PluginLayer,
 ): Promise<PluginActionRan> {
-  if (!inTauri()) return { ok: false };
+  if (!inTauri()) return { ok: false, show: [] };
   const outcome = await invoke<PluginActionRan>("plugin_settings_action", {
     name,
     cmd,

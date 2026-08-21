@@ -63,6 +63,7 @@ pub mod plugin_log;
 pub mod plugin_manifest;
 pub mod plugin_payload;
 pub mod plugin_provenance;
+pub mod plugin_show;
 pub mod plugin_subscribe;
 pub mod plugin_trust;
 pub mod plugin_uninstall;

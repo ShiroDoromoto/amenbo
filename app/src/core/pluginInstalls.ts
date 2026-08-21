@@ -239,9 +239,11 @@ export async function checkPluginSettings(
  * the words from there, so this seam cannot ask a plugin to run something its author did not write
  * (`AMB-D-522`).
  *
- * `supplied` is what this press asked for (`ask`) — handed to that one run and stored nowhere, which is
- * why nothing is refetched afterwards: an operation writes back through `plugin config set` when it has
- * something to save, and that is a write like any other.
+ * `supplied` is what this press asked for (`ask`) — handed to that one run and stored nowhere. What the
+ * run leaves behind is another matter: an operation writes back through `plugin config set` when it has
+ * something to save (`AMB-D-406`), so what the layer holds is refetched afterwards, exactly as a write of
+ * our own does. The refetch is unconditional because a plugin that ended up saying no may still have
+ * written before it got there.
  *
  * A refusal — a shut gate, a plugin that will not start — throws; a plugin that ran and failed comes back
  * as `ok: false` with whatever line it wrote, because "it ran and said no" is an answer, not an error.
@@ -253,12 +255,14 @@ export async function runPluginAction(
   layer: PluginLayer,
 ): Promise<PluginActionRan> {
   if (!inTauri()) return { ok: false };
-  return invoke<PluginActionRan>("plugin_settings_action", {
+  const outcome = await invoke<PluginActionRan>("plugin_settings_action", {
     name,
     cmd,
     supplied,
     projectId: layer,
   });
+  reloadConfig();
+  return outcome;
 }
 
 /**

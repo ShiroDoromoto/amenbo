@@ -407,6 +407,24 @@
 /* The pair that closes the ask box. Its own row, because the box stacks its boxes in a column and two
    buttons one above the other read as two separate steps rather than a choice between them. */
 .plugcfg__askacts { display: flex; align-items: center; gap: var(--s-2); margin-top: var(--s-1); }
+/* What a plugin's author asked to have drawn (`AMB-D-727`) — from its manifest, between the fields, or
+   from a run that has just answered. A column of its own so a `heading` can break one up, and every string
+   in it is drawn as the plain text it is: no markup, no link, nothing an author's line can turn into. */
+.plugshow { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); width: 100%; margin-bottom: var(--s-3); }
+.plugshow__text { font-size: var(--fs-xs); white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.plugshow__heading { font-size: var(--fs-sm); font-weight: var(--fw-bold); color: var(--c-text-muted); }
+/* The one part that is meant to be noticed — a caution, an expiry — so it takes the same surface the
+   form's own warnings do rather than a colour of the author's choosing. */
+.plugshow__note { font-size: var(--fs-xs); border-left: 2px solid var(--c-accent); padding-left: var(--s-2); overflow-wrap: anywhere; }
+.plugshow__list { display: flex; flex-direction: column; gap: var(--s-1); font-size: var(--fs-xs); margin: 0; padding-left: var(--s-4); }
+/* A string nobody should have to retype, with its button on the same line. The string is monospaced —
+   these are addresses and keys, where a run of characters has to be readable one at a time. */
+.plugshow__copy { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.plugshow__copy code { font-size: var(--fs-xs); overflow-wrap: anywhere; }
+/* The code is drawn black on white in both themes: a camera reads contrast, and a QR inverted for a dark
+   background is one many scanners will not take. Sized off the form's own type so it grows with it. */
+.plugshow__qr { width: 12rem; max-width: 100%; height: auto; border-radius: var(--r-sm); }
+
 .plugdet__readme { border-top: 1px solid var(--c-border); padding-top: var(--s-3); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .plugdet__foot { border-top: 1px solid var(--c-border); margin-top: var(--s-4); padding-top: var(--s-2); font-size: var(--fs-xs); }
 /* Holder-side surface of `AMB-D-366`: premises pinned on after a task was reserved. A different axis from

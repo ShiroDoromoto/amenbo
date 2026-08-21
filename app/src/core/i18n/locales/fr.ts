@@ -441,6 +441,8 @@ export const fr: Translation = {
     "plugins.act.running": "En cours…", "plugins.act.ok": "Terminé", "plugins.act.failed": "L’opération ne s’est pas terminée",
     "plugins.act.run": "Exécuter", "plugins.act.cancel": "Annuler",
     "plugins.act.askNote": "Transmis à cette exécution seulement, et conservé nulle part.",
+    "plugins.show.copy": "Copier", "plugins.show.copied": "Copié",
+    "plugins.show.qr": "Code QR",
     "plugins.check.refused": "Sa propre vérification a refusé ces réglages : il n’a pas été activé.",
     "plugins.check.noAnswer": "Sa propre vérification n’a pas répondu : il n’a pas été activé. Le journal d’exécution dit ce qui s’est passé.",
     "plugins.updates.title.one": "{n} mise à jour d'extension disponible",

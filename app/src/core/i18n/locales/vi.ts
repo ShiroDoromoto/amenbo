@@ -425,6 +425,8 @@ export const vi: Translation = {
     "plugins.act.running": "Đang chạy…", "plugins.act.ok": "Xong", "plugins.act.failed": "Chưa chạy đến cùng",
     "plugins.act.run": "Chạy", "plugins.act.cancel": "Huỷ",
     "plugins.act.askNote": "Chỉ trao cho lần chạy này và không lưu ở đâu cả.",
+    "plugins.show.copy": "Sao chép", "plugins.show.copied": "Đã sao chép",
+    "plugins.show.qr": "Mã QR",
     "plugins.check.refused": "Phần kiểm tra của chính nó từ chối các thiết lập này, nên plugin chưa được bật.",
     "plugins.check.noAnswer": "Phần kiểm tra của chính nó không trả lời, nên plugin chưa được bật. Nhật ký chạy cho biết chuyện gì đã xảy ra.",
     "plugins.updates.title.other": "Có {n} bản cập nhật plugin",

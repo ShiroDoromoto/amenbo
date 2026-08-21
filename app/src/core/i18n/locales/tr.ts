@@ -422,6 +422,8 @@ export const tr: Translation = {
     "plugins.act.running": "Çalışıyor…", "plugins.act.ok": "Bitti", "plugins.act.failed": "Sonuna kadar gitmedi",
     "plugins.act.run": "Çalıştır", "plugins.act.cancel": "Vazgeç",
     "plugins.act.askNote": "Yalnızca bu çalıştırmaya verilir, hiçbir yerde saklanmaz.",
+    "plugins.show.copy": "Kopyala", "plugins.show.copied": "Kopyalandı",
+    "plugins.show.qr": "QR kodu",
     "plugins.check.refused": "Kendi denetimi bu ayarları geri çevirdi, bu yüzden açılmadı.",
     "plugins.check.noAnswer": "Kendi denetimi yanıt vermedi, bu yüzden açılmadı. Ne olduğunu çalıştırma günlüğü söyler.",
     "plugins.updates.title.one": "{n} eklenti güncellemesi var", "plugins.updates.title.other": "{n} eklenti güncellemesi var",

@@ -423,6 +423,8 @@ export const zhHant: Translation = {
     "plugins.act.running": "正在執行…", "plugins.act.ok": "已完成", "plugins.act.failed": "沒有執行到最後",
     "plugins.act.run": "執行", "plugins.act.cancel": "取消",
     "plugins.act.askNote": "只交給這次執行，不會儲存。",
+    "plugins.show.copy": "複製", "plugins.show.copied": "已複製",
+    "plugins.show.qr": "QR 碼",
     "plugins.check.refused": "它自己的檢查拒絕了這些設定，因此沒有啟用。",
     "plugins.check.noAnswer": "它自己的檢查沒有回答，因此沒有啟用。執行記錄裡有發生了什麼。",
     "plugins.updates.title.other": "有 {n} 個外掛可以更新",

@@ -572,3 +572,67 @@ fn a_tmpdir_that_is_gone_is_not_handed_on_to_a_plugin_and_a_live_one_is() {
     std::fs::create_dir_all(&live).unwrap();
     assert_eq!(std::path::Path::new(&ran(&live)), live, "a TMPDIR that is there is left alone");
 }
+
+/// The write-back road (`AMB-D-406`), from a directory bound to nothing: a plugin storing its own value with
+/// `plugin config set` writes it to the project it was launched for, and the folder its launcher happened to
+/// be standing in decides none of it.
+///
+/// That decision says the `.amenbo` walk is not to be used on the plugin face, for the reason git hands a
+/// hook `GIT_DIR` — and the write-back was the one place still walking it. A press on the settings form
+/// (`AMB-D-664`) launches the plugin from the app, whose directory is `/`, so a value written there had
+/// nowhere to land; the same plugin run from a bound terminal wrote, which is the shape of the bug: it
+/// worked wherever the road was not.
+///
+/// So the program below steps out of the bound folder first. What is left to decide where the value lands
+/// is the window, and the assertion is that it did — under the old rule this call came back
+/// `--project is required`.
+#[cfg(unix)]
+#[test]
+fn a_plugin_writes_its_own_value_back_from_a_folder_bound_to_nothing() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "書き戻されるPJ"]);
+    let bound = cli.bound_project();
+
+    // A field the author says their own plugin fills in — the `readonly` shape a `setup` writes back
+    // (`AMB-D-656`), which is exactly what has no other way in.
+    install_plugin(
+        &cli,
+        "setup",
+        serde_json::json!([{ "key": "endpoint", "label": "Worker の URL", "readonly": true }]),
+    );
+
+    // Somewhere with no pointer of its own and none above it either, so the walk has nothing to find. It
+    // sits beside the store rather than inside it: the store's own directory is the one `init` bound.
+    let nowhere = cli.home.parent().unwrap().join("nowhere-in-particular");
+    std::fs::create_dir_all(&nowhere).unwrap();
+
+    let program = cli.home.join("plugins").join("setup").join("setup");
+    std::fs::write(
+        &program,
+        format!(
+            "#!/bin/sh\ncat >/dev/null\ncd '{nowhere}' || exit 1\n\
+             '{bin}' plugin config set setup endpoint 'https://worker.example.com' \
+               > '{nowhere}/out' 2> '{nowhere}/err'\n\
+             printf '%s' \"$?\" > '{nowhere}/code'\n",
+            bin = env!("CARGO_BIN_EXE_amenbo"),
+            nowhere = nowhere.display(),
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    cli.json(&["plugin", "enable", "setup", "--json"]);
+
+    let run = cli.json(&["plugin", "run", "--json", "--actor", "human", "setup"]);
+    assert_eq!(run["ok"], true, "the plugin ran: {run}");
+
+    let code = std::fs::read_to_string(nowhere.join("code")).unwrap();
+    let refusal = std::fs::read_to_string(nowhere.join("err")).unwrap();
+    assert_eq!(code, "0", "the write-back landed rather than asking for a project: {refusal}");
+
+    // And it landed on the window's project, which is the half a bare exit code cannot say.
+    let held = cli.json(&["plugin", "config", "get", "setup", "endpoint", "--json"]);
+    assert_eq!(held["value"], "https://worker.example.com", "the value is what the plugin wrote: {held}");
+    assert_eq!(id_str(&held["project"]), bound, "it belongs to the project it was launched for: {held}");
+}

@@ -563,20 +563,61 @@ impl Driver<'_> {
                 // about a button that runs outright wants. The verdict on stdout is what a check reads,
                 // and a press never looks at it. The script ends cleanly whatever it found: a non-zero
                 // exit is a failed operation, and the line would be drawn as one.
+                //
+                // Before that line, where the road asked for it, the press writes one of the plugin's own
+                // settings back — the same `plugin config set` an author writes, run from inside the run
+                // with the store and the window Amenbo handed it. It is nowhere near the store's files: a
+                // value laid down by hand would prove the form draws what is *there*, and what this road
+                // is about is the press putting it there. A refusal takes the operation's line, so the
+                // screen says what went wrong instead of leaving an empty field to explain.
+                let back = match (
+                    with.get("writes").and_then(|v| v.as_str()),
+                    with.get("writes_value").and_then(|v| v.as_str()),
+                ) {
+                    (None, _) => String::new(),
+                    (Some(key), value) => {
+                        let value = value.unwrap_or_default();
+                        let bin = self.bin.display().to_string();
+                        // All three go into the script single-quoted, which is the one thing they could
+                        // break. A quote is refused rather than escaped: the road would still run, and
+                        // what it then wrote would not be what it says it wrote.
+                        if [bin.as_str(), key, value].iter().any(|s| s.contains('\'')) {
+                            return Err(
+                                "a value written back from a press cannot carry a single quote — the program writes it from a script"
+                                    .to_string(),
+                            );
+                        }
+                        format!(
+                            "if ! said=$('{bin}' plugin config set '{name}' '{key}' '{value}' 2>&1); then\n\
+                             \x20 echo \"the write-back was refused: $said\" >&2\n\
+                             \x20 echo '{{\"v\":1,\"ok\":true}}'\n\
+                             \x20 exit 0\n\
+                             fi\n"
+                        )
+                    }
+                };
                 std::fs::write(
                     &path,
-                    "#!/bin/sh\n\
-                     asked=$(env | sed -n 's/^AMENBO_ASK_[A-Za-z0-9_]*=//p' | head -1)\n\
-                     if [ -z \"$asked\" ]; then asked='nothing at all'; fi\n\
-                     echo \"the operation was handed $asked\" >&2\n\
-                     echo '{\"v\":1,\"ok\":true}'\n\
-                     exit 0\n",
+                    format!(
+                        "#!/bin/sh\n\
+                         {back}\
+                         asked=$(env | sed -n 's/^AMENBO_ASK_[A-Za-z0-9_]*=//p' | head -1)\n\
+                         if [ -z \"$asked\" ]; then asked='nothing at all'; fi\n\
+                         echo \"the operation was handed $asked\" >&2\n\
+                         echo '{{\"v\":1,\"ok\":true}}'\n\
+                         exit 0\n"
+                    ),
                 )
                 .map_err(|e| format!("could not write {}: {e}", path.display()))?;
                 make_runnable(&path)?;
-                Ok(Outcome::action(format!(
-                    "left `{name}` answering a press with one line naming what it was asked for, and a check with a yes"
-                )))
+                Ok(Outcome::action(match with.get("writes").and_then(|v| v.as_str()) {
+                    Some(key) => format!(
+                        "left `{name}` answering a press by writing `{key}` back, then one line naming what it was asked for, and a check with a yes"
+                    ),
+                    None => format!(
+                        "left `{name}` answering a press with one line naming what it was asked for, and a check with a yes"
+                    ),
+                }))
             }
             // Writing what a plugin says for itself onto the manifest beside its binary — the author's
             // `agent` block, arriving the only way it can while the scenario is not to depend on the

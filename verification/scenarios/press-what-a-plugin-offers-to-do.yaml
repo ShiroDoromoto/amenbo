@@ -3,11 +3,16 @@
 # the author's own code — the same command face a terminal reaches, raised from the one screen that has the
 # values in front of it.
 #
-# Four promises, and the road is the four of them in order. The button does not run while the gate is
+# Five promises, and the road is the five of them in order. The button does not run while the gate is
 # shut, because pressing it is running somebody's code and the enable is where that was agreed to. A press
 # that needs a one-time value asks for it at the press. What is typed there is handed to that run and
 # kept nowhere — which is only visible on the *second* press, where the box comes up empty again. And where
 # the author called that value a credential, the box does not draw it back at the person typing it.
+#
+# The fifth runs the other way. What the *plugin* works out during a press it writes back through
+# `plugin config set`, and that value is kept — it is the whole content of a field its author
+# marked `readonly`, which nobody standing at the form has any way to fill in. So the same press that
+# forgets what it was handed leaves something behind, and the two are told apart on one screen.
 #
 # Like every line that installs a plugin, the premise below goes to the catalog over the network on purpose
 # (see `put-a-plugin-on-the-machine.yaml`): a button on the settings form is a face of a plugin that is
@@ -21,15 +26,16 @@
 # is a return value rather than a line beside a button. What is under test here is the door that chooses
 # among the calls a manifest declared, asks for what that call needs at the press, and forgets it.
 id: press-what-a-plugin-offers-to-do
-title: An operation a plugin's author put on its settings form runs from there once the plugin is on, asks for what it needs at the press, and keeps none of it
+title: An operation a plugin's author put on its settings form runs from there once the plugin is on, asks for what it needs at the press, keeps none of it, and leaves behind what it worked out itself
 description: >
   Install the official `worktree` plugin, give it two operations its author declared — a button apiece, each
-  asking for one value at the press — and walk them on the settings form. While the plugin is off the button
-  is drawn and cannot be pressed. Turn it on, press it, and the box it asks for comes up empty. Fill it in,
-  run it, and the author's own line comes back on the form carrying what was typed. Press it a second time:
-  the box is empty again, which is the whole of a value handed to one run and kept nowhere. Then the button
-  beside it, whose value its author called a credential: the same run, reached through a box that does not
-  draw back what is typed into it.
+  asking for one value at the press — and a setting the author says the plugin fills in itself, and walk
+  them on the settings form. While the plugin is off the button is drawn and cannot be pressed. Turn it on,
+  press it, and the box it asks for comes up empty. Fill it in, run it, and the author's own line comes back
+  on the form carrying what was typed — and the field the plugin writes back to is holding what that same
+  run put there. Press it a second time: the box is empty again, which is the whole of a value handed to one
+  run and kept nowhere. Then the button beside it, whose value its author called a credential: the same run,
+  reached through a box that does not draw back what is typed into it.
 given:
   # The project the road walks its crossing on. A crossing is a plugin and a project, and the project is
   # not one a road on screen can raise on its way past.
@@ -69,25 +75,43 @@ given:
       ask_label: Access token
       ask_secret: true
 
+  # The field a press fills in for itself. Its author says the value is the plugin's, so there is no box
+  # to type it into and no other way for it to arrive — which is what makes it the field a road about
+  # pressing can read the press through.
+  - type: action
+    domain: plugin
+    op: declare-setting
+    with:
+      name: worktree
+      key: worker_url
+      label: Worker URL
+      readonly: true
+
   # And a program behind the button. An operation is code being run, so a press with nothing stood in for
   # it would read whatever the real plugin happened to say — and what the form draws is one line of that.
+  # It writes that field back on each press, the way a `setup` puts the address it just registered where
+  # the form will draw it — not laid down here, because the press putting it there is the road.
   - type: action
     domain: plugin
     op: press-program
     with:
       name: worktree
+      writes: worker_url
+      writes_value: https://greenhouse.example.test/board
 
 # What the road wants in front of it is the device the premise above describes: the project named below on
 # this machine, the official `worktree` plugin installed in the store the build under test opens, its
 # manifest declaring the two operations below, each with the one value it asks for and only the second of
-# them calling that value a credential, a program behind them that answers a
-# press with a line naming what it was handed, and its gate shut everywhere. Stand that with
-# `devtool devgui cli` and the same declaration the premise makes. Where the run starts does not matter:
+# them calling that value a credential, the `readonly` setting they write back to standing empty, a program
+# behind them that writes that setting and then says what it was handed, and its gate shut everywhere.
+# Stand that with `devtool devgui cli` and the same declaration the premise makes — the field is left with
+# nothing in it, because what puts something there is the press. Where the run starts does not matter:
 # the first step is the arrival. Every step after it moves the screen, so carry each move out when the run
 # hands that step over.
 #
-# Two lines are closed by a reading and the rest by an eye. The author's sentences are the readings — they
-# are the one thing on those shots that neither Amenbo nor the interface wrote. The button refusing the hand
+# Three lines are closed by a reading and the rest by an eye. The author's sentences are the readings — they
+# are the one thing on those shots that neither Amenbo nor the interface wrote — and so is the written-back
+# value, which is the plugin's own word for where it put what it worked out. The button refusing the hand
 # is paint, and the box a press asks in is read for being *empty*, and for not drawing back what was typed
 # into it, neither of which a reading of the words on a shot can settle.
 steps_gui:
@@ -106,8 +130,9 @@ steps_gui:
       name: worktree
       project: Greenhouse
 
-  # A plugin with a button and no field still has a form, which is what there is to open here — nothing in
-  # this manifest asks for a setting to be filled in.
+  # The form the buttons are drawn on, opened. The one field this manifest declares is the plugin's own to
+  # write, so there is nothing on it for a reader to answer — a form is what a button lives on, not only
+  # what a question is asked from.
   - type: action
     domain: plugin
     op: open-config-in-row
@@ -166,6 +191,20 @@ steps_gui:
     with:
       name: worktree
       text: the operation was handed cf-9f2a41d7e6
+
+  # And the other direction, on the same form: what the press wrote back is standing in its field. The
+  # press had a store and a window handed to it and nothing else — no folder it could have taken a project
+  # from — so a value arriving here says the write went to the crossing the button was pressed at. It is
+  # read where a `readonly` value is always read, with no box under it and no button beside it: the field
+  # is the plugin's, and a press is the only thing that has ever put anything in it.
+  - type: assert
+    domain: plugin
+    op: config
+    with:
+      name: worktree
+      key: worker_url
+      readonly: true
+      equals: https://greenhouse.example.test/board
 
   # And the second press, which is where "kept nowhere" is visible at all. A value the form had quietly
   # stored would come back in this box, and the run before it would look exactly the same.

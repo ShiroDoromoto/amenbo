@@ -505,3 +505,70 @@ fn declare_scope(cli: &Cli, name: &str, scope: &str) {
     manifest["scope"] = serde_json::json!(scope);
     std::fs::write(&manifest_file, serde_json::to_vec(&manifest).unwrap()).unwrap();
 }
+
+/// A `TMPDIR` is inherited, and what it names can already be gone — so Amenbo checks before it passes one
+/// on (`AMB-T-3461`).
+///
+/// The macOS `.pkg` installer runs its postinstall inside a sandbox
+/// (`/private/tmp/PKInstallSandbox.<x>/tmp`) and deletes that sandbox as soon as the install finishes; the
+/// postinstall's last act is to relaunch the freshly installed app with `open`, which hands the app the
+/// environment it was called with. Every plugin that app then started was pointed at a directory deleted
+/// seconds earlier — the viewer's "put the app on this device" came back
+/// `stat …/PKInstallSandbox.<x>/tmp: no such file or directory`, and from the user's side the button did
+/// nothing. Startup disowns a `TMPDIR` that is not there, so what a plugin inherits is somewhere it can
+/// write; a live one is the caller's own choice and is left alone.
+#[cfg(unix)]
+#[test]
+fn a_tmpdir_that_is_gone_is_not_handed_on_to_a_plugin_and_a_live_one_is() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+
+    // A plugin that reports the throwaway directory it was given, which is the whole observation here.
+    install_plugin(&cli, "tmp", serde_json::json!([]));
+    let program = cli.home.join("plugins").join("tmp").join("tmp");
+    std::fs::write(&program, "#!/bin/sh\ncat >/dev/null\nprintf 'tmpdir[%s]\\n' \"$TMPDIR\"\n").unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+    cli.json(&["plugin", "enable", "tmp", "--json"]);
+
+    let ran = |tmpdir: &std::path::Path| -> String {
+        let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
+            .env("AMENBO_HOME", &cli.home)
+            .env("AMENBO_UPDATE_CHECK", "0")
+            .env("TMPDIR", tmpdir)
+            .current_dir(&cli.home)
+            .args(["--actor", "human", "plugin", "run", "tmp"])
+            .output()
+            .expect("run amenbo");
+        let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+        assert_eq!(exit_code(&out), 0, "the plugin ran: {stdout}");
+        let line = stdout
+            .lines()
+            .find(|l| l.starts_with("tmpdir["))
+            .unwrap_or_else(|| panic!("the plugin reported its TMPDIR: {stdout}"));
+        line["tmpdir[".len()..line.len() - 1].to_string()
+    };
+
+    // The installer's shape: a directory that was there when the variable was exported, and is not now.
+    let sandbox = cli.home.join("PKInstallSandbox.test");
+    let dead = sandbox.join("tmp");
+    std::fs::create_dir_all(&dead).unwrap();
+    std::fs::remove_dir_all(&sandbox).unwrap();
+
+    let given = ran(&dead);
+    assert_ne!(
+        std::path::Path::new(&given),
+        dead,
+        "the directory that is gone must not reach the plugin: {given}"
+    );
+    assert!(
+        given.is_empty() || std::path::Path::new(&given).is_dir(),
+        "what the plugin got instead is somewhere it can write: {given}"
+    );
+
+    // A live one decides nothing here — it is the caller's, and it arrives untouched.
+    let live = cli.home.join("live-tmp");
+    std::fs::create_dir_all(&live).unwrap();
+    assert_eq!(std::path::Path::new(&ran(&live)), live, "a TMPDIR that is there is left alone");
+}

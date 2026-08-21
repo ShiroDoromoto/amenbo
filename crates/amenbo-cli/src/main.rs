@@ -64,7 +64,11 @@ use output::{
 static PROJECT_OVERRIDE: OnceLock<i64> = OnceLock::new();
 
 fn main() {
+    // Both of these run before anything else, and before any thread exists: one hands SIGPIPE back to the
+    // kernel, the other disowns an inherited `TMPDIR` whose directory the OS already took away
+    // (`AMB-T-3461`).
     restore_sigpipe();
+    amenbo_core::tmpdir::forget_if_gone();
     let code = real_main();
     std::process::exit(code);
 }

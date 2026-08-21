@@ -50,6 +50,23 @@ pub fn path() -> Option<OsString> {
     var_os(PATH_VAR)
 }
 
+/// The name of [`tmpdir`], for the one surface that **removes** it rather than reads it: the startup
+/// repair that disowns a throwaway directory the OS has already taken away
+/// ([`crate::tmpdir::forget_if_gone`]).
+pub const TMPDIR_VAR: &str = "TMPDIR";
+
+/// `TMPDIR` — where the OS says throwaway files go, on Unix. Amenbo reads it for one purpose: to see
+/// whether the directory it names is still there, because an inherited one need not be. A process
+/// started by the macOS `.pkg` installer's postinstall carries the installer's sandbox
+/// (`/private/tmp/PKInstallSandbox.*/tmp`), and that sandbox is removed the moment the install
+/// finishes — leaving the app, and every plugin it starts, pointed at a directory that is gone.
+///
+/// Windows has no `TMPDIR`: `std::env::temp_dir()` reads `TMP`/`TEMP` there, and nothing we ship hands
+/// out a vanishing one. This getter answers `None` there, and the repair has nothing to do.
+pub fn tmpdir() -> Option<OsString> {
+    var_os(TMPDIR_VAR)
+}
+
 /// The name of [`mcp_dirs`], for the MCP server that sets it on every run it starts
 /// (`crate::mcp`).
 pub const MCP_DIRS_VAR: &str = "AMENBO_MCP_DIRS";

@@ -168,7 +168,14 @@ ln -sf "\$APP_DIR/$APP_NAME/Contents/MacOS/amenbo" "\$BIN_DIR/amenbo"
   osascript -e 'quit app "$APP_LAUNCH_NAME"' 2>/dev/null || true
   pkill -x amenbo 2>/dev/null || true
   sleep 1
-  open -a "\$APP_DIR/$APP_NAME" || true
+  # Launch with the installer's own TMPDIR dropped. This postinstall runs inside the pkg sandbox
+  # (/private/tmp/PKInstallSandbox.<x>/tmp) which the installer removes the moment the install finishes,
+  # and open hands the app the environment it was called with -- open(1): "opened applications inherit
+  # environment variables just as if you had launched the application directly through its full path".
+  # Without this the freshly installed app, and every plugin it starts, is pointed at a directory that is
+  # about to be deleted (AMB-T-3461). The app disowns a dead TMPDIR on its own too; this keeps the
+  # installer from handing one over in the first place.
+  env -u TMPDIR open -a "\$APP_DIR/$APP_NAME" || true
 } || true
 
 exit 0

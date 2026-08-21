@@ -82,7 +82,7 @@ pub mod swap_lock;
 pub mod sync_snapshot;
 pub mod tick;
 pub mod time;
-mod tmpdir;
+pub mod tmpdir;
 pub mod update_check;
 pub mod validate;
 pub mod view;

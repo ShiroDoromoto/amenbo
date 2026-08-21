@@ -34,6 +34,7 @@ use serde::{Serialize, Serializer};
 use crate::config::is_reserved_plugin_name;
 use crate::error::Msg;
 use crate::plugin_config::MAX_CONFIG_IDENT_BYTES;
+use crate::plugin_manifest::ConfigEntry;
 use crate::plugin_manifest::{
     ConfigField, ConfigFieldOverlay, Face, FieldType, Manifest, ManifestOverlay, Os, SettingsAction,
     SettingsOverlay, Translations, NONE_SELECTED,
@@ -66,6 +67,13 @@ pub const MAX_CATEGORY_LEN: usize = 40;
 /// The longest a config field's human `label` may be (characters) — the display-name floor (`AMB-D-360`):
 /// free text, but length-capped and control-char-free so a form field cannot break the layout.
 pub const MAX_LABEL_LEN: usize = 100;
+
+/// The most parts a manifest's `config` list may draw between its fields (`AMB-D-727`) — the same
+/// ceiling a run's answer is held to
+/// ([`plugin_show::MAX_PARTS`](crate::plugin_show::MAX_PARTS)), for the same reason: a settings form is a
+/// place to fill things in, not a page to read. What a long explanation has instead is `help`, which sits
+/// under the box it is about.
+pub const MAX_CONFIG_PARTS: usize = crate::plugin_show::MAX_PARTS;
 
 /// The most config fields a manifest may declare (`AMB-D-356`, the safe floor). A generous ceiling — a
 /// real plugin needs a handful — whose only purpose is to stop a manifest declaring thousands of fields
@@ -228,6 +236,10 @@ pub enum ProblemCode {
     /// translate (`AMB-D-621`): a field, a config key, a candidate. Whatever was written under it would
     /// reach no reader, and silence is the one thing an author cannot debug.
     NotInBase,
+    /// A part carries a destination and the plugin is not official (`AMB-D-727`) — a `qr` or a `link`,
+    /// which are read on a phone and opened outside Amenbo. The badge is the catalog's word and not an
+    /// author's (`AMB-D-347`), so this is a rule about who is writing, not about what was written.
+    OfficialOnly,
     /// A translation is offered in a language Amenbo is not read in (`AMB-D-394`). The code names the
     /// file it was written in and the document it would be published as, so one outside the list is a
     /// document nothing ever fetches.
@@ -265,6 +277,7 @@ impl ProblemCode {
         Self::AskConflict,
         Self::BadStepRef,
         Self::RecordRef,
+        Self::OfficialOnly,
         Self::NotInBase,
         Self::UnknownLanguage,
     ];
@@ -300,6 +313,7 @@ impl ProblemCode {
             Self::AskConflict => "ask_conflict",
             Self::BadStepRef => "bad_step_ref",
             Self::RecordRef => "record_ref",
+            Self::OfficialOnly => "official_only",
             Self::NotInBase => "not_in_base",
             Self::UnknownLanguage => "unknown_language",
         }
@@ -470,7 +484,8 @@ fn check_overlay(problems: &mut Vec<Problem>, m: &Manifest, lang: &str, o: &Mani
 
     for (key, field) in &o.config {
         let loc = at(&format!("config[{key}]"));
-        let Some(base) = m.config.iter().find(|f| &f.key == key) else {
+        let Some(base) = m.config.iter().filter_map(ConfigEntry::field).find(|f| &f.key == key)
+        else {
             problems.push(Problem::new(
                 loc,
                 ProblemCode::NotInBase,
@@ -1040,14 +1055,27 @@ fn check_os(problems: &mut Vec<Problem>, os: &[Os]) {
 /// *user-typed value* at write time ([`crate::plugin_config::check_value`]) — and is not here; this
 /// validates the *author-declared schema*.
 fn check_config(problems: &mut Vec<Problem>, m: &Manifest) {
-    if m.config.len() > MAX_CONFIG_FIELDS {
+    let fields: Vec<&ConfigField> = m.config.iter().filter_map(ConfigEntry::field).collect();
+    if fields.len() > MAX_CONFIG_FIELDS {
         problems.push(Problem::new(
             "config",
             ProblemCode::TooManyFields,
-            format!("config declares too many fields ({}; max {MAX_CONFIG_FIELDS})", m.config.len()),
+            format!("config declares too many fields ({}; max {MAX_CONFIG_FIELDS})", fields.len()),
         ));
     }
-    let total: usize = m.config.iter().map(schema_bytes).sum();
+    let parts = m.config.iter().filter_map(ConfigEntry::part).count();
+    if parts > MAX_CONFIG_PARTS {
+        problems.push(Problem::new(
+            "config",
+            ProblemCode::TooManyFields,
+            format!("config draws too many parts ({parts}; max {MAX_CONFIG_PARTS})"),
+        ));
+    }
+    let total: usize =
+        m.config.iter().map(|entry| match entry {
+            ConfigEntry::Field(field) => schema_bytes(field),
+            ConfigEntry::Part(part) => part_bytes(part),
+        }).sum();
     if total > MAX_CONFIG_SCHEMA_BYTES {
         problems.push(Problem::new(
             "config",
@@ -1057,7 +1085,14 @@ fn check_config(problems: &mut Vec<Problem>, m: &Manifest) {
     }
 
     let mut seen = HashSet::new();
-    for (i, field) in m.config.iter().enumerate() {
+    for (i, entry) in m.config.iter().enumerate() {
+        let field = match entry {
+            ConfigEntry::Part(part) => {
+                check_config_part(problems, i, part, m.official);
+                continue;
+            }
+            ConfigEntry::Field(field) => field,
+        };
         check_config_key(problems, &format!("config[{i}].key"), &field.key);
         check_line(problems, &format!("config[{i}].label"), &field.label, MAX_LABEL_LEN);
         if !field.key.is_empty() && !seen.insert(field.key.as_str()) {
@@ -1070,6 +1105,54 @@ fn check_config(problems: &mut Vec<Problem>, m: &Manifest) {
         check_config_text(problems, i, field);
         check_config_kind(problems, i, field);
         check_config_readonly(problems, i, field);
+    }
+}
+
+/// Check one part written into the config list (`AMB-D-727`).
+///
+/// Two rules, and both are the run-answer's own — one vocabulary means one set of rules, wherever it is
+/// written ([`plugin_show`](crate::plugin_show)):
+///
+/// - **the floor Amenbo puts under every author string it draws** ([`Part::wrong`]) — no control
+///   character, and a `link` that goes to a page rather than to a scheme handler on this machine.
+/// - **`qr` and `link` are an official plugin's** — both carry a destination, and a QR's is opened on a
+///   phone where nothing here can stop it. A third party has `copy`, which puts the same string in front
+///   of somebody who can read it first. Said here rather than dropped in silence: an author who wrote one
+///   is owed the reason it will not draw, which is what a self-check is for.
+fn check_config_part(
+    problems: &mut Vec<Problem>,
+    i: usize,
+    part: &crate::plugin_show::Part,
+    official: bool,
+) {
+    let at = format!("config[{i}].{}", part.key());
+    if let Some(wrong) = part.wrong() {
+        let code = match wrong {
+            crate::plugin_show::Fault::ControlChar => ProblemCode::ControlChar,
+            crate::plugin_show::Fault::LinkScheme => ProblemCode::BadUrl,
+        };
+        problems.push(Problem::new(&at, code, wrong.as_str().to_string()));
+    }
+    if part.official_only() && !official {
+        problems.push(Problem::new(
+            &at,
+            ProblemCode::OfficialOnly,
+            format!(
+                "'{}' carries a destination, so it is drawn for an official plugin only — `copy` puts                  the same string in front of a reader who can see where it goes",
+                part.key()
+            ),
+        ));
+    }
+}
+
+/// How much of the schema's size budget one drawn part spends: every string its author wrote into it,
+/// counted exactly as a field's are.
+fn part_bytes(part: &crate::plugin_show::Part) -> usize {
+    use crate::plugin_show::Part;
+    match part {
+        Part::Text(t) | Part::Heading(t) | Part::Note(t) | Part::Copy(t) | Part::Qr(t) => t.len(),
+        Part::List(items) => items.iter().map(String::len).sum(),
+        Part::Link { url, label } => url.len() + label.len(),
     }
 }
 
@@ -1358,7 +1441,8 @@ fn check_settings(problems: &mut Vec<Problem>, m: &Manifest) {
             ),
         ));
     }
-    let stored: HashSet<&str> = m.config.iter().map(|f| f.key.as_str()).collect();
+    let stored: HashSet<&str> =
+        m.config.iter().filter_map(ConfigEntry::field).map(|f| f.key.as_str()).collect();
     let mut seen = HashSet::new();
     for (i, action) in settings.actions.iter().enumerate() {
         let at_cmd = format!("settings.actions[{i}].cmd");
@@ -1736,10 +1820,10 @@ mod tests {
             scope: crate::plugin_manifest::Scope::Project,
             payload_v: 1,
             min_amenbo: Some("1.8.0".into()),
-            config: vec![
+            config: ConfigEntry::schema(vec![
                 ConfigField { secret: true, required: true, ..ConfigField::new("webhook_url", "Webhook URL") },
                 ConfigField::new("events", "Events"),
-            ],
+            ]),
         }
     }
 
@@ -1927,9 +2011,8 @@ mod tests {
     #[test]
     fn too_many_config_fields_is_refused() {
         let mut m = valid();
-        m.config = (0..MAX_CONFIG_FIELDS + 1)
-            .map(|i| ConfigField::new(format!("k{i}"), "L"))
-            .collect();
+        m.config =
+            ConfigEntry::schema((0..MAX_CONFIG_FIELDS + 1).map(|i| ConfigField::new(format!("k{i}"), "L")));
         assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::TooManyFields));
     }
 
@@ -1937,7 +2020,7 @@ mod tests {
     fn a_bad_config_key_is_refused() {
         for bad in ["Webhook", "1st", "web-hook", "web hook", ""] {
             let mut m = valid();
-            m.config = vec![ConfigField::new(bad, "L")];
+            m.config = ConfigEntry::schema(vec![ConfigField::new(bad, "L")]);
             let cs = codes(&validate_manifest(&m));
             assert!(
                 cs.contains(&ProblemCode::BadKey) || cs.contains(&ProblemCode::Empty),
@@ -1946,13 +2029,113 @@ mod tests {
         }
     }
 
+    // ───────────── the parts a form draws between its fields (`AMB-D-727`) ─────────────
+
+    /// A manifest whose `config` carries one part, and nothing else changed.
+    fn with_part(part: serde_json::Value) -> Manifest {
+        let mut m = valid();
+        m.config = vec![
+            ConfigField::new("smtp_password", "Password").into(),
+            ConfigEntry::Part(serde_json::from_value(part).expect("a part")),
+        ];
+        m
+    }
+
+    /// The whole vocabulary is admissible where a field is, and none of it needs a key.
+    #[test]
+    fn a_part_between_the_fields_is_valid() {
+        for part in [
+            serde_json::json!({ "text": "Read this with your phone" }),
+            serde_json::json!({ "heading": "Pair the device" }),
+            serde_json::json!({ "note": "The code expires in ten minutes" }),
+            serde_json::json!({ "list": ["Open the app", "Point the camera"] }),
+            serde_json::json!({ "copy": "https://example.test/board" }),
+            serde_json::json!({ "qr": "https://apps.apple.com/x" }),
+            serde_json::json!({ "link": { "url": "https://api.slack.com/apps", "label": "Create one" } }),
+        ] {
+            let m = with_part(part.clone());
+            assert!(validate_manifest(&m).is_empty(), "{part}: {:?}", validate_manifest(&m));
+        }
+    }
+
+    /// A destination is an official plugin's to draw. A third party is told which rule and where, rather
+    /// than watching their `qr` quietly not appear.
+    #[test]
+    fn a_third_partys_destination_is_refused_and_named() {
+        for part in [
+            serde_json::json!({ "qr": "https://apps.apple.com/x" }),
+            serde_json::json!({ "link": { "url": "https://example.test/x", "label": "Go" } }),
+        ] {
+            let mut m = with_part(part.clone());
+            m.official = false;
+            let problems = validate_manifest(&m);
+            assert_eq!(codes(&problems), vec![ProblemCode::OfficialOnly], "{part}");
+            assert!(
+                problems[0].location.starts_with("config[1]."),
+                "at: {}",
+                problems[0].location
+            );
+        }
+        // What a third party has instead, and it is not refused.
+        let mut m = with_part(serde_json::json!({ "copy": "https://example.test/x" }));
+        m.official = false;
+        assert!(validate_manifest(&m).is_empty());
+    }
+
+    /// The floor under every author string Amenbo draws, asked of a part exactly as it is of a field: no
+    /// control character, and a `link` that goes to a page rather than to something on this machine.
+    #[test]
+    fn a_part_is_held_to_the_floor_every_author_string_is() {
+        for (part, code) in [
+            (serde_json::json!({ "text": "one\ntwo" }), ProblemCode::ControlChar),
+            (serde_json::json!({ "list": ["fine", "one\ttwo"] }), ProblemCode::ControlChar),
+            (
+                serde_json::json!({ "link": { "url": "file:///etc/passwd", "label": "Go" } }),
+                ProblemCode::BadUrl,
+            ),
+            (
+                serde_json::json!({ "link": { "url": "amenbo://open", "label": "Go" } }),
+                ProblemCode::BadUrl,
+            ),
+        ] {
+            let m = with_part(part.clone());
+            assert_eq!(codes(&validate_manifest(&m)), vec![code], "{part}");
+        }
+    }
+
+    /// The same ceiling a run's answer is held to: a form is a place to fill things in, not a page.
+    #[test]
+    fn too_many_drawn_parts_is_refused() {
+        let mut m = valid();
+        let part = || ConfigEntry::Part(crate::plugin_show::Part::Text("x".into()));
+        m.config = (0..MAX_CONFIG_PARTS).map(|_| part()).collect();
+        assert!(validate_manifest(&m).is_empty(), "the cap itself is allowed");
+        m.config.push(part());
+        assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::TooManyFields));
+    }
+
+    /// A part spends the schema's size budget like everything else an author writes into `config` — the
+    /// field cap alone would leave a form of ten paragraphs unbounded.
+    #[test]
+    fn a_part_spends_the_schemas_size_budget() {
+        let mut m = valid();
+        m.config = (0..3)
+            .map(|_| {
+                ConfigEntry::Part(crate::plugin_show::Part::Text(
+                    "x".repeat(MAX_CONFIG_SCHEMA_BYTES / 2),
+                ))
+            })
+            .collect();
+        assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::SchemaTooLarge));
+    }
+
     #[test]
     fn a_duplicate_config_key_is_refused() {
         let mut m = valid();
-        m.config = vec![
+        m.config = ConfigEntry::schema(vec![
             ConfigField::new("dup", "A"),
             ConfigField::new("dup", "B"),
-        ];
+        ]);
         assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::Duplicate));
     }
 
@@ -1972,11 +2155,11 @@ mod tests {
     #[test]
     fn a_multi_field_with_options_and_a_default_among_them_is_valid() {
         let mut m = valid();
-        m.config = vec![multi(Some("task.done,task.rejected"))];
+        m.config = ConfigEntry::schema(vec![multi(Some("task.done,task.rejected"))]);
         assert!(validate_manifest(&m).is_empty(), "{:?}", validate_manifest(&m));
 
         // No default at all is equally fine: the field is simply unanswered until someone answers it.
-        m.config = vec![multi(None)];
+        m.config = ConfigEntry::schema(vec![multi(None)]);
         assert!(validate_manifest(&m).is_empty(), "{:?}", validate_manifest(&m));
     }
 
@@ -1984,7 +2167,7 @@ mod tests {
     #[test]
     fn a_multi_field_with_no_options_is_refused() {
         let mut m = valid();
-        m.config = vec![ConfigField { options: Vec::new(), ..multi(None) }];
+        m.config = ConfigEntry::schema(vec![ConfigField { options: Vec::new(), ..multi(None) }]);
         assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::Empty));
     }
 
@@ -1993,7 +2176,7 @@ mod tests {
     #[test]
     fn options_on_a_text_field_are_refused() {
         let mut m = valid();
-        m.config = vec![ConfigField { field_type: FieldType::Text, ..multi(None) }];
+        m.config = ConfigEntry::schema(vec![ConfigField { field_type: FieldType::Text, ..multi(None) }]);
         assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::OptionsNeedMulti));
     }
 
@@ -2002,41 +2185,41 @@ mod tests {
     #[test]
     fn an_option_value_may_not_carry_a_comma_or_be_the_reserved_word() {
         let mut m = valid();
-        m.config = vec![ConfigField {
+        m.config = ConfigEntry::schema(vec![ConfigField {
             options: vec![ConfigOption { value: "a,b".into(), label: "L".into() }],
             ..multi(None)
-        }];
+        }]);
         assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::BadChars));
 
-        m.config = vec![ConfigField {
+        m.config = ConfigEntry::schema(vec![ConfigField {
             options: vec![ConfigOption { value: NONE_SELECTED.into(), label: "L".into() }],
             ..multi(None)
-        }];
+        }]);
         assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::Reserved));
     }
 
     #[test]
     fn a_duplicate_option_value_is_refused() {
         let mut m = valid();
-        m.config = vec![ConfigField {
+        m.config = ConfigEntry::schema(vec![ConfigField {
             options: vec![
                 ConfigOption { value: "task.done".into(), label: "A".into() },
                 ConfigOption { value: "task.done".into(), label: "B".into() },
             ],
             ..multi(None)
-        }];
+        }]);
         assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::Duplicate));
     }
 
     #[test]
     fn too_many_options_is_refused() {
         let mut m = valid();
-        m.config = vec![ConfigField {
+        m.config = ConfigEntry::schema(vec![ConfigField {
             options: (0..MAX_CONFIG_OPTIONS + 1)
                 .map(|i| ConfigOption { value: format!("v{i}"), label: "L".into() })
                 .collect(),
             ..multi(None)
-        }];
+        }]);
         assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::TooManyFields));
     }
 
@@ -2046,7 +2229,7 @@ mod tests {
     fn a_default_that_is_not_offered_is_refused() {
         for bad in ["task.created", "task.done,task.created", NONE_SELECTED, ""] {
             let mut m = valid();
-            m.config = vec![multi(Some(bad))];
+            m.config = ConfigEntry::schema(vec![multi(Some(bad))]);
             assert!(
                 codes(&validate_manifest(&m)).contains(&ProblemCode::NotAnOption),
                 "'{bad}' is not one of the offered values"
@@ -2058,16 +2241,16 @@ mod tests {
     #[test]
     fn a_text_default_is_held_to_the_one_line_floor() {
         let mut m = valid();
-        m.config = vec![ConfigField {
+        m.config = ConfigEntry::schema(vec![ConfigField {
             default: Some("x".repeat(MAX_DEFAULT_LEN + 1)),
             ..ConfigField::new("base", "Base branch")
-        }];
+        }]);
         assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::TooLong));
 
-        m.config = vec![ConfigField {
+        m.config = ConfigEntry::schema(vec![ConfigField {
             default: Some("main".into()),
             ..ConfigField::new("base", "Base branch")
-        }];
+        }]);
         assert!(validate_manifest(&m).is_empty(), "a plain default on a text field is fine");
     }
 
@@ -2083,7 +2266,7 @@ mod tests {
         };
         let mut m = valid();
         // Each field is within every per-field cap; together they are more schema than the whole may be.
-        m.config = vec![full_of_options("a"), full_of_options("b")];
+        m.config = ConfigEntry::schema(vec![full_of_options("a"), full_of_options("b")]);
         assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::SchemaTooLarge));
     }
 
@@ -2094,7 +2277,7 @@ mod tests {
     #[test]
     fn the_supporting_text_an_author_wrote_passes() {
         let mut m = valid();
-        m.config = vec![
+        m.config = ConfigEntry::schema(vec![
             ConfigField {
                 help: Some("Create it under\nIncoming Webhooks.\n\nOne channel per URL.".into()),
                 placeholder: Some("https://hooks.example.com/T000/B000".into()),
@@ -2107,7 +2290,7 @@ mod tests {
                 required: true,
                 ..ConfigField::new("worker_url", "Worker URL")
             },
-        ];
+        ]);
         assert!(validate_manifest(&m).is_empty(), "{:?}", validate_manifest(&m));
     }
 
@@ -2116,18 +2299,18 @@ mod tests {
     #[test]
     fn supporting_text_over_its_cap_is_refused() {
         let mut m = valid();
-        m.config = vec![ConfigField {
+        m.config = ConfigEntry::schema(vec![ConfigField {
             help: Some("あ".repeat(MAX_HELP_BYTES / 3 + 1)),
             ..ConfigField::new("k", "L")
-        }];
+        }]);
         let problems = validate_manifest(&m);
         assert_eq!(codes(&problems), [ProblemCode::TooLong]);
         assert_eq!(problems[0].location, "config[0].help");
 
-        m.config = vec![ConfigField {
+        m.config = ConfigEntry::schema(vec![ConfigField {
             placeholder: Some("x".repeat(MAX_PLACEHOLDER_BYTES + 1)),
             ..ConfigField::new("k", "L")
-        }];
+        }]);
         let problems = validate_manifest(&m);
         assert_eq!(codes(&problems), [ProblemCode::TooLong]);
         assert_eq!(problems[0].location, "config[0].placeholder");
@@ -2139,18 +2322,18 @@ mod tests {
     #[test]
     fn a_control_character_in_supporting_text_is_refused() {
         let mut m = valid();
-        m.config = vec![ConfigField {
+        m.config = ConfigEntry::schema(vec![ConfigField {
             help: Some("Paste the URL.\x1b[2J".into()),
             ..ConfigField::new("k", "L")
-        }];
+        }]);
         let problems = validate_manifest(&m);
         assert_eq!(codes(&problems), [ProblemCode::ControlChar]);
         assert_eq!(problems[0].location, "config[0].help");
 
-        m.config = vec![ConfigField {
+        m.config = ConfigEntry::schema(vec![ConfigField {
             placeholder: Some("first\nsecond".into()),
             ..ConfigField::new("k", "L")
-        }];
+        }]);
         assert_eq!(codes(&validate_manifest(&m)), [ProblemCode::ControlChar]);
     }
 
@@ -2160,7 +2343,7 @@ mod tests {
     fn supporting_text_citing_an_amenbo_record_is_refused() {
         let mut m = valid();
         m.config =
-            vec![ConfigField { help: Some("AMB-D-411 makes this required.".into()), ..ConfigField::new("k", "L") }];
+ConfigEntry::schema(            vec![ConfigField { help: Some("AMB-D-411 makes this required.".into()), ..ConfigField::new("k", "L") }]);
         assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::RecordRef));
     }
 
@@ -2169,12 +2352,10 @@ mod tests {
     #[test]
     fn supporting_text_counts_towards_the_schema_size_cap() {
         let mut m = valid();
-        m.config = (0..8)
-            .map(|i| ConfigField {
-                help: Some("h".repeat(MAX_HELP_BYTES)),
-                ..ConfigField::new(format!("k{i}"), "L")
-            })
-            .collect();
+        m.config = ConfigEntry::schema((0..8).map(|i| ConfigField {
+            help: Some("h".repeat(MAX_HELP_BYTES)),
+            ..ConfigField::new(format!("k{i}"), "L")
+        }));
         assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::SchemaTooLarge));
     }
 
@@ -2193,16 +2374,16 @@ mod tests {
     #[test]
     fn a_readonly_field_that_contradicts_itself_is_refused() {
         let mut m = valid();
-        m.config = vec![ConfigField {
+        m.config = ConfigEntry::schema(vec![ConfigField {
             readonly: true,
             default: Some("main".into()),
             ..ConfigField::new("k", "L")
-        }];
+        }]);
         let problems = validate_manifest(&m);
         assert_eq!(codes(&problems), [ProblemCode::ReadonlyConflict]);
         assert_eq!(problems[0].location, "config[0].readonly");
 
-        m.config = vec![ConfigField { readonly: true, ..multi(None) }];
+        m.config = ConfigEntry::schema(vec![ConfigField { readonly: true, ..multi(None) }]);
         assert_eq!(codes(&validate_manifest(&m)), [ProblemCode::ReadonlyConflict]);
     }
 
@@ -2211,12 +2392,12 @@ mod tests {
     #[test]
     fn a_readonly_field_may_still_be_required() {
         let mut m = valid();
-        m.config = vec![ConfigField {
+        m.config = ConfigEntry::schema(vec![ConfigField {
             readonly: true,
             required: true,
             secret: true,
             ..ConfigField::new("auth_token", "Auth token")
-        }];
+        }]);
         assert!(validate_manifest(&m).is_empty(), "{:?}", validate_manifest(&m));
     }
 
@@ -2820,14 +3001,14 @@ mod tests {
     /// get wrong.
     fn valid_with_candidates() -> Manifest {
         let mut m = valid();
-        m.config[1] = ConfigField {
+        m.config[1] = ConfigEntry::from(ConfigField {
             field_type: FieldType::Multi,
             options: vec![
                 ConfigOption { value: "task.done".into(), label: "Task done".into() },
                 ConfigOption { value: "task.created".into(), label: "Task created".into() },
             ],
             ..ConfigField::new("events", "Events")
-        };
+        });
         m
     }
 
@@ -3081,13 +3262,13 @@ mod tests {
     /// example to translate (`AMB-D-656`).
     fn valid_with_supporting() -> Manifest {
         let mut m = valid_with_candidates();
-        m.config[0] = ConfigField {
+        m.config[0] = ConfigEntry::from(ConfigField {
             help: Some("Create it under Incoming Webhooks.".into()),
             placeholder: Some("https://hooks.example.com/T000/B000".into()),
             secret: true,
             required: true,
             ..ConfigField::new("webhook_url", "Webhook URL")
-        };
+        });
         m
     }
 

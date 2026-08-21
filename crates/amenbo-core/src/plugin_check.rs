@@ -212,7 +212,7 @@ pub fn run(
 
     let waited = invocation.spawn().and_then(|running| running.wait_timeout(bound));
     let (checked, recorded) =
-        read(&plugin.name, &plugin.manifest.config, plugin.manifest.official, waited, bound);
+        read(&plugin.name, &plugin.manifest.fields(), plugin.manifest.official, waited, bound);
     plugin_log::record(&store.paths.plugin_log_file(), &recorded);
     Ok(checked)
 }

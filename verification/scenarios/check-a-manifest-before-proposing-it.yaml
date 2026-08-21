@@ -6,9 +6,11 @@ id: check-a-manifest-before-proposing-it
 title: A manifest passes the catalog rules, and a broken one is turned down by the rule it broke
 description: >
   Write a manifest the way an author would — the layer the plugin lives at, the settings it offers, the
-  calls its settings form raises and the words it will say for itself at the AI's entry point included —
+  parts its form draws between them, the calls its settings form raises and the words it will say for
+  itself at the AI's entry point included —
   hold it up to the rules, and have it pass. Then break one rule at a time — an asset URL that is not
-  https, a setting whose default is not among the choices it offers, an agent block that names no occasion,
+  https, a part carrying a destination that only the official index may publish,
+  a setting whose default is not among the choices it offers, an agent block that names no occasion,
   a call written as a sentence, a value asked for at a press declaring it is kept, a line
   citing a record of this store, a description text pointing at a page only a base could resolve, one past
   the size a language is given, a layer Amenbo has no name for, and a file that does not even parse — and
@@ -45,10 +47,12 @@ steps_cli:
         scope: project
         payload_v: 1
         config:
+          - note: SCENARIO — what this plugin needs before it can run
           - key: base
             label: Base branch
             secret: false
             required: false
+          - copy: https://example.com/scenario-plugin/where-to-get-a-token
           - key: events
             label: Events to report
             type: multi
@@ -120,6 +124,52 @@ steps_cli:
       path: not-https.yaml
       ok: false
       problem: bad_url
+
+  # A part that carries a destination. `copy` above is every author's; `qr` and `link` are read on a
+  # phone and opened outside Amenbo, so they are the official index's to publish and the badge is the
+  # catalog's word rather than a manifest's. An author who writes one is told which rule and where, at
+  # their own door — the alternative is a button that quietly never appears on anybody's screen.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      path: a-destination.yaml
+      content: |
+        name: scenario-plugin
+        desc: SCENARIO — the same manifest, drawing a way out of Amenbo
+        author: amenbo
+        repo: ShiroDoromoto/amenbo-plugin-worktree
+        os:
+          - macos
+          - linux
+        category: workflow
+        assets:
+          macos:
+            url: https://example.com/scenario-plugin-v1-macos.tar.gz
+            checksum: sha256:a6c1027eb54606d4f5e67176faeefefff3b64161b03fd76faff5908e093bf07c
+          linux-x64:
+            url: https://example.com/scenario-plugin-v1-linux-x64.tar.gz
+            checksum: sha256:f74ec13fc4341dba8bb64071651f86fb374bb932e0f15a8799bed8de014c06ac
+          linux-arm64:
+            url: https://example.com/scenario-plugin-v1-linux-arm64.tar.gz
+            checksum: sha256:a3b1ae53a6650e05673783d9d9e686b03c31582d488639a5af667f87e90988a5
+        payload_v: 1
+        config:
+          - link:
+              url: https://example.com/scenario-plugin/tokens
+              label: SCENARIO — get a token
+          - key: base
+            label: Base branch
+            secret: false
+            required: false
+
+  - type: assert
+    domain: plugin
+    op: validated
+    with:
+      path: a-destination.yaml
+      ok: false
+      problem: official_only
 
   # A setting whose candidates the author declares is a setting no one has to spell — which only holds if
   # the value in force before anyone answers is one of those candidates. A default outside them is a value

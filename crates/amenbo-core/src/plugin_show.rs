@@ -37,6 +37,7 @@
 //! edit of the author's answer in front of a person as if it were theirs — the same reading
 //! [`plugin_check`](crate::plugin_check) already takes of a sentence past its floor.
 
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// The most parts one answer may put on the form (`AMB-D-727`). A form is a place to fill things in, not
@@ -52,7 +53,15 @@ pub const MAX_SHOW_BYTES: usize = 4096;
 /// Every variant holds strings the author supplied and nothing Amenbo would have to interpret: what a
 /// part *looks* like is the screen's, and what it *says* is theirs. `Qr` and `Link` reach this type only
 /// for an official plugin — [`read`] is where that is settled, so nothing downstream has to remember it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+///
+/// **It is the manifest's vocabulary too** (`AMB-D-727`): the same parts may be written into a plugin's
+/// `config` list, where they draw whether or not anything has run
+/// ([`ConfigEntry`](crate::plugin_manifest::ConfigEntry)). That is what the serde derives are for — one
+/// type, read the same way off a run's stdout and off a manifest on disk, so a rule written once holds in
+/// both places. The wire shape is the one an author writes: `{"text": "…"}`, `{"list": ["…"]}`,
+/// `{"link": {"url": "…", "label": "…"}}`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
 pub enum Part {
     /// A line of explanation, drawn plain.
     Text(String),
@@ -79,8 +88,68 @@ pub enum Part {
 impl Part {
     /// Whether this part carries a destination, and so rides for an official plugin alone
     /// (`AMB-D-727`).
-    fn official_only(&self) -> bool {
+    pub fn official_only(&self) -> bool {
         matches!(self, Part::Qr(_) | Part::Link { .. })
+    }
+
+    /// The manifest key this part is written under — the word a validator's location names it by.
+    pub fn key(&self) -> &'static str {
+        match self {
+            Part::Text(_) => "text",
+            Part::Heading(_) => "heading",
+            Part::Note(_) => "note",
+            Part::List(_) => "list",
+            Part::Copy(_) => "copy",
+            Part::Qr(_) => "qr",
+            Part::Link { .. } => "link",
+        }
+    }
+
+    /// What is wrong with this part, or `None` for one Amenbo will draw (`AMB-D-727`).
+    ///
+    /// One function so both places that take a part hold it to the same rules — the run that answered
+    /// with it, and the manifest that declared it. What each caller does with a fault is its own: a run's
+    /// answer is dropped whole, and a manifest's author is told which rule and where.
+    pub fn wrong(&self) -> Option<Fault> {
+        let said: Vec<&str> = match self {
+            Part::Text(t) | Part::Heading(t) | Part::Note(t) | Part::Copy(t) | Part::Qr(t) => {
+                vec![t.as_str()]
+            }
+            Part::List(items) => items.iter().map(String::as_str).collect(),
+            Part::Link { url, label } => vec![url.as_str(), label.as_str()],
+        };
+        if said.iter().any(|one| one.chars().any(char::is_control)) {
+            return Some(Fault::ControlChar);
+        }
+        if let Part::Link { url, .. } = self {
+            if !(url.starts_with("https://") || url.starts_with("http://")) {
+                return Some(Fault::LinkScheme);
+            }
+        }
+        None
+    }
+}
+
+/// What can be wrong with a part Amenbo is asked to draw (`AMB-D-727`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Fault {
+    /// One of its strings carries a control character. These are drawn on the screen somebody types a
+    /// secret into, and a terminal escape in one can write over what Amenbo said — the same reading
+    /// `help` is held to (`AMB-D-656`).
+    ControlChar,
+    /// A `link` points somewhere a browser should not be sent. `http` or `https` is what a destination on
+    /// a settings form is; anything else hands a scheme handler on this machine a string of the author's,
+    /// which is not the button they were offered.
+    LinkScheme,
+}
+
+impl Fault {
+    /// The stable sentence for it, for a face that has to say what is wrong.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Fault::ControlChar => "it carries a control character",
+            Fault::LinkScheme => "a link goes to an http or https page and nowhere else",
+        }
     }
 }
 
@@ -104,67 +173,14 @@ pub fn read(said: Option<&Value>, official: bool) -> Option<Vec<Part>> {
     if said.is_null() {
         return Some(Vec::new());
     }
-    let listed = said.as_array()?;
-    if listed.len() > MAX_PARTS || said.to_string().len() > MAX_SHOW_BYTES {
+    if said.as_array()?.len() > MAX_PARTS || said.to_string().len() > MAX_SHOW_BYTES {
         return None;
     }
-    let mut parts = Vec::with_capacity(listed.len());
-    for one in listed {
-        let part = part(one)?;
-        if part.official_only() && !official {
-            continue;
-        }
-        parts.push(part);
-    }
-    Some(parts)
-}
-
-/// One part out of the array, or `None` for a shape this build does not speak.
-///
-/// A part is an object naming exactly one kind: `{"text": "…"}`. Two keys would be two parts written as
-/// one, and a name this build does not know is an author's typo far more often than it is a plugin from
-/// the future — the version marker is what says which vocabulary is being spoken, so a stray key here is
-/// worth breaking on rather than swallowing.
-fn part(said: &Value) -> Option<Part> {
-    let fields = said.as_object()?;
-    let (kind, value) = match fields.len() {
-        1 => fields.iter().next()?,
-        _ => return None,
-    };
-    Some(match kind.as_str() {
-        "text" => Part::Text(line(value)?),
-        "heading" => Part::Heading(line(value)?),
-        "note" => Part::Note(line(value)?),
-        "copy" => Part::Copy(line(value)?),
-        "qr" => Part::Qr(line(value)?),
-        "list" => Part::List(
-            value.as_array()?.iter().map(line).collect::<Option<Vec<String>>>()?,
-        ),
-        "link" => {
-            let link = value.as_object()?;
-            let url = line(link.get("url")?)?;
-            // A button that opens a browser opens a browser. `http`/`https` is what a destination on a
-            // settings form is; anything else is a way to hand a scheme handler on this machine a string,
-            // which is not what the author was offered here.
-            if !(url.starts_with("https://") || url.starts_with("http://")) {
-                return None;
-            }
-            Part::Link { url, label: line(link.get("label")?)? }
-        }
-        _ => return None,
-    })
-}
-
-/// One string out of a part, held to the floor Amenbo puts under every author string it shows: a string,
-/// with no control characters in it. The length is the answer's as a whole ([`MAX_SHOW_BYTES`]) rather
-/// than each string's own — a `qr` carries a URL and a `text` carries a sentence, and one cap for both
-/// would be wrong for one of them.
-fn line(said: &Value) -> Option<String> {
-    let said = said.as_str()?;
-    if said.chars().any(char::is_control) {
+    let listed: Vec<Part> = serde_json::from_value(said.clone()).ok()?;
+    if listed.iter().any(|part| part.wrong().is_some()) {
         return None;
     }
-    Some(said.to_string())
+    Some(listed.into_iter().filter(|part| official || !part.official_only()).collect())
 }
 
 /// Read the parts one **operation** answered with (`AMB-D-727`) — the settings face's other run.

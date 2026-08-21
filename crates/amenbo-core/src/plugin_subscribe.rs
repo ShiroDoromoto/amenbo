@@ -154,7 +154,7 @@ impl Subscribers for EnabledSubscribers<'_> {
             let injection = match plugin_inject::resolve(
                 self.store,
                 &plugin.name,
-                &plugin.manifest.config,
+                &plugin.manifest.fields(),
                 layer,
             ) {
                 Ok(injection) => injection,
@@ -272,7 +272,7 @@ mod tests {
             // `VERSION` rather than sitting on a literal that a bump would turn into a false failure.
             payload_v: crate::plugin_payload::VERSION,
             min_amenbo: None,
-            config,
+            config: crate::plugin_manifest::ConfigEntry::schema(config),
             events: events.iter().map(|e| EventSubscription::new(*e)).collect(),
             agent: None,
             settings: None,

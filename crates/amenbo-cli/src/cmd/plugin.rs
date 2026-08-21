@@ -474,10 +474,11 @@ fn plugin_config_field(
     plugin: &amenbo_core::plugin_subscribe::InstalledPlugin,
     key: &str,
 ) -> Result<amenbo_core::plugin_manifest::ConfigField, CliError> {
-    if let Some(f) = plugin.manifest.config.iter().find(|f| f.key == key) {
+    let fields = plugin.manifest.fields();
+    if let Some(f) = fields.iter().find(|f| f.key == key) {
         return Ok(f.clone());
     }
-    let declared: Vec<&str> = plugin.manifest.config.iter().map(|f| f.key.as_str()).collect();
+    let declared: Vec<&str> = fields.iter().map(|f| f.key.as_str()).collect();
     let known = if declared.is_empty() { "none".to_string() } else { declared.join(", ") };
     Err(CliError::from(amenbo_core::Error::invalid(
         format!("plugin '{}' declares no setting '{key}' (it declares: {known})", plugin.name),
@@ -1563,7 +1564,7 @@ fn plugin_enable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i32
     amenbo_core::plugin_compat::check(&plugin.manifest)
         .map_err(|incompatible| CliError::from(incompatible.into_error(name)))?;
     let layer = plugin_layer(store, &plugin.manifest)?;
-    let fields = plugin.manifest.config.clone();
+    let fields = plugin.manifest.fields();
     let satisfied = amenbo_core::plugin_config::satisfied_keys(store, name, &fields, layer)
         .map_err(CliError::from)?;
     let has_value = |f: &amenbo_core::plugin_manifest::ConfigField| {
@@ -1915,7 +1916,7 @@ mod tests {
             &mut store,
             "watcher",
             Layer::Project(project),
-            &installed.config,
+            &installed.fields(),
             |_| true,
             &amenbo_core::plugin_check::Checked::NotDeclared,
         )

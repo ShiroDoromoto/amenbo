@@ -423,17 +423,18 @@ pub fn required_unset_for_update(
     }
     // One satisfied set per gate that actually fires: each layer holds its own values, so two of
     // them can hold different halves of the same schema.
+    let declared = available.fields();
     let mut per_gate = Vec::new();
     for layer in store.layers_with_plugin_enabled(name)? {
         if !crate::plugin_trust::effective_enabled_in(store, name, layer)? {
             continue;
         }
-        per_gate.push(satisfied_keys(store, name, &available.config, layer)?);
+        per_gate.push(satisfied_keys(store, name, &declared, layer)?);
     }
     if per_gate.is_empty() {
         return Ok(Vec::new());
     }
-    Ok(crate::plugin_trust::missing_required(&available.config, |f| {
+    Ok(crate::plugin_trust::missing_required(&declared, |f| {
         per_gate.iter().all(|satisfied| satisfied.iter().any(|k| k == &f.key))
     })
     .into_iter()
@@ -639,7 +640,7 @@ mod tests {
             scope: crate::plugin_manifest::Scope::Project,
             payload_v: 1,
             min_amenbo: None,
-            config,
+            config: crate::plugin_manifest::ConfigEntry::schema(config),
             events: Vec::new(),
             agent: None,
             settings: None,

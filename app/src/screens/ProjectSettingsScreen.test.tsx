@@ -8,7 +8,13 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto } from "../bindings/bindings";
+import type {
+  AgentHookRequestsDto,
+  AgentHookWiringDto,
+  BoundFolderDto,
+  PluginFormEntryDto,
+  PluginWantedSettingDto,
+} from "../bindings/bindings";
 import type { PluginInstall } from "../core/pluginInstalls";
 
 const hoisted = vi.hoisted(() => ({
@@ -83,6 +89,13 @@ vi.mock("../core/mutations", () => {
 
 import { ProjectSettingsScreen } from "./ProjectSettingsScreen";
 import { t, tf } from "../core/i18n";
+
+/**
+ * A declared form of settings alone (`AMB-D-727`) — every field an entry, in order. The parts a form may
+ * also carry are their own tests'; what these are about is the boxes.
+ */
+const form = (...fields: PluginWantedSettingDto[]): PluginFormEntryDto[] =>
+  fields.map((field) => ({ kind: "field", field }));
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -229,7 +242,7 @@ function install(
       ...on.map((project) => ({ project, enabled: true, hasValue: false, requiredUnset: false })),
       ...filledIn.map((project) => ({ project, enabled: false, hasValue: true, requiredUnset: false })),
     ],
-    config: [],
+    config: form(),
     actions: [],
     scope: over.device ? "machine" : "project",
     ...over,
@@ -359,7 +372,7 @@ describe("this project's plugin crossings", () => {
   it("marks a crossing short of a required value, and opens its settings in the row", async () => {
     hoisted.installs = [install({
       name: "notify",
-      config: [{ key: "webhook_url", label: "Webhook", required: true, secret: false, readonly: false, fieldType: "text", options: [] }],
+      config: form({ key: "webhook_url", label: "Webhook", required: true, secret: false, readonly: false, fieldType: "text", options: [] }),
     })];
     await render([]);
 

@@ -929,9 +929,10 @@ export type PluginDetailDto = {
  */
 events: Array<string>, 
 /**
- * The settings it declares, in the author's order.
+ * The form it declares, in the author's order — the settings it will want filled in, and the parts
+ * drawn between them (`AMB-D-727`).
  */
-config: Array<PluginWantedSettingDto>, 
+config: Array<PluginFormEntryDto>, 
 /**
  * **What the plugin is, in its author's own words** (`AMB-D-638`) — the Markdown the detail draws
  * as its body. Absent is a plugin whose author wrote none, and the face falls back to the
@@ -1043,6 +1044,27 @@ featured: boolean,
 addedAt?: string, };
 
 /**
+ * **One entry on a plugin's settings form** (`AMB-D-727`) — a setting somebody fills in, or a part
+ * Amenbo draws where it stands.
+ *
+ * The list is the author's declared order, because where a part sits is what it is for: the way to the
+ * page that issues a token belongs above the box the token goes in, and two lists side by side cannot
+ * say that.
+ *
+ * A third party's `qr` and `link` are gone before this is built — core drops them (`AMB-D-727`), so a
+ * face draws whatever reaches it.
+ */
+export type PluginFormEntryDto = { "kind": "field", 
+/**
+ * The setting.
+ */
+field: PluginWantedSettingDto, } | { "kind": "part", 
+/**
+ * What to draw.
+ */
+part: PluginShowPartDto, };
+
+/**
  * Where a gate ended up, and what closing it threw away (`AMB-D-399`) — what [`plugin_set_enabled`](crate::commands::plugin_set_enabled)
  * answers with.
  *
@@ -1111,11 +1133,12 @@ compatible: boolean,
  */
 incompatibleReason?: string, 
 /**
- * The settings the author declared, in that order — the schema alone. Empty for a plugin that
- * declares none, which is the form's own answer to whether there is anything to configure. What is
- * held for a key is one project's (`AMB-D-434`) and comes from [`plugin_config_read`](crate::commands::plugin_config_read).
+ * The form the author declared, in that order — its settings, and the parts drawn between them
+ * (`AMB-D-727`). Empty for a plugin that declares nothing, which is the form's own answer to whether
+ * there is anything to configure. What is held for a key is one project's (`AMB-D-434`) and comes
+ * from [`plugin_config_read`](crate::commands::plugin_config_read).
  */
-config: Array<PluginWantedSettingDto>, 
+config: Array<PluginFormEntryDto>, 
 /**
  * The operations the author declared, in that order (`AMB-D-664`) — the buttons the settings form
  * draws beside those fields. Empty is a plugin whose form is fields and a save, as every form was.

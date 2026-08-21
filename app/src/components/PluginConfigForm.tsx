@@ -5,6 +5,7 @@ import { asTyped } from "../core/keys";
 import {
   NONE_SELECTED,
   checkPluginSettings,
+  formFields,
   runPluginAction,
   setPluginConfig,
   usePluginConfig,
@@ -172,7 +173,7 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
   // never promised to.
   const onSave = () =>
     run(async () => {
-      for (const f of install.config) {
+      for (const f of formFields(install.config)) {
         if (f.secret) {
           const pair = secrets[f.key];
           if (!pair || pair.value === "") continue;
@@ -224,7 +225,7 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
         </div>
       )}
       {check?.ok && check.message && <div className="plugcfg__note">{check.message}</div>}
-      {install.config.map((f) => (
+      {formFields(install.config).map((f) => (
         <div key={f.key} className="plugcfg__field">
           {/* A choice is a group of boxes, each with its own label, so the caption above it names the
               group rather than pointing at one input. */}

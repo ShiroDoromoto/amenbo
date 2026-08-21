@@ -12,7 +12,7 @@ import {
   type PluginDetail as PluginDetailDoc,
   type PluginEntry,
 } from "../core/pluginCatalog";
-import { installPlugin, type PluginInstall } from "../core/pluginInstalls";
+import { formFields, installPlugin, type PluginInstall } from "../core/pluginInstalls";
 import { pluginAbout, pluginDesc, settingLabel } from "../core/pluginText";
 import { Icon } from "../components/Icon";
 
@@ -169,12 +169,14 @@ function WhatItWants({ detail }: { detail: PluginDetailDoc }) {
           </>
         )}
       </div>
-      {detail.config.length > 0 && (
+      {/* The settings alone (`AMB-D-727`): what a browse view answers here is what the plugin will want
+          filled in, and a part the form draws is not one of those. */}
+      {formFields(detail.config).length > 0 && (
         <div className="plugdet__meta faint">
           <span>{t("plugins.want.settings")}</span>
           {/* Each setting is one item on the line, told apart the way the entry's own meta row does it:
               a label can hold spaces, so the gap alone would not say where one ends. */}
-          {detail.config.map((f, i) => (
+          {formFields(detail.config).map((f, i) => (
             <span key={f.key}>
               {i > 0 && <span className="faint">· </span>}
               {settingLabel(f)}

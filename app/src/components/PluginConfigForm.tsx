@@ -5,6 +5,7 @@ import { asTyped } from "../core/keys";
 import {
   NONE_SELECTED,
   checkPluginSettings,
+  formFields,
   runPluginAction,
   setPluginConfig,
   usePluginConfig,
@@ -140,14 +141,14 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
   // of a `when` core cannot answer — the store has not been told about a box that is still being filled in,
   // so someone ticking Cloudflare would otherwise wait for a save to see its fields.
   const answers: Record<string, string> = {};
-  for (const f of install.config) {
+  for (const f of formFields(install.config)) {
     const answer = f.fieldType === "multi" ? ticked(f).join(",") : shown(f) || f.defaultValue || "";
     if (answer !== "") answers[f.key] = answer;
   }
   // The form as it stands: the settings whose conditions hold, each keeping only the candidates whose own
   // do, and the operations that go with them — a form that hid Cloudflare's fields but kept its button
   // would leave a step nobody could follow.
-  const drawn = install.config
+  const drawn = formFields(install.config)
     .filter((f) => whenShows(f.when, answers))
     .map((f) => ({ ...f, options: f.options.filter((o) => whenShows(o.when, answers)) }));
   const actions = install.actions.filter((a) => whenShows(a.when, answers));
@@ -190,7 +191,7 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
   // never promised to.
   const onSave = () =>
     run(async () => {
-      for (const f of install.config) {
+      for (const f of formFields(install.config)) {
         if (f.secret) {
           const pair = secrets[f.key];
           if (!pair || pair.value === "") continue;

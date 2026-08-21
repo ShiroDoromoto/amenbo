@@ -305,10 +305,10 @@ mod tests {
     /// form are where either is read.
     #[test]
     fn nothing_an_author_wrote_about_a_setting_reaches_the_entry_point() {
-        use crate::plugin_manifest::ConfigField;
+        use crate::plugin_manifest::{ConfigEntry, ConfigField};
 
         let mut plugin = installed("worktree", Some(guide()), &["task.status_changed"]);
-        plugin.manifest.config = vec![
+        plugin.manifest.config = ConfigEntry::schema(vec![
             ConfigField {
                 help: Some("Create it under Incoming Webhooks.".into()),
                 placeholder: Some("https://hooks.example.test/T000/B000".into()),
@@ -316,7 +316,7 @@ mod tests {
                 ..ConfigField::new("webhook_url", "Webhook URL")
             },
             ConfigField { readonly: true, ..ConfigField::new("worker_url", "Worker URL") },
-        ];
+        ]);
 
         let written = [
             "config",

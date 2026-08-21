@@ -14,6 +14,7 @@ import type {
   PluginCheckDto,
   PluginDeviceRowDto,
   PluginProjectRowDto,
+  PluginFormEntryDto,
   PluginWantedSettingDto,
 } from "../bindings/bindings";
 import type { PluginCatalogRead, PluginUpdate } from "../core/pluginUpdates";
@@ -177,7 +178,7 @@ const onDevice = (over: Partial<PluginDeviceRowDto> = {}): PluginDeviceRowDto =>
 const row = ({ on = [], ...over }: Partial<PluginInstall> & { name: string; on?: number[] }): PluginInstall => ({
   compatible: true,
   projects: on.map((project) => at(project, { enabled: true })),
-  config: [],
+  config: form(),
   actions: [],
   scope: over.device ? "machine" : "project",
   ...over,
@@ -209,6 +210,13 @@ const field = (
   state: over.value != null || over.secretSet ? "chosen" : "unanswered",
   ...over,
 });
+
+/**
+ * A declared form of settings alone (`AMB-D-727`) — every field an entry, in order. The parts a form may
+ * also carry are their own tests'; what these are about is the boxes.
+ */
+const form = (...fields: PluginWantedSettingDto[]): PluginFormEntryDto[] =>
+  fields.map((field) => ({ kind: "field", field }));
 
 /** One operation its author declared (`AMB-D-664`), asking for nothing until a test says it does. */
 const action = (over: Partial<PluginActionDto> & { cmd: string }): PluginActionDto => ({
@@ -457,7 +465,7 @@ describe("the layer a plugin declared", () => {
     hoisted.installs = [
       row({
         name: "worktree",
-        config: [field({ key: "base", label: "Base branch", required: true })],
+        config: form(field({ key: "base", label: "Base branch", required: true })),
         device: onDevice({ requiredUnset: true }),
       }),
     ];
@@ -488,7 +496,7 @@ describe("the settings form", () => {
     hoisted.installs = [
       row({
         name: "notify",
-        config: [field({ key: "webhook", required: true })],
+        config: form(field({ key: "webhook", required: true })),
         projects: [at(1, { requiredUnset: true })],
       }),
       row({ name: "quiet", on: [1] }),
@@ -512,7 +520,7 @@ describe("the settings form", () => {
     hoisted.installs = [
       row({
         name: "notify",
-        config: [field({ key: "webhook", required: true })],
+        config: form(field({ key: "webhook", required: true })),
         projects: [at(1, { requiredUnset: true })],
       }),
     ];
@@ -541,7 +549,7 @@ describe("the settings form", () => {
       row({
         name: "notify",
         on: [7],
-        config: [field({ key: "events" }), field({ key: "room" })],
+        config: form(field({ key: "events" }), field({ key: "room" })),
       }),
     ];
     hoisted.held = { notify: { 7: [field({ key: "events", value: "push" }), field({ key: "room" })] } };
@@ -562,7 +570,7 @@ describe("the settings form", () => {
   // already said which (`AMB-D-447`) — so the form asks nobody a second time.
   it("writes for the project whose row it was opened in, without asking again", async () => {
     hoisted.projects = [{ id: 7, name: "alpha" }, { id: 8, name: "beta" }];
-    hoisted.installs = [row({ name: "notify", on: [8], config: [field({ key: "events" })] })];
+    hoisted.installs = [row({ name: "notify", on: [8], config: form(field({ key: "events" })) })];
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
 
@@ -579,7 +587,7 @@ describe("the settings form", () => {
   // A secret is written and never read back, so the second box is the only check on a typo there is.
   it("asks for a secret twice, and writes nothing when the two do not match", async () => {
     hoisted.projects = [{ id: 7, name: "alpha" }];
-    hoisted.installs = [row({ name: "notify", on: [7], config: [field({ key: "token", secret: true })] })];
+    hoisted.installs = [row({ name: "notify", on: [7], config: form(field({ key: "token", secret: true })) })];
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
 
@@ -609,7 +617,7 @@ describe("the settings form", () => {
       ],
       defaultValue: "task.done",
     });
-    hoisted.installs = [row({ name: "notify", on: [7], config: [events] })];
+    hoisted.installs = [row({ name: "notify", on: [7], config: form(events) })];
     hoisted.held = { notify: { 7: [events] } };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
@@ -648,7 +656,7 @@ describe("the settings form", () => {
       row({
         name: "viewer",
         on: [7],
-        config: [transport, worker],
+        config: form(transport, worker),
         actions: [action({ cmd: "tunnel", label: "Raise the tunnel", when: [{ field: "transport", has: "cloudflare" }] })],
       }),
     ];
@@ -684,7 +692,7 @@ describe("the settings form", () => {
         { value: "task.rejected", label: "Rejected", when: [{ field: "mode", has: "advanced" }] },
       ],
     });
-    hoisted.installs = [row({ name: "notify", on: [7], config: [mode, events] })];
+    hoisted.installs = [row({ name: "notify", on: [7], config: form(mode, events) })];
     hoisted.held = { notify: { 7: [mode, events] } };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
@@ -707,7 +715,7 @@ describe("the settings form", () => {
       options: [{ value: "task.done", label: "Done", when: [] }],
       value: "task.done",
     });
-    hoisted.installs = [row({ name: "notify", on: [7], config: [events] })];
+    hoisted.installs = [row({ name: "notify", on: [7], config: form(events) })];
     hoisted.held = { notify: { 7: [events] } };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
@@ -731,7 +739,7 @@ describe("the settings form", () => {
       value: NONE_SELECTED,
       state: "none",
     });
-    hoisted.installs = [row({ name: "notify", on: [7], config: [events] })];
+    hoisted.installs = [row({ name: "notify", on: [7], config: form(events) })];
     hoisted.held = { notify: { 7: [events] } };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
@@ -754,9 +762,9 @@ describe("the settings form", () => {
     hoisted.installs = [
       row({
         name: "notify",
-        config: [field({ key: "events", required: true, defaultValue: "task.done" })],
+        config: form(field({ key: "events", required: true, defaultValue: "task.done" })),
       }),
-      row({ name: "hooks", config: [field({ key: "webhook", required: true })] }),
+      row({ name: "hooks", config: form(field({ key: "webhook", required: true })) }),
     ];
     render();
     act(() => { select(gatePicker(0), "1"); });
@@ -775,7 +783,7 @@ describe("the settings form", () => {
       help: "Create it under Incoming Webhooks.\n\n[Not a link](https://example.test/x)",
       placeholder: "https://hooks.example.test/T000/B000",
     });
-    hoisted.installs = [row({ name: "notify", on: [7], config: [webhook] })];
+    hoisted.installs = [row({ name: "notify", on: [7], config: form(webhook) })];
     hoisted.held = { notify: { 7: [webhook] } };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
@@ -793,7 +801,7 @@ describe("the settings form", () => {
   it("shows the default in the empty box, and the example only without one", () => {
     hoisted.projects = [{ id: 7, name: "alpha" }];
     const base = field({ key: "base", defaultValue: "main", placeholder: "release/*" });
-    hoisted.installs = [row({ name: "worktree", on: [7], config: [base] })];
+    hoisted.installs = [row({ name: "worktree", on: [7], config: form(base) })];
     hoisted.held = { worktree: { 7: [base] } };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
@@ -806,7 +814,7 @@ describe("the settings form", () => {
   it("shows a readonly setting's value with no input and no way to clear it", () => {
     hoisted.projects = [{ id: 7, name: "alpha" }];
     const worker = field({ key: "worker_url", readonly: true, value: "https://amenbo.example.test" });
-    hoisted.installs = [row({ name: "viewer", on: [7], config: [worker] })];
+    hoisted.installs = [row({ name: "viewer", on: [7], config: form(worker) })];
     hoisted.held = { viewer: { 7: [worker] } };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
@@ -819,7 +827,7 @@ describe("the settings form", () => {
   // Clearing is the same door as setting: an empty value is "not provided", which is what `required` reads.
   it("clears a held setting with an empty value", async () => {
     hoisted.projects = [{ id: 7, name: "alpha" }];
-    hoisted.installs = [row({ name: "notify", on: [7], config: [field({ key: "events" })] })];
+    hoisted.installs = [row({ name: "notify", on: [7], config: form(field({ key: "events" })) })];
     hoisted.held = { notify: { 7: [field({ key: "events", value: "push" })] } };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
@@ -836,7 +844,7 @@ describe("the settings form", () => {
 describe("what the author's own code says on the form", () => {
   it("draws a refusing check's sentences where each one belongs, and leaves the gate shut", async () => {
     hoisted.projects = [{ id: 7, name: "alpha" }];
-    hoisted.installs = [row({ name: "mail", config: [field({ key: "smtp_host" })], projects: [at(7)] })];
+    hoisted.installs = [row({ name: "mail", config: form(field({ key: "smtp_host" })), projects: [at(7)] })];
     hoisted.held = { mail: { 7: [field({ key: "smtp_host", value: "smtp.example.test" })] } };
     hoisted.check = {
       ok: false,
@@ -860,7 +868,7 @@ describe("what the author's own code says on the form", () => {
   // form says what happened in its own words and leaves the reason to the execution log.
   it("says the check did not answer when it said nothing readable", async () => {
     hoisted.projects = [{ id: 7, name: "alpha" }];
-    hoisted.installs = [row({ name: "mail", config: [field({ key: "smtp_host" })], projects: [at(7)] })];
+    hoisted.installs = [row({ name: "mail", config: form(field({ key: "smtp_host" })), projects: [at(7)] })];
     hoisted.check = { ok: false, answered: false, fields: {}, show: [] };
     render();
 
@@ -876,7 +884,7 @@ describe("what the author's own code says on the form", () => {
       row({
         name: "mail",
         on: [7],
-        config: [field({ key: "smtp_host" }), field({ key: "smtp_user" })],
+        config: form(field({ key: "smtp_host" }), field({ key: "smtp_user" })),
       }),
     ];
     hoisted.saveCheck = {
@@ -912,7 +920,7 @@ describe("what the author's own code says on the form", () => {
   // leaving its sentence standing over values it never saw.
   it("replaces the switch's verdict with what the save's check said", async () => {
     hoisted.projects = [{ id: 7, name: "alpha" }];
-    hoisted.installs = [row({ name: "mail", config: [field({ key: "smtp_host" })], projects: [at(7)] })];
+    hoisted.installs = [row({ name: "mail", config: form(field({ key: "smtp_host" })), projects: [at(7)] })];
     hoisted.check = {
       ok: false, answered: true, message: "SCENARIO — when it was pressed", fields: {}, show: [],
     };
@@ -1035,7 +1043,7 @@ describe("moving one plugin's build from its row", () => {
   it("names an offer that needs a decision instead of offering it", () => {
     hoisted.projects = [{ id: 1, name: "alpha" }];
     hoisted.installs = [
-      row({ name: "notify", on: [1], config: [field({ key: "token", required: true })] }),
+      row({ name: "notify", on: [1], config: form(field({ key: "token", required: true })) }),
     ];
     hoisted.updates = [offer({ name: "notify", hold: "settings", missing: ["token"] })];
     render();

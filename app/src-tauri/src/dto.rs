@@ -1551,8 +1551,9 @@ pub struct PluginDetailDto {
     /// The observation events it subscribes to (`AMB-D-383`), by name — what installing it means it will
     /// be woken for.
     pub(crate) events: Vec<String>,
-    /// The settings it declares, in the author's order.
-    pub(crate) config: Vec<PluginWantedSettingDto>,
+    /// The form it declares, in the author's order — the settings it will want filled in, and the parts
+    /// drawn between them (`AMB-D-727`).
+    pub(crate) config: Vec<PluginFormEntryDto>,
     /// **What the plugin is, in its author's own words** (`AMB-D-638`) — the Markdown the detail draws
     /// as its body. Absent is a plugin whose author wrote none, and the face falls back to the
     /// repository's README there; where this is present the README is neither drawn nor fetched.
@@ -1651,10 +1652,11 @@ pub struct PluginInstallDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) incompatible_reason: Option<String>,
-    /// The settings the author declared, in that order — the schema alone. Empty for a plugin that
-    /// declares none, which is the form's own answer to whether there is anything to configure. What is
-    /// held for a key is one project's (`AMB-D-434`) and comes from [`plugin_config_read`](crate::commands::plugin_config_read).
-    pub(crate) config: Vec<PluginWantedSettingDto>,
+    /// The form the author declared, in that order — its settings, and the parts drawn between them
+    /// (`AMB-D-727`). Empty for a plugin that declares nothing, which is the form's own answer to whether
+    /// there is anything to configure. What is held for a key is one project's (`AMB-D-434`) and comes
+    /// from [`plugin_config_read`](crate::commands::plugin_config_read).
+    pub(crate) config: Vec<PluginFormEntryDto>,
     /// The operations the author declared, in that order (`AMB-D-664`) — the buttons the settings form
     /// draws beside those fields. Empty is a plugin whose form is fields and a save, as every form was.
     pub(crate) actions: Vec<PluginActionDto>,
@@ -1715,21 +1717,48 @@ pub enum PluginShowPartDto {
 
 /// Build the parts a run answered with, for a face to draw (`AMB-D-727`).
 pub(crate) fn show_parts(parts: &[amenbo_core::plugin_show::Part]) -> Vec<PluginShowPartDto> {
+    parts.iter().map(show_part).collect()
+}
+
+/// One part, for a face to draw (`AMB-D-727`).
+pub(crate) fn show_part(part: &amenbo_core::plugin_show::Part) -> PluginShowPartDto {
     use amenbo_core::plugin_show::Part;
-    parts
-        .iter()
-        .map(|part| match part {
-            Part::Text(text) => PluginShowPartDto::Text { text: text.clone() },
-            Part::Heading(text) => PluginShowPartDto::Heading { text: text.clone() },
-            Part::Note(text) => PluginShowPartDto::Note { text: text.clone() },
-            Part::List(items) => PluginShowPartDto::List { items: items.clone() },
-            Part::Copy(text) => PluginShowPartDto::Copy { text: text.clone() },
-            Part::Qr(text) => PluginShowPartDto::Qr { text: text.clone() },
-            Part::Link { url, label } => {
-                PluginShowPartDto::Link { url: url.clone(), label: label.clone() }
-            }
-        })
-        .collect()
+    match part {
+        Part::Text(text) => PluginShowPartDto::Text { text: text.clone() },
+        Part::Heading(text) => PluginShowPartDto::Heading { text: text.clone() },
+        Part::Note(text) => PluginShowPartDto::Note { text: text.clone() },
+        Part::List(items) => PluginShowPartDto::List { items: items.clone() },
+        Part::Copy(text) => PluginShowPartDto::Copy { text: text.clone() },
+        Part::Qr(text) => PluginShowPartDto::Qr { text: text.clone() },
+        Part::Link { url, label } => {
+            PluginShowPartDto::Link { url: url.clone(), label: label.clone() }
+        }
+    }
+}
+
+/// **One entry on a plugin's settings form** (`AMB-D-727`) — a setting somebody fills in, or a part
+/// Amenbo draws where it stands.
+///
+/// The list is the author's declared order, because where a part sits is what it is for: the way to the
+/// page that issues a token belongs above the box the token goes in, and two lists side by side cannot
+/// say that.
+///
+/// A third party's `qr` and `link` are gone before this is built — core drops them (`AMB-D-727`), so a
+/// face draws whatever reaches it.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum PluginFormEntryDto {
+    /// A setting the plugin takes, and what this machine holds for it.
+    Field {
+        /// The setting.
+        field: PluginWantedSettingDto,
+    },
+    /// Something for Amenbo to draw, filled in by nobody.
+    Part {
+        /// What to draw.
+        part: PluginShowPartDto,
+    },
 }
 
 /// What the author's own check said about the values, for the screen that shows the form (`AMB-D-664`).

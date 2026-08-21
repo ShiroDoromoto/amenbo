@@ -726,7 +726,15 @@ const REGISTRY: &[OpSpec] = &[
     // settings block carrying both halves — a check before the gate and a button behind it — is walked
     // by standing in this one. `check-program` is what a road reaches for when the *verdict* is the
     // thing under test, since that is the half this cannot vary.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "press-program", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    //
+    // `writes` and `writes_value` leave it writing one of its own settings back on every press, through
+    // `plugin config set` — the door a plugin's own value arrives by, and the only one there
+    // is for a field its author marked `readonly`. That is the whole of what a `setup` does: it works
+    // something out — an address it registered, a key it generated — and puts it where the form will draw
+    // it. Naming neither leaves the program as it was, writing nothing. The value is not read back from
+    // in here: what says the write landed is the field on the form afterwards, which is the reading the
+    // road is about, and the program says so on its own line only when the write was refused.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "press-program", required: &["name"], refs: &[], strings: &["name", "writes", "writes_value"], binds: false },
     // An installed plugin whose program answers the check with a verdict. Whether the values are usable is
     // the author's judgement and Amenbo makes none of its own, so the only thing that can say no is a
     // program that says it — and no published plugin declares a check to answer at all. `ok` is that

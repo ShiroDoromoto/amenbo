@@ -16,18 +16,22 @@ import { inTauri, subscribe } from "./snapshot";
 import { invalidateQueries, useQuery } from "./query";
 import type {
   PluginActionDto,
+  PluginFormEntryDto,
   PluginActionRanDto,
   PluginCheckDto,
   PluginConfigFieldDto,
   PluginGateMovedDto,
   PluginInstallDto,
   PluginRemovedDto,
+  PluginWantedSettingDto,
 } from "../bindings/bindings";
 
 /** One installed plugin and where its switch stands (generated DTO). */
 export type PluginInstall = PluginInstallDto;
 /** One setting its author declared, and what this machine holds for it (generated DTO). */
 export type PluginConfigField = PluginConfigFieldDto;
+/** One entry on a plugin's declared form — a setting, or a part Amenbo draws (generated DTO). */
+export type PluginFormEntry = PluginFormEntryDto;
 /** What an uninstall found and removed (generated DTO). */
 export type PluginRemoved = PluginRemovedDto;
 /** Where a moved gate ended up, and what closing it dropped (generated DTO). */
@@ -308,6 +312,18 @@ export async function uninstallPlugin(name: string): Promise<PluginRemoved | nul
 }
 
 /**
+ * The settings on a declared form, in the author's order — its entries with the parts Amenbo merely
+ * draws left out (`AMB-D-727`).
+ *
+ * A part has no key and no value, so everything about *filling the form in* — what is saved, what
+ * `required` is read off, what a check names — asks for these. What a part is for is where it sits, and
+ * that is the drawing's to read off `install.config` itself.
+ */
+export function formFields(entries: PluginFormEntry[]): PluginWantedSettingDto[] {
+  return entries.flatMap((entry) => (entry.kind === "field" ? [entry.field] : []));
+}
+
+/**
  * The state of one row (`AMB-D-447`), for a face that is drawing it — one project's crossing, or the
  * device's own row when `layer` is `null` (`AMB-D-601`).
  *
@@ -322,7 +338,7 @@ export function crossingAt(install: PluginInstall, layer: PluginLayer): PluginRo
   return {
     enabled: false,
     hasValue: false,
-    requiredUnset: install.config.some((f) => f.required && f.defaultValue == null),
+    requiredUnset: formFields(install.config).some((f) => f.required && f.defaultValue == null),
   };
 }
 

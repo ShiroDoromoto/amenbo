@@ -4673,6 +4673,8 @@ pub fn plugin_set_enabled(
 ///
 /// The sentences travel whole and are drawn plain: Amenbo does not read them (`AMB-D-356`), and the form
 /// puts each one where it belongs — the per-field lines beside their boxes, the `message` at the head.
+/// What the check asked to have drawn travels the same way (`AMB-D-727`): core has already settled which
+/// parts this author may have, so this is a rename and nothing more.
 fn checked_dto(checked: &amenbo_core::plugin_check::Checked) -> Option<PluginCheckDto> {
     match checked {
         amenbo_core::plugin_check::Checked::NotDeclared => None,
@@ -4680,6 +4682,7 @@ fn checked_dto(checked: &amenbo_core::plugin_check::Checked) -> Option<PluginChe
             ok: verdict.ok,
             message: verdict.message.clone(),
             fields: verdict.fields.clone(),
+            show: crate::dto::show_parts(&verdict.show),
             answered: true,
         }),
         // A silence has nothing of the plugin's in it (`AMB-D-354`), so nothing is invented here either:
@@ -4688,6 +4691,7 @@ fn checked_dto(checked: &amenbo_core::plugin_check::Checked) -> Option<PluginChe
             ok: false,
             message: None,
             fields: std::collections::BTreeMap::new(),
+            show: Vec::new(),
             answered: false,
         }),
     }
@@ -4784,6 +4788,12 @@ pub fn plugin_settings_check(
 ///
 /// `project_id` is the project the form is standing in, as everywhere else on this face — required for a
 /// `scope: project` plugin, and the device's own for a `scope: machine` one (`AMB-D-601`).
+///
+/// **What comes back is the run's verdict, its line, and the parts it asked to have drawn**
+/// (`AMB-D-727`). The parts are read off stdout, which this face never consumed before — so a plugin
+/// writing anything else there is not at fault and simply draws nothing. Whether the run succeeded is
+/// still the exit code's to say (`AMB-D-353`); an `ok` written into that document is the check's word,
+/// not an operation's, and is not read here.
 #[tauri::command]
 pub fn plugin_settings_action(
     name: String,
@@ -4796,6 +4806,9 @@ pub fn plugin_settings_action(
     // not one to hold shut for however long a `setup` takes (`AMB-D-664` puts no bound on a press).
     {
         let store = &open_store_read()?;
+        // The badge, off the manifest this machine holds: it is what decides whether a `qr` or a `link`
+        // the run asks for may be drawn (`AMB-D-727` / `AMB-D-347`), and an author cannot set it.
+        let official = amenbo_core::plugin_installed::read(&store.paths, &name)?.manifest.official;
         let outcome =
             amenbo_core::plugin_invoke::call_declared(store, &name, &cmd, &supplied, project_id)?;
         let (ok, diagnostic) = match &outcome {
@@ -4807,7 +4820,13 @@ pub fn plugin_settings_action(
             }
         };
         let line = diagnostic.lines().find(|l| !l.trim().is_empty()).map(str::to_string);
-        Ok(PluginActionRanDto { ok, message: line })
+        // A failed run's stdout is not consumed (`AMB-D-354`), so there is nothing of a failure's to draw
+        // beyond its line — which is what `value()` already answers.
+        let show = outcome
+            .value()
+            .map(|stdout| amenbo_core::plugin_show::of_stdout(stdout, official))
+            .unwrap_or_default();
+        Ok(PluginActionRanDto { ok, message: line, show: crate::dto::show_parts(&show) })
     }
 }
 
@@ -5417,17 +5436,33 @@ mod tests {
                 "smtp_host".to_string(),
                 "there is a space in it".to_string(),
             )]),
+            show: vec![amenbo_core::plugin_show::Part::Link {
+                url: "https://myaccount.google.com/apppasswords".into(),
+                label: "Create an app password".into(),
+            }],
         }))
         .expect("a check that answered is something to draw");
         assert!(!answered.ok && answered.answered);
         assert_eq!(answered.message.as_deref(), Some("the mailbox would not answer"));
         assert_eq!(answered.fields["smtp_host"], "there is a space in it");
+        // What the check asked to have drawn rides with its sentences (`AMB-D-727`) — the road to the
+        // page that issues the value is worth the most beside the box that is refusing it.
+        assert!(
+            matches!(
+                answered.show.as_slice(),
+                [PluginShowPartDto::Link { url, label }]
+                    if url == "https://myaccount.google.com/apppasswords"
+                        && label == "Create an app password"
+            ),
+            "the check's parts reach the form"
+        );
 
         let silent = checked_dto(&Checked::Silent(Silence::TimedOut)).expect("a silence is drawn too");
         assert!(!silent.ok, "a silence never opens a gate, and the form says the gate is shut");
         assert!(!silent.answered);
         assert_eq!(silent.message, None, "there is no sentence of the author's in it");
         assert!(silent.fields.is_empty());
+        assert!(silent.show.is_empty(), "nor anything of theirs to draw");
     }
 
     /// The other moment a check runs (`AMB-D-664`) — after a save, where it costs nothing. It is raised

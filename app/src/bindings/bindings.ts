@@ -675,9 +675,11 @@ ask: Array<PluginAskDto>, };
  * What pressing one of a plugin's declared operations did (`AMB-D-664`) — the whole of what the form
  * draws afterwards.
  *
- * **An operation has no return value.** What comes back is whether the run succeeded and the one line its
- * author wrote to stderr, which is the same reading every command run gets (`AMB-D-353`). Anything longer
- * is on the execution log, where every run of this plugin already is (`AMB-D-361`).
+ * **The exit code is still the whole verdict** (`AMB-D-353`), and the author's one line on stderr is
+ * still the sentence beside the button. What a run may now add to that is a set of parts to draw
+ * (`AMB-D-727`) — a QR to hold a phone up to, an address with a copy button — which is what gets anybody
+ * through a setup that a sentence cannot. Anything past those is on the execution log, where every run
+ * of this plugin already is (`AMB-D-361`).
  */
 export type PluginActionRanDto = { 
 /**
@@ -688,7 +690,14 @@ ok: boolean,
 /**
  * The author's own line, as written to stderr and drawn plain. Absent when the run said nothing.
  */
-message?: string, };
+message?: string, 
+/**
+ * What the run asked to have drawn, in the order it wrote them (`AMB-D-727`). Empty covers both a
+ * run that asked for nothing and one whose stdout is not an answer this build reads — an
+ * operation's stdout was never consumed before this, so a plugin writing something else there is
+ * drawn exactly as it always was.
+ */
+show: Array<PluginShowPartDto>, };
 
 /**
  * **One value an operation asks for at the press** (`AMB-D-664`) — a box drawn only while the press is
@@ -832,7 +841,13 @@ message?: string,
  * One sentence per setting the check spoke about, keyed by the setting's own key — drawn beside the
  * box it names. Core has already dropped any key the manifest does not declare.
  */
-fields: Record<string, string>, };
+fields: Record<string, string>, 
+/**
+ * What the check asked to have drawn, in the order it wrote them (`AMB-D-727`). A check runs before
+ * anybody has filled anything in, which is where a way to the page that issues the token is worth
+ * the most. Empty is a check that asked for nothing, which is every one written before this existed.
+ */
+show: Array<PluginShowPartDto>, };
 
 /**
  * One setting a plugin's author declared, and what this machine currently holds for it
@@ -1193,6 +1208,52 @@ readme?: string,
  * user than a failure: the answer is to wait, not to check the network.
  */
 rateLimited: boolean, };
+
+/**
+ * One thing a plugin's own run asked to have drawn on the settings form (`AMB-D-727`) — the vocabulary
+ * a check's verdict and an operation's answer both come back in.
+ *
+ * **The author supplies strings; Amenbo draws.** There is no markup here and no image: a `qr` carries
+ * the text to encode and a `link` a destination and the words on the button, so what appears on screen
+ * is the form's own, in the form's own paint. That is what keeps a plugin a child process
+ * (`AMB-D-346`) and what keeps a reader able to tell Amenbo's words from a stranger's.
+ *
+ * `qr` and `link` reach a face only for an official plugin (`AMB-D-727`); core drops a third party's
+ * before this is built, so nothing on this side has to know the rule.
+ */
+export type PluginShowPartDto = { "kind": "text", 
+/**
+ * The author's words.
+ */
+text: string, } | { "kind": "heading", 
+/**
+ * The author's words.
+ */
+text: string, } | { "kind": "note", 
+/**
+ * The author's words.
+ */
+text: string, } | { "kind": "list", 
+/**
+ * The lines.
+ */
+items: Array<string>, } | { "kind": "copy", 
+/**
+ * What the button copies, and what is drawn beside it.
+ */
+text: string, } | { "kind": "qr", 
+/**
+ * What the code encodes. The drawing is the screen's.
+ */
+text: string, } | { "kind": "link", 
+/**
+ * Where it goes — `http` or `https`, which core has already held it to.
+ */
+url: string, 
+/**
+ * The words on the button.
+ */
+label: string, };
 
 /**
  * One installed plugin the catalog holds a different build of (`AMB-D-359`) — an offer the face can act

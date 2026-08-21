@@ -418,6 +418,7 @@ mod tests {
             ok,
             message: Some("cannot sign in".into()),
             fields: about.iter().map(|(k, v)| ((*k).to_string(), (*v).to_string())).collect(),
+            show: Vec::new(),
         })
     }
 

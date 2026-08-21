@@ -247,7 +247,7 @@ beforeEach(() => {
   hoisted.checked = [];
   hoisted.saveCheck = undefined;
   hoisted.pressed = [];
-  hoisted.ran = { ok: true };
+  hoisted.ran = { ok: true, show: [] };
   hoisted.projects = [];
   hoisted.held = {};
   hoisted.removed = [];
@@ -770,6 +770,7 @@ describe("what the author's own code says on the form", () => {
       answered: true,
       message: "SCENARIO — the mailbox would not answer",
       fields: { smtp_host: "SCENARIO — there is a space in it" },
+      show: [],
     };
     render();
 
@@ -787,7 +788,7 @@ describe("what the author's own code says on the form", () => {
   it("says the check did not answer when it said nothing readable", async () => {
     hoisted.projects = [{ id: 7, name: "alpha" }];
     hoisted.installs = [row({ name: "mail", config: [field({ key: "smtp_host" })], projects: [at(7)] })];
-    hoisted.check = { ok: false, answered: false, fields: {} };
+    hoisted.check = { ok: false, answered: false, fields: {}, show: [] };
     render();
 
     await act(async () => { button(t("plugins.enable"))!.click(); });
@@ -810,6 +811,7 @@ describe("what the author's own code says on the form", () => {
       answered: true,
       message: "SCENARIO — the mailbox would not answer",
       fields: { smtp_user: "SCENARIO — it is not an address" },
+      show: [],
     };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
@@ -838,8 +840,12 @@ describe("what the author's own code says on the form", () => {
   it("replaces the switch's verdict with what the save's check said", async () => {
     hoisted.projects = [{ id: 7, name: "alpha" }];
     hoisted.installs = [row({ name: "mail", config: [field({ key: "smtp_host" })], projects: [at(7)] })];
-    hoisted.check = { ok: false, answered: true, message: "SCENARIO — when it was pressed", fields: {} };
-    hoisted.saveCheck = { ok: true, answered: true, message: "SCENARIO — after the save", fields: {} };
+    hoisted.check = {
+      ok: false, answered: true, message: "SCENARIO — when it was pressed", fields: {}, show: [],
+    };
+    hoisted.saveCheck = {
+      ok: true, answered: true, message: "SCENARIO — after the save", fields: {}, show: [],
+    };
     render();
 
     await act(async () => { button(t("plugins.enable"))!.click(); });
@@ -925,7 +931,7 @@ describe("what the author's own code says on the form", () => {
     hoisted.installs = [
       row({ name: "slack", on: [7], actions: [action({ cmd: "config test", label: "Send a test" })] }),
     ];
-    hoisted.ran = { ok: false, message: "SCENARIO — the webhook returned 404" };
+    hoisted.ran = { ok: false, message: "SCENARIO — the webhook returned 404", show: [] };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
 

@@ -1630,6 +1630,78 @@ pub struct PluginInstallDto {
     pub(crate) actions: Vec<PluginActionDto>,
 }
 
+/// One thing a plugin's own run asked to have drawn on the settings form (`AMB-D-727`) — the vocabulary
+/// a check's verdict and an operation's answer both come back in.
+///
+/// **The author supplies strings; Amenbo draws.** There is no markup here and no image: a `qr` carries
+/// the text to encode and a `link` a destination and the words on the button, so what appears on screen
+/// is the form's own, in the form's own paint. That is what keeps a plugin a child process
+/// (`AMB-D-346`) and what keeps a reader able to tell Amenbo's words from a stranger's.
+///
+/// `qr` and `link` reach a face only for an official plugin (`AMB-D-727`); core drops a third party's
+/// before this is built, so nothing on this side has to know the rule.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum PluginShowPartDto {
+    /// A line of explanation, drawn plain.
+    Text {
+        /// The author's words.
+        text: String,
+    },
+    /// A heading, breaking a long answer up.
+    Heading {
+        /// The author's words.
+        text: String,
+    },
+    /// A line that should stand out — a caution, a thing not to miss.
+    Note {
+        /// The author's words.
+        text: String,
+    },
+    /// A set of lines drawn as a list, in the order they were written.
+    List {
+        /// The lines.
+        items: Vec<String>,
+    },
+    /// A string with a copy button beside it, for what nobody should have to retype.
+    Copy {
+        /// What the button copies, and what is drawn beside it.
+        text: String,
+    },
+    /// A QR code drawn from a string. Official plugins only.
+    Qr {
+        /// What the code encodes. The drawing is the screen's.
+        text: String,
+    },
+    /// A button that opens a page in the reader's browser. Official plugins only.
+    Link {
+        /// Where it goes — `http` or `https`, which core has already held it to.
+        url: String,
+        /// The words on the button.
+        label: String,
+    },
+}
+
+/// Build the parts a run answered with, for a face to draw (`AMB-D-727`).
+pub(crate) fn show_parts(parts: &[amenbo_core::plugin_show::Part]) -> Vec<PluginShowPartDto> {
+    use amenbo_core::plugin_show::Part;
+    parts
+        .iter()
+        .map(|part| match part {
+            Part::Text(text) => PluginShowPartDto::Text { text: text.clone() },
+            Part::Heading(text) => PluginShowPartDto::Heading { text: text.clone() },
+            Part::Note(text) => PluginShowPartDto::Note { text: text.clone() },
+            Part::List(items) => PluginShowPartDto::List { items: items.clone() },
+            Part::Copy(text) => PluginShowPartDto::Copy { text: text.clone() },
+            Part::Qr(text) => PluginShowPartDto::Qr { text: text.clone() },
+            Part::Link { url, label } => {
+                PluginShowPartDto::Link { url: url.clone(), label: label.clone() }
+            }
+        })
+        .collect()
+}
+
 /// What the author's own check said about the values, for the screen that shows the form (`AMB-D-664`).
 ///
 /// It rides back with the gate because the check is what an enable raises: the switch is where the run
@@ -1653,6 +1725,10 @@ pub struct PluginCheckDto {
     /// box it names. Core has already dropped any key the manifest does not declare.
     #[ts(type = "Record<string, string>")]
     pub(crate) fields: std::collections::BTreeMap<String, String>,
+    /// What the check asked to have drawn, in the order it wrote them (`AMB-D-727`). A check runs before
+    /// anybody has filled anything in, which is where a way to the page that issues the token is worth
+    /// the most. Empty is a check that asked for nothing, which is every one written before this existed.
+    pub(crate) show: Vec<PluginShowPartDto>,
 }
 
 /// Where a gate ended up, and what closing it threw away (`AMB-D-399`) — what [`plugin_set_enabled`](crate::commands::plugin_set_enabled)
@@ -1684,9 +1760,11 @@ pub struct PluginGateMovedDto {
 /// What pressing one of a plugin's declared operations did (`AMB-D-664`) — the whole of what the form
 /// draws afterwards.
 ///
-/// **An operation has no return value.** What comes back is whether the run succeeded and the one line its
-/// author wrote to stderr, which is the same reading every command run gets (`AMB-D-353`). Anything longer
-/// is on the execution log, where every run of this plugin already is (`AMB-D-361`).
+/// **The exit code is still the whole verdict** (`AMB-D-353`), and the author's one line on stderr is
+/// still the sentence beside the button. What a run may now add to that is a set of parts to draw
+/// (`AMB-D-727`) — a QR to hold a phone up to, an address with a copy button — which is what gets anybody
+/// through a setup that a sentence cannot. Anything past those is on the execution log, where every run
+/// of this plugin already is (`AMB-D-361`).
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -1698,6 +1776,11 @@ pub struct PluginActionRanDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) message: Option<String>,
+    /// What the run asked to have drawn, in the order it wrote them (`AMB-D-727`). Empty covers both a
+    /// run that asked for nothing and one whose stdout is not an answer this build reads — an
+    /// operation's stdout was never consumed before this, so a plugin writing something else there is
+    /// drawn exactly as it always was.
+    pub(crate) show: Vec<PluginShowPartDto>,
 }
 
 /// What an uninstall actually found and removed (`AMB-D-357`) — the receipt the face reports from.

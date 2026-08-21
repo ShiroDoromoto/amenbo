@@ -130,6 +130,13 @@ pub struct Verdict {
     /// verdict stands. Ordered by key, since the form draws it beside its box rather than in the order the
     /// check happened to write.
     pub fields: BTreeMap<String, String>,
+    /// What the check asked to have drawn on the form (`AMB-D-727`), in the order it wrote them — the
+    /// same vocabulary an operation answers with ([`plugin_show`](crate::plugin_show)).
+    ///
+    /// A check is the one run that happens before anybody has filled anything in, which is where a way
+    /// to the page that issues the token is worth the most; empty is every check written before the
+    /// vocabulary existed.
+    pub show: Vec<crate::plugin_show::Part>,
 }
 
 impl Verdict {
@@ -204,7 +211,8 @@ pub fn run(
         crate::plugin_invoke::prepare_check(store, &plugin.name, cmd, project)?;
 
     let waited = invocation.spawn().and_then(|running| running.wait_timeout(bound));
-    let (checked, recorded) = read(&plugin.name, &plugin.manifest.config, waited, bound);
+    let (checked, recorded) =
+        read(&plugin.name, &plugin.manifest.config, plugin.manifest.official, waited, bound);
     plugin_log::record(&store.paths.plugin_log_file(), &recorded);
     Ok(checked)
 }
@@ -215,6 +223,7 @@ pub fn run(
 fn read(
     plugin: &str,
     declared: &[ConfigField],
+    official: bool,
     waited: std::io::Result<Option<PluginOutput>>,
     bound: Duration,
 ) -> (Checked, Run) {
@@ -243,7 +252,7 @@ fn read(
         }
         Ok(Some(output)) => {
             let recorded = line(Outcome::Ok, output.code, output.elapsed, &output.stderr);
-            match verdict(&output.stdout, declared) {
+            match verdict(&output.stdout, declared, official) {
                 Some(verdict) => (Checked::Answered(verdict), recorded),
                 None => {
                     // A clean exit is what the log records — the run itself was fine — so the reason the
@@ -266,8 +275,12 @@ fn read(
 /// does not declare is dropped and the rest of the verdict stands. A sentence past the cap or carrying
 /// control characters is not dropped but refused whole — the same floor a stored value is held to
 /// ([`plugin_config::check_value`](crate::plugin_config::check_value)) — because a verdict Amenbo has
-/// edited is no longer the author's answer, and this one is about to be put in front of a person.
-fn verdict(stdout: &str, declared: &[ConfigField]) -> Option<Verdict> {
+/// edited is no longer the author's answer, and this one is about to be put in front of a person. The
+/// parts it asks to have drawn (`AMB-D-727`) are read the same way, by
+/// [`plugin_show::read`](crate::plugin_show::read): a third party's `qr` is dropped and the rest stands,
+/// while a shape this build cannot draw takes the verdict with it. `official` is the catalog's badge off
+/// the installed manifest, which is what settles that (`AMB-D-347`).
+fn verdict(stdout: &str, declared: &[ConfigField], official: bool) -> Option<Verdict> {
     let document: Value = serde_json::from_str(stdout.trim()).ok()?;
     let document = document.as_object()?;
     if document.get("v").and_then(Value::as_u64) != Some(u64::from(VERSION)) {
@@ -296,7 +309,10 @@ fn verdict(stdout: &str, declared: &[ConfigField]) -> Option<Verdict> {
             }
         }
     }
-    Some(Verdict { ok, message, fields })
+    // Fail-closed on the parts as well (`AMB-D-354`): an answer this build cannot draw is one it cannot
+    // act on, and a verdict half-drawn in front of somebody is worse than the silence.
+    let show = crate::plugin_show::read(document.get("show"), official)?;
+    Some(Verdict { ok, message, fields, show })
 }
 
 /// One sentence out of a verdict, held to the floor Amenbo puts under every author string it shows
@@ -319,7 +335,7 @@ mod tests {
     }
 
     fn read_verdict(stdout: &str) -> Option<Verdict> {
-        verdict(stdout, &declared(&["smtp_user", "smtp_password"]))
+        verdict(stdout, &declared(&["smtp_user", "smtp_password"]), true)
     }
 
     // ───────────────────────── what a verdict says (`AMB-D-664`) ─────────────────────────
@@ -355,7 +371,10 @@ mod tests {
     #[test]
     fn a_bare_yes_is_a_verdict() {
         let read = read_verdict(r#"{"v":1,"ok":true}"#).expect("a yes with nothing to say");
-        assert_eq!(read, Verdict { ok: true, message: None, fields: BTreeMap::new() });
+        assert_eq!(
+            read,
+            Verdict { ok: true, message: None, fields: BTreeMap::new(), show: Vec::new() }
+        );
     }
 
     /// A line about a setting the manifest does not declare is dropped, and the verdict stands: there is no
@@ -390,7 +409,10 @@ mod tests {
             r#"{"v":1,"ok":true,"message":7}"#,     // a sentence is a string
             r#"{"v":1,"ok":false,"fields":{"smtp_user":7}}"#,
         ] {
-            assert!(verdict(stdout, &declared(&["smtp_user"])).is_none(), "read as a verdict: {stdout}");
+            assert!(
+                verdict(stdout, &declared(&["smtp_user"]), true).is_none(),
+                "read as a verdict: {stdout}"
+            );
         }
     }
 
@@ -437,6 +459,7 @@ mod tests {
         let (checked, recorded) = read(
             "mail",
             &declared(&["smtp_user"]),
+            true,
             output(Some(0), r#"{"v":1,"ok":true}"#, "signed in"),
             TIMEOUT,
         );
@@ -451,6 +474,7 @@ mod tests {
         let (checked, recorded) = read(
             "mail",
             &declared(&["smtp_user"]),
+            true,
             output(Some(3), r#"{"v":1,"ok":true}"#, "boom"),
             TIMEOUT,
         );
@@ -462,14 +486,14 @@ mod tests {
     #[test]
     fn a_check_that_writes_nonsense_has_checked_nothing() {
         let (checked, recorded) =
-            read("mail", &declared(&["smtp_user"]), output(Some(0), "fine!", ""), TIMEOUT);
+            read("mail", &declared(&["smtp_user"]), true, output(Some(0), "fine!", ""), TIMEOUT);
         assert_eq!(checked.silence(), Some(Silence::Unreadable));
         assert_eq!(recorded.outcome, Outcome::Ok, "the run itself was clean; the answer was not");
     }
 
     #[test]
     fn a_check_that_overran_is_logged_at_the_bound_it_was_killed_at() {
-        let (checked, recorded) = read("mail", &[], Ok(None), TIMEOUT);
+        let (checked, recorded) = read("mail", &[], true, Ok(None), TIMEOUT);
         assert_eq!(checked.silence(), Some(Silence::TimedOut));
         assert_eq!(recorded.outcome, Outcome::TimedOut);
         assert_eq!(recorded.elapsed, TIMEOUT);
@@ -479,7 +503,7 @@ mod tests {
     #[test]
     fn a_check_that_would_not_start_says_so_in_amenbos_own_words() {
         let (checked, recorded) =
-            read("mail", &[], Err(std::io::Error::other("no such file")), TIMEOUT);
+            read("mail", &[], true, Err(std::io::Error::other("no such file")), TIMEOUT);
         assert_eq!(checked.silence(), Some(Silence::NotLaunched));
         assert_eq!(recorded.outcome, Outcome::NotLaunched);
         assert!(recorded.stderr.contains("no such file"), "there was no child to write one");

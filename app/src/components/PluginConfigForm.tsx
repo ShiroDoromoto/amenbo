@@ -8,6 +8,7 @@ import {
   runPluginAction,
   setPluginConfig,
   usePluginConfig,
+  whenShows,
   type PluginAction,
   type PluginActionRan,
   type PluginConfigField,
@@ -134,6 +135,23 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
     return answer === "" || answer === NONE_SELECTED ? [] : answer.split(",");
   };
 
+  // Where every setting stands *on screen*, which is what its author's conditions are read against
+  // (`AMB-D-727`): what was typed, else what the layer holds, else the default behind it. This is the half
+  // of a `when` core cannot answer — the store has not been told about a box that is still being filled in,
+  // so someone ticking Cloudflare would otherwise wait for a save to see its fields.
+  const answers: Record<string, string> = {};
+  for (const f of install.config) {
+    const answer = f.fieldType === "multi" ? ticked(f).join(",") : shown(f) || f.defaultValue || "";
+    if (answer !== "") answers[f.key] = answer;
+  }
+  // The form as it stands: the settings whose conditions hold, each keeping only the candidates whose own
+  // do, and the operations that go with them — a form that hid Cloudflare's fields but kept its button
+  // would leave a step nobody could follow.
+  const drawn = install.config
+    .filter((f) => whenShows(f.when, answers))
+    .map((f) => ({ ...f, options: f.options.filter((o) => whenShows(o.when, answers)) }));
+  const actions = install.actions.filter((a) => whenShows(a.when, answers));
+
   // What the author's check says about the values a write has just left behind (`AMB-D-664`), or nothing
   // — a plugin that declares no check, and a crossing whose gate is shut, which core is the one to answer
   // (running their code is what enabling means, `AMB-D-351`).
@@ -224,7 +242,7 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
         </div>
       )}
       {check?.ok && check.message && <div className="plugcfg__note">{check.message}</div>}
-      {install.config.map((f) => (
+      {drawn.map((f) => (
         <div key={f.key} className="plugcfg__field">
           {/* A choice is a group of boxes, each with its own label, so the caption above it names the
               group rather than pointing at one input. */}
@@ -376,11 +394,11 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
 
       {/* The operations their author declared (`AMB-D-664`). Drawn under the fields because that is what
           they act on, and only for a plugin that declared any — a form with none is the form it was. */}
-      {install.actions.length > 0 && (
+      {actions.length > 0 && (
         <div className="plugcfg__acts">
           <div className="faint plugcfg__note">{t("plugins.act.title")}</div>
           {!enabled && <div className="plugcfg__note">{t("plugins.act.needsEnabled")}</div>}
-          {install.actions.map((a) => (
+          {actions.map((a) => (
             <div key={a.cmd} className="plugcfg__act">
               {/* A real button, not the link-styled feed__action: the author's own words are the label,
                   so a borderless faint one is read as one more line of their prose and never pressed —

@@ -4355,11 +4355,24 @@ pub async fn plugin_detail(
 /// (`AMB-D-621`): a translation carries no order of its own, so the pairing is by key at every step,
 /// candidates included. Nothing is resolved here — both halves travel, and the face picks
 /// (`AMB-D-623`).
+/// The conditions a face still has to judge, as the DTO carries them (`AMB-D-727`) — the platform's half
+/// already settled, so `None` is a thing this build's OS hides and is never drawn at all.
+fn wanted_when(when: &[amenbo_core::plugin_when::When]) -> Option<Vec<PluginWhenDto>> {
+    Some(
+        amenbo_core::plugin_when::after_platform(when)?
+            .into_iter()
+            .map(|c| PluginWhenDto { field: c.field, has: c.has })
+            .collect(),
+    )
+}
+
 fn wanted_setting(
     field: &amenbo_core::plugin_manifest::ConfigField,
     overlay: Option<&amenbo_core::plugin_manifest::ConfigFieldOverlay>,
+    when: Vec<PluginWhenDto>,
 ) -> PluginWantedSettingDto {
     PluginWantedSettingDto {
+        when,
         key: field.key.clone(),
         label: field.label.clone(),
         label_i18n: overlay.and_then(|o| o.label.clone()),
@@ -4371,13 +4384,18 @@ fn wanted_setting(
         secret: field.secret,
         required: field.required,
         field_type: field.field_type,
+        // A candidate this platform hides is dropped here rather than drawn greyed: an iCloud checkbox on
+        // Windows is not a choice someone could make (`AMB-D-727`).
         options: field
             .options
             .iter()
-            .map(|o| PluginConfigOptionDto {
-                label_i18n: overlay.and_then(|f| f.options.get(&o.value).cloned()),
-                value: o.value.clone(),
-                label: o.label.clone(),
+            .filter_map(|o| {
+                Some(PluginConfigOptionDto {
+                    when: wanted_when(&o.when)?,
+                    label_i18n: overlay.and_then(|f| f.options.get(&o.value).cloned()),
+                    value: o.value.clone(),
+                    label: o.label.clone(),
+                })
             })
             .collect(),
         default_value: field.default.clone(),
@@ -4393,7 +4411,13 @@ fn wanted_settings(
     config: &[amenbo_core::plugin_manifest::ConfigField],
     overlay: Option<&std::collections::BTreeMap<String, amenbo_core::plugin_manifest::ConfigFieldOverlay>>,
 ) -> Vec<PluginWantedSettingDto> {
-    config.iter().map(|f| wanted_setting(f, overlay.and_then(|o| o.get(&f.key)))).collect()
+    config
+        .iter()
+        .filter_map(|f| {
+            let when = wanted_when(&f.when)?;
+            Some(wanted_setting(f, overlay.and_then(|o| o.get(&f.key)), when))
+        })
+        .collect()
 }
 
 /// The operations a plugin's settings block declares, each with its words in the reader's language
@@ -4410,9 +4434,11 @@ fn wanted_actions(
     settings
         .actions
         .iter()
-        .map(|action| {
+        .filter_map(|action| {
+            let when = wanted_when(&action.when)?;
             let translated = overlay.and_then(|o| o.actions.get(&action.cmd));
-            PluginActionDto {
+            Some(PluginActionDto {
+                when,
                 cmd: action.cmd.clone(),
                 label: action.label.clone(),
                 label_i18n: translated.and_then(|a| a.label.clone()),
@@ -4426,7 +4452,7 @@ fn wanted_actions(
                         secret: field.secret,
                     })
                     .collect(),
-            }
+            })
         })
         .collect()
 }
@@ -5309,6 +5335,76 @@ mod tests {
         assert!(rows()[0].enabled, "the gate opened where nothing was in the way");
 
         let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// **The platform's half of a condition is settled here, and the rest travels** (`AMB-D-727`).
+    ///
+    /// A face never learns an OS name: what this build's platform hides is gone before the DTO is built,
+    /// which is the half core is the only one that can answer. What reads another setting is handed on,
+    /// because while a form is open the answers are the form's — the store has not been told about a box
+    /// still being filled in.
+    #[test]
+    fn what_this_platform_hides_never_reaches_the_form_and_the_rest_is_handed_on() {
+        use amenbo_core::plugin_manifest::{ConfigField, ConfigOption, FieldType, Os, Settings, SettingsAction};
+        use amenbo_core::plugin_when::When;
+
+        let here = Os::here().expect("this build runs on a platform Amenbo names");
+        let elsewhere = if here == Os::Windows { Os::Macos } else { Os::Windows };
+
+        let config = vec![
+            ConfigField {
+                field_type: FieldType::Multi,
+                options: vec![
+                    ConfigOption { when: vec![When::on([elsewhere])], ..ConfigOption::new("icloud", "iCloud") },
+                    ConfigOption::new("cloudflare", "Cloudflare"),
+                ],
+                ..ConfigField::new("transport", "経路")
+            },
+            ConfigField {
+                when: vec![When::on([elsewhere])],
+                ..ConfigField::new("apple_id", "Apple ID")
+            },
+            ConfigField {
+                when: vec![When::on([here]), When::field_has("transport", "cloudflare")],
+                ..ConfigField::new("worker_url", "Worker の URL")
+            },
+        ];
+
+        let drawn = wanted_settings(&config, None);
+        assert_eq!(
+            drawn.iter().map(|f| f.key.as_str()).collect::<Vec<_>>(),
+            ["transport", "worker_url"],
+            "the field this platform hides is not on the form at all",
+        );
+        assert_eq!(
+            drawn[0].options.iter().map(|o| o.value.as_str()).collect::<Vec<_>>(),
+            ["cloudflare"],
+            "nor is the candidate it hides",
+        );
+        assert!(drawn[0].when.is_empty(), "an unconditional field carries no condition on");
+        assert_eq!(
+            drawn[1].when.iter().map(|c| (c.field.as_str(), c.has.as_str())).collect::<Vec<_>>(),
+            [("transport", "cloudflare")],
+            "the platform clause held and is spent; what reads a setting is handed on",
+        );
+
+        let settings = Settings {
+            check: None,
+            actions: vec![
+                SettingsAction { when: vec![When::on([elsewhere])], ..SettingsAction::new("apple", "Apple") },
+                SettingsAction {
+                    when: vec![When::field_has("transport", "cloudflare")],
+                    ..SettingsAction::new("tunnel", "Raise the tunnel")
+                },
+            ],
+        };
+        let actions = wanted_actions(Some(&settings), None);
+        assert_eq!(
+            actions.iter().map(|a| a.cmd.as_str()).collect::<Vec<_>>(),
+            ["tunnel"],
+            "the button this platform hides is gone with its fields",
+        );
+        assert_eq!(actions[0].when.len(), 1, "and the one that is left carries what is still to judge");
     }
 
     /// The translations an install keeps beside its manifest (`AMB-D-622`), as the catalog published them.

@@ -6,10 +6,19 @@
 //! three fields to scroll past. Neither is something the author could fix from their side: there was
 //! nowhere to say "only when".
 //!
-//! **The reading is here, in core, and not on the screen** (`AMB-D-727`). A face does not know which OS
-//! this build is running on, and core does; putting the judgement anywhere else would let `plugin config
-//! get` and the form answer differently about the same field. What a face receives is the list that
-//! survived.
+//! **The reading splits where the facts live** (`AMB-D-727`). A condition asks two kinds of question, and
+//! they are answered in different places:
+//!
+//! - **the platform** is core's, because a face does not know which OS this build runs on and core does,
+//!   and because the answer cannot change while the program runs. [`after_platform`] settles it once, and
+//!   what it hides is gone before any face sees it;
+//! - **another setting's answer** is settled wherever the answers are. At the gate that is the store
+//!   ([`Stage`], [`crate::plugin_config::stage`]); while a form is open it is the form, whose boxes hold
+//!   answers the store has not been told about yet — someone ticking Cloudflare expects its fields the
+//!   same moment, not after a save.
+//!
+//! So a face is handed the platform's verdict already applied and [`OnAnswer`] for the rest, rather than a
+//! list it has to judge whole or a question it has to ask again on every keystroke.
 //!
 //! **What a condition hides is the field, never the value.** A value saved on a Mac is still there when the
 //! same store is opened on Windows, and still handed to the plugin — hiding a box is a statement about the
@@ -19,13 +28,13 @@
 //!
 //! The type lives here rather than beside the rest of the manifest's shapes because it is the one that
 //! carries a reading: [`Stage`] is what a condition is judged against, and keeping the two together is what
-//! keeps a second, drifting reading from being written somewhere else.
+//! keeps the store-side reading from drifting from the declaration it reads.
 
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::plugin_manifest::{ConfigField, Os, SettingsAction};
+use crate::plugin_manifest::Os;
 
 /// **One condition** (`AMB-D-727`). There are two kinds and no more — the platform this build runs on, and
 /// what another field currently holds:
@@ -131,39 +140,52 @@ impl Stage {
     }
 }
 
-/// **The fields a face draws at this stage** — the ones whose conditions hold, each carrying only the
-/// candidates whose own conditions hold (`AMB-D-727`).
+/// **One condition on another setting's answer** (`AMB-D-727`) — what is left of a `when` once the
+/// platform has answered its half ([`after_platform`]).
 ///
-/// Owned rather than borrowed because a surviving field is not always the declared one: a `multi` field
-/// whose candidate list was narrowed is a field the manifest does not contain.
-///
-/// **Nothing else may be filtered through this.** What a plugin is handed at run time is every value the
-/// store holds ([`crate::plugin_inject`]), and what an undeclared-value purge compares against is every
-/// declared key ([`crate::plugin_config::purge_undeclared`]) — passing a narrowed list to either would
-/// throw away a value for being off screen.
-pub fn visible_fields(fields: &[ConfigField], stage: &Stage) -> Vec<ConfigField> {
-    fields
-        .iter()
-        .filter(|field| stage.shows(&field.when))
-        .map(|field| {
-            let mut field = field.clone();
-            field.options.retain(|option| stage.shows(&option.when));
-            field
-        })
-        .collect()
+/// It is the half that keeps moving. A platform is settled for as long as the program runs, and an answer
+/// changes under the user's fingers: someone ticking Cloudflare on a settings form expects its three
+/// fields the same moment, before anything is saved and before the store has heard about it. So this is
+/// the shape a face is handed, to re-read against the answers it is holding.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OnAnswer {
+    /// The key of the setting whose answer this reads.
+    pub field: String,
+    /// The value looked for among that setting's answers.
+    pub has: String,
 }
 
-/// **The operations a face offers at this stage** (`AMB-D-727`) — someone who chose only iCloud has no use
-/// for a button that raises a Cloudflare tunnel, and a form that hides the fields but keeps the button
-/// leaves them a step they cannot read.
-pub fn visible_actions<'a>(actions: &'a [SettingsAction], stage: &Stage) -> Vec<&'a SettingsAction> {
-    actions.iter().filter(|action| stage.shows(&action.when)).collect()
+/// **The platform's half of the reading, settled once** (`AMB-D-727`).
+///
+/// `None` is a thing this build's platform hides outright — a Windows machine has no use for an iCloud
+/// candidate, and nothing that happens on the form will change that. `Some(rest)` is what is left to judge:
+/// the conditions that read another setting, handed on for whoever holds the answers.
+///
+/// **This is what "core does the filtering" means here.** A face does not know which OS it is running on,
+/// and core does, so the platform is decided where the fact lives and a face never learns an OS name. The
+/// half that is left is decided where the answers live — which, while a form is open, is the form: the
+/// store has not been told yet, so asking core would be asking about the answers of a moment ago.
+///
+/// A clause naming neither kind is dropped rather than obeyed, for the reason [`When`] gives: it decides
+/// nothing, and what a face cannot judge it must not hide something over. The validator refuses it at the
+/// author's desk ([`crate::plugin_validate`]).
+pub fn after_platform(when: &[When]) -> Option<Vec<OnAnswer>> {
+    let here = Os::here();
+    let mut rest = Vec::new();
+    for clause in when {
+        if !clause.os.is_empty() && !here.is_some_and(|os| clause.os.contains(&os)) {
+            return None;
+        }
+        if let (Some(field), Some(has)) = (&clause.field, &clause.has) {
+            rest.push(OnAnswer { field: field.clone(), has: has.clone() });
+        }
+    }
+    Some(rest)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugin_manifest::{ConfigOption, FieldType};
 
     fn stage(os: Option<Os>, values: &[(&str, &str)]) -> Stage {
         Stage::on(os, values.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect())
@@ -214,53 +236,32 @@ mod tests {
         assert!(stage(Some(Os::Macos), &[]).shows(&[half]));
     }
 
-    /// A hidden field is dropped whole; a shown one keeps only the candidates that are themselves shown.
+    /// The platform decides its half here and hands the rest on: a thing this platform hides is gone, and
+    /// what survives carries only the conditions that read an answer.
     #[test]
-    fn the_visible_list_drops_hidden_fields_and_hidden_candidates() {
-        let mut transport = ConfigField::new("transport", "経路");
-        transport.field_type = FieldType::Multi;
-        transport.options = vec![
-            ConfigOption {
-                value: "icloud".into(),
-                label: "iCloud".into(),
-                when: vec![When::on([Os::Macos])],
-            },
-            ConfigOption { value: "cloudflare".into(), label: "Cloudflare".into(), when: Vec::new() },
-        ];
-        let mut worker = ConfigField::new("worker_url", "Worker の URL");
-        worker.when = vec![When::field_has("transport", "cloudflare")];
+    fn the_platform_is_settled_and_the_answer_half_is_handed_on() {
+        let here = Os::here().expect("this build runs on a platform Amenbo names");
+        let elsewhere = if here == Os::Windows { Os::Macos } else { Os::Windows };
 
-        let fields = [transport, worker];
-        let on_windows = stage(Some(Os::Windows), &[("transport", "icloud")]);
-        let shown = visible_fields(&fields, &on_windows);
-        assert_eq!(shown.len(), 1, "the Cloudflare field is hidden while iCloud is the answer");
-        assert_eq!(shown[0].key, "transport");
+        assert_eq!(after_platform(&[]), Some(Vec::new()), "nothing declared survives with nothing left");
+        assert_eq!(after_platform(&[When::on([elsewhere])]), None, "another platform's is gone");
         assert_eq!(
-            shown[0].options.iter().map(|o| o.value.as_str()).collect::<Vec<_>>(),
-            ["cloudflare"],
-            "the iCloud candidate is Mac-only and this is Windows",
+            after_platform(&[When::on([here])]),
+            Some(Vec::new()),
+            "this platform's held, and left nothing behind to judge",
         );
-
-        let on_mac = stage(Some(Os::Macos), &[("transport", "cloudflare")]);
-        let shown = visible_fields(&fields, &on_mac);
-        assert_eq!(shown.len(), 2, "choosing Cloudflare brings its field out");
-        assert_eq!(shown[0].options.len(), 2, "both candidates stand on a Mac");
+        assert_eq!(
+            after_platform(&[When::on([here]), When::field_has("transport", "cloudflare")]),
+            Some(vec![OnAnswer { field: "transport".into(), has: "cloudflare".into() }]),
+            "the answer half is what a face is handed",
+        );
     }
 
-    /// An operation is filtered by the same reading its fields are.
+    /// A clause a face could not judge is dropped rather than obeyed — the same fail-open the reading
+    /// keeps, so an author's mistake never looks like a field that was never declared.
     #[test]
-    fn the_visible_operations_are_filtered_the_same_way() {
-        let tunnel = SettingsAction {
-            cmd: "tunnel".into(),
-            label: "Cloudflare 経路を立てる".into(),
-            ask: Vec::new(),
-            when: vec![When::field_has("transport", "cloudflare")],
-        };
-        let actions = [tunnel];
-        assert!(visible_actions(&actions, &stage(Some(Os::Macos), &[("transport", "icloud")])).is_empty());
-        assert_eq!(
-            visible_actions(&actions, &stage(Some(Os::Macos), &[("transport", "cloudflare")])).len(),
-            1,
-        );
+    fn a_clause_that_names_neither_kind_is_not_handed_on() {
+        let half = When { field: Some("transport".into()), has: None, ..When::default() };
+        assert_eq!(after_platform(&[When::default(), half]), Some(Vec::new()));
     }
 }

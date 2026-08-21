@@ -60,7 +60,7 @@ pub struct When {
     /// not "no platform".
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub os: Vec<Os>,
-    /// The key of the field whose value this clause reads — a [`ConfigField::key`] of the same manifest.
+    /// The key of the field whose value this clause reads — a [`crate::plugin_manifest::ConfigField::key`] of the same manifest.
     /// Written with [`has`](When::has); alone it is a mistake the validator names.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub field: Option<String>,
@@ -110,7 +110,7 @@ pub struct Stage {
 
 impl Stage {
     /// A stage on this build's platform, holding `values` — the resolved answer for each field that has
-    /// one, keyed by [`ConfigField::key`]. This is what every caller reading a real store wants;
+    /// one, keyed by [`crate::plugin_manifest::ConfigField::key`]. This is what every caller reading a real store wants;
     /// [`on`](Stage::on) is for saying otherwise.
     pub fn here(values: BTreeMap<String, String>) -> Self {
         Stage { os: Os::here(), values }

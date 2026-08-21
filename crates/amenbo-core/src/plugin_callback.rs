@@ -28,9 +28,9 @@
 //! **The reach is the gate, read back.** A plugin fires through its own gate, and that gate is also the
 //! window: it observes what it observes, so what it may read is what it may observe, and [`reach_of`] is
 //! that identity spelled out. Which gate that is comes from the layer the author declared (`AMB-D-601`) —
-//! one project for a `project` plugin, the whole device for a `machine` one. Both faces resolve the project
-//! before anything runs ([`plugin_trust::require_project`](crate::plugin_trust::require_project)), so
-//! neither has to decide this twice.
+//! one project for a `project` plugin, the whole device for a `machine` one. Both faces have already
+//! resolved that layer ([`Layer::of`](crate::plugin_layer::Layer::of)) before anything runs, so neither has
+//! to decide it twice, and neither needs a project id a device-wide run would only throw away.
 //!
 //! **This is not isolation** (`AMB-D-406`). A plugin has a shell: it can rewrite these variables, and it can
 //! open the store file directly. The trust boundary is the explicit enable (`AMB-D-351`), not a sandbox —
@@ -41,7 +41,7 @@ use std::path::Path;
 
 use crate::error::{Error, Result};
 use crate::idref::{self, RefKind};
-use crate::plugin_manifest::Scope;
+use crate::plugin_layer::Layer;
 use crate::reach::Reach;
 
 /// The variable naming the store a plugin reads back from. It is Amenbo's own `AMENBO_HOME` — the root that
@@ -57,17 +57,18 @@ pub const REACH_ENV: &str = crate::env::PLUGIN_REACH_VAR;
 /// enabled to carry; enabling it is the consent to let it read the whole device, and nothing asks again.
 pub const ALL_REACH: &str = "all";
 
-/// The window a plugin reads through, from the gate it fires through (`AMB-D-406`): the layer its author
-/// declared (`AMB-D-601`) is what says which gate that is.
+/// The window a plugin reads through, from the gate it fires through (`AMB-D-406`): the [`Layer`] its
+/// author declared (`AMB-D-601`) **is** that gate, so it is the whole of what this takes.
 ///
 /// A `project` plugin — the default, and what a manifest saying nothing means — reaches the one project
-/// whose gate let it fire, and `project` is that project. A `machine` plugin's gate is the device's, so its
-/// window is the device: it is handed [`Reach::All`], and the `project` it fired for narrows nothing. That
-/// is not a wider grant than the gate — it *is* the gate, read back, exactly as the project case is.
-pub fn reach_of(scope: Scope, project: i64) -> Reach {
-    match scope {
-        Scope::Project => Reach::window(project),
-        Scope::Machine => Reach::All,
+/// whose gate let it fire, which is the id its layer carries. A `machine` plugin's gate is the device's, so
+/// its window is the device: it is handed [`Reach::All`], and it needs no project to say so — asking for one
+/// would make a device-wide run demand a value it then discards, and refuse the runs that have none. That is
+/// not a wider grant than the gate — it *is* the gate, read back, exactly as the project case is.
+pub fn reach_of(layer: Layer) -> Reach {
+    match layer {
+        Layer::Project(id) => Reach::window(id),
+        Layer::Device => Reach::All,
     }
 }
 
@@ -145,19 +146,23 @@ fn unreadable(value: &str) -> Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugin_manifest::Scope;
 
     #[test]
     fn a_gate_is_the_window_it_fires_through() {
-        assert_eq!(reach_of(Scope::Project, 7), Reach::window(7));
+        assert_eq!(reach_of(Layer::Project(7)), Reach::window(7));
     }
 
     #[test]
-    fn a_device_wide_plugin_reads_the_device_and_the_project_it_fired_for_narrows_nothing() {
-        assert_eq!(reach_of(Scope::Machine, 7), Reach::All);
-        assert_eq!(reach_of(Scope::Machine, 9), Reach::All);
+    fn a_device_wide_plugin_reads_the_device_without_a_project_to_narrow_it() {
+        assert_eq!(reach_of(Layer::Device), Reach::All);
+        // The layer comes from the declaration, so a face standing in a project and one standing nowhere
+        // hand a `machine` plugin the same window (`AMB-D-601`).
+        assert_eq!(reach_of(Layer::of(Scope::Machine, Some(7)).unwrap()), Reach::All);
+        assert_eq!(reach_of(Layer::of(Scope::Machine, None).unwrap()), Reach::All);
         // An undeclared layer is the project's (`AMB-D-601`), so a manifest written before `scope` existed
         // keeps the window it has always had.
-        assert_eq!(reach_of(Scope::default(), 7), Reach::window(7));
+        assert_eq!(reach_of(Layer::of(Scope::default(), Some(7)).unwrap()), Reach::window(7));
     }
 
     #[test]
@@ -190,7 +195,7 @@ mod tests {
         );
         // And the device-wide half, which is the same two variables with the window opened.
         assert_eq!(
-            env(Path::new("/data/amenbo"), reach_of(Scope::Machine, 3))[1],
+            env(Path::new("/data/amenbo"), reach_of(Layer::Device))[1],
             ("AMENBO_PLUGIN_REACH".to_string(), ALL_REACH.to_string())
         );
     }

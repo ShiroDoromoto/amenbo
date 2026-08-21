@@ -34,6 +34,18 @@ fn store_with_settings(
     script: &str,
     settings: Option<serde_json::Value>,
 ) -> (Store, i64) {
+    store_with_scope(label, name, script, settings, None)
+}
+
+/// The same again, for a plugin whose manifest declares the layer it lives at (`AMB-D-601`) — `None` writes
+/// no `scope`, which is the `project` every other test here works with.
+fn store_with_scope(
+    label: &str,
+    name: &str,
+    script: &str,
+    settings: Option<serde_json::Value>,
+    scope: Option<&str>,
+) -> (Store, i64) {
     let base = amenbo_scratch::scratch(label);
     let paths = Paths::at(base.clone());
     let home = paths.plugin_dir(name);
@@ -50,6 +62,9 @@ fn store_with_settings(
     });
     if let Some(settings) = settings {
         manifest["settings"] = settings;
+    }
+    if let Some(scope) = scope {
+        manifest["scope"] = serde_json::Value::String(scope.to_string());
     }
     std::fs::write(home.join("manifest.json"), manifest.to_string()).unwrap();
     let program = home.join(name);
@@ -175,6 +190,28 @@ fn a_called_plugin_reads_the_store_and_its_window_out_of_its_environment() {
     // The gate it fired through is the project's, and so is the window (`AMB-D-406`).
     let reach = amenbo_core::idref::project(project);
     assert_eq!(outcome.value(), Some(format!("{base}|{reach}\n").as_str()));
+}
+
+/// A device-wide plugin runs from outside any project (`AMB-D-601`): the GUI's device row hands no project,
+/// and the layer is already `Device`, so nothing may demand an id on the way to a window that opens anyway.
+/// Before this, the read-back path asked for one regardless and the run died with
+/// `invalid_plugin_project_required` — a refusal the declaration says should never have been reachable.
+#[test]
+fn a_device_wide_plugin_runs_with_no_project_and_reads_the_whole_device() {
+    use amenbo_core::plugin_callback::{ALL_REACH, REACH_ENV, STORE_ENV};
+
+    let (mut store, _project) = store_with_scope(
+        "invoke-device-wide",
+        "viewer",
+        &format!("#!/bin/sh\ncat >/dev/null\nprintf '%s|%s\\n' \"${STORE_ENV}\" \"${REACH_ENV}\"\n"),
+        None,
+        Some("machine"),
+    );
+    enable(&mut store, "viewer", Layer::Device, &[], |_| true, &Checked::NotDeclared).unwrap();
+
+    let outcome = plugin_invoke::call(&store, "viewer", &[], None).unwrap();
+    let base = store.paths.base_dir.to_string_lossy();
+    assert_eq!(outcome.value(), Some(format!("{base}|{ALL_REACH}\n").as_str()));
 }
 
 /// One operation the settings face declares: a test send, asking for a token at the press.

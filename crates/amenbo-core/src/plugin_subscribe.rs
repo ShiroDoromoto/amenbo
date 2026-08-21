@@ -174,12 +174,11 @@ impl Subscribers for EnabledSubscribers<'_> {
             }
             // The read-back path (`AMB-D-406`): the store to call `amenbo` into, and the window to read it
             // through — the same gate that let this subscriber fire, since what a plugin may observe is what
-            // it may read. The layer its author declared says which gate that is (`AMB-D-601`): this
-            // project, or the whole device.
-            for (name, value) in plugin_callback::env(
-                &self.store.paths.base_dir,
-                plugin_callback::reach_of(plugin.manifest.scope, project),
-            ) {
+            // it may read. That gate is the `layer` resolved above (`AMB-D-601`): this project, or the whole
+            // device.
+            for (name, value) in
+                plugin_callback::env(&self.store.paths.base_dir, plugin_callback::reach_of(layer))
+            {
                 invocation = invocation.env(name, value);
             }
             subscribers.push(Subscriber {

@@ -675,6 +675,22 @@ pub struct ConfigOption {
     pub value: String,
     /// The human-readable label shown beside this candidate. Display text only.
     pub label: String,
+    /// **When this candidate is offered at all** (`AMB-D-727`) — an iCloud transport has nothing to offer
+    /// a Windows machine, and a checkbox for it is one more thing to read past. Empty means always, which
+    /// is what every candidate written before the key existed says.
+    ///
+    /// The reading is [`crate::plugin_when`]'s, and it hides the checkbox rather than the answer: a
+    /// candidate already chosen stays chosen and still reaches the plugin.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub when: Vec<crate::plugin_when::When>,
+}
+
+impl ConfigOption {
+    /// A candidate offered unconditionally — the pair an author writes when they name a value and the
+    /// words beside its checkbox and nothing else. [`when`](ConfigOption::when) is what narrows it.
+    pub fn new(value: impl Into<String>, label: impl Into<String>) -> Self {
+        ConfigOption { value: value.into(), label: label.into(), when: Vec::new() }
+    }
 }
 
 /// One field of a plugin's configuration schema (`AMB-D-356`, `AMB-D-415`). The author declares a flat list
@@ -772,6 +788,20 @@ pub struct ConfigField {
     /// manifest's default reaches every project that never answered.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default: Option<String>,
+    /// **When this field is drawn at all** (`AMB-D-727`) — the Cloudflare credentials belong on the form
+    /// of someone who chose Cloudflare, and nowhere else. Empty means always, which is what every field
+    /// written before the key existed says.
+    ///
+    /// **It hides the box, not the value** ([`crate::plugin_when`]). What the store holds is handed to the
+    /// plugin whether the field is on screen or not, so a value answered on a Mac is still there when the
+    /// store is opened on Windows.
+    ///
+    /// It does bind one thing besides the drawing: while the field is hidden, an empty
+    /// [`required`](ConfigField::required) does not shut the enable gate
+    /// ([`crate::plugin_trust::missing_required`]) — a gate held shut over a box nobody can see is one
+    /// nobody can open.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub when: Vec<crate::plugin_when::When>,
 }
 
 impl ConfigField {
@@ -790,6 +820,7 @@ impl ConfigField {
             field_type: FieldType::Text,
             options: Vec::new(),
             default: None,
+            when: Vec::new(),
         }
     }
 }
@@ -947,6 +978,22 @@ pub struct SettingsAction {
     /// are. An empty list does not serialize, as everywhere else.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ask: Vec<AskField>,
+    /// **When this button is offered at all** (`AMB-D-727`) — someone who chose only iCloud has no use for
+    /// "raise a Cloudflare tunnel", and hiding that transport's fields while leaving its button turns the
+    /// form into a step nobody can follow. Empty means always.
+    ///
+    /// Read exactly as a field's is ([`crate::plugin_when`]): the same two kinds of clause, judged against
+    /// the same layer's answers.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub when: Vec<crate::plugin_when::When>,
+}
+
+impl SettingsAction {
+    /// An operation offered unconditionally, asking for nothing beyond the values already saved — the
+    /// button an author writes when they name a call and the words on it.
+    pub fn new(cmd: impl Into<String>, label: impl Into<String>) -> Self {
+        SettingsAction { cmd: cmd.into(), label: label.into(), ask: Vec::new(), when: Vec::new() }
+    }
 }
 
 /// **One input an operation asks for, for that run alone** (`AMB-D-664`).

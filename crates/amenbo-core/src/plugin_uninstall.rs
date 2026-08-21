@@ -156,7 +156,7 @@ mod tests {
         plugin_config::set(store, &field("events", false), plugin, Layer::Project(project), "merge").unwrap();
         plugin_config::set(store, &field("token", true), plugin, Layer::Project(project), "s3cret").unwrap();
         // ...and a project that has the plugin on, the gate's residue (`AMB-D-434`).
-        crate::plugin_trust::enable(store, plugin, Layer::Project(project), &[], |_| true, &Checked::NotDeclared)
+        crate::plugin_trust::enable(store, plugin, Layer::Project(project), &[], &crate::plugin_when::Stage::default(), |_| true, &Checked::NotDeclared)
             .unwrap();
         // ...and an event still waiting on its queue, which goes with the plugin (`AMB-D-399`).
         let tx = store.read_model().write().unwrap();

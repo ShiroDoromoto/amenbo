@@ -359,14 +359,13 @@ mod tests {
         plugin.manifest.settings = Some(Settings {
             check: Some("config check".into()),
             actions: vec![SettingsAction {
-                cmd: "config test".into(),
-                label: "Send a test message".into(),
                 ask: vec![AskField {
                     key: "api_token".into(),
                     label: "API token".into(),
                     secret: true,
                     extra: Default::default(),
                 }],
+                ..SettingsAction::new("config test", "Send a test message")
             }],
         });
 

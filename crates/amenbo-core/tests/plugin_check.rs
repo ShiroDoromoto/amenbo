@@ -81,7 +81,7 @@ fn enable_after_check_within(
 ) -> amenbo_core::error::Result<Checked> {
     let plugin = amenbo_core::plugin_installed::read(&store.paths, "mail")?;
     let checked = plugin_check::run(store, &plugin, Some(project), bound)?;
-    enable(store, "mail", Layer::Project(project), &plugin.manifest.config, |_| true, &checked)?;
+    enable(store, "mail", Layer::Project(project), &plugin.manifest.config, &amenbo_core::plugin_when::Stage::default(), |_| true, &checked)?;
     Ok(checked)
 }
 
@@ -268,6 +268,7 @@ fn a_check_that_cannot_start_refuses_too() {
         "mail",
         Layer::Project(project),
         &plugin.manifest.config,
+        &amenbo_core::plugin_when::Stage::default(),
         |_| true,
         &checked,
     )
@@ -290,7 +291,7 @@ fn a_device_wide_check_runs_from_no_project_and_opens_the_device_gate() {
 
     let plugin = amenbo_core::plugin_installed::read(&store.paths, "mail").unwrap();
     let checked = plugin_check::run(&store, &plugin, None, PATIENT).unwrap();
-    enable(&mut store, "mail", Layer::Device, &plugin.manifest.config, |_| true, &checked).unwrap();
+    enable(&mut store, "mail", Layer::Device, &plugin.manifest.config, &amenbo_core::plugin_when::Stage::default(), |_| true, &checked).unwrap();
 
     assert_eq!(checked.verdict().unwrap().message.as_deref(), Some("signed in"));
     assert!(effective_enabled_in(&store, "mail", Layer::Device).unwrap());
@@ -309,7 +310,7 @@ fn a_device_wide_check_that_says_no_holds_the_device_gate_shut() {
 
     let plugin = amenbo_core::plugin_installed::read(&store.paths, "mail").unwrap();
     let checked = plugin_check::run(&store, &plugin, None, PATIENT).unwrap();
-    let err = enable(&mut store, "mail", Layer::Device, &plugin.manifest.config, |_| true, &checked)
+    let err = enable(&mut store, "mail", Layer::Device, &plugin.manifest.config, &amenbo_core::plugin_when::Stage::default(), |_| true, &checked)
         .unwrap_err();
 
     assert!(err.message_en().contains("smtp_user"), "{}", err.message_en());

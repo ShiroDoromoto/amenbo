@@ -227,13 +227,13 @@ mod tests {
 
     /// Open a plugin's gate in one project — what an enable does.
     fn enable_in(store: &mut Store, plugin: &str, project: i64) {
-        plugin_trust::enable(store, plugin, Layer::Project(project), &[], |_| true, &Checked::NotDeclared)
+        plugin_trust::enable(store, plugin, Layer::Project(project), &[], &crate::plugin_when::Stage::default(), |_| true, &Checked::NotDeclared)
             .unwrap();
     }
 
     /// The device gate — where a `scope: machine` plugin's one switch is (`AMB-D-601`).
     fn enable_on_the_device(store: &mut Store, plugin: &str) {
-        plugin_trust::enable(store, plugin, Layer::Device, &[], |_| true, &Checked::NotDeclared)
+        plugin_trust::enable(store, plugin, Layer::Device, &[], &crate::plugin_when::Stage::default(), |_| true, &Checked::NotDeclared)
             .unwrap();
     }
 

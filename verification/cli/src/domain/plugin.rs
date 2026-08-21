@@ -545,6 +545,12 @@ impl Driver<'_> {
             // environment of that same run and is kept nowhere else — so the program says both in one
             // line, and a road can read from the form that the press reached the author's code carrying
             // what was typed into it.
+            //
+            // It answers a check with a yes on the other stream, because the two faces read different
+            // ones: a press draws stderr and discards stdout, a check reads stdout and only logs stderr.
+            // A plugin has one program, so a settings block with both halves in it would otherwise need
+            // two standing in the same place — and this way the road declares both and neither face
+            // hears the other's answer.
             "press-program" => {
                 let name = req_str(with, "name")?;
                 let path = self.session.home.join("plugins").join(name).join(name);
@@ -554,20 +560,22 @@ impl Driver<'_> {
                 // `AMENBO_ASK_` is Amenbo's own prefix for what a press asked for, and the whole value is
                 // taken rather than the variable's name, since what the form draws is read by an eye. A
                 // press that asked for nothing leaves the line saying so, which is the reading a road
-                // about a button that runs outright wants. The script ends cleanly whatever it found:
-                // a non-zero exit is a failed operation, and the line would be drawn as one.
+                // about a button that runs outright wants. The verdict on stdout is what a check reads,
+                // and a press never looks at it. The script ends cleanly whatever it found: a non-zero
+                // exit is a failed operation, and the line would be drawn as one.
                 std::fs::write(
                     &path,
                     "#!/bin/sh\n\
                      asked=$(env | sed -n 's/^AMENBO_ASK_[A-Za-z0-9_]*=//p' | head -1)\n\
                      if [ -z \"$asked\" ]; then asked='nothing at all'; fi\n\
                      echo \"the operation was handed $asked\" >&2\n\
+                     echo '{\"v\":1,\"ok\":true}'\n\
                      exit 0\n",
                 )
                 .map_err(|e| format!("could not write {}: {e}", path.display()))?;
                 make_runnable(&path)?;
                 Ok(Outcome::action(format!(
-                    "left `{name}` answering a press with one line, naming what it was asked for"
+                    "left `{name}` answering a press with one line naming what it was asked for, and a check with a yes"
                 )))
             }
             // Writing what a plugin says for itself onto the manifest beside its binary — the author's

@@ -8,6 +8,16 @@
 # is the whole device — there is no second question under it, because the declaration already settled what
 # the switch means.
 #
+# The press in the middle is where the plugin's own body runs. Everything before it is Amenbo drawing a
+# row and writing a row; the check the switch raises, and the operation pressed after it, are the author's
+# code being launched from a face that stands in no project — which is the one thing a device-wide plugin
+# is for and the one thing a road that only fills the row in never reaches. Both go through the same door,
+# and a build that asked that door for a project it would then throw away turned both away.
+#
+# The gate opening is what says the check ran: a check is declared here, and a check that is not answered
+# — nothing on stdout, a non-zero exit, a run that never started — leaves the gate shut. So a row that
+# says "on" with a check standing in front of it is a row whose plugin was launched and said yes.
+#
 # The last two steps are the other half of "one gate": a reader standing in a project must not find a
 # second switch there. A project's own settings name the plugin and offer nothing to press, and the
 # picker that adds a crossing does not list it — there is no crossing to add.
@@ -16,18 +26,20 @@
 # project to name, which the road beside this one walks. What only a screen can be wrong about is whether
 # the row exists at all, and whether the project's face quietly offers a switch of its own.
 #
-# The declaration and the setting are written onto the installed manifest by the driver, because no plugin
-# the official catalog serves carries either. The world is stood up before the app is; what is left to the
-# operator is where to start, which is the installed plugins screen.
+# The declaration, the setting, the check, the operation and the program behind both are written onto the
+# installed manifest by the driver, because no plugin the official catalog serves carries any of them (see
+# those ops' own notes). The world is stood up before the app is; what is left to the operator is where to
+# start, which is the installed plugins screen.
 id: put-a-device-wide-plugin-to-work
 title: A plugin declared the machine's is filled in and turned on from its own row, and a project's settings offer no second switch for it
 description: >
   Start with a plugin the machine's, installed and firing nowhere, owing a setting its author says it
   cannot work without. Its row is the device's own: it carries the mark before anything is pressed, the
   settings open inside it and ask for no project, the value goes in there, the mark gives way, and one
-  press turns the plugin on for the whole machine. Then open a project's own settings and read the other
-  half of that: the plugin is named there as the device's, with nothing to press and nothing in the picker
-  to add.
+  press turns the plugin on for the whole machine — a switch that raises the author's own check first, so
+  a row saying "on" is a plugin that ran. Then press the operation its author put on that same form and
+  read the line their code wrote back. Then open a project's own settings and read the other half of it
+  all: the plugin is named there as the device's, with nothing to press and nothing in the picker to add.
 given:
   # The project the last two steps stand in. A road on screen cannot raise one on its way past, and a
   # project's own settings are what the second half of this is read on.
@@ -63,6 +75,37 @@ given:
       key: base
       label: Base branch
       required: true
+
+  # The check the switch raises before it opens. It is what makes the enable below launch the plugin at
+  # all: a row with no check declared turns on with nothing of the author's ever running, which leaves the
+  # door that assembles a run from no project standing beside the road rather than on it.
+  - type: action
+    domain: plugin
+    op: declare-check
+    with:
+      name: worktree
+      cmd: config check
+
+  # And the operation behind the gate, which is that same door reached the other way — pressed by a reader
+  # rather than raised by a switch, and from the device's own form, where there is no project to name.
+  - type: action
+    domain: plugin
+    op: declare-action
+    with:
+      name: worktree
+      cmd: config test
+      label: Send a test message
+      ask: api_token
+      ask_label: API token
+
+  # The program behind both. A check with nothing to answer it leaves the gate shut, and a press with
+  # nothing behind it draws Amenbo's own sentence instead of an author's — so the one program stood in
+  # here says yes to the check and names what the press handed it.
+  - type: action
+    domain: plugin
+    op: press-program
+    with:
+      name: worktree
 
 steps_gui:
   # The mark before the switch. A warning that only arrives after the refusal arrives too late, and on
@@ -118,12 +161,47 @@ steps_gui:
     with:
       name: worktree
 
+  # The gate open with a check in front of it, which is the plugin's own body having run from a face
+  # standing in no project. A build that could not launch it from here would be sitting on the row before
+  # this one, refusing.
   - type: assert
     domain: plugin
     op: fires-on-device
     with:
       name: worktree
       present: true
+
+  # And the same door pressed by hand. The button is on the device's own form, so nothing about this press
+  # names a project either — what it asks for it asks at the press, and the line that comes back is the
+  # author's own, which is the whole of what a run says for itself here.
+  - type: action
+    domain: plugin
+    op: press
+    with:
+      name: worktree
+      label: Send a test message
+
+  - type: assert
+    domain: plugin
+    op: press-asks
+    with:
+      name: worktree
+      label: API token
+
+  - type: action
+    domain: plugin
+    op: press-answer
+    with:
+      name: worktree
+      label: API token
+      value: cf-9f2a41d7e6
+
+  - type: assert
+    domain: plugin
+    op: press-said
+    with:
+      name: worktree
+      text: the operation was handed cf-9f2a41d7e6
 
   # And the other half of one gate. A project's own settings are where a second switch would appear if
   # there were one, so this is the face the road has to end on rather than the one it started from.

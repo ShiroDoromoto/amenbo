@@ -404,6 +404,9 @@
 /* What one press asks for and nothing keeps — indented under its own button, so the boxes read as part of
    the press rather than as more settings. */
 .plugcfg__ask { display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-1); width: 100%; padding-left: var(--s-3); }
+/* The pair that closes the ask box. Its own row, because the box stacks its boxes in a column and two
+   buttons one above the other read as two separate steps rather than a choice between them. */
+.plugcfg__askacts { display: flex; align-items: center; gap: var(--s-2); margin-top: var(--s-1); }
 .plugdet__readme { border-top: 1px solid var(--c-border); padding-top: var(--s-3); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .plugdet__foot { border-top: 1px solid var(--c-border); margin-top: var(--s-4); padding-top: var(--s-2); font-size: var(--fs-xs); }
 /* Holder-side surface of `AMB-D-366`: premises pinned on after a task was reserved. A different axis from

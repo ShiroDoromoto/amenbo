@@ -382,8 +382,11 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
           {!enabled && <div className="plugcfg__note">{t("plugins.act.needsEnabled")}</div>}
           {install.actions.map((a) => (
             <div key={a.cmd} className="plugcfg__act">
+              {/* A real button, not the link-styled feed__action: the author's own words are the label,
+                  so a borderless faint one is read as one more line of their prose and never pressed —
+                  and pressing these in turn is the whole way a plugin's setup is walked. */}
               <button
-                className="feed__action"
+                className="btn"
                 disabled={!enabled || pressing !== null}
                 onClick={() => {
                   // A press that asks for nothing runs; one that asks opens its boxes first, empty every
@@ -415,23 +418,27 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
                   {/* The one thing worth saying about these boxes: what is typed into them goes to this
                       run and is kept nowhere, which is what makes them different from the form above. */}
                   <div className="faint plugcfg__note">{t("plugins.act.askNote")}</div>
-                  <button
-                    className="btn"
-                    disabled={pressing !== null}
-                    onClick={() => void onPress(a)}
-                  >
-                    {t("plugins.act.run")}
-                  </button>
-                  <button
-                    className="feed__action"
-                    disabled={pressing !== null}
-                    onClick={() => {
-                      setAsking(null);
-                      setAsked({});
-                    }}
-                  >
-                    {t("plugins.act.cancel")}
-                  </button>
+                  {/* Run and cancel side by side, the way every other form in the app closes: the one
+                      that runs carries the accent, the one that backs out is the plain button. */}
+                  <div className="plugcfg__askacts">
+                    <button
+                      className="btn btn--primary"
+                      disabled={pressing !== null}
+                      onClick={() => void onPress(a)}
+                    >
+                      {t("plugins.act.run")}
+                    </button>
+                    <button
+                      className="btn"
+                      disabled={pressing !== null}
+                      onClick={() => {
+                        setAsking(null);
+                        setAsked({});
+                      }}
+                    >
+                      {t("plugins.act.cancel")}
+                    </button>
+                  </div>
                 </div>
               )}
               {/* What the press did: the author's own line where they wrote one, and Amenbo's word for it

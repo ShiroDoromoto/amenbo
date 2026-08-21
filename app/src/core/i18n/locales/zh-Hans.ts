@@ -423,6 +423,8 @@ export const zhHans: Translation = {
     "plugins.act.running": "正在执行…", "plugins.act.ok": "已完成", "plugins.act.failed": "没有执行到最后",
     "plugins.act.run": "执行", "plugins.act.cancel": "取消",
     "plugins.act.askNote": "只交给这次执行，不会保存。",
+    "plugins.show.copy": "复制", "plugins.show.copied": "已复制",
+    "plugins.show.qr": "二维码",
     "plugins.check.refused": "它自己的检查拒绝了这些设置，因此没有启用。",
     "plugins.check.noAnswer": "它自己的检查没有回答，因此没有启用。执行日志里有发生了什么。",
     "plugins.updates.title.other": "有 {n} 个插件可以更新",

@@ -431,6 +431,8 @@ export const ja: Translation = {
     "plugins.act.running": "実行中…", "plugins.act.ok": "実行しました", "plugins.act.failed": "最後まで実行できませんでした",
     "plugins.act.run": "実行", "plugins.act.cancel": "やめる",
     "plugins.act.askNote": "この実行にだけ渡され、保存されません。",
+    "plugins.show.copy": "コピー", "plugins.show.copied": "コピーしました",
+    "plugins.show.qr": "QR コード",
     "plugins.check.refused": "プラグインの検査がこの設定を断ったので、有効にしていません。",
     "plugins.check.noAnswer": "プラグインの検査が答えなかったので、有効にしていません。何が起きたかは実行ログにあります。",
     // the update banner and its explicit re-check

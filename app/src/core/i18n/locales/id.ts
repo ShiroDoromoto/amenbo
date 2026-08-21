@@ -425,6 +425,8 @@ export const id: Translation = {
     "plugins.act.running": "Sedang berjalan…", "plugins.act.ok": "Selesai", "plugins.act.failed": "Tidak sampai selesai",
     "plugins.act.run": "Jalankan", "plugins.act.cancel": "Batal",
     "plugins.act.askNote": "Diberikan hanya untuk jalannya kali ini dan tidak disimpan di mana pun.",
+    "plugins.show.copy": "Salin", "plugins.show.copied": "Tersalin",
+    "plugins.show.qr": "Kode QR",
     "plugins.check.refused": "Pemeriksaannya sendiri menolak pengaturan ini, jadi tidak diaktifkan.",
     "plugins.check.noAnswer": "Pemeriksaannya sendiri tidak menjawab, jadi tidak diaktifkan. Log eksekusi memuat apa yang terjadi.",
     "plugins.updates.title.other": "{n} pembaruan plugin tersedia",

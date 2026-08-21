@@ -422,6 +422,8 @@ export const hi: Translation = {
     "plugins.act.running": "चल रहा है…", "plugins.act.ok": "हो गया", "plugins.act.failed": "यह पूरा नहीं हुआ",
     "plugins.act.run": "चलाएँ", "plugins.act.cancel": "रद्द करें",
     "plugins.act.askNote": "सिर्फ़ इसी बार के लिए दिया जाता है, कहीं सहेजा नहीं जाता।",
+    "plugins.show.copy": "कॉपी करें", "plugins.show.copied": "कॉपी हो गया",
+    "plugins.show.qr": "क्यूआर कोड",
     "plugins.check.refused": "इसकी अपनी जाँच ने ये सेटिंग्स ठुकरा दीं, इसलिए यह चालू नहीं हुआ।",
     "plugins.check.noAnswer": "इसकी अपनी जाँच ने कोई जवाब नहीं दिया, इसलिए यह चालू नहीं हुआ। क्या हुआ यह रन लॉग में है।",
     "plugins.updates.title.one": "{n} प्लगिन अपडेट उपलब्ध", "plugins.updates.title.other": "{n} प्लगिन अपडेट उपलब्ध",

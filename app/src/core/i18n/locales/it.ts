@@ -441,6 +441,8 @@ export const it: Translation = {
     "plugins.act.running": "In corso…", "plugins.act.ok": "Fatto", "plugins.act.failed": "Non è arrivata in fondo",
     "plugins.act.run": "Esegui", "plugins.act.cancel": "Annulla",
     "plugins.act.askNote": "Passato solo a questa esecuzione e non conservato da nessuna parte.",
+    "plugins.show.copy": "Copia", "plugins.show.copied": "Copiato",
+    "plugins.show.qr": "Codice QR",
     "plugins.check.refused": "Il suo controllo ha rifiutato queste impostazioni, quindi non è stato attivato.",
     "plugins.check.noAnswer": "Il suo controllo non ha risposto, quindi non è stato attivato. Il registro delle esecuzioni dice cos’è successo.",
     "plugins.updates.title.one": "{n} aggiornamento di estensione disponibile",

@@ -441,6 +441,8 @@ export const es: Translation = {
     "plugins.act.running": "Ejecutando…", "plugins.act.ok": "Hecho", "plugins.act.failed": "No llegó a terminar",
     "plugins.act.run": "Ejecutar", "plugins.act.cancel": "Cancelar",
     "plugins.act.askNote": "Se entrega solo a esta ejecución y no se guarda en ningún sitio.",
+    "plugins.show.copy": "Copiar", "plugins.show.copied": "Copiado",
+    "plugins.show.qr": "Código QR",
     "plugins.check.refused": "Su propia comprobación rechazó estos ajustes, así que no se activó.",
     "plugins.check.noAnswer": "Su propia comprobación no respondió, así que no se activó. El registro de ejecución dice qué pasó.",
     "plugins.updates.title.one": "{n} actualización de complemento disponible",

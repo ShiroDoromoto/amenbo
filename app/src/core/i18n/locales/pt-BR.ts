@@ -442,6 +442,8 @@ export const ptBR: Translation = {
     "plugins.act.running": "Executando…", "plugins.act.ok": "Pronto", "plugins.act.failed": "Não chegou ao fim",
     "plugins.act.run": "Executar", "plugins.act.cancel": "Cancelar",
     "plugins.act.askNote": "Entregue só a esta execução e não guardado em lugar nenhum.",
+    "plugins.show.copy": "Copiar", "plugins.show.copied": "Copiado",
+    "plugins.show.qr": "Código QR",
     "plugins.check.refused": "A verificação dele recusou estas configurações, então não foi ativado.",
     "plugins.check.noAnswer": "A verificação dele não respondeu, então não foi ativado. O log de execução diz o que aconteceu.",
     "plugins.updates.title.one": "{n} atualização de plugin disponível",

@@ -206,6 +206,7 @@ const field = (
   secretSet: false,
   fieldType: "text",
   options: [],
+  when: [],
   state: over.value != null || over.secretSet ? "chosen" : "unanswered",
   ...over,
 });
@@ -221,6 +222,7 @@ const form = (...fields: PluginWantedSettingDto[]): PluginFormEntryDto[] =>
 const action = (over: Partial<PluginActionDto> & { cmd: string }): PluginActionDto => ({
   label: over.cmd,
   ask: [],
+  when: [],
   ...over,
 });
 
@@ -610,8 +612,8 @@ describe("the settings form", () => {
       key: "events",
       fieldType: "multi",
       options: [
-        { value: "task.done", label: "Done" },
-        { value: "task.rejected", label: "Rejected" },
+        { value: "task.done", label: "Done", when: [] },
+        { value: "task.rejected", label: "Rejected", when: [] },
       ],
       defaultValue: "task.done",
     });
@@ -632,6 +634,77 @@ describe("the settings form", () => {
     ]);
   });
 
+  // **A condition is read against the answers on screen, not the ones in the store** (`AMB-D-727`). The
+  // platform's half is already gone by the time the form has this — core settles it — so what is left is
+  // the half that moves under the user's fingers, and it has to move at the tick rather than at the save.
+  it("draws a conditioned field, its candidates and its button the moment the answer they read changes", async () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    const transport = field({
+      key: "transport",
+      fieldType: "multi",
+      options: [
+        { value: "icloud", label: "iCloud", when: [] },
+        { value: "cloudflare", label: "Cloudflare", when: [] },
+      ],
+    });
+    const worker = field({
+      key: "worker_url",
+      label: "Worker の URL",
+      when: [{ field: "transport", has: "cloudflare" }],
+    });
+    hoisted.installs = [
+      row({
+        name: "viewer",
+        on: [7],
+        config: form(transport, worker),
+        actions: [action({ cmd: "tunnel", label: "Raise the tunnel", when: [{ field: "transport", has: "cloudflare" }] })],
+      }),
+    ];
+    hoisted.held = { viewer: { 7: [transport, worker] } };
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+
+    // Nothing answers it, so neither the field nor the button that acts on it is on the form.
+    expect(container.textContent).not.toContain("Worker の URL");
+    expect(button("Raise the tunnel")).toBeUndefined();
+
+    // Ticking Cloudflare brings both out — before any save, which is the whole point.
+    act(() => { boxes()[1].click(); });
+    expect(container.textContent).toContain("Worker の URL");
+    expect(button("Raise the tunnel")).toBeDefined();
+
+    // And unticking it puts them away again.
+    act(() => { boxes()[1].click(); });
+    expect(container.textContent).not.toContain("Worker の URL");
+    expect(button("Raise the tunnel")).toBeUndefined();
+  });
+
+  // A candidate carries its own condition, and it is read the same way — the checkbox goes, the field it
+  // belongs to stays.
+  it("drops a candidate whose own condition does not hold", async () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    const mode = field({ key: "mode", fieldType: "multi", options: [{ value: "advanced", label: "Advanced", when: [] }] });
+    const events = field({
+      key: "events",
+      fieldType: "multi",
+      options: [
+        { value: "task.done", label: "Done", when: [] },
+        { value: "task.rejected", label: "Rejected", when: [{ field: "mode", has: "advanced" }] },
+      ],
+    });
+    hoisted.installs = [row({ name: "notify", on: [7], config: form(mode, events) })];
+    hoisted.held = { notify: { 7: [mode, events] } };
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+
+    expect(container.textContent).toContain("Done");
+    expect(container.textContent).not.toContain("Rejected");
+
+    // Ticking `advanced` — the first box on the form — offers the candidate it gates.
+    act(() => { boxes()[0].click(); });
+    expect(container.textContent).toContain("Rejected");
+  });
+
   // Unticking the last box is an answer, not a retraction: it writes the reserved word, because an empty
   // value is where "nobody answered" already lives.
   it("writes the word for none of them when every box comes off", async () => {
@@ -639,7 +712,7 @@ describe("the settings form", () => {
     const events = field({
       key: "events",
       fieldType: "multi",
-      options: [{ value: "task.done", label: "Done" }],
+      options: [{ value: "task.done", label: "Done", when: [] }],
       value: "task.done",
     });
     hoisted.installs = [row({ name: "notify", on: [7], config: form(events) })];
@@ -661,7 +734,7 @@ describe("the settings form", () => {
     const events = field({
       key: "events",
       fieldType: "multi",
-      options: [{ value: "task.done", label: "Done" }],
+      options: [{ value: "task.done", label: "Done", when: [] }],
       defaultValue: "task.done",
       value: NONE_SELECTED,
       state: "none",

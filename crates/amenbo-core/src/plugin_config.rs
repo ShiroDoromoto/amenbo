@@ -503,6 +503,7 @@ pub fn required_unset_for_update(
     // values (`AMB-D-727`), can be showing different halves of it too. A field is in the way when *some*
     // gate both offers it and has no answer for it; one that every gate hides is a field no form could
     // offer, and holding the update back over it would leave the build unreachable with nothing to act on.
+    let declared = available.fields();
     let mut gates = 0;
     let mut in_the_way = std::collections::HashSet::new();
     for layer in store.layers_with_plugin_enabled(name)? {
@@ -510,9 +511,9 @@ pub fn required_unset_for_update(
             continue;
         }
         gates += 1;
-        let (satisfied, stage) = read_layer(store, name, &available.config, layer)?;
+        let (satisfied, stage) = read_layer(store, name, &declared, layer)?;
         in_the_way.extend(
-            crate::plugin_trust::missing_required(&available.config, &stage, |f| {
+            crate::plugin_trust::missing_required(&declared, &stage, |f| {
                 satisfied.iter().any(|k| k == &f.key)
             })
             .into_iter()
@@ -524,12 +525,7 @@ pub fn required_unset_for_update(
     }
     // Walked in the author's declared order, so the keys come back the way the schema reads rather than
     // the way the gates happened to be listed.
-    Ok(available
-        .config
-        .iter()
-        .filter(|f| in_the_way.contains(&f.key))
-        .map(|f| f.key.clone())
-        .collect())
+    Ok(declared.iter().filter(|f| in_the_way.contains(&f.key)).map(|f| f.key.clone()).collect())
 }
 
 #[cfg(test)]
@@ -730,7 +726,7 @@ mod tests {
             scope: crate::plugin_manifest::Scope::Project,
             payload_v: 1,
             min_amenbo: None,
-            config,
+            config: crate::plugin_manifest::ConfigEntry::schema(config),
             events: Vec::new(),
             agent: None,
             settings: None,

@@ -40,7 +40,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::plugin_manifest::{
-    AgentGuide, Asset, ConfigField, ConfigFieldOverlay, EventSubscription, Manifest, Os, Platform,
+    AgentGuide, Asset, ConfigEntry, ConfigFieldOverlay, EventSubscription, Manifest, Os, Platform,
     Scope, Settings, SettingsOverlay, Translations,
 };
 
@@ -125,9 +125,11 @@ pub struct Detail {
     /// The minimum Amenbo version the plugin needs (`AMB-D-359`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub min_amenbo: Option<String>,
-    /// The plugin's configuration schema (`AMB-D-356`).
+    /// The plugin's configuration schema (`AMB-D-356`) — its settings, and the parts a form draws
+    /// between them (`AMB-D-727`). Carried whole because this is what an installed manifest is rebuilt
+    /// from: a part dropped here would be a part no install on any machine ever sees.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub config: Vec<ConfigField>,
+    pub config: Vec<ConfigEntry>,
     /// Where the plugin's own code is called from the settings face (`AMB-D-664`).
     ///
     /// It rides here for the reason the schema it stands beside does: it is read where the plugin is

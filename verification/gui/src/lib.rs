@@ -577,8 +577,11 @@ impl Instructor {
             (Domain::Plugin, "line") => {
                 Some(Expectation { text: arg_str(with, "desc")?.to_string(), present: true })
             }
-            (Domain::Plugin, "asks") => {
-                Some(Expectation { text: arg_str(with, "label")?.to_string(), present: true })
+            // `present: false` reads the same words for their absence: a setting a condition
+            // does not let through is not drawn greyed or drawn empty, so what proves the condition held
+            // is that its label is nowhere on the screen.
+            (Domain::Plugin, "asks") | (Domain::Plugin, "offers") => {
+                Some(Expectation { text: arg_str(with, "label")?.to_string(), present: present(with) })
             }
             (Domain::Plugin, "checked") | (Domain::Plugin, "press-said") => {
                 Some(Expectation { text: arg_str(with, "text")?.to_string(), present: true })
@@ -1271,13 +1274,34 @@ impl Instructor {
                 let name = req(with, "name")?;
                 let key = req(with, "key")?;
                 let label = req(with, "label")?;
-                match arg_str(with, "candidate") {
-                    Some(value) => format!(
+                match (arg_str(with, "candidate"), present(with)) {
+                    (Some(value), true) => format!(
                         "Confirm the settings form for \"{name}\" draws the answer stored as \"{value}\", under the setting \"{key}\", with the words \"{label}\"."
                     ),
-                    None => format!(
+                    // The condition's half: a candidate its author ruled out here is off the
+                    // form, not drawn and refusing, so the words are the whole of what is being looked for.
+                    (Some(value), false) => format!(
+                        "Confirm the settings form for \"{name}\" offers no answer stored as \"{value}\" under the setting \"{key}\" — the words \"{label}\" are nowhere on it."
+                    ),
+                    (None, true) => format!(
                         "Confirm the settings form for \"{name}\" asks for the setting \"{key}\" under the words \"{label}\"."
                     ),
+                    (None, false) => format!(
+                        "Confirm the settings form for \"{name}\" does not ask for the setting \"{key}\" at all — the words \"{label}\" are nowhere on it."
+                    ),
+                }
+            }
+            // Whether the form is offering one of the author's operations. Apart from
+            // `press-shut`, which reads a button that is drawn and will not be pressed: a condition that
+            // does not hold takes the button off the form, and a reader has to be able to tell "there, and
+            // refusing" from "not there".
+            (Domain::Plugin, "offers") => {
+                let name = req(with, "name")?;
+                let label = req(with, "label")?;
+                if present(with) {
+                    format!("Confirm the settings form for \"{name}\" offers the operation drawn as \"{label}\".")
+                } else {
+                    format!("Confirm the settings form for \"{name}\" offers no operation drawn as \"{label}\" — those words are nowhere on it.")
                 }
             }
             // What the author's check said, in whichever of its two places the step names. The line beside
@@ -2220,6 +2244,80 @@ steps_gui:
         let line = ins.render(&s.steps(Driver::Gui)[0]).unwrap();
         assert!(line.contains("worker_url") && line.contains("https://example.test/board"), "got: {line}");
         assert!(line.contains("no box") && line.contains("no button"), "got: {line}");
+    }
+
+    /// **The absent half of a form reading is the half a condition needs.** A setting, a
+    /// candidate or an operation its author ruled out is not drawn greyed and not drawn empty — it is off
+    /// the form — so the step is a reading of words that must be nowhere, and the sentence handed to an
+    /// operator has to say so rather than asking them to confirm something is there.
+    #[test]
+    fn a_form_reading_says_which_way_it_leans_and_expects_the_words_that_way() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: plugin
+    op: asks
+    with: { name: viewer, key: worker_url, label: Worker URL, present: false }
+  - type: assert
+    domain: plugin
+    op: asks
+    with: { name: viewer, key: transport, candidate: cloudflare, label: Cloudflare, present: false }
+  - type: assert
+    domain: plugin
+    op: offers
+    with: { name: viewer, label: Raise the tunnel, present: false }
+  - type: assert
+    domain: plugin
+    op: offers
+    with: { name: viewer, label: Raise the tunnel, present: true }
+"#);
+        let steps = s.steps(Driver::Gui);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = steps.iter().map(|st| ins.render(st).unwrap()).collect();
+
+        assert!(lines[0].contains("does not ask for the setting"), "got: {}", lines[0]);
+        assert!(lines[1].contains("offers no answer stored as"), "got: {}", lines[1]);
+        assert!(lines[2].contains("offers no operation drawn as"), "got: {}", lines[2]);
+        assert!(lines[3].contains("offers the operation drawn as"), "got: {}", lines[3]);
+
+        // What OCR is sent looking for is the author's words either way; which way the step leans is the
+        // whole of the difference, and getting that backwards would green a run on a form nobody drew.
+        assert_eq!(
+            ins.expectation(&steps[0]),
+            Some(Expectation { text: "Worker URL".to_string(), present: false })
+        );
+        assert_eq!(
+            ins.expectation(&steps[2]),
+            Some(Expectation { text: "Raise the tunnel".to_string(), present: false })
+        );
+        assert_eq!(
+            ins.expectation(&steps[3]),
+            Some(Expectation { text: "Raise the tunnel".to_string(), present: true })
+        );
+    }
+
+    /// Absent, a form reading leans the way every one of these leaned before there was anything to hide.
+    #[test]
+    fn a_form_reading_that_says_nothing_still_expects_the_words_present() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: plugin
+    op: asks
+    with: { name: viewer, key: worker_url, label: Worker URL }
+"#);
+        let steps = s.steps(Driver::Gui);
+        let mut ins = Instructor::new();
+        let line = ins.render(&steps[0]).unwrap();
+        assert!(line.contains("asks for the setting"), "got: {line}");
+        assert_eq!(
+            ins.expectation(&steps[0]),
+            Some(Expectation { text: "Worker URL".to_string(), present: true })
+        );
     }
 
     #[test]

@@ -38,6 +38,7 @@ use crate::plugin_manifest::{
     ConfigField, ConfigFieldOverlay, Face, FieldType, Manifest, ManifestOverlay, Os, SettingsAction,
     SettingsOverlay, Translations, NONE_SELECTED,
 };
+use crate::plugin_when::When;
 use crate::plugin_wire::{ListEntry, ListEntryOverlay};
 
 /// The shortest a plugin id (`name`) may be (`AMB-D-360`).
@@ -101,6 +102,11 @@ pub const MAX_HELP_BYTES: usize = 1024;
 /// example of what to type, shown inside the input — so the cap is roughly the width of the box it is
 /// drawn in, not the width of a sentence.
 pub const MAX_PLACEHOLDER_BYTES: usize = 80;
+
+/// The most conditions one `when` may hold (`AMB-D-727`). The clauses are read together, so a list this
+/// long already names the platform and every field a form has to choose among; past it, what an author is
+/// writing is a rule engine, and the way to say something that complicated is a second plugin.
+pub const MAX_WHEN_CLAUSES: usize = 4;
 
 /// The most operations a settings face may offer (`AMB-D-664`). Every one of them is a button on one
 /// form, so the ceiling is what a screen can hold without becoming a menu — and a plugin needing more of
@@ -212,6 +218,12 @@ pub enum ProblemCode {
     /// An agent command's `cmd` is not a call — it holds a word the grammar does not admit, or more words
     /// than a call has (`AMB-D-572`). A settings call is held to the same grammar (`AMB-D-664`).
     BadCmd,
+    /// A `when` clause is not one Amenbo can read (`AMB-D-727`): it names neither kind of condition, or
+    /// both at once, or half of one (`field` without `has`), or a `field` that the manifest does not
+    /// declare — including the very field the clause is written on, which could only ever hide itself.
+    /// A condition that decides nothing leaves the thing it is on visible, so this is refused at the
+    /// author's desk rather than becoming a rule that silently never fires.
+    BadWhen,
     /// An `ask` field declares a key an ask does not have (`AMB-D-664`): a `default`, or `required`. Both
     /// belong to a value the form stores, and an ask is the value it does not — so a field carrying one is
     /// asking for something that would never happen, silently.
@@ -297,6 +309,7 @@ impl ProblemCode {
             Self::NotAnOption => "not_an_option",
             Self::ReadonlyConflict => "readonly_conflict",
             Self::BadCmd => "bad_cmd",
+            Self::BadWhen => "bad_when",
             Self::AskConflict => "ask_conflict",
             Self::BadStepRef => "bad_step_ref",
             Self::RecordRef => "record_ref",
@@ -1056,6 +1069,7 @@ fn check_config(problems: &mut Vec<Problem>, m: &Manifest) {
         ));
     }
 
+    let declared: HashSet<&str> = m.config.iter().map(|f| f.key.as_str()).collect();
     let mut seen = HashSet::new();
     for (i, field) in m.config.iter().enumerate() {
         check_config_key(problems, &format!("config[{i}].key"), &field.key);
@@ -1070,6 +1084,16 @@ fn check_config(problems: &mut Vec<Problem>, m: &Manifest) {
         check_config_text(problems, i, field);
         check_config_kind(problems, i, field);
         check_config_readonly(problems, i, field);
+        check_when(problems, &format!("config[{i}].when"), &field.when, &declared, Some(&field.key));
+        for (j, option) in field.options.iter().enumerate() {
+            check_when(
+                problems,
+                &format!("config[{i}].options[{j}].when"),
+                &option.when,
+                &declared,
+                Some(&field.key),
+            );
+        }
     }
 }
 
@@ -1082,8 +1106,21 @@ fn schema_bytes(f: &ConfigField) -> usize {
         + f.label.len()
         + f.help.as_deref().map_or(0, str::len)
         + f.placeholder.as_deref().map_or(0, str::len)
-        + f.options.iter().map(|o| o.value.len() + o.label.len()).sum::<usize>()
+        + f.options
+            .iter()
+            .map(|o| o.value.len() + o.label.len() + when_bytes(&o.when))
+            .sum::<usize>()
         + f.default.as_deref().map_or(0, str::len)
+        + when_bytes(&f.when)
+}
+
+/// What a `when` spends of the schema's size budget (`AMB-D-727`): the strings its author wrote into it.
+/// The platform tokens are Amenbo's vocabulary and weigh nothing here — what an author can make long is
+/// the key and the value a condition reads.
+fn when_bytes(when: &[When]) -> usize {
+    when.iter()
+        .map(|c| c.field.as_deref().map_or(0, str::len) + c.has.as_deref().map_or(0, str::len))
+        .sum()
 }
 
 /// Check the supporting text a field may carry (`AMB-D-656`) — the paragraph under the input, and the
@@ -1285,6 +1322,98 @@ fn check_config_kind(problems: &mut Vec<Problem>, i: usize, field: &ConfigField)
     }
 }
 
+/// Check one `when` — the conditions on a field, on one of its candidates, or on an operation
+/// (`AMB-D-727`).
+///
+/// **A clause names exactly one kind.** `os` says which platforms, `field`/`has` says what another answer
+/// must be, and the two are separate clauses rather than one carrying both — a list is already an `and`, so
+/// there is nothing a combined clause can say that two cannot, and one spelling of a thing is one thing to
+/// learn. Half a kind (`field` with no `has`) is the mistake this shape actually invites, and it is refused
+/// rather than ignored: at the reading it decides nothing, so the author would be left with a rule that
+/// never fires and no way to see why.
+///
+/// `declared` is every config key of the same manifest — the names a `field` clause may reach for. `own` is
+/// the key the condition is written on, when it is written on a field or one of its candidates: a clause
+/// reading its own field could only hide itself, and is not a thing to spell.
+fn check_when(
+    problems: &mut Vec<Problem>,
+    at: &str,
+    when: &[When],
+    declared: &HashSet<&str>,
+    own: Option<&str>,
+) {
+    if when.len() > MAX_WHEN_CLAUSES {
+        problems.push(Problem::new(
+            at,
+            ProblemCode::TooManyFields,
+            format!("{at} holds too many conditions ({}; max {MAX_WHEN_CLAUSES})", when.len()),
+        ));
+    }
+    for (i, clause) in when.iter().enumerate() {
+        let loc = format!("{at}[{i}]");
+        let by_os = !clause.os.is_empty();
+        let by_field = clause.field.is_some() || clause.has.is_some();
+        if by_os && by_field {
+            problems.push(Problem::new(
+                loc.clone(),
+                ProblemCode::BadWhen,
+                format!("{loc} names both 'os' and 'field' — write them as two conditions, which are read together"),
+            ));
+        }
+        if !by_os && !by_field {
+            problems.push(Problem::new(
+                loc.clone(),
+                ProblemCode::BadWhen,
+                format!("{loc} names no condition — a when clause says 'os' or 'field' and 'has'"),
+            ));
+            continue;
+        }
+        if by_os {
+            let mut seen = HashSet::new();
+            for os in &clause.os {
+                if !seen.insert(*os) {
+                    problems.push(Problem::new(
+                        loc.clone(),
+                        ProblemCode::Duplicate,
+                        format!("{loc} lists '{}' more than once", os.as_str()),
+                    ));
+                }
+            }
+        }
+        let (Some(field), Some(has)) = (&clause.field, &clause.has) else {
+            if by_field {
+                problems.push(Problem::new(
+                    loc.clone(),
+                    ProblemCode::BadWhen,
+                    format!("{loc} needs both 'field' and 'has' — one names the setting, the other the answer looked for"),
+                ));
+            }
+            continue;
+        };
+        check_line(problems, &format!("{loc}.has"), has, MAX_OPTION_VALUE_LEN);
+        if has.contains(',') {
+            problems.push(Problem::new(
+                format!("{loc}.has"),
+                ProblemCode::BadChars,
+                "'has' must not contain ',' — a multi field's answers are stored joined by one, so a value carrying its own can never be among them",
+            ));
+        }
+        if Some(field.as_str()) == own {
+            problems.push(Problem::new(
+                loc.clone(),
+                ProblemCode::BadWhen,
+                format!("{loc} reads the field it is written on ('{field}') — a condition on its own answer can only hide itself"),
+            ));
+        } else if !declared.contains(field.as_str()) {
+            problems.push(Problem::new(
+                loc.clone(),
+                ProblemCode::BadWhen,
+                format!("{loc} names a setting this manifest does not declare ('{field}')"),
+            ));
+        }
+    }
+}
+
 /// Check one config field key: a storage key and (for a secret) an env-var stem, so it must be a plain
 /// identifier — `[a-z][a-z0-9_]*` — and within the identifier byte cap the write boundary also enforces
 /// ([`MAX_CONFIG_IDENT_BYTES`]).
@@ -1371,6 +1500,7 @@ fn check_settings(problems: &mut Vec<Problem>, m: &Manifest) {
             ));
         }
         check_action_label(problems, &format!("settings.actions[{i}].label"), &action.label);
+        check_when(problems, &format!("settings.actions[{i}].when"), &action.when, &stored, None);
         check_ask(problems, i, action, &stored);
     }
 }
@@ -1957,12 +2087,110 @@ mod tests {
     }
 
     /// A well-formed choice — candidates, and a default among them (`AMB-D-415`).
+    /// A schema whose second field is conditioned on the first — the shape `AMB-D-727` is written for.
+    fn conditioned(when: Vec<When>) -> Manifest {
+        let mut m = valid();
+        m.config = vec![
+            ConfigField::new("transport", "経路"),
+            ConfigField { when, ..ConfigField::new("worker_url", "Worker の URL") },
+        ];
+        m
+    }
+
+    /// The two conditions an author may write, on a field and on one of its candidates (`AMB-D-727`).
+    #[test]
+    fn the_two_kinds_of_condition_pass() {
+        assert!(validate_manifest(&conditioned(vec![When::on([Os::Macos])])).is_empty());
+        let m = conditioned(vec![When::field_has("transport", "cloudflare")]);
+        assert!(validate_manifest(&m).is_empty());
+
+        // Both kinds at once, as two clauses — which is how an `and` is written.
+        let m = conditioned(vec![When::on([Os::Macos]), When::field_has("transport", "cloudflare")]);
+        assert!(validate_manifest(&m).is_empty());
+
+        // And on a candidate, which is read against the same schema.
+        let mut m = valid();
+        m.config = vec![ConfigField {
+            options: vec![ConfigOption {
+                when: vec![When::on([Os::Macos])],
+                ..ConfigOption::new("icloud", "iCloud")
+            }],
+            ..multi(None)
+        }];
+        assert!(validate_manifest(&m).is_empty());
+    }
+
+    /// A clause that decides nothing is refused rather than read: at the reading it leaves the thing
+    /// visible, so an author would be left with a rule that never fires and no way to see why.
+    #[test]
+    fn a_condition_amenbo_cannot_read_is_named() {
+        // Neither kind.
+        let m = conditioned(vec![When::default()]);
+        assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::BadWhen));
+
+        // Half of a kind, either half.
+        let half = When { field: Some("transport".into()), has: None, ..When::default() };
+        assert!(codes(&validate_manifest(&conditioned(vec![half]))).contains(&ProblemCode::BadWhen));
+        let half = When { field: None, has: Some("cloudflare".into()), ..When::default() };
+        assert!(codes(&validate_manifest(&conditioned(vec![half]))).contains(&ProblemCode::BadWhen));
+
+        // Both kinds in one clause — they are two conditions, and the list already reads them together.
+        let both = When { os: vec![Os::Macos], ..When::field_has("transport", "cloudflare") };
+        assert!(codes(&validate_manifest(&conditioned(vec![both]))).contains(&ProblemCode::BadWhen));
+    }
+
+    /// A `field` clause reaches for a name this schema declares — and never for the field it is on, which
+    /// could only hide itself.
+    #[test]
+    fn a_field_clause_names_a_setting_that_exists_and_is_not_its_own() {
+        let m = conditioned(vec![When::field_has("no_such_key", "x")]);
+        assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::BadWhen));
+
+        let m = conditioned(vec![When::field_has("worker_url", "x")]);
+        assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::BadWhen));
+    }
+
+    /// A `has` carrying a comma can never match: a multi field's answers are stored joined by one
+    /// (`AMB-D-415`), so no part of the stored value can hold it.
+    #[test]
+    fn a_has_that_could_never_match_is_named() {
+        let m = conditioned(vec![When::field_has("transport", "a,b")]);
+        assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::BadChars));
+    }
+
+    /// Past the cap the author is writing a rule engine, and the form has to explain it.
+    #[test]
+    fn too_many_conditions_are_refused() {
+        let when = vec![When::field_has("transport", "cloudflare"); MAX_WHEN_CLAUSES + 1];
+        assert!(codes(&validate_manifest(&conditioned(when))).contains(&ProblemCode::TooManyFields));
+    }
+
+    /// An operation carries the same conditions its fields do, read against the same schema
+    /// (`AMB-D-727`).
+    #[test]
+    fn an_operations_condition_is_held_to_the_same_rules() {
+        let mut m = valid();
+        m.config = vec![ConfigField::new("transport", "経路")];
+        m.settings = Some(Settings {
+            check: None,
+            actions: vec![SettingsAction {
+                when: vec![When::field_has("transport", "cloudflare")],
+                ..SettingsAction::new("tunnel", "Cloudflare 経路を立てる")
+            }],
+        });
+        assert!(validate_manifest(&m).is_empty());
+
+        let Some(settings) = m.settings.as_mut() else { unreachable!() };
+        settings.actions[0].when = vec![When::field_has("no_such_key", "x")];
+        assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::BadWhen));
+    }
+
     fn multi(default: Option<&str>) -> ConfigField {
         ConfigField {
             field_type: FieldType::Multi,
             options: vec![
-                ConfigOption { value: "task.done".into(), label: "完了した".into() },
-                ConfigOption { value: "task.rejected".into(), label: "見送った".into() },
+                ConfigOption::new("task.done", "完了した"),
+                ConfigOption::new("task.rejected", "見送った"),
             ],
             default: default.map(str::to_string),
             ..ConfigField::new("events", "Events")
@@ -2003,13 +2231,13 @@ mod tests {
     fn an_option_value_may_not_carry_a_comma_or_be_the_reserved_word() {
         let mut m = valid();
         m.config = vec![ConfigField {
-            options: vec![ConfigOption { value: "a,b".into(), label: "L".into() }],
+            options: vec![ConfigOption::new("a,b", "L")],
             ..multi(None)
         }];
         assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::BadChars));
 
         m.config = vec![ConfigField {
-            options: vec![ConfigOption { value: NONE_SELECTED.into(), label: "L".into() }],
+            options: vec![ConfigOption::new(NONE_SELECTED, "L")],
             ..multi(None)
         }];
         assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::Reserved));
@@ -2020,8 +2248,8 @@ mod tests {
         let mut m = valid();
         m.config = vec![ConfigField {
             options: vec![
-                ConfigOption { value: "task.done".into(), label: "A".into() },
-                ConfigOption { value: "task.done".into(), label: "B".into() },
+                ConfigOption::new("task.done", "A"),
+                ConfigOption::new("task.done", "B"),
             ],
             ..multi(None)
         }];
@@ -2033,7 +2261,7 @@ mod tests {
         let mut m = valid();
         m.config = vec![ConfigField {
             options: (0..MAX_CONFIG_OPTIONS + 1)
-                .map(|i| ConfigOption { value: format!("v{i}"), label: "L".into() })
+                .map(|i| ConfigOption::new(format!("v{i}"), "L"))
                 .collect(),
             ..multi(None)
         }];
@@ -2077,7 +2305,7 @@ mod tests {
     fn options_count_towards_the_schema_size_cap() {
         let full_of_options = |key: &str| ConfigField {
             options: (0..MAX_CONFIG_OPTIONS)
-                .map(|i| ConfigOption { value: format!("v{i}"), label: "l".repeat(MAX_LABEL_LEN) })
+                .map(|i| ConfigOption::new(format!("v{i}"), "l".repeat(MAX_LABEL_LEN)))
                 .collect(),
             ..ConfigField { field_type: FieldType::Multi, ..ConfigField::new(key, "L") }
         };
@@ -2282,7 +2510,7 @@ mod tests {
 
     /// One operation, asking for nothing beyond what the form already stores.
     fn action(cmd: &str, label: &str) -> SettingsAction {
-        SettingsAction { cmd: cmd.into(), label: label.into(), ask: Vec::new() }
+        SettingsAction::new(cmd, label)
     }
 
     /// One value asked for at the press, declaring nothing an ask does not have.
@@ -2823,8 +3051,8 @@ mod tests {
         m.config[1] = ConfigField {
             field_type: FieldType::Multi,
             options: vec![
-                ConfigOption { value: "task.done".into(), label: "Task done".into() },
-                ConfigOption { value: "task.created".into(), label: "Task created".into() },
+                ConfigOption::new("task.done", "Task done"),
+                ConfigOption::new("task.created", "Task created"),
             ],
             ..ConfigField::new("events", "Events")
         };

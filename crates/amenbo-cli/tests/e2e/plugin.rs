@@ -978,3 +978,52 @@ fn plugin_enable_refused_by_the_check_names_the_settings_and_not_the_authors_wor
     let enabled = cli.json(&["plugin", "enable", "mail", "--json"]);
     assert_eq!(enabled["enabled"], true, "a yes opens the gate");
 }
+
+/// **A `required` setting the author's conditions hide does not shut the enable gate** (`AMB-D-727`).
+///
+/// The reading is core's and the platform is only core's to know, so this walks the whole road a person
+/// walks: the schema as the author published it, the values written through the same door a form writes
+/// them through, and the gate as `plugin enable` reaches it. What the unit tests fix is the rule; what this
+/// fixes is that the rule is the one the CLI actually runs.
+///
+/// A refusal over a hidden field would be a dead end — it names a setting, and the form it sends the user
+/// to has no box for it.
+#[test]
+fn a_required_setting_that_is_hidden_does_not_block_enable_and_a_shown_one_does() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    install_plugin(
+        &cli,
+        "viewer",
+        serde_json::json!([
+            {
+                "key": "transport", "label": "経路", "type": "multi",
+                "options": [
+                    { "value": "icloud", "label": "iCloud" },
+                    { "value": "cloudflare", "label": "Cloudflare" },
+                ],
+            },
+            {
+                "key": "worker_url", "label": "Worker の URL", "required": true,
+                "when": [{ "field": "transport", "has": "cloudflare" }],
+            },
+        ]),
+    );
+
+    // Nothing answers the condition yet, so the Worker field is off the form — and an empty setting that
+    // is off the form is not a reason to refuse.
+    let (out, code) = cli.run(&["plugin", "enable", "viewer"]);
+    assert_eq!(code, 0, "a hidden required setting does not shut the gate: {out}");
+
+    // Choosing Cloudflare brings the field out, and now it is a setting like any other.
+    cli.json(&["plugin", "config", "set", "viewer", "transport", "cloudflare", "--json"]);
+    cli.run(&["plugin", "disable", "viewer"]);
+    let (err, code) = cli.run_err(&["plugin", "enable", "viewer", "--json"]);
+    assert_ne!(code, 0, "the shown required setting shuts it: {err}");
+    assert!(err.contains("worker_url"), "and the refusal names it: {err}");
+
+    // Answering it opens the gate again.
+    cli.json(&["plugin", "config", "set", "viewer", "worker_url", "https://w.example.com", "--json"]);
+    let (out, code) = cli.run(&["plugin", "enable", "viewer"]);
+    assert_eq!(code, 0, "with the field answered the gate opens: {out}");
+}

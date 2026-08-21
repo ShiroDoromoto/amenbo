@@ -738,8 +738,8 @@ impl ConfigOption {
 pub enum ConfigEntry {
     /// A setting the plugin takes — the whole of what `config` held before this.
     Field(Box<ConfigField>),
-    /// Something for Amenbo to draw where it stands, filled in by nobody.
-    Part(crate::plugin_show::Part),
+    /// Something for Amenbo to draw where it stands, filled in by nobody — see [`ConfigPart`].
+    Part(ConfigPart),
 }
 
 impl ConfigEntry {
@@ -752,11 +752,69 @@ impl ConfigEntry {
     }
 
     /// The part, when this entry is one. `None` is a setting.
-    pub fn part(&self) -> Option<&crate::plugin_show::Part> {
+    pub fn part(&self) -> Option<&ConfigPart> {
         match self {
             ConfigEntry::Part(part) => Some(part),
             ConfigEntry::Field(_) => None,
         }
+    }
+
+    /// **When this entry is drawn at all** (`AMB-D-727`) — the conditions written on it, whichever kind
+    /// it is. Empty is an unconditional entry.
+    ///
+    /// One accessor because a form walks the list once, in the author's order, and asking a field and a
+    /// part in two different ways is how the two end up read by two different rules.
+    pub fn when(&self) -> &[crate::plugin_when::When] {
+        match self {
+            ConfigEntry::Field(field) => &field.when,
+            ConfigEntry::Part(part) => &part.when,
+        }
+    }
+}
+
+/// **A part written into a manifest's `config` list, and when it is drawn** (`AMB-D-727`).
+///
+/// The part itself is [`plugin_show::Part`](crate::plugin_show::Part), flattened, so what an author
+/// writes is the same object a run answers with — `{ text: "…" }`, `{ qr: "…" }` — and the condition sits
+/// beside it as one more key:
+///
+/// ```yaml
+/// config:
+///   - note: "Raise the Cloudflare Worker before filling this in"
+///     when:
+///       - { field: transport, has: cloudflare }
+/// ```
+///
+/// **Why a part needs one at all.** A field and its caption are a pair: a way to the page that issues a
+/// token stands above the box that token goes in, and hiding the box while the caption stays leaves a
+/// step nobody can follow — the same reason an operation carries one
+/// ([`SettingsAction::when`]). The reading is [`plugin_when`](crate::plugin_when)'s, the one every other
+/// condition is read by.
+///
+/// A run's answer carries no condition and needs none: it is drawn because something was pressed, and
+/// what the author knew when they wrote the manifest they know again when their own code runs.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConfigPart {
+    /// What Amenbo draws — the part, written as the object it is.
+    #[serde(flatten)]
+    pub part: crate::plugin_show::Part,
+    /// **When it is drawn** (`AMB-D-727`). Empty means always, which is what every part written before
+    /// the key existed says.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub when: Vec<crate::plugin_when::When>,
+}
+
+impl ConfigPart {
+    /// A part drawn unconditionally — what an author writes when they name one and nothing else.
+    /// [`when`](ConfigPart::when) is what narrows it.
+    pub fn new(part: crate::plugin_show::Part) -> Self {
+        ConfigPart { part, when: Vec::new() }
+    }
+}
+
+impl From<crate::plugin_show::Part> for ConfigEntry {
+    fn from(part: crate::plugin_show::Part) -> Self {
+        ConfigEntry::Part(ConfigPart::new(part))
     }
 }
 
@@ -1569,7 +1627,7 @@ mod tests {
             "a part has no key and nothing to store, so it is not a field"
         );
         assert_eq!(
-            m.config[2].part(),
+            m.config[2].part().map(|p| &p.part),
             Some(&crate::plugin_show::Part::Note("One per mailbox.".into())),
         );
         // Out as it was written, in the order it was written. The field re-emits with `secret` and
@@ -1578,6 +1636,30 @@ mod tests {
         assert_eq!(out[0], v["config"][0], "the way to the page stays above the box it is for");
         assert_eq!(out[1]["key"], serde_json::json!("smtp_password"));
         assert_eq!(out[2], v["config"][2]);
+    }
+
+    /// A part carries its condition beside itself, one more key on the object it already was
+    /// (`AMB-D-727`) — and a part without one is byte-for-byte what an author who never heard of the key
+    /// wrote.
+    #[test]
+    fn a_part_carries_when_beside_what_it_draws() {
+        let mut v = full_json();
+        v["config"] = serde_json::json!([
+            { "key": "transport", "label": "経路" },
+            { "note": "Worker を先に立ててください", "when": [{ "field": "transport", "has": "cloudflare" }] },
+            { "text": "どの経路でも読めます" },
+        ]);
+        let m: Manifest = serde_json::from_value(v.clone()).unwrap();
+        let conditioned = m.config[1].part().expect("a part");
+        assert_eq!(conditioned.part, crate::plugin_show::Part::Note("Worker を先に立ててください".into()));
+        assert_eq!(conditioned.when, vec![crate::plugin_when::When::field_has("transport", "cloudflare")]);
+        assert_eq!(m.config[1].when(), conditioned.when, "one accessor answers for either kind of entry");
+        assert!(m.config[2].when().is_empty(), "a part written without one is unconditional");
+        assert!(m.config[0].when().is_empty());
+
+        let out = &serde_json::to_value(&m).unwrap()["config"];
+        assert_eq!(out[1], v["config"][1], "the condition rides back out beside the part");
+        assert_eq!(out[2], v["config"][2], "an empty condition does not appear at all");
     }
 
     /// The one thing an untagged list has to get right: telling the two apart with nothing spelled twice.

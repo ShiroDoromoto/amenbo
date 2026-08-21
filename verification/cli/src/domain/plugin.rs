@@ -402,6 +402,53 @@ impl Driver<'_> {
                 self.declare_field(name, key, with, serde_json::json!({ "secret": true }))?;
                 Ok(Outcome::action(format!("`{name}` now declares `{key}` as a secret setting")))
             }
+            // A part the author wrote into that same list for Amenbo to *draw* — a caption, a way to
+            // the page that issues a value, a code to hold a phone up to. Written onto the
+            // installed manifest for the reason every declaration here is: no published plugin writes
+            // one, so a road about a form that already says something has no other way to be standing in
+            // front of it. It is appended, so the order a road declares things in is the order they are
+            // drawn — a part between two settings is a part between two boxes.
+            "declare-part" => {
+                let name = req_str(with, "name")?;
+                let kind = req_str(with, "kind")?;
+                let value = req_str(with, "value")?;
+                let part = match kind {
+                    // A list carries lines rather than one string, and a comma is what a scenario has to
+                    // write them with — the same joining a choice's candidates take.
+                    "list" => serde_json::json!({ "list": value.split(',').collect::<Vec<_>>() }),
+                    // A link is a destination and the words on its button. Where the road named no words,
+                    // the address stands as them: a button with no label is not a shape Amenbo draws.
+                    "link" => {
+                        let label = with.get("label").and_then(|v| v.as_str()).unwrap_or(value);
+                        serde_json::json!({ "link": { "url": value, "label": label } })
+                    }
+                    "text" | "heading" | "note" | "copy" | "qr" => {
+                        serde_json::json!({ kind: value })
+                    }
+                    other => {
+                        return Err(format!(
+                            "`{other}` is not a part Amenbo draws — it is one of text, heading, note, list, copy, qr, link"
+                        ))
+                    }
+                };
+                let path = self.session.home.join("plugins").join(name).join("manifest.json");
+                let raw = std::fs::read_to_string(&path)
+                    .map_err(|e| format!("could not read {}: {e}", path.display()))?;
+                let mut manifest: serde_json::Value = serde_json::from_str(&raw)
+                    .map_err(|e| format!("{} is not the manifest it should be: {e}", path.display()))?;
+                // A plugin that takes no settings carries no list, which is a list to add to all the
+                // same — a plugin may draw and ask for nothing.
+                if manifest["config"].is_null() {
+                    manifest["config"] = serde_json::json!([]);
+                }
+                manifest["config"]
+                    .as_array_mut()
+                    .ok_or_else(|| format!("{}'s config schema is not a list", path.display()))?
+                    .push(part);
+                std::fs::write(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?)
+                    .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+                Ok(Outcome::action(format!("`{name}` now draws a `{kind}` on its settings form")))
+            }
             // And for a setting whose answers the author listed, with the one that stands until someone
             // answers. Same reason again: candidates are the author's to declare and no published plugin
             // declares any, so the half of `plugin config` that keeps three answers apart — a choice
@@ -596,6 +643,37 @@ impl Driver<'_> {
                         )
                     }
                 };
+                // And what the run asks to have *drawn*, where the road named a part. It
+                // rides in the same document the verdict does, which is the whole of what a press may
+                // answer with beyond its one line — and a `qr` is the string, never a picture: what
+                // reaches the screen is Amenbo's own drawing of it.
+                let mut answer = serde_json::json!({ "v": 1, "ok": true });
+                if let Some(kind) = with.get("shows").and_then(|v| v.as_str()) {
+                    let value = with.get("shows_value").and_then(|v| v.as_str()).unwrap_or_default();
+                    let label = with.get("shows_label").and_then(|v| v.as_str()).unwrap_or(value);
+                    answer["show"] = serde_json::json!([match kind {
+                        "list" => serde_json::json!({ "list": value.split(',').collect::<Vec<_>>() }),
+                        "link" => serde_json::json!({ "link": { "url": value, "label": label } }),
+                        "text" | "heading" | "note" | "copy" | "qr" => {
+                            serde_json::json!({ kind: value })
+                        }
+                        other => {
+                            return Err(format!(
+                                "`{other}` is not a part Amenbo draws — it is one of text, heading, note, list, copy, qr, link"
+                            ))
+                        }
+                    }]);
+                }
+                // The whole document goes into the script single-quoted, which is the one thing it could
+                // break. A quote is refused rather than escaped: the road would still run, and what it
+                // then drew would not be what it says it drew.
+                let answer = serde_json::to_string(&answer).map_err(|e| e.to_string())?;
+                if answer.contains('\'') {
+                    return Err(
+                        "a part a press answers with cannot carry a single quote — the program writes the answer from a script"
+                            .to_string(),
+                    );
+                }
                 std::fs::write(
                     &path,
                     format!(
@@ -604,7 +682,7 @@ impl Driver<'_> {
                          asked=$(env | sed -n 's/^AMENBO_ASK_[A-Za-z0-9_]*=//p' | head -1)\n\
                          if [ -z \"$asked\" ]; then asked='nothing at all'; fi\n\
                          echo \"the operation was handed $asked\" >&2\n\
-                         echo '{{\"v\":1,\"ok\":true}}'\n\
+                         echo '{answer}'\n\
                          exit 0\n"
                     ),
                 )

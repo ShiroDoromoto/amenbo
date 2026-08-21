@@ -425,6 +425,8 @@ export const th: Translation = {
     "plugins.act.running": "กำลังทำงาน…", "plugins.act.ok": "เสร็จแล้ว", "plugins.act.failed": "ทำไม่จบ",
     "plugins.act.run": "เรียกใช้", "plugins.act.cancel": "ยกเลิก",
     "plugins.act.askNote": "ส่งให้การทำงานครั้งนี้เท่านั้น และไม่ได้เก็บไว้ที่ใด",
+    "plugins.show.copy": "คัดลอก", "plugins.show.copied": "คัดลอกแล้ว",
+    "plugins.show.qr": "คิวอาร์โค้ด",
     "plugins.check.refused": "การตรวจของปลั๊กอินปฏิเสธการตั้งค่านี้ จึงยังไม่ได้เปิดใช้",
     "plugins.check.noAnswer": "การตรวจของปลั๊กอินไม่ตอบ จึงยังไม่ได้เปิดใช้ ดูว่าเกิดอะไรขึ้นได้ในบันทึกการทำงาน",
     "plugins.updates.title.other": "มีอัปเดตปลั๊กอิน {n} รายการ",

@@ -30,7 +30,7 @@ vi.mock("./query", () => ({
   useQuery: () => ({ data: undefined, loading: false, error: undefined }),
 }));
 
-import { runPluginAction } from "./pluginInstalls";
+import { runPluginAction, whenShows } from "./pluginInstalls";
 
 beforeEach(() => {
   invoked.length = 0;
@@ -59,5 +59,33 @@ describe("runPluginAction", () => {
     const outcome = await runPluginAction("viewer", "config setup", {}, null);
     expect(outcome).toEqual({ ok: false, message: "no worker" });
     expect(invalidated).toEqual([["plugin-config", "viewer", null]]);
+  });
+});
+
+// The half of a `when` a face is left to judge (`AMB-D-727`). What this build's OS hides never arrives, so
+// everything here is about the other kind: what a setting is answering *on screen*, before any save.
+describe("whenShows", () => {
+  it("shows what carries no condition", () => {
+    expect(whenShows([], {})).toBe(true);
+  });
+
+  it("reads a multi setting's answer as the set it is", () => {
+    const when = [{ field: "transport", has: "cloudflare" }];
+    expect(whenShows(when, { transport: "icloud,cloudflare" })).toBe(true);
+    expect(whenShows(when, { transport: "cloudflare" })).toBe(true);
+    expect(whenShows(when, { transport: "icloud" })).toBe(false);
+  });
+
+  it("shows nothing for a setting nobody has answered", () => {
+    expect(whenShows([{ field: "transport", has: "cloudflare" }], {})).toBe(false);
+  });
+
+  it("reads several conditions together", () => {
+    const when = [
+      { field: "transport", has: "cloudflare" },
+      { field: "mode", has: "advanced" },
+    ];
+    expect(whenShows(when, { transport: "cloudflare", mode: "advanced" })).toBe(true);
+    expect(whenShows(when, { transport: "cloudflare", mode: "simple" })).toBe(false);
   });
 });

@@ -445,6 +445,8 @@ export const pl: Translation = {
     "plugins.act.running": "Trwa…", "plugins.act.ok": "Gotowe", "plugins.act.failed": "Nie doszło do końca",
     "plugins.act.run": "Uruchom", "plugins.act.cancel": "Anuluj",
     "plugins.act.askNote": "Przekazywane tylko do tego uruchomienia i nigdzie nie zapisywane.",
+    "plugins.show.copy": "Kopiuj", "plugins.show.copied": "Skopiowano",
+    "plugins.show.qr": "Kod QR",
     "plugins.check.refused": "Własne sprawdzenie odrzuciło te ustawienia, więc wtyczka nie została włączona.",
     "plugins.check.noAnswer": "Własne sprawdzenie nie odpowiedziało, więc wtyczka nie została włączona. Dziennik uruchomień mówi, co się stało.",
     "plugins.updates.title.one": "Dostępna {n} aktualizacja wtyczki",

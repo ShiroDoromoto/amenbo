@@ -422,6 +422,8 @@ export const nl: Translation = {
     "plugins.act.running": "Bezig…", "plugins.act.ok": "Klaar", "plugins.act.failed": "Het is niet afgerond",
     "plugins.act.run": "Uitvoeren", "plugins.act.cancel": "Annuleren",
     "plugins.act.askNote": "Alleen aan deze uitvoering doorgegeven en nergens bewaard.",
+    "plugins.show.copy": "Kopiëren", "plugins.show.copied": "Gekopieerd",
+    "plugins.show.qr": "QR-code",
     "plugins.check.refused": "De eigen controle wees deze instellingen af, dus is hij niet aangezet.",
     "plugins.check.noAnswer": "De eigen controle gaf geen antwoord, dus is hij niet aangezet. Het uitvoeringslogboek zegt wat er gebeurde.",
     "plugins.updates.title.one": "{n} plug-in-update beschikbaar", "plugins.updates.title.other": "{n} plug-in-updates beschikbaar",

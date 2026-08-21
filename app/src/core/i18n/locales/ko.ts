@@ -422,6 +422,8 @@ export const ko: Translation = {
     "plugins.act.running": "실행 중…", "plugins.act.ok": "완료했습니다", "plugins.act.failed": "끝까지 실행되지 않았습니다",
     "plugins.act.run": "실행", "plugins.act.cancel": "취소",
     "plugins.act.askNote": "이번 실행에만 전달되고 어디에도 저장되지 않습니다.",
+    "plugins.show.copy": "복사", "plugins.show.copied": "복사했습니다",
+    "plugins.show.qr": "QR 코드",
     "plugins.check.refused": "플러그인 자체 검사가 이 설정을 거절해서 켜지 않았습니다.",
     "plugins.check.noAnswer": "플러그인 자체 검사가 답하지 않아서 켜지 않았습니다. 무슨 일이 있었는지는 실행 로그에 있습니다.",
     "plugins.updates.title.other": "플러그인 업데이트 {n}건이 있습니다",

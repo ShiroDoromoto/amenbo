@@ -1,6 +1,11 @@
 import { useState } from "react";
-import type { PluginCheckDto, PluginWantedSettingDto } from "../bindings/bindings";
+import type {
+  PluginCheckDto,
+  PluginFormEntryDto,
+  PluginWantedSettingDto,
+} from "../bindings/bindings";
 import { errText, t } from "../core/i18n";
+import { PluginShowParts } from "./PluginShowParts";
 import { asTyped } from "../core/keys";
 import {
   NONE_SELECTED,
@@ -9,6 +14,7 @@ import {
   runPluginAction,
   setPluginConfig,
   usePluginConfig,
+  whenShows,
   type PluginAction,
   type PluginActionRan,
   type PluginConfigField,
@@ -56,11 +62,15 @@ import {
  * something any plugin can carry in a project it is off in — so a crossing has a form whether or not
  * the plugin is on there.
  *
- * **The author's own code speaks on this screen and nowhere else** (`AMB-D-664`). Two things reach it:
+ * **The author's own code speaks on this screen and nowhere else** (`AMB-D-664`). Three things reach it:
  * what their `check` said about the values — one sentence at the head, and one beside each box it named —
- * and the operations they declared, drawn as buttons. Both are plain text for the reason everything else
- * here is, and a press runs a call the manifest named rather than anything this form composed
- * (`AMB-D-522`).
+ * the operations they declared, drawn as buttons, and the parts either of those asked to have drawn
+ * (`AMB-D-727`). Every string in all three is plain text for the reason everything else here is, and a
+ * press runs a call the manifest named rather than anything this form composed (`AMB-D-522`).
+ *
+ * **A part is drawn where its author put it.** The manifest's own parts are entries in the same `config`
+ * list the settings are, so the way to the page that issues a token stands above the box the token goes
+ * in; a run's arrive under the button that raised it, and only the last press's are on screen at once.
  *
  * **The check is raised twice, and only one of them can refuse anything.** At the switch it decides whether
  * the gate opens; here, after a save at a crossing the plugin is already on, it decides nothing at all —
@@ -117,7 +127,11 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
   const [pressing, setPressing] = useState<string | null>(null);
   const [asking, setAsking] = useState<string | null>(null);
   const [asked, setAsked] = useState<Record<string, string>>({});
-  const [ran, setRan] = useState<Record<string, PluginActionRan>>({});
+  // The last press and what it answered — **one at a time** (`AMB-D-727`). What a run puts on the form
+  // is about the run: pressing the same button again, or a different one, replaces it, and leaving the
+  // screen takes it with the form. A second button's answer standing beside the first would read as one
+  // thing said twice.
+  const [ran, setRan] = useState<{ cmd: string; outcome: PluginActionRan } | null>(null);
   const { fields } = usePluginConfig(install.name, layer);
 
   // What that project holds for a key — absent until the read lands, which is not "unset".
@@ -134,6 +148,28 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
       edit === "" ? f.defaultValue ?? "" : edit ?? heldFor(f.key)?.value ?? f.defaultValue ?? "";
     return answer === "" || answer === NONE_SELECTED ? [] : answer.split(",");
   };
+
+  // Where every setting stands *on screen*, which is what its author's conditions are read against
+  // (`AMB-D-727`): what was typed, else what the layer holds, else the default behind it. This is the half
+  // of a `when` core cannot answer — the store has not been told about a box that is still being filled in,
+  // so someone ticking Cloudflare would otherwise wait for a save to see its fields.
+  const answers: Record<string, string> = {};
+  for (const f of formFields(install.config)) {
+    const answer = f.fieldType === "multi" ? ticked(f).join(",") : shown(f) || f.defaultValue || "";
+    if (answer !== "") answers[f.key] = answer;
+  }
+  // The form as it stands, **in the author's declared order** (`AMB-D-727`): the settings whose conditions
+  // hold, each keeping only the candidates whose own do, with the parts they wrote between them read the
+  // same way and left where they stand — a form that hid Cloudflare's fields but kept its button, or its
+  // caption, would leave a step nobody could follow. The operations go the same way.
+  const drawn: PluginFormEntryDto[] = install.config.flatMap((entry): PluginFormEntryDto[] => {
+    if (entry.kind === "part") return whenShows(entry.when, answers) ? [entry] : [];
+    const f = entry.field;
+    if (!whenShows(f.when, answers)) return [];
+    const options = f.options.filter((o) => whenShows(o.when, answers));
+    return [{ ...entry, field: { ...f, options } }];
+  });
+  const actions = install.actions.filter((a) => whenShows(a.when, answers));
 
   // What the author's check says about the values a write has just left behind (`AMB-D-664`), or nothing
   // — a plugin that declares no check, and a crossing whose gate is shut, which core is the one to answer
@@ -202,9 +238,12 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
   const onPress = async (a: PluginAction) => {
     setPressing(a.cmd);
     setError(null);
+    // Whatever the last press left goes now, not when this one answers: what is on screen while a run is
+    // in flight must not read as this run's.
+    setRan(null);
     try {
       const outcome = await runPluginAction(install.name, a.cmd, asked, layer);
-      setRan((s) => ({ ...s, [a.cmd]: outcome }));
+      setRan({ cmd: a.cmd, outcome });
       setAsking(null);
       setAsked({});
     } catch (e) {
@@ -225,7 +264,17 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
         </div>
       )}
       {check?.ok && check.message && <div className="plugcfg__note">{check.message}</div>}
-      {formFields(install.config).map((f) => (
+      {/* And what the check asked to have drawn (`AMB-D-727`) — the way to the page that issues the value
+          it is refusing over, most often, which is why it stands with its sentences. */}
+      {check && <PluginShowParts parts={check.show} />}
+      {/* The author's declared order, parts and settings together (`AMB-D-727`): where a part sits is what
+          it is for — the way to the page that issues a token belongs above the box the token goes in. */}
+      {drawn.map((entry, at) => {
+        if (entry.kind === "part") {
+          return <PluginShowParts key={`part-${at}`} parts={[entry.part]} />;
+        }
+        const f = entry.field;
+        return (
         <div key={f.key} className="plugcfg__field">
           {/* A choice is a group of boxes, each with its own label, so the caption above it names the
               group rather than pointing at one input. */}
@@ -363,7 +412,8 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
             </button>
           )}
         </div>
-      ))}
+        );
+      })}
 
       <div className="pluggate">
         <button className="btn" disabled={busy} onClick={() => void onSave()}>
@@ -377,11 +427,11 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
 
       {/* The operations their author declared (`AMB-D-664`). Drawn under the fields because that is what
           they act on, and only for a plugin that declared any — a form with none is the form it was. */}
-      {install.actions.length > 0 && (
+      {actions.length > 0 && (
         <div className="plugcfg__acts">
           <div className="faint plugcfg__note">{t("plugins.act.title")}</div>
           {!enabled && <div className="plugcfg__note">{t("plugins.act.needsEnabled")}</div>}
-          {install.actions.map((a) => (
+          {actions.map((a) => (
             <div key={a.cmd} className="plugcfg__act">
               {/* A real button, not the link-styled feed__action: the author's own words are the label,
                   so a borderless faint one is read as one more line of their prose and never pressed —
@@ -443,12 +493,16 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
                 </div>
               )}
               {/* What the press did: the author's own line where they wrote one, and Amenbo's word for it
-                  where they did not. An operation has no return value to draw (`AMB-D-664`). */}
-              {ran[a.cmd] && pressing !== a.cmd && (
-                <div className={ran[a.cmd].ok ? "faint plugcfg__note" : "pluggate__note"}>
-                  {ran[a.cmd].message ??
-                    t(ran[a.cmd].ok ? "plugins.act.ok" : "plugins.act.failed")}
-                </div>
+                  where they did not — and then whatever they asked to have drawn (`AMB-D-727`), which is
+                  where a QR to hold a phone up to or an address to copy arrives. */}
+              {ran?.cmd === a.cmd && pressing !== a.cmd && (
+                <>
+                  <div className={ran.outcome.ok ? "faint plugcfg__note" : "pluggate__note"}>
+                    {ran.outcome.message ??
+                      t(ran.outcome.ok ? "plugins.act.ok" : "plugins.act.failed")}
+                  </div>
+                  <PluginShowParts parts={ran.outcome.show} />
+                </>
               )}
             </div>
           ))}

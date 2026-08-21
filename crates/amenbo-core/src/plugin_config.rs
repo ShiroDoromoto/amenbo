@@ -260,6 +260,76 @@ pub fn get(
     }
 }
 
+/// What one field is worth to whoever asks, from what the store holds for it (`AMB-D-415`) — the three
+/// answers a field can carry, resolved into the one value that stands for it:
+///
+/// | state ([`answer`]) | resolves to |
+/// |---|---|
+/// | [`Chosen`](Answer::Chosen) | the value itself |
+/// | [`NoneOfThem`](Answer::NoneOfThem) | the empty string — an answer, and nothing in it |
+/// | [`Unanswered`](Answer::Unanswered) | the author's [`default`](ConfigField::default), or nothing at all |
+///
+/// The state is read where it is named, so a face saying "none of them", a run receiving nothing and a
+/// `when` reading this field are all reading the same thing rather than three spellings of it.
+///
+/// Two callers depend on that being one function: what a plugin is handed at run time
+/// ([`crate::plugin_inject`]) and what a condition is judged against ([`stage`]). A field is shown or
+/// hidden by the value the plugin would actually receive, which is the only reading that could not
+/// surprise anyone.
+pub fn resolved(field: &ConfigField, held: Option<String>) -> Option<String> {
+    match answer(field, held.as_deref()) {
+        Answer::Chosen => held,
+        Answer::NoneOfThem => Some(String::new()),
+        Answer::Unanswered => field.default.clone(),
+    }
+}
+
+/// **What one layer's conditions are judged against** (`AMB-D-727`) — this build's platform, and the
+/// resolved answer each of `fields` currently has here.
+///
+/// One per layer, because the answers are one per layer: the same plugin can hold `transport: icloud` for
+/// one project and `transport: cloudflare` for another, and a stage built for the first would hide the
+/// wrong half of the second's form.
+///
+/// The values are [`resolved`]'s, not the store's raw rows — a field standing on the author's `default` is
+/// answered as far as everything downstream is concerned, so a condition reading it has to see the same
+/// answer the plugin would be handed.
+pub fn stage(
+    store: &Store,
+    plugin: &str,
+    fields: &[ConfigField],
+    layer: Layer,
+) -> Result<crate::plugin_when::Stage> {
+    Ok(read_layer(store, plugin, fields, layer)?.1)
+}
+
+/// One walk of the store per layer, answering both questions asked of it: which fields hold a value
+/// ([`satisfied_keys`]) and what the answers make of the author's conditions ([`stage`]).
+///
+/// The two are read together because they are the same read — one `get` per field — and the callers that
+/// want one want the other in the same breath ([`held_at`], [`intersections`], the enable doors). Asking
+/// separately would double the reads a plugin row costs, per project, on a screen that draws one row per
+/// crossing.
+fn read_layer(
+    store: &Store,
+    plugin: &str,
+    fields: &[ConfigField],
+    layer: Layer,
+) -> Result<(Vec<String>, crate::plugin_when::Stage)> {
+    let mut satisfied = Vec::new();
+    let mut values = std::collections::BTreeMap::new();
+    for field in fields {
+        let held = get(store, field, plugin, layer)?;
+        if held.is_some() {
+            satisfied.push(field.key.clone());
+        }
+        if let Some(value) = resolved(field, held) {
+            values.insert(field.key.clone(), value);
+        }
+    }
+    Ok((satisfied, crate::plugin_when::Stage::here(values)))
+}
+
 /// Which of the author's declared `fields` this layer currently holds a value for (`AMB-D-434`). This is
 /// the `has_value` probe [`plugin_trust::enable`](crate::plugin_trust::enable) asks its caller for — that
 /// boundary judges `required` and deliberately does not read storage, so the resolution lives here with
@@ -324,15 +394,20 @@ pub fn held_at(
     fields: &[ConfigField],
     layer: Layer,
 ) -> Result<Held> {
-    Ok(held_from(fields, &satisfied_keys(store, plugin, fields, layer)?))
+    let (satisfied, stage) = read_layer(store, plugin, fields, layer)?;
+    Ok(held_from(fields, &stage, &satisfied))
 }
 
 /// The same two readings off a satisfied set already in hand — what [`intersections`] has after its own
 /// probe, and what keeps it from paying for a second one.
-fn held_from(fields: &[ConfigField], satisfied: &[String]) -> Held {
+///
+/// `stage` is that same layer's ([`stage`]), because `required_unset` is a reading of the fields a user can
+/// see (`AMB-D-727`): a required field the author's conditions hide is not one this row may report as
+/// standing in the way.
+fn held_from(fields: &[ConfigField], stage: &crate::plugin_when::Stage, satisfied: &[String]) -> Held {
     Held {
         has_value: !satisfied.is_empty(),
-        required_unset: !crate::plugin_trust::missing_required(fields, |f| {
+        required_unset: !crate::plugin_trust::missing_required(fields, stage, |f| {
             satisfied.iter().any(|k| k == &f.key)
         })
         .is_empty(),
@@ -370,12 +445,14 @@ pub fn intersections(
 
     let mut rows = Vec::new();
     for project in projects {
-        let satisfied = satisfied_keys(store, plugin, fields, Layer::Project(project))?;
+        // One read per project, and one stage from it: the answers a condition reads are one project's
+        // (`AMB-D-727`), as the values it judges `required` on are.
+        let (satisfied, stage) = read_layer(store, plugin, fields, Layer::Project(project))?;
         let on = enabled.contains(&project);
         if !on && satisfied.is_empty() {
             continue;
         }
-        let held = held_from(fields, &satisfied);
+        let held = held_from(fields, &stage, &satisfied);
         rows.push(Intersection {
             project,
             enabled: on,
@@ -421,25 +498,34 @@ pub fn required_unset_for_update(
     if crate::plugin_installed::read(&store.paths, name).is_err() {
         return Ok(Vec::new());
     }
-    // One satisfied set per gate that actually fires: each layer holds its own values, so two of
-    // them can hold different halves of the same schema.
+    // One judgement per gate that actually fires: each layer holds its own values, so two of them can hold
+    // different halves of the same schema — and, since the candidate schema's conditions read those same
+    // values (`AMB-D-727`), can be showing different halves of it too. A field is in the way when *some*
+    // gate both offers it and has no answer for it; one that every gate hides is a field no form could
+    // offer, and holding the update back over it would leave the build unreachable with nothing to act on.
     let declared = available.fields();
-    let mut per_gate = Vec::new();
+    let mut gates = 0;
+    let mut in_the_way = std::collections::HashSet::new();
     for layer in store.layers_with_plugin_enabled(name)? {
         if !crate::plugin_trust::effective_enabled_in(store, name, layer)? {
             continue;
         }
-        per_gate.push(satisfied_keys(store, name, &declared, layer)?);
+        gates += 1;
+        let (satisfied, stage) = read_layer(store, name, &declared, layer)?;
+        in_the_way.extend(
+            crate::plugin_trust::missing_required(&declared, &stage, |f| {
+                satisfied.iter().any(|k| k == &f.key)
+            })
+            .into_iter()
+            .map(str::to_string),
+        );
     }
-    if per_gate.is_empty() {
+    if gates == 0 {
         return Ok(Vec::new());
     }
-    Ok(crate::plugin_trust::missing_required(&declared, |f| {
-        per_gate.iter().all(|satisfied| satisfied.iter().any(|k| k == &f.key))
-    })
-    .into_iter()
-    .map(str::to_string)
-    .collect())
+    // Walked in the author's declared order, so the keys come back the way the schema reads rather than
+    // the way the gates happened to be listed.
+    Ok(declared.iter().filter(|f| in_the_way.contains(&f.key)).map(|f| f.key.clone()).collect())
 }
 
 #[cfg(test)]
@@ -460,8 +546,8 @@ mod tests {
         ConfigField {
             field_type: FieldType::Multi,
             options: vec![
-                ConfigOption { value: "task.done".into(), label: "完了した".into() },
-                ConfigOption { value: "task.rejected".into(), label: "見送った".into() },
+                ConfigOption::new("task.done", "完了した"),
+                ConfigOption::new("task.rejected", "見送った"),
             ],
             ..ConfigField::new(key, key)
         }
@@ -681,7 +767,7 @@ mod tests {
         let (mut store, _dir) = store_at("update-required");
         let p = mk_project(&mut store, "p");
         install_plugin(&store.paths.clone(), "slack", Vec::new());
-        crate::plugin_trust::enable(&mut store, "slack", Layer::Project(p), &[], |_| true, &Checked::NotDeclared)
+        crate::plugin_trust::enable(&mut store, "slack", Layer::Project(p), &[], &crate::plugin_when::Stage::default(), |_| true, &Checked::NotDeclared)
             .unwrap();
         let available =
             install_plugin(&store.paths.clone(), "slack", vec![required_field("webhook_url")]);
@@ -730,7 +816,7 @@ mod tests {
 
         install_plugin(&store.paths.clone(), "slack", Vec::new());
         for id in [set_up, short] {
-            crate::plugin_trust::enable(&mut store, "slack", Layer::Project(id), &[], |_| true, &Checked::NotDeclared)
+            crate::plugin_trust::enable(&mut store, "slack", Layer::Project(id), &[], &crate::plugin_when::Stage::default(), |_| true, &Checked::NotDeclared)
                 .unwrap();
         }
         let available =
@@ -758,7 +844,7 @@ mod tests {
         mk_project(&mut store, "untouched");
         let fields = vec![text_field("channel")];
 
-        crate::plugin_trust::enable(&mut store, "slack", Layer::Project(firing), &fields, |_| true, &Checked::NotDeclared)
+        crate::plugin_trust::enable(&mut store, "slack", Layer::Project(firing), &fields, &crate::plugin_when::Stage::default(), |_| true, &Checked::NotDeclared)
             .unwrap();
         set(&mut store, &text_field("channel"), "slack", Layer::Project(off_with_value), "#general").unwrap();
 
@@ -790,7 +876,7 @@ mod tests {
         let filled = mk_project(&mut store, "filled");
         let fields = vec![required_field("webhook_url")];
 
-        crate::plugin_trust::enable(&mut store, "slack", Layer::Project(short), &fields, |_| true, &Checked::NotDeclared)
+        crate::plugin_trust::enable(&mut store, "slack", Layer::Project(short), &fields, &crate::plugin_when::Stage::default(), |_| true, &Checked::NotDeclared)
             .unwrap();
         set(&mut store, &required_field("webhook_url"), "slack", Layer::Project(filled), "https://hooks/x").unwrap();
 

@@ -1567,6 +1567,11 @@ fn plugin_enable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i32
     let fields = plugin.manifest.fields();
     let satisfied = amenbo_core::plugin_config::satisfied_keys(store, name, &fields, layer)
         .map_err(CliError::from)?;
+    // What the author's conditions make of this layer's answers (`AMB-D-727`) — the gate is judged on the
+    // fields a form would actually draw, so a `required` field this schema hides here is not held against
+    // the enable.
+    let stage = amenbo_core::plugin_config::stage(store, name, &fields, layer)
+        .map_err(CliError::from)?;
     let has_value = |f: &amenbo_core::plugin_manifest::ConfigField| {
         satisfied.iter().any(|k| k == &f.key)
     };
@@ -1581,7 +1586,7 @@ fn plugin_enable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i32
     )
     .map_err(CliError::from)?;
 
-    amenbo_core::plugin_trust::enable(store, name, layer, &fields, has_value, &checked)
+    amenbo_core::plugin_trust::enable(store, name, layer, &fields, &stage, has_value, &checked)
         .map_err(|refused| refusal_at_the_gate(name, &checked, refused))?;
 
     human(flags, format!("Enabled plugin: {name} ({})", gate_where(store, layer)?));
@@ -1832,6 +1837,7 @@ mod tests {
             "notes",
             Layer::Project(project),
             &[],
+            &amenbo_core::plugin_when::Stage::default(),
             |_| true,
             &amenbo_core::plugin_check::Checked::NotDeclared,
         )
@@ -1917,6 +1923,7 @@ mod tests {
             "watcher",
             Layer::Project(project),
             &installed.fields(),
+            &amenbo_core::plugin_when::Stage::default(),
             |_| true,
             &amenbo_core::plugin_check::Checked::NotDeclared,
         )
@@ -2000,8 +2007,8 @@ mod tests {
         let events = ConfigField {
             field_type: FieldType::Multi,
             options: vec![
-                ConfigOption { value: "task.done".into(), label: "done".into() },
-                ConfigOption { value: "task.rejected".into(), label: "rejected".into() },
+                ConfigOption::new("task.done", "done"),
+                ConfigOption::new("task.rejected", "rejected"),
             ],
             default: Some("task.done".into()),
             ..ConfigField::new("events", "Events")

@@ -4653,6 +4653,10 @@ pub fn plugin_set_enabled(
             let fields = installed.manifest.fields();
             let satisfied =
                 amenbo_core::plugin_config::satisfied_keys(store, &name, &fields, layer)?;
+            // What the author's conditions make of this layer's answers (`AMB-D-727`): the gate is judged
+            // on the fields this form draws, so a `required` field hidden here does not shut it — the user
+            // would have no box to fill in.
+            let stage = amenbo_core::plugin_config::stage(store, &name, &fields, layer)?;
             // The author's own check, raised before the gate — pressing enable is the consent to run this
             // code (`AMB-D-664` / `AMB-D-351`).
             let checked = amenbo_core::plugin_check::run(
@@ -4671,8 +4675,8 @@ pub fn plugin_set_enabled(
             // verdict, is what the form works from. Every other refusal is still thrown: an incompatible
             // build and an empty `required` field have no verdict to draw, only a sentence to show.
             let shut_by_the_check = !checked.opens_the_gate()
-                && amenbo_core::plugin_trust::missing_required(&fields, has_value).is_empty();
-            match enable(store, &name, layer, &fields, has_value, &checked) {
+                && amenbo_core::plugin_trust::missing_required(&fields, &stage, has_value).is_empty();
+            match enable(store, &name, layer, &fields, &stage, has_value, &checked) {
                 Ok(()) => {}
                 Err(_) if shut_by_the_check => {}
                 Err(refused) => return Err(refused.into()),
@@ -5354,8 +5358,8 @@ mod tests {
                 "events",
                 "Events",
                 vec![
-                    ConfigOption { value: "task.done".into(), label: "Task finished".into() },
-                    ConfigOption { value: "task.created".into(), label: "Task filed".into() },
+                    ConfigOption::new("task.done", "Task finished"),
+                    ConfigOption::new("task.created", "Task filed"),
                 ],
             ),
         ];
@@ -5460,16 +5464,15 @@ mod tests {
             check: Some("config check".into()),
             actions: vec![
                 SettingsAction {
-                    cmd: "config test".into(),
-                    label: "Send a test message".into(),
                     ask: vec![AskField {
                         key: "api_token".into(),
                         label: "API token".into(),
                         secret: true,
                         extra: Default::default(),
                     }],
+                    ..SettingsAction::new("config test", "Send a test message")
                 },
-                SettingsAction { cmd: "setup".into(), label: "Set up".into(), ask: Vec::new() },
+                SettingsAction::new("setup", "Set up"),
             ],
         };
         // Only the first operation, written in the other order than the manifest declares them — which is
@@ -5604,6 +5607,7 @@ mod tests {
                 "mail",
                 amenbo_core::plugin_layer::Layer::Project(project_id),
                 &[],
+                &amenbo_core::plugin_when::Stage::default(),
                 |_| true,
                 &amenbo_core::plugin_check::Checked::NotDeclared,
             )

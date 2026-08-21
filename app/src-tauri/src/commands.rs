@@ -4431,10 +4431,14 @@ fn wanted_settings(
             // A destination is an official plugin's to draw (`AMB-D-727`), and this is where a third
             // party's is dropped: the validator tells an author their `qr` will not draw, and a manifest
             // that reached a machine anyway is answered here rather than trusted.
-            ConfigEntry::Part(part) if part.official_only() && !official => None,
-            ConfigEntry::Part(part) => {
-                Some(PluginFormEntryDto::Part { part: show_part(part) })
-            }
+            ConfigEntry::Part(part) if part.part.official_only() && !official => None,
+            // A part goes the way its neighbouring setting does (`AMB-D-727`): the platform's half of its
+            // condition is settled here, and what reads another setting's answer travels with it. A
+            // caption that outlived the box it is about would leave a step nobody could follow.
+            ConfigEntry::Part(part) => Some(PluginFormEntryDto::Part {
+                when: wanted_when(&part.when)?,
+                part: show_part(&part.part),
+            }),
         })
         .collect()
 }
@@ -5481,7 +5485,11 @@ mod tests {
             },
         )]);
 
-        let form = wanted_settings(&amenbo_core::plugin_manifest::ConfigEntry::schema(config.clone()), Some(&overlay), true);
+        let form = wanted_settings(
+            &amenbo_core::plugin_manifest::ConfigEntry::schema(config.clone()),
+            Some(&overlay),
+            true,
+        );
         let drawn = drawn_fields(&form);
         assert_eq!(drawn[0].label, "Endpoint");
         assert_eq!(drawn[0].label_i18n, None, "an untranslated field carries no second line");
@@ -5492,7 +5500,11 @@ mod tests {
         assert_eq!(drawn[1].options[1].label_i18n, None);
 
         // No layer at all is the same answer as a layer that says nothing: the form as its author wrote it.
-        let bare = wanted_settings(&amenbo_core::plugin_manifest::ConfigEntry::schema(config), None, true);
+        let bare = wanted_settings(
+            &amenbo_core::plugin_manifest::ConfigEntry::schema(config),
+            None,
+            true,
+        );
         assert!(drawn_fields(&bare).iter().all(|f| f.label_i18n.is_none()));
     }
 
@@ -5516,18 +5528,18 @@ mod tests {
         use amenbo_core::plugin_show::Part;
 
         let declared = vec![
-            ConfigEntry::Part(Part::Link {
+            ConfigEntry::from(Part::Link {
                 url: "https://myaccount.google.com/apppasswords".into(),
                 label: "Create an app password".into(),
             }),
             ConfigField { secret: true, ..ConfigField::new("smtp_password", "Password") }.into(),
-            ConfigEntry::Part(Part::Note("One per mailbox.".into())),
+            ConfigEntry::from(Part::Note("One per mailbox.".into())),
         ];
 
         let drawn = wanted_settings(&declared, None, true);
-        assert!(matches!(drawn[0], PluginFormEntryDto::Part { part: PluginShowPartDto::Link { .. } }));
+        assert!(matches!(drawn[0], PluginFormEntryDto::Part { part: PluginShowPartDto::Link { .. }, .. }));
         assert!(matches!(&drawn[1], PluginFormEntryDto::Field { field } if field.key == "smtp_password"));
-        assert!(matches!(drawn[2], PluginFormEntryDto::Part { part: PluginShowPartDto::Note { .. } }));
+        assert!(matches!(drawn[2], PluginFormEntryDto::Part { part: PluginShowPartDto::Note { .. }, .. }));
     }
 
     /// A destination is an official plugin's (`AMB-D-727`), and this is the second place that is answered:
@@ -5539,21 +5551,88 @@ mod tests {
         use amenbo_core::plugin_show::Part;
 
         let declared = vec![
-            ConfigEntry::Part(Part::Qr("https://apps.apple.com/x".into())),
-            ConfigEntry::Part(Part::Link {
+            ConfigEntry::from(Part::Qr("https://apps.apple.com/x".into())),
+            ConfigEntry::from(Part::Link {
                 url: "https://example.test/x".into(),
                 label: "Go".into(),
             }),
-            ConfigEntry::Part(Part::Copy("https://example.test/x".into())),
+            ConfigEntry::from(Part::Copy("https://example.test/x".into())),
             ConfigField::new("token", "Token").into(),
         ];
 
         let drawn = wanted_settings(&declared, None, false);
         assert_eq!(drawn.len(), 2, "the two that carry a destination are gone");
-        assert!(matches!(drawn[0], PluginFormEntryDto::Part { part: PluginShowPartDto::Copy { .. } }));
+        assert!(matches!(drawn[0], PluginFormEntryDto::Part { part: PluginShowPartDto::Copy { .. }, .. }));
         assert!(matches!(&drawn[1], PluginFormEntryDto::Field { field } if field.key == "token"));
 
-        assert_eq!(wanted_settings(&declared, None, true).len(), 4, "an official plugin draws all four");
+        assert_eq!(
+            wanted_settings(&declared, None, true).len(),
+            4,
+            "an official plugin draws all four"
+        );
+    }
+
+    /// A part is read the way its neighbouring setting is (`AMB-D-727`) — the platform's half settled
+    /// here, and what reads another setting's answer handed on for the form to re-read. A caption that
+    /// outlived the box it is about would leave a step nobody could follow.
+    #[test]
+    fn a_part_is_conditioned_the_way_the_settings_around_it_are() {
+        use amenbo_core::plugin_manifest::{ConfigEntry, ConfigField, ConfigPart, Os};
+        use amenbo_core::plugin_show::Part;
+        use amenbo_core::plugin_when::When;
+
+        let here = Os::here().expect("this build runs on a platform Amenbo names");
+        let elsewhere = if here == Os::Windows { Os::Macos } else { Os::Windows };
+
+        let declared = vec![
+            ConfigField::new("transport", "経路").into(),
+            ConfigEntry::Part(ConfigPart {
+                part: Part::Note("Worker を先に立ててください".into()),
+                when: vec![When::on([here]), When::field_has("transport", "cloudflare")],
+            }),
+            ConfigEntry::Part(ConfigPart {
+                part: Part::Text("この経路は Mac だけです".into()),
+                when: vec![When::on([elsewhere])],
+            }),
+            ConfigEntry::from(Part::Text("どの経路でも読めます".into())),
+        ];
+
+        let drawn = wanted_settings(&declared, None, true);
+        let parts: Vec<&Vec<PluginWhenDto>> = drawn
+            .iter()
+            .filter_map(|entry| match entry {
+                PluginFormEntryDto::Part { when, .. } => Some(when),
+                PluginFormEntryDto::Field { .. } => None,
+            })
+            .collect();
+        assert_eq!(parts.len(), 2, "the part this platform hides is not on the form at all");
+        assert_eq!(
+            parts[0].iter().map(|c| (c.field.as_str(), c.has.as_str())).collect::<Vec<_>>(),
+            [("transport", "cloudflare")],
+            "the platform clause held and is spent; what reads a setting is handed on",
+        );
+        assert!(parts[1].is_empty(), "a part written without a condition carries none on");
+    }
+
+    /// A part a stranger may not draw and a part this platform hides are two separate answers, and a
+    /// third party's `qr` is gone either way — the badge is read where it always was.
+    #[test]
+    fn a_conditioned_destination_is_still_an_official_plugins_alone() {
+        use amenbo_core::plugin_manifest::{ConfigEntry, ConfigPart, Os};
+        use amenbo_core::plugin_show::Part;
+        use amenbo_core::plugin_when::When;
+
+        let here = Os::here().expect("this build runs on a platform Amenbo names");
+        let elsewhere = if here == Os::Windows { Os::Macos } else { Os::Windows };
+        let qr = |os| {
+            vec![ConfigEntry::Part(ConfigPart {
+                part: Part::Qr("https://apps.apple.com/x".into()),
+                when: vec![When::on([os])],
+            })]
+        };
+        assert!(wanted_settings(&qr(elsewhere), None, true).is_empty(), "hidden by the platform");
+        assert_eq!(wanted_settings(&qr(here), None, true).len(), 1);
+        assert!(wanted_settings(&qr(here), None, false).is_empty(), "still official-only");
     }
 
     /// The buttons are paired the same way (`AMB-D-664`): an operation by the call it raises, and a value

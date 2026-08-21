@@ -1102,7 +1102,7 @@ fn check_config(problems: &mut Vec<Problem>, m: &Manifest) {
     for (i, entry) in m.config.iter().enumerate() {
         let field = match entry {
             ConfigEntry::Part(part) => {
-                check_config_part(problems, i, part, m.official);
+                check_config_part(problems, i, part, m.official, &declared);
                 continue;
             }
             ConfigEntry::Field(field) => field,
@@ -1134,7 +1134,7 @@ fn check_config(problems: &mut Vec<Problem>, m: &Manifest) {
 
 /// Check one part written into the config list (`AMB-D-727`).
 ///
-/// Two rules, and both are the run-answer's own — one vocabulary means one set of rules, wherever it is
+/// Three rules. Two are the run-answer's own — one vocabulary means one set of rules, wherever it is
 /// written ([`plugin_show`](crate::plugin_show)):
 ///
 /// - **the floor Amenbo puts under every author string it draws** ([`Part::wrong`](crate::plugin_show::Part::wrong)) — no control
@@ -1143,13 +1143,20 @@ fn check_config(problems: &mut Vec<Problem>, m: &Manifest) {
 ///   phone where nothing here can stop it. A third party has `copy`, which puts the same string in front
 ///   of somebody who can read it first. Said here rather than dropped in silence: an author who wrote one
 ///   is owed the reason it will not draw, which is what a self-check is for.
+///
+/// The third is the manifest's alone, because a run's answer has no condition to carry: **when it is
+/// drawn** is read by [`check_when`], the same rule a field's and an operation's are held to — a clause
+/// that names neither kind is a mistake, and one naming a `field` names a key this manifest declares.
 fn check_config_part(
     problems: &mut Vec<Problem>,
     i: usize,
-    part: &crate::plugin_show::Part,
+    entry: &crate::plugin_manifest::ConfigPart,
     official: bool,
+    declared: &HashSet<&str>,
 ) {
+    let part = &entry.part;
     let at = format!("config[{i}].{}", part.key());
+    check_when(problems, &format!("config[{i}].when"), &entry.when, declared, None);
     if let Some(wrong) = part.wrong() {
         let code = match wrong {
             crate::plugin_show::Fault::ControlChar => ProblemCode::ControlChar,
@@ -1170,14 +1177,16 @@ fn check_config_part(
 }
 
 /// How much of the schema's size budget one drawn part spends: every string its author wrote into it,
-/// counted exactly as a field's are.
-fn part_bytes(part: &crate::plugin_show::Part) -> usize {
+/// counted exactly as a field's are — its condition included (`AMB-D-727`), for the same reason a
+/// field's is.
+fn part_bytes(entry: &crate::plugin_manifest::ConfigPart) -> usize {
     use crate::plugin_show::Part;
-    match part {
+    let drawn = match &entry.part {
         Part::Text(t) | Part::Heading(t) | Part::Note(t) | Part::Copy(t) | Part::Qr(t) => t.len(),
         Part::List(items) => items.iter().map(String::len).sum(),
         Part::Link { url, label } => url.len() + label.len(),
-    }
+    };
+    drawn + when_bytes(&entry.when)
 }
 
 /// How much of the schema's size budget one field spends: every string its author wrote into it, the
@@ -2237,7 +2246,7 @@ mod tests {
     #[test]
     fn too_many_drawn_parts_is_refused() {
         let mut m = valid();
-        let part = || ConfigEntry::Part(crate::plugin_show::Part::Text("x".into()));
+        let part = || ConfigEntry::from(crate::plugin_show::Part::Text("x".into()));
         m.config = (0..MAX_CONFIG_PARTS).map(|_| part()).collect();
         assert!(validate_manifest(&m).is_empty(), "the cap itself is allowed");
         m.config.push(part());
@@ -2251,7 +2260,7 @@ mod tests {
         let mut m = valid();
         m.config = (0..3)
             .map(|_| {
-                ConfigEntry::Part(crate::plugin_show::Part::Text(
+                ConfigEntry::from(crate::plugin_show::Part::Text(
                     "x".repeat(MAX_CONFIG_SCHEMA_BYTES / 2),
                 ))
             })
@@ -2346,6 +2355,51 @@ mod tests {
     fn too_many_conditions_are_refused() {
         let when = vec![When::field_has("transport", "cloudflare"); MAX_WHEN_CLAUSES + 1];
         assert!(codes(&validate_manifest(&conditioned(when))).contains(&ProblemCode::TooManyFields));
+    }
+
+    /// A part carries the same conditions a field does, read against the same schema (`AMB-D-727`) —
+    /// hiding a box while its caption stays leaves a step nobody can follow, so the two are written the
+    /// same way and refused the same way.
+    #[test]
+    fn a_parts_condition_is_held_to_the_same_rules() {
+        let with = |when: Vec<When>| {
+            let mut m = valid();
+            m.config = vec![
+                ConfigField::new("transport", "経路").into(),
+                ConfigEntry::Part(crate::plugin_manifest::ConfigPart {
+                    part: crate::plugin_show::Part::Note("Worker を先に立ててください".into()),
+                    when,
+                }),
+            ];
+            m
+        };
+        assert!(validate_manifest(&with(vec![When::field_has("transport", "cloudflare")])).is_empty());
+        assert!(validate_manifest(&with(vec![When::on([Os::Macos])])).is_empty());
+
+        // A clause that decides nothing, and one reaching for a setting this manifest does not declare.
+        assert!(codes(&validate_manifest(&with(vec![When::default()]))).contains(&ProblemCode::BadWhen));
+        let m = with(vec![When::field_has("no_such_key", "x")]);
+        assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::BadWhen));
+
+        // A part has no key of its own, so there is no self-reference to catch — every declared name is
+        // another's.
+        let when = vec![When::field_has("transport", "cloudflare"); MAX_WHEN_CLAUSES + 1];
+        assert!(codes(&validate_manifest(&with(when))).contains(&ProblemCode::TooManyFields));
+    }
+
+    /// A part's condition spends the schema's size budget like a field's does — an author who writes ten
+    /// notes and conditions each of them has written the same weight either way.
+    #[test]
+    fn a_parts_condition_spends_the_schemas_size_budget() {
+        let mut m = valid();
+        m.config = vec![
+            ConfigField::new("transport", "経路").into(),
+            ConfigEntry::Part(crate::plugin_manifest::ConfigPart {
+                part: crate::plugin_show::Part::Text("x".into()),
+                when: vec![When::field_has("transport", "y".repeat(MAX_CONFIG_SCHEMA_BYTES))],
+            }),
+        ];
+        assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::SchemaTooLarge));
     }
 
     /// An operation carries the same conditions its fields do, read against the same schema

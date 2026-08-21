@@ -680,6 +680,43 @@ describe("the settings form", () => {
     expect(button("Raise the tunnel")).toBeUndefined();
   });
 
+  // A part carries its own condition, read against the same answers a field's is (`AMB-D-727`). A form
+  // that hid Cloudflare's box but kept the caption above it would leave a step nobody could follow.
+  it("draws a conditioned part the moment the answer it reads changes", async () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    const transport = field({
+      key: "transport",
+      fieldType: "multi",
+      options: [
+        { value: "icloud", label: "iCloud", when: [] },
+        { value: "cloudflare", label: "Cloudflare", when: [] },
+      ],
+    });
+    hoisted.installs = [
+      row({
+        name: "viewer",
+        on: [7],
+        config: [
+          ...form(transport),
+          {
+            kind: "part",
+            when: [{ field: "transport", has: "cloudflare" }],
+            part: { kind: "note", text: "Worker を先に立ててください" },
+          },
+        ],
+      }),
+    ];
+    hoisted.held = { viewer: { 7: [transport] } };
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+
+    expect(container.textContent).not.toContain("Worker を先に立ててください");
+    act(() => { boxes()[1].click(); });
+    expect(container.textContent).toContain("Worker を先に立ててください");
+    act(() => { boxes()[1].click(); });
+    expect(container.textContent).not.toContain("Worker を先に立ててください");
+  });
+
   // A candidate carries its own condition, and it is read the same way — the checkbox goes, the field it
   // belongs to stays.
   it("drops a candidate whose own condition does not hold", async () => {
@@ -1030,7 +1067,7 @@ describe("what the author's own code says on the form", () => {
 // left does not survive the next.
 describe("what the author asked to have drawn on the form", () => {
   /** One entry drawn rather than filled in. */
-  const part = (one: PluginShowPartDto): PluginFormEntryDto => ({ kind: "part", part: one });
+  const part = (one: PluginShowPartDto): PluginFormEntryDto => ({ kind: "part", when: [], part: one });
 
   /** Open the settings of the one crossing on screen. */
   const openForm = () => {

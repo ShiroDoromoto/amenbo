@@ -1069,6 +1069,12 @@ export type PluginFormEntryDto = { "kind": "field",
  */
 field: PluginWantedSettingDto, } | { "kind": "part", 
 /**
+ * What is left of the author's condition on it (`AMB-D-727`) — the platform's half already
+ * settled, so what remains reads another setting's answer and is re-read as the form changes,
+ * exactly as a setting's own is. Empty is a part drawn unconditionally.
+ */
+when: Array<PluginWhenDto>, 
+/**
  * What to draw.
  */
 part: PluginShowPartDto, };

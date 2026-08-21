@@ -159,13 +159,11 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
     if (answer !== "") answers[f.key] = answer;
   }
   // The form as it stands, **in the author's declared order** (`AMB-D-727`): the settings whose conditions
-  // hold, each keeping only the candidates whose own do, with the parts they wrote between them left where
-  // they stand — a form that hid Cloudflare's fields but kept its button, or its caption, would leave a
-  // step nobody could follow. The operations go the same way.
-  //
-  // A part carries no condition of its own yet, so every one of them draws.
+  // hold, each keeping only the candidates whose own do, with the parts they wrote between them read the
+  // same way and left where they stand — a form that hid Cloudflare's fields but kept its button, or its
+  // caption, would leave a step nobody could follow. The operations go the same way.
   const drawn: PluginFormEntryDto[] = install.config.flatMap((entry): PluginFormEntryDto[] => {
-    if (entry.kind === "part") return [entry];
+    if (entry.kind === "part") return whenShows(entry.when, answers) ? [entry] : [];
     const f = entry.field;
     if (!whenShows(f.when, answers)) return [];
     const options = f.options.filter((o) => whenShows(o.when, answers));

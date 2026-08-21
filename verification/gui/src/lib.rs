@@ -586,6 +586,15 @@ impl Instructor {
             (Domain::Plugin, "checked") | (Domain::Plugin, "press-said") => {
                 Some(Expectation { text: arg_str(with, "text")?.to_string(), present: true })
             }
+            // A part is read by its own string, where it has one on the shot: the words on a `link`'s
+            // button, the line a `text` is, the address beside a `copy`. They are the author's, which is
+            // what makes them worth reading back — Amenbo wrote none of them.
+            //
+            // A `qr` is not one of those. What is on the screen is a picture, and the claim is about who
+            // drew it, so that one is left to an eye.
+            (Domain::Plugin, "drawn") if arg_str(with, "kind")? != "qr" => {
+                Some(Expectation { text: arg_str(with, "value")?.to_string(), present: true })
+            }
             (Domain::Plugin, "detail") => {
                 Some(Expectation { text: arg_str(with, "declares")?.to_string(), present: true })
             }
@@ -1345,6 +1354,41 @@ impl Instructor {
                         "Confirm the press on \"{name}\" is asking for a value under the words \"{label}\", and that the box is empty rather than carrying anything typed into it before."
                     ),
                 }
+            }
+            // What the author asked to have drawn, read off the form. A `qr` is its own
+            // line: what is on the screen is a picture, and the claim is that Amenbo drew it from a
+            // string the author handed over — an image the plugin supplied is exactly what this
+            // vocabulary exists instead of, and no reading of words settles which one is standing there.
+            (Domain::Plugin, "drawn") => {
+                let name = req(with, "name")?;
+                let kind = req(with, "kind")?;
+                // Where it stands, when the road named a setting it has to stand over. It is a clause on
+                // the same line rather than a step of its own: what is being read is one thing on the
+                // screen, and an eye given two lines about it reads the first and skims the second.
+                let over = match with.get("above").and_then(|v| v.as_str()) {
+                    Some(key) => format!(
+                        " Confirm it stands above the setting \"{key}\", where its author put it, and not in a block of its own."
+                    ),
+                    None => String::new(),
+                };
+                let line = match (kind, with.get("value").and_then(|v| v.as_str())) {
+                    ("qr", _) => format!(
+                        "Confirm the settings form for \"{name}\" draws a QR code — squares Amenbo has drawn, sharp and square-on, not a picture sitting at some size of its own."
+                    ),
+                    ("copy", Some(value)) => format!(
+                        "Confirm the settings form for \"{name}\" draws \"{value}\" with a button beside it that copies it."
+                    ),
+                    ("link", Some(value)) => format!(
+                        "Confirm the settings form for \"{name}\" draws a button reading \"{value}\", and that it is a button rather than a line of text."
+                    ),
+                    (kind, Some(value)) => format!(
+                        "Confirm the settings form for \"{name}\" draws \"{value}\" as a {kind}, in plain text with no markup of the author's showing through."
+                    ),
+                    (kind, None) => format!(
+                        "Confirm the settings form for \"{name}\" draws a {kind} the plugin asked for."
+                    ),
+                };
+                format!("{line}{over}")
             }
             // The button before the gate is open. What is under test is a control a reader can see and
             // cannot use, so the absence of the button would pass this for the wrong reason — the line

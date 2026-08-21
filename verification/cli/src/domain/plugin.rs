@@ -412,9 +412,27 @@ impl Driver<'_> {
                 let name = req_str(with, "name")?;
                 let key = req_str(with, "key")?;
                 let options = req_str(with, "options")?;
+                // A candidate carries its own condition, and only one of them can: a step
+                // names which by its stored value, so a choice offering one answer under a condition and
+                // the rest unconditionally is written in one line rather than several.
+                let conditioned = with.get("candidate").and_then(|v| v.as_str());
+                let candidate_when = when_from(with, "candidate_when")?;
+                if candidate_when.is_some() && conditioned.is_none() {
+                    return Err(
+                        "`candidate_when_field` needs `candidate` — a condition on a candidate has to say which one".to_string()
+                    );
+                }
                 let candidates: Vec<serde_json::Value> = options
                     .split(',')
-                    .map(|value| serde_json::json!({ "value": value, "label": value }))
+                    .map(|value| {
+                        let mut option = serde_json::json!({ "value": value, "label": value });
+                        if conditioned == Some(value) {
+                            if let Some(when) = &candidate_when {
+                                option["when"] = when.clone();
+                            }
+                        }
+                        option
+                    })
                     .collect();
                 let mut over = serde_json::json!({ "type": "multi", "options": candidates });
                 // A field that declares no default is the other shape a choice comes in — one where
@@ -443,6 +461,11 @@ impl Driver<'_> {
                 let mut manifest: serde_json::Value = serde_json::from_str(&raw)
                     .map_err(|e| format!("{} is not the manifest it should be: {e}", path.display()))?;
                 let mut action = serde_json::json!({ "cmd": cmd, "label": label });
+                // When the button is offered at all — the same pair a setting takes, on the
+                // control that acts on those settings.
+                if let Some(when) = when_from(with, "when")? {
+                    action["when"] = when;
+                }
                 // What the press asks for, where the step named one. An operation asking for nothing is
                 // the other shape it comes in — a button that runs the moment it is pressed — so the key
                 // is left off rather than written empty, which the form would draw as a box with no name.
@@ -1581,6 +1604,11 @@ impl Driver<'_> {
         let mut field = serde_json::json!({
             "key": key, "label": label, "secret": false, "required": must_be_answered
         });
+        // What the author said about when this setting is drawn at all. Absent is the
+        // unconditional field every declaration here wrote before the key existed.
+        if let Some(when) = when_from(with, "when")? {
+            field["when"] = when;
+        }
         for (k, v) in over.as_object().into_iter().flatten() {
             field[k] = v.clone();
         }
@@ -1764,6 +1792,31 @@ fn hung_on<'a>(doc: &'a serde_json::Value, run: &str, id: &str) -> Option<Vec<&'
     )
 }
 
+/// The condition an author put on what a step is declaring, read off the pair of words
+/// a step writes it as — `<prefix>_field` naming the setting whose answer decides, `<prefix>_has` the
+/// value looked for among its answers.
+///
+/// `None` where the step named neither, which is the unconditional shape everything here had before
+/// there was anything to hide. Half a pair is a mistake worth a refusal rather than a silent
+/// unconditional: a step that meant to hide something and did not would read green over a form
+/// drawing everything.
+///
+/// The manifest takes a list, and one clause is what a step can say; a road needing two would be
+/// reading a rule engine rather than a form.
+fn when_from(with: &Args, prefix: &str) -> Result<Option<serde_json::Value>, String> {
+    let field = with.get(format!("{prefix}_field").as_str()).and_then(|v| v.as_str());
+    let has = with.get(format!("{prefix}_has").as_str()).and_then(|v| v.as_str());
+    match (field, has) {
+        (None, None) => Ok(None),
+        (Some(field), Some(has)) => {
+            Ok(Some(serde_json::json!([{ "field": field, "has": has }])))
+        }
+        _ => Err(format!(
+            "`{prefix}_field` and `{prefix}_has` are written together — one names the setting the condition reads, the other the answer it looks for"
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1789,6 +1842,33 @@ mod tests {
         };
         assert!(err.contains("holds") && err.contains("equals"), "got: {err}");
         assert!(refuse_screen_reading(&args("{ name: worktree, key: base, equals: main }")).is_ok());
+    }
+
+    /// The condition a step writes as a pair of words, and the shape the manifest takes it in — one
+    /// clause naming a setting and the answer looked for among its own.
+    #[test]
+    fn a_condition_is_read_off_the_pair_a_step_writes_it_as() {
+        assert_eq!(when_from(&args("{ name: viewer, key: worker_url }"), "when"), Ok(None));
+        assert_eq!(
+            when_from(&args("{ when_field: transport, when_has: cloudflare }"), "when"),
+            Ok(Some(serde_json::json!([{ "field": "transport", "has": "cloudflare" }])))
+        );
+        // The prefix is what lets one step carry both its own condition and its candidate's.
+        assert_eq!(
+            when_from(&args("{ candidate_when_field: mode, candidate_when_has: advanced }"), "candidate_when"),
+            Ok(Some(serde_json::json!([{ "field": "mode", "has": "advanced" }])))
+        );
+    }
+
+    /// Half a pair is refused rather than read as no condition at all: a step that meant to hide
+    /// something and quietly did not would read green over a form drawing everything.
+    #[test]
+    fn half_a_condition_is_refused() {
+        let Err(err) = when_from(&args("{ when_field: transport }"), "when") else {
+            panic!("a condition naming no answer decides nothing");
+        };
+        assert!(err.contains("when_field") && err.contains("when_has"), "got: {err}");
+        assert!(when_from(&args("{ when_has: cloudflare }"), "when").is_err());
     }
 
     fn served(docs: &[(String, String)], path: &str) -> serde_json::Value {

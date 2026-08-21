@@ -361,6 +361,9 @@ settings opened inside it and the press that then goes through,
 `learn-why-a-plugin-will-not-turn-on` walks the gate that turns on the author's own judgement — the two
 sentences a refusing check puts on the form after a save, the value staying saved and the plugin staying on
 under them, and the same check standing in front of the switch when it is pressed again —
+`see-only-the-settings-that-apply` walks the same form one layer up — the candidate an author withheld,
+the field that candidate gates and the operation acting on it, each absent until the answer above it is
+given, and the field and its button arriving together —
 `choose-from-what-a-plugin-offers` walks a settings form through the three answers a choice holds and
 the button back to the author's default, `press-what-a-plugin-offers-to-do` walks the other half of that
 same form — the operation its author declared, drawn but unpressable while the gate is shut, the box it

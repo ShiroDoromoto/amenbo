@@ -542,7 +542,9 @@ of what that code said. `declare-check` writes the other half of that block — 
 raised on the values before a gate opens on them — and `plugin check-program` answers it, `ok:` being the
 scenario's to choose, since what a road about a gate wants is the same values turned away and then let
 through. A plugin has one program, so those two stand-ins replace whatever stood there before, each other
-included: a road walks the one it is about. `plugin declare-scope` writes the layer the author
+included — but they do not need each other: `press-program` answers a check with a yes on the stream a
+press never reads, so a settings block carrying both halves is walked by standing in that one, and
+`check-program` is what a road reaches for when the verdict itself is under test. `plugin declare-scope` writes the layer the author
 declared — one project's rows, or the device's — which is the same kind of word and unreachable for the
 same reason: a manifest saying nothing means `project`, and every published plugin says nothing, so the
 road a machine-wide plugin walks (one enable, one window on the whole device) exists only once this is

@@ -720,6 +720,12 @@ const REGISTRY: &[OpSpec] = &[
     // nowhere. Both are only visible from inside the run, and only a program willing to say what it was
     // handed can say either — which no published plugin is, none of them declaring an operation at all.
     // So the driver stands one in that writes its one line, naming what it was asked for.
+    //
+    // It also answers a check with a yes, on the stream the press never looks at: a press draws stderr
+    // and discards stdout, a check reads stdout and only logs stderr. A plugin has one program, so a
+    // settings block carrying both halves — a check before the gate and a button behind it — is walked
+    // by standing in this one. `check-program` is what a road reaches for when the *verdict* is the
+    // thing under test, since that is the half this cannot vary.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "press-program", required: &["name"], refs: &[], strings: &["name"], binds: false },
     // An installed plugin whose program answers the check with a verdict. Whether the values are usable is
     // the author's judgement and Amenbo makes none of its own, so the only thing that can say no is a
@@ -730,7 +736,8 @@ const REGISTRY: &[OpSpec] = &[
     // which is what a road reads back to know whose sentence reached the screen.
     //
     // A plugin has one program, so this stands in for whatever was standing there before — `press-program`
-    // included. A road walks the one it is about.
+    // included, whose own yes it replaces. A road reaches here when the verdict is what it is about, and
+    // for `press-program` when the settings block is walked with the check simply passing.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "check-program", required: &["name", "ok"], refs: &[], strings: &["name", "message", "field", "field_message"], binds: false },
     // An installed plugin whose program calls Amenbo back. A payload names a record and carries none of
     // it, so the route to the content is the binary itself, run from inside the plugin with the store and

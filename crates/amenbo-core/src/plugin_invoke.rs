@@ -64,7 +64,7 @@ use crate::plugin_inject;
 use crate::plugin_installed;
 use crate::plugin_log;
 use crate::plugin_payload::VERSION;
-use crate::plugin_trust::{effective_enabled_in, require_project};
+use crate::plugin_trust::effective_enabled_in;
 use crate::store::Store;
 
 /// What the execution log records in the `event` column for a command run. Not one of the v1 event names
@@ -277,13 +277,10 @@ fn assemble(
         invocation = invocation.env(key, value);
     }
     // The read-back path (`AMB-D-406`): the store to call into, and the window to read it through — which is
-    // the gate this run just passed, since what a plugin may observe is what it may read. Which gate that is
-    // follows the layer the author declared (`AMB-D-601`): this project, or the whole device.
-    let project = require_project(project)?;
-    for (key, value) in plugin_callback::env(
-        &store.paths.base_dir,
-        plugin_callback::reach_of(plugin.manifest.scope, project),
-    ) {
+    // the gate this run just passed, since what a plugin may observe is what it may read. That gate is the
+    // `layer` resolved above (`AMB-D-601`), so a `scope: machine` plugin runs from outside any project
+    // rather than being asked for an id its window would discard.
+    for (key, value) in plugin_callback::env(&store.paths.base_dir, plugin_callback::reach_of(layer)) {
         invocation = invocation.env(key, value);
     }
     Ok(invocation)

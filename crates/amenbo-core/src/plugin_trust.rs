@@ -50,10 +50,10 @@ pub struct Stopped {
 /// The project whose gate a face is moving, or the refusal when it is standing in none (`AMB-D-434`).
 ///
 /// A `scope: project` plugin is a project's, so a context with no project has no answer to give — refused
-/// here rather than silently resolved device-wide, a fallback no declaration asked for. One wording, shared
-/// by every face that has an `Option<i64>` and needs the gate, and by
-/// [`Layer::of`](crate::plugin_layer::Layer::of), which is where the declaration decides whether the
-/// question is even asked.
+/// here rather than silently resolved device-wide, a fallback no declaration asked for. Asked from one
+/// place only: [`Layer::of`](crate::plugin_layer::Layer::of), where the declaration decides whether the
+/// question arises at all — a face that asked it beside the layer would put the project plugin's refusal in
+/// front of a device-wide run that never needed a project.
 pub fn require_project(project: Option<i64>) -> Result<i64> {
     project.ok_or_else(|| {
         Error::Invalid(

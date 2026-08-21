@@ -1383,6 +1383,27 @@ pub struct PluginConfigFieldDto {
     pub(crate) state: String,
 }
 
+/// **One condition still to be judged, on the answers the form is holding** (`AMB-D-727`).
+///
+/// The platform's half of a `when` is already settled by the time this arrives: what this build's OS hides
+/// is not in the list at all ([`amenbo_core::plugin_when::after_platform`]), and no face here ever learns
+/// an OS name. What is left reads another setting, and it is left to the form because the form is where
+/// the answers are while it is open — someone ticking Cloudflare expects its fields the same moment, and
+/// the store has not been told yet.
+///
+/// Read as an `and`: everything listed has to hold. A setting answers with `has` when `has` is among its
+/// values, which for a `multi` setting is one of the comma-joined answers (`AMB-D-415`) and for a text one
+/// is the whole of it.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PluginWhenDto {
+    /// The key of the setting whose answer this reads.
+    pub(crate) field: String,
+    /// The value looked for among that setting's answers.
+    pub(crate) has: String,
+}
+
 /// One candidate a setting offers (`AMB-D-415`): the value stored when it is ticked, and the words the
 /// author wants beside its checkbox. Two audiences, so two strings — the plugin reads `value`, the user
 /// reads `label`.
@@ -1398,6 +1419,9 @@ pub struct PluginConfigOptionDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) label_i18n: Option<String>,
+    /// When this candidate is offered (`AMB-D-727`). Empty is a candidate with no condition on it, which
+    /// is every one written before the key existed.
+    pub(crate) when: Vec<PluginWhenDto>,
 }
 
 /// One setting a plugin will ask for, as its author declared it — and nothing a store holds for it.
@@ -1460,6 +1484,10 @@ pub struct PluginWantedSettingDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) default_value: Option<String>,
+    /// When this setting is drawn (`AMB-D-727`). Empty is a setting with no condition on it, which is
+    /// every one written before the key existed — and also one whose only condition was the platform,
+    /// already settled and held.
+    pub(crate) when: Vec<PluginWhenDto>,
 }
 
 /// **One operation the settings form may raise** (`AMB-D-664`) — a button, and whatever that press has to
@@ -1485,6 +1513,8 @@ pub struct PluginActionDto {
     /// What this press asks for and nothing keeps (`AMB-D-664`). Empty is the ordinary operation, which
     /// runs on the values already saved.
     pub(crate) ask: Vec<PluginAskDto>,
+    /// When this button is offered (`AMB-D-727`). Empty is an operation with no condition on it.
+    pub(crate) when: Vec<PluginWhenDto>,
 }
 
 /// **One value an operation asks for at the press** (`AMB-D-664`) — a box drawn only while the press is

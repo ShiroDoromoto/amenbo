@@ -79,8 +79,7 @@ pub fn require_project(project: Option<i64>) -> Result<i64> {
 /// that is empty would shut this gate over a box the form does not draw: the user is told a setting is
 /// missing, goes to fill it in, and there is nothing on the screen to fill in. So `stage` is asked here
 /// rather than by each caller — it is what makes forgetting it impossible, which is the only reason this
-/// takes a parameter it could have been handed a filtered list instead of
-/// ([`crate::plugin_when::visible_fields`]).
+/// takes a parameter rather than a list a caller had already narrowed.
 pub fn missing_required<'a>(
     fields: &'a [ConfigField],
     stage: &crate::plugin_when::Stage,

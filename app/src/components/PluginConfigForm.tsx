@@ -1,5 +1,9 @@
 import { useState } from "react";
-import type { PluginCheckDto, PluginWantedSettingDto } from "../bindings/bindings";
+import type {
+  PluginCheckDto,
+  PluginFormEntryDto,
+  PluginWantedSettingDto,
+} from "../bindings/bindings";
 import { errText, t } from "../core/i18n";
 import { PluginShowParts } from "./PluginShowParts";
 import { asTyped } from "../core/keys";
@@ -10,6 +14,7 @@ import {
   runPluginAction,
   setPluginConfig,
   usePluginConfig,
+  whenShows,
   type PluginAction,
   type PluginActionRan,
   type PluginConfigField,
@@ -144,6 +149,30 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
     return answer === "" || answer === NONE_SELECTED ? [] : answer.split(",");
   };
 
+  // Where every setting stands *on screen*, which is what its author's conditions are read against
+  // (`AMB-D-727`): what was typed, else what the layer holds, else the default behind it. This is the half
+  // of a `when` core cannot answer — the store has not been told about a box that is still being filled in,
+  // so someone ticking Cloudflare would otherwise wait for a save to see its fields.
+  const answers: Record<string, string> = {};
+  for (const f of formFields(install.config)) {
+    const answer = f.fieldType === "multi" ? ticked(f).join(",") : shown(f) || f.defaultValue || "";
+    if (answer !== "") answers[f.key] = answer;
+  }
+  // The form as it stands, **in the author's declared order** (`AMB-D-727`): the settings whose conditions
+  // hold, each keeping only the candidates whose own do, with the parts they wrote between them left where
+  // they stand — a form that hid Cloudflare's fields but kept its button, or its caption, would leave a
+  // step nobody could follow. The operations go the same way.
+  //
+  // A part carries no condition of its own yet, so every one of them draws.
+  const drawn: PluginFormEntryDto[] = install.config.flatMap((entry): PluginFormEntryDto[] => {
+    if (entry.kind === "part") return [entry];
+    const f = entry.field;
+    if (!whenShows(f.when, answers)) return [];
+    const options = f.options.filter((o) => whenShows(o.when, answers));
+    return [{ ...entry, field: { ...f, options } }];
+  });
+  const actions = install.actions.filter((a) => whenShows(a.when, answers));
+
   // What the author's check says about the values a write has just left behind (`AMB-D-664`), or nothing
   // — a plugin that declares no check, and a crossing whose gate is shut, which core is the one to answer
   // (running their code is what enabling means, `AMB-D-351`).
@@ -242,7 +271,7 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
       {check && <PluginShowParts parts={check.show} />}
       {/* The author's declared order, parts and settings together (`AMB-D-727`): where a part sits is what
           it is for — the way to the page that issues a token belongs above the box the token goes in. */}
-      {install.config.map((entry, at) => {
+      {drawn.map((entry, at) => {
         if (entry.kind === "part") {
           return <PluginShowParts key={`part-${at}`} parts={[entry.part]} />;
         }
@@ -400,11 +429,11 @@ export function PluginConfigForm({ install, layer, enabled, check, onWrote }: {
 
       {/* The operations their author declared (`AMB-D-664`). Drawn under the fields because that is what
           they act on, and only for a plugin that declared any — a form with none is the form it was. */}
-      {install.actions.length > 0 && (
+      {actions.length > 0 && (
         <div className="plugcfg__acts">
           <div className="faint plugcfg__note">{t("plugins.act.title")}</div>
           {!enabled && <div className="plugcfg__note">{t("plugins.act.needsEnabled")}</div>}
-          {install.actions.map((a) => (
+          {actions.map((a) => (
             <div key={a.cmd} className="plugcfg__act">
               {/* A real button, not the link-styled feed__action: the author's own words are the label,
                   so a borderless faint one is read as one more line of their prose and never pressed —

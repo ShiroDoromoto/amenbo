@@ -14,9 +14,10 @@
 //! see whether it launched.
 //!
 //! **The stamp closes it.** `AMENBO_BUILD=release` is set in the release workflow's environment and
-//! nowhere else — not in the Makefile, not in a plain `cargo build` — so it is present in exactly the
-//! binaries public CI produced. There is no other way a distributed Amenbo is built: every artifact
-//! comes from `_release.yml`, and the `script` channel ships those same bytes.
+//! nowhere else — not in the Makefile, not in a plain `cargo build`, not in the theme preview public
+//! CI also builds (`AMB-D-732`) — so it is present in exactly the binaries public CI produced. There
+//! is no other way a distributed Amenbo is built: every artifact comes from `_release.yml`, and the
+//! `script` channel ships those same bytes.
 //!
 //! **What the gate refuses is narrow**, and all four conditions must hold ([`refuses_migration`]): an
 //! unstamped build, pointed at the production channel, against the real app-data root, with no escape

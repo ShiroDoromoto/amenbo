@@ -1,0 +1,115 @@
+// @vitest-environment jsdom
+// The classification selects in the detail pane move before the write answers, and one of these writes
+// can be refused: a required axis will not be emptied (`AMB-D-734`). What that made possible was a pane
+// showing a value the store never took — the toast said no, the select stayed where the reader had put
+// it, and the two disagreed until the task was opened again.
+//
+// What these guard: a refused assignment **puts the select back**, and one that lands **leaves it**.
+import { act, createElement } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+const AXIS = { id: 900, name: "プロダクト", notes: "", role: "none", ordered: false, showOnCard: false, required: true,
+  values: [{ id: 901, name: "Amenbo本体" }, { id: 902, name: "Viewer" }] };
+
+const hoisted = vi.hoisted(() => ({
+  /** Set it to make the assignment write refuse, the way core refuses to empty a required axis. */
+  setFails: false,
+  /** Every assignment the pane asked for, as `taskId:valueId`. */
+  asked: [] as string[],
+}));
+
+// Only the two writes the selects drive are stood in for; everything else — the snapshot, the store, the
+// pane's own state — runs for real, which is the point: the rollback lives in the wiring between them.
+vi.mock("../core/mutations", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../core/mutations")>();
+  return {
+    ...orig,
+    setTaskDimensionValue: async (taskId: number, valueId: number) => {
+      hoisted.asked.push(`${taskId}:${valueId}`);
+      if (hoisted.setFails) throw { code: "invalid_dimension_required_unset", message_en: "refused" };
+    },
+  };
+});
+
+// The mock store has no axes, so one is hung on the task's project — the pane reads them off the snapshot.
+vi.mock("../core/snapshot", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../core/snapshot")>();
+  return {
+    ...orig,
+    getSnapshot: () => {
+      const snap = orig.getSnapshot();
+      return { ...snap, projects: snap.projects.map((p) => (p.id === 1 ? { ...p, dimensions: [AXIS] } : p)) };
+    },
+  };
+});
+
+import { TaskDetailPane } from "./TaskDetailPane";
+import { StoreProvider } from "../store/store";
+import { loadSnapshot } from "../core/snapshot";
+
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+let container: HTMLDivElement;
+let root: Root;
+
+const axisSelect = () => container.querySelector<HTMLSelectElement>("select.inlineselect")!;
+
+/** Pick a value in the axis select, the way a reader does. */
+async function pick(value: string) {
+  const select = axisSelect();
+  await act(async () => {
+    select.value = value;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await settle();
+}
+
+/** Wait for useTask (useQuery) and for the write's answer to come back. */
+async function settle() {
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
+}
+
+beforeAll(async () => {
+  await loadSnapshot();
+});
+
+beforeEach(() => {
+  hoisted.setFails = false;
+  hoisted.asked = [];
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+});
+
+afterEach(() => {
+  act(() => root.unmount());
+  container.remove();
+});
+
+describe("TaskDetailPane classification selects", () => {
+  async function open() {
+    act(() => root.render(createElement(StoreProvider, null, createElement(TaskDetailPane, { taskId: 1 }))));
+    await settle();
+  }
+
+  it("puts the select back when the write is refused", async () => {
+    hoisted.setFails = true;
+    await open();
+    expect(axisSelect().value).toBe(""); // The task carries no value on this axis yet
+
+    await pick("901");
+
+    expect(hoisted.asked).toEqual(["1:901"]); // It did try
+    expect(axisSelect().value).toBe(""); // …and the refusal took the select back
+  });
+
+  it("leaves the select where the reader put it when the write lands", async () => {
+    await open();
+
+    await pick("901");
+
+    expect(hoisted.asked).toEqual(["1:901"]);
+    expect(axisSelect().value).toBe("901");
+  });
+});

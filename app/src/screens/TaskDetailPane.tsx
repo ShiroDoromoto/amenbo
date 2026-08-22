@@ -100,6 +100,16 @@ export function TaskDetailPane({
     }).catch(() => {});
     return () => { alive = false; };
   }, [taskId]);
+  // What the select shows for one axis — the value, or nothing where the task is on no value of it. It is
+  // both how an assignment is drawn optimistically and how a refused one is taken back, so the two can
+  // never disagree about what "cleared" looks like.
+  const showDimValue = (dimensionId: number, valueId: number | undefined) =>
+    setDimValues((m) => {
+      const n = { ...m };
+      if (valueId === undefined) delete n[dimensionId];
+      else n[dimensionId] = valueId;
+      return n;
+    });
   // Unsaved input means: notes are being edited and the draft differs from what is stored, or a comment draft is
   // still sitting there. On unmount it always resets to false, so nothing carries over to the next task opened.
   const notesDirty = editingNotes && notesDraft !== (task?.notes ?? "");
@@ -293,12 +303,17 @@ export function TaskDetailPane({
                   onChange={(e) => {
                     const valueId = Number(e.target.value);
                     const prev = dimValues[dim.id];
+                    // The select moves first and the write answers after, so a refusal has to put it
+                    // back: a required axis will not be emptied (`AMB-D-734`), and left alone the pane
+                    // would go on showing "none" over a value the store still holds.
                     if (valueId) {
-                      store.setTaskDimensionValue(task.id, valueId);
-                      setDimValues((m) => ({ ...m, [dim.id]: valueId }));
+                      showDimValue(dim.id, valueId);
+                      void store.setTaskDimensionValue(task.id, valueId)
+                        .then((ok) => { if (!ok) showDimValue(dim.id, prev); });
                     } else if (prev) {
-                      store.unsetTaskDimensionValue(task.id, prev);
-                      setDimValues((m) => { const n = { ...m }; delete n[dim.id]; return n; });
+                      showDimValue(dim.id, undefined);
+                      void store.unsetTaskDimensionValue(task.id, prev)
+                        .then((ok) => { if (!ok) showDimValue(dim.id, prev); });
                     }
                   }}
                 >

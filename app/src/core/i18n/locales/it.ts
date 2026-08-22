@@ -362,6 +362,7 @@ export const it: Translation = {
     "search.on.decision": "Decisione",
     "search.on.decisionComment": "Commento a una decisione",
     "commands.note": "Riferimento completo dei comandi (da agent --json · sola lettura)",
+    "commands.prefix": "Ogni riga qui sotto si digita dopo questo:",
     "cli.none": "Questa build non fornisce alcun comando eseguibile: la sua CLI è dentro l'AppImage ed esiste solo mentre l'app è aperta. Usa l'app stessa.",
     "commands.search": "Cerca comandi", "commands.empty": "Nessun comando", "commands.loading": "Caricamento…",
     "commands.other": "Altri", "commands.required": "obbligatorio", "commands.examples": "Esempi",

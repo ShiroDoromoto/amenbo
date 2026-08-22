@@ -1011,7 +1011,7 @@ jobs:
           guards/check-prose.sh
 
   tree-guards:
-    name: Tree guards (internal-note refs, test prose, CLI shim, change scopes, CLI name, product name, sidecar name, dev self-update, TS derive)
+    name: Tree guards (internal-note refs, test prose, CLI shim, change scopes, CLI name, product name, sidecar name, dev self-update, TS derive, GUI inputs)
     runs-on: ubuntu-latest
     # Backstop for the local pre-commit hook, which runs the first two scans over
     # staged additions only. All have fixed patterns — no secret needed. The rest
@@ -1064,6 +1064,11 @@ jobs:
         run: |
           chmod +x guards/check-ts-derive.sh
           guards/check-ts-derive.sh
+
+      - name: Assert every source the GUI reads from outside app/ opens the gui gate
+        run: |
+          chmod +x guards/check-gui-inputs.sh
+          guards/check-gui-inputs.sh
 
       - name: Assert the merge gate below waits for every job in this workflow
         run: |

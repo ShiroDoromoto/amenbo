@@ -42,6 +42,16 @@ gui:
   - '.nvmrc'
   - '.github/workflows/_ci.yml'
   - '.github/paths-filters.yml'
+  # The GUI's inputs are not confined to app/. The Rust↔TS parity tests hold one hand-written
+  # TypeScript list against the Rust it mirrors, and they read that Rust straight out of the tree
+  # with Vite's `?raw` — so a Rust file listed here is as much a build input of this job as any
+  # file under app/. Left out, the layer excuses the very change that breaks the parity: the PR
+  # that edits Rust alone is green with this job skipped, and the break lands on main under the
+  # next PR that happens to touch app/. guards/check-gui-inputs.sh holds this list to what those
+  # tests actually read.
+  - 'crates/amenbo-core/src/error.rs'
+  - 'crates/amenbo-core/src/doctor.rs'
+  - 'crates/amenbo-core/src/store/tests.rs'
 # devtool is one self-contained Go module with no dependency on the rest of the tree,
 # so nothing outside it can move its verdict — except the gate itself, which holds the
 # three checks this job runs.

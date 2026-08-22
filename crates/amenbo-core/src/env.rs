@@ -42,10 +42,12 @@ pub fn plugin_reach() -> Option<String> {
 /// with Amenbo's own directory in front of this list ([`crate::plugin_exec`]).
 pub const PATH_VAR: &str = "PATH";
 
-/// `PATH` — the OS's own list of directories a bare command name is looked up in. Amenbo reads it for one
-/// purpose: to hand a plugin that same list with its own directory in front, so the `amenbo` a plugin is
-/// told to call (`AMB-D-406`) is there to be found even when the process was started by a scheduler rather
-/// than by a shell (`AMB-D-716`).
+/// `PATH` — the OS's own list of directories a bare command name is looked up in. Amenbo reads it for two
+/// purposes. One is to hand a plugin that same list with its own directory in front, so the `amenbo` a
+/// plugin is told to call (`AMB-D-406`) is there to be found even when the process was started by a
+/// scheduler rather than by a shell (`AMB-D-716`). The other is to ask the same question of ourselves: a
+/// theme preview on Linux is the one build nothing installs a CLI for, so whether it has a command to
+/// name is whether the member put one here ([`crate::config::Paths::command_to_run`]).
 pub fn path() -> Option<OsString> {
     var_os(PATH_VAR)
 }

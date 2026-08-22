@@ -363,7 +363,7 @@ export const fr: Translation = {
     "search.on.decisionComment": "Commentaire sur une décision",
     "commands.note": "Référence complète des commandes (depuis agent --json · lecture seule)",
     "commands.prefix": "Chaque ligne ci-dessous se tape à la suite de :",
-    "cli.none": "Cette version ne fournit aucune commande exécutable : son CLI est dans l'AppImage et n'existe que tant que l'application est ouverte. Passez par l'application.",
+    "cli.none": "Aucune commande n'est encore dans votre PATH. Cet aperçu fournit son CLI sous forme de fichier à côté de l'application : copiez-le dans ~/.local/bin (ou n'importe où dans votre PATH) et il devient la commande à taper.",
     "commands.search": "Chercher une commande", "commands.empty": "Aucune commande", "commands.loading": "Chargement…",
     "commands.other": "Autres", "commands.required": "obligatoire", "commands.examples": "Exemples",
     "plugins.market": "Place de marché", "plugins.searchPh": "Chercher des extensions",

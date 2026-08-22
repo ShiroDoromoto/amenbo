@@ -359,7 +359,7 @@ export const ja: Translation = {
     "search.on.decisionComment": "決定記録への発言",
     "commands.note": "全コマンドの仕様（agent --json 由来・表示専用）",
     "commands.prefix": "下の各行は、これに続けて打ちます：",
-    "cli.none": "このビルドには、打てるコマンドがありません。CLI は AppImage の中にあり、アプリを開いている間しか存在しません。アプリの画面から進めてください。",
+    "cli.none": "打てるコマンドは、まだ PATH にありません。この preview は CLI をアプリの隣にファイルで同梱しています。~/.local/bin（PATH の通る場所ならどこでも）へコピーすれば、それが打つコマンドになります。",
     "commands.search": "コマンドを検索", "commands.empty": "コマンドがありません", "commands.loading": "読み込み中…",
     "commands.other": "その他", "commands.required": "必須", "commands.examples": "サンプル",
     // plugin market (the "find one" tab)

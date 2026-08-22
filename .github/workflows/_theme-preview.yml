@@ -239,10 +239,23 @@ jobs:
           AMENBO_BUILD_TIME: ${{ needs.names.outputs.built_at }}
         run: make gui-dev-linux AMB-T-ID="$THEME" LINUX_GUI_ARCH=amd64
 
+      # The CLI goes beside it as its own file, which macOS and Windows do not need: there the CLI
+      # inside the bundle has an address that outlives the run (a `.app` in `/Applications`, an
+      # installer that puts it on `PATH`), while an AppImage's contents are a squashfs mounted under
+      # `/tmp` while the GUI is open and gone after. Same container as the AppImage, for the same
+      # glibc floor, and named for the theme so the file a member copies onto their `PATH` is
+      # already the word they will type.
+      - name: Build the Linux preview CLI
+        env:
+          THEME: ${{ inputs.theme }}
+        run: make dist-cli-dev-linux AMB-T-ID="$THEME" LINUX_CLI_ARCH=amd64
+
       - uses: actions/upload-artifact@v7
         with:
           name: preview-${{ inputs.theme }}-linux-x86_64
-          path: dist/*.AppImage
+          path: |
+            dist/*.AppImage
+            dist/${{ needs.names.outputs.app_name }}
           if-no-files-found: error
 
   # What a member types. It is written into the run itself rather than into a document, because the
@@ -275,7 +288,7 @@ jobs:
           |---|---|---|
           | macOS (Apple Silicon) | preview-$THEME-macos-arm64 | unzip, drag the .app into /Applications |
           | Windows (x64) | preview-$THEME-windows-x64 | run the -setup.exe (it installs for your user only) |
-          | Linux (x86_64) | preview-$THEME-linux-x86_64 | make the .AppImage executable and run it |
+          | Linux (x86_64) | preview-$THEME-linux-x86_64 | make the .AppImage executable and run it; \`install -m755 $APP_NAME ~/.local/bin/\` for the CLI |
 
           It stands beside your Amenbo rather than over it: its own app-data, its own bundle
           identifier (\`$IDENTIFIER\`), its own executable name. Your real store is not touched, and
@@ -298,7 +311,8 @@ jobs:
           On macOS, drag the .app to the Trash. On Windows, uninstall it the normal way — the
           uninstaller takes the PATH entry, the install directory, the Start menu shortcut and the
           uninstall registration with it, and leaves only the two above. On Linux, delete the
-          .AppImage.
+          .AppImage and \`~/.local/bin/$APP_NAME\` — the CLI is a file you copied, so nothing else
+          takes it away.
 
           These artifacts expire 90 days after this run.
           EOF

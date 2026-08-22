@@ -437,7 +437,11 @@ settings, the identity it answers `whoami` with, the build in place, and the sto
 
 Not every object is reached by a binding. A **dimension** travels as the words a person says — its
 axis and value are named in `with` (`dimension: <axis name>`, `value: <value name>`), which is what
-the command takes too; a bare number there would be read as a name, not an id. A **folder** travels
+the command takes too; a bare number there would be read as a name, not an id. Either word may also
+be the **key** the row answers to, since that is what the command resolves before it
+tries a name — a road writes one where being typed from outside is the point, and the name
+everywhere else. The key itself is named at birth by `slug:` on `dimension create` / `value-add`,
+renamed afterwards by `dimension rekey`, and read back by the `key` assert. A **folder** travels
 as a plain name too (`dir: shared`), and for a different reason: a binding is answered by where a
 folder sits, so the driver is the one that places it — clear of the run's own bound CWD, which a
 pointer search would otherwise walk up into. One kind of folder name is answered without being

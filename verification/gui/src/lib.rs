@@ -538,6 +538,10 @@ impl Instructor {
     /// `tick setting` is a `Review` for the reason `plugin config`'s state is: the two positions the
     /// row can stand in are drawn as words of the interface, and which of them is standing is not
     /// something the presence of text can settle.
+    ///
+    /// `dimension key` is read, and it is the cleanest reading on these roads. A key is neither a word
+    /// of the interface nor a title drawn twice over — it is what a reader types for somewhere outside
+    /// Amenbo — so it stands on the shot in the one field it was typed into, and nowhere else.
     fn expectation(&self, step: &Step) -> Option<Expectation> {
         let Step::Assert { domain, op, with } = step else { return None };
         match (*domain, op.as_str()) {
@@ -626,6 +630,14 @@ impl Instructor {
             // nothing.
             (Domain::Repo, "mcp-app") => {
                 Some(Expectation { text: arg_str(with, "dir")?.to_string(), present: true })
+            }
+            // The key held in a field, judged by reading it. What is being looked for is a word nobody
+            // else on that screen carries — not a name, not a label, but the key a reader typed for use
+            // outside Amenbo — so a reading that finds it found it where it was typed. A refusal is read
+            // the same way, on the key that was there before: the field is put back rather than left
+            // holding a key nothing was saved under, so what says the guard bit is the old key standing.
+            (Domain::Dimension, "key") => {
+                Some(Expectation { text: arg_str(with, "equals")?.to_string(), present: true })
             }
             _ => None,
         }
@@ -821,6 +833,26 @@ impl Instructor {
                     ),
                     false => format!(
                         "Above the board, open the way into managing the project's categories, find the row for \"{dimension}\", and turn off the box that makes the category demand an answer.",
+                    ),
+                }
+            }
+            // The key a category or one of its values answers to, renamed where a reader renames it. The
+            // field sits beside the name in the same manager the box above is in, so the line walks in
+            // the same way — and it says the key is typed rather than chosen, since what a reader is
+            // being asked for is a word and not a pick.
+            //
+            // This face has no other door onto a key: a category raised on screen takes the one its id
+            // gives it, and there is no field to name another in. So the road here is renaming, and a
+            // step that named a key at a row's birth would be describing a screen that is not there.
+            (Domain::Dimension, "rekey") => {
+                let dimension = req(with, "dimension")?;
+                let slug = req(with, "slug")?;
+                match arg_str(with, "value") {
+                    Some(value) => format!(
+                        "Above the board, open the way into managing the project's categories, find the value \"{value}\" under \"{dimension}\", and type \"{slug}\" into the field beside its name that holds its key.",
+                    ),
+                    None => format!(
+                        "Above the board, open the way into managing the project's categories, find the row for \"{dimension}\", and type \"{slug}\" into the field beside its name that holds its key.",
                     ),
                 }
             }
@@ -1807,6 +1839,21 @@ impl Instructor {
                     return Err(format!("assert `setting` does not know the position `{other}`"))
                 }
             },
+            // The key that field is holding, read back. It is the one line on these roads whose word is
+            // neither the interface's nor a title — a key is what a reader types for somewhere outside
+            // Amenbo — so it is on the shot exactly once, in the field it was typed into.
+            (Domain::Dimension, "key") => {
+                let dimension = req(with, "dimension")?;
+                let want = req(with, "equals")?;
+                match arg_str(with, "value") {
+                    Some(value) => format!(
+                        "In the categories manager, confirm the field beside the value \"{value}\" under \"{dimension}\" holds the key \"{want}\"."
+                    ),
+                    None => format!(
+                        "In the categories manager, confirm the field beside the name of \"{dimension}\" holds the key \"{want}\"."
+                    ),
+                }
+            }
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -4153,6 +4200,58 @@ steps_gui:
         };
         let said = Instructor::new().render(&set).unwrap();
         assert!(said.contains("Medium") && said.contains("print"), "got: {said}");
+    }
+
+    /// The key a category answers to, renamed on the one face that can rename it and read back off the
+    /// field it was typed into. Both rows are walked — the axis's own key and one of its values' — since
+    /// the manager draws a field beside each name and a line naming only the category would leave a
+    /// reader typing into the wrong one. A refusal here is read on the key that was there before: the
+    /// field is put back, so the old key standing is what says the guard bit.
+    #[test]
+    fn a_key_is_typed_beside_the_name_it_belongs_to_and_read_back_off_that_field() {
+        let rekey = |value: Option<&str>, slug: &str, refused: Option<&str>| {
+            let mut with: Args = [
+                ("dimension".to_string(), serde_yaml::Value::from("Medium")),
+                ("slug".to_string(), serde_yaml::Value::from(slug)),
+            ]
+            .into_iter()
+            .collect();
+            if let Some(value) = value {
+                with.insert("value".to_string(), serde_yaml::Value::from(value));
+            }
+            if let Some(code) = refused {
+                with.insert("refused".to_string(), serde_yaml::Value::from(code));
+            }
+            Step::Action { domain: Domain::Dimension, op: "rekey".to_string(), with, bind: None }
+        };
+        let axis = Instructor::new().render(&rekey(None, "channel", None)).unwrap();
+        assert!(axis.contains("Medium") && axis.contains("channel"), "got: {axis}");
+        assert!(axis.contains("categories"), "the field is in the manager: {axis}");
+        let value = Instructor::new().render(&rekey(Some("print"), "paper", None)).unwrap();
+        assert!(value.contains("print") && value.contains("paper"), "got: {value}");
+        let turned =
+            Instructor::new().render(&rekey(None, "focus", Some("invalid_dimension_slug_taken"))).unwrap();
+        assert!(turned.contains("turned away rather than to go through"), "got: {turned}");
+
+        // And the reading. A key is on the shot in the field it was typed into and nowhere else, so
+        // both rows are judged rather than left to an eye.
+        let read = |value: Option<&str>| {
+            let mut with: Args = [
+                ("dimension".to_string(), serde_yaml::Value::from("Medium")),
+                ("equals".to_string(), serde_yaml::Value::from("channel")),
+            ]
+            .into_iter()
+            .collect();
+            if let Some(value) = value {
+                with.insert("value".to_string(), serde_yaml::Value::from(value));
+            }
+            Step::Assert { domain: Domain::Dimension, op: "key".to_string(), with }
+        };
+        let exp = Instructor::new().expectation(&read(None)).expect("a key is read, not reviewed");
+        assert_eq!(exp.text, "channel");
+        assert!(exp.present, "the key is looked for rather than looked past");
+        let said = Instructor::new().render(&read(Some("print"))).unwrap();
+        assert!(said.contains("print") && said.contains("channel"), "got: {said}");
     }
 
     /// The crossing a setting is held at, named on a screen road — refused rather than passed over. A

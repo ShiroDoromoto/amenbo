@@ -589,9 +589,9 @@ impl Store {
         Ok(crate::store_engine::read::dimension_value(self.engine.conn(), id)?)
     }
 
-    /// Resolve a dimension reference (an id, or an exact name match). Passing `project_id` confines the
-    /// search to that project; a call that does **not** confine it (`dimension show <name>`) searches the
-    /// whole machine.
+    /// Resolve a dimension reference (an id, its slug, or an exact name match — `AMB-D-735`). Passing
+    /// `project_id` confines the search to that project; a call that does **not** confine it
+    /// (`dimension show <name>`) searches the whole machine.
     ///
     /// Whatever the scope, **what this facet cannot reach is dropped before the hit set is collapsed**.
     /// Names are per-project, so a name a second project also uses would otherwise collapse to
@@ -636,8 +636,9 @@ impl Store {
         })
     }
 
-    /// Resolve a value reference (an id, or an exact name match) inside a dimension. A value exists only
-    /// within its dimension, so reach-checking the dimension is enough.
+    /// Resolve a value reference (an id, its slug, or an exact name match — `AMB-D-735`) inside a
+    /// dimension. A value exists only within its dimension, so reach-checking the dimension is enough,
+    /// and a slug is unique only that far.
     pub fn resolve_dimension_value(&self, dimension_id: i64, reference: &str) -> Result<i64> {
         self.reachable(&format!("dimension #{dimension_id}"), |c| {
             super::owner::dimension(c, dimension_id)

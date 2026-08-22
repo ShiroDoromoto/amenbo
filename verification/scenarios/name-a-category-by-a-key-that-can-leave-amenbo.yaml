@@ -1,0 +1,305 @@
+# The readable key an axis and each of its values carry, and what it is for: being typed somewhere
+# Amenbo is not. A display name here is written in Japanese and has spaces in it, and an id
+# (`AMB-DIM-7`) goes anywhere but says nothing — so the key is the third thing, the one that is both
+# stable and legible. What makes it worth a road of its own is that the key is the half nothing else
+# would notice going wrong: a build where the door stopped taking one reads exactly like a build
+# where nobody ever named a key, since every row is born with the one its id gives it and every
+# reading finds a key standing there either way.
+#
+# So this one is written to name a key at both doors that take one, rename it at both doors that
+# rename one, and be turned away twice — on a key no machine outside could carry, and on a key a
+# sibling already answers to. The step that says what all of it is for is the one that hands the key
+# back to Amenbo in place of the name.
+id: name-a-category-by-a-key-that-can-leave-amenbo
+title: A category and its values are named by a key that can be typed outside Amenbo, renamed, and refused where it would not carry
+description: >
+  Raise a category naming the key it is to answer to, add a value naming one too, and read both keys
+  back. Rename each of them and read them back again. File work by typing those keys where the names
+  would go, and find it filed under the names. Then try a key no machine outside could carry, and a
+  key a sibling already answers to, and be refused both times with the key that was there still
+  standing. Within one axis the values' keys are each other's business; across two axes they are not,
+  so a key one axis's value holds is free for another's.
+# The world is one axis already answering to a key, with a value doing the same, and a second axis
+# beside it — the sibling whose key a collision collides with. Both are stood up already named
+# because what they are here for is to be collided with rather than to be walked: naming a key is the
+# road, and standing the world up on it would prove the road twice and the collision not at all. The
+# task is finished being written before anything else, so the step that files it is about the key it
+# is filed by and nothing else.
+given:
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: Medium
+      slug: medium
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Medium
+      value: print
+      slug: print
+
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: Focus
+      slug: focus
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — work to be filed by key
+    as: seed
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: seed
+
+steps_cli:
+  # The key named where the row is raised, which is the door a script has and a screen does not. What
+  # comes back is the key that was asked for and neither of the two keys a build might hand back
+  # instead — the one its id would give it, or one spelt out of its name. Both are wrong here on
+  # purpose: the name says one word and the key says another.
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: Channel
+      slug: outlet
+
+  - type: assert
+    domain: dimension
+    op: key
+    with:
+      dimension: Channel
+      equals: outlet
+
+  # A value's key at its own door, one tier down and asked the same way. A value is not a small axis:
+  # it is written by a command of its own, against a table of its own, so a key taken at one of these
+  # doors says nothing about the other.
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Channel
+      value: Postal
+      slug: mail
+
+  - type: assert
+    domain: dimension
+    op: key
+    with:
+      dimension: Channel
+      value: Postal
+      equals: mail
+
+  # Renamed afterwards, which is the other half of a key being a key: it is the readable name of the
+  # row, so it has to be correctable without the row being raised again. Both tiers rename, and the
+  # names on both are left alone — what moved is the key.
+  - type: action
+    domain: dimension
+    op: rekey
+    with:
+      dimension: Channel
+      slug: route
+
+  - type: assert
+    domain: dimension
+    op: key
+    with:
+      dimension: Channel
+      equals: route
+
+  - type: action
+    domain: dimension
+    op: rekey
+    with:
+      dimension: Channel
+      value: Postal
+      slug: post
+
+  - type: assert
+    domain: dimension
+    op: key
+    with:
+      dimension: Channel
+      value: Postal
+      equals: post
+
+  # And the whole of what a key is for, in one step: the axis and the value are handed back to Amenbo
+  # as their keys, where a hand typing this would otherwise have to spell out a Japanese name. That the
+  # filing landed is read by the axis's *name*, so the two sides of the identity meet — typed one way,
+  # found the other.
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: seed
+      dimension: route
+      value: post
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:Channel=Postal"
+      target: seed
+      present: true
+
+  # The first refusal: a key that would not survive being carried out. Upper case is the case worth
+  # walking rather than a stray byte — the store would hold `Route` and `route` apart, while the file
+  # names and the bus names a key travels as read them as one, so a door that folded instead of
+  # refusing would hand out a pair of keys that collide only on the machine that has to resolve them.
+  - type: action
+    domain: dimension
+    op: rekey
+    with:
+      dimension: Channel
+      slug: Route
+      refused: invalid_dimension_slug_shape
+
+  - type: assert
+    domain: dimension
+    op: key
+    with:
+      dimension: Channel
+      equals: route
+
+  # The second: a key another axis in this project already answers to. It is refused where it is asked
+  # for rather than at the table underneath, so what comes back names the guard — and the row keeps the
+  # key it had, which is what says nothing was half-written on the way to being turned away.
+  - type: action
+    domain: dimension
+    op: rekey
+    with:
+      dimension: Channel
+      slug: focus
+      refused: invalid_dimension_slug_taken
+
+  - type: assert
+    domain: dimension
+    op: key
+    with:
+      dimension: Channel
+      equals: route
+
+  # How far that uniqueness reaches, which is the half a refusal alone would leave unsaid. A second
+  # value under the same axis cannot take the first one's key…
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Channel
+      value: Voice
+      slug: phone
+
+  - type: action
+    domain: dimension
+    op: rekey
+    with:
+      dimension: Channel
+      value: Voice
+      slug: post
+      refused: invalid_dimension_slug_taken
+
+  # …and yet the same key under another axis is free, because a value's key is only ever read through
+  # the axis it hangs off. `print` is the key a value of `Medium` holds, and it goes on here without a
+  # word — which is what says the reach is the axis and not the project.
+  - type: action
+    domain: dimension
+    op: rekey
+    with:
+      dimension: Channel
+      value: Voice
+      slug: print
+
+  - type: assert
+    domain: dimension
+    op: key
+    with:
+      dimension: Channel
+      value: Voice
+      equals: print
+
+  - type: assert
+    domain: dimension
+    op: key
+    with:
+      dimension: Medium
+      value: print
+      equals: print
+
+steps_gui:
+  # The screen's half is renaming, and only renaming. A category raised here takes the key its id gives
+  # it and is offered no field to name another in, so the door the road above walks first does not
+  # exist on this face — what does exist is a field beside every name, on the axis and on each of its
+  # values, and that is what this road is.
+  - type: action
+    domain: dimension
+    op: rekey
+    with:
+      dimension: Medium
+      slug: channel
+
+  - type: assert
+    domain: dimension
+    op: key
+    with:
+      dimension: Medium
+      equals: channel
+
+  - type: action
+    domain: dimension
+    op: rekey
+    with:
+      dimension: Medium
+      value: print
+      slug: paper
+
+  - type: assert
+    domain: dimension
+    op: key
+    with:
+      dimension: Medium
+      value: print
+      equals: paper
+
+  # And the two refusals, which this face answers with the field rather than with a code: the key goes
+  # back to what it was and the reason is said in a message. A build that took the typed key and saved
+  # nothing would leave the box sitting there showing a key no row holds — so the reading after each
+  # refusal is on the old key, and it is the whole of the claim.
+  - type: action
+    domain: dimension
+    op: rekey
+    with:
+      dimension: Medium
+      slug: focus
+      refused: invalid_dimension_slug_taken
+
+  - type: assert
+    domain: dimension
+    op: key
+    with:
+      dimension: Medium
+      equals: channel
+
+  - type: action
+    domain: dimension
+    op: rekey
+    with:
+      dimension: Medium
+      slug: 2nd-hand
+      refused: invalid_dimension_slug_shape
+
+  - type: assert
+    domain: dimension
+    op: key
+    with:
+      dimension: Medium
+      equals: channel

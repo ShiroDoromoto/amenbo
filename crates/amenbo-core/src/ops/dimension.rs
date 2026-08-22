@@ -149,11 +149,16 @@ fn checked_slug(slug: &str) -> Result<String> {
 /// The refusal both slug doors share: somebody within the same reach already answers to it. Raised in
 /// place of the table's own `UNIQUE`, so the caller is told which row holds the slug instead of reading
 /// a constraint violation — and so the refusal arrives before anything in the transaction is written.
+///
+/// The holder is named the way this crate names any row it cannot hand back — by its key, in the bare
+/// form (`ops::Noun::not_found` writes the same), leaving the reference label to whichever surface has
+/// one. It rides as a field too, so that surface need not read the sentence to find it.
 fn slug_taken(what: &str, slug: &str, holder: i64) -> Error {
     Error::Invalid(
-        Msg::new(format!("'{slug}' is already the slug of {what} {holder}"))
+        Msg::new(format!("'{slug}' is already the key of {what} {holder}"))
             .coded(ErrorCode::InvalidDimensionSlugTaken)
-            .with("slug", slug),
+            .with("slug", slug)
+            .with("holder", holder),
     )
 }
 
@@ -179,7 +184,7 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewDimension) -> Result<Dimen
         Some(named) => {
             let named = checked_slug(named)?;
             if let Some(holder) = read::dimension_id_by_slug(tx.conn(), project_id, &named)? {
-                return Err(slug_taken("the category", &named, holder));
+                return Err(slug_taken("category", &named, holder));
             }
             named
         }
@@ -294,7 +299,7 @@ pub fn update(
         let named = checked_slug(named)?;
         match read::dimension_id_by_slug(tx.conn(), d.project_id, &named)? {
             Some(holder) if holder != d.id => {
-                return Err(slug_taken("the category", &named, holder))
+                return Err(slug_taken("category", &named, holder))
             }
             _ => d.slug = Some(named),
         }
@@ -361,7 +366,7 @@ pub fn value_add(
             if let Some(holder) =
                 read::dimension_value_id_by_slug(tx.conn(), dimension_id, &named)?
             {
-                return Err(slug_taken("the value", &named, holder));
+                return Err(slug_taken("value", &named, holder));
             }
             named
         }
@@ -407,7 +412,7 @@ pub fn value_set_slug(tx: &WriteTx<'_>, value_id: i64, slug: &str) -> Result<Dim
     live_before(tx, before.dimension_id)?;
     if let Some(holder) = read::dimension_value_id_by_slug(tx.conn(), before.dimension_id, &slug)? {
         if holder != before.id {
-            return Err(slug_taken("the value", &slug, holder));
+            return Err(slug_taken("value", &slug, holder));
         }
     }
     let after =

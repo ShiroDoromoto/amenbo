@@ -1045,6 +1045,9 @@ pub enum DimensionCmd {
         /// require a value on this axis before a creation can be finished (refused here: a new axis has no values yet)
         #[arg(long)]
         required: bool,
+        /// readable key for naming this axis outside Amenbo (lower-case letters, digits and hyphens, starting with a letter; defaults to `d<id>`)
+        #[arg(long)]
+        slug: Option<String>,
     },
     /// List a project's dimensions (display order) with their values
     List {
@@ -1057,7 +1060,7 @@ pub enum DimensionCmd {
         /// dimension ref (AMB-DIM-n), slug or name
         id: String,
     },
-    /// Update a dimension's name, notes, value ordering, time-axis role, whether it goes on the task card, and/or whether it must be answered (only the given fields change)
+    /// Update a dimension's name, notes, value ordering, time-axis role, whether it goes on the task card, whether it must be answered, and/or its slug (only the given fields change)
     Update {
         /// dimension ref (AMB-DIM-n), slug or name
         id: String,
@@ -1077,6 +1080,9 @@ pub enum DimensionCmd {
         /// whether a task must carry a value here before its creation can be finished (`--required true|false`)
         #[arg(long)]
         required: Option<bool>,
+        /// rename the readable key this axis is named by outside Amenbo
+        #[arg(long)]
+        slug: Option<String>,
     },
     /// Reorder a dimension within its project
     Move {
@@ -1109,8 +1115,11 @@ pub enum DimensionCmd {
         /// last day of the value's period; omit to leave it ongoing (time-axis dimensions only)
         #[arg(long)]
         end: Option<String>,
+        /// readable key for naming this value outside Amenbo (lower-case letters, digits and hyphens, starting with a letter; defaults to `v<id>`)
+        #[arg(long)]
+        slug: Option<String>,
     },
-    /// Update a dimension value's name and/or period (only the given fields change)
+    /// Update a dimension value's name, slug and/or period (only the given fields change)
     ValueUpdate {
         /// dimension ref (AMB-DIM-n), slug or name
         dimension: String,
@@ -1130,6 +1139,9 @@ pub enum DimensionCmd {
         /// open the period's end (the value becomes ongoing)
         #[arg(long, conflicts_with = "end")]
         clear_end: bool,
+        /// rename the readable key this value is named by outside Amenbo
+        #[arg(long)]
+        slug: Option<String>,
     },
     /// Reorder a value within its dimension
     ValueMove {

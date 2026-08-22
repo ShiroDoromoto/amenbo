@@ -110,6 +110,7 @@ export const ja: Translation = {
     "dec.edge.supersedeRevisitConfirm": "{target} の上に立つ決定があります。置き換えるなら見直してください:\n{list}\n\nこのまま置き換えますか？",
     "dec.edge.searchPh": "リンク先の決定を検索（AMB-D-<n>・タイトル）",
     "dec.edge.noCandidates": "リンクを張れる決定がありません",
+    "dec.recorded": "記録", "dec.decided": "採択", "dec.lastChanged": "最終更新",
     "dec.notFound": "決定が見つかりません",
     "dec.unknownName": "(不明)",
     "dec.comments": "この決定への議論", "dec.reasonPh": "理由（任意・Markdown 可）を書く…",

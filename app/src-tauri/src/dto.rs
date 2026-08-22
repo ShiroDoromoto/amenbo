@@ -294,6 +294,9 @@ pub struct DecisionDto {
     /// Linked tasks (cross-link), carrying status — is the work this decision created still open?
     pub(crate) linked_tasks: Vec<LinkedTaskRefDto>,
     pub(crate) created_at: String,
+    /// When it last changed in any way — a body edit and a status transition alike. The pane hides it
+    /// where it only repeats `created_at` or `decided_at`, so it reads as "changed since".
+    pub(crate) updated_at: String,
 }
 
 /// A reference to a task a decision spawned. A [`DecisionRefDto`] plus **status**, so the screen can

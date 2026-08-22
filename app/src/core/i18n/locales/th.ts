@@ -113,6 +113,7 @@ export const th: Translation = {
     "dec.edge.supersedeRevisitConfirm": "การตัดสินใจเหล่านี้ตั้งอยู่บน {target} — ถ้าคุณแทนที่มัน ให้ทบทวนพวกนี้ด้วย:\n{list}\n\nจะแทนที่ต่อไหม",
     "dec.edge.searchPh": "ค้นการตัดสินใจที่จะเชื่อม (AMB-D-<n>, ชื่อเรื่อง)",
     "dec.edge.noCandidates": "ไม่เหลือการตัดสินใจให้เชื่อมแล้ว",
+    "dec.recorded": "บันทึกเมื่อ", "dec.decided": "ตัดสินเมื่อ", "dec.lastChanged": "แก้ไขล่าสุด",
     "dec.notFound": "ไม่พบการตัดสินใจ",
     "dec.unknownName": "(ไม่ทราบ)",
     "dec.comments": "การถกกัน", "dec.reasonPh": "เหตุผล (ไม่บังคับ, Markdown)…",

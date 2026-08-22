@@ -110,6 +110,7 @@ export const ko: Translation = {
     "dec.edge.supersedeRevisitConfirm": "다음 결정들이 {target}을(를) 근거로 삼고 있습니다. 대체한다면 이것들도 다시 보세요:\n{list}\n\n그래도 대체할까요?",
     "dec.edge.searchPh": "연결할 결정 검색(AMB-D-<n>, 제목)",
     "dec.edge.noCandidates": "더 연결할 결정이 없습니다",
+    "dec.recorded": "기록", "dec.decided": "채택", "dec.lastChanged": "마지막 변경",
     "dec.notFound": "결정을 찾을 수 없습니다",
     "dec.unknownName": "(알 수 없음)",
     "dec.comments": "논의", "dec.reasonPh": "이유(선택, 마크다운)…",

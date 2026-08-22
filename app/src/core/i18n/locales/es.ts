@@ -113,6 +113,7 @@ export const es: Translation = {
     "dec.edge.supersedeRevisitConfirm": "Estas decisiones se apoyan en {target}; revísalas si la sustituyes:\n{list}\n\n¿Sustituirla de todos modos?",
     "dec.edge.searchPh": "Buscar decisiones que enlazar (AMB-D-<n>, título)",
     "dec.edge.noCandidates": "No queda ninguna decisión que enlazar",
+    "dec.recorded": "Registrada", "dec.decided": "Decidida", "dec.lastChanged": "Último cambio",
     "dec.notFound": "Decisión no encontrada",
     "dec.unknownName": "(desconocido)",
     "dec.comments": "Discusión", "dec.reasonPh": "Motivo (opcional, Markdown)…",

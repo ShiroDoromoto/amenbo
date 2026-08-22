@@ -3645,6 +3645,9 @@ pub struct DecisionCardRow {
     pub status: String,
     pub decided_at: Option<String>,
     pub created_at: String,
+    /// When this decision last changed in any way — an edit to the body, and a status transition alike
+    /// (`Decision::updated_at`). Not "when the body was rewritten": accepting one moves it too.
+    pub updated_at: String,
     /// The owning project; `None` when the project is not live.
     pub project: Option<ProjectRef>,
     /// The decisions this one replaced (any liveness; `ref` = `AMB-D-n`). A set, not a single target: one
@@ -3689,6 +3692,7 @@ pub fn decision_card_row(conn: &Connection, decision_id: i64) -> Result<Option<D
     let mut sel = Select::new();
     let (id, title, body, status) = (sel.col(D.id), sel.col(D.title), sel.col(D.body), sel.col(D.status));
     let (decided_at, created_at) = (sel.col(D.decided_at), sel.col(D.created_at));
+    let updated_at = sel.col(D.updated_at);
     let pid = sel.col(D.project_id);
     // `NOT NULL` in the registry, `NULL` through this `LEFT JOIN` when the project is gone — see
     // `decision_list`.
@@ -3710,6 +3714,7 @@ pub fn decision_card_row(conn: &Connection, decision_id: i64) -> Result<Option<D
                 status: status.get(r)?,
                 decided_at: decided_at.get(r)?,
                 created_at: created_at.get(r)?,
+                updated_at: updated_at.get(r)?,
                 // Project: present only when live.
                 project: project_name.map(|name| ProjectRef { id: project_id, name }),
                 // The edge sets are filled below.

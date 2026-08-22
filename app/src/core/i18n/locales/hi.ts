@@ -110,6 +110,7 @@ export const hi: Translation = {
     "dec.edge.supersedeRevisitConfirm": "ये निर्णय {target} पर टिके हैं — उसे अधिक्रमित करें तो इन्हें फिर से देखें:\n{list}\n\nफिर भी अधिक्रमित करें?",
     "dec.edge.searchPh": "जोड़ने के लिए निर्णय खोजें (AMB-D-<n>, शीर्षक)",
     "dec.edge.noCandidates": "जोड़ने को कोई निर्णय बचा नहीं",
+    "dec.recorded": "दर्ज", "dec.decided": "तय", "dec.lastChanged": "अंतिम बदलाव",
     "dec.notFound": "निर्णय नहीं मिला",
     "dec.unknownName": "(अज्ञात)",
     "dec.comments": "चर्चा", "dec.reasonPh": "कारण (वैकल्पिक, Markdown)…",

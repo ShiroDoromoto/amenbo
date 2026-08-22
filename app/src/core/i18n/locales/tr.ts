@@ -110,6 +110,7 @@ export const tr: Translation = {
     "dec.edge.supersedeRevisitConfirm": "Şu kararlar {target} dayanağına oturuyor — onun yerine geçerseniz bunları da gözden geçirin:\n{list}\n\nYine de yerine geçilsin mi?",
     "dec.edge.searchPh": "Bağlanacak kararı ara (AMB-D-<n>, başlık)",
     "dec.edge.noCandidates": "Bağlanacak karar kalmadı",
+    "dec.recorded": "Kaydedildi", "dec.decided": "Karara bağlandı", "dec.lastChanged": "Son değişiklik",
     "dec.notFound": "Karar bulunamadı",
     "dec.unknownName": "(bilinmiyor)",
     "dec.comments": "Tartışma", "dec.reasonPh": "Gerekçe (isteğe bağlı, Markdown)…",

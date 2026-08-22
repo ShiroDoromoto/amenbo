@@ -925,6 +925,37 @@ fn task_show_signposts_empty_categories() {
     }
 }
 
+/// `task show` dates the task itself — when it was written, and when it was last written to. Both
+/// stamps were already in `--json` and in neither human page, so "how long has this been sitting here"
+/// had no answer on the page an agent actually reads. `updated` is written only once it has moved off
+/// `created`, so a freshly filed task says one thing rather than the same stamp twice.
+#[test]
+fn task_show_dates_the_task() {
+    let cli = Cli::new();
+    let pid = cli.a_project();
+    let tid = id_str(&cli.json(&["task", "add", "--title", "いつ書かれたか", "--project", &pid, "--json"])["task"]["id"]);
+
+    let created = cli.json(&["task", "show", &tid, "--json"])["created_at"].as_str().expect("created_at").to_string();
+    let (fresh, code) = cli.run(&["task", "show", &tid]);
+    assert_eq!(code, 0, "{fresh}");
+    assert!(fresh.contains(&format!("created: {created}")), "the page dates the task:\n{fresh}");
+    assert!(!fresh.contains("updated:"), "nothing has written to it yet, so there is no second stamp:\n{fresh}");
+
+    // Past the second boundary, so the next write is unambiguously a later stamp (`Timestamp` keeps
+    // whole seconds).
+    std::thread::sleep(std::time::Duration::from_millis(2000));
+    cli.json(&["task", "update", &tid, "--priority", "high", "--json"]);
+
+    let updated = cli.json(&["task", "show", &tid, "--json"])["updated_at"].as_str().expect("updated_at").to_string();
+    assert_ne!(updated, created, "the write moved the record's stamp");
+    let (moved, code) = cli.run(&["task", "show", &tid]);
+    assert_eq!(code, 0, "{moved}");
+    assert!(
+        moved.contains(&format!("created: {created} / updated: {updated} (any write)")),
+        "both stamps, and what moves the second one:\n{moved}"
+    );
+}
+
 /// `task list --filter commit:<sha>` walks the reverse chain **git → task**: a public commit carries no
 /// store-local ref, so the only face back is the SHA recorded on the task. The
 /// SHA folds to the bytes the door stored, the same commit on two tasks finds both, and a SHA nobody

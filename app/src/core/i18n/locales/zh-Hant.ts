@@ -177,6 +177,7 @@ export const zhHant: Translation = {
     "detail.commentPh": "寫一則留言…（Markdown，Enter 換行）",
     "detail.commentHint": "Markdown · 用 ⌘/Ctrl+Enter 送出", "detail.send": "送出",
     "detail.created": "建立於", "detail.restoreHint": "刪除無法復原",
+    "detail.updated": "更新於", "detail.updatedHint": "任何寫入都會推進它——留言、日期、標題修改——而不只是狀態變更",
     "detail.delete": "刪除", "detail.deleteTip": "刪除這個任務（無法復原）",
     "detail.deleteConfirm": "刪除「{title}」？",
     "comment.edit": "編輯這則留言",

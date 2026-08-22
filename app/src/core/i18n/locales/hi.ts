@@ -176,6 +176,7 @@ export const hi: Translation = {
     "detail.commentPh": "टिप्पणी लिखें… (Markdown, नई पंक्ति के लिए Enter)",
     "detail.commentHint": "Markdown · ⌘/Ctrl+Enter से भेजें", "detail.send": "भेजें",
     "detail.created": "बनाया गया", "detail.restoreHint": "मिटाना वापस नहीं लिया जा सकता",
+    "detail.updated": "अपडेट", "detail.updatedHint": "कोई भी बदलाव इसे आगे बढ़ा देता है — टिप्पणी, तारीख, शीर्षक सुधार — सिर्फ़ स्थिति बदलने पर नहीं",
     "detail.delete": "मिटाएँ", "detail.deleteTip": "यह काम मिटाएँ (वापस नहीं लिया जा सकता)",
     "detail.deleteConfirm": "“{title}” मिटाएँ?",
     "comment.edit": "यह टिप्पणी संपादित करें",

@@ -180,6 +180,7 @@ export const ptBR: Translation = {
     "detail.commentPh": "Escreva um comentário… (Markdown, Enter para quebrar linha)",
     "detail.commentHint": "Markdown · envie com ⌘/Ctrl+Enter", "detail.send": "Enviar",
     "detail.created": "Criada", "detail.restoreHint": "a exclusão não pode ser desfeita",
+    "detail.updated": "Atualizada", "detail.updatedHint": "qualquer escrita move isto — um comentário, uma data, uma correção de título — não apenas uma mudança de status",
     "detail.delete": "Excluir", "detail.deleteTip": "Excluir esta tarefa (não pode ser desfeito)",
     "detail.deleteConfirm": "Excluir “{title}”?",
     "comment.edit": "Editar este comentário",

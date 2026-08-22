@@ -267,6 +267,8 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
         not_started_until: not_started_until.map(date_iso),
         draft: row.draft,
         premise_change,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
     }
 }
 
@@ -6515,6 +6517,55 @@ mod tests {
 
         // A term nowhere is an empty answer, not an error.
         assert!(task_search(project_id, "どこにも無い語".to_string()).unwrap().is_empty());
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// The card dates the task: both stamps ride the wire, so the detail pane can say when a task was
+    /// filed and whether anything has written to it since. Pinned here because the two are the row's own
+    /// columns forwarded untouched — a drop between the read and the DTO would leave the pane silently
+    /// dateless rather than failing.
+    #[test]
+    fn the_card_carries_when_the_task_was_written() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("card-stamps");
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        let mut store = Store::open().unwrap();
+        let project_id = store
+            .project_add(amenbo_core::ops::project::NewProject {
+                name: "テストPJ".into(),
+                view: View::List,
+                notes: String::new(),
+                color: None,
+            })
+            .unwrap()
+            .id;
+        let id = store
+            .add_task(amenbo_core::ops::task::NewTask {
+                title: "いつ書かれたか".into(),
+                project_id: Some(project_id),
+                due_on: None,
+                start_on: None,
+                priority: None,
+                notes: String::new(),
+                created_by_kind: Some(ActorKind::Ai),
+                at_binding_id: None,
+            })
+            .unwrap()
+            .id;
+
+        let card = {
+            let read_model = store.read_model();
+            let row = amenbo_core::store_engine::read::task_card_row(read_model.conn(), id).unwrap().unwrap();
+            task_card_from_row(&store, row)
+        };
+        // The stamps core wrote, forwarded as they are stored. A task nobody has written to since carries
+        // them equal, which is what lets the pane drop the second one.
+        let detail = store.task_detail(id).unwrap();
+        assert_eq!(card.created_at, detail.created_at.to_rfc3339_z(), "the card dates the task");
+        assert_eq!(card.updated_at, detail.updated_at.to_rfc3339_z(), "and says when it was last written to");
+        assert_eq!(card.created_at, card.updated_at, "nothing has written to it since it was filed");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

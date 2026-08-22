@@ -10,7 +10,7 @@ const snap = { language: null as string | null, dateLocale: null as string | nul
 vi.mock("../snapshot", () => ({ getSnapshot: () => snap }));
 
 import {
-  agoLabel, dueLabel, formatDay, formatDayTime, formatNumber, monthLabel, weekdayLabels,
+  agoLabel, dueLabel, formatDay, formatDayTime, formatNumber, formatStamp, monthLabel, weekdayLabels,
 } from "./format";
 import { tf, tn } from "./index";
 import { de } from "./locales/de";
@@ -130,6 +130,13 @@ describe("a date", () => {
     const written = formatDayTime(at, "en-US");
     expect(written).toMatch(/^6\/21, \d{2}:\d{2}/);
     expect(written).not.toContain("2026");
+  });
+
+  // The other one: a task can have been filed any distance back, so its stamp says which year.
+  it("keeps the year when the stamp may be any distance back", () => {
+    expect(formatStamp(at, "en-US")).toMatch(/^6\/21\/2026, \d{2}:\d{2}/);
+    expect(formatStamp(at, "ja-JP")).toMatch(/^2026\/6\/21 \d{2}:\d{2}/);
+    expect(formatStamp(new Date("nope"), "en-US")).toBe("");
   });
 });
 

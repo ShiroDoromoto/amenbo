@@ -124,6 +124,18 @@ export function formatDayTime(at: Date, locale: string = dateLocale()): string {
   }).format(at);
 }
 
+/**
+ * A dated instant — the day *and* the year, with the time. `formatDayTime` leaves the year out for a
+ * stamp inside the span the reader is already looking at; this one is for a stamp that can be any
+ * distance back, where "8/22 12:02" would not say which year it was.
+ */
+export function formatStamp(at: Date, locale: string = dateLocale()): string {
+  if (!Number.isFinite(at.getTime())) return "";
+  return dateTimeFormat(locale, {
+    year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
+  }).format(at);
+}
+
 /** The calendar's month heading (month is 0..11, as in `getMonth`). */
 export function monthLabel(year: number, month: number, locale: string = dateLocale()): string {
   return dateTimeFormat(locale, { year: "numeric", month: "long", timeZone: "UTC" })

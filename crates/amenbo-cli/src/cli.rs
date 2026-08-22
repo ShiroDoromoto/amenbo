@@ -1140,7 +1140,8 @@ pub enum DimensionCmd {
         #[arg(long)]
         bottom: bool,
     },
-    /// Delete a dimension value permanently; its task assignments go with it (alias: value-delete)
+    /// Delete a dimension value permanently; its task assignments go with it. The last value of a
+    /// required axis is refused — lower the requirement first (alias: value-delete)
     #[command(alias = "value-delete")]
     ValueRm {
         /// dimension ref (AMB-DIM-n) or name

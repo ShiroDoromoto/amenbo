@@ -94,7 +94,6 @@ fn release_build(cli: &Path) -> Result<bool, String> {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
-    use std::os::unix::fs::PermissionsExt;
 
     /// A bundle in the shape this reads: a CLI where the installer puts one, answering `version
     /// --json` with `body`.
@@ -103,8 +102,7 @@ mod tests {
         let macos = app.join("Contents/MacOS");
         std::fs::create_dir_all(&macos).unwrap();
         let cli = macos.join("amenbo");
-        std::fs::write(&cli, format!("#!/bin/sh\ncat <<'EOF'\n{body}\nEOF\n")).unwrap();
-        std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::stand_in_program(&cli, &format!("#!/bin/sh\ncat <<'EOF'\n{body}\nEOF\n"));
         app
     }
 

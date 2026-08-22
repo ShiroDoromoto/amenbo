@@ -37,6 +37,36 @@ pub mod launch;
 /// The line the run stands on: only a bundle the release workflow produced is launched.
 pub mod shipped;
 
+/// Write `body` at `path` as a program these tests will run, leaving no descriptor on it here.
+///
+/// A file written in this process and exec'd a moment later is the classic ETXTBSY race: these
+/// tests run beside each other, and a process forked while this one's file was still open for
+/// writing carries that descriptor until it execs — which is what makes Linux refuse to exec the
+/// file it points at. The refusal lands on whichever test was unlucky, has nothing to do with the
+/// change under review, and goes away on a re-run: a red nobody reads, holding up a merge.
+///
+/// So the writing is handed to a child. The only descriptor on the file lives in a process nothing
+/// here can fork from, and by the time the path is exec'd that process is gone — there is no
+/// descriptor left to inherit, whatever else the harness is doing at the time. (The CLI driver's
+/// MCP stand-in dodges the same race from the other side, by writing no file at all.)
+#[cfg(all(test, unix))]
+pub(crate) fn stand_in_program(path: &Path, body: &str) {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let mut writer = Command::new("/bin/sh")
+        .arg("-c")
+        .arg(r#"cat > "$0" && chmod 755 "$0""#)
+        .arg(path)
+        .stdin(Stdio::piped())
+        .spawn()
+        .expect("a shell to write the stand-in with");
+    let mut input = writer.stdin.take().expect("its input");
+    input.write_all(body.as_bytes()).expect("the stand-in's body is written");
+    drop(input);
+    assert!(writer.wait().expect("the writer finishes").success(), "the stand-in is runnable");
+}
+
 /// The throwaway store that app is launched against — the CLI driver's own, not a second one. What
 /// isolates a run is the same two things whichever driver is asking (`AMENBO_HOME` at a directory
 /// the run made, and a working directory carrying no pointer to a real project), and the premise is

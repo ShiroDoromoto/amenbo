@@ -158,7 +158,6 @@ fn executable(bundle: &Path) -> Result<PathBuf, String> {
 #[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::*;
-    use std::os::unix::fs::PermissionsExt;
 
     /// A bundle in the shape the launcher reads: a plist naming the executable, and a script
     /// standing in for the app at that name.
@@ -176,9 +175,7 @@ mod tests {
             ),
         )
         .unwrap();
-        let exe = macos.join(name);
-        std::fs::write(&exe, body).unwrap();
-        std::fs::set_permissions(&exe, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::stand_in_program(&macos.join(name), body);
         app
     }
 

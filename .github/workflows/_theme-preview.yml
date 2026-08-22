@@ -105,13 +105,15 @@ jobs:
       # no longer open what an unreleased build carried past it. So ask the bundle rather than trust
       # that no stamp has been added above: the CLI the bundle ships answers both questions at once,
       # and the channel it names is also what proves the theme's own app-data made it into the build.
-      # This is the one leg where a built binary is reachable without unpacking an installer.
+      # This is the one leg where a built binary is reachable without unpacking an installer. The
+      # bundle carries it under the theme's own name, which is its app-data name as well — the same
+      # split that keeps the Windows leg's CLI off production's spot on PATH.
       - name: The preview must be unstamped, and on the theme's own channel
         env:
           PRODUCT_NAME: ${{ needs.names.outputs.product_name }}
           APP_NAME: ${{ needs.names.outputs.app_name }}
         run: |
-          cli="app/src-tauri/target/release/bundle/macos/$PRODUCT_NAME.app/Contents/MacOS/amenbo"
+          cli="app/src-tauri/target/release/bundle/macos/$PRODUCT_NAME.app/Contents/MacOS/$APP_NAME"
           "$cli" version --json
           stamped=$("$cli" version --json | jq -r .release_build)
           channel=$("$cli" version --json | jq -r .channel)

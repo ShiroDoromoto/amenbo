@@ -1,9 +1,18 @@
 ; hooks.nsh — Tauri NSIS installer hooks for amenbo.
 ;
 ; The unified installer ships the amenbo CLI as a Tauri sidecar (externalBin);
-; NSIS installs it into $INSTDIR as `amenbo.exe`, next to the GUI
-; `amenbo-app.exe`. These hooks put $INSTDIR on the *user* PATH so `amenbo`
-; works from any terminal — one installer lands GUI + CLI on PATH.
+; NSIS installs it into $INSTDIR under the stem that config names, next to the
+; GUI. These hooks put $INSTDIR on the *user* PATH so the CLI works from any
+; terminal — one installer lands GUI + CLI on PATH.
+;
+; The stem is this build's own name: `amenbo.exe` for the release, and
+; `amenbo-dev.exe` / `amenbo-dev-<theme>.exe` for a development build (the
+; Makefile's GUI_DEV_CONFIG). It has to be — every channel installs into a
+; directory of its own and puts that directory on PATH, so a shared name meant
+; `where amenbo` listed production and every preview a member had taken, and the
+; one a shell resolved was whichever had been installed first (AMB-T-3504).
+; Nothing here reads the name: the hooks work on $INSTDIR, and each build's
+; directory is already its own.
 ;
 ; Per-user PATH (HKCU\Environment) matches the `currentUser` install mode set
 ; in tauri.conf.json — INSTDIR under %LOCALAPPDATA%, no UAC, so the app can

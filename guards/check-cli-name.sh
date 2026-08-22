@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # check-cli-name.sh — keep the CLI from telling anyone to type a command it does not answer to.
 #
-# The name to type is a channel fact, not a constant: a production build installs `amenbo`, a dev
-# build installs `amenbo-dev`, and `Paths::command_name()` is the one place that knows which. Every
-# string that words a command for someone to run has to take it from there.
+# The name to type is a build fact, not a constant: a production build installs `amenbo`, the shared
+# dev build `amenbo-dev`, a theme's preview `amenbo-dev-<id>`, and `Paths::command_name()` is the one
+# place that knows which. Every string that words a command for someone to run has to take it from
+# there.
 #
 # A hardcoded name is invisible to every other gate. It compiles, it reads correctly in the source,
 # and the production build even prints it correctly — the sentence only turns into a lie on the dev

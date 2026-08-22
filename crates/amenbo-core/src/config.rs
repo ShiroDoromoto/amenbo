@@ -141,48 +141,45 @@ impl Paths {
         Self::is_dev_app_name(Self::APP_NAME)
     }
 
-    /// The CLI this build's channel installs — the name guidance tells a human or an AI to **type**,
-    /// which is not the same thing as the app-data name this build **reads**. The two coincide on
-    /// production and on the shared dev build, and part company on a throwaway per-task instance:
-    /// its app-data is `amenbo-dev-<id>`, but it ships no CLI of its own, so what there is to type is
-    /// still the dev CLI. Naming the app-data instead is how guidance ends up pointing at a command
-    /// that does not exist.
+    /// The CLI this build installs, and the name guidance tells a human or an AI to **type**. It is
+    /// this build's own name — the same word as the app-data ([`APP_NAME`](Self::APP_NAME)) and as
+    /// the file the bundle carries the CLI under ([`sidecar_file_name`](Self::sidecar_file_name)):
+    /// `amenbo`, `amenbo-dev`, `amenbo-dev-<id>`.
+    ///
+    /// Every build ships a CLI of its own — a theme's development preview is a whole bundle a team
+    /// member installs (`AMB-D-732`), CLI included — and two things break the moment a name is shared
+    /// across builds rather than split with them:
+    ///
+    /// - **On Windows the installer puts this CLI on `PATH`.** One name there means production, the
+    ///   shared dev build and every preview a member has taken all answer to `amenbo`, and which of
+    ///   them a shell resolves is decided by the order they were installed in — so a member can be
+    ///   left typing `amenbo` at an unsigned, unstamped build.
+    /// - **Guidance would name the wrong store.** A task instance reads `amenbo-dev-<id>`, and a
+    ///   screen of its own telling someone to type `amenbo-dev` sends them to the *shared* dev store:
+    ///   an answer that runs and is wrong, which is worse than one that is not found.
+    ///
+    /// What this does not do is put the name on `PATH` where no installer does. macOS and Linux carry
+    /// the CLI inside the bundle and nowhere else, so on a member's machine a preview's name is one
+    /// to reach by path rather than to type ([`sidecar_file_name`](Self::sidecar_file_name) is that
+    /// path's last element); `AMB-T-3519` is where that guidance is worded.
     ///
     /// Every surface that words a command for someone to run — the managed block's `{CMD}`, the hook
-    /// setup notice, `init`'s closing line — takes it from here, and everything that names a
-    /// directory or a channel keeps taking [`APP_NAME`](Self::APP_NAME).
+    /// setup notice, `init`'s closing line — takes it from here.
     pub fn command_name() -> &'static str {
-        Self::command_name_for(Self::APP_NAME)
+        Self::APP_NAME
     }
 
-    /// The rule [`command_name`](Self::command_name) applies, taking the name as an argument for the
-    /// reason [`is_dev_app_name`](Self::is_dev_app_name) does — a running binary's channel is fixed
-    /// at compile time, so only a table can pin what each name maps to.
-    pub(crate) fn command_name_for(app_name: &str) -> &'static str {
-        if Self::is_dev_app_name(app_name) {
-            Self::DEV_APP_NAME // the dev CLI's name, which the shared dev build's app-data happens to share
-        } else {
-            Self::PRODUCTION_APP_NAME
-        }
-    }
-
-    /// The name the CLI file carries **inside the app's bundle**, without an extension. It is not a
-    /// channel fact at all: Tauri bundles the sidecar under the stem `bundle.externalBin` names
-    /// (`binaries/amenbo`), and that config is one file for every build, so a dev bundle ships
-    /// `amenbo` beside its GUI exactly as production does. `guards/check-sidecar-name.sh` is what
-    /// keeps this constant and that config saying the same word.
-    pub const SIDECAR_NAME: &'static str = "amenbo";
-
-    /// That stem as the file name this platform's bundle actually holds — the thing to look for beside
+    /// That same name as the file this platform's bundle actually holds — the thing to look for beside
     /// the running binary when something needs the CLI as a **path** rather than as a command word
     /// (an MCP host is not a shell and has no `PATH` of the reader's to resolve one in).
     ///
-    /// Distinct from [`command_name`](Self::command_name) on purpose: that answers what to **type**,
-    /// which the dev channel spells `amenbo-dev`, while nothing of that name is ever written into a
-    /// bundle. Asking the typing question about a file is how a dev build ends up looking for
-    /// `Contents/MacOS/amenbo-dev` and finding nothing.
-    pub fn sidecar_file_name() -> &'static str {
-        if cfg!(windows) { "amenbo.exe" } else { Self::SIDECAR_NAME }
+    /// Tauri bundles the sidecar under the stem `bundle.externalBin` names, and the build splits that
+    /// stem by channel exactly as it splits the bundle identifier, the product name and the GUI
+    /// executable (the `Makefile`'s `GUI_DEV_CONFIG`). So the stem, the app-data and
+    /// [`command_name`](Self::command_name) are one word, and the only thing this adds is the
+    /// extension Windows hangs off it. `guards/check-sidecar-name.sh` holds the build config to it.
+    pub fn sidecar_file_name() -> String {
+        if cfg!(windows) { format!("{}.exe", Self::APP_NAME) } else { Self::APP_NAME.to_owned() }
     }
 
     /// The naming rule [`is_dev_channel`](Self::is_dev_channel) applies, taking the name as an
@@ -1070,26 +1067,19 @@ mod tests {
         }
     }
 
-    /// What there is to type, per channel. The case that matters is the task instance: it reads its
-    /// own app-data but installs no CLI, so guidance that named the app-data would send someone to a
-    /// command that is not on the machine.
+    /// One name per build, all the way through: what to type, what the bundle carries and what the
+    /// app-data is called are the same word. A test compiles on the production channel, so what it
+    /// can see from in here is that the three answers agree — the split itself is the build's
+    /// (`Makefile`, `GUI_DEV_CONFIG`) and `guards/check-sidecar-name.sh` is what holds that.
     #[test]
-    fn the_command_to_type_is_the_channel_s_cli_not_the_app_data() {
-        assert_eq!(Paths::command_name_for("amenbo"), "amenbo");
-        assert_eq!(Paths::command_name_for("amenbo-dev"), "amenbo-dev");
-        assert_eq!(Paths::command_name_for("amenbo-dev-2134"), "amenbo-dev");
-        // Not the dev channel, so production's CLI — the same fallback `APP_NAME` itself takes.
-        assert_eq!(Paths::command_name_for("amenbo-devish"), "amenbo");
-    }
-
-    /// The file in the bundle keeps its stem whatever extension the platform hangs off it, so the two
-    /// cannot drift into naming different files. The word itself is held against the bundle config by
-    /// `guards/check-sidecar-name.sh`; what a test can see from in here is only that the pair agree.
-    #[test]
-    fn the_bundled_file_is_the_sidecar_name_with_this_platform_s_extension() {
-        let file = Paths::sidecar_file_name();
-        assert_eq!(file.trim_end_matches(".exe"), Paths::SIDECAR_NAME);
-        assert_eq!(file.ends_with(".exe"), cfg!(windows), "only Windows carries the extension");
+    fn the_command_to_type_is_this_build_s_own_name() {
+        assert_eq!(Paths::command_name(), Paths::APP_NAME);
+        assert_eq!(Paths::sidecar_file_name().trim_end_matches(".exe"), Paths::command_name());
+        assert_eq!(
+            Paths::sidecar_file_name().ends_with(".exe"),
+            cfg!(windows),
+            "only Windows carries the extension"
+        );
     }
 
     /// What each channel calls itself on screen. Production says nothing at all — the one case that

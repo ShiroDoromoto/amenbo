@@ -13,16 +13,28 @@
 # (crates/amenbo-core/src/tick.rs::registration_name), and the file is named for the label because
 # that is the convention SMAppService is used under.
 #
-# The Makefile owns which label a build gets and hands tauri the entry that bundles the file; this
-# writes exactly one file and says where it went.
+# The CLI it runs is named per build for the same reason: the bundle carries the sidecar under this
+# build's own name (`Paths::command_name`), so production's `Contents/MacOS/amenbo` and a theme
+# preview's `Contents/MacOS/amenbo-dev-<id>` are different files, and a plist naming the wrong one
+# is a timer that registers and never runs.
 #
-# Usage: scripts/write-tick-plist.sh <label>      (e.g. work.amenbo.tick, work.amenbo.tick.amenbo-dev)
-# Exit codes: 0 = written, 1 = no label given.
+# The Makefile owns both names and hands tauri the entry that bundles the file; this writes exactly
+# one file and says where it went.
+#
+# Usage: scripts/write-tick-plist.sh <label> <cli-name>
+#        (e.g. work.amenbo.tick amenbo, work.amenbo.tick.amenbo-dev amenbo-dev)
+# Exit codes: 0 = written, 1 = a name is missing.
 set -euo pipefail
 
 label=${1:-}
 if [ -z "$label" ]; then
     echo "✗ tick plist: no label given (e.g. work.amenbo.tick)" >&2
+    exit 1
+fi
+
+cli=${2:-}
+if [ -z "$cli" ]; then
+    echo "✗ tick plist: no CLI name given (e.g. amenbo) — it is what the wake-up runs" >&2
     exit 1
 fi
 
@@ -50,10 +62,10 @@ cat > "$out" <<PLIST
 	<!-- What the wake-up runs: the CLI carried in this same bundle, named relative to the bundle
 	     root, so the job follows the app wherever it is installed. -->
 	<key>BundleProgram</key>
-	<string>Contents/MacOS/amenbo</string>
+	<string>Contents/MacOS/$cli</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>Contents/MacOS/amenbo</string>
+		<string>Contents/MacOS/$cli</string>
 		<string>tick</string>
 		<string>run</string>
 	</array>

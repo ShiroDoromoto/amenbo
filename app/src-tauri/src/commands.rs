@@ -384,6 +384,7 @@ fn collect_store(store: &Store, acc: &mut Acc) -> Result<(), CmdError> {
             .map(|d| DimensionDto {
                 id: d.id,
                 name: d.name.clone(),
+                slug: d.slug.clone(),
                 notes: d.notes.clone(),
                 role: d.role.clone(),
                 ordered: d.ordered,
@@ -395,6 +396,7 @@ fn collect_store(store: &Store, acc: &mut Acc) -> Result<(), CmdError> {
                     .map(|v| DimensionValueDto {
                         id: v.id,
                         name: v.name.clone(),
+                        slug: v.slug.clone(),
                         start_on: v.start_on.map(|d| d.to_string()),
                         end_on: v.end_on.map(|d| d.to_string()),
                     })
@@ -2705,6 +2707,20 @@ pub fn dimension_rename(id: i64, name: String) -> Result<WriteAck, CmdError> {
     Ok(WriteAck::new(&["tasks"]))
 }
 
+/// Rename a dimension's readable key (`AMB-D-735`) — the key alone, the slug's counterpart of
+/// [`dimension_rename`]. A key is never cleared, only replaced, so there is no empty arm: core refuses
+/// a shape it cannot carry outside (`invalid_dimension_slug_shape`) and a key another axis in the same
+/// project already answers to (`invalid_dimension_slug_taken`), and the panel puts that refusal in
+/// front of the reader rather than guessing a key of its own.
+#[tauri::command]
+pub fn dimension_set_slug(id: i64, slug: String) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.dimension_update(id, None, None, None, None, None, None, Some(&slug))?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["tasks"]))
+}
+
 /// Update a dimension's description (notes), whether its values are ordered (ordered), whether it is
 /// the time axis (time_axis), whether it goes on the task card (show_on_card), and whether it refuses
 /// to be left empty (required). Only the fields passed are changed — same shape as the CLI's
@@ -2769,6 +2785,17 @@ pub fn dimension_value_add(dimension_id: i64, name: String) -> Result<WriteAck, 
 pub fn dimension_value_rename(value_id: i64, name: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
         store.dimension_value_update(value_id, Some(&name), None, None)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["tasks"]))
+}
+
+/// Rename a dimension value's readable key (`AMB-D-735`) — [`dimension_set_slug`] one value wide, and
+/// checked for a collision within the axis, which is as far as a value's key has to be unique.
+#[tauri::command]
+pub fn dimension_value_set_slug(value_id: i64, slug: String) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.dimension_value_update(value_id, None, Some(&slug), None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))

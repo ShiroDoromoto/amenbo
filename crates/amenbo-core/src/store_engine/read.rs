@@ -3782,14 +3782,17 @@ pub fn decision_card_row(conn: &Connection, decision_id: i64) -> Result<Option<D
 
 /// One dimension value of a project overview (in `order_key` order). `start_on`/`end_on` are the
 /// period of a `role: time_axis` value — carried for every value, meaningful only on a time_axis axis.
+/// `slug` is the readable key the value answers to outside Amenbo (`AMB-D-735`); it is `None` only for
+/// a row still being written, never for one the overview reads back.
 pub struct DimensionValueRow {
     pub id: i64,
     pub name: String,
+    pub slug: Option<String>,
     pub start_on: Option<NaiveDate>,
     pub end_on: Option<NaiveDate>,
 }
 
-/// One dimension (classification axis) of a project overview: id/name/notes plus its live values (in
+/// One dimension (classification axis) of a project overview: id/name/slug/notes plus its live values (in
 /// `order_key` order) and the flags the GUI needs to render/operate it. `role` is the snake_case wire
 /// text (`none`/`time_axis`); `ordered` says whether its values carry an order; `show_on_card` says
 /// whether a task's value on this axis belongs on its card (`AMB-D-651`); `required` says whether it
@@ -3798,6 +3801,9 @@ pub struct DimensionValueRow {
 pub struct DimensionRow {
     pub id: i64,
     pub name: String,
+    /// The readable key the axis answers to outside Amenbo (`AMB-D-735`) — `None` only for a row still
+    /// being written, never for one the overview reads back.
+    pub slug: Option<String>,
     pub notes: String,
     pub role: String,
     pub ordered: bool,
@@ -3899,7 +3905,7 @@ fn overview_dimensions(
     let mut sel = Select::new();
     let (project_id, id, name) = (sel.col(D.project_id), sel.col(D.id), sel.col(D.name));
     let (notes, role, ordered) = (sel.col(D.notes), sel.col(D.role), sel.col(D.ordered));
-    let (show_on_card, required) = (sel.col(D.show_on_card), sel.col(D.required));
+    let (show_on_card, required, slug) = (sel.col(D.show_on_card), sel.col(D.required), sel.col(D.slug));
     // The project is joined to keep a dimension whose project is gone out of the overview, not for a
     // column of its own — so it is named here and nowhere else.
     let mut sql = Sql::from(&sel, D.table);
@@ -3914,6 +3920,7 @@ fn overview_dimensions(
                 DimensionRow {
                     id: id.get(r)?,
                     name: name.get(r)?,
+                    slug: slug.get(r)?,
                     notes: notes.get(r)?,
                     role: role.get(r)?,
                     ordered: ordered.get(r)?,
@@ -3942,7 +3949,7 @@ fn overview_dimension_values(
 
     let mut sel = Select::new();
     let (dimension_id, id, name) = (sel.col(V.dimension_id), sel.col(V.id), sel.col(V.name));
-    let (start_on, end_on) = (sel.col(V.start_on), sel.col(V.end_on));
+    let (slug, start_on, end_on) = (sel.col(V.slug), sel.col(V.start_on), sel.col(V.end_on));
     let mut sql = Sql::from(&sel, V.table);
     sql.join(D.table, same(D.id, V.dimension_id))
         .push_where(scoped(reach, D.project_id).as_ref())
@@ -3955,6 +3962,7 @@ fn overview_dimension_values(
                 DimensionValueRow {
                     id: id.get(r)?,
                     name: name.get(r)?,
+                    slug: slug.get(r)?,
                     start_on: parse_card_date(start_on.get(r)?)?,
                     end_on: parse_card_date(end_on.get(r)?)?,
                 },

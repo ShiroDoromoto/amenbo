@@ -952,8 +952,12 @@ button.feed__target:hover { color: var(--c-accent); }
 .dimmgr__dimhead { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
 .dimmgr__name { flex: 1; min-width: 12ch; font-weight: var(--fw-bold); background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 2px var(--s-2); color: inherit; }
 .dimmgr__notes { width: 100%; background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 2px var(--s-2); color: var(--c-text-muted); font-size: var(--fs-sm); }
-.dimmgr__name:hover, .dimmgr__notes:hover, .dimmgr__valname:hover { border-color: var(--c-border); }
-.dimmgr__name:focus, .dimmgr__notes:focus, .dimmgr__valname:focus { border-color: var(--c-accent); background: var(--c-surface); outline: none; }
+/* The readable key beside a name (`AMB-D-735`). It is machine-facing text — lower-case ASCII, no spaces —
+   so it is set in the mono face and kept quiet next to the name it belongs to. */
+.dimmgr__slug { width: 14ch; background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 2px var(--s-2); color: var(--c-text-muted); font-family: var(--font-mono); font-size: var(--fs-xs); }
+.dimmgr__valslug { width: 12ch; background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 0 2px; color: var(--c-text-muted); font-family: var(--font-mono); font-size: var(--fs-xs); }
+.dimmgr__name:hover, .dimmgr__notes:hover, .dimmgr__valname:hover, .dimmgr__slug:hover, .dimmgr__valslug:hover { border-color: var(--c-border); }
+.dimmgr__name:focus, .dimmgr__notes:focus, .dimmgr__valname:focus, .dimmgr__slug:focus, .dimmgr__valslug:focus { border-color: var(--c-accent); background: var(--c-surface); outline: none; }
 .dimmgr__values { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); padding-left: var(--s-2); }
 .dimmgr__vlabel { font-size: var(--fs-xs); margin-right: var(--s-1); }
 .dimmgr__val { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--c-border); border-radius: 999px; padding: 1px var(--s-2); background: var(--c-surface); }

@@ -54,6 +54,14 @@ interface Store {
   // detached from the task detail).
   addDimension(projectId: number, name: string): void;
   renameDimension(id: number, name: string): void;
+  /**
+   * Rename the axis's readable key (`AMB-D-735`) — what it answers to outside Amenbo. Replaced, never
+   * cleared. It answers whether the write landed, because a key is refused for reasons the panel
+   * cannot see coming — a shape that cannot be carried outside, a key another axis already answers to
+   * — and the field has to be put back rather than left showing a key nothing was saved under. The
+   * refusal itself has already gone to a toast.
+   */
+  setDimensionSlug(id: number, slug: string): Promise<boolean>;
   updateDimension(id: number, notes: string): void;
   setDimensionOrdered(id: number, ordered: boolean): void;
   setDimensionTimeAxis(id: number, timeAxis: boolean): void;
@@ -66,6 +74,8 @@ interface Store {
   removeDimension(id: number): void;
   addDimensionValue(dimensionId: number, name: string): void;
   renameDimensionValue(valueId: number, name: string): void;
+  /** The value's counterpart of `setDimensionSlug`, unique within its axis, and refusable the same way. */
+  setDimensionValueSlug(valueId: number, slug: string): Promise<boolean>;
   setDimensionValuePeriod(valueId: number, startOn: string | undefined, endOn: string | undefined): void;
   removeDimensionValue(valueId: number): void;
   moveDimensionValue(valueId: number, pos: { before?: number; after?: number }): void;
@@ -169,6 +179,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     deleteTask(id) { run(mut.deleteTask(id)); },
     addDimension(projectId, name) { run(mut.addDimension(projectId, name)); },
     renameDimension(id, name) { run(mut.renameDimension(id, name)); },
+    setDimensionSlug(id, slug) { return runOk(mut.setDimensionSlug(id, slug)); },
     updateDimension(id, notes) { run(mut.updateDimension(id, notes)); },
     setDimensionOrdered(id, ordered) { run(mut.setDimensionOrdered(id, ordered)); },
     setDimensionTimeAxis(id, timeAxis) { run(mut.setDimensionTimeAxis(id, timeAxis)); },
@@ -177,6 +188,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     removeDimension(id) { run(mut.removeDimension(id)); },
     addDimensionValue(dimensionId, name) { run(mut.addDimensionValue(dimensionId, name)); },
     renameDimensionValue(valueId, name) { run(mut.renameDimensionValue(valueId, name)); },
+    setDimensionValueSlug(valueId, slug) { return runOk(mut.setDimensionValueSlug(valueId, slug)); },
     setDimensionValuePeriod(valueId, startOn, endOn) { run(mut.setDimensionValuePeriod(valueId, startOn, endOn)); },
     removeDimensionValue(valueId) { run(mut.removeDimensionValue(valueId)); },
     moveDimensionValue(valueId, pos) { run(mut.moveDimensionValue(valueId, pos)); },

@@ -335,9 +335,13 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone: a terminal has no board to cut.
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "group-by", required: &["axis"], refs: &[], strings: &["axis"], binds: false },
     // A classification axis, its values, and the assignment that files a task under one. The axis and
-    // the value travel as names — that is how the CLI takes them, and how a person says them.
-    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "create", required: &["name"], refs: &[], strings: &["name"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "value-add", required: &["dimension", "value"], refs: &[], strings: &["dimension", "value"], binds: false },
+    // the value travel as words — a name, or the key the row answers to, since the command resolves the
+    // key before it tries a name.
+    // `slug` names the readable key the axis or the value is to answer to outside Amenbo. Left out,
+    // the door derives one from the id, which is what nearly every row keeps — so a road writes it
+    // only where the key itself is what is under test.
+    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "create", required: &["name"], refs: &[], strings: &["name", "slug"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "value-add", required: &["dimension", "value"], refs: &[], strings: &["dimension", "value", "slug"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "set", required: &["target", "dimension", "value"], refs: &["target"], strings: &["dimension", "value"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "unset", required: &["target", "dimension", "value"], refs: &["target"], strings: &["dimension", "value"], binds: false },
     // Whether the axis belongs on the board's task cards. The answer is the axis's own rather than a
@@ -351,6 +355,11 @@ const REGISTRY: &[OpSpec] = &[
     // road that needs the demand out of the way. An axis offering no values could never be answered,
     // so raising it on one is refused, which is a road of its own to walk.
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "required", required: &["dimension"], refs: &[], strings: &["dimension"], binds: false },
+    // Renaming that key afterwards — the axis's own, or one of its values' where `value` names one.
+    // It is a move of its own rather than an arg on the ops above, because naming a key at birth and
+    // renaming one are two different doors: the screen has only the second, so a road that wrote the
+    // key where the row was created could not be walked there at all.
+    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "rekey", required: &["dimension", "slug"], refs: &[], strings: &["dimension", "value", "slug"], binds: false },
     // Ordering between two tasks, and the anchor back to the history that carried the work out.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "depend", required: &["target", "on"], refs: &["target", "on"], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "undepend", required: &["target", "on"], refs: &["target", "on"], strings: &[], binds: false },
@@ -1236,6 +1245,11 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "plugin-row", required: &["project", "plugin", "state"], refs: &[], strings: &["project", "plugin", "state"], binds: false },
     // An axis as it is read back, by name: is it defined, and does it carry the value named?
     OpSpec { kind: Kind::Assert, domain: Domain::Dimension, op: "listed", required: &["dimension"], refs: &[], strings: &["dimension", "value"], binds: false },
+    // The key an axis answers to, or one of its values where `value` names one. Read apart from
+    // `listed` because it is a different question: that one asks whether the axis is defined at all,
+    // and a row whose key was quietly left as its id-derived default is defined exactly as much as one
+    // somebody named.
+    OpSpec { kind: Kind::Assert, domain: Domain::Dimension, op: "key", required: &["dimension", "equals"], refs: &[], strings: &["dimension", "value", "equals"], binds: false },
     // What a card says about how its task is classified — the value carried on one axis, read off the
     // board with nothing opened. A screen road alone: a listing has no card, and the question is
     // about a surface rather than about the filing, which `dimension listed` and the

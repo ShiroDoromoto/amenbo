@@ -1,5 +1,6 @@
 //! The `dimension` domain: the classification axes a project declares, their values, and the
-//! assignment that files a task under one. Both travel as names, which is how the CLI takes them.
+//! assignment that files a task under one. Both travel as words — a name, or the readable key the row
+//! answers to — which is how the CLI takes them either way.
 
 use amenbo_scenario::{Args, Domain};
 
@@ -11,14 +12,56 @@ impl Driver<'_> {
             "create" => {
                 let name = req_str(with, "name")?;
                 let pid = self.project_id.to_string();
-                self.run_json(&["dimension", "add", "--name", name, "--project", &pid, "--json"])?;
-                Ok(Outcome::action(format!("defined the axis `{name}`")))
+                let mut args = vec!["dimension", "add", "--name", name, "--project", &pid];
+                // The key is named only where a road names it; left out, the door derives one from the
+                // id, and passing an empty `--slug` would be a different request altogether.
+                if let Some(slug) = slug(with) {
+                    args.extend_from_slice(&["--slug", slug]);
+                }
+                args.push("--json");
+                self.run_json(&args)?;
+                Ok(Outcome::action(format!("defined the axis `{name}`{}", named_key(with))))
             }
             "value-add" => {
                 let dimension = req_str(with, "dimension")?;
                 let value = req_str(with, "value")?;
-                self.run_json(&["dimension", "value-add", dimension, "--name", value, "--json"])?;
-                Ok(Outcome::action(format!("added the value `{value}` to `{dimension}`")))
+                let mut args = vec!["dimension", "value-add", dimension, "--name", value];
+                if let Some(slug) = slug(with) {
+                    args.extend_from_slice(&["--slug", slug]);
+                }
+                args.push("--json");
+                self.run_json(&args)?;
+                Ok(Outcome::action(format!(
+                    "added the value `{value}` to `{dimension}`{}",
+                    named_key(with)
+                )))
+            }
+            // Renaming the key afterwards, on the axis or on one of its values. Two commands behind one
+            // op because the two rows are the same thing to a reader — what a key is for is being typed
+            // outside Amenbo, and neither an axis nor a value is more outside than the other.
+            "rekey" => {
+                let dimension = req_str(with, "dimension")?;
+                let slug = req_str(with, "slug")?;
+                match with.get("value").and_then(|v| v.as_str()) {
+                    Some(value) => {
+                        self.run_json(&[
+                            "dimension",
+                            "value-update",
+                            dimension,
+                            value,
+                            "--slug",
+                            slug,
+                            "--json",
+                        ])?;
+                        Ok(Outcome::action(format!(
+                            "made `{value}` of `{dimension}` answer to `{slug}`"
+                        )))
+                    }
+                    None => {
+                        self.run_json(&["dimension", "update", dimension, "--slug", slug, "--json"])?;
+                        Ok(Outcome::action(format!("made `{dimension}` answer to `{slug}`")))
+                    }
+                }
             }
             // Whether the axis goes on the board's task cards. It is the axis's own answer and not a
             // reader's setting, so a screen road stands it up through here — the world its `given:`
@@ -98,7 +141,59 @@ impl Driver<'_> {
                     ),
                 ))
             }
+            // The key a row answers to, read back off the same listing `listed` reads. An axis carries
+            // one and so does every value, and which of the two is being read is said by whether the
+            // step named a value — the way it is said everywhere else in this domain.
+            "key" => {
+                let dimension = req_str(with, "dimension")?;
+                let value = with.get("value").and_then(|v| v.as_str());
+                let want = req_str(with, "equals")?;
+                let v = self.run_json(&["dimension", "list", "--json"])?;
+                let axis = v["dimensions"]
+                    .as_array()
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[])
+                    .iter()
+                    .find(|d| d["dimension"]["name"].as_str() == Some(dimension))
+                    .ok_or_else(|| format!("no axis named `{dimension}` to read a key off"))?;
+                let held = match value {
+                    None => axis["dimension"]["slug"].as_str(),
+                    Some(name) => axis["values"]
+                        .as_array()
+                        .map(Vec::as_slice)
+                        .unwrap_or(&[])
+                        .iter()
+                        .find(|v| v["name"].as_str() == Some(name))
+                        .ok_or_else(|| format!("`{dimension}` has no value named `{name}`"))?
+                        ["slug"]
+                        .as_str(),
+                };
+                let pass = held == Some(want);
+                Ok(Outcome::assert(
+                    pass,
+                    format!(
+                        "{} answers to `{}` (expected `{want}`, {})",
+                        value
+                            .map(|v| format!("value `{v}` of `{dimension}`"))
+                            .unwrap_or_else(|| format!("axis `{dimension}`")),
+                        held.unwrap_or("<no key>"),
+                        if pass { "as expected" } else { "MISMATCH" }
+                    ),
+                ))
+            }
             _ => Err(unmapped(Domain::Dimension, op)),
         }
     }
+}
+
+/// The key a step named, where it named one. Absent is not the same as empty: a row created without
+/// one takes the key its id gives it, which is what the door does when the flag is left off.
+fn slug(with: &Args) -> Option<&str> {
+    with.get("slug").and_then(|v| v.as_str())
+}
+
+/// The tail an action's note carries when the step named a key, so the run's log says which of the
+/// two doors was walked — the one that names a key, or the one that leaves the id to give it.
+fn named_key(with: &Args) -> String {
+    slug(with).map(|s| format!(", answering to `{s}`")).unwrap_or_default()
 }

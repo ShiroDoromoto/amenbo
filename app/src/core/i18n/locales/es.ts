@@ -658,6 +658,7 @@ export const es: Translation = {
       "Un SHA de commit son los 40 o 64 caracteres hexadecimales completos; un SHA corto, una rama, una etiqueta o una revisión no lo son.",
     invalid_attachment_too_large: "Este archivo ocupa {size} bytes y supera el límite de {max} bytes para su tipo.",
     invalid_dimension_period_order: "La fecha de inicio de un valor no puede ser posterior a su fecha de fin.",
+    invalid_dimension_required_without_values: "«{name}» no ofrece ningún valor, así que no puede hacerse obligatoria: añádele un valor primero.",
     invalid_dimension_required_unset: "«{name}» es una categoría obligatoria, así que el valor de una tarea en ella no se puede vaciar: elige otro valor.",
     invalid_task_required_dimension: "Esta tarea no lleva ningún valor en {names}, que este proyecto exige.",
     invalid_dimension_values_unordered:

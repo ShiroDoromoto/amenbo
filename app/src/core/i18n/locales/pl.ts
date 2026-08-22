@@ -667,6 +667,7 @@ export const pl: Translation = {
       "SHA commita to pełne 40 lub 64 znaki szesnastkowe — skrócony SHA, gałąź, tag ani rewizja się nie liczą.",
     invalid_attachment_too_large: "Ten plik ma {size} bajtów i przekracza limit {max} bajtów dla swojego rodzaju.",
     invalid_dimension_period_order: "Data początkowa wartości nie może być późniejsza niż data końcowa.",
+    invalid_dimension_required_without_values: "„{name}” nie ma żadnych wartości, więc nie może stać się wymagana — najpierw dodaj do niej wartość.",
     invalid_dimension_required_unset: "„{name}” to kategoria wymagana, więc wartości zadania na niej nie da się wyczyścić — wybierz inną wartość.",
     invalid_task_required_dimension: "To zadanie nie ma wartości w {names}, czego wymaga ten projekt.",
     invalid_dimension_values_unordered: "Wartości tej kategorii nie mają kolejności, więc nie można ich przestawiać.",

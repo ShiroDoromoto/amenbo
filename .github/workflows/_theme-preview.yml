@@ -59,6 +59,7 @@ jobs:
       identifier: ${{ steps.names.outputs.identifier }}
       bin_name: ${{ steps.names.outputs.bin_name }}
       config: ${{ steps.names.outputs.config }}
+      built_at: ${{ steps.built_at.outputs.built_at }}
     steps:
       - uses: actions/checkout@v7
 
@@ -73,6 +74,13 @@ jobs:
           names=$(make -s gui-dev-names AMB-T-ID="$THEME")
           echo "$names"
           echo "$names" >> "$GITHUB_OUTPUT"
+
+      # One instant for the whole run, read here and handed down. The three build jobs start
+      # minutes apart, so a clock read in each of them would put three different times on three
+      # bundles of one bake — and telling two bakes apart is the only thing this field is for.
+      - name: Read the instant this bake is stamped with
+        id: built_at
+        run: echo "built_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
   macos:
     name: macOS preview (.app, arm64)
@@ -98,6 +106,8 @@ jobs:
       - name: Build the dev GUI bundle
         env:
           THEME: ${{ inputs.theme }}
+          AMENBO_BUILD_SHA: ${{ github.sha }}
+          AMENBO_BUILD_TIME: ${{ needs.names.outputs.built_at }}
         run: make gui-dev AMB-T-ID="$THEME"
 
       # The one thing this workflow must never do is stamp the build. A stamped binary is allowed to
@@ -190,6 +200,8 @@ jobs:
         working-directory: app
         env:
           AMENBO_APP_NAME: ${{ needs.names.outputs.app_name }}
+          AMENBO_BUILD_SHA: ${{ github.sha }}
+          AMENBO_BUILD_TIME: ${{ needs.names.outputs.built_at }}
         run: npm run tauri build -- --bundles nsis --config src-tauri/tauri.dev.conf.json --config src-tauri/theme-preview.conf.json
 
       - name: Collect the installer under the theme's name
@@ -221,6 +233,8 @@ jobs:
       - name: Build the Linux preview bundle (AppImage)
         env:
           THEME: ${{ inputs.theme }}
+          AMENBO_BUILD_SHA: ${{ github.sha }}
+          AMENBO_BUILD_TIME: ${{ needs.names.outputs.built_at }}
         run: make gui-dev-linux AMB-T-ID="$THEME" LINUX_GUI_ARCH=amd64
 
       - uses: actions/upload-artifact@v7

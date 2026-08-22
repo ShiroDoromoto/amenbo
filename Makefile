@@ -881,10 +881,15 @@ gui-dev-linux:
 	docker build --platform linux/$(LINUX_GUI_ARCH) -f scripts/docker/Dockerfile.linux-gui -t $(LINUX_GUI_IMAGE) scripts/docker/
 	@# The same named tool cache dist-gui-linux uses (linuxdeploy/AppRun/appimagetool are the
 	@# rate-limited downloads, and they do not care which channel asked for them).
+	@# The build-time caption (AMENBO_BUILD_SHA / AMENBO_BUILD_TIME) is forwarded only when the
+	@# caller set it — CI does, a local build does not, and an empty -e would hand the compiler a
+	@# variable that is set to nothing rather than unset.
 	docker run --rm --platform linux/$(LINUX_GUI_ARCH) \
 	  -e VERSION="$(VERSION)" -e TARGET_ARCH="$(LINUX_GUI_ARCH)" -e XDG_CACHE_HOME=/cache \
 	  -e DEV_APP_NAME="$(GUI_DEV_DATA)" -e DEV_CONFIG='$(GUI_DEV_CONFIG)' \
 	  -e OUT_IMG_NAME="$(notdir $(GUI_DEV_APPIMAGE))" \
+	  $(if $(AMENBO_BUILD_SHA),-e AMENBO_BUILD_SHA="$(AMENBO_BUILD_SHA)",) \
+	  $(if $(AMENBO_BUILD_TIME),-e AMENBO_BUILD_TIME="$(AMENBO_BUILD_TIME)",) \
 	  -v "amenbo-tauri-cache-$(LINUX_GUI_ARCH):/cache" \
 	  -v "$(CURDIR):/src:ro" \
 	  -v "$(CURDIR)/$(DIST_DIR):/out" \

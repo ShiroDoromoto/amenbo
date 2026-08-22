@@ -72,6 +72,44 @@ pub(crate) fn lift_legacy_identity(base: &std::path::Path) -> Result<()> {
 /// version number does, and a reader who sees it in someone else's screenshot must read the same word.
 const DEV_BADGE: &str = "DEV";
 
+/// The commit a development build was made from, and when it was made — substituted at build time,
+/// and absent from every build that is not one CI made. They exist for one reader: a member holding
+/// two previews of the *same* theme, whose badges are otherwise identical word for word
+/// (`AMB-D-732`). The channel and the instance are already in the badge; what is not is which of
+/// two bakes of that instance this window is.
+///
+/// A local build deliberately leaves them unset. The timestamp changes on every invocation, and
+/// `option_env!` is a rebuild trigger, so passing it locally would recompile the crate on every
+/// build to change a caption nobody is comparing across two windows.
+const BUILD_SHA: Option<&str> = option_env!("AMENBO_BUILD_SHA");
+const BUILD_TIME: Option<&str> = option_env!("AMENBO_BUILD_TIME");
+
+/// How much of a commit hash the badge carries. Long enough to be a name in this repository, short
+/// enough to sit in a header beside two other fields.
+const BADGE_SHA_LEN: usize = 8;
+
+/// The commit as the badge shows it, or `None` if what the build was handed is not a hash. Nothing
+/// downstream can tell a wrong caption from a right one, so a value that does not look like one is
+/// dropped rather than shown.
+fn badge_sha(sha: &str) -> Option<String> {
+    let sha = sha.trim();
+    if sha.len() < BADGE_SHA_LEN || !sha.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some(sha[..BADGE_SHA_LEN].to_ascii_lowercase())
+}
+
+/// The build's instant as the badge shows it — month, day and minute, on the reader's own clock.
+///
+/// The year is left out because the two builds being told apart are days or weeks apart, and the
+/// seconds because two bakes a minute apart are the same build to anyone comparing them. Local
+/// rather than UTC for the reason every other instant is (`AMB-D-429`): the reader is comparing it
+/// with when they remember installing the other one.
+fn badge_built_at(rfc3339: &str) -> Option<String> {
+    crate::time::Timestamp::parse_rfc3339(rfc3339.trim())
+        .map(|t| t.0.with_timezone(&chrono::Local).format("%m-%d %H:%M").to_string())
+}
+
 /// Where the data and config files live. The store is a single SQLite file
 /// (`<app-data>/store.sqlite`); identity, config and the store itself all sit flat under the same
 /// base (`base_dir`). **The data itself never lives in a project directory**, which may be synced
@@ -203,7 +241,29 @@ impl Paths {
     /// Production is deliberately silent: a badge that showed everywhere would be shipped chrome
     /// nobody reads, and its absence is what makes the dev one worth noticing.
     pub fn dev_badge() -> Option<String> {
-        Self::dev_badge_for(Self::APP_NAME)
+        Self::dev_badge_with(Self::APP_NAME, BUILD_SHA, BUILD_TIME)
+    }
+
+    /// [`dev_badge`](Self::dev_badge) with all three build-time facts said out loud, so a test can
+    /// stand somewhere other than the build it is running in.
+    ///
+    /// The two build fields only ever extend a badge that is already there: production returns
+    /// `None` before either is read, which is what keeps a stamp of the commit out of a shipped
+    /// window even if a release build were one day handed one.
+    pub(crate) fn dev_badge_with(
+        name: &str,
+        sha: Option<&str>,
+        built_at: Option<&str>,
+    ) -> Option<String> {
+        let mut badge = Self::dev_badge_for(name)?;
+        for field in [sha.and_then(badge_sha), built_at.and_then(badge_built_at)]
+            .into_iter()
+            .flatten()
+        {
+            badge.push_str(" · ");
+            badge.push_str(&field);
+        }
+        Some(badge)
     }
 
     /// The labelling rule [`dev_badge`](Self::dev_badge) applies, taking the name as an argument for
@@ -1104,5 +1164,50 @@ mod tests {
         assert_eq!(Paths::dev_badge_for("amenbo-devish"), None);
         // The build writes digits and nothing else there, so an unreadable suffix is shown, not swallowed.
         assert_eq!(Paths::dev_badge_for("amenbo-dev-wip"), Some("DEV wip".to_owned()));
+    }
+
+    /// The two bakes of one theme a member is holding differ in nothing the badge said before, so
+    /// the commit and the minute are what tell them apart. Production is checked here too: the
+    /// build fields must not be able to put a commit into a shipped window.
+    #[test]
+    fn the_badge_carries_the_commit_and_the_minute_a_preview_was_baked() {
+        let sha = Some("7901f2b9c0deadbeef0000000000000000000000");
+        let at = Some("2026-08-22T07:36:11Z");
+        let badge = Paths::dev_badge_with("amenbo-dev-3493", sha, at).expect("a dev build has one");
+        assert!(badge.starts_with("DEV AMB-T-3493 · 7901f2b9 · "), "{badge}");
+        // Local, so the minute itself moves with the machine; its shape does not.
+        let minute = badge.rsplit(" · ").next().expect("the last field is the minute");
+        assert_eq!(minute.len(), "08-22 07:36".len(), "{badge}");
+
+        // Production reads neither field.
+        assert_eq!(Paths::dev_badge_with("amenbo", sha, at), None);
+
+        // A build handed nothing wears the badge it always did.
+        assert_eq!(
+            Paths::dev_badge_with("amenbo-dev", None, None),
+            Some("DEV".to_owned())
+        );
+    }
+
+    /// Nothing downstream can tell a wrong caption from a right one, so anything that is not a hash
+    /// or an instant is dropped rather than shown.
+    #[test]
+    fn a_build_field_that_is_not_what_it_claims_is_dropped_not_shown() {
+        // Too short to be a name in this repository, and not hex at all.
+        assert_eq!(badge_sha("7901f2"), None);
+        assert_eq!(badge_sha("not-a-sha-at-all"), None);
+        assert_eq!(badge_sha(""), None);
+        // Abbreviated on the way in is fine, as long as there is enough of it.
+        assert_eq!(badge_sha("7901F2B9C0"), Some("7901f2b9".to_owned()));
+
+        assert_eq!(badge_built_at("yesterday"), None);
+        assert_eq!(badge_built_at(""), None);
+        assert!(badge_built_at("2026-08-22T07:36:11Z").is_some());
+
+        // Dropped one at a time: an unreadable minute does not cost the commit its place.
+        assert_eq!(
+            Paths::dev_badge_with("amenbo-dev", Some("7901f2b9"), Some("nonsense")),
+            Some("DEV · 7901f2b9".to_owned())
+        );
     }
 }

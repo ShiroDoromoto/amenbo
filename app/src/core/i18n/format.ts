@@ -67,19 +67,6 @@ function relative(value: number, unit: Intl.RelativeTimeFormatUnit, locale: stri
 }
 
 /**
- * How long ago, from a timestamp — the wording under every comment and activity line. The unit is the
- * largest one the gap fills, so a reader gets "2 hours ago" rather than a count of minutes.
- *
- * An unparseable timestamp renders as nothing: `Intl` throws on a `NaN`, and a broken row must not
- * take the screen down with it.
- */
-export function agoLabel(at: string, locale: string = dateLocale(), now: number = Date.now()): string {
-  const ms = new Date(at).getTime();
-  if (!Number.isFinite(ms)) return "";
-  return agoSecondsLabel((now - ms) / 1000, locale);
-}
-
-/**
  * The same wording from an age rather than an instant — what a backend reports when the fact it holds is
  * "this copy is that many seconds old", with no timestamp to hand.
  *
@@ -93,6 +80,44 @@ export function agoSecondsLabel(seconds: number, locale: string = dateLocale()):
   if (secs < 3600) return relative(-Math.floor(secs / 60), "minute", locale);
   if (secs < 86_400) return relative(-Math.floor(secs / 3600), "hour", locale);
   return relative(-Math.floor(secs / 86_400), "day", locale);
+}
+
+/**
+ * Past this, "N days ago" has stopped being a date. A reader can turn "2 days ago" into a day in their
+ * head; nobody turns "115 days ago" into one, so beyond a week the day itself is shown instead.
+ */
+const RELATIVE_UNTIL_SECONDS = 7 * 86_400;
+
+/**
+ * When something happened, for a timeline row: relative while that still reads as a time, the calendar
+ * day once it does not. The unit under the threshold is the largest one the gap fills, so a reader gets
+ * "2 hours ago" rather than a count of minutes.
+ *
+ * An unparseable timestamp renders as nothing: `Intl` throws on a `NaN`, and a broken row must not take
+ * the screen down with it.
+ *
+ * `agoSecondsLabel` keeps the plain relative wording, because the other thing it answers ("this copy is
+ * that many seconds old") never wants a day.
+ */
+export function whenLabel(at: string, locale: string = dateLocale(), now: number = Date.now()): string {
+  const ms = new Date(at).getTime();
+  if (!Number.isFinite(ms)) return "";
+  const secs = (now - ms) / 1000;
+  if (secs >= RELATIVE_UNTIL_SECONDS) return formatDay(new Date(ms), locale);
+  return agoSecondsLabel(secs, locale);
+}
+
+/**
+ * The instant itself, down to the second — what `whenLabel` rounds away. The CLI prints a comment's
+ * timestamp outright, so the GUI carries it too, on the `title` of the row's when.
+ */
+export function exactLabel(at: string, locale: string = dateLocale()): string {
+  const d = new Date(at);
+  if (!Number.isFinite(d.getTime())) return "";
+  return dateTimeFormat(locale, {
+    year: "numeric", month: "numeric", day: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+  }).format(d);
 }
 
 /**
@@ -121,18 +146,6 @@ export function formatDayTime(at: Date, locale: string = dateLocale()): string {
   if (!Number.isFinite(at.getTime())) return "";
   return dateTimeFormat(locale, {
     month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
-  }).format(at);
-}
-
-/**
- * A dated instant — the day *and* the year, with the time. `formatDayTime` leaves the year out for a
- * stamp inside the span the reader is already looking at; this one is for a stamp that can be any
- * distance back, where "8/22 12:02" would not say which year it was.
- */
-export function formatStamp(at: Date, locale: string = dateLocale()): string {
-  if (!Number.isFinite(at.getTime())) return "";
-  return dateTimeFormat(locale, {
-    year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
   }).format(at);
 }
 

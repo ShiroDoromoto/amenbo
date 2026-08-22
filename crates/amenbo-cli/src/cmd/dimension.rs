@@ -84,6 +84,9 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
                 ordered,
                 role: if time_axis { DimensionRole::TimeAxis } else { DimensionRole::None },
                 show_on_card,
+                // A new axis has no values, so it cannot be required at birth — the flag is raised on
+                // `dimension update` once there is something to answer with.
+                required: false,
             };
             let d = store.dimension_add(pid, new).map_err(CliError::from)?;
             write_envelope(flags, "dimension.add", "dimension", serde_json::to_value(&d).unwrap(), None, false, format!("✓ Created dimension: {} ({})", d.name, dimension_label(d.id)));
@@ -155,7 +158,7 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
             }
             let role = time_axis
                 .map(|on| if on { DimensionRole::TimeAxis } else { DimensionRole::None });
-            let d = store.dimension_update(did, name.as_deref(), notes.as_deref(), ordered, role, show_on_card).map_err(CliError::from)?;
+            let d = store.dimension_update(did, name.as_deref(), notes.as_deref(), ordered, role, show_on_card, None).map_err(CliError::from)?;
             write_envelope(flags, "dimension.update", "dimension", serde_json::to_value(&d).unwrap(), Some(changed), false, format!("✓ Updated dimension: {}", dimension_label(d.id)));
         }
         DimensionCmd::Move { id, before, after, top, bottom } => {

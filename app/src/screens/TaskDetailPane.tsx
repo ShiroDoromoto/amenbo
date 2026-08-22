@@ -11,9 +11,9 @@ import { addComment as mutAddComment, editComment as mutEditComment, removeComme
 import { activityRowKey, loadTaskActivity } from "../core/activity";
 import { confirmDialog } from "../core/dialog";
 import {
-  DateField, DueChip, FacetAvatar, PremiseChangedField, PriorityDot, StatusSelect, TaskIdChip,
+  DateField, DueChip, FacetAvatar, PremiseChangedField, PriorityDot, StatusSelect, TaskIdChip, When,
 } from "../components/atoms";
-import { agoLabel, errText, eventText, formatStamp, priorityLabel, t, tf } from "../core/i18n";
+import { errText, eventText, exactLabel, priorityLabel, t, tf } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { useRefNav } from "../core/refNav";
 import type { Actor, ActivityItem, Facet, Placement, Priority, TaskCard } from "../mock/types";
@@ -492,11 +492,11 @@ export function TaskDetailPane({
               question as when the status last moved. */}
           <div className="meta">
             {t("detail.created")}: {task.createdBy ? tf("facet.named", { name: task.createdBy.name, facet: t(task.createdBy.kind === "ai" ? "facet.ai" : "facet.human") }) : "—"}
-            {" · "}<span title={task.createdAt}>{formatStamp(new Date(task.createdAt))}</span>
+            {" · "}<span title={task.createdAt}>{exactLabel(task.createdAt)}</span>
             {task.updatedAt !== task.createdAt && (
               <>
                 {" · "}{t("detail.updated")}:{" "}
-                <span title={t("detail.updatedHint")}>{formatStamp(new Date(task.updatedAt))}</span>
+                <span title={t("detail.updatedHint")}>{exactLabel(task.updatedAt)}</span>
               </>
             )}
             {" · "}id {task.id} · {t("detail.restoreHint")}
@@ -523,7 +523,7 @@ export function TaskDetailPane({
                       {it.kind === "comment" ? tf("comment.quoted", { text: it.text ?? "" }) : it.event && eventText(it.event, it.target.title)}
                     </div>
                     <div className="feed__meta">
-                      <span>{agoLabel(it.at)}{it.editedAt && <span className="faint"> · {t("comment.edited")} {agoLabel(it.editedAt)}</span>}</span>
+                      <span><When at={it.at} editedAt={it.editedAt} /></span>
                     </div>
                   </div>
                 </div>

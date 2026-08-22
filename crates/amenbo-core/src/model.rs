@@ -639,6 +639,16 @@ pub struct Dimension {
     /// `AMB-D-40` drew until somebody names an axis to widen it (`AMB-D-650`).
     #[serde(default)]
     pub show_on_card: bool,
+    /// Does this axis refuse to be left empty? A task carrying no value here cannot have its creation
+    /// finished (`AMB-D-734`): a task that was never classified is one nobody can hand to a release
+    /// later, so the axis's raiser gets to say the axis has to be answered. It is the axis's own answer,
+    /// like `show_on_card`, and it bites at one point only — `ops::task::finish_creating`. It is
+    /// deliberately **not** a `ready` premise: raising the flag would otherwise drop every task already
+    /// filed to `ready:no` in one stroke, and a flag that can be raised at any time must not be able to
+    /// stop the whole backlog. `false` is where an axis starts and where every axis an upgrade brings in
+    /// stays.
+    #[serde(default)]
+    pub required: bool,
     /// Where the dimension itself sits in the display order.
     pub order_key: String,
     pub created_at: Timestamp,

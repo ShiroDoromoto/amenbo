@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { addComment, addTask, deleteProject, deleteTask, finishTaskCreation, rejectTask, setDue, setStart, setStatus } from "./mutations";
-import { agoLabel } from "./i18n";
+import { whenLabel } from "./i18n";
 import { addDays, todayStr } from "./calendar";
 import { applySnapshot, getSnapshot, type Snapshot } from "./snapshot";
 import type { TaskCard } from "../mock/types";
@@ -201,7 +201,7 @@ describe("addComment (browser-loop mock)", () => {
     expect(s.activity[0].text).toBe("やります");
     // Stamped with now, checked against now — never against a literal, which would pin one language's
     // wording into a test about the ledger.
-    expect(agoLabel(s.activity[0].at)).toBe(agoLabel(new Date().toISOString()));
+    expect(whenLabel(s.activity[0].at)).toBe(whenLabel(new Date().toISOString()));
   });
 
   it("does not push onto a nonexistent task (core rejects it on the foreign key)", async () => {

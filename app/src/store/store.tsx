@@ -69,8 +69,14 @@ interface Store {
   setDimensionValuePeriod(valueId: number, startOn: string | undefined, endOn: string | undefined): void;
   removeDimensionValue(valueId: number): void;
   moveDimensionValue(valueId: number, pos: { before?: number; after?: number }): void;
-  setTaskDimensionValue(taskId: number, valueId: number): void;
-  unsetTaskDimensionValue(taskId: number, valueId: number): void;
+  /**
+   * Put a task on an axis, or take it off. Both answer whether the write landed, because both can be
+   * refused — a required axis will not be emptied (`AMB-D-734`) — and every caller moves the screen
+   * before the answer comes. A `false` is that caller's cue to put the screen back; the refusal itself
+   * has already gone to a toast.
+   */
+  setTaskDimensionValue(taskId: number, valueId: number): Promise<boolean>;
+  unsetTaskDimensionValue(taskId: number, valueId: number): Promise<boolean>;
   // Reordering projects (sidebar drag & drop). Failures — the reorder command rejecting, say — go through run() like
   // every other mutator so they reach a toast; called directly they would fail in silence.
   moveProject(projectId: number, position: "top" | "bottom" | "before" | "after", anchorId?: number): void;
@@ -122,6 +128,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // The same toast, plus the yes/no an optimistic caller needs: a screen that moved before the write
+  // landed has to know whether to keep the move or take it back. `run` cannot say — it returns nothing —
+  // and `runResult`'s `null` is only distinguishable from success where the write has a value to return.
+  const runOk = useCallback((p: Promise<void>): Promise<boolean> => {
+    return p.then(() => true).catch((e) => {
+      console.error("[amenbo] mutation failed:", e);
+      setNotice(errText(e));
+      return false;
+    });
+  }, []);
+
   const runResult = useCallback(<T,>(p: Promise<T>): Promise<T | null> => {
     return p.catch((e): null => {
       console.error("[amenbo] mutation failed:", e);
@@ -163,8 +180,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setDimensionValuePeriod(valueId, startOn, endOn) { run(mut.setDimensionValuePeriod(valueId, startOn, endOn)); },
     removeDimensionValue(valueId) { run(mut.removeDimensionValue(valueId)); },
     moveDimensionValue(valueId, pos) { run(mut.moveDimensionValue(valueId, pos)); },
-    setTaskDimensionValue(taskId, valueId) { run(mut.setTaskDimensionValue(taskId, valueId)); },
-    unsetTaskDimensionValue(taskId, valueId) { run(mut.unsetTaskDimensionValue(taskId, valueId)); },
+    setTaskDimensionValue(taskId, valueId) { return runOk(mut.setTaskDimensionValue(taskId, valueId)); },
+    unsetTaskDimensionValue(taskId, valueId) { return runOk(mut.unsetTaskDimensionValue(taskId, valueId)); },
     moveProject(projectId, position, anchorId) { run(mut.moveProject(projectId, position, anchorId)); },
     markSeen(taskId) {
       markTaskSeen(taskId).then(() => { notifyDataChanged(); invalidateQueries((k) => k[0] === "smartView"); }).catch(() => {});
@@ -175,7 +192,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     unarchiveInbox(taskId) {
       unarchiveInboxItem(taskId).then(() => { notifyInboxChanged(); invalidateQueries((k) => k[0] === "smartView"); }).catch(() => {});
     },
-  }), [activity, run, runResult]);
+  }), [activity, run, runOk, runResult]);
 
   return (
     <Ctx.Provider value={store}>

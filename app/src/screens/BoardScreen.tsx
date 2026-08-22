@@ -115,6 +115,17 @@ export function BoardScreen({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [dimMgrOpen, setDimMgrOpen] = useState(false);
   const [dimAssign, setDimAssign] = useState<Record<string, number>>({});
+  // Which column a card is drawn in — moved when it is dropped, and moved back when the write says no.
+  // A required axis will not be emptied (`AMB-D-734`), so the drop onto the "no value" column is a move
+  // the store can refuse; left where it landed, the card would sit in a column it is not in.
+  const showDimAssign = useCallback((taskId: number, valueId: number | undefined) => {
+    setDimAssign((m) => {
+      const n = { ...m };
+      if (valueId === undefined) delete n[taskId];
+      else n[taskId] = valueId;
+      return n;
+    });
+  }, []);
   // Free-word search, run by core over every face the word index carries (see the doc comment above).
   // Incremental, and ANDs with the filter chips.
   const [search, setSearch] = useState("");
@@ -465,8 +476,10 @@ export function BoardScreen({
               onCardDragEnd={clearDragging}
               onDropTask={(id) => {
                 if (dimAssign[id] === v.id) return;
-                store.setTaskDimensionValue(id, v.id);
-                setDimAssign((m) => ({ ...m, [id]: v.id }));
+                const prev = dimAssign[id];
+                showDimAssign(id, v.id);
+                void store.setTaskDimensionValue(id, v.id)
+                  .then((ok) => { if (!ok) showDimAssign(id, prev); });
               }}
             />
           ))}
@@ -485,8 +498,9 @@ export function BoardScreen({
             onDropTask={(id) => {
               const cur = dimAssign[id];
               if (!cur) return;
-              store.unsetTaskDimensionValue(id, cur);
-              setDimAssign((m) => { const n = { ...m }; delete n[id]; return n; });
+              showDimAssign(id, undefined);
+              void store.unsetTaskDimensionValue(id, cur)
+                .then((ok) => { if (!ok) showDimAssign(id, cur); });
             }}
           />
           <AddDimensionValue onAdd={(name) => store.addDimensionValue(groupingDim.id, name)} />

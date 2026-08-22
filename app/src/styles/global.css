@@ -191,10 +191,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
     color: inherit;
   }
 }
-/* Which build this window is (`DEV`, `DEV AMB-T-<id>`) — never present on a shipped one. It sits
-   right against the brand it qualifies, and wears the heed step so it is legible in a cropped
-   screenshot, which is the one place the window title cannot answer the question. Monospace keeps
-   the task ref reading as a ref. */
+/* Which build this window is (`DEV`, `DEV AMB-T-<id>`, and on a preview CI baked, that plus the
+   commit and the minute) — never present on a shipped one. It sits right against the brand it
+   qualifies, and wears the heed step so it is legible in a cropped screenshot, which is the one
+   place the window title cannot answer the question. Monospace keeps the task ref reading as a ref,
+   and holds the three fields in columns that line up when two windows are compared. */
 .topbar__envbadge {
   font-family: var(--font-mono);
   font-size: var(--fs-xs); font-weight: var(--fw-bold); letter-spacing: 0.04em;

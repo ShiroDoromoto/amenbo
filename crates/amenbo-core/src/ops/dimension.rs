@@ -74,6 +74,7 @@ fn unsatisfiable_required(name: &str) -> Error {
         Msg::new(format!(
             "'{name}' offers no values, so it cannot be required — add a value to it first"
         ))
+        .coded(ErrorCode::InvalidDimensionRequiredWithoutValues)
         .with("name", name),
     )
 }
@@ -415,6 +416,7 @@ pub fn unset(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<bool> {
                  another value instead",
                 axis.name
             ))
+            .coded(ErrorCode::InvalidDimensionRequiredUnset)
             .with("name", &axis.name),
         ));
     }

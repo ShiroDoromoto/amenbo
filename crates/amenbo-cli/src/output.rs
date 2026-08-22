@@ -458,6 +458,17 @@ impl From<amenbo_core::Error> for CliError {
             // value that failed: `git log --oneline` prints the short form, so the value nearest to hand
             // is the one the door will never take. Amenbo does not expand it — it never runs git
             // (`AMB-D-281`) — so what it can do is name the one command that does.
+            // The refusal names the axes but not the way to answer them, and the way is two steps: the
+            // values live on the axis, and putting one on the task is its own command. A caller who has
+            // just been told "you carry no value on X" is one step from `dimension show X`.
+            E::Invalid(m) if m.code() == Some(ErrorCode::InvalidTaskRequiredDimension) => Some(format!(
+                "This project requires a value on that axis before a creation can be finished. `{cmd} dimension show <axis>` lists what it offers, then `{cmd} dimension set <id> <axis> <value>` puts one on the task."
+            )),
+            // Lowering the flag is the other way out, and it is the one nobody thinks of while holding a
+            // task they only wanted to reclassify.
+            E::Invalid(m) if m.code() == Some(ErrorCode::InvalidDimensionRequiredUnset) => Some(format!(
+                "Move the task to another value with `{cmd} dimension set <id> <axis> <value>`, or stop the axis demanding one with `{cmd} dimension update <axis> --required false`."
+            )),
             E::Invalid(m) if m.code() == Some(ErrorCode::InvalidCommitSha) => Some(
                 "`git log --oneline` prints the short form. Expand it with `git rev-parse <short sha>` and pass what that returns — Amenbo never runs git itself."
                     .to_string(),

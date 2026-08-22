@@ -5,6 +5,7 @@
 // so the screen holds one way of getting started rather than a button and a longer typed alternative.
 import { useState } from "react";
 import { useCliCommandName } from "../core/cliCommand";
+import { NoCli } from "../components/NoCli";
 import { errText, t, tf } from "../core/i18n";
 import { bindFolder, pickFolder } from "../core/mutations";
 import { inTauri } from "../core/snapshot";
@@ -58,9 +59,10 @@ export function OnboardingScreen({ onNav }: { onNav: (nav: Nav) => void }) {
 
 /**
  * The reference steps: the walk the two cards above start, from linking a folder to work on the board.
- * `cli` is the command name this build installs, which the asking step's request has to carry.
+ * `cli` is the command name this build installs, which the asking step's request has to carry — and
+ * `null` where it installs none the reader can run, which leaves that step with the reason instead.
  */
-function steps(cli: string): { title: string; cmd?: string; body: React.ReactNode }[] {
+function steps(cli: string | null): { title: string; cmd?: string; body: React.ReactNode }[] {
   return [
     {
       title: t("onboard.s1title"),
@@ -68,7 +70,9 @@ function steps(cli: string): { title: string; cmd?: string; body: React.ReactNod
     },
     // The asking step hands over the very request the first loop copies (`FirstLoop`), so a reader
     // who meets both is taught one wording and not two.
-    { title: t("onboard.s2title"), cmd: tf("firstloop.prompt", { cmd: cli }), body: t("onboard.s2body") },
+    cli
+      ? { title: t("onboard.s2title"), cmd: tf("firstloop.prompt", { cmd: cli }), body: t("onboard.s2body") }
+      : { title: t("onboard.s2title"), body: <><NoCli />{t("onboard.s2body")}</> },
     { title: t("onboard.s3title"), body: t("onboard.s3body") },
   ];
 }

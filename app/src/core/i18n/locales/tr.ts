@@ -346,6 +346,7 @@ export const tr: Translation = {
     "search.on.decision": "Karar",
     "search.on.decisionComment": "Bir karara yapılan yorum",
     "commands.note": "Tam komut başvurusu (agent --json çıktısından · salt okunur)",
+    "cli.none": "Bu yapı çalıştırabileceğiniz bir komut içermiyor: CLI'si AppImage'ın içinde ve yalnızca uygulama açıkken var. Uygulamanın kendisini kullanın.",
     "commands.search": "Komut ara", "commands.empty": "Komut yok", "commands.loading": "Yükleniyor…",
     "commands.other": "Diğer", "commands.required": "zorunlu", "commands.examples": "Örnekler",
     "plugins.market": "Pazar", "plugins.searchPh": "Eklenti ara",

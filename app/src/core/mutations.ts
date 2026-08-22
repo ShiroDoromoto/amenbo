@@ -1329,17 +1329,21 @@ export async function fetchDevBadge(): Promise<string | null> {
 }
 
 /**
- * What this build's CLI is called where the user types it — `amenbo`, or `amenbo-dev` on a dev
- * build. Every screen that hands over a command to run asks for it instead of spelling `amenbo`,
- * because a dev window naming the production CLI sends the reader to a command that is not there.
+ * How this build's CLI is run where the user types it — `amenbo`, `amenbo-dev` on the shared dev
+ * build, and the path into the bundle on a macOS preview, whose CLI no installer puts on PATH.
+ * Every screen that hands over a command to run asks for it instead of spelling `amenbo`, because a
+ * dev window naming the production CLI sends the reader to a command that is not there.
  *
- * Asked **once, at startup**, like the badge: the channel is stamped in at build time. Null in the
- * browser, where there is no build to ask — the caller keeps showing the production name, which is
- * the one a reader of the web preview would install.
+ * **Null means this build has no command a reader can run at all** — a Linux preview, whose CLI is
+ * inside an AppImage and exists only while the app is open. A screen that gets it says so rather
+ * than naming something. In the browser there is no build to ask, so the production name is
+ * answered: it is the one a reader of the web preview would install.
+ *
+ * Asked **once, at startup**, like the badge: the channel is stamped in at build time.
  */
 export async function fetchCliCommandName(): Promise<string | null> {
-  if (!inTauri()) return null;
-  return await invoke<string>("cli_command_name");
+  if (!inTauri()) return "amenbo";
+  return await invoke<string | null>("cli_command_name");
 }
 
 /**

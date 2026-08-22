@@ -347,6 +347,7 @@ export const zhHant: Translation = {
     "search.on.decision": "決定",
     "search.on.decisionComment": "決定上的評論",
     "commands.note": "完整指令參考（來自 agent --json · 唯讀）",
+    "cli.none": "此版本沒有可執行的指令：它的 CLI 位於 AppImage 內部，只在應用程式開啟時存在。請直接使用應用程式。",
     "commands.search": "搜尋指令", "commands.empty": "沒有指令", "commands.loading": "載入中…",
     "commands.other": "其他", "commands.required": "必填", "commands.examples": "範例",
     "plugins.market": "市集", "plugins.searchPh": "搜尋外掛",

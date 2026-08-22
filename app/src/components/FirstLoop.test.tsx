@@ -12,8 +12,8 @@ const hoisted = vi.hoisted(() => ({
   opened: [] as string[],
   /** What `openTerminal` rejects with, when the environment has no terminal to open. */
   terminalFails: null as { code: string; message_en: string } | null,
-  /** The CLI name this build installs — what the request has to name. */
-  cli: "amenbo" as string,
+  /** The CLI this build installs — what the request has to name; null where it installs none. */
+  cli: "amenbo" as string | null,
 }));
 
 vi.mock("../core/mutations", () => ({
@@ -61,8 +61,9 @@ afterEach(() => {
 const render = (dir = "/w/first") =>
   act(async () => { root.render(createElement(FirstLoop, { dir })); });
 
-/** The request as this build hands it over, with the command name filled in. */
-const prompt = (lang?: "en") => tf("firstloop.prompt", { cmd: hoisted.cli }, lang);
+/** The request as this build hands it over, with the command name filled in. Only the builds that
+ *  have one hand a request over at all, so this is asked for nowhere else. */
+const prompt = (lang?: "en") => tf("firstloop.prompt", { cmd: hoisted.cli ?? "" }, lang);
 
 describe("the two moves the user is left with", () => {
   it("opens the terminal in the linked folder, and copies nothing on the way", async () => {
@@ -104,6 +105,18 @@ describe("what the request text says", () => {
     expect(container.textContent).toContain("amenbo-dev-2627 agent --json");
     await act(async () => { button(t("firstloop.s2btn"))!.click(); });
     expect(clipboard).toEqual([prompt()]);
+  });
+
+  // A Linux preview has a CLI and no way to reach it, so there is no request to hand over. What must
+  // not happen is a request naming a command anyway: the reader would paste it and their AI would
+  // meet `not found`, having done exactly what this screen told them to.
+  it("hands over no request at all where the build ships no command a reader can run", async () => {
+    hoisted.cli = null;
+    await render();
+
+    expect(container.textContent).toContain(t("cli.none"));
+    expect(container.textContent).not.toContain("agent --json");
+    expect(button(t("firstloop.s2btn"))).toBeUndefined();
   });
 });
 

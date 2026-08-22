@@ -4,6 +4,7 @@ import { t } from "../core/i18n";
 import { useAgentSpec, type CommandSpec } from "../core/reads";
 import { asTyped } from "../core/keys";
 import { Icon } from "../components/Icon";
+import { NoCli } from "../components/NoCli";
 
 // The command catalogue: a reference screen for browsing the spec from `amenbo agent --json` (whose
 // source of truth is core::agent). Commands are grouped by capability, and each one expands to its
@@ -12,6 +13,9 @@ import { Icon } from "../components/Icon";
 export function CommandCatalogScreen() {
   const { spec, loading } = useAgentSpec();
   // The catalogue lists commands to type, so each line is worded for the CLI this build installs.
+  // Where it installs none the reader can run, the lines keep the command and drop the name in front
+  // of it: what each one does is still the reference this screen is for, and a name nothing answers
+  // to would only read as one they could paste.
   const cli = useCliCommandName();
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -67,6 +71,7 @@ export function CommandCatalogScreen() {
       </div>
       <div className="feed feed--virtual">
         {loading && total === 0 && <div className="feed__item faint">{t("commands.loading")}</div>}
+        {!cli && <div className="feed__item"><NoCli /></div>}
         {!loading && total === 0 && <div className="feed__item faint">{t("commands.empty")}</div>}
         {filtered.map((g) => (
           <div key={g.capability}>
@@ -87,7 +92,7 @@ export function CommandCatalogScreen() {
   );
 }
 
-function CommandRow({ cli, cmd, open, onToggle }: { cli: string; cmd: CommandSpec; open: boolean; onToggle: () => void }) {
+function CommandRow({ cli, cmd, open, onToggle }: { cli: string | null; cmd: CommandSpec; open: boolean; onToggle: () => void }) {
   const args = cmd.args ?? [];
   const flags = cmd.flags ?? [];
   const examples = cmd.examples ?? [];
@@ -95,7 +100,7 @@ function CommandRow({ cli, cmd, open, onToggle }: { cli: string; cmd: CommandSpe
     <div className="feed__item">
       <div className="feed__body">
         <button className="feed__line feed__action cmdcat__head" onClick={onToggle}>
-          <code className="palette__cmd">{cli} {cmd.name}</code>{" "}
+          <code className="palette__cmd">{cli ? `${cli} ${cmd.name}` : cmd.name}</code>{" "}
           <span className="muted">{cmd.summary}</span>
           <span className="faint"> <Icon name={open ? "chevronDown" : "chevronRight"} /></span>
         </button>

@@ -14,16 +14,21 @@ import { fetchCliCommandName } from "./mutations";
 export const PRODUCTION_CLI = "amenbo";
 
 /**
- * The command this build installs. Asked once per screen that needs it — the channel is fixed at build
- * time, so the answer cannot change while the process runs — and it stands at the production name until
- * the answer comes, so the shipped build, where the answer *is* that name, never shows the change.
+ * The command this build installs, or `null` where it installs none a reader can run. Asked once per
+ * screen that needs it — the channel is fixed at build time, so the answer cannot change while the
+ * process runs — and it stands at the production name until the answer comes, so the shipped build,
+ * where the answer *is* that name, never shows the change.
+ *
+ * `null` is the Linux preview, whose CLI is sealed inside an AppImage (`AMB-D-732`). A screen that
+ * gets it stops wording a command and says there is none, which is the whole reason this is nullable:
+ * a name that is not found is a reader following our instructions into a dead end.
  */
-export function useCliCommandName(): string {
-  const [cmd, setCmd] = useState(PRODUCTION_CLI);
+export function useCliCommandName(): string | null {
+  const [cmd, setCmd] = useState<string | null>(PRODUCTION_CLI);
   useEffect(() => {
     let alive = true;
     fetchCliCommandName()
-      .then((c) => alive && c && setCmd(c))
+      .then((c) => alive && setCmd(c))
       .catch(() => {}); // Unanswered: the production name is still the likeliest one to be there.
     return () => {
       alive = false;

@@ -349,6 +349,7 @@ export const th: Translation = {
     "search.on.decision": "การตัดสินใจ",
     "search.on.decisionComment": "ความเห็นในการตัดสินใจ",
     "commands.note": "คู่มือคำสั่งฉบับเต็ม (จาก agent --json · อ่านอย่างเดียว)",
+    "cli.none": "บิลด์นี้ไม่มีคำสั่งที่คุณรันได้ CLI ของมันอยู่ใน AppImage และมีอยู่เฉพาะตอนที่เปิดแอปเท่านั้น ให้ใช้ตัวแอปแทน",
     "commands.search": "ค้นคำสั่ง", "commands.empty": "ไม่มีคำสั่ง", "commands.loading": "กำลังโหลด…",
     "commands.other": "อื่น ๆ", "commands.required": "จำเป็น", "commands.examples": "ตัวอย่าง",
     "plugins.market": "ตลาด", "plugins.searchPh": "ค้นปลั๊กอิน",

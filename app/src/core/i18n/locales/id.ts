@@ -349,6 +349,7 @@ export const id: Translation = {
     "search.on.decision": "Keputusan",
     "search.on.decisionComment": "Komentar pada keputusan",
     "commands.note": "Rujukan perintah lengkap (dari agent --json · hanya baca)",
+    "cli.none": "Build ini tidak menyertakan perintah yang bisa Anda jalankan: CLI-nya ada di dalam AppImage dan hanya ada selama aplikasi terbuka. Gunakan aplikasinya langsung.",
     "commands.search": "Cari perintah", "commands.empty": "Tidak ada perintah", "commands.loading": "Memuat…",
     "commands.other": "Lainnya", "commands.required": "wajib", "commands.examples": "Contoh",
     "plugins.market": "Pasar", "plugins.searchPh": "Cari plugin",

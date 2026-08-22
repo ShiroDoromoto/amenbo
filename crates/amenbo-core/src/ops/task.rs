@@ -149,6 +149,11 @@ pub fn add(tx: &WriteTx<'_>, input: NewTask) -> Result<Task> {
 /// is no state to protect and nothing the caller would do differently on being told. The surfaces
 /// short-circuit it into a reported no-op, which is where "already finished" is worth saying.
 ///
+/// **It is where a required classification is read** (`AMB-D-734`). An axis its project marked required
+/// and this task carries no value on holds the creation here, named so the caller knows what to fill in.
+/// This is the flag's only bite: `ready` says nothing about it, so raising one does not move a task that
+/// is already through this door, and no other operation asks again.
+///
 /// **It writes nothing, and that is load-bearing.** Composing the row anyway would leave `updated_at` as
 /// the one column that moved — the clock always having moved — and a task whose only change is that it was
 /// touched is a change the whole store then carries: a change-feed row, a project version, and the signal
@@ -159,9 +164,41 @@ pub fn finish_creating(tx: &WriteTx<'_>, id: i64) -> Result<Task> {
     if !before.draft {
         return Ok(before);
     }
+    let empty = unmet_required_axes(tx, &before)?;
+    if !empty.is_empty() {
+        return Err(Error::Invalid(
+            Msg::new(format!(
+                "this task carries no value on {}, which this project requires",
+                empty.join(", ")
+            ))
+            .with("names", empty.join(", ")),
+        ));
+    }
     let after = Task { draft: false, updated_at: Timestamp::now(), ..before.clone() };
     emit_update(tx, record::task(&before), record::task(&after))?;
     Ok(after)
+}
+
+/// The names of the project's required axes this task carries no value on, in display order
+/// (`AMB-D-734`). Empty is the pass. Read inside the caller's transaction, so a flag raised while this
+/// creation was being finished is either seen here or lands after the commit — never half-seen.
+///
+/// One query for the axes and one per axis for the assignment: a project's axes are a handful, and the
+/// list is already narrowed to the required ones, so this walks what the premise is actually about
+/// rather than the task's whole classification.
+fn unmet_required_axes(tx: &WriteTx<'_>, task: &Task) -> Result<Vec<String>> {
+    // Axes belong to a project, so a task in none is asked for nothing — there is no raiser to have
+    // required anything of it.
+    let Some(project_id) = task.project_id else {
+        return Ok(Vec::new());
+    };
+    let mut empty = Vec::new();
+    for (axis_id, name) in read::required_dimensions(tx.conn(), project_id)? {
+        if read::assignment_ids_on_axis(tx.conn(), task.id, axis_id)?.is_empty() {
+            empty.push(name);
+        }
+    }
+    Ok(empty)
 }
 
 #[derive(Default)]
@@ -489,6 +526,26 @@ mod tests {
         });
     }
 
+    /// A task left at the first stage of its creation — what `mk_task_in` would have finished for you.
+    /// The premise this file's required-classification tests are about is only readable while it stands.
+    fn draft_in(tx: &WriteTx<'_>, title: &str, project_id: Option<i64>) -> i64 {
+        add(
+            tx,
+            NewTask {
+                title: title.to_string(),
+                project_id,
+                due_on: None,
+                start_on: None,
+                priority: None,
+                notes: String::new(),
+                created_by_kind: None,
+                at_binding_id: None,
+            },
+        )
+        .expect("add task")
+        .id
+    }
+
     /// The current status, read from the source of truth.
     fn status_of(tx: &WriteTx<'_>, id: i64) -> TaskStatus {
         read::task_status(tx.conn(), id).unwrap().expect("the task is live")
@@ -540,6 +597,74 @@ mod tests {
             // Asked again it does not refuse: there is no state to protect, and saying so is the surface's
             // job rather than this one's.
             assert!(!finish_creating(tx, t.id).unwrap().draft);
+        });
+    }
+
+    /// The one point the required-classification flag bites (`AMB-D-734`): a creation cannot be finished
+    /// while an axis the project requires is still blank, and the refusal names the axes to fill in.
+    #[test]
+    fn a_required_axis_holds_the_creation_until_it_is_answered() {
+        with_tx(|tx| {
+            let pid = mk_project(tx, "PJ");
+            let tid = draft_in(tx, "分類のないタスク", Some(pid));
+            let axis = crate::ops::dimension::add(
+                tx,
+                pid,
+                crate::ops::dimension::NewDimension {
+                    name: "プロダクト".to_string(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let value = crate::ops::dimension::value_add(tx, axis.id, "Amenbo本体").unwrap();
+
+            // While the axis demands nothing, the creation finishes with the axis blank.
+            let other = draft_in(tx, "先に締めたタスク", Some(pid));
+            assert!(!finish_creating(tx, other).unwrap().draft);
+
+            crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, Some(true))
+                .unwrap();
+
+            // Raising it does not reopen the creation that already finished — the premise is read at the
+            // door and nowhere else.
+            assert!(!finish_creating(tx, other).unwrap().draft);
+
+            // The one still open is held, and told which axis is empty.
+            let err = finish_creating(tx, tid).unwrap_err();
+            assert!(
+                err.message_en().contains("プロダクト"),
+                "the refusal names the axis to fill in: {}",
+                err.message_en()
+            );
+            assert!(live_before(tx, tid).unwrap().draft, "and the creation is still open");
+
+            // Answer the axis and the same call goes through.
+            crate::ops::dimension::set(tx, tid, value.id).unwrap();
+            assert!(!finish_creating(tx, tid).unwrap().draft);
+        });
+    }
+
+    /// A task in no project answers to no axis: axes belong to a project, so there is no raiser to have
+    /// required anything of it.
+    #[test]
+    fn a_task_in_no_project_is_asked_for_no_classification() {
+        with_tx(|tx| {
+            let pid = mk_project(tx, "PJ");
+            let axis = crate::ops::dimension::add(
+                tx,
+                pid,
+                crate::ops::dimension::NewDimension {
+                    name: "プロダクト".to_string(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            crate::ops::dimension::value_add(tx, axis.id, "Amenbo本体").unwrap();
+            crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, Some(true))
+                .unwrap();
+
+            let loose = draft_in(tx, "どのプロジェクトにも属さない", None);
+            assert!(!finish_creating(tx, loose).unwrap().draft);
         });
     }
 

@@ -196,6 +196,7 @@ mod cross_project_tests {
                 ordered: false,
                 role: crate::model::DimensionRole::None,
                 show_on_card: false,
+                required: false,
             },
         )
         .expect("add dimension")
@@ -367,6 +368,7 @@ mod delete_children_tests {
                 ordered: false,
                 role: DimensionRole::None,
                 show_on_card: false,
+                required: false,
             },
         )
         .expect("add dimension")

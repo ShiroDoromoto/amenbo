@@ -33,7 +33,7 @@ pub(crate) const NOUN: Noun = Noun { en: "dimension", code: ErrorCode::NotFoundD
 pub(crate) const VALUE_NOUN: Noun = Noun { en: "dimension value", code: ErrorCode::NotFoundDimensionValue };
 
 /// The specification of a new dimension. The defaults — single-select, unordered, no role, off the
-/// card — are the bare shape of a user-defined axis. A time-axis phase is built by setting
+/// card, not required — are the bare shape of a user-defined axis. A time-axis phase is built by setting
 /// `role=TimeAxis`.
 #[derive(Clone, Debug)]
 pub struct NewDimension {
@@ -45,6 +45,10 @@ pub struct NewDimension {
     /// Whether a task's value on this axis goes on its card (`AMB-D-651`). New axes start `false`, so
     /// an axis reaches the cards only once somebody says it should (`AMB-D-650`).
     pub show_on_card: bool,
+    /// Whether a creation can be finished without a value on this axis (`AMB-D-734`). A new axis has no
+    /// values yet, so raising it here is refused for the same reason [`update`] refuses it on an empty
+    /// axis: the flag would be unsatisfiable from the moment it was written.
+    pub required: bool,
 }
 
 impl Default for NewDimension {
@@ -56,8 +60,22 @@ impl Default for NewDimension {
             ordered: false,
             role: DimensionRole::None,
             show_on_card: false,
+            required: false,
         }
     }
+}
+
+/// The refusal both doors to `required` share: an axis offering no values cannot demand one
+/// (`AMB-D-734`). Written once so the sentence a caller sees does not depend on which door it came in
+/// by — `add`, where the axis is new and so necessarily empty, or `update` on an axis whose values were
+/// never added.
+fn unsatisfiable_required(name: &str) -> Error {
+    Error::Invalid(
+        Msg::new(format!(
+            "'{name}' offers no values, so it cannot be required — add a value to it first"
+        ))
+        .with("name", name),
+    )
 }
 
 // ───────────────────────────── Dimensions (the axis itself) ─────────────────────────────
@@ -68,6 +86,10 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewDimension) -> Result<Dimen
     }
     if read::project(tx.conn(), project_id)?.is_none() {
         return Err(crate::ops::project::NOUN.not_found(project_id.to_string()));
+    }
+    // An axis is born with no values, so "required" here could never be met by anybody.
+    if new.required {
+        return Err(unsatisfiable_required(&new.name));
     }
     let sibs = read::dimension_siblings(tx.conn(), project_id, None)?;
     let order_key = place(&sibs, &Position::Bottom)?;
@@ -81,6 +103,7 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewDimension) -> Result<Dimen
         ordered: new.ordered,
         role: new.role,
         show_on_card: new.show_on_card,
+        required: new.required,
         order_key,
         created_at: now,
         updated_at: now,
@@ -103,8 +126,9 @@ fn live_value_before(tx: &WriteTx<'_>, id: i64) -> Result<DimensionValue> {
         .ok_or_else(|| VALUE_NOUN.not_found(id.to_string()))
 }
 
-/// Update a dimension's name, notes, whether its values are ordered (`ordered`), its role (`role`)
-/// and whether it belongs on the task card (`show_on_card`). Only the `Some` fields are written. The
+/// Update a dimension's name, notes, whether its values are ordered (`ordered`), its role (`role`),
+/// whether it belongs on the task card (`show_on_card`) and whether it refuses to be left empty
+/// (`required`). Only the `Some` fields are written. The
 /// name is a display label, so it is free to change. Flipping `ordered` false→true brings the
 /// values' `order_key` into play (making `value_move` possible); true→false drops them back to a
 /// stable ascending-id order (`order_key` is not cleared, so flipping it on again revives the old
@@ -117,6 +141,17 @@ fn live_value_before(tx: &WriteTx<'_>, id: i64) -> Result<DimensionValue> {
 /// by). `show_on_card` is the axis's own answer to whether a task's value on it goes on the card, so
 /// flipping it here moves every face at once and no number of axes flipped on is refused — the
 /// crowding that invites is the raiser's to judge (`AMB-D-650`), not this op's to cap.
+///
+/// `required` is the one flag with a precondition: an axis offering no values is refused, because a
+/// flag nobody can satisfy would leave every creation on this project stuck at the door (`AMB-D-734`).
+/// Lowering it is free, and so is leaving it where it is. Raising it does not touch a task that has
+/// already finished its creation — the premise bites at [`crate::ops::task::finish_creating`] and
+/// nowhere else — but a draft left open on this project will now be held there until it carries a
+/// value, which the decision names as the cost it accepts.
+///
+/// The arity is the axis's own: every flag it carries is settable through this one door, and splitting
+/// them into per-flag ops would make "change two things at once" two transactions instead of one.
+#[allow(clippy::too_many_arguments)]
 pub fn update(
     tx: &WriteTx<'_>,
     id: i64,
@@ -125,6 +160,7 @@ pub fn update(
     ordered: Option<bool>,
     role: Option<DimensionRole>,
     show_on_card: Option<bool>,
+    required: Option<bool>,
 ) -> Result<Dimension> {
     if let Some(n) = name {
         if n.trim().is_empty() {
@@ -147,6 +183,12 @@ pub fn update(
     }
     if let Some(c) = show_on_card {
         d.show_on_card = c;
+    }
+    if let Some(r) = required {
+        if r && read::dimension_value_ids(tx.conn(), id)?.is_empty() {
+            return Err(unsatisfiable_required(&d.name));
+        }
+        d.required = r;
     }
     d.updated_at = Timestamp::now();
     emit_update(tx, record::dimension(&before), record::dimension(&d))?;
@@ -333,10 +375,30 @@ pub fn set(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<(TaskDimensi
 
 /// Remove a task's assignment to a particular dimension value (a hard delete). A noop when it is
 /// not assigned. Returns changed.
+///
+/// **A required axis has no way back to empty** (`AMB-D-734`). Moving the task to another value on the
+/// same axis is `set`, which replaces the assignment rather than clearing it; what this would do is
+/// leave the axis blank, which is the one state the flag exists to forbid. Refusing here rather than
+/// at the next `finish_creating` keeps the task from being emptied out behind the premise's back — the
+/// premise is read once, at the door, and a task already through it would never be asked again.
 pub fn unset(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<bool> {
     let Some(id) = read::assignment_id(tx.conn(), task_id, value_id)? else {
         return Ok(false);
     };
+    let dimension_id = read::dimension_id_of_value(tx.conn(), value_id)?
+        .ok_or_else(|| VALUE_NOUN.not_found(value_id.to_string()))?;
+    let axis = read::dimension(tx.conn(), dimension_id)?
+        .ok_or_else(|| NOUN.not_found(dimension_id.to_string()))?;
+    if axis.required {
+        return Err(Error::Invalid(
+            Msg::new(format!(
+                "'{}' is a required category, so a task's value on it cannot be cleared — assign \
+                 another value instead",
+                axis.name
+            ))
+            .with("name", &axis.name),
+        ));
+    }
     tx.delete_record("task_dimension_value", id)?;
     Ok(true)
 }
@@ -438,7 +500,7 @@ mod tests {
         let p = project_named(tx, "PJ");
         let d1 = add(tx, p, custom("D1")).unwrap();
         let d2 = add(tx, p, custom("D2")).unwrap();
-        update(tx, d1.id, Some("分類"), None, None, None, None).unwrap();
+        update(tx, d1.id, Some("分類"), None, None, None, None, None).unwrap();
         assert_eq!(dim(tx, d1.id).name, "分類");
         // Resolves by name or by id (exact match).
         assert_eq!(read::resolve_dimension_in(tx.conn(), None, "分類").unwrap(), vec![d1.id]);
@@ -605,13 +667,13 @@ mod tests {
 
         // Nominate it later and the very same dates start acting as windows. Name and notes are
         // left as they were.
-        let named = update(tx, d.id, None, None, None, Some(DimensionRole::TimeAxis), None).unwrap();
+        let named = update(tx, d.id, None, None, None, Some(DimensionRole::TimeAxis), None, None).unwrap();
         assert_eq!(named.name, "時代");
         assert_eq!(current(tx, p, day("2026-07-09")).unwrap(), now.id);
 
         // Un-nominate it and it steps out of the resolution; the dates stay in their columns but
         // stop meaning anything.
-        update(tx, d.id, None, None, None, Some(DimensionRole::None), None).unwrap();
+        update(tx, d.id, None, None, None, Some(DimensionRole::None), None, None).unwrap();
         assert!(current(tx, p, day("2026-07-09")).is_none());
         assert_eq!(val(tx, now.id).start_on, Some(day("2026-07-08")));
     }
@@ -630,7 +692,7 @@ mod tests {
 
         // Turn `ordered` on and `order_key` takes effect, so values can be reordered. Name and
         // notes are left as they were.
-        let updated = update(tx, d.id, None, None, Some(true), None, None).unwrap();
+        let updated = update(tx, d.id, None, None, Some(true), None, None, None).unwrap();
         assert!(updated.ordered);
         assert_eq!(updated.name, "カテゴリー");
         value_move(tx, b.id, Position::Top).unwrap();
@@ -639,7 +701,7 @@ mod tests {
 
         // Turn `ordered` back off and the values fall back to a stable ascending-id order rather
         // than `order_key`, so the reordering stops showing.
-        update(tx, d.id, None, None, Some(false), None, None).unwrap();
+        update(tx, d.id, None, None, Some(false), None, None, None).unwrap();
         assert!(!dim(tx, d.id).ordered);
         let mut expected = [("A", &a.id), ("B", &b.id)];
         expected.sort_by(|x, y| x.1.cmp(y.1));
@@ -662,7 +724,7 @@ mod tests {
 
         // Raise the flag and it is the axis that carries it — name, notes, order and role are not
         // touched on the way through.
-        let raised = update(tx, d.id, None, None, None, None, Some(true)).unwrap();
+        let raised = update(tx, d.id, None, None, None, None, Some(true), None).unwrap();
         assert!(raised.show_on_card);
         assert_eq!(raised.name, "カテゴリー");
         assert!(raised.ordered);
@@ -670,15 +732,80 @@ mod tests {
         assert!(dim(tx, d.id).show_on_card, "and it is what was written, not just what came back");
 
         // Lower it again. Nothing about the axis remembers it was ever up.
-        update(tx, d.id, None, None, None, None, Some(false)).unwrap();
+        update(tx, d.id, None, None, None, None, Some(false), None).unwrap();
         assert!(!dim(tx, d.id).show_on_card);
 
         // An update that says nothing about the flag leaves it where it stands.
-        update(tx, d.id, None, None, None, None, Some(true)).unwrap();
-        update(tx, d.id, Some("区分"), None, None, None, None).unwrap();
+        update(tx, d.id, None, None, None, None, Some(true), None).unwrap();
+        update(tx, d.id, Some("区分"), None, None, None, None, None).unwrap();
         let after = dim(tx, d.id);
         assert_eq!(after.name, "区分");
         assert!(after.show_on_card, "an unmentioned flag is not cleared");
+    }
+
+    /// `required` is the one flag with a precondition (`AMB-D-734`): an axis nobody can answer cannot
+    /// demand an answer. Both doors refuse it — the axis's birth, where it is necessarily empty, and an
+    /// `update` on one whose values were never added — and the guard lifts the moment a value exists.
+    #[test]
+    fn required_is_refused_until_the_axis_has_a_value() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        // A new axis has no values, so it cannot be born required.
+        assert!(
+            add(tx, p, NewDimension { required: true, ..custom("プロダクト") }).is_err(),
+            "an axis is empty at birth, so requiring it there could never be satisfied"
+        );
+
+        let d = add(tx, p, custom("プロダクト")).unwrap();
+        assert!(!dim(tx, d.id).required, "a new axis demands nothing");
+        assert!(
+            update(tx, d.id, None, None, None, None, None, Some(true)).is_err(),
+            "an axis offering no values cannot be required"
+        );
+
+        // Give it something to answer with and the same call goes through.
+        value_add(tx, d.id, "Amenbo本体").unwrap();
+        let raised = update(tx, d.id, None, None, None, None, None, Some(true)).unwrap();
+        assert!(raised.required);
+        assert_eq!(raised.name, "プロダクト", "nothing else on the axis moved with the flag");
+        assert!(dim(tx, d.id).required, "and it is what was written, not just what came back");
+
+        // Lowering it is free, and an update that says nothing about it leaves it standing.
+        update(tx, d.id, None, None, None, None, None, Some(false)).unwrap();
+        assert!(!dim(tx, d.id).required);
+        update(tx, d.id, None, None, None, None, None, Some(true)).unwrap();
+        update(tx, d.id, Some("製品"), None, None, None, None, None).unwrap();
+        assert!(dim(tx, d.id).required, "an unmentioned flag is not cleared");
+    }
+
+    /// A required axis has no route back to empty (`AMB-D-734`): `set` moves the task to another value,
+    /// and `unset` — the one call that would leave the axis blank — is refused.
+    #[test]
+    fn a_required_axis_cannot_be_cleared_off_a_task() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let t = task_in(tx, "a task", p);
+        let axis = add(tx, p, custom("プロダクト")).unwrap();
+        let core = value_add(tx, axis.id, "Amenbo本体").unwrap();
+        let site = value_add(tx, axis.id, "Amenboサイト").unwrap();
+        set(tx, t, core.id).unwrap();
+
+        // While the axis demands nothing, clearing the assignment is an ordinary removal.
+        assert!(unset(tx, t, core.id).unwrap());
+        set(tx, t, core.id).unwrap();
+
+        update(tx, axis.id, None, None, None, None, None, Some(true)).unwrap();
+        assert!(unset(tx, t, core.id).is_err(), "a required axis cannot be emptied");
+        // Moving to another value on the same axis is `set`, and it still works — the axis stays answered.
+        set(tx, t, site.id).unwrap();
+        assert_eq!(read::task_dimension_assignments(tx.conn(), t).unwrap(), vec![(axis.id, site.id)]);
+        // An axis that demands nothing is unaffected by the one that does.
+        let free = add(tx, p, custom("フェーズ")).unwrap();
+        let stage = value_add(tx, free.id, "運用第2期").unwrap();
+        set(tx, t, stage.id).unwrap();
+        assert!(unset(tx, t, stage.id).unwrap());
     }
 
     #[test]

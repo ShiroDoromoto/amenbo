@@ -444,6 +444,25 @@ pub const STEPS: &[Step] = &[
             "CREATE INDEX IF NOT EXISTS task_by_due ON task(due_on) WHERE due_on IS NOT NULL;",
         ),
     },
+    Step {
+        to: 29,
+        name: "add dimension.required, whether an axis refuses to be left empty",
+        // `AMB-D-734`. Whether a task may finish its creation without a value on this axis is the axis's
+        // own answer, so it arrives as a column on `dimension` — one flag per axis, and none per value.
+        //
+        // **Seeded, and the seed is not a guess: `0` on every row.** The decision starts every axis on
+        // the "not required" side, which is what an upgrading store's axes were already read as, so no
+        // creation that could be finished yesterday is refused after this runs. `NOT NULL DEFAULT 0`
+        // writes that into every existing row and there is nothing further to backfill — the same shape
+        // as v27's.
+        //
+        // The column is spelled out here in frozen text, as every step's is: the registry may rename it
+        // tomorrow, and what this step added must keep meaning what it meant.
+        apply: Apply::Sql(
+            "ALTER TABLE dimension ADD COLUMN required BOOLEAN NOT NULL DEFAULT 0 \
+                 CHECK(required IN (0, 1));",
+        ),
+    },
 ];
 
 /// v23: give the change feed the window each instruction belongs to (`AMB-D-582`), so a reader closed to

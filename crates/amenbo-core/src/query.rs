@@ -2838,6 +2838,7 @@ mod filter_tests {
                     ordered: true,
                     role,
                     show_on_card: false,
+                    required: false,
                 },
             )
             .unwrap()
@@ -2922,6 +2923,7 @@ mod filter_tests {
                     ordered: true,
                     role,
                     show_on_card: false,
+                    required: false,
                 },
             )
             .unwrap()
@@ -2990,6 +2992,7 @@ mod filter_tests {
                     ordered: true,
                     role,
                     show_on_card: false,
+                    required: false,
                 },
             )
             .unwrap()

@@ -261,12 +261,27 @@ jobs:
           | Windows (x64) | preview-$THEME-windows-x64 | run the -setup.exe (it installs for your user only) |
           | Linux (x86_64) | preview-$THEME-linux-x86_64 | make the .AppImage executable and run it |
 
-          It stands beside your Amenbo rather than over it: its own app-data
-          (\`work.amenbo.$APP_NAME\`), its own bundle identifier (\`$IDENTIFIER\`), its own
-          executable name. Your real store is not touched, and this build could not migrate it if it
-          tried — it carries no release stamp.
+          It stands beside your Amenbo rather than over it: its own app-data, its own bundle
+          identifier (\`$IDENTIFIER\`), its own executable name. Your real store is not touched, and
+          this build could not migrate it if it tried — it carries no release stamp.
 
-          To retreat: delete the app, and delete its app-data (\`work.amenbo.$APP_NAME\`).
+          ### To retreat
+
+          Delete the app, then delete its app-data. On macOS and Windows a second directory is named
+          after the bundle identifier rather than after the app-data, so deleting the app-data alone
+          leaves it behind — and the name is close enough to the app-data's to be deleted in its
+          place by mistake.
+
+          | OS | app-data | named after \`$IDENTIFIER\` |
+          |---|---|---|
+          | macOS | \`~/Library/Application Support/work.amenbo.$APP_NAME\` | \`~/Library/Caches/$IDENTIFIER\`, \`~/Library/WebKit/$IDENTIFIER\`, \`~/Library/Preferences/$IDENTIFIER.plist\` |
+          | Windows (x64) | \`%APPDATA%\\amenbo\\$APP_NAME\` | \`%LOCALAPPDATA%\\$IDENTIFIER\` |
+          | Linux (x86_64) | \`~/.local/share/$APP_NAME\` | not yet walked |
+
+          On macOS, drag the .app to the Trash. On Windows, uninstall it the normal way — the
+          uninstaller takes the PATH entry, the install directory, the Start menu shortcut and the
+          uninstall registration with it, and leaves only the two above. On Linux, delete the
+          .AppImage.
 
           These artifacts expire 90 days after this run.
           EOF

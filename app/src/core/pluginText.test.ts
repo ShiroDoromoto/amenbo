@@ -21,12 +21,14 @@ const setting = (over: Partial<PluginWantedSettingDto>): PluginWantedSettingDto 
   readonly: false,
   fieldType: "text",
   options: [],
+  when: [],
   ...over,
 });
 
 const option = (over: Partial<PluginConfigOptionDto>): PluginConfigOptionDto => ({
   value: "task.done",
   label: "Task finished",
+  when: [],
   ...over,
 });
 

@@ -74,12 +74,20 @@ pub fn require_project(project: Option<i64>) -> Result<i64> {
 /// what the run receives ([`plugin_inject`](crate::plugin_inject)). `required` asks whether the plugin can
 /// work without an answer, and a default is one — the two are separate axes, and demanding a user retype a
 /// value that is already in effect would refuse a plugin that is, in fact, fully configured.
-pub fn missing_required(
-    fields: &[ConfigField],
+///
+/// **Neither is a field the author's conditions currently hide** (`AMB-D-727`). A hidden `required` field
+/// that is empty would shut this gate over a box the form does not draw: the user is told a setting is
+/// missing, goes to fill it in, and there is nothing on the screen to fill in. So `stage` is asked here
+/// rather than by each caller — it is what makes forgetting it impossible, which is the only reason this
+/// takes a parameter rather than a list a caller had already narrowed.
+pub fn missing_required<'a>(
+    fields: &'a [ConfigField],
+    stage: &crate::plugin_when::Stage,
     has_value: impl Fn(&ConfigField) -> bool,
-) -> Vec<&str> {
+) -> Vec<&'a str> {
     fields
         .iter()
+        .filter(|f| stage.shows(&f.when))
         .filter(|f| f.required && f.default.is_none() && !has_value(f))
         .map(|f| f.key.as_str())
         .collect()
@@ -92,6 +100,10 @@ pub fn missing_required(
 /// **Opening the device gate is the consent to let the plugin read the whole machine** (`AMB-D-601`), so
 /// nothing asks a second time: a `scope: machine` plugin's [`Layer::Device`] is that answer, and there is no
 /// separate one stored beside it.
+///
+/// `stage` is what this layer's answers and this platform make of the author's conditions
+/// ([`crate::plugin_config::stage`]) — the gate is judged on the fields a user can actually see
+/// ([`missing_required`]).
 ///
 /// `checked` is what the author's check said about the values ([`crate::plugin_check::run`]), and the
 /// caller raises it rather than this door: the run is the caller's to hold, because a verdict carries
@@ -107,12 +119,13 @@ pub fn enable(
     plugin: &str,
     layer: Layer,
     fields: &[ConfigField],
+    stage: &crate::plugin_when::Stage,
     has_value: impl Fn(&ConfigField) -> bool,
     checked: &Checked,
 ) -> Result<()> {
     // Presence first: it costs nothing to read, and a plugin with an empty `required` field is refused in
     // the words a user can act on, rather than in whatever the author's code made of the emptiness.
-    refuse_missing_required(plugin, fields, has_value)?;
+    refuse_missing_required(plugin, fields, stage, has_value)?;
     refuse_failed_check(plugin, checked)?;
     store.set_plugin_enabled_in_project(layer.project_id(), plugin, true)?;
     Ok(())
@@ -198,9 +211,10 @@ fn refuse_failed_check(plugin: &str, checked: &Checked) -> Result<()> {
 fn refuse_missing_required(
     plugin: &str,
     fields: &[ConfigField],
+    stage: &crate::plugin_when::Stage,
     has_value: impl Fn(&ConfigField) -> bool,
 ) -> Result<()> {
-    let missing = missing_required(fields, has_value);
+    let missing = missing_required(fields, stage, has_value);
     if missing.is_empty() {
         return Ok(());
     }
@@ -221,6 +235,12 @@ mod tests {
 
     fn field(key: &str, required: bool) -> ConfigField {
         ConfigField { required, ..ConfigField::new(key, key) }
+    }
+
+    /// A stage in which nothing the author conditioned is showing — the platform is one we do not name and
+    /// no field has an answer, so every clause fails. What a hidden `required` field is judged against.
+    fn nothing_shown() -> crate::plugin_when::Stage {
+        crate::plugin_when::Stage::on(None, Default::default())
     }
 
     /// A real store on a scratch base, so the enable rows land somewhere.
@@ -268,7 +288,7 @@ mod tests {
         let a = mk_project(&mut store, "a");
         let b = mk_project(&mut store, "b");
 
-        enable(&mut store, "slack", Layer::Project(a), &[], |_| true, &Checked::NotDeclared).unwrap();
+        enable(&mut store, "slack", Layer::Project(a), &[], &crate::plugin_when::Stage::default(), |_| true, &Checked::NotDeclared).unwrap();
 
         assert!(effective_enabled_in(&store, "slack", Layer::Project(a)).unwrap());
         assert!(!effective_enabled_in(&store, "slack", Layer::Project(b)).unwrap());
@@ -280,14 +300,14 @@ mod tests {
         let mut store = store_at("project-disable");
         let a = mk_project(&mut store, "a");
         let b = mk_project(&mut store, "b");
-        enable(&mut store, "slack", Layer::Project(a), &[], |_| true, &Checked::NotDeclared).unwrap();
-        enable(&mut store, "slack", Layer::Project(b), &[], |_| true, &Checked::NotDeclared).unwrap();
+        enable(&mut store, "slack", Layer::Project(a), &[], &crate::plugin_when::Stage::default(), |_| true, &Checked::NotDeclared).unwrap();
+        enable(&mut store, "slack", Layer::Project(b), &[], &crate::plugin_when::Stage::default(), |_| true, &Checked::NotDeclared).unwrap();
 
         disable(&mut store, "slack", Layer::Project(a)).unwrap();
         assert!(!effective_enabled_in(&store, "slack", Layer::Project(a)).unwrap());
         assert!(effective_enabled_in(&store, "slack", Layer::Project(b)).unwrap(), "b is untouched");
 
-        enable(&mut store, "slack", Layer::Project(a), &[], |_| true, &Checked::NotDeclared).unwrap();
+        enable(&mut store, "slack", Layer::Project(a), &[], &crate::plugin_when::Stage::default(), |_| true, &Checked::NotDeclared).unwrap();
         assert!(effective_enabled_in(&store, "slack", Layer::Project(a)).unwrap());
     }
 
@@ -335,8 +355,8 @@ mod tests {
         let mut store = store_at("project-disable-queue");
         let a = mk_project(&mut store, "A");
         let b = mk_project(&mut store, "B");
-        enable(&mut store, "slack", Layer::Project(a), &[], |_| true, &Checked::NotDeclared).unwrap();
-        enable(&mut store, "slack", Layer::Project(b), &[], |_| true, &Checked::NotDeclared).unwrap();
+        enable(&mut store, "slack", Layer::Project(a), &[], &crate::plugin_when::Stage::default(), |_| true, &Checked::NotDeclared).unwrap();
+        enable(&mut store, "slack", Layer::Project(b), &[], &crate::plugin_when::Stage::default(), |_| true, &Checked::NotDeclared).unwrap();
         queue_for(&store, "slack", Some(a), 1);
         queue_for(&store, "slack", Some(b), 2);
         let tx = store.read_model().write().unwrap();
@@ -358,7 +378,7 @@ mod tests {
     fn disabling_the_only_project_drops_the_queue_and_the_runners_lease() {
         let mut store = store_at("only-project-disable-queue");
         let p = mk_project(&mut store, "p");
-        enable(&mut store, "slack", Layer::Project(p), &[], |_| true, &Checked::NotDeclared).unwrap();
+        enable(&mut store, "slack", Layer::Project(p), &[], &crate::plugin_when::Stage::default(), |_| true, &Checked::NotDeclared).unwrap();
         queue_for(&store, "slack", Some(p), 1);
         let tx = store.read_model().write().unwrap();
         tx.claim_runner("slack", "runner-1", "2999-01-01T00:00:00Z", "2026-07-25T09:00:00Z").unwrap();
@@ -384,7 +404,7 @@ mod tests {
         let mut store = store_at("required");
         let p = mk_project(&mut store, "p");
 
-        let err = enable(&mut store, "slack", Layer::Project(p), &fields, |_| false, &Checked::NotDeclared)
+        let err = enable(&mut store, "slack", Layer::Project(p), &fields, &crate::plugin_when::Stage::default(), |_| false, &Checked::NotDeclared)
             .unwrap_err();
         assert!(format!("{err:?}").contains("webhook_url"), "the empty field is named");
         assert!(!effective_enabled_in(&store, "slack", Layer::Project(p)).unwrap());
@@ -396,9 +416,53 @@ mod tests {
         let mut store = store_at("satisfied");
         let p = mk_project(&mut store, "p");
         let fields = [field("webhook_url", true)];
-        enable(&mut store, "slack", Layer::Project(p), &fields, |f| f.key == "webhook_url", &Checked::NotDeclared)
+        enable(&mut store, "slack", Layer::Project(p), &fields, &crate::plugin_when::Stage::default(), |f| f.key == "webhook_url", &Checked::NotDeclared)
             .unwrap();
         assert!(effective_enabled_in(&store, "slack", Layer::Project(p)).unwrap());
+    }
+
+    /// **A required field the author's conditions hide does not shut the gate** (`AMB-D-727`). The refusal
+    /// names a setting, and the form the user is sent to has no box for it — so the plugin could never be
+    /// turned on, and the screen could never say why.
+    #[test]
+    fn a_required_field_that_is_hidden_does_not_refuse_enable() {
+        let mut store = store_at("hidden-required");
+        let p = mk_project(&mut store, "p");
+        let hidden = ConfigField {
+            when: vec![crate::plugin_when::When::field_has("transport", "cloudflare")],
+            ..field("worker_url", true)
+        };
+        let fields = [field("transport", false), hidden];
+
+        // Nothing answers the condition, so the field is off screen: the gate opens with it empty.
+        enable(
+            &mut store,
+            "viewer",
+            Layer::Project(p),
+            &fields,
+            &nothing_shown(),
+            |f| f.key == "transport",
+            &Checked::NotDeclared,
+        )
+        .unwrap();
+        assert!(effective_enabled_in(&store, "viewer", Layer::Project(p)).unwrap());
+
+        // Once it is on screen it is a setting like any other, and an empty one shuts the gate.
+        let shown = crate::plugin_when::Stage::on(
+            None,
+            [("transport".to_string(), "cloudflare".to_string())].into_iter().collect(),
+        );
+        let err = enable(
+            &mut store,
+            "viewer2",
+            Layer::Project(p),
+            &fields,
+            &shown,
+            |f| f.key == "transport",
+            &Checked::NotDeclared,
+        )
+        .unwrap_err();
+        assert!(format!("{err:?}").contains("worker_url"), "the setting is named: {err:?}");
     }
 
     /// `missing_required` reports only the empty required fields — optional and satisfied ones are not
@@ -406,7 +470,7 @@ mod tests {
     #[test]
     fn missing_required_lists_only_the_empty_required_fields() {
         let fields = [field("a", true), field("b", false), field("c", true)];
-        let missing = missing_required(&fields, |f| f.key == "a");
+        let missing = missing_required(&fields, &crate::plugin_when::Stage::default(), |f| f.key == "a");
         assert_eq!(missing, vec!["c"]);
     }
 
@@ -434,6 +498,7 @@ mod tests {
             "mail",
             Layer::Project(p),
             &[],
+            &crate::plugin_when::Stage::default(),
             |_| true,
             &said(false, &[("smtp_user", "no such mailbox")]),
         )
@@ -466,7 +531,7 @@ mod tests {
             crate::plugin_check::Silence::Unreadable,
         ] {
             let err =
-                enable(&mut store, "mail", Layer::Project(p), &[], |_| true, &Checked::Silent(silence))
+                enable(&mut store, "mail", Layer::Project(p), &[], &crate::plugin_when::Stage::default(), |_| true, &Checked::Silent(silence))
                     .unwrap_err();
             assert!(format!("{err:?}").contains("did not answer"), "{err:?}");
             // A code of its own, whichever way the run failed to answer: the four silences are one fact to
@@ -482,7 +547,7 @@ mod tests {
         let mut store = store_at("check-yes");
         let p = mk_project(&mut store, "p");
 
-        enable(&mut store, "mail", Layer::Project(p), &[], |_| true, &said(true, &[])).unwrap();
+        enable(&mut store, "mail", Layer::Project(p), &[], &crate::plugin_when::Stage::default(), |_| true, &said(true, &[])).unwrap();
 
         assert!(effective_enabled_in(&store, "mail", Layer::Project(p)).unwrap());
     }
@@ -500,6 +565,7 @@ mod tests {
             "mail",
             Layer::Project(p),
             &fields,
+            &crate::plugin_when::Stage::default(),
             |_| false,
             &said(false, &[("webhook_url", "not a url")]),
         )
@@ -516,11 +582,11 @@ mod tests {
             ConfigField { default: Some("task.done".into()), ..field("events", true) },
             field("webhook_url", true),
         ];
-        assert_eq!(missing_required(&fields, |_| false), vec!["webhook_url"]);
+        assert_eq!(missing_required(&fields, &crate::plugin_when::Stage::default(), |_| false), vec!["webhook_url"]);
 
         let mut store = store_at("defaulted");
         let p = mk_project(&mut store, "p");
-        enable(&mut store, "slack", Layer::Project(p), &fields[..1], |_| false, &Checked::NotDeclared).unwrap();
+        enable(&mut store, "slack", Layer::Project(p), &fields[..1], &crate::plugin_when::Stage::default(), |_| false, &Checked::NotDeclared).unwrap();
         assert!(effective_enabled_in(&store, "slack", Layer::Project(p)).unwrap());
     }
 }

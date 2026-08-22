@@ -447,7 +447,7 @@ pub fn apply(
 /// rows nothing reads, and the next update over the same plugin purges them: the purge is keyed on what is
 /// declared now, so it is the same work whenever it happens.
 fn purge_dropped(store: &mut Store, to: &Manifest) -> Purged {
-    plugin_config::purge_undeclared(store, &to.name, &to.config).unwrap_or_else(|e| {
+    plugin_config::purge_undeclared(store, &to.name, &to.fields()).unwrap_or_else(|e| {
         tracing::warn!(
             plugin = %to.name,
             error = %e,
@@ -732,7 +732,7 @@ pub fn rollback(paths: &Paths, name: &str) -> Result<RolledBack> {
 mod tests {
     use super::*;
     use crate::plugin_layer::Layer;
-    use crate::plugin_manifest::{Arch, Asset, Os};
+    use crate::plugin_manifest::{Arch, Asset, ConfigEntry, Os};
 
     /// An arch-agnostic platform key (`<os>`).
     fn plat(os: Os) -> Platform {
@@ -1024,7 +1024,7 @@ mod tests {
         let cases: [fn(&mut Manifest); 3] = [
             // A setting the author added.
             |m| {
-                m.config.push(crate::plugin_manifest::ConfigField::new("base", "Base branch"))
+                m.config.push(crate::plugin_manifest::ConfigField::new("base", "Base branch").into())
             },
             // A subscription they changed.
             |m| m.events.push(crate::plugin_manifest::EventSubscription::new("task.done")),
@@ -1154,7 +1154,7 @@ mod tests {
     /// update's purge acts on.
     fn install_and_configure(store: &mut Store, manifest: &Manifest, project: i64) {
         install_on_disk(&store.paths.clone(), manifest, b"old");
-        for f in &manifest.config {
+        for f in &manifest.fields() {
             let value = if f.secret { "s3cret" } else { "main" };
             plugin_config::set(store, f, &manifest.name, Layer::Project(project), value).unwrap();
         }
@@ -1304,11 +1304,11 @@ mod tests {
         let mut store = store_at("purge");
         let project = mk_project(&mut store, "proj");
         let mut before = manifest("worktree", "aa");
-        before.config = vec![field("base", false), field("token", true)];
+        before.config = ConfigEntry::schema(vec![field("base", false), field("token", true)]);
         install_and_configure(&mut store, &before, project);
 
         let mut after = manifest("worktree", "bb");
-        after.config = vec![field("base", false)];
+        after.config = ConfigEntry::schema(vec![field("base", false)]);
         let paths = store.paths.clone();
         let mut replaced =
             retain_and_place(&paths, &update_of(before, after), b"new", &Origin::Official).unwrap();
@@ -1335,7 +1335,7 @@ mod tests {
         let mut store = store_at("purge-none");
         let project = mk_project(&mut store, "proj");
         let mut before = manifest("worktree", "aa");
-        before.config = vec![field("base", false), field("token", true)];
+        before.config = ConfigEntry::schema(vec![field("base", false), field("token", true)]);
         install_and_configure(&mut store, &before, project);
 
         let mut after = manifest("worktree", "bb");
@@ -1516,7 +1516,7 @@ mod tests {
         let mut store = store_at("rollback-purged");
         let project = mk_project(&mut store, "proj");
         let mut before = manifest("worktree", "aa");
-        before.config = vec![field("base", false)];
+        before.config = ConfigEntry::schema(vec![field("base", false)]);
         install_and_configure(&mut store, &before, project);
 
         let paths = store.paths.clone();

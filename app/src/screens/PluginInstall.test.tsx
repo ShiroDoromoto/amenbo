@@ -60,6 +60,14 @@ vi.mock("../core/snapshot", async (importOriginal) => {
 
 import { PluginMarketScreen } from "./PluginMarketScreen";
 import { t, tf } from "../core/i18n";
+import type { PluginFormEntryDto, PluginWantedSettingDto } from "../bindings/bindings";
+
+/**
+ * A declared form of settings alone (`AMB-D-727`) — every field an entry, in order. The parts a form may
+ * also carry are their own tests'; what these are about is the boxes.
+ */
+const form = (...fields: PluginWantedSettingDto[]): PluginFormEntryDto[] =>
+  fields.map((field) => ({ kind: "field", field }));
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -84,7 +92,7 @@ const entry = (name: string) => ({
 const row = ({ on = [], ...over }: Partial<PluginInstall> & { name: string; on?: number[] }): PluginInstall => ({
   compatible: true,
   projects: on.map((project) => ({ project, enabled: true, hasValue: false, requiredUnset: false })),
-  config: [],
+  config: form(),
   actions: [],
   scope: "project",
   ...over,
@@ -181,7 +189,7 @@ describe("what the install face says once a plugin has landed", () => {
 describe("what the opened entry says installing it would mean", () => {
   const doc = (over: Partial<PluginDetail> = {}): PluginDetail => ({
     events: [],
-    config: [],
+    config: form(),
     scope: "project",
     compatible: true,
     ...over,
@@ -190,10 +198,10 @@ describe("what the opened entry says installing it would mean", () => {
   it("names what it watches, and what it will ask to be told", () => {
     hoisted.detail = doc({
       events: ["task.created", "task.completed"],
-      config: [
-        { key: "webhook", label: "Webhook URL", secret: true, required: true, readonly: false, fieldType: "text", options: [] },
-        { key: "events", label: "Which events", secret: false, required: false, readonly: false, fieldType: "text", options: [] },
-      ],
+      config: form(
+        { key: "webhook", label: "Webhook URL", secret: true, required: true, readonly: false, fieldType: "text", options: [], when: [] },
+        { key: "events", label: "Which events", secret: false, required: false, readonly: false, fieldType: "text", options: [], when: [] },
+      ),
     });
     render();
     open(0);

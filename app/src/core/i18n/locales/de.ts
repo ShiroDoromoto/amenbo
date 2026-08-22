@@ -431,6 +431,8 @@ export const de: Translation = {
     "plugins.act.running": "Läuft…", "plugins.act.ok": "Erledigt", "plugins.act.failed": "Es wurde nicht zu Ende geführt",
     "plugins.act.run": "Ausführen", "plugins.act.cancel": "Abbrechen",
     "plugins.act.askNote": "Wird nur an diesen Lauf übergeben und nirgends gespeichert.",
+    "plugins.show.copy": "Kopieren", "plugins.show.copied": "Kopiert",
+    "plugins.show.qr": "QR-Code",
     "plugins.check.refused": "Die eigene Prüfung hat diese Einstellungen abgelehnt, deshalb wurde es nicht eingeschaltet.",
     "plugins.check.noAnswer": "Die eigene Prüfung hat nicht geantwortet, deshalb wurde es nicht eingeschaltet. Das Ausführungsprotokoll sagt, was passiert ist.",
     "plugins.updates.title.one": "{n} Plug-in-Aktualisierung verfügbar",

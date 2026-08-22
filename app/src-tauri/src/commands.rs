@@ -4336,7 +4336,11 @@ pub async fn plugin_detail(
         let why = amenbo_core::plugin_compat::check(&manifest).err();
         Ok(Some(PluginDetailDto {
             events: detail.events.iter().map(|e| e.event.clone()).collect(),
-            config: wanted_settings(&detail.config, detail.i18n.get(&lang).map(|o| &o.config)),
+            config: wanted_settings(
+                &detail.config,
+                detail.i18n.get(&lang).map(|o| &o.config),
+                found.entry.official,
+            ),
             about: detail.about.clone(),
             about_i18n: detail.i18n.get(&lang).and_then(|o| o.about.clone()),
             scope: detail.scope,
@@ -4355,11 +4359,24 @@ pub async fn plugin_detail(
 /// (`AMB-D-621`): a translation carries no order of its own, so the pairing is by key at every step,
 /// candidates included. Nothing is resolved here — both halves travel, and the face picks
 /// (`AMB-D-623`).
+/// The conditions a face still has to judge, as the DTO carries them (`AMB-D-727`) — the platform's half
+/// already settled, so `None` is a thing this build's OS hides and is never drawn at all.
+fn wanted_when(when: &[amenbo_core::plugin_when::When]) -> Option<Vec<PluginWhenDto>> {
+    Some(
+        amenbo_core::plugin_when::after_platform(when)?
+            .into_iter()
+            .map(|c| PluginWhenDto { field: c.field, has: c.has })
+            .collect(),
+    )
+}
+
 fn wanted_setting(
     field: &amenbo_core::plugin_manifest::ConfigField,
     overlay: Option<&amenbo_core::plugin_manifest::ConfigFieldOverlay>,
+    when: Vec<PluginWhenDto>,
 ) -> PluginWantedSettingDto {
     PluginWantedSettingDto {
+        when,
         key: field.key.clone(),
         label: field.label.clone(),
         label_i18n: overlay.and_then(|o| o.label.clone()),
@@ -4371,13 +4388,18 @@ fn wanted_setting(
         secret: field.secret,
         required: field.required,
         field_type: field.field_type,
+        // A candidate this platform hides is dropped here rather than drawn greyed: an iCloud checkbox on
+        // Windows is not a choice someone could make (`AMB-D-727`).
         options: field
             .options
             .iter()
-            .map(|o| PluginConfigOptionDto {
-                label_i18n: overlay.and_then(|f| f.options.get(&o.value).cloned()),
-                value: o.value.clone(),
-                label: o.label.clone(),
+            .filter_map(|o| {
+                Some(PluginConfigOptionDto {
+                    when: wanted_when(&o.when)?,
+                    label_i18n: overlay.and_then(|f| f.options.get(&o.value).cloned()),
+                    value: o.value.clone(),
+                    label: o.label.clone(),
+                })
             })
             .collect(),
         default_value: field.default.clone(),
@@ -4390,10 +4412,35 @@ fn wanted_setting(
 /// `overlay` is the language's own half of the translations, keyed by field key; `None` is a plugin
 /// nobody translated, or a reader on the base language, and both mean the form draws as it always did.
 fn wanted_settings(
-    config: &[amenbo_core::plugin_manifest::ConfigField],
+    config: &[amenbo_core::plugin_manifest::ConfigEntry],
     overlay: Option<&std::collections::BTreeMap<String, amenbo_core::plugin_manifest::ConfigFieldOverlay>>,
-) -> Vec<PluginWantedSettingDto> {
-    config.iter().map(|f| wanted_setting(f, overlay.and_then(|o| o.get(&f.key)))).collect()
+    official: bool,
+) -> Vec<PluginFormEntryDto> {
+    use amenbo_core::plugin_manifest::ConfigEntry;
+    config
+        .iter()
+        .filter_map(|entry| match entry {
+            // A setting this platform hides is dropped whole (`AMB-D-727`); what is left of its condition
+            // travels with it, for the form to re-read as its answers change.
+            ConfigEntry::Field(field) => {
+                let when = wanted_when(&field.when)?;
+                Some(PluginFormEntryDto::Field {
+                    field: wanted_setting(field, overlay.and_then(|o| o.get(&field.key)), when),
+                })
+            }
+            // A destination is an official plugin's to draw (`AMB-D-727`), and this is where a third
+            // party's is dropped: the validator tells an author their `qr` will not draw, and a manifest
+            // that reached a machine anyway is answered here rather than trusted.
+            ConfigEntry::Part(part) if part.part.official_only() && !official => None,
+            // A part goes the way its neighbouring setting does (`AMB-D-727`): the platform's half of its
+            // condition is settled here, and what reads another setting's answer travels with it. A
+            // caption that outlived the box it is about would leave a step nobody could follow.
+            ConfigEntry::Part(part) => Some(PluginFormEntryDto::Part {
+                when: wanted_when(&part.when)?,
+                part: show_part(&part.part),
+            }),
+        })
+        .collect()
 }
 
 /// The operations a plugin's settings block declares, each with its words in the reader's language
@@ -4410,9 +4457,11 @@ fn wanted_actions(
     settings
         .actions
         .iter()
-        .map(|action| {
+        .filter_map(|action| {
+            let when = wanted_when(&action.when)?;
             let translated = overlay.and_then(|o| o.actions.get(&action.cmd));
-            PluginActionDto {
+            Some(PluginActionDto {
+                when,
                 cmd: action.cmd.clone(),
                 label: action.label.clone(),
                 label_i18n: translated.and_then(|a| a.label.clone()),
@@ -4426,7 +4475,7 @@ fn wanted_actions(
                         secret: field.secret,
                     })
                     .collect(),
-            }
+            })
         })
         .collect()
 }
@@ -4472,13 +4521,14 @@ fn install_row(
 ) -> Result<PluginInstallDto, CmdError> {
     use amenbo_core::plugin_layer::Layer;
     let why = amenbo_core::plugin_compat::check(&plugin.manifest).err();
-    let config = wanted_settings(&plugin.manifest.config, overlay.map(|o| &o.config));
+    let config =
+        wanted_settings(&plugin.manifest.config, overlay.map(|o| &o.config), plugin.manifest.official);
     let actions = wanted_actions(
         plugin.manifest.settings.as_ref(),
         overlay.and_then(|o| o.settings.as_ref()),
     );
     let projects =
-        amenbo_core::plugin_config::intersections(store, &plugin.name, &plugin.manifest.config)?
+        amenbo_core::plugin_config::intersections(store, &plugin.name, &plugin.manifest.fields())?
             .into_iter()
             .map(|at| PluginProjectRowDto {
                 project: at.project,
@@ -4493,7 +4543,7 @@ fn install_row(
             let held = amenbo_core::plugin_config::held_at(
                 store,
                 &plugin.name,
-                &plugin.manifest.config,
+                &plugin.manifest.fields(),
                 Layer::Device,
             )?;
             Some(PluginDeviceRowDto {
@@ -4565,7 +4615,7 @@ pub fn plugin_config_read(
     let layer = amenbo_core::plugin_layer::Layer::of(installed.manifest.scope, project_id)?;
     installed
         .manifest
-        .config
+        .fields()
         .iter()
         .map(|f| config_field_row(&store, &name, f, layer))
         .collect()
@@ -4629,9 +4679,13 @@ pub fn plugin_set_enabled(
         if enabled {
             amenbo_core::plugin_compat::check(&installed.manifest)
                 .map_err(|incompatible| CmdError::from(incompatible.into_error(&name)))?;
-            let fields = installed.manifest.config.clone();
+            let fields = installed.manifest.fields();
             let satisfied =
                 amenbo_core::plugin_config::satisfied_keys(store, &name, &fields, layer)?;
+            // What the author's conditions make of this layer's answers (`AMB-D-727`): the gate is judged
+            // on the fields this form draws, so a `required` field hidden here does not shut it — the user
+            // would have no box to fill in.
+            let stage = amenbo_core::plugin_config::stage(store, &name, &fields, layer)?;
             // The author's own check, raised before the gate — pressing enable is the consent to run this
             // code (`AMB-D-664` / `AMB-D-351`).
             let checked = amenbo_core::plugin_check::run(
@@ -4650,8 +4704,8 @@ pub fn plugin_set_enabled(
             // verdict, is what the form works from. Every other refusal is still thrown: an incompatible
             // build and an empty `required` field have no verdict to draw, only a sentence to show.
             let shut_by_the_check = !checked.opens_the_gate()
-                && amenbo_core::plugin_trust::missing_required(&fields, has_value).is_empty();
-            match enable(store, &name, layer, &fields, has_value, &checked) {
+                && amenbo_core::plugin_trust::missing_required(&fields, &stage, has_value).is_empty();
+            match enable(store, &name, layer, &fields, &stage, has_value, &checked) {
                 Ok(()) => {}
                 Err(_) if shut_by_the_check => {}
                 Err(refused) => return Err(refused.into()),
@@ -4722,9 +4776,9 @@ pub fn plugin_config_set(
 ) -> Result<(), CmdError> {
     with_store_mut(|store| {
         let installed = amenbo_core::plugin_installed::read(&store.paths, &name)?;
-        let field = installed.manifest.config.iter().find(|f| f.key == key).cloned().ok_or_else(|| {
-            let declared: Vec<&str> =
-                installed.manifest.config.iter().map(|f| f.key.as_str()).collect();
+        let fields = installed.manifest.fields();
+        let field = fields.iter().find(|f| f.key == key).cloned().ok_or_else(|| {
+            let declared: Vec<&str> = fields.iter().map(|f| f.key.as_str()).collect();
             let known = if declared.is_empty() { "none".to_string() } else { declared.join(", ") };
             CmdError::from(amenbo_core::Error::invalid(
                 format!("plugin '{name}' declares no setting '{key}' (it declares: {known})"),
@@ -5307,6 +5361,85 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
+    /// **The platform's half of a condition is settled here, and the rest travels** (`AMB-D-727`).
+    ///
+    /// A face never learns an OS name: what this build's platform hides is gone before the DTO is built,
+    /// which is the half core is the only one that can answer. What reads another setting is handed on,
+    /// because while a form is open the answers are the form's — the store has not been told about a box
+    /// still being filled in.
+    #[test]
+    fn what_this_platform_hides_never_reaches_the_form_and_the_rest_is_handed_on() {
+        use amenbo_core::plugin_manifest::{
+            ConfigEntry, ConfigField, ConfigOption, FieldType, Os, Settings, SettingsAction,
+        };
+        use amenbo_core::plugin_when::When;
+
+        let here = Os::here().expect("this build runs on a platform Amenbo names");
+        let elsewhere = if here == Os::Windows { Os::Macos } else { Os::Windows };
+
+        let config = vec![
+            ConfigField {
+                field_type: FieldType::Multi,
+                options: vec![
+                    ConfigOption { when: vec![When::on([elsewhere])], ..ConfigOption::new("icloud", "iCloud") },
+                    ConfigOption::new("cloudflare", "Cloudflare"),
+                ],
+                ..ConfigField::new("transport", "経路")
+            },
+            ConfigField {
+                when: vec![When::on([elsewhere])],
+                ..ConfigField::new("apple_id", "Apple ID")
+            },
+            ConfigField {
+                when: vec![When::on([here]), When::field_has("transport", "cloudflare")],
+                ..ConfigField::new("worker_url", "Worker の URL")
+            },
+        ];
+
+        let entries = wanted_settings(&ConfigEntry::schema(config), None, true);
+        let drawn: Vec<&PluginWantedSettingDto> = entries
+            .iter()
+            .filter_map(|entry| match entry {
+                PluginFormEntryDto::Field { field } => Some(field),
+                PluginFormEntryDto::Part { .. } => None,
+            })
+            .collect();
+        assert_eq!(
+            drawn.iter().map(|f| f.key.as_str()).collect::<Vec<_>>(),
+            ["transport", "worker_url"],
+            "the field this platform hides is not on the form at all",
+        );
+        assert_eq!(
+            drawn[0].options.iter().map(|o| o.value.as_str()).collect::<Vec<_>>(),
+            ["cloudflare"],
+            "nor is the candidate it hides",
+        );
+        assert!(drawn[0].when.is_empty(), "an unconditional field carries no condition on");
+        assert_eq!(
+            drawn[1].when.iter().map(|c| (c.field.as_str(), c.has.as_str())).collect::<Vec<_>>(),
+            [("transport", "cloudflare")],
+            "the platform clause held and is spent; what reads a setting is handed on",
+        );
+
+        let settings = Settings {
+            check: None,
+            actions: vec![
+                SettingsAction { when: vec![When::on([elsewhere])], ..SettingsAction::new("apple", "Apple") },
+                SettingsAction {
+                    when: vec![When::field_has("transport", "cloudflare")],
+                    ..SettingsAction::new("tunnel", "Raise the tunnel")
+                },
+            ],
+        };
+        let actions = wanted_actions(Some(&settings), None);
+        assert_eq!(
+            actions.iter().map(|a| a.cmd.as_str()).collect::<Vec<_>>(),
+            ["tunnel"],
+            "the button this platform hides is gone with its fields",
+        );
+        assert_eq!(actions[0].when.len(), 1, "and the one that is left carries what is still to judge");
+    }
+
     /// The translations an install keeps beside its manifest (`AMB-D-622`), as the catalog published them.
     fn plant_translations(home: &std::path::Path, name: &str, translations: serde_json::Value) {
         let dir = home.join("plugins").join(name);
@@ -5333,8 +5466,8 @@ mod tests {
                 "events",
                 "Events",
                 vec![
-                    ConfigOption { value: "task.done".into(), label: "Task finished".into() },
-                    ConfigOption { value: "task.created".into(), label: "Task filed".into() },
+                    ConfigOption::new("task.done", "Task finished"),
+                    ConfigOption::new("task.created", "Task filed"),
                 ],
             ),
         ];
@@ -5352,7 +5485,12 @@ mod tests {
             },
         )]);
 
-        let drawn = wanted_settings(&config, Some(&overlay));
+        let form = wanted_settings(
+            &amenbo_core::plugin_manifest::ConfigEntry::schema(config.clone()),
+            Some(&overlay),
+            true,
+        );
+        let drawn = drawn_fields(&form);
         assert_eq!(drawn[0].label, "Endpoint");
         assert_eq!(drawn[0].label_i18n, None, "an untranslated field carries no second line");
         assert_eq!(drawn[1].label, "Events", "the author's own line is never overwritten");
@@ -5362,8 +5500,139 @@ mod tests {
         assert_eq!(drawn[1].options[1].label_i18n, None);
 
         // No layer at all is the same answer as a layer that says nothing: the form as its author wrote it.
-        let bare = wanted_settings(&config, None);
-        assert!(bare.iter().all(|f| f.label_i18n.is_none()));
+        let bare = wanted_settings(
+            &amenbo_core::plugin_manifest::ConfigEntry::schema(config),
+            None,
+            true,
+        );
+        assert!(drawn_fields(&bare).iter().all(|f| f.label_i18n.is_none()));
+    }
+
+    /// The settings on a drawn form (`AMB-D-727`) — what a test about a *field* wants out of a list that
+    /// also carries the parts Amenbo draws between them.
+    fn drawn_fields(form: &[PluginFormEntryDto]) -> Vec<&PluginWantedSettingDto> {
+        form.iter()
+            .filter_map(|entry| match entry {
+                PluginFormEntryDto::Field { field } => Some(field),
+                PluginFormEntryDto::Part { .. } => None,
+            })
+            .collect()
+    }
+
+    /// A form is drawn in the order its author wrote (`AMB-D-727`), parts and settings together — where a
+    /// part sits is what it is for, so a face that sorted or split them would lose the whole point of
+    /// writing one there.
+    #[test]
+    fn a_drawn_form_keeps_the_order_its_author_wrote() {
+        use amenbo_core::plugin_manifest::{ConfigEntry, ConfigField};
+        use amenbo_core::plugin_show::Part;
+
+        let declared = vec![
+            ConfigEntry::from(Part::Link {
+                url: "https://myaccount.google.com/apppasswords".into(),
+                label: "Create an app password".into(),
+            }),
+            ConfigField { secret: true, ..ConfigField::new("smtp_password", "Password") }.into(),
+            ConfigEntry::from(Part::Note("One per mailbox.".into())),
+        ];
+
+        let drawn = wanted_settings(&declared, None, true);
+        assert!(matches!(drawn[0], PluginFormEntryDto::Part { part: PluginShowPartDto::Link { .. }, .. }));
+        assert!(matches!(&drawn[1], PluginFormEntryDto::Field { field } if field.key == "smtp_password"));
+        assert!(matches!(drawn[2], PluginFormEntryDto::Part { part: PluginShowPartDto::Note { .. }, .. }));
+    }
+
+    /// A destination is an official plugin's (`AMB-D-727`), and this is the second place that is answered:
+    /// the validator tells an author, and a manifest that reached a machine anyway is drawn without it.
+    /// What is around it still draws — the reader loses the button, not the form.
+    #[test]
+    fn a_third_partys_destination_never_reaches_the_form() {
+        use amenbo_core::plugin_manifest::{ConfigEntry, ConfigField};
+        use amenbo_core::plugin_show::Part;
+
+        let declared = vec![
+            ConfigEntry::from(Part::Qr("https://apps.apple.com/x".into())),
+            ConfigEntry::from(Part::Link {
+                url: "https://example.test/x".into(),
+                label: "Go".into(),
+            }),
+            ConfigEntry::from(Part::Copy("https://example.test/x".into())),
+            ConfigField::new("token", "Token").into(),
+        ];
+
+        let drawn = wanted_settings(&declared, None, false);
+        assert_eq!(drawn.len(), 2, "the two that carry a destination are gone");
+        assert!(matches!(drawn[0], PluginFormEntryDto::Part { part: PluginShowPartDto::Copy { .. }, .. }));
+        assert!(matches!(&drawn[1], PluginFormEntryDto::Field { field } if field.key == "token"));
+
+        assert_eq!(
+            wanted_settings(&declared, None, true).len(),
+            4,
+            "an official plugin draws all four"
+        );
+    }
+
+    /// A part is read the way its neighbouring setting is (`AMB-D-727`) — the platform's half settled
+    /// here, and what reads another setting's answer handed on for the form to re-read. A caption that
+    /// outlived the box it is about would leave a step nobody could follow.
+    #[test]
+    fn a_part_is_conditioned_the_way_the_settings_around_it_are() {
+        use amenbo_core::plugin_manifest::{ConfigEntry, ConfigField, ConfigPart, Os};
+        use amenbo_core::plugin_show::Part;
+        use amenbo_core::plugin_when::When;
+
+        let here = Os::here().expect("this build runs on a platform Amenbo names");
+        let elsewhere = if here == Os::Windows { Os::Macos } else { Os::Windows };
+
+        let declared = vec![
+            ConfigField::new("transport", "経路").into(),
+            ConfigEntry::Part(ConfigPart {
+                part: Part::Note("Worker を先に立ててください".into()),
+                when: vec![When::on([here]), When::field_has("transport", "cloudflare")],
+            }),
+            ConfigEntry::Part(ConfigPart {
+                part: Part::Text("この経路は Mac だけです".into()),
+                when: vec![When::on([elsewhere])],
+            }),
+            ConfigEntry::from(Part::Text("どの経路でも読めます".into())),
+        ];
+
+        let drawn = wanted_settings(&declared, None, true);
+        let parts: Vec<&Vec<PluginWhenDto>> = drawn
+            .iter()
+            .filter_map(|entry| match entry {
+                PluginFormEntryDto::Part { when, .. } => Some(when),
+                PluginFormEntryDto::Field { .. } => None,
+            })
+            .collect();
+        assert_eq!(parts.len(), 2, "the part this platform hides is not on the form at all");
+        assert_eq!(
+            parts[0].iter().map(|c| (c.field.as_str(), c.has.as_str())).collect::<Vec<_>>(),
+            [("transport", "cloudflare")],
+            "the platform clause held and is spent; what reads a setting is handed on",
+        );
+        assert!(parts[1].is_empty(), "a part written without a condition carries none on");
+    }
+
+    /// A part a stranger may not draw and a part this platform hides are two separate answers, and a
+    /// third party's `qr` is gone either way — the badge is read where it always was.
+    #[test]
+    fn a_conditioned_destination_is_still_an_official_plugins_alone() {
+        use amenbo_core::plugin_manifest::{ConfigEntry, ConfigPart, Os};
+        use amenbo_core::plugin_show::Part;
+        use amenbo_core::plugin_when::When;
+
+        let here = Os::here().expect("this build runs on a platform Amenbo names");
+        let elsewhere = if here == Os::Windows { Os::Macos } else { Os::Windows };
+        let qr = |os| {
+            vec![ConfigEntry::Part(ConfigPart {
+                part: Part::Qr("https://apps.apple.com/x".into()),
+                when: vec![When::on([os])],
+            })]
+        };
+        assert!(wanted_settings(&qr(elsewhere), None, true).is_empty(), "hidden by the platform");
+        assert_eq!(wanted_settings(&qr(here), None, true).len(), 1);
+        assert!(wanted_settings(&qr(here), None, false).is_empty(), "still official-only");
     }
 
     /// The buttons are paired the same way (`AMB-D-664`): an operation by the call it raises, and a value
@@ -5378,16 +5647,15 @@ mod tests {
             check: Some("config check".into()),
             actions: vec![
                 SettingsAction {
-                    cmd: "config test".into(),
-                    label: "Send a test message".into(),
                     ask: vec![AskField {
                         key: "api_token".into(),
                         label: "API token".into(),
                         secret: true,
                         extra: Default::default(),
                     }],
+                    ..SettingsAction::new("config test", "Send a test message")
                 },
-                SettingsAction { cmd: "setup".into(), label: "Set up".into(), ask: Vec::new() },
+                SettingsAction::new("setup", "Set up"),
             ],
         };
         // Only the first operation, written in the other order than the manifest declares them — which is
@@ -5522,6 +5790,7 @@ mod tests {
                 "mail",
                 amenbo_core::plugin_layer::Layer::Project(project_id),
                 &[],
+                &amenbo_core::plugin_when::Stage::default(),
                 |_| true,
                 &amenbo_core::plugin_check::Checked::NotDeclared,
             )
@@ -5565,7 +5834,8 @@ mod tests {
                 .into_iter()
                 .find(|r| r.name == "notify")
                 .unwrap();
-            (row.config[0].label.clone(), row.config[0].label_i18n.clone())
+            let first = drawn_fields(&row.config)[0];
+            (first.label.clone(), first.label_i18n.clone())
         };
 
         assert_eq!(label("ja"), ("Endpoint".into(), Some("送り先".into())));
@@ -5729,7 +5999,7 @@ mod tests {
         // to answer (`AMB-D-412`).
         let declared = plugin_installs("en".into()).unwrap().into_iter().find(|r| r.name == "notify").unwrap();
         assert_eq!(
-            declared.config.iter().map(|f| f.key.as_str()).collect::<Vec<_>>(),
+            drawn_fields(&declared.config).iter().map(|f| f.key.as_str()).collect::<Vec<_>>(),
             vec!["events", "token"],
             "the schema arrives in the author's order, without a project being named"
         );
@@ -5804,7 +6074,7 @@ mod tests {
             }]),
         );
         let declared = plugin_installs("en".into()).unwrap().into_iter().find(|r| r.name == "notify").unwrap();
-        let events = &declared.config[0];
+        let events = drawn_fields(&declared.config)[0];
         assert_eq!(events.field_type, amenbo_core::plugin_manifest::FieldType::Multi);
         assert_eq!(
             events.options.iter().map(|o| o.value.as_str()).collect::<Vec<_>>(),
@@ -5895,9 +6165,10 @@ mod tests {
         write_detail(amenbo_core::plugin_payload::VERSION);
         let detail = tauri::async_runtime::block_on(plugin_detail("notify".into(), "en".into())).unwrap().unwrap();
         assert_eq!(detail.events, vec!["task.created".to_string(), "task.completed".to_string()]);
-        assert_eq!(detail.config.len(), 1);
-        assert!(detail.config[0].secret && detail.config[0].required);
-        assert_eq!(detail.config[0].label, "Webhook URL");
+        let declared = drawn_fields(&detail.config);
+        assert_eq!(declared.len(), 1);
+        assert!(declared[0].secret && declared[0].required);
+        assert_eq!(declared[0].label, "Webhook URL");
         assert!(detail.compatible && detail.incompatible_reason.is_none());
 
         // The author's description (`AMB-D-638`), and their own text beside the reader's language rather

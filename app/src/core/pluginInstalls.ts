@@ -16,18 +16,22 @@ import { inTauri, subscribe } from "./snapshot";
 import { invalidateQueries, useQuery } from "./query";
 import type {
   PluginActionDto,
+  PluginFormEntryDto,
   PluginActionRanDto,
   PluginCheckDto,
   PluginConfigFieldDto,
   PluginGateMovedDto,
   PluginInstallDto,
   PluginRemovedDto,
+  PluginWantedSettingDto,
 } from "../bindings/bindings";
 
 /** One installed plugin and where its switch stands (generated DTO). */
 export type PluginInstall = PluginInstallDto;
 /** One setting its author declared, and what this machine holds for it (generated DTO). */
 export type PluginConfigField = PluginConfigFieldDto;
+/** One entry on a plugin's declared form — a setting, or a part Amenbo draws (generated DTO). */
+export type PluginFormEntry = PluginFormEntryDto;
 /** What an uninstall found and removed (generated DTO). */
 export type PluginRemoved = PluginRemovedDto;
 /** Where a moved gate ended up, and what closing it dropped (generated DTO). */
@@ -66,6 +70,30 @@ const NO_FIELDS: PluginConfigField[] = [];
  * means nobody answered, so the two answers need two spellings, and no candidate may take this one.
  */
 export const NONE_SELECTED = "none";
+
+/**
+ * Whether a thing its author put a condition on is shown, given the answers the form is holding
+ * (`AMB-D-727`).
+ *
+ * **The platform's half is already gone.** What this build's OS hides never reaches a face at all — core
+ * settles that once, before the DTO is built, so nothing here knows an OS name. What is left reads another
+ * setting, and it is read here because here is where the answers are while a form is open: someone ticking
+ * Cloudflare expects its fields the same moment, and the store has not been told yet.
+ *
+ * `answers` is the value each setting stands at *on screen* — what was typed, or what is held, or the
+ * author's default behind it. A setting nobody has answered matches nothing: an unanswered question is not
+ * a "no", but a form whose dependent fields all stand open until the first save is the thing this was
+ * added to stop.
+ *
+ * Read as an `and` — everything listed has to hold — and a `multi` setting answers with a value when it is
+ * among its comma-joined ones (`AMB-D-415`), which for a text setting is the whole of it.
+ */
+export function whenShows(
+  when: readonly { field: string; has: string }[],
+  answers: Readonly<Record<string, string>>,
+): boolean {
+  return when.every((c) => (answers[c.field] ?? "").split(",").includes(c.has));
+}
 
 /**
  * Read what is installed, and the state of every project × plugin crossing each one has a row at
@@ -284,6 +312,18 @@ export async function uninstallPlugin(name: string): Promise<PluginRemoved | nul
 }
 
 /**
+ * The settings on a declared form, in the author's order — its entries with the parts Amenbo merely
+ * draws left out (`AMB-D-727`).
+ *
+ * A part has no key and no value, so everything about *filling the form in* — what is saved, what
+ * `required` is read off, what a check names — asks for these. What a part is for is where it sits, and
+ * that is the drawing's to read off `install.config` itself.
+ */
+export function formFields(entries: PluginFormEntry[]): PluginWantedSettingDto[] {
+  return entries.flatMap((entry) => (entry.kind === "field" ? [entry.field] : []));
+}
+
+/**
  * The state of one row (`AMB-D-447`), for a face that is drawing it — one project's crossing, or the
  * device's own row when `layer` is `null` (`AMB-D-601`).
  *
@@ -298,7 +338,7 @@ export function crossingAt(install: PluginInstall, layer: PluginLayer): PluginRo
   return {
     enabled: false,
     hasValue: false,
-    requiredUnset: install.config.some((f) => f.required && f.defaultValue == null),
+    requiredUnset: formFields(install.config).some((f) => f.required && f.defaultValue == null),
   };
 }
 

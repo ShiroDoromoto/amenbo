@@ -445,6 +445,8 @@ export const uk: Translation = {
     "plugins.act.running": "Виконується…", "plugins.act.ok": "Готово", "plugins.act.failed": "Не дійшло до кінця",
     "plugins.act.run": "Виконати", "plugins.act.cancel": "Скасувати",
     "plugins.act.askNote": "Передається лише цьому запуску й ніде не зберігається.",
+    "plugins.show.copy": "Копіювати", "plugins.show.copied": "Скопійовано",
+    "plugins.show.qr": "QR-код",
     "plugins.check.refused": "Власна перевірка відхилила ці налаштування, тому плагін не ввімкнено.",
     "plugins.check.noAnswer": "Власна перевірка не відповіла, тому плагін не ввімкнено. Що сталося, видно в журналі запусків.",
     "plugins.updates.title.one": "Доступне {n} оновлення плагіна",

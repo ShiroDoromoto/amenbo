@@ -448,6 +448,8 @@ export const ru: Translation = {
     "plugins.act.running": "Выполняется…", "plugins.act.ok": "Готово", "plugins.act.failed": "Не дошло до конца",
     "plugins.act.run": "Выполнить", "plugins.act.cancel": "Отмена",
     "plugins.act.askNote": "Передаётся только этому запуску и нигде не сохраняется.",
+    "plugins.show.copy": "Копировать", "plugins.show.copied": "Скопировано",
+    "plugins.show.qr": "QR-код",
     "plugins.check.refused": "Собственная проверка отклонила эти настройки, поэтому плагин не включён.",
     "plugins.check.noAnswer": "Собственная проверка не ответила, поэтому плагин не включён. Что произошло, видно в журнале запусков.",
     "plugins.updates.title.one": "Доступно {n} обновление плагина",

@@ -717,6 +717,7 @@ mod tests {
             plugin,
             layer,
             &[],
+            &crate::plugin_when::Stage::default(),
             |_| true,
             &crate::plugin_check::Checked::NotDeclared,
         )

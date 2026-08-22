@@ -474,10 +474,11 @@ fn plugin_config_field(
     plugin: &amenbo_core::plugin_subscribe::InstalledPlugin,
     key: &str,
 ) -> Result<amenbo_core::plugin_manifest::ConfigField, CliError> {
-    if let Some(f) = plugin.manifest.config.iter().find(|f| f.key == key) {
+    let fields = plugin.manifest.fields();
+    if let Some(f) = fields.iter().find(|f| f.key == key) {
         return Ok(f.clone());
     }
-    let declared: Vec<&str> = plugin.manifest.config.iter().map(|f| f.key.as_str()).collect();
+    let declared: Vec<&str> = fields.iter().map(|f| f.key.as_str()).collect();
     let known = if declared.is_empty() { "none".to_string() } else { declared.join(", ") };
     Err(CliError::from(amenbo_core::Error::invalid(
         format!("plugin '{}' declares no setting '{key}' (it declares: {known})", plugin.name),
@@ -1563,8 +1564,13 @@ fn plugin_enable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i32
     amenbo_core::plugin_compat::check(&plugin.manifest)
         .map_err(|incompatible| CliError::from(incompatible.into_error(name)))?;
     let layer = plugin_layer(store, &plugin.manifest)?;
-    let fields = plugin.manifest.config.clone();
+    let fields = plugin.manifest.fields();
     let satisfied = amenbo_core::plugin_config::satisfied_keys(store, name, &fields, layer)
+        .map_err(CliError::from)?;
+    // What the author's conditions make of this layer's answers (`AMB-D-727`) — the gate is judged on the
+    // fields a form would actually draw, so a `required` field this schema hides here is not held against
+    // the enable.
+    let stage = amenbo_core::plugin_config::stage(store, name, &fields, layer)
         .map_err(CliError::from)?;
     let has_value = |f: &amenbo_core::plugin_manifest::ConfigField| {
         satisfied.iter().any(|k| k == &f.key)
@@ -1580,7 +1586,7 @@ fn plugin_enable_cmd(store: &mut Store, flags: &Flags, name: &str) -> Result<i32
     )
     .map_err(CliError::from)?;
 
-    amenbo_core::plugin_trust::enable(store, name, layer, &fields, has_value, &checked)
+    amenbo_core::plugin_trust::enable(store, name, layer, &fields, &stage, has_value, &checked)
         .map_err(|refused| refusal_at_the_gate(name, &checked, refused))?;
 
     human(flags, format!("Enabled plugin: {name} ({})", gate_where(store, layer)?));
@@ -1831,6 +1837,7 @@ mod tests {
             "notes",
             Layer::Project(project),
             &[],
+            &amenbo_core::plugin_when::Stage::default(),
             |_| true,
             &amenbo_core::plugin_check::Checked::NotDeclared,
         )
@@ -1915,7 +1922,8 @@ mod tests {
             &mut store,
             "watcher",
             Layer::Project(project),
-            &installed.config,
+            &installed.fields(),
+            &amenbo_core::plugin_when::Stage::default(),
             |_| true,
             &amenbo_core::plugin_check::Checked::NotDeclared,
         )
@@ -1999,8 +2007,8 @@ mod tests {
         let events = ConfigField {
             field_type: FieldType::Multi,
             options: vec![
-                ConfigOption { value: "task.done".into(), label: "done".into() },
-                ConfigOption { value: "task.rejected".into(), label: "rejected".into() },
+                ConfigOption::new("task.done", "done"),
+                ConfigOption::new("task.rejected", "rejected"),
             ],
             default: Some("task.done".into()),
             ..ConfigField::new("events", "Events")

@@ -648,7 +648,15 @@ const REGISTRY: &[OpSpec] = &[
     // published, beside the manifest rather than in it, so a form reads it the way it reads a real one.
     // No published plugin declares a setting at all, so no published plugin has one translated either:
     // both halves are unreachable for the same reason and are written by the same door.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-setting", required: &["name", "key"], refs: &[], strings: &["name", "key", "label"], binds: false },
+    //
+    // `when_field` and `when_has` are the condition an author put on that setting — the
+    // setting whose answer decides whether this one is drawn, and the value looked for among its answers.
+    // The pair is two words rather than one nested block for the reason `ask`/`ask_label` is: a step's
+    // `with` is a flat mapping of words, and a condition written as a list of objects inside one is a
+    // shape no other op here takes. The platform half of a `when` has no word at all — a road conditioned
+    // on the OS walks differently on each runner, which is a scenario that proves something different
+    // depending on where it ran.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-setting", required: &["name", "key"], refs: &[], strings: &["name", "key", "label", "when_field", "when_has"], binds: false },
     // An installed plugin declaring a setting its author marked secret. Which settings a plugin takes
     // is the author's word and Amenbo never invents one, so the only honest way to reach this state is
     // for a plugin that declares one to be published — and no plugin in the official catalog does. The
@@ -657,6 +665,17 @@ const REGISTRY: &[OpSpec] = &[
     // is: the driver writes the declaration onto the installed manifest, the way `stale-manifest`
     // writes the disagreement it needs. Everything after it is Amenbo's own doing.
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-secret", required: &["name", "key"], refs: &[], strings: &["name", "key", "label"], binds: false },
+    // An installed plugin whose author wrote a part into its `config` list for Amenbo to *draw* — a
+    // caption, a way to the page that issues a value, a code to hold a phone up to.
+    // Written onto the installed manifest for the reason every declaration here is: which parts a plugin
+    // draws is its author's word, and no plugin in the official catalog writes one, so a road about a
+    // form that says something before anybody has filled anything in has no other way to be standing in
+    // front of one. `kind` is the part, `value` the string it carries — for a `list`, its lines joined by
+    // commas — and `label` the words on a `link`'s button.
+    //
+    // Where it lands in the list is where it is drawn, so a road walks the declarations in the order it
+    // wants them read: a `declare-part` between two `declare-setting`s is a part between two boxes.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-part", required: &["name", "kind", "value"], refs: &[], strings: &["name", "kind", "value", "label"], binds: false },
     // An installed plugin declaring a setting whose answers its author listed, and the one that stands
     // while nobody has answered. Same reason as `declare-secret`: which settings a plugin takes is the
     // author's word, and no plugin in the official catalog offers candidates — so the half of
@@ -665,7 +684,9 @@ const REGISTRY: &[OpSpec] = &[
     // by commas the way an answer is; `default` is a subset of them, and leaving it out is the other
     // shape a choice comes in. `translated` is the same word it is on `declare-setting`, and this is
     // where its `options` half has anything to translate.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-choice", required: &["name", "key", "options"], refs: &[], strings: &["name", "key", "label", "options", "default"], binds: false },
+    // `when_field` / `when_has` are the same pair `declare-setting` takes, and they land on the choice
+    // itself — a candidate's own condition is written where the candidate is, which is `candidate_when_*`.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-choice", required: &["name", "key", "options"], refs: &[], strings: &["name", "key", "label", "options", "default", "when_field", "when_has", "candidate", "candidate_when_field", "candidate_when_has"], binds: false },
     // An installed plugin declaring an operation a reader may press on its settings form. Same reason as
     // the three above it, one door further along: what that form offers is the author's word, and no
     // plugin in the official catalog declares a settings block at all — so the button, and the value a
@@ -675,7 +696,10 @@ const REGISTRY: &[OpSpec] = &[
     // moment it is pressed. `ask_secret` is the author saying that value is a credential, which is a word
     // on this declaration rather than an op of its own: the field written is the same field, and what the
     // flag changes is how the form draws the box in front of it.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-action", required: &["name", "cmd", "label"], refs: &[], strings: &["name", "cmd", "label", "ask", "ask_label"], binds: false },
+    // `when_field` / `when_has` are the same pair the settings take: someone who chose
+    // iCloud has no use for a button that raises a Cloudflare tunnel, and a form that hides that
+    // transport's fields while keeping its button leaves a step nobody can follow.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "declare-action", required: &["name", "cmd", "label"], refs: &[], strings: &["name", "cmd", "label", "ask", "ask_label", "when_field", "when_has"], binds: false },
     // And the other half of that same block: the check an author has raised on the values before a gate
     // opens on them. It is written onto what is installed for the reason its neighbours are — no plugin in
     // the official catalog declares a settings block — so a gate that turns on somebody else's judgement
@@ -726,7 +750,21 @@ const REGISTRY: &[OpSpec] = &[
     // settings block carrying both halves — a check before the gate and a button behind it — is walked
     // by standing in this one. `check-program` is what a road reaches for when the *verdict* is the
     // thing under test, since that is the half this cannot vary.
-    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "press-program", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    //
+    // `writes` and `writes_value` leave it writing one of its own settings back on every press, through
+    // `plugin config set` — the door a plugin's own value arrives by, and the only one there
+    // is for a field its author marked `readonly`. That is the whole of what a `setup` does: it works
+    // something out — an address it registered, a key it generated — and puts it where the form will draw
+    // it. Naming neither leaves the program as it was, writing nothing. The value is not read back from
+    // in here: what says the write landed is the field on the form afterwards, which is the reading the
+    // road is about, and the program says so on its own line only when the write was refused.
+    //
+    // `shows` and `shows_value` are the other half of what a run may answer with: the kind
+    // of part and the string it carries, with `shows_label` for the words on a `link`'s button. A press
+    // has no return value a form reads otherwise, so a road about a QR coming back from a `setup` has
+    // nothing to look at without this — and the picture is Amenbo's to draw, which is exactly the claim
+    // the road exists to hold.
+    OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "press-program", required: &["name"], refs: &[], strings: &["name", "writes", "writes_value", "shows", "shows_value", "shows_label"], binds: false },
     // An installed plugin whose program answers the check with a verdict. Whether the values are usable is
     // the author's judgement and Amenbo makes none of its own, so the only thing that can say no is a
     // program that says it — and no published plugin declares a check to answer at all. `ok` is that
@@ -880,6 +918,21 @@ const REGISTRY: &[OpSpec] = &[
     // with `plugin run`, which names the call itself and hands it whatever arguments were typed. What is
     // under test here is the door that does neither — the press chooses among the calls the manifest
     // declared, and the value it needs is asked at the press and kept nowhere afterwards.
+    // What the author asked to have drawn, read off the form. `kind` is which part, and
+    // `value` the string it carries where an eye can read one back — the words on a `link`'s button, the
+    // line a `text` is, the address beside a `copy`. A `qr` names none: what is on the screen is a
+    // picture, and the whole claim is that Amenbo drew it rather than the author handing one over.
+    //
+    // `above` names a setting this part has to stand over, and it is the claim the manifest half of the
+    // vocabulary exists for: where a part sits is what it is for. A way to the page that issues a token
+    // belongs over the box the token goes in, and a build that drew every part in a block of its own —
+    // before the fields, or after them — would pass a read of the words and lose the whole point of
+    // writing one into a manifest.
+    //
+    // A screen road alone, for the reason the press it stands beside is one: none of this reaches a
+    // terminal. `plugin run` hands a caller the plugin's stdout verbatim and draws nothing, and the
+    // author's words are the settings form's alone — they reach the screen and nowhere else.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "drawn", required: &["name", "kind"], refs: &[], strings: &["name", "kind", "value", "above"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "press", required: &["name", "label"], refs: &[], strings: &["name", "label"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "press-answer", required: &["name", "label", "value"], refs: &[], strings: &["name", "label", "value"], binds: false },
     // Asserts
@@ -1431,7 +1484,20 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone, and not by omission. A form is a screen; `plugin config` in a terminal
     // answers with values and never draws a label, and what it does print is English whatever the
     // reader's language says.
+    //
+    // `present: false` is the other half of the same reading, and the half a condition needs
+    // a setting whose condition does not hold is not drawn greyed or drawn empty, it is not on
+    // the form — so what proves the condition is that its words are nowhere on the screen. Absent, the
+    // step reads the way every one of these read before there was anything to hide.
     OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "asks", required: &["name", "key", "label"], refs: &[], strings: &["name", "key", "label", "candidate"], binds: false },
+    // Whether the settings form is offering one of the author's operations at all. It is a
+    // reading apart from `press-shut`, which is about a button that *is* drawn and cannot be pressed: a
+    // condition that does not hold takes the button off the form, and "drawn but refusing" and "not there"
+    // are the two states a reader has to be able to tell apart.
+    //
+    // A screen road alone, like the three presses below it: a terminal has `plugin run`, which takes any
+    // call the plugin answers whether or not a form would have drawn a button for it.
+    OpSpec { kind: Kind::Assert, domain: Domain::Plugin, op: "offers", required: &["name", "label", "present"], refs: &[], strings: &["name", "label"], binds: false },
     // The three readings a pressed operation leaves, each asked apart from the others because each is a
     // different promise. `press-said` is the line the run left on the form — the author's own words,
     // quoted whole the way a row's line is, since what a build could draw instead is Amenbo's own sentence
@@ -1747,6 +1813,10 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // already declared — the declaration is the world, and the answering is the road.
     (Domain::Plugin, "declare-setting"),
     (Domain::Plugin, "declare-choice"),
+    // And what it asks Amenbo to *draw* between them. Same reason twice over: no published
+    // plugin writes one, and what the road is about is a form that already says something before anybody
+    // has typed anything — so the writing is the world and the reading is the road.
+    (Domain::Plugin, "declare-part"),
     // And what it offers to *do* from that same form, with the program that answers a press. The
     // declaration is the world for the same reason a setting's is — no published plugin carries one — and
     // the program comes with it: an operation is code being run, so a road that pressed a button no

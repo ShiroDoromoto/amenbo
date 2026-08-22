@@ -154,7 +154,7 @@ impl Subscribers for EnabledSubscribers<'_> {
             let injection = match plugin_inject::resolve(
                 self.store,
                 &plugin.name,
-                &plugin.manifest.config,
+                &plugin.manifest.fields(),
                 layer,
             ) {
                 Ok(injection) => injection,
@@ -227,13 +227,13 @@ mod tests {
 
     /// Open a plugin's gate in one project — what an enable does.
     fn enable_in(store: &mut Store, plugin: &str, project: i64) {
-        plugin_trust::enable(store, plugin, Layer::Project(project), &[], |_| true, &Checked::NotDeclared)
+        plugin_trust::enable(store, plugin, Layer::Project(project), &[], &crate::plugin_when::Stage::default(), |_| true, &Checked::NotDeclared)
             .unwrap();
     }
 
     /// The device gate — where a `scope: machine` plugin's one switch is (`AMB-D-601`).
     fn enable_on_the_device(store: &mut Store, plugin: &str) {
-        plugin_trust::enable(store, plugin, Layer::Device, &[], |_| true, &Checked::NotDeclared)
+        plugin_trust::enable(store, plugin, Layer::Device, &[], &crate::plugin_when::Stage::default(), |_| true, &Checked::NotDeclared)
             .unwrap();
     }
 
@@ -272,7 +272,7 @@ mod tests {
             // `VERSION` rather than sitting on a literal that a bump would turn into a false failure.
             payload_v: crate::plugin_payload::VERSION,
             min_amenbo: None,
-            config,
+            config: crate::plugin_manifest::ConfigEntry::schema(config),
             events: events.iter().map(|e| EventSubscription::new(*e)).collect(),
             agent: None,
             settings: None,

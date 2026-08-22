@@ -533,8 +533,12 @@ pub struct Manifest {
     /// An empty schema does not serialize (`skip_serializing_if`), so a re-emitted manifest for a plugin
     /// with no settings is byte-for-byte what an author who omitted `config` wrote — the absent and the
     /// empty forms stay the same document.
+    ///
+    /// **Not every entry is a field** (`AMB-D-727`): the list may also carry parts for Amenbo to draw
+    /// where they stand — see [`ConfigEntry`]. What takes a value is [`Manifest::fields`], which is what
+    /// every layer that stores, injects or judges a value asks for.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub config: Vec<ConfigField>,
+    pub config: Vec<ConfigEntry>,
     /// **Where the author's own code is called from the settings face** (`AMB-D-664`) — see [`Settings`].
     /// Absent means nowhere, which is what every manifest written before this block says: the plugin is
     /// enabled on the presence check alone, and its form is fields and a save button.
@@ -565,6 +569,21 @@ pub struct Manifest {
 }
 
 impl Manifest {
+    /// **The settings this plugin takes**, in the order they are declared — [`config`](Manifest::config)
+    /// with the parts Amenbo merely draws left out (`AMB-D-727`).
+    ///
+    /// This is what every layer behind the screen wants: what is stored, what is injected, what
+    /// `required` is read off, what a check may name. A part has no key and no value, so it is not one
+    /// of them, and asking for it here would put a caption into the config table.
+    ///
+    /// It clones because the callers take a slice and there is nowhere to borrow one from — the entries
+    /// are interleaved. A schema is capped at
+    /// [`MAX_CONFIG_FIELDS`](crate::plugin_validate::MAX_CONFIG_FIELDS) small structs, so the copy is
+    /// paid once per run and is not worth an iterator in every signature that reads a field.
+    pub fn fields(&self) -> Vec<ConfigField> {
+        self.config.iter().filter_map(ConfigEntry::field).cloned().collect()
+    }
+
     /// **The distributable this manifest offers for one OS** (`AMB-D-381`) — the [`assets`](Manifest::assets)
     /// entry when the manifest is the per-OS kind, the single `url`/`checksum`/`signature` when it is the
     /// one-file kind. Every layer that fetches, verifies or compares an asset goes through here, so the
@@ -675,6 +694,142 @@ pub struct ConfigOption {
     pub value: String,
     /// The human-readable label shown beside this candidate. Display text only.
     pub label: String,
+    /// **When this candidate is offered at all** (`AMB-D-727`) — an iCloud transport has nothing to offer
+    /// a Windows machine, and a checkbox for it is one more thing to read past. Empty means always, which
+    /// is what every candidate written before the key existed says.
+    ///
+    /// The reading is [`crate::plugin_when`]'s, and it hides the checkbox rather than the answer: a
+    /// candidate already chosen stays chosen and still reaches the plugin.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub when: Vec<crate::plugin_when::When>,
+}
+
+impl ConfigOption {
+    /// A candidate offered unconditionally — the pair an author writes when they name a value and the
+    /// words beside its checkbox and nothing else. [`when`](ConfigOption::when) is what narrows it.
+    pub fn new(value: impl Into<String>, label: impl Into<String>) -> Self {
+        ConfigOption { value: value.into(), label: label.into(), when: Vec::new() }
+    }
+}
+
+/// **One entry in a plugin's `config` list** (`AMB-D-727`) — a setting somebody fills in, or a part
+/// Amenbo simply draws.
+///
+/// The two live in one list because *where* a part sits is what it is for: a way to the page that issues
+/// the token belongs above the box that token goes in, and a list of settings with a separate list of
+/// captions beside it cannot say that. So the order an author writes is the order a form is drawn in, and
+/// a part is written where it should appear.
+///
+/// **Why static parts at all, when a run can answer with the same ones.** A run answers when it is run,
+/// and the reader who most needs the way to that page has not run anything: `mail` declares no operation
+/// to press and its check fires at the enable, which is *after* the point where somebody is looking for
+/// where to get a password. Before this, both official plugins buried the address in `help` prose, where
+/// it is a string to retype rather than a button.
+///
+/// The parts are [`plugin_show::Part`](crate::plugin_show::Part) — the same seven a run answers with, held
+/// to the same rules, `qr` and `link` official-only in both places (`AMB-D-727`).
+///
+/// It reads untagged because a manifest is written by hand: a setting is an object with a `key` and a
+/// `label`, a part is an object named for what it draws, and nothing has to be spelled twice to tell
+/// them apart. What that costs is the error message on a malformed entry, which is why
+/// [`plugin_validate`](crate::plugin_validate) is where an author is told what is wrong with one.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ConfigEntry {
+    /// A setting the plugin takes — the whole of what `config` held before this.
+    Field(Box<ConfigField>),
+    /// Something for Amenbo to draw where it stands, filled in by nobody — see [`ConfigPart`].
+    Part(ConfigPart),
+}
+
+impl ConfigEntry {
+    /// The setting, when this entry is one. `None` is a part, which nobody fills in.
+    pub fn field(&self) -> Option<&ConfigField> {
+        match self {
+            ConfigEntry::Field(field) => Some(field),
+            ConfigEntry::Part(_) => None,
+        }
+    }
+
+    /// The part, when this entry is one. `None` is a setting.
+    pub fn part(&self) -> Option<&ConfigPart> {
+        match self {
+            ConfigEntry::Part(part) => Some(part),
+            ConfigEntry::Field(_) => None,
+        }
+    }
+
+    /// **When this entry is drawn at all** (`AMB-D-727`) — the conditions written on it, whichever kind
+    /// it is. Empty is an unconditional entry.
+    ///
+    /// One accessor because a form walks the list once, in the author's order, and asking a field and a
+    /// part in two different ways is how the two end up read by two different rules.
+    pub fn when(&self) -> &[crate::plugin_when::When] {
+        match self {
+            ConfigEntry::Field(field) => &field.when,
+            ConfigEntry::Part(part) => &part.when,
+        }
+    }
+}
+
+/// **A part written into a manifest's `config` list, and when it is drawn** (`AMB-D-727`).
+///
+/// The part itself is [`plugin_show::Part`](crate::plugin_show::Part), flattened, so what an author
+/// writes is the same object a run answers with — `{ text: "…" }`, `{ qr: "…" }` — and the condition sits
+/// beside it as one more key:
+///
+/// ```yaml
+/// config:
+///   - note: "Raise the Cloudflare Worker before filling this in"
+///     when:
+///       - { field: transport, has: cloudflare }
+/// ```
+///
+/// **Why a part needs one at all.** A field and its caption are a pair: a way to the page that issues a
+/// token stands above the box that token goes in, and hiding the box while the caption stays leaves a
+/// step nobody can follow — the same reason an operation carries one
+/// ([`SettingsAction::when`]). The reading is [`plugin_when`](crate::plugin_when)'s, the one every other
+/// condition is read by.
+///
+/// A run's answer carries no condition and needs none: it is drawn because something was pressed, and
+/// what the author knew when they wrote the manifest they know again when their own code runs.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ConfigPart {
+    /// What Amenbo draws — the part, written as the object it is.
+    #[serde(flatten)]
+    pub part: crate::plugin_show::Part,
+    /// **When it is drawn** (`AMB-D-727`). Empty means always, which is what every part written before
+    /// the key existed says.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub when: Vec<crate::plugin_when::When>,
+}
+
+impl ConfigPart {
+    /// A part drawn unconditionally — what an author writes when they name one and nothing else.
+    /// [`when`](ConfigPart::when) is what narrows it.
+    pub fn new(part: crate::plugin_show::Part) -> Self {
+        ConfigPart { part, when: Vec::new() }
+    }
+}
+
+impl From<crate::plugin_show::Part> for ConfigEntry {
+    fn from(part: crate::plugin_show::Part) -> Self {
+        ConfigEntry::Part(ConfigPart::new(part))
+    }
+}
+
+impl ConfigEntry {
+    /// A `config` list of settings alone, in order — what every manifest written before parts existed is
+    /// (`AMB-D-727`), and the shortest way for a caller holding fields to say so.
+    pub fn schema(fields: impl IntoIterator<Item = ConfigField>) -> Vec<ConfigEntry> {
+        fields.into_iter().map(ConfigEntry::from).collect()
+    }
+}
+
+impl From<ConfigField> for ConfigEntry {
+    fn from(field: ConfigField) -> Self {
+        ConfigEntry::Field(Box::new(field))
+    }
 }
 
 /// One field of a plugin's configuration schema (`AMB-D-356`, `AMB-D-415`). The author declares a flat list
@@ -772,6 +927,20 @@ pub struct ConfigField {
     /// manifest's default reaches every project that never answered.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default: Option<String>,
+    /// **When this field is drawn at all** (`AMB-D-727`) — the Cloudflare credentials belong on the form
+    /// of someone who chose Cloudflare, and nowhere else. Empty means always, which is what every field
+    /// written before the key existed says.
+    ///
+    /// **It hides the box, not the value** ([`crate::plugin_when`]). What the store holds is handed to the
+    /// plugin whether the field is on screen or not, so a value answered on a Mac is still there when the
+    /// store is opened on Windows.
+    ///
+    /// It does bind one thing besides the drawing: while the field is hidden, an empty
+    /// [`required`](ConfigField::required) does not shut the enable gate
+    /// ([`crate::plugin_trust::missing_required`]) — a gate held shut over a box nobody can see is one
+    /// nobody can open.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub when: Vec<crate::plugin_when::When>,
 }
 
 impl ConfigField {
@@ -790,6 +959,7 @@ impl ConfigField {
             field_type: FieldType::Text,
             options: Vec::new(),
             default: None,
+            when: Vec::new(),
         }
     }
 }
@@ -947,6 +1117,22 @@ pub struct SettingsAction {
     /// are. An empty list does not serialize, as everywhere else.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ask: Vec<AskField>,
+    /// **When this button is offered at all** (`AMB-D-727`) — someone who chose only iCloud has no use for
+    /// "raise a Cloudflare tunnel", and hiding that transport's fields while leaving its button turns the
+    /// form into a step nobody can follow. Empty means always.
+    ///
+    /// Read exactly as a field's is ([`crate::plugin_when`]): the same two kinds of clause, judged against
+    /// the same layer's answers.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub when: Vec<crate::plugin_when::When>,
+}
+
+impl SettingsAction {
+    /// An operation offered unconditionally, asking for nothing beyond the values already saved — the
+    /// button an author writes when they name a call and the words on it.
+    pub fn new(cmd: impl Into<String>, label: impl Into<String>) -> Self {
+        SettingsAction { cmd: cmd.into(), label: label.into(), ask: Vec::new(), when: Vec::new() }
+    }
 }
 
 /// **One input an operation asks for, for that run alone** (`AMB-D-664`).
@@ -1411,15 +1597,88 @@ mod tests {
             { "key": "events", "label": "通知するイベント" }
         ]);
         let m: Manifest = serde_json::from_value(v.clone()).unwrap();
-        assert_eq!(m.config.len(), 2);
-        assert_eq!(m.config[0].key, "webhook_url");
-        assert!(m.config[0].secret && m.config[0].required);
+        let fields = m.fields();
+        assert_eq!(fields.len(), 2);
+        assert_eq!(fields[0].key, "webhook_url");
+        assert!(fields[0].secret && fields[0].required);
         // The second field declares neither flag: both default to false.
-        assert_eq!(m.config[1].key, "events");
-        assert!(!m.config[1].secret, "an unmarked field is not a secret");
-        assert!(!m.config[1].required, "an unmarked field is not required");
+        assert_eq!(fields[1].key, "events");
+        assert!(!fields[1].secret, "an unmarked field is not a secret");
+        assert!(!fields[1].required, "an unmarked field is not required");
         // Re-serializing a schema built from the parsed form yields the same document.
         assert_eq!(serde_json::to_value(&m).unwrap()["config"], serde_json::to_value(&m.config).unwrap());
+    }
+
+    /// A part written between the fields is one of them in the list and none of them to fill in
+    /// (`AMB-D-727`), and it comes back out where it was written: what a part is *for* is where it sits.
+    #[test]
+    fn a_part_stands_between_the_fields_and_is_not_one_of_them() {
+        let mut v = full_json();
+        v["config"] = serde_json::json!([
+            { "link": { "url": "https://myaccount.google.com/apppasswords", "label": "Create one" } },
+            { "key": "smtp_password", "label": "Password", "secret": true },
+            { "note": "One per mailbox." },
+        ]);
+        let m: Manifest = serde_json::from_value(v.clone()).unwrap();
+        assert_eq!(m.config.len(), 3, "the list is what the author wrote");
+        assert_eq!(
+            m.fields().iter().map(|f| f.key.clone()).collect::<Vec<_>>(),
+            vec!["smtp_password"],
+            "a part has no key and nothing to store, so it is not a field"
+        );
+        assert_eq!(
+            m.config[2].part().map(|p| &p.part),
+            Some(&crate::plugin_show::Part::Note("One per mailbox.".into())),
+        );
+        // Out as it was written, in the order it was written. The field re-emits with `secret` and
+        // `required` spelled out, which is what every field has always done; the parts are verbatim.
+        let out = &serde_json::to_value(&m).unwrap()["config"];
+        assert_eq!(out[0], v["config"][0], "the way to the page stays above the box it is for");
+        assert_eq!(out[1]["key"], serde_json::json!("smtp_password"));
+        assert_eq!(out[2], v["config"][2]);
+    }
+
+    /// A part carries its condition beside itself, one more key on the object it already was
+    /// (`AMB-D-727`) — and a part without one is byte-for-byte what an author who never heard of the key
+    /// wrote.
+    #[test]
+    fn a_part_carries_when_beside_what_it_draws() {
+        let mut v = full_json();
+        v["config"] = serde_json::json!([
+            { "key": "transport", "label": "経路" },
+            { "note": "Worker を先に立ててください", "when": [{ "field": "transport", "has": "cloudflare" }] },
+            { "text": "どの経路でも読めます" },
+        ]);
+        let m: Manifest = serde_json::from_value(v.clone()).unwrap();
+        let conditioned = m.config[1].part().expect("a part");
+        assert_eq!(conditioned.part, crate::plugin_show::Part::Note("Worker を先に立ててください".into()));
+        assert_eq!(conditioned.when, vec![crate::plugin_when::When::field_has("transport", "cloudflare")]);
+        assert_eq!(m.config[1].when(), conditioned.when, "one accessor answers for either kind of entry");
+        assert!(m.config[2].when().is_empty(), "a part written without one is unconditional");
+        assert!(m.config[0].when().is_empty());
+
+        let out = &serde_json::to_value(&m).unwrap()["config"];
+        assert_eq!(out[1], v["config"][1], "the condition rides back out beside the part");
+        assert_eq!(out[2], v["config"][2], "an empty condition does not appear at all");
+    }
+
+    /// The one thing an untagged list has to get right: telling the two apart with nothing spelled twice.
+    /// A setting is an object with a `key` and a `label`; a part is an object named for what it draws.
+    #[test]
+    fn a_field_and_a_part_are_told_apart_by_what_they_are() {
+        let read = |one: serde_json::Value| {
+            let mut v = full_json();
+            v["config"] = serde_json::json!([one]);
+            serde_json::from_value::<Manifest>(v)
+        };
+        assert!(read(serde_json::json!({ "key": "k", "label": "L" })).unwrap().config[0]
+            .field()
+            .is_some());
+        assert!(read(serde_json::json!({ "text": "Read this" })).unwrap().config[0].part().is_some());
+        assert!(
+            read(serde_json::json!({ "key": "k" })).is_err(),
+            "a setting with no label is neither: a manifest that means one is not quietly read as the other"
+        );
     }
 
     /// A field that declares no kind is a text field, and re-emits without the key — the same
@@ -1429,10 +1688,11 @@ mod tests {
         let mut v = full_json();
         v["config"] = serde_json::json!([{ "key": "base", "label": "Base branch" }]);
         let m: Manifest = serde_json::from_value(v.clone()).unwrap();
-        assert_eq!(m.config[0], ConfigField::new("base", "Base branch"));
-        assert_eq!(m.config[0].field_type, FieldType::Text, "no `type` ⇒ a line the user types");
-        assert!(m.config[0].options.is_empty());
-        assert!(m.config[0].default.is_none());
+        let field = &m.fields()[0];
+        assert_eq!(*field, ConfigField::new("base", "Base branch"));
+        assert_eq!(field.field_type, FieldType::Text, "no `type` ⇒ a line the user types");
+        assert!(field.options.is_empty());
+        assert!(field.default.is_none());
         let out = &serde_json::to_value(&m).unwrap()["config"][0];
         for absent in ["type", "options", "default"] {
             assert_eq!(out.get(absent), None, "`{absent}` was not written, so it is not carried back out");
@@ -1455,7 +1715,7 @@ mod tests {
             "default": "task.done",
         }]);
         let m: Manifest = serde_json::from_value(v.clone()).unwrap();
-        let field = &m.config[0];
+        let field = &m.fields()[0];
         assert_eq!(field.field_type, FieldType::Multi);
         assert_eq!(field.options.len(), 2);
         assert_eq!(field.options[0].value, "task.done");
@@ -1484,11 +1744,12 @@ mod tests {
             { "key": "base", "label": "Base branch" },
         ]);
         let m: Manifest = serde_json::from_value(v.clone()).unwrap();
-        assert_eq!(m.config[0].help.as_deref(), Some("Incoming Webhooks で作る。\n\nチャンネルごとに1本。"));
-        assert_eq!(m.config[0].placeholder.as_deref(), Some("https://hooks.example.com/T000/B000"));
-        assert!(!m.config[0].readonly, "an unmarked field is the user's to fill in");
-        assert!(m.config[1].readonly);
-        assert!(m.config[1].help.is_none() && m.config[1].placeholder.is_none());
+        let fields = m.fields();
+        assert_eq!(fields[0].help.as_deref(), Some("Incoming Webhooks で作る。\n\nチャンネルごとに1本。"));
+        assert_eq!(fields[0].placeholder.as_deref(), Some("https://hooks.example.com/T000/B000"));
+        assert!(!fields[0].readonly, "an unmarked field is the user's to fill in");
+        assert!(fields[1].readonly);
+        assert!(fields[1].help.is_none() && fields[1].placeholder.is_none());
 
         let out = &serde_json::to_value(&m).unwrap()["config"];
         for declared in ["help", "placeholder"] {

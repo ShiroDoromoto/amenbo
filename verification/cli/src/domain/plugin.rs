@@ -402,6 +402,53 @@ impl Driver<'_> {
                 self.declare_field(name, key, with, serde_json::json!({ "secret": true }))?;
                 Ok(Outcome::action(format!("`{name}` now declares `{key}` as a secret setting")))
             }
+            // A part the author wrote into that same list for Amenbo to *draw* — a caption, a way to
+            // the page that issues a value, a code to hold a phone up to. Written onto the
+            // installed manifest for the reason every declaration here is: no published plugin writes
+            // one, so a road about a form that already says something has no other way to be standing in
+            // front of it. It is appended, so the order a road declares things in is the order they are
+            // drawn — a part between two settings is a part between two boxes.
+            "declare-part" => {
+                let name = req_str(with, "name")?;
+                let kind = req_str(with, "kind")?;
+                let value = req_str(with, "value")?;
+                let part = match kind {
+                    // A list carries lines rather than one string, and a comma is what a scenario has to
+                    // write them with — the same joining a choice's candidates take.
+                    "list" => serde_json::json!({ "list": value.split(',').collect::<Vec<_>>() }),
+                    // A link is a destination and the words on its button. Where the road named no words,
+                    // the address stands as them: a button with no label is not a shape Amenbo draws.
+                    "link" => {
+                        let label = with.get("label").and_then(|v| v.as_str()).unwrap_or(value);
+                        serde_json::json!({ "link": { "url": value, "label": label } })
+                    }
+                    "text" | "heading" | "note" | "copy" | "qr" => {
+                        serde_json::json!({ kind: value })
+                    }
+                    other => {
+                        return Err(format!(
+                            "`{other}` is not a part Amenbo draws — it is one of text, heading, note, list, copy, qr, link"
+                        ))
+                    }
+                };
+                let path = self.session.home.join("plugins").join(name).join("manifest.json");
+                let raw = std::fs::read_to_string(&path)
+                    .map_err(|e| format!("could not read {}: {e}", path.display()))?;
+                let mut manifest: serde_json::Value = serde_json::from_str(&raw)
+                    .map_err(|e| format!("{} is not the manifest it should be: {e}", path.display()))?;
+                // A plugin that takes no settings carries no list, which is a list to add to all the
+                // same — a plugin may draw and ask for nothing.
+                if manifest["config"].is_null() {
+                    manifest["config"] = serde_json::json!([]);
+                }
+                manifest["config"]
+                    .as_array_mut()
+                    .ok_or_else(|| format!("{}'s config schema is not a list", path.display()))?
+                    .push(part);
+                std::fs::write(&path, serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?)
+                    .map_err(|e| format!("could not write {}: {e}", path.display()))?;
+                Ok(Outcome::action(format!("`{name}` now draws a `{kind}` on its settings form")))
+            }
             // And for a setting whose answers the author listed, with the one that stands until someone
             // answers. Same reason again: candidates are the author's to declare and no published plugin
             // declares any, so the half of `plugin config` that keeps three answers apart — a choice
@@ -412,9 +459,27 @@ impl Driver<'_> {
                 let name = req_str(with, "name")?;
                 let key = req_str(with, "key")?;
                 let options = req_str(with, "options")?;
+                // A candidate carries its own condition, and only one of them can: a step
+                // names which by its stored value, so a choice offering one answer under a condition and
+                // the rest unconditionally is written in one line rather than several.
+                let conditioned = with.get("candidate").and_then(|v| v.as_str());
+                let candidate_when = when_from(with, "candidate_when")?;
+                if candidate_when.is_some() && conditioned.is_none() {
+                    return Err(
+                        "`candidate_when_field` needs `candidate` — a condition on a candidate has to say which one".to_string()
+                    );
+                }
                 let candidates: Vec<serde_json::Value> = options
                     .split(',')
-                    .map(|value| serde_json::json!({ "value": value, "label": value }))
+                    .map(|value| {
+                        let mut option = serde_json::json!({ "value": value, "label": value });
+                        if conditioned == Some(value) {
+                            if let Some(when) = &candidate_when {
+                                option["when"] = when.clone();
+                            }
+                        }
+                        option
+                    })
                     .collect();
                 let mut over = serde_json::json!({ "type": "multi", "options": candidates });
                 // A field that declares no default is the other shape a choice comes in — one where
@@ -443,6 +508,11 @@ impl Driver<'_> {
                 let mut manifest: serde_json::Value = serde_json::from_str(&raw)
                     .map_err(|e| format!("{} is not the manifest it should be: {e}", path.display()))?;
                 let mut action = serde_json::json!({ "cmd": cmd, "label": label });
+                // When the button is offered at all — the same pair a setting takes, on the
+                // control that acts on those settings.
+                if let Some(when) = when_from(with, "when")? {
+                    action["when"] = when;
+                }
                 // What the press asks for, where the step named one. An operation asking for nothing is
                 // the other shape it comes in — a button that runs the moment it is pressed — so the key
                 // is left off rather than written empty, which the form would draw as a box with no name.
@@ -563,20 +633,92 @@ impl Driver<'_> {
                 // about a button that runs outright wants. The verdict on stdout is what a check reads,
                 // and a press never looks at it. The script ends cleanly whatever it found: a non-zero
                 // exit is a failed operation, and the line would be drawn as one.
+                //
+                // Before that line, where the road asked for it, the press writes one of the plugin's own
+                // settings back — the same `plugin config set` an author writes, run from inside the run
+                // with the store and the window Amenbo handed it. It is nowhere near the store's files: a
+                // value laid down by hand would prove the form draws what is *there*, and what this road
+                // is about is the press putting it there. A refusal takes the operation's line, so the
+                // screen says what went wrong instead of leaving an empty field to explain.
+                let back = match (
+                    with.get("writes").and_then(|v| v.as_str()),
+                    with.get("writes_value").and_then(|v| v.as_str()),
+                ) {
+                    (None, _) => String::new(),
+                    (Some(key), value) => {
+                        let value = value.unwrap_or_default();
+                        let bin = self.bin.display().to_string();
+                        // All three go into the script single-quoted, which is the one thing they could
+                        // break. A quote is refused rather than escaped: the road would still run, and
+                        // what it then wrote would not be what it says it wrote.
+                        if [bin.as_str(), key, value].iter().any(|s| s.contains('\'')) {
+                            return Err(
+                                "a value written back from a press cannot carry a single quote — the program writes it from a script"
+                                    .to_string(),
+                            );
+                        }
+                        format!(
+                            "if ! said=$('{bin}' plugin config set '{name}' '{key}' '{value}' 2>&1); then\n\
+                             \x20 echo \"the write-back was refused: $said\" >&2\n\
+                             \x20 echo '{{\"v\":1,\"ok\":true}}'\n\
+                             \x20 exit 0\n\
+                             fi\n"
+                        )
+                    }
+                };
+                // And what the run asks to have *drawn*, where the road named a part. It
+                // rides in the same document the verdict does, which is the whole of what a press may
+                // answer with beyond its one line — and a `qr` is the string, never a picture: what
+                // reaches the screen is Amenbo's own drawing of it.
+                let mut answer = serde_json::json!({ "v": 1, "ok": true });
+                if let Some(kind) = with.get("shows").and_then(|v| v.as_str()) {
+                    let value = with.get("shows_value").and_then(|v| v.as_str()).unwrap_or_default();
+                    let label = with.get("shows_label").and_then(|v| v.as_str()).unwrap_or(value);
+                    answer["show"] = serde_json::json!([match kind {
+                        "list" => serde_json::json!({ "list": value.split(',').collect::<Vec<_>>() }),
+                        "link" => serde_json::json!({ "link": { "url": value, "label": label } }),
+                        "text" | "heading" | "note" | "copy" | "qr" => {
+                            serde_json::json!({ kind: value })
+                        }
+                        other => {
+                            return Err(format!(
+                                "`{other}` is not a part Amenbo draws — it is one of text, heading, note, list, copy, qr, link"
+                            ))
+                        }
+                    }]);
+                }
+                // The whole document goes into the script single-quoted, which is the one thing it could
+                // break. A quote is refused rather than escaped: the road would still run, and what it
+                // then drew would not be what it says it drew.
+                let answer = serde_json::to_string(&answer).map_err(|e| e.to_string())?;
+                if answer.contains('\'') {
+                    return Err(
+                        "a part a press answers with cannot carry a single quote — the program writes the answer from a script"
+                            .to_string(),
+                    );
+                }
                 std::fs::write(
                     &path,
-                    "#!/bin/sh\n\
-                     asked=$(env | sed -n 's/^AMENBO_ASK_[A-Za-z0-9_]*=//p' | head -1)\n\
-                     if [ -z \"$asked\" ]; then asked='nothing at all'; fi\n\
-                     echo \"the operation was handed $asked\" >&2\n\
-                     echo '{\"v\":1,\"ok\":true}'\n\
-                     exit 0\n",
+                    format!(
+                        "#!/bin/sh\n\
+                         {back}\
+                         asked=$(env | sed -n 's/^AMENBO_ASK_[A-Za-z0-9_]*=//p' | head -1)\n\
+                         if [ -z \"$asked\" ]; then asked='nothing at all'; fi\n\
+                         echo \"the operation was handed $asked\" >&2\n\
+                         echo '{answer}'\n\
+                         exit 0\n"
+                    ),
                 )
                 .map_err(|e| format!("could not write {}: {e}", path.display()))?;
                 make_runnable(&path)?;
-                Ok(Outcome::action(format!(
-                    "left `{name}` answering a press with one line naming what it was asked for, and a check with a yes"
-                )))
+                Ok(Outcome::action(match with.get("writes").and_then(|v| v.as_str()) {
+                    Some(key) => format!(
+                        "left `{name}` answering a press by writing `{key}` back, then one line naming what it was asked for, and a check with a yes"
+                    ),
+                    None => format!(
+                        "left `{name}` answering a press with one line naming what it was asked for, and a check with a yes"
+                    ),
+                }))
             }
             // Writing what a plugin says for itself onto the manifest beside its binary — the author's
             // `agent` block, arriving the only way it can while the scenario is not to depend on the
@@ -1540,6 +1682,11 @@ impl Driver<'_> {
         let mut field = serde_json::json!({
             "key": key, "label": label, "secret": false, "required": must_be_answered
         });
+        // What the author said about when this setting is drawn at all. Absent is the
+        // unconditional field every declaration here wrote before the key existed.
+        if let Some(when) = when_from(with, "when")? {
+            field["when"] = when;
+        }
         for (k, v) in over.as_object().into_iter().flatten() {
             field[k] = v.clone();
         }
@@ -1723,6 +1870,31 @@ fn hung_on<'a>(doc: &'a serde_json::Value, run: &str, id: &str) -> Option<Vec<&'
     )
 }
 
+/// The condition an author put on what a step is declaring, read off the pair of words
+/// a step writes it as — `<prefix>_field` naming the setting whose answer decides, `<prefix>_has` the
+/// value looked for among its answers.
+///
+/// `None` where the step named neither, which is the unconditional shape everything here had before
+/// there was anything to hide. Half a pair is a mistake worth a refusal rather than a silent
+/// unconditional: a step that meant to hide something and did not would read green over a form
+/// drawing everything.
+///
+/// The manifest takes a list, and one clause is what a step can say; a road needing two would be
+/// reading a rule engine rather than a form.
+fn when_from(with: &Args, prefix: &str) -> Result<Option<serde_json::Value>, String> {
+    let field = with.get(format!("{prefix}_field").as_str()).and_then(|v| v.as_str());
+    let has = with.get(format!("{prefix}_has").as_str()).and_then(|v| v.as_str());
+    match (field, has) {
+        (None, None) => Ok(None),
+        (Some(field), Some(has)) => {
+            Ok(Some(serde_json::json!([{ "field": field, "has": has }])))
+        }
+        _ => Err(format!(
+            "`{prefix}_field` and `{prefix}_has` are written together — one names the setting the condition reads, the other the answer it looks for"
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1748,6 +1920,33 @@ mod tests {
         };
         assert!(err.contains("holds") && err.contains("equals"), "got: {err}");
         assert!(refuse_screen_reading(&args("{ name: worktree, key: base, equals: main }")).is_ok());
+    }
+
+    /// The condition a step writes as a pair of words, and the shape the manifest takes it in — one
+    /// clause naming a setting and the answer looked for among its own.
+    #[test]
+    fn a_condition_is_read_off_the_pair_a_step_writes_it_as() {
+        assert_eq!(when_from(&args("{ name: viewer, key: worker_url }"), "when"), Ok(None));
+        assert_eq!(
+            when_from(&args("{ when_field: transport, when_has: cloudflare }"), "when"),
+            Ok(Some(serde_json::json!([{ "field": "transport", "has": "cloudflare" }])))
+        );
+        // The prefix is what lets one step carry both its own condition and its candidate's.
+        assert_eq!(
+            when_from(&args("{ candidate_when_field: mode, candidate_when_has: advanced }"), "candidate_when"),
+            Ok(Some(serde_json::json!([{ "field": "mode", "has": "advanced" }])))
+        );
+    }
+
+    /// Half a pair is refused rather than read as no condition at all: a step that meant to hide
+    /// something and quietly did not would read green over a form drawing everything.
+    #[test]
+    fn half_a_condition_is_refused() {
+        let Err(err) = when_from(&args("{ when_field: transport }"), "when") else {
+            panic!("a condition naming no answer decides nothing");
+        };
+        assert!(err.contains("when_field") && err.contains("when_has"), "got: {err}");
+        assert!(when_from(&args("{ when_has: cloudflare }"), "when").is_err());
     }
 
     fn served(docs: &[(String, String)], path: &str) -> serde_json::Value {

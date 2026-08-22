@@ -66,6 +66,7 @@ pub mod plugin_provenance;
 pub mod plugin_show;
 pub mod plugin_subscribe;
 pub mod plugin_trust;
+pub mod plugin_when;
 pub mod plugin_uninstall;
 pub mod plugin_update;
 pub mod plugin_validate;

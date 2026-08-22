@@ -669,7 +669,11 @@ labelI18n?: string,
  * What this press asks for and nothing keeps (`AMB-D-664`). Empty is the ordinary operation, which
  * runs on the values already saved.
  */
-ask: Array<PluginAskDto>, };
+ask: Array<PluginAskDto>, 
+/**
+ * When this button is offered (`AMB-D-727`). Empty is an operation with no condition on it.
+ */
+when: Array<PluginWhenDto>, };
 
 /**
  * What pressing one of a plugin's declared operations did (`AMB-D-664`) — the whole of what the form
@@ -911,7 +915,12 @@ export type PluginConfigOptionDto = { value: string, label: string,
  * the base label, never over it (`AMB-D-623`). The `value` has no counterpart here: it is what
  * travels to the plugin, so it is the same in every language.
  */
-labelI18n?: string, };
+labelI18n?: string, 
+/**
+ * When this candidate is offered (`AMB-D-727`). Empty is a candidate with no condition on it, which
+ * is every one written before the key existed.
+ */
+when: Array<PluginWhenDto>, };
 
 /**
  * What the catalog's **detail document** says about one plugin — the half of its entry that is fetched
@@ -929,9 +938,10 @@ export type PluginDetailDto = {
  */
 events: Array<string>, 
 /**
- * The settings it declares, in the author's order.
+ * The form it declares, in the author's order — the settings it will want filled in, and the parts
+ * drawn between them (`AMB-D-727`).
  */
-config: Array<PluginWantedSettingDto>, 
+config: Array<PluginFormEntryDto>, 
 /**
  * **What the plugin is, in its author's own words** (`AMB-D-638`) — the Markdown the detail draws
  * as its body. Absent is a plugin whose author wrote none, and the face falls back to the
@@ -1043,6 +1053,33 @@ featured: boolean,
 addedAt?: string, };
 
 /**
+ * **One entry on a plugin's settings form** (`AMB-D-727`) — a setting somebody fills in, or a part
+ * Amenbo draws where it stands.
+ *
+ * The list is the author's declared order, because where a part sits is what it is for: the way to the
+ * page that issues a token belongs above the box the token goes in, and two lists side by side cannot
+ * say that.
+ *
+ * A third party's `qr` and `link` are gone before this is built — core drops them (`AMB-D-727`), so a
+ * face draws whatever reaches it.
+ */
+export type PluginFormEntryDto = { "kind": "field", 
+/**
+ * The setting.
+ */
+field: PluginWantedSettingDto, } | { "kind": "part", 
+/**
+ * What is left of the author's condition on it (`AMB-D-727`) — the platform's half already
+ * settled, so what remains reads another setting's answer and is re-read as the form changes,
+ * exactly as a setting's own is. Empty is a part drawn unconditionally.
+ */
+when: Array<PluginWhenDto>, 
+/**
+ * What to draw.
+ */
+part: PluginShowPartDto, };
+
+/**
  * Where a gate ended up, and what closing it threw away (`AMB-D-399`) — what [`plugin_set_enabled`](crate::commands::plugin_set_enabled)
  * answers with.
  *
@@ -1111,11 +1148,12 @@ compatible: boolean,
  */
 incompatibleReason?: string, 
 /**
- * The settings the author declared, in that order — the schema alone. Empty for a plugin that
- * declares none, which is the form's own answer to whether there is anything to configure. What is
- * held for a key is one project's (`AMB-D-434`) and comes from [`plugin_config_read`](crate::commands::plugin_config_read).
+ * The form the author declared, in that order — its settings, and the parts drawn between them
+ * (`AMB-D-727`). Empty for a plugin that declares nothing, which is the form's own answer to whether
+ * there is anything to configure. What is held for a key is one project's (`AMB-D-434`) and comes
+ * from [`plugin_config_read`](crate::commands::plugin_config_read).
  */
-config: Array<PluginWantedSettingDto>, 
+config: Array<PluginFormEntryDto>, 
 /**
  * The operations the author declared, in that order (`AMB-D-664`) — the buttons the settings form
  * draws beside those fields. Empty is a plugin whose form is fields and a save, as every form was.
@@ -1399,7 +1437,36 @@ options: Array<PluginConfigOptionDto>,
  * The value in force while nobody has answered (`AMB-D-415`) — what a run receives, and what the
  * form ticks and captions as the default. Absent means an unanswered field is simply unanswered.
  */
-defaultValue?: string, };
+defaultValue?: string, 
+/**
+ * When this setting is drawn (`AMB-D-727`). Empty is a setting with no condition on it, which is
+ * every one written before the key existed — and also one whose only condition was the platform,
+ * already settled and held.
+ */
+when: Array<PluginWhenDto>, };
+
+/**
+ * **One condition still to be judged, on the answers the form is holding** (`AMB-D-727`).
+ *
+ * The platform's half of a `when` is already settled by the time this arrives: what this build's OS hides
+ * is not in the list at all ([`amenbo_core::plugin_when::after_platform`]), and no face here ever learns
+ * an OS name. What is left reads another setting, and it is left to the form because the form is where
+ * the answers are while it is open — someone ticking Cloudflare expects its fields the same moment, and
+ * the store has not been told yet.
+ *
+ * Read as an `and`: everything listed has to hold. A setting answers with `has` when `has` is among its
+ * values, which for a `multi` setting is one of the comma-joined answers (`AMB-D-415`) and for a text one
+ * is the whole of it.
+ */
+export type PluginWhenDto = { 
+/**
+ * The key of the setting whose answer this reads.
+ */
+field: string, 
+/**
+ * The value looked for among that setting's answers.
+ */
+has: string, };
 
 /**
  * What [`repair_pointers`](crate::commands::repair_pointers) returns: how many folders were fixed, and how many were left waiting on

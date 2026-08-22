@@ -66,6 +66,15 @@ SEED_GUI_DEV_DATA := command -v devtool >/dev/null 2>&1 && devtool devgui seed $
 endif
 GUI_APP_DEV := $(BUNDLE_DIR)/$(GUI_DEV_NAME).app
 
+# The three names tauri itself has to be told, as one config object. Written once, here, because
+# more than one build reads them: the mac bundle below, the Linux AppImage (gui-dev-linux), and the
+# Windows installer the preview workflow builds on a runner that has no make. That last one is why
+# `gui-dev-names` prints this string verbatim — a second place composing it is a second place the
+# names can drift, and a theme whose bundle identifier differs by OS is one that stops being one
+# theme. The fourth name (the app-data, GUI_DEV_DATA) is not tauri's: it reaches the build as
+# AMENBO_APP_NAME in the environment.
+GUI_DEV_CONFIG := {"productName":"$(GUI_DEV_NAME)","identifier":"$(GUI_DEV_ID)","mainBinaryName":"$(GUI_DEV_BIN)"}
+
 # The hourly tick's launchd agent, which every mac bundle carries and registers from inside itself.
 # macOS keys its record of a background item by the plist's label, and one user has one record per
 # label — so the label carries the channel exactly as the Linux units and the Windows task do
@@ -131,6 +140,10 @@ LINUX_GUI_IMAGE   := amenbo-linux-gui:latest
 LINUX_GUI_ARCH    ?= amd64
 LINUX_IMG_ARCH    := $(if $(filter arm64,$(LINUX_GUI_ARCH)),aarch64,x86_64)
 GUI_APPIMAGE_DIST := $(DIST_DIR)/amenbo-app-linux-$(LINUX_IMG_ARCH).AppImage
+# The dev channel's AppImage (gui-dev-linux) is named for the executable the theme carries, so two
+# themes' previews sit in one folder without either one being "the" AppImage. Unset AMB-T-ID makes
+# it the shared dev app's, which is the same rule the mac bundle follows.
+GUI_DEV_APPIMAGE  := $(DIST_DIR)/$(GUI_DEV_BIN)-linux-$(LINUX_IMG_ARCH).AppImage
 # The GUI e2e (verify-gui-linux) must run the HOST's arch: an emulated (qemu) amd64 build
 # aborts in the Tauri CLI, and an emulated GUI is not what we want to watch anyway.
 HOST_GUI_ARCH     := $(if $(filter arm64,$(shell uname -m)),arm64,amd64)
@@ -158,7 +171,7 @@ LINUX_CLI_IMAGE   := amenbo-linux-cli:$(LINUX_CLI_ARCH)
 # so it does not appear here = shell-gate's actionlint sees that.
 SHELL_SOURCES := $(shell git ls-files '*.sh' '.githooks/*')
 
-.PHONY: help install install-dev gui gui-dev install-gui install-gui-dev dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate product-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate ci-aggregate-gate workflow-run-gate brand sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux verify-existing-store release codesign-cert devtool
+.PHONY: help install install-dev gui gui-dev gui-dev-names gui-dev-linux install-gui install-gui-dev dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate product-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate ci-aggregate-gate workflow-run-gate brand sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux verify-existing-store release codesign-cert devtool
 
 help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
@@ -201,6 +214,8 @@ help:
 	@echo "make install-gui     - [retired] the prod GUI ships in the unified installer; release with make release"
 	@echo "make install-gui-dev - build the dev GUI and put it in $(APPS_DIR)/$(GUI_DEV_NAME).app"
 	@echo "                       AMB-T-ID=<id> builds that task's own throwaway instance (app-data work.amenbo.amenbo-dev-<id>, seeded from the shared dev store) instead of the shared dev app; devtool devgui rm <id> deletes it"
+	@echo "make gui-dev-linux - build the dev GUI's Linux AppImage in Docker into dist/ (the preview workflow's Linux leg; needs Docker)"
+	@echo "make gui-dev-names - print the names AMB-T-ID splits a dev build by, as key=value (what the preview workflow reads instead of spelling them again)"
 
 ## Pay the freeze debt an appended migration step creates. The chain defines the format version, so a
 ## step bumps it, and the freeze check goes red until that version's shape is written down. The text can
@@ -804,7 +819,7 @@ gui:
 ## with AMB-T-ID unset the names merely restate what tauri.dev.conf.json already says.
 gui-dev:
 	@scripts/write-tick-plist.sh $(TICK_LABEL_DEV)
-	cd app && AMENBO_APP_NAME=$(GUI_DEV_DATA) npm run tauri build -- --config src-tauri/tauri.dev.conf.json --config '{"productName":"$(GUI_DEV_NAME)","identifier":"$(GUI_DEV_ID)","mainBinaryName":"$(GUI_DEV_BIN)"}' $(call tick-config,$(TICK_LABEL_DEV))
+	cd app && AMENBO_APP_NAME=$(GUI_DEV_DATA) npm run tauri build -- --config src-tauri/tauri.dev.conf.json --config '$(GUI_DEV_CONFIG)' $(call tick-config,$(TICK_LABEL_DEV))
 	@# Tauri emits an ad-hoc (linker-signed) .app whose CDHash changes every rebuild,
 	@# re-prompting the keychain each cycle. Sign with the stable local identity so
 	@# one "Always Allow" survives future rebuilds (matches install/install-dev).
@@ -837,6 +852,44 @@ install-gui-dev: gui-dev
 	@# one bundle for the whole machine, so a parallel session can land its own build over this one.
 	@scripts/verify-gui-front.sh "$(APPS_DIR)/$(GUI_DEV_NAME).app"
 	@echo "→ updated $(APPS_DIR)/$(GUI_DEV_NAME).app (dev; app-data: work.amenbo.$(GUI_DEV_DATA))"
+
+## The names a theme's dev build is split by, as `key=value` lines — the one way anything outside
+## make reads them. The preview workflow's Windows leg builds the installer without make (the
+## runner has none), so without this it would have to spell the four names a second time, and a
+## theme whose identifier or app-data differs by OS is no longer one theme on a member's machine.
+## Printed rather than exported because the reader is a workflow step writing $GITHUB_OUTPUT.
+## The digits-only check on AMB-T-ID above runs first, so an id that is not a task number stops
+## here — which is what makes this the whole preview run's front gate.
+gui-dev-names:
+	@echo 'app_name=$(GUI_DEV_DATA)'
+	@echo 'product_name=$(GUI_DEV_NAME)'
+	@echo 'identifier=$(GUI_DEV_ID)'
+	@echo 'bin_name=$(GUI_DEV_BIN)'
+	@echo 'config=$(GUI_DEV_CONFIG)'
+
+## The dev channel's Linux GUI bundle: dist-gui-linux's recipe, carrying the dev names. It goes
+## through the same Ubuntu 22.04 container for the same reason the shipped one does — that base is
+## the glibc floor of the whole Linux distribution, and a preview built on a newer machine refuses
+## to start on the distributions the released AppImage still runs on, which would read to the member
+## trying it as "the theme is broken".
+## No signing key is passed and none is wanted: an unstamped preview never self-updates
+## (update_check::withheld_from_build), so an updater artifact would be one nothing consumes.
+## Needs Docker; the arch must be native (emulation only makes it slow).
+gui-dev-linux:
+	@command -v docker >/dev/null 2>&1 || { echo "✗ docker is required (the Linux GUI bundle is built with Docker)"; exit 1; }
+	@mkdir -p $(DIST_DIR)
+	docker build --platform linux/$(LINUX_GUI_ARCH) -f scripts/docker/Dockerfile.linux-gui -t $(LINUX_GUI_IMAGE) scripts/docker/
+	@# The same named tool cache dist-gui-linux uses (linuxdeploy/AppRun/appimagetool are the
+	@# rate-limited downloads, and they do not care which channel asked for them).
+	docker run --rm --platform linux/$(LINUX_GUI_ARCH) \
+	  -e VERSION="$(VERSION)" -e TARGET_ARCH="$(LINUX_GUI_ARCH)" -e XDG_CACHE_HOME=/cache \
+	  -e DEV_APP_NAME="$(GUI_DEV_DATA)" -e DEV_CONFIG='$(GUI_DEV_CONFIG)' \
+	  -e OUT_IMG_NAME="$(notdir $(GUI_DEV_APPIMAGE))" \
+	  -v "amenbo-tauri-cache-$(LINUX_GUI_ARCH):/cache" \
+	  -v "$(CURDIR):/src:ro" \
+	  -v "$(CURDIR)/$(DIST_DIR):/out" \
+	  $(LINUX_GUI_IMAGE) bash /src/scripts/docker/build-linux-gui.sh
+	@echo "→ $(GUI_DEV_APPIMAGE) (dev; app-data: work.amenbo.$(GUI_DEV_DATA))"
 
 ## The parallel-development helper (Go, one static binary): it gives a task the throwaway dev GUI it
 ## is verified in so several implementation sessions run without stepping on each other, and it

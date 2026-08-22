@@ -267,7 +267,7 @@ fn assemble(
         Call::Declared { cmd, supplied } => declared_call(&plugin.manifest, name, cmd, supplied)?,
     };
 
-    let injection = plugin_inject::resolve(store, name, &plugin.manifest.config, layer)?;
+    let injection = plugin_inject::resolve(store, name, &plugin.manifest.fields(), layer)?;
     let mut invocation =
         PluginInvocation::new(plugin.program).stdin_json(command_stdin(injection.text));
     for arg in args {

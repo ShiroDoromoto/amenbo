@@ -1,0 +1,211 @@
+# A settings form used to draw every field its author listed, top to bottom, always — so a reader picking
+# one transport still scrolled past the other's credentials, and a checkbox that could never apply to them
+# sat among the ones that could. What an author can say now is *when* a setting, one of its candidates or
+# one of the operations beside them is drawn at all, and what this walks is a reader meeting that.
+#
+# The road is one form and three answers deep, because that is what makes the promise worth anything: a
+# candidate appears once the setting above it says so, the field that candidate gates appears once it is
+# chosen, and the button that acts on that field appears with it. A form that revealed the field and kept
+# the button back would leave a reader a value to fill in and no way to use it; one that revealed the
+# button and kept the field back would leave them a step they cannot take.
+#
+# **A screen road alone, and not by omission.** There is no form in a terminal: `plugin config get` names
+# a key and answers with a value, and a key it would not have drawn answers just the same — deliberately,
+# since what a condition hides is the box and never the value. So the only place this can be
+# wrong is the screen, and the only way to see it is to look at one.
+#
+# The platform's half of a condition is not walked here on purpose. It is settled in core, before any face
+# sees it, and a road conditioned on the OS would prove one thing on a mac runner and another on a Linux
+# one — a scenario whose verdict depends on where it ran is not a verdict.
+#
+# The declarations are written onto the installed manifest by the driver, because no plugin the official
+# catalog serves carries a condition (see those ops' own notes). The world is stood up before the app is;
+# what is left to the operator is where to start, which is this project's own settings.
+id: see-only-the-settings-that-apply
+title: A settings form draws only the settings, candidates and operations its author's conditions let through
+description: >
+  Open the settings of a plugin whose author put conditions on half of what it declares. Read the form as
+  it stands: the candidate that needs an answer above it is not offered, the field that candidate gates is
+  not asked for, and the operation acting on that field is not there to press. Answer the setting above,
+  and the candidate appears. Choose it, and the field and its operation appear together.
+given:
+  # The project the form is opened from. A road on screen cannot raise one on its way past.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: worktree
+
+  # The setting nothing hangs on, which is what the reader answers first — and what the form has to be
+  # drawing all along, or a road that found the rest missing would have found an empty form.
+  - type: action
+    domain: plugin
+    op: declare-choice
+    with:
+      name: worktree
+      key: mode
+      label: Reporting mode
+      options: simple,advanced
+
+  # The choice whose second candidate is the author's to withhold. Only that one carries a condition: the
+  # first is offered from the start, so what the reading tells apart is one candidate appearing beside
+  # another that never went anywhere.
+  - type: action
+    domain: plugin
+    op: declare-choice
+    with:
+      name: worktree
+      key: transport
+      label: Transport
+      options: icloud,cloudflare
+      candidate: cloudflare
+      candidate_when_field: mode
+      candidate_when_has: advanced
+
+  # The credential that belongs to that transport and to no other. This is the field the whole thing is
+  # for: it is the one a reader who chose the other transport should never be asked for.
+  - type: action
+    domain: plugin
+    op: declare-setting
+    with:
+      name: worktree
+      key: worker_url
+      label: Worker URL
+      when_field: transport
+      when_has: cloudflare
+
+  # And the operation that acts on it, under the same condition. The two are declared apart and read apart,
+  # because a build that let one through and held the other back is exactly the half-drawn form this road
+  # exists to catch.
+  - type: action
+    domain: plugin
+    op: declare-action
+    with:
+      name: worktree
+      cmd: config tunnel
+      label: Raise the tunnel
+      when_field: transport
+      when_has: cloudflare
+
+steps_gui:
+  # The face the form is opened on. A plugin is reached from the project's own settings as well as from its
+  # own screen, and this is the one where a reader is filling a plugin in rather than surveying the machine.
+  - type: action
+    domain: project
+    op: open-settings
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: plugin
+    op: draw-crossing
+    with:
+      name: worktree
+      project: Greenhouse
+
+  - type: action
+    domain: plugin
+    op: open-config-in-row
+    with:
+      name: worktree
+      project: Greenhouse
+
+  # The form is up, and the unconditional setting is on it. This reading comes first because every absence
+  # below it means nothing on a form that never drew: a blank panel would pass all three of them.
+  - type: assert
+    domain: plugin
+    op: asks
+    with:
+      name: worktree
+      key: mode
+      label: Reporting mode
+
+  # The three absences, read apart. Each is a different promise — a candidate withheld, a field not asked
+  # for, an operation not offered — and a build gets them wrong one at a time.
+  - type: assert
+    domain: plugin
+    op: asks
+    with:
+      name: worktree
+      key: transport
+      candidate: cloudflare
+      label: cloudflare
+      present: false
+
+  - type: assert
+    domain: plugin
+    op: asks
+    with:
+      name: worktree
+      key: worker_url
+      label: Worker URL
+      present: false
+
+  - type: assert
+    domain: plugin
+    op: offers
+    with:
+      name: worktree
+      label: Raise the tunnel
+      present: false
+
+  # The first answer. What it unlocks is one candidate and nothing else — the field below it hangs on which
+  # transport is chosen, not on the mode, and a form that revealed everything at the first answer would be
+  # reading the conditions as one switch.
+  - type: action
+    domain: plugin
+    op: config-choose
+    with:
+      name: worktree
+      key: mode
+      options: advanced
+
+  - type: assert
+    domain: plugin
+    op: asks
+    with:
+      name: worktree
+      key: transport
+      candidate: cloudflare
+      label: cloudflare
+
+  - type: assert
+    domain: plugin
+    op: asks
+    with:
+      name: worktree
+      key: worker_url
+      label: Worker URL
+      present: false
+
+  # And the answer the field and its button both hang on. They are declared apart and asserted apart, and
+  # they arrive together — which is the whole of what "the form does not leave a step half-drawn" means.
+  - type: action
+    domain: plugin
+    op: config-choose
+    with:
+      name: worktree
+      key: transport
+      options: cloudflare
+
+  - type: assert
+    domain: plugin
+    op: asks
+    with:
+      name: worktree
+      key: worker_url
+      label: Worker URL
+
+  - type: assert
+    domain: plugin
+    op: offers
+    with:
+      name: worktree
+      label: Raise the tunnel
+      present: true

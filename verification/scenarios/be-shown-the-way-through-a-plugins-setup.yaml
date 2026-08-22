@@ -1,0 +1,261 @@
+# What a plugin's author can put on its settings form besides boxes — and, in every case, who drew it.
+#
+# The form used to have two things on it: fields to fill in, and one line an operation left behind. That
+# is not enough to get anybody through a setup. A token has to be fetched from a page somebody has to be
+# sent to, an address has to be copied without being retyped, and a code has to be looked at with a phone
+# — and `viewer` was reduced to writing a QR to a file and asking the operating system to open it, which
+# fails quietly on a machine with nothing registered for the type and leaves a reader looking at a form
+# where nothing happened.
+#
+# So an author declares and Amenbo draws. What crosses the seam is strings: a `qr` is the text to encode
+# and not a picture, a `link` is a destination and the words on a button. That line is what keeps a plugin
+# a child process instead of something shipping a webview per platform, and it is what lets
+# somebody typing a credential still tell Amenbo's window from a stranger's writing inside it. This road
+# is that claim, read on the two places parts arrive from: the manifest, which draws before anything has
+# run, and a press, which draws under the button that raised it.
+#
+# Like every line that installs a plugin, the premise below goes to the catalog over the network on
+# purpose (see `put-a-plugin-on-the-machine.yaml`): what a form draws for a plugin is a face of a plugin
+# that is really there. What it draws is the author's word — no plugin in the official catalog writes a
+# part — so the declarations are written onto what is installed, and the program that answers the press
+# is stood in beside them (see those ops' own notes). Everything from the first step on is Amenbo's own.
+#
+# The other half of the rule — that `qr` and `link` carry a destination, so a third party's are dropped
+# and the rest of what they wrote still draws — is not on this road and cannot be. A stranger's plugin is
+# one installed from a shelf anyone may publish into, and nothing on such a shelf installs: the rows carry
+# no asset, and the signature an install is judged on is the layer no fixture stands in for. That rule is
+# read where it can be — at the author's own door, where `check-a-manifest-before-proposing-it.yaml` walks
+# the refusal it earns.
+#
+# This goal has no terminal road. Nothing here reaches one: `plugin run` hands a caller the plugin's
+# stdout verbatim and draws nothing at all, and the author's words are the settings form's alone.
+id: be-shown-the-way-through-a-plugins-setup
+title: A plugin's own account of its setup is drawn on the settings form — its captions and its way to the page that issues a value before anything is filled in, and the code a press comes back with
+description: >
+  Install the official `worktree` plugin, write into it the account an author would give of their own
+  setup — a heading, a line of explanation, a button to the page a value is fetched from, a caution, the
+  steps in order, an address to copy — and open its settings. All of it is standing there before anything
+  has been typed, which is the whole reason a manifest may carry it: the reader who most needs the way to
+  that page has run nothing yet. Then the other source: turn the plugin on, press the operation its author
+  declared, and read back the line it wrote and the QR it asked for — squares Amenbo drew from a string,
+  which is what the plugin handed over instead of an image.
+given:
+  # The project the road walks its crossing on. A crossing is a plugin and a project, and the project is
+  # not one a road on screen can raise on its way past.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+
+  - type: action
+    domain: plugin
+    op: install
+    with:
+      name: worktree
+
+  # The account itself, written in the order it is to be read. Where a part sits is what it is for, so
+  # this is not a set of captions filed beside the form — the button to the page a value comes from
+  # stands above the box that value goes in, and the steps stand under it.
+  - type: action
+    domain: plugin
+    op: declare-part
+    with:
+      name: worktree
+      kind: heading
+      value: SCENARIO — before you start
+
+  - type: action
+    domain: plugin
+    op: declare-part
+    with:
+      name: worktree
+      kind: text
+      value: SCENARIO — the service makes this value, not Amenbo.
+
+  # The part that is the point of the whole vocabulary for a plugin with nothing to press: a way to the
+  # page. Before this, an author had the supporting text under a box and nothing else, so the address
+  # sat in prose as a string to retype.
+  - type: action
+    domain: plugin
+    op: declare-part
+    with:
+      name: worktree
+      kind: link
+      value: https://example.test/scenario/tokens
+      label: SCENARIO — get a token
+
+  - type: action
+    domain: plugin
+    op: declare-setting
+    with:
+      name: worktree
+      key: api_token
+      label: SCENARIO — API token
+
+  - type: action
+    domain: plugin
+    op: declare-part
+    with:
+      name: worktree
+      kind: note
+      value: SCENARIO — a token is one workspace.
+
+  - type: action
+    domain: plugin
+    op: declare-part
+    with:
+      name: worktree
+      kind: list
+      value: SCENARIO — open the console,SCENARIO — create a token,SCENARIO — paste it above
+
+  # What a third party has instead of a destination, and what an official plugin has beside one: the
+  # string in front of a reader who can see where it goes, with a button so nobody types it.
+  - type: action
+    domain: plugin
+    op: declare-part
+    with:
+      name: worktree
+      kind: copy
+      value: https://example.test/scenario/console
+
+  # And the other source. An operation, and a program behind it that answers with a code to look at —
+  # the run `viewer` was writing a file for.
+  - type: action
+    domain: plugin
+    op: declare-action
+    with:
+      name: worktree
+      cmd: config setup
+      label: SCENARIO — set the device up
+
+  - type: action
+    domain: plugin
+    op: press-program
+    with:
+      name: worktree
+      shows: qr
+      shows_value: https://example.test/scenario/pair
+
+# What the road wants in front of it is the device the premise above describes: the project named below
+# on this machine, the official `worktree` plugin installed in the store the build under test opens, its
+# manifest carrying the parts and the setting above in that order, the operation below declared, a
+# program behind it answering a press with a QR of the address named there, and its gate shut everywhere.
+# Stand that with `devtool devgui cli` and the same declarations the premise makes. Where the run starts
+# does not matter: the first step is the arrival. Every step after it moves the screen, so carry each move
+# out when the run hands that step over.
+#
+# Most of these close on a reading, since the words are the author's — the one thing on those shots that
+# neither Amenbo nor the interface wrote. The QR closes on an eye: what is on the screen is a picture, and
+# which side of the seam drew it is not something a reading of words can settle.
+steps_gui:
+  # The face this is met on: the plugin is one row among the project's own settings, and the settings kept
+  # at that crossing open inside it.
+  - type: action
+    domain: project
+    op: open-settings
+    with:
+      project: Greenhouse
+
+  - type: action
+    domain: plugin
+    op: draw-crossing
+    with:
+      name: worktree
+      project: Greenhouse
+
+  - type: action
+    domain: plugin
+    op: open-config-in-row
+    with:
+      name: worktree
+      project: Greenhouse
+
+  # All of it, before a key is pressed and with the gate still shut. This is what a manifest's parts are
+  # for: a run answers when it is run, and nobody has run anything yet.
+  - type: assert
+    domain: plugin
+    op: drawn
+    with:
+      name: worktree
+      kind: heading
+      value: SCENARIO — before you start
+
+  - type: assert
+    domain: plugin
+    op: drawn
+    with:
+      name: worktree
+      kind: text
+      value: SCENARIO — the service makes this value, not Amenbo.
+
+  # The way to the page, and where it stands. Two claims on one control: a build that drew the author's
+  # words as a line of text would put the same words on the shot and leave the reader with nowhere to
+  # press, and one that filed every part in a block of its own would draw the button somewhere the box it
+  # is about cannot be seen from.
+  - type: assert
+    domain: plugin
+    op: drawn
+    with:
+      name: worktree
+      kind: link
+      value: SCENARIO — get a token
+      above: SCENARIO — API token
+
+  - type: assert
+    domain: plugin
+    op: drawn
+    with:
+      name: worktree
+      kind: note
+      value: SCENARIO — a token is one workspace.
+
+  # The steps in order, which is the one part that is several strings rather than one — read by any of
+  # them, since a build that drew a list would draw the whole list.
+  - type: assert
+    domain: plugin
+    op: drawn
+    with:
+      name: worktree
+      kind: list
+      value: SCENARIO — create a token
+
+  - type: assert
+    domain: plugin
+    op: drawn
+    with:
+      name: worktree
+      kind: copy
+      value: https://example.test/scenario/console
+
+  # And the other source. Running the author's code is what enabling means, so the gate opens before
+  # anything can be pressed.
+  - type: action
+    domain: plugin
+    op: enable-in
+    with:
+      name: worktree
+      project: Greenhouse
+
+  - type: action
+    domain: plugin
+    op: press
+    with:
+      name: worktree
+      label: SCENARIO — set the device up
+
+  - type: assert
+    domain: plugin
+    op: press-said
+    with:
+      name: worktree
+      text: the operation was handed nothing at all
+
+  # The code itself. It is the one part read by an eye rather than by the words on the shot, and the one
+  # the whole seam was drawn for: what the plugin handed over is a string, and the squares are Amenbo's.
+  - type: assert
+    domain: plugin
+    op: drawn
+    with:
+      name: worktree
+      kind: qr

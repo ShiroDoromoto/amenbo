@@ -1,0 +1,272 @@
+name: _theme-preview
+
+# Build one theme's development preview for every OS a member is on, and leave it in the run's
+# artifacts. A theme is one subject the team touches for weeks before deciding to merge it or to
+# retreat from it, and the preview is how the people making that call — designers, business — get
+# to touch it without building the source, which is a wall this team cannot ask them to climb.
+#
+# It is NOT a distribution, and three things say so:
+#
+#   * No release stamp. `AMENBO_BUILD` is set in `_release.yml`'s environment and nowhere else, and
+#     that stamp is what lets a binary migrate a production store forward. Adding it
+#     here would put a member's real data past what the released app can open, from a build nobody
+#     released. Nothing in this file may set it.
+#   * The dev channel. Every binary is built with the theme's own app-data name, bundle identifier,
+#     product name and executable name, so a preview addresses a store of its own and sits beside
+#     the member's production Amenbo and the shared dev app rather than over either.
+#   * No signing, no notarization. The one way to take these artifacts is `gh run download`, and
+#     what it writes carries neither `com.apple.quarantine` nor a Mark of the Web — measured on
+#     both macOS and Windows before this workflow was written. Gatekeeper's first-run gate has no
+#     subject, so notarizing would be a round trip to Apple per artifact buying nothing. What DOES
+#     attach quarantine is the Actions web UI's "Download artifact" button, so the member's
+#     instructions name the command, not the page.
+#
+# The four names are not decided here. `make gui-dev-names` prints them, the `names` job below is
+# the only reader, and the three build jobs are handed what it printed — because the Windows leg
+# builds without make (the runner has none) and a theme whose identifier differs by OS is no longer
+# one theme on the machine it is installed on.
+#
+# One arch per OS: the machines being handed a preview are Apple Silicon Macs, x86_64 Windows and
+# x86_64 Linux. The release ships both arches everywhere; a preview is not the release, and the
+# second arch is added the day a member needs it.
+#
+# `_release.yml` is deliberately not reused. It exists to stamp and sign, and a preview must do
+# neither — the two would have to be told apart by a flag inside a workflow whose whole job is to
+# produce the bytes users get, which is the wrong place for that question. The release triggers are
+# also closed on purpose (`release-tag.yml`), so this workflow has an entry of its own.
+
+on:
+  workflow_call:
+    inputs:
+      theme:
+        description: the theme's id — the umbrella task's number, digits only
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  # The theme's four names, read once from the Makefile and handed down. This is also the run's
+  # front gate: `AMB-T-ID` takes digits only, so a theme id that is not a task number stops here
+  # instead of three jobs into the run.
+  names:
+    name: The names this theme is built under
+    runs-on: ubuntu-latest
+    outputs:
+      app_name: ${{ steps.names.outputs.app_name }}
+      product_name: ${{ steps.names.outputs.product_name }}
+      identifier: ${{ steps.names.outputs.identifier }}
+      bin_name: ${{ steps.names.outputs.bin_name }}
+      config: ${{ steps.names.outputs.config }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read the names off the Makefile
+        id: names
+        env:
+          THEME: ${{ inputs.theme }}
+        run: |
+          # Through a variable rather than a pipe into $GITHUB_OUTPUT: the default shell here is
+          # `bash -e` without pipefail, so a pipe would hand the step tee's exit status and swallow
+          # the one refusal this job exists to make.
+          names=$(make -s gui-dev-names AMB-T-ID="$THEME")
+          echo "$names"
+          echo "$names" >> "$GITHUB_OUTPUT"
+
+  macos:
+    name: macOS preview (.app, arm64)
+    needs: names
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install GUI deps
+        working-directory: app
+        run: npm ci
+
+      # The same target a developer builds a task's throwaway instance with, so the preview and the
+      # instance the work was verified in are the same bundle under the same names. The local
+      # code-signing step inside it is a no-op off a developer's machine (codesign-local.sh), which
+      # leaves tauri's ad-hoc signature — all a build taken by `gh run download` needs.
+      - name: Build the dev GUI bundle
+        env:
+          THEME: ${{ inputs.theme }}
+        run: make gui-dev AMB-T-ID="$THEME"
+
+      # The one thing this workflow must never do is stamp the build. A stamped binary is allowed to
+      # migrate a member's production store forward, and that is irreversible — the released app can
+      # no longer open what an unreleased build carried past it. So ask the bundle rather than trust
+      # that no stamp has been added above: the CLI the bundle ships answers both questions at once,
+      # and the channel it names is also what proves the theme's own app-data made it into the build.
+      # This is the one leg where a built binary is reachable without unpacking an installer.
+      - name: The preview must be unstamped, and on the theme's own channel
+        env:
+          PRODUCT_NAME: ${{ needs.names.outputs.product_name }}
+          APP_NAME: ${{ needs.names.outputs.app_name }}
+        run: |
+          cli="app/src-tauri/target/release/bundle/macos/$PRODUCT_NAME.app/Contents/MacOS/amenbo"
+          "$cli" version --json
+          stamped=$("$cli" version --json | jq -r .release_build)
+          channel=$("$cli" version --json | jq -r .channel)
+          if [ "$stamped" != "false" ]; then
+            echo "::error::this preview carries the release stamp — it could migrate a member's real store" >&2
+            exit 1
+          fi
+          if [ "$channel" != "$APP_NAME" ]; then
+            echo "::error::this preview answers to '$channel', not '$APP_NAME' — it would share app-data with another build" >&2
+            exit 1
+          fi
+
+      # Pack the .app ourselves rather than handing the directory to upload-artifact: that path
+      # zips without preserving the executable bit, and a .app whose binary is not executable does
+      # not open. `ditto -c -k --keepParent` is the packer that keeps the bundle's permissions,
+      # symlinks and signature intact.
+      - name: Pack the .app
+        env:
+          PRODUCT_NAME: ${{ needs.names.outputs.product_name }}
+          BIN_NAME: ${{ needs.names.outputs.bin_name }}
+        run: |
+          mkdir -p dist
+          ditto -c -k --keepParent \
+            "app/src-tauri/target/release/bundle/macos/$PRODUCT_NAME.app" \
+            "dist/$BIN_NAME-macos-arm64.zip"
+          ls -l dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: preview-${{ inputs.theme }}-macos-arm64
+          path: dist/*.zip
+          if-no-files-found: error
+
+  windows:
+    name: Windows preview (NSIS, x64)
+    needs: names
+    runs-on: windows-latest
+    # rusqlite's bundled SQLCipher builds OpenSSL from source and openssl-src configures it through
+    # perl; a step under git-bash resolves `perl` to MSYS2's, which lacks Locale::Maketext::Simple
+    # and dies in ./Configure. Naming the runner's Strawberry Perl is what the release and CI legs
+    # do for the same reason.
+    env:
+      OPENSSL_SRC_PERL: C:/Strawberry/perl/bin/perl.exe
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install GUI deps
+        working-directory: app
+        run: npm ci
+
+      # The names arrive as one JSON object and are written to a file rather than passed inline:
+      # the string carries braces and quotes, and an npm script on Windows is one more layer of
+      # quoting to lose them in. `--config` takes a path, which has none of that surface. The file
+      # is untracked and lives for the length of this run.
+      - name: Write the theme's tauri overrides
+        shell: bash
+        env:
+          CONFIG: ${{ needs.names.outputs.config }}
+        run: |
+          printf '%s\n' "$CONFIG" > app/src-tauri/theme-preview.conf.json
+          cat app/src-tauri/theme-preview.conf.json
+
+      # The unified NSIS installer, dev channel: the dev config supplies the channel's icons and
+      # defaults, the theme's config is merged over it, and AMENBO_APP_NAME is what amenbo-core
+      # compiles the app-data name from. No updater config — a preview carries no stamp, so it
+      # withholds the update check entirely and could not self-update if it asked.
+      # It stays unsigned: SmartScreen's first-run warning has no subject either, because
+      # `gh run download` attaches no Mark of the Web — measured on a real Windows machine.
+      - name: Build the Windows preview installer (NSIS)
+        working-directory: app
+        env:
+          AMENBO_APP_NAME: ${{ needs.names.outputs.app_name }}
+        run: npm run tauri build -- --bundles nsis --config src-tauri/tauri.dev.conf.json --config src-tauri/theme-preview.conf.json
+
+      - name: Collect the installer under the theme's name
+        shell: bash
+        env:
+          BIN_NAME: ${{ needs.names.outputs.bin_name }}
+        run: |
+          mkdir -p dist
+          cp app/src-tauri/target/release/bundle/nsis/*setup.exe "dist/$BIN_NAME-windows-x64-setup.exe"
+          ls -l dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: preview-${{ inputs.theme }}-windows-x64
+          path: dist/*setup.exe
+          if-no-files-found: error
+
+  linux:
+    name: Linux preview (AppImage, x86_64)
+    needs: names
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Through the same Ubuntu 22.04 container the shipped AppImage is built in, on a runner that
+      # is natively this arch. That base is the glibc floor of the Linux distribution: built on the
+      # runner itself, the preview would refuse to start on the very systems the released AppImage
+      # still runs on, and a member would read that as the theme being broken.
+      - name: Build the Linux preview bundle (AppImage)
+        env:
+          THEME: ${{ inputs.theme }}
+        run: make gui-dev-linux AMB-T-ID="$THEME" LINUX_GUI_ARCH=amd64
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: preview-${{ inputs.theme }}-linux-x86_64
+          path: dist/*.AppImage
+          if-no-files-found: error
+
+  # What a member types. It is written into the run itself rather than into a document, because the
+  # thing that goes stale is the run id — and here it cannot: the summary is written by the run it
+  # names. The `-R <owner>/<repo>` in it is not a convenience: a member holds no clone, so without
+  # it `gh` stops at `not a git repository`.
+  hand-off:
+    name: How to take it
+    needs: [names, macos, windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write the download instructions into the run summary
+        env:
+          THEME: ${{ inputs.theme }}
+          PRODUCT_NAME: ${{ needs.names.outputs.product_name }}
+          APP_NAME: ${{ needs.names.outputs.app_name }}
+          IDENTIFIER: ${{ needs.names.outputs.identifier }}
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## $PRODUCT_NAME — how to take it
+
+          Take it with \`gh\`. The Actions page's "Download artifact" button attaches quarantine on
+          macOS and a Mark of the Web on Windows; this command attaches neither.
+
+          \`\`\`
+          gh run download $GITHUB_RUN_ID -R $GITHUB_REPOSITORY
+          \`\`\`
+
+          | OS | artifact | what to do |
+          |---|---|---|
+          | macOS (Apple Silicon) | preview-$THEME-macos-arm64 | unzip, drag the .app into /Applications |
+          | Windows (x64) | preview-$THEME-windows-x64 | run the -setup.exe (it installs for your user only) |
+          | Linux (x86_64) | preview-$THEME-linux-x86_64 | make the .AppImage executable and run it |
+
+          It stands beside your Amenbo rather than over it: its own app-data
+          (\`work.amenbo.$APP_NAME\`), its own bundle identifier (\`$IDENTIFIER\`), its own
+          executable name. Your real store is not touched, and this build could not migrate it if it
+          tried — it carries no release stamp.
+
+          To retreat: delete the app, and delete its app-data (\`work.amenbo.$APP_NAME\`).
+
+          These artifacts expire 90 days after this run.
+          EOF

@@ -105,31 +105,12 @@ pub struct Injection {
     pub text: Map<String, Value>,
 }
 
-/// What one field is worth to a run, from what the store holds for it (`AMB-D-415`) — the three answers a
-/// field can carry, resolved into the one value a plugin receives:
-///
-/// | state ([`plugin_config::answer`]) | injected |
-/// |---|---|
-/// | [`Chosen`](plugin_config::Answer::Chosen) | the value itself |
-/// | [`NoneOfThem`](plugin_config::Answer::NoneOfThem) | the empty string — an answer, and nothing in it |
-/// | [`Unanswered`](plugin_config::Answer::Unanswered) | the author's [`default`](ConfigField::default), or nothing at all |
-///
-/// The state is read where it is named, so a face saying "none of them" and a run receiving nothing are
-/// reading the same thing rather than two spellings of it.
-fn resolved(field: &ConfigField, held: Option<String>) -> Option<String> {
-    match plugin_config::answer(field, held.as_deref()) {
-        plugin_config::Answer::Chosen => held,
-        plugin_config::Answer::NoneOfThem => Some(String::new()),
-        plugin_config::Answer::Unanswered => field.default.clone(),
-    }
-}
-
 /// Resolve a plugin's config for one run and split it into env (secret) and stdin-JSON (text) pieces
 /// (`AMB-D-356` / `AMB-T-2016`), reading only *this* plugin's stored values.
 ///
 /// `fields` is the plugin's manifest config schema; each field carries the author's `secret` flag, which
 /// decides both where the value was stored and how it is injected, and the `default` and candidates
-/// [`resolved`] reads. `layer` is where this plugin's values live — the run's project for a `scope: project`
+/// [`plugin_config::resolved`] reads. `layer` is where this plugin's values live — the run's project for a `scope: project`
 /// plugin, the device for a `scope: machine` one (`AMB-D-601`), and the only rows this run may see either
 /// way. A field that resolves to nothing — unanswered, with no default behind it — contributes nothing.
 pub fn resolve(
@@ -140,7 +121,7 @@ pub fn resolve(
 ) -> Result<Injection> {
     let mut injection = Injection::default();
     for field in fields {
-        let Some(value) = resolved(field, plugin_config::get(store, field, plugin, layer)?) else {
+        let Some(value) = plugin_config::resolved(field, plugin_config::get(store, field, plugin, layer)?) else {
             continue;
         };
         if field.secret {
@@ -203,8 +184,8 @@ mod tests {
         ConfigField {
             field_type: FieldType::Multi,
             options: vec![
-                ConfigOption { value: "task.done".into(), label: "完了した".into() },
-                ConfigOption { value: "task.rejected".into(), label: "見送った".into() },
+                ConfigOption::new("task.done", "完了した"),
+                ConfigOption::new("task.rejected", "見送った"),
             ],
             default: default.map(str::to_string),
             ..ConfigField::new(key, key)

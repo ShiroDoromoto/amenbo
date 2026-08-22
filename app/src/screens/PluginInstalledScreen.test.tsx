@@ -14,6 +14,8 @@ import type {
   PluginCheckDto,
   PluginDeviceRowDto,
   PluginProjectRowDto,
+  PluginFormEntryDto,
+  PluginShowPartDto,
   PluginWantedSettingDto,
 } from "../bindings/bindings";
 import type { PluginCatalogRead, PluginUpdate } from "../core/pluginUpdates";
@@ -177,7 +179,7 @@ const onDevice = (over: Partial<PluginDeviceRowDto> = {}): PluginDeviceRowDto =>
 const row = ({ on = [], ...over }: Partial<PluginInstall> & { name: string; on?: number[] }): PluginInstall => ({
   compatible: true,
   projects: on.map((project) => at(project, { enabled: true })),
-  config: [],
+  config: form(),
   actions: [],
   scope: over.device ? "machine" : "project",
   ...over,
@@ -205,14 +207,23 @@ const field = (
   secretSet: false,
   fieldType: "text",
   options: [],
+  when: [],
   state: over.value != null || over.secretSet ? "chosen" : "unanswered",
   ...over,
 });
+
+/**
+ * A declared form of settings alone (`AMB-D-727`) — every field an entry, in order. The parts a form may
+ * also carry are their own tests'; what these are about is the boxes.
+ */
+const form = (...fields: PluginWantedSettingDto[]): PluginFormEntryDto[] =>
+  fields.map((field) => ({ kind: "field", field }));
 
 /** One operation its author declared (`AMB-D-664`), asking for nothing until a test says it does. */
 const action = (over: Partial<PluginActionDto> & { cmd: string }): PluginActionDto => ({
   label: over.cmd,
   ask: [],
+  when: [],
   ...over,
 });
 
@@ -455,7 +466,7 @@ describe("the layer a plugin declared", () => {
     hoisted.installs = [
       row({
         name: "worktree",
-        config: [field({ key: "base", label: "Base branch", required: true })],
+        config: form(field({ key: "base", label: "Base branch", required: true })),
         device: onDevice({ requiredUnset: true }),
       }),
     ];
@@ -486,7 +497,7 @@ describe("the settings form", () => {
     hoisted.installs = [
       row({
         name: "notify",
-        config: [field({ key: "webhook", required: true })],
+        config: form(field({ key: "webhook", required: true })),
         projects: [at(1, { requiredUnset: true })],
       }),
       row({ name: "quiet", on: [1] }),
@@ -510,7 +521,7 @@ describe("the settings form", () => {
     hoisted.installs = [
       row({
         name: "notify",
-        config: [field({ key: "webhook", required: true })],
+        config: form(field({ key: "webhook", required: true })),
         projects: [at(1, { requiredUnset: true })],
       }),
     ];
@@ -539,7 +550,7 @@ describe("the settings form", () => {
       row({
         name: "notify",
         on: [7],
-        config: [field({ key: "events" }), field({ key: "room" })],
+        config: form(field({ key: "events" }), field({ key: "room" })),
       }),
     ];
     hoisted.held = { notify: { 7: [field({ key: "events", value: "push" }), field({ key: "room" })] } };
@@ -560,7 +571,7 @@ describe("the settings form", () => {
   // already said which (`AMB-D-447`) — so the form asks nobody a second time.
   it("writes for the project whose row it was opened in, without asking again", async () => {
     hoisted.projects = [{ id: 7, name: "alpha" }, { id: 8, name: "beta" }];
-    hoisted.installs = [row({ name: "notify", on: [8], config: [field({ key: "events" })] })];
+    hoisted.installs = [row({ name: "notify", on: [8], config: form(field({ key: "events" })) })];
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
 
@@ -577,7 +588,7 @@ describe("the settings form", () => {
   // A secret is written and never read back, so the second box is the only check on a typo there is.
   it("asks for a secret twice, and writes nothing when the two do not match", async () => {
     hoisted.projects = [{ id: 7, name: "alpha" }];
-    hoisted.installs = [row({ name: "notify", on: [7], config: [field({ key: "token", secret: true })] })];
+    hoisted.installs = [row({ name: "notify", on: [7], config: form(field({ key: "token", secret: true })) })];
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
 
@@ -602,12 +613,12 @@ describe("the settings form", () => {
       key: "events",
       fieldType: "multi",
       options: [
-        { value: "task.done", label: "Done" },
-        { value: "task.rejected", label: "Rejected" },
+        { value: "task.done", label: "Done", when: [] },
+        { value: "task.rejected", label: "Rejected", when: [] },
       ],
       defaultValue: "task.done",
     });
-    hoisted.installs = [row({ name: "notify", on: [7], config: [events] })];
+    hoisted.installs = [row({ name: "notify", on: [7], config: form(events) })];
     hoisted.held = { notify: { 7: [events] } };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
@@ -624,6 +635,114 @@ describe("the settings form", () => {
     ]);
   });
 
+  // **A condition is read against the answers on screen, not the ones in the store** (`AMB-D-727`). The
+  // platform's half is already gone by the time the form has this — core settles it — so what is left is
+  // the half that moves under the user's fingers, and it has to move at the tick rather than at the save.
+  it("draws a conditioned field, its candidates and its button the moment the answer they read changes", async () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    const transport = field({
+      key: "transport",
+      fieldType: "multi",
+      options: [
+        { value: "icloud", label: "iCloud", when: [] },
+        { value: "cloudflare", label: "Cloudflare", when: [] },
+      ],
+    });
+    const worker = field({
+      key: "worker_url",
+      label: "Worker の URL",
+      when: [{ field: "transport", has: "cloudflare" }],
+    });
+    hoisted.installs = [
+      row({
+        name: "viewer",
+        on: [7],
+        config: form(transport, worker),
+        actions: [action({ cmd: "tunnel", label: "Raise the tunnel", when: [{ field: "transport", has: "cloudflare" }] })],
+      }),
+    ];
+    hoisted.held = { viewer: { 7: [transport, worker] } };
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+
+    // Nothing answers it, so neither the field nor the button that acts on it is on the form.
+    expect(container.textContent).not.toContain("Worker の URL");
+    expect(button("Raise the tunnel")).toBeUndefined();
+
+    // Ticking Cloudflare brings both out — before any save, which is the whole point.
+    act(() => { boxes()[1].click(); });
+    expect(container.textContent).toContain("Worker の URL");
+    expect(button("Raise the tunnel")).toBeDefined();
+
+    // And unticking it puts them away again.
+    act(() => { boxes()[1].click(); });
+    expect(container.textContent).not.toContain("Worker の URL");
+    expect(button("Raise the tunnel")).toBeUndefined();
+  });
+
+  // A part carries its own condition, read against the same answers a field's is (`AMB-D-727`). A form
+  // that hid Cloudflare's box but kept the caption above it would leave a step nobody could follow.
+  it("draws a conditioned part the moment the answer it reads changes", async () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    const transport = field({
+      key: "transport",
+      fieldType: "multi",
+      options: [
+        { value: "icloud", label: "iCloud", when: [] },
+        { value: "cloudflare", label: "Cloudflare", when: [] },
+      ],
+    });
+    hoisted.installs = [
+      row({
+        name: "viewer",
+        on: [7],
+        config: [
+          ...form(transport),
+          {
+            kind: "part",
+            when: [{ field: "transport", has: "cloudflare" }],
+            part: { kind: "note", text: "Worker を先に立ててください" },
+          },
+        ],
+      }),
+    ];
+    hoisted.held = { viewer: { 7: [transport] } };
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+
+    expect(container.textContent).not.toContain("Worker を先に立ててください");
+    act(() => { boxes()[1].click(); });
+    expect(container.textContent).toContain("Worker を先に立ててください");
+    act(() => { boxes()[1].click(); });
+    expect(container.textContent).not.toContain("Worker を先に立ててください");
+  });
+
+  // A candidate carries its own condition, and it is read the same way — the checkbox goes, the field it
+  // belongs to stays.
+  it("drops a candidate whose own condition does not hold", async () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    const mode = field({ key: "mode", fieldType: "multi", options: [{ value: "advanced", label: "Advanced", when: [] }] });
+    const events = field({
+      key: "events",
+      fieldType: "multi",
+      options: [
+        { value: "task.done", label: "Done", when: [] },
+        { value: "task.rejected", label: "Rejected", when: [{ field: "mode", has: "advanced" }] },
+      ],
+    });
+    hoisted.installs = [row({ name: "notify", on: [7], config: form(mode, events) })];
+    hoisted.held = { notify: { 7: [mode, events] } };
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+
+    expect(container.textContent).toContain("Done");
+    expect(container.textContent).not.toContain("Rejected");
+
+    // Ticking `advanced` — the first box on the form — offers the candidate it gates.
+    act(() => { boxes()[0].click(); });
+    expect(container.textContent).toContain("Rejected");
+  });
+
   // Unticking the last box is an answer, not a retraction: it writes the reserved word, because an empty
   // value is where "nobody answered" already lives.
   it("writes the word for none of them when every box comes off", async () => {
@@ -631,10 +750,10 @@ describe("the settings form", () => {
     const events = field({
       key: "events",
       fieldType: "multi",
-      options: [{ value: "task.done", label: "Done" }],
+      options: [{ value: "task.done", label: "Done", when: [] }],
       value: "task.done",
     });
-    hoisted.installs = [row({ name: "notify", on: [7], config: [events] })];
+    hoisted.installs = [row({ name: "notify", on: [7], config: form(events) })];
     hoisted.held = { notify: { 7: [events] } };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
@@ -653,12 +772,12 @@ describe("the settings form", () => {
     const events = field({
       key: "events",
       fieldType: "multi",
-      options: [{ value: "task.done", label: "Done" }],
+      options: [{ value: "task.done", label: "Done", when: [] }],
       defaultValue: "task.done",
       value: NONE_SELECTED,
       state: "none",
     });
-    hoisted.installs = [row({ name: "notify", on: [7], config: [events] })];
+    hoisted.installs = [row({ name: "notify", on: [7], config: form(events) })];
     hoisted.held = { notify: { 7: [events] } };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
@@ -681,9 +800,9 @@ describe("the settings form", () => {
     hoisted.installs = [
       row({
         name: "notify",
-        config: [field({ key: "events", required: true, defaultValue: "task.done" })],
+        config: form(field({ key: "events", required: true, defaultValue: "task.done" })),
       }),
-      row({ name: "hooks", config: [field({ key: "webhook", required: true })] }),
+      row({ name: "hooks", config: form(field({ key: "webhook", required: true })) }),
     ];
     render();
     act(() => { select(gatePicker(0), "1"); });
@@ -702,7 +821,7 @@ describe("the settings form", () => {
       help: "Create it under Incoming Webhooks.\n\n[Not a link](https://example.test/x)",
       placeholder: "https://hooks.example.test/T000/B000",
     });
-    hoisted.installs = [row({ name: "notify", on: [7], config: [webhook] })];
+    hoisted.installs = [row({ name: "notify", on: [7], config: form(webhook) })];
     hoisted.held = { notify: { 7: [webhook] } };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
@@ -720,7 +839,7 @@ describe("the settings form", () => {
   it("shows the default in the empty box, and the example only without one", () => {
     hoisted.projects = [{ id: 7, name: "alpha" }];
     const base = field({ key: "base", defaultValue: "main", placeholder: "release/*" });
-    hoisted.installs = [row({ name: "worktree", on: [7], config: [base] })];
+    hoisted.installs = [row({ name: "worktree", on: [7], config: form(base) })];
     hoisted.held = { worktree: { 7: [base] } };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
@@ -733,7 +852,7 @@ describe("the settings form", () => {
   it("shows a readonly setting's value with no input and no way to clear it", () => {
     hoisted.projects = [{ id: 7, name: "alpha" }];
     const worker = field({ key: "worker_url", readonly: true, value: "https://amenbo.example.test" });
-    hoisted.installs = [row({ name: "viewer", on: [7], config: [worker] })];
+    hoisted.installs = [row({ name: "viewer", on: [7], config: form(worker) })];
     hoisted.held = { viewer: { 7: [worker] } };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
@@ -746,7 +865,7 @@ describe("the settings form", () => {
   // Clearing is the same door as setting: an empty value is "not provided", which is what `required` reads.
   it("clears a held setting with an empty value", async () => {
     hoisted.projects = [{ id: 7, name: "alpha" }];
-    hoisted.installs = [row({ name: "notify", on: [7], config: [field({ key: "events" })] })];
+    hoisted.installs = [row({ name: "notify", on: [7], config: form(field({ key: "events" })) })];
     hoisted.held = { notify: { 7: [field({ key: "events", value: "push" })] } };
     render();
     act(() => { button(t("plugins.cfg.open"))!.click(); });
@@ -763,7 +882,7 @@ describe("the settings form", () => {
 describe("what the author's own code says on the form", () => {
   it("draws a refusing check's sentences where each one belongs, and leaves the gate shut", async () => {
     hoisted.projects = [{ id: 7, name: "alpha" }];
-    hoisted.installs = [row({ name: "mail", config: [field({ key: "smtp_host" })], projects: [at(7)] })];
+    hoisted.installs = [row({ name: "mail", config: form(field({ key: "smtp_host" })), projects: [at(7)] })];
     hoisted.held = { mail: { 7: [field({ key: "smtp_host", value: "smtp.example.test" })] } };
     hoisted.check = {
       ok: false,
@@ -787,7 +906,7 @@ describe("what the author's own code says on the form", () => {
   // form says what happened in its own words and leaves the reason to the execution log.
   it("says the check did not answer when it said nothing readable", async () => {
     hoisted.projects = [{ id: 7, name: "alpha" }];
-    hoisted.installs = [row({ name: "mail", config: [field({ key: "smtp_host" })], projects: [at(7)] })];
+    hoisted.installs = [row({ name: "mail", config: form(field({ key: "smtp_host" })), projects: [at(7)] })];
     hoisted.check = { ok: false, answered: false, fields: {}, show: [] };
     render();
 
@@ -803,7 +922,7 @@ describe("what the author's own code says on the form", () => {
       row({
         name: "mail",
         on: [7],
-        config: [field({ key: "smtp_host" }), field({ key: "smtp_user" })],
+        config: form(field({ key: "smtp_host" }), field({ key: "smtp_user" })),
       }),
     ];
     hoisted.saveCheck = {
@@ -839,7 +958,7 @@ describe("what the author's own code says on the form", () => {
   // leaving its sentence standing over values it never saw.
   it("replaces the switch's verdict with what the save's check said", async () => {
     hoisted.projects = [{ id: 7, name: "alpha" }];
-    hoisted.installs = [row({ name: "mail", config: [field({ key: "smtp_host" })], projects: [at(7)] })];
+    hoisted.installs = [row({ name: "mail", config: form(field({ key: "smtp_host" })), projects: [at(7)] })];
     hoisted.check = {
       ok: false, answered: true, message: "SCENARIO — when it was pressed", fields: {}, show: [],
     };
@@ -940,6 +1059,205 @@ describe("what the author's own code says on the form", () => {
   });
 });
 
+// What the author asked to have *drawn* (`AMB-D-727`) — the half of the settings form that is neither a
+// box nor a sentence. It reaches the form from two places, and both are here: written into the manifest,
+// where it draws before anything has run, and answered by a run, where it draws under the button that
+// raised it. Everything in it is a string the author supplied and Amenbo's own paint: what these hold is
+// that each kind draws as what it is, that a part sits where its author put it, and that what one press
+// left does not survive the next.
+describe("what the author asked to have drawn on the form", () => {
+  /** One entry drawn rather than filled in. */
+  const part = (one: PluginShowPartDto): PluginFormEntryDto => ({ kind: "part", when: [], part: one });
+
+  /** Open the settings of the one crossing on screen. */
+  const openForm = () => {
+    render();
+    act(() => { button(t("plugins.cfg.open"))!.click(); });
+  };
+
+  it("draws each kind as what it is", () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    hoisted.installs = [
+      row({
+        name: "viewer",
+        on: [7],
+        config: [
+          part({ kind: "heading", text: "SCENARIO — pair the device" }),
+          part({ kind: "text", text: "SCENARIO — read this with your phone" }),
+          part({ kind: "note", text: "SCENARIO — the code expires in ten minutes" }),
+          part({ kind: "list", items: ["SCENARIO — open the app", "SCENARIO — point the camera"] }),
+          part({ kind: "copy", text: "https://example.test/board" }),
+          part({ kind: "qr", text: "https://example.test/pair" }),
+          part({ kind: "link", url: "https://example.test/tokens", label: "SCENARIO — get a token" }),
+        ],
+      }),
+    ];
+    openForm();
+
+    // The author's words, each in the shape they asked for.
+    expect(container.querySelector(".plugshow__heading")?.textContent)
+      .toBe("SCENARIO — pair the device");
+    expect(container.querySelector(".plugshow__text")?.textContent)
+      .toBe("SCENARIO — read this with your phone");
+    expect(container.querySelector(".plugshow__note")?.textContent)
+      .toBe("SCENARIO — the code expires in ten minutes");
+    expect(
+      Array.from(container.querySelectorAll(".plugshow__list li")).map((li) => li.textContent),
+    ).toEqual(["SCENARIO — open the app", "SCENARIO — point the camera"]);
+    expect(container.querySelector(".plugshow__copy code")?.textContent)
+      .toBe("https://example.test/board");
+    expect(button("SCENARIO — get a token"), "a link is a button, not a line to read").toBeTruthy();
+
+    // The QR is drawn here, out of the string, rather than being an image the author handed over — which
+    // is the whole reason the vocabulary carries the text and not the picture.
+    const qr = container.querySelector(".plugshow__qr");
+    expect(qr?.tagName.toLowerCase()).toBe("svg");
+    expect(qr?.querySelector("path")?.getAttribute("d")).toBeTruthy();
+
+    // And nothing an author wrote is drawn as markup: what is on screen is text.
+    expect(container.querySelector(".plugshow__text")?.innerHTML)
+      .toBe("SCENARIO — read this with your phone");
+  });
+
+  // Where a part sits is what it is for: the way to the page that issues a token belongs above the box
+  // the token goes in. A build that drew the settings first and the parts after would pass every other
+  // read here and lose the whole point of writing one into a manifest.
+  it("keeps a part where its author put it, between the settings", () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    hoisted.installs = [
+      row({
+        name: "mail",
+        on: [7],
+        config: [
+          part({ kind: "link", url: "https://example.test/passwords", label: "SCENARIO — make one" }),
+          ...form(field({ key: "smtp_password", label: "SCENARIO — password", secret: true })),
+          part({ kind: "note", text: "SCENARIO — one per mailbox" }),
+        ],
+      }),
+    ];
+    openForm();
+
+    const drawn = Array.from(
+      container.querySelectorAll(".plugcfg > .plugshow, .plugcfg > .plugcfg__field"),
+    ).map((el) => el.className);
+    expect(drawn).toEqual(["plugshow", "plugcfg__field", "plugshow"]);
+  });
+
+  // A press is the other place parts arrive, and the reason `viewer` was writing a QR to a file at all.
+  it("draws what a press answered with, under the button that raised it", async () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    hoisted.installs = [
+      row({ name: "viewer", on: [7], actions: [action({ cmd: "config setup", label: "Set up" })] }),
+    ];
+    hoisted.ran = {
+      ok: true,
+      message: "SCENARIO — the worker is up",
+      show: [{ kind: "qr", text: "https://example.test/pair" }],
+    };
+    openForm();
+
+    expect(container.querySelector(".plugshow__qr"), "nothing is drawn before it runs").toBeNull();
+    await act(async () => { button("Set up")!.click(); });
+    expect(container.textContent).toContain("SCENARIO — the worker is up");
+    expect(container.querySelector(".plugcfg__act .plugshow__qr")).toBeTruthy();
+  });
+
+  // What a run put on the form is about that run (`AMB-D-727`). A second button's answer standing beside
+  // the first would read as one thing said twice, and the reader has no way to tell which press it came
+  // from.
+  it("replaces what the last press left when another one is pressed", async () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    hoisted.installs = [
+      row({
+        name: "viewer",
+        on: [7],
+        actions: [
+          action({ cmd: "config setup", label: "Set up" }),
+          action({ cmd: "config pair", label: "Pair" }),
+        ],
+      }),
+    ];
+    hoisted.ran = { ok: true, show: [{ kind: "copy", text: "SCENARIO — the first answer" }] };
+    openForm();
+
+    await act(async () => { button("Set up")!.click(); });
+    expect(container.textContent).toContain("SCENARIO — the first answer");
+
+    hoisted.ran = { ok: true, show: [{ kind: "copy", text: "SCENARIO — the second answer" }] };
+    await act(async () => { button("Pair")!.click(); });
+    expect(container.textContent).toContain("SCENARIO — the second answer");
+    expect(container.textContent, "the first press's answer went with it")
+      .not.toContain("SCENARIO — the first answer");
+  });
+
+  // The check's own parts, where its sentences are: it is the run that happens before anybody has filled
+  // anything in, so the way to the page that issues the value it is refusing over belongs beside it.
+  it("draws what the check asked for, at the head of the form", async () => {
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    // Off at this crossing, so there is a switch to press — the check runs at the enable.
+    hoisted.installs = [
+      row({ name: "mail", config: form(field({ key: "smtp_password" })), projects: [at(7)] }),
+    ];
+    hoisted.check = {
+      ok: false,
+      answered: true,
+      message: "SCENARIO — the mailbox would not answer",
+      fields: {},
+      show: [{ kind: "link", url: "https://example.test/passwords", label: "SCENARIO — make one" }],
+    };
+    render();
+    await act(async () => { button(t("plugins.enable"))!.click(); });
+
+    expect(container.textContent).toContain("SCENARIO — the mailbox would not answer");
+    expect(button("SCENARIO — make one")).toBeTruthy();
+  });
+
+  // A `link` goes out through the one door this app opens a browser with — a person pressing a button,
+  // not Amenbo reaching the network. What a build that rendered an anchor instead would give an author
+  // is a destination the webview itself might follow.
+  it("sends a link out through the app's own door", () => {
+    const opened: string[] = [];
+    vi.stubGlobal("open", (url: string) => { opened.push(url); return null; });
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    hoisted.installs = [
+      row({
+        name: "mail",
+        on: [7],
+        config: [part({ kind: "link", url: "https://example.test/tokens", label: "SCENARIO — go" })],
+      }),
+    ];
+    openForm();
+
+    expect(container.querySelector(".plugshow a"), "there is no anchor to follow").toBeNull();
+    act(() => { button("SCENARIO — go")!.click(); });
+    expect(opened).toEqual(["https://example.test/tokens"]);
+    vi.unstubAllGlobals();
+  });
+
+  // What a third party has instead of a destination: the string is put in front of somebody who can read
+  // it before going there, and the button spares them retyping it.
+  it("copies what a copy part carries", async () => {
+    const copied: string[] = [];
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: (s: string) => { copied.push(s); return Promise.resolve(); } },
+    });
+    hoisted.projects = [{ id: 7, name: "alpha" }];
+    hoisted.installs = [
+      row({
+        name: "mail",
+        on: [7],
+        config: [part({ kind: "copy", text: "https://example.test/board" })],
+      }),
+    ];
+    openForm();
+
+    await act(async () => { button(t("plugins.show.copy"))!.click(); });
+    expect(copied).toEqual(["https://example.test/board"]);
+    expect(button(t("plugins.show.copied")), "and it says so").toBeTruthy();
+  });
+});
+
 // The other half of the update offer (`AMB-D-359`): the banner takes them in bulk, and the row takes one.
 // What needs a decision is named rather than offered as a button that would only be refused, and the way
 // back from an update this face applied is on the same row.
@@ -962,7 +1280,7 @@ describe("moving one plugin's build from its row", () => {
   it("names an offer that needs a decision instead of offering it", () => {
     hoisted.projects = [{ id: 1, name: "alpha" }];
     hoisted.installs = [
-      row({ name: "notify", on: [1], config: [field({ key: "token", required: true })] }),
+      row({ name: "notify", on: [1], config: form(field({ key: "token", required: true })) }),
     ];
     hoisted.updates = [offer({ name: "notify", hold: "settings", missing: ["token"] })];
     render();

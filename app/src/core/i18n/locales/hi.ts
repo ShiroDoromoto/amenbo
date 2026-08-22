@@ -347,7 +347,7 @@ export const hi: Translation = {
     "search.on.decision": "निर्णय",
     "search.on.decisionComment": "निर्णय पर टिप्पणी",
     "commands.note": "पूरी कमांड संदर्भिका (agent --json से · सिर्फ़ पढ़ने के लिए)",
-    "cli.none": "इस बिल्ड में चलाने लायक कोई कमांड नहीं है: इसका CLI AppImage के भीतर है और केवल तब तक मौजूद रहता है जब ऐप खुला हो। ऐप से ही आगे बढ़ें।",
+    "cli.none": "आपके PATH में अभी कोई कमांड नहीं है। यह प्रीव्यू अपना CLI ऐप के बगल में एक फ़ाइल के रूप में देता है — उसे ~/.local/bin (या PATH में कहीं भी) कॉपी करें, और वही टाइप करने वाली कमांड बन जाएगी।",
     "commands.search": "कमांड खोजें", "commands.empty": "कोई कमांड नहीं", "commands.loading": "लोड हो रहा है…",
     "commands.other": "अन्य", "commands.required": "आवश्यक", "commands.examples": "उदाहरण",
     "plugins.market": "बाज़ार", "plugins.searchPh": "प्लगिन खोजें",

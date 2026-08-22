@@ -348,7 +348,7 @@ export const zhHans: Translation = {
     "search.on.decision": "决定",
     "search.on.decisionComment": "决定上的评论",
     "commands.note": "完整命令参考（来自 agent --json · 只读）",
-    "cli.none": "此版本没有可运行的命令：它的 CLI 位于 AppImage 内部，只在应用打开时存在。请直接使用应用。",
+    "cli.none": "你的 PATH 中还没有可用的命令。此预览把 CLI 作为一个文件放在应用旁边——把它复制到 ~/.local/bin（或 PATH 中的任何位置），它就是你要输入的命令。",
     "commands.search": "搜索命令", "commands.empty": "没有命令", "commands.loading": "加载中…",
     "commands.other": "其他", "commands.required": "必填", "commands.examples": "示例",
     "plugins.market": "市场", "plugins.searchPh": "搜索插件",

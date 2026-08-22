@@ -360,7 +360,7 @@ export const ru: Translation = {
     "search.on.decision": "Решение",
     "search.on.decisionComment": "Комментарий к решению",
     "commands.note": "Полный справочник команд (из agent --json · только чтение)",
-    "cli.none": "В этой сборке нет команды, которую можно запустить: её CLI находится внутри AppImage и существует только пока приложение открыто. Работайте в самом приложении.",
+    "cli.none": "В вашем PATH пока нет команды. Эта предварительная сборка кладёт свой CLI отдельным файлом рядом с приложением — скопируйте его в ~/.local/bin (или в любое место из вашего PATH), и он станет командой, которую вы набираете.",
     "commands.search": "Поиск команд", "commands.empty": "Команд нет", "commands.loading": "Загрузка…",
     "commands.other": "Прочие", "commands.required": "обязательно", "commands.examples": "Примеры",
     "plugins.market": "Каталог", "plugins.searchPh": "Поиск плагинов",

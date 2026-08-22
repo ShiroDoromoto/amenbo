@@ -360,7 +360,7 @@ export const pl: Translation = {
     "search.on.decision": "Decyzja",
     "search.on.decisionComment": "Komentarz do decyzji",
     "commands.note": "Pełny wykaz poleceń (z agent --json · tylko do odczytu)",
-    "cli.none": "Ta kompilacja nie zawiera polecenia, które można uruchomić: jej CLI jest wewnątrz AppImage i istnieje tylko wtedy, gdy aplikacja jest otwarta. Korzystaj z samej aplikacji.",
+    "cli.none": "W twoim PATH nie ma jeszcze żadnego polecenia. Ta wersja podglądowa dostarcza swoje CLI jako plik obok aplikacji — skopiuj go do ~/.local/bin (lub gdziekolwiek w twoim PATH), a stanie się poleceniem, które wpisujesz.",
     "commands.search": "Szukaj poleceń", "commands.empty": "Brak poleceń", "commands.loading": "Wczytywanie…",
     "commands.other": "Inne", "commands.required": "wymagane", "commands.examples": "Przykłady",
     "plugins.market": "Rynek", "plugins.searchPh": "Szukaj wtyczek",

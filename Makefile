@@ -164,6 +164,14 @@ GUI_APPIMAGE_HOST := $(DIST_DIR)/amenbo-app-linux-$(HOST_IMG_ARCH).AppImage
 # still runs on. amd64 is the default; override with LINUX_CLI_ARCH=arm64.
 LINUX_CLI_ARCH    ?= amd64
 CLI_LINUX_DIST    := $(DIST_DIR)/amenbo-linux-$(LINUX_CLI_ARCH)
+# The dev channel's Linux CLI is named for the build instead of for the arch, the way its AppImage
+# is. A member drops the file straight into a directory on their PATH, so the file name IS the word
+# they then type, and that word has to be the one this build answers to (`Paths::command_name`).
+# Which arch it is belongs on the artifact, where two arches would never share a folder.
+CLI_DEV_LINUX_DIST := $(DIST_DIR)/$(GUI_DEV_DATA)
+# What dist-cli-linux writes. The release wants CLI_LINUX_DIST; a preview overrides it with the
+# line above, so the two callers differ by a name and not by a second copy of the recipe.
+CLI_LINUX_OUT     ?= $(CLI_LINUX_DIST)
 # The AppImage carries the GUI alone, so the e2e's separate writer — the CLI process the
 # check watches the webview react to — is brought in as its own binary, built for the host arch.
 CLI_LINUX_HOST    := $(DIST_DIR)/amenbo-linux-$(HOST_GUI_ARCH)
@@ -180,7 +188,7 @@ LINUX_CLI_IMAGE   := amenbo-linux-cli:$(LINUX_CLI_ARCH)
 # so it does not appear here = shell-gate's actionlint sees that.
 SHELL_SOURCES := $(shell git ls-files '*.sh' '.githooks/*')
 
-.PHONY: help install install-dev gui gui-dev gui-dev-names gui-dev-linux install-gui install-gui-dev dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate product-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate ci-aggregate-gate workflow-run-gate brand sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux verify-existing-store release codesign-cert devtool
+.PHONY: help install install-dev gui gui-dev gui-dev-names gui-dev-linux install-gui install-gui-dev dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate product-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate ci-aggregate-gate workflow-run-gate brand sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux dist-cli-dev-linux verify-existing-store release codesign-cert devtool
 
 help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
@@ -207,6 +215,7 @@ help:
 	@echo "make dist-gui-mac - build the mac unified .pkg (GUI to /Applications, CLI to /usr/local/bin) into dist/ (the mac release bundle itself; Intel build via MAC_GUI_ARCH=amd64)"
 	@echo "make dist-gui-linux - build the Linux GUI AppImage in Docker into dist/ (needs Docker)"
 	@echo "make dist-cli-linux - build the shipped Linux CLI in the same Docker base as the AppImage, into dist/ (that base is the glibc floor of the distribution; LINUX_CLI_ARCH=arm64 for the other arch; needs Docker)"
+	@echo "make dist-cli-dev-linux AMB-T-ID=<id> - the same Linux CLI named for the build, for a theme preview to hand its member (needs Docker)"
 	@echo "make verify-gui-linux - exercise 'another process writes → the screen updates' on a real Linux GUI over Xvfb (needs Docker)"
 	@echo "make verify-network-linux - stand up real NFS/SMB and exercise store_watch's network-FS detection (needs Docker; also runs every time in CI)"
 	@echo "make verify-network-mac - the macOS version of the above (MNT_LOCAL detection). Mounts real SMB over loopback and exercises it (needs Docker)"
@@ -388,13 +397,21 @@ dist-cli-linux:
 	@# Named volumes carry the crates.io cache and the target dir across runs — shared with lint-linux,
 	@# which compiles the same workspace in the same image (in CI they are fresh every time).
 	docker run --rm --platform linux/$(LINUX_CLI_ARCH) \
-	  -e OUT_NAME=$(notdir $(CLI_LINUX_DIST)) \
+	  -e OUT_NAME=$(notdir $(CLI_LINUX_OUT)) \
 	  -v "amenbo-lint-registry-$(LINUX_CLI_ARCH):/root/.cargo/registry" \
 	  -v "amenbo-lint-target-$(LINUX_CLI_ARCH):/build/target" \
 	  -v "$(CURDIR):/src:ro" \
 	  -v "$(CURDIR)/$(DIST_DIR):/out" \
 	  $(LINUX_CLI_IMAGE) bash /src/scripts/docker/build-linux-cli.sh
-	@echo "→ Linux CLI built (arch=$(LINUX_CLI_ARCH)): $(CLI_LINUX_DIST)"
+	@echo "→ Linux CLI built (arch=$(LINUX_CLI_ARCH)): $(CLI_LINUX_OUT)"
+
+## The same Linux CLI, named for the build rather than for the arch — what a theme's preview hands
+## the member beside its AppImage. The AppImage carries a copy, but it is mounted only while the GUI
+## runs, so this standalone one is the only one with an address that outlives the run, and the name
+## it lands under is the word the member will type once it is on their PATH.
+## Takes AMB-T-ID like the rest of the dev channel; unset gives the shared dev build's name.
+dist-cli-dev-linux:
+	@$(MAKE) dist-cli-linux CLI_LINUX_OUT="$(CLI_DEV_LINUX_DIST)"
 
 ## The scenario that drives verify-gui-linux. The check reads its `steps_gui` road — the screen is
 ## what it judges — and that road's listed/present title is the card it writes and OCRs back;

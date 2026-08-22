@@ -218,15 +218,23 @@ impl Paths {
     /// | production, any OS | the name — the unified installer puts it on `PATH` |
     /// | the shared dev build | the name — `make install-dev` puts it in `~/.cargo/bin` |
     /// | a task or theme instance on macOS | the path to the copy in the bundle |
-    /// | a task or theme instance on Linux | **nothing** |
+    /// | a task or theme instance on Linux | the name, once the member has put that file on `PATH` |
     ///
     /// The last two rows are the same build on two OSes, and they part company because of what a
     /// member is handed (`AMB-D-732`). macOS hands them a `.app` they drag into `/Applications`,
     /// where it stays and the CLI inside it has an address anyone can paste. Linux hands them one
     /// `.AppImage`, whose contents are a squashfs mounted under `/tmp` for as long as the GUI runs
-    /// and gone after: a path there is right for a few minutes and wrong for good, which is worse
-    /// than no path at all. So a Linux preview says there is no command rather than naming one —
-    /// `AMB-T-3521` is where a CLI reaching a Linux member is worked out.
+    /// and gone after: a path there is right for a few minutes and wrong for good. So the preview
+    /// ships the CLI beside the AppImage as its own file, under the name this build answers to, and
+    /// the member copies it somewhere on their `PATH`.
+    ///
+    /// That copying is theirs to do, so this asks rather than assumes: the name comes back only when
+    /// a file by that name is actually reachable, and until then there is still no command. Both
+    /// halves matter — naming a command nobody installed sends a reader to `not found` with no idea
+    /// why, and staying silent after they installed it hides the one thing they went and got. The
+    /// answer is settled once per process, so installing the CLI while the app is open is read on
+    /// the next start — the same as the bundle's path on macOS, and the member has just been at a
+    /// terminal, which is where they can try it immediately anyway.
     ///
     /// The path is escaped for a shell, not quoted: the bundle's name carries spaces and brackets
     /// (`amenbo (dev 3519).app`), and the wording it lands in is as often inside quotes already —
@@ -235,15 +243,30 @@ impl Paths {
         static WORDED: OnceLock<Option<String>> = OnceLock::new();
         WORDED
             .get_or_init(|| {
-                Self::command_to_run_for(Self::APP_NAME, std::env::consts::OS, Self::bundled_cli().as_deref())
+                Self::command_to_run_for(
+                    Self::APP_NAME,
+                    std::env::consts::OS,
+                    Self::bundled_cli().as_deref(),
+                    || Self::found_on_path(Self::APP_NAME),
+                )
             })
             .as_deref()
     }
 
-    /// The rule [`command_to_run`](Self::command_to_run) applies, with all three facts it stands on
-    /// said out loud — the build's name, the OS, and where the bundle's copy of the CLI is — so a
-    /// test can stand on an OS and a channel other than the one it is running on.
-    pub(crate) fn command_to_run_for(app_name: &str, os: &str, bundled: Option<&Path>) -> Option<String> {
+    /// The rule [`command_to_run`](Self::command_to_run) applies, with all four facts it stands on
+    /// said out loud — the build's name, the OS, where the bundle's copy of the CLI is, and whether
+    /// a command by that name is reachable from a shell — so a test can stand on an OS, a channel
+    /// and a machine other than the ones it is running on.
+    ///
+    /// The fourth arrives as a question rather than an answer, because it is the one that costs
+    /// something to settle: every other build is decided before the Linux branch is reached, and a
+    /// walk of `PATH` those builds never look at is a walk none of them should pay for.
+    pub(crate) fn command_to_run_for(
+        app_name: &str,
+        os: &str,
+        bundled: Option<&Path>,
+        on_path: impl FnOnce() -> bool,
+    ) -> Option<String> {
         let installed_on_path =
             os == "windows" || !Self::is_dev_app_name(app_name) || app_name == Self::DEV_APP_NAME;
         if installed_on_path {
@@ -252,7 +275,31 @@ impl Paths {
         if os == "macos" {
             return bundled.map(Self::shell_escaped);
         }
-        None
+        // A preview's Linux member installs the CLI by hand, so the answer is whether they did.
+        on_path().then(|| app_name.to_owned())
+    }
+
+    /// Whether a shell here would find a runnable command by that name — the one fact a Linux
+    /// preview's answer turns on, since nothing on that machine installs its CLI but the member.
+    ///
+    /// The executable bit is part of the question, not a detail: a copy made without it is found by
+    /// name and then refused by the kernel, which is the same "runs and is wrong" the naming rule
+    /// exists to avoid. Off Unix this never runs — every other build is answered before the Linux
+    /// branch is reached — so there the file being there is the whole of it.
+    fn found_on_path(name: &str) -> bool {
+        let Some(paths) = crate::env::path() else { return false };
+        std::env::split_paths(&paths).any(|dir| Self::is_runnable(&dir.join(name)))
+    }
+
+    #[cfg(unix)]
+    fn is_runnable(path: &Path) -> bool {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+    }
+
+    #[cfg(not(unix))]
+    fn is_runnable(path: &Path) -> bool {
+        path.is_file()
     }
 
     /// The copy of this build's CLI the bundle carries, where the running binary is standing beside
@@ -1218,7 +1265,8 @@ mod tests {
     #[test]
     fn a_build_is_reached_by_name_where_an_installer_puts_it_there_and_by_path_where_none_does() {
         let bundled = std::path::Path::new("/Applications/amenbo (dev 3519).app/Contents/MacOS/amenbo-dev-3519");
-        let reach = |name: &str, os: &str| Paths::command_to_run_for(name, os, Some(bundled));
+        // Nothing is on this imaginary machine's PATH unless a case says so.
+        let reach = |name: &str, os: &str| Paths::command_to_run_for(name, os, Some(bundled), || false);
 
         // Windows installs every channel's CLI on PATH, so the name is what there is to type.
         assert_eq!(reach("amenbo", "windows").as_deref(), Some("amenbo"));
@@ -1232,8 +1280,39 @@ mod tests {
             Some(r"/Applications/amenbo\ \(dev\ 3519\).app/Contents/MacOS/amenbo-dev-3519"),
         );
         // The same preview on Linux is an AppImage: what is inside it is mounted for the length of
-        // the run and gone after, so there is nothing to hand over.
+        // the run and gone after. The CLI ships beside it as its own file, so the answer is whether
+        // the member has put that file somewhere a shell finds it — and until they do, there is
+        // still nothing to hand over.
         assert_eq!(reach("amenbo-dev-3519", "linux"), None);
+        assert_eq!(
+            Paths::command_to_run_for("amenbo-dev-3519", "linux", Some(bundled), || true).as_deref(),
+            Some("amenbo-dev-3519"),
+        );
+        // Not the bundle's copy, even where one is beside it: on Linux that path outlives nothing.
+        assert!(
+            !Paths::command_to_run_for("amenbo-dev-3519", "linux", Some(bundled), || true)
+                .is_some_and(|c| c.contains('/')),
+            "a Linux preview is worded as the name, never as a path",
+        );
+    }
+
+    /// What `found_on_path` is actually asking. A file by the right name is not the answer — a copy
+    /// made without the executable bit is found and then refused by the kernel, which is the "runs
+    /// and is wrong" the naming rule exists to avoid.
+    #[cfg(unix)]
+    #[test]
+    fn a_command_is_on_path_only_once_it_can_actually_run() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = amenbo_scratch::scratch("cli-on-path");
+        let name = "amenbo-dev-3519";
+        let file = dir.join(name);
+        std::fs::write(&file, "#!/bin/sh\n").unwrap();
+
+        assert!(!Paths::is_runnable(&file), "a copy nobody made executable is not a command");
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(Paths::is_runnable(&file), "and once it is, it is");
+        assert!(!Paths::is_runnable(&dir), "a directory of that name is not one either");
+        assert!(!Paths::is_runnable(&dir.join("nothing-here")));
     }
 
     /// Out of a build tree the bundle's copy is not beside the running binary, and a macOS preview
@@ -1241,7 +1320,7 @@ mod tests {
     /// [`Paths::command_name`] answers with wherever there is nothing better.
     #[test]
     fn a_preview_with_no_bundle_beside_it_is_worded_as_the_name() {
-        assert_eq!(Paths::command_to_run_for("amenbo-dev-3519", "macos", None), None);
+        assert_eq!(Paths::command_to_run_for("amenbo-dev-3519", "macos", None, || false), None);
         let own = "a test build is production, which is always its own name";
         assert_eq!(Paths::command_name(), Paths::APP_NAME, "{own}");
     }

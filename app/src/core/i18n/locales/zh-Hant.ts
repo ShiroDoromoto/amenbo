@@ -353,6 +353,7 @@ export const zhHant: Translation = {
     "search.on.decision": "決定",
     "search.on.decisionComment": "決定上的評論",
     "commands.note": "完整指令參考（來自 agent --json · 唯讀）",
+    "commands.prefix": "下面每一行都接在它後面輸入：",
     "cli.none": "你的 PATH 中還沒有可用的指令。此預覽把 CLI 以一個檔案放在應用程式旁邊——把它複製到 ~/.local/bin（或 PATH 中的任何位置），它就是你要輸入的指令。",
     "commands.search": "搜尋指令", "commands.empty": "沒有指令", "commands.loading": "載入中…",
     "commands.other": "其他", "commands.required": "必填", "commands.examples": "範例",

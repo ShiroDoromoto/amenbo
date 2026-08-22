@@ -362,6 +362,7 @@ export const es: Translation = {
     "search.on.decision": "Decisión",
     "search.on.decisionComment": "Comentario en una decisión",
     "commands.note": "Referencia completa de comandos (de agent --json · solo lectura)",
+    "commands.prefix": "Cada línea de abajo se escribe después de esto:",
     "cli.none": "Todavía no hay ningún comando en tu PATH. Esta vista previa incluye su CLI como un archivo junto a la app: cópialo en ~/.local/bin (o en cualquier lugar de tu PATH) y pasará a ser el comando que escribes.",
     "commands.search": "Buscar comandos", "commands.empty": "Sin comandos", "commands.loading": "Cargando…",
     "commands.other": "Otros", "commands.required": "obligatorio", "commands.examples": "Ejemplos",

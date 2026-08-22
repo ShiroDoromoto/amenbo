@@ -352,6 +352,7 @@ export const tr: Translation = {
     "search.on.decision": "Karar",
     "search.on.decisionComment": "Bir karara yapılan yorum",
     "commands.note": "Tam komut başvurusu (agent --json çıktısından · salt okunur)",
+    "commands.prefix": "Aşağıdaki her satır bunun ardından yazılır:",
     "cli.none": "PATH'inizde henüz bir komut yok. Bu önizleme, CLI'sini uygulamanın yanında bir dosya olarak veriyor — onu ~/.local/bin dizinine (ya da PATH'inizdeki herhangi bir yere) kopyalayın, yazacağınız komut o olur.",
     "commands.search": "Komut ara", "commands.empty": "Komut yok", "commands.loading": "Yükleniyor…",
     "commands.other": "Diğer", "commands.required": "zorunlu", "commands.examples": "Örnekler",

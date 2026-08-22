@@ -373,6 +373,7 @@ const ui = {
   "search.on.task": "Task", "search.on.taskComment": "Comment on a task",
   "search.on.decision": "Decision", "search.on.decisionComment": "Comment on a decision",
   "commands.note": "Full command reference (from agent --json · read-only)",
+  "commands.prefix": "Each line below is typed after this:",
   // The one line a screen shows in place of a command, where nothing on the machine reaches this
   // build's CLI yet (a Linux preview before its member installs it; see components/NoCli.tsx).
   "cli.none": "No command is on your PATH yet. This preview ships its CLI as a file beside the app — copy it into ~/.local/bin (or anywhere on your PATH) and it becomes the command to type.",

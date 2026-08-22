@@ -12,10 +12,11 @@ import { NoCli } from "../components/NoCli";
 // runs the CLI.
 export function CommandCatalogScreen() {
   const { spec, loading } = useAgentSpec();
-  // The catalogue lists commands to type, so each line is worded for the CLI this build installs.
-  // Where it installs none the reader can run, the lines keep the command and drop the name in front
-  // of it: what each one does is still the reference this screen is for, and a name nothing answers
-  // to would only read as one they could paste.
+  // The catalogue is a reference, not a screen anyone pastes from line by line — so the CLI this build
+  // installs is named once, at the top, and the rows carry the command alone. On a preview build that
+  // name is a 60-character path (`AMB-D-732`), and repeating it down every row pushes the command
+  // itself off to the right and wraps the summary, which is the one thing a reader came here to scan.
+  // Where the build installs no CLI a reader can run, the same place says that instead.
   const cli = useCliCommandName();
   const [q, setQ] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -71,7 +72,13 @@ export function CommandCatalogScreen() {
       </div>
       <div className="feed feed--virtual">
         {loading && total === 0 && <div className="feed__item faint">{t("commands.loading")}</div>}
-        {!cli && <div className="feed__item"><NoCli /></div>}
+        {cli ? (
+          <div className="feed__item faint">
+            {t("commands.prefix")} <code className="palette__cmd">{cli}</code>
+          </div>
+        ) : (
+          <div className="feed__item"><NoCli /></div>
+        )}
         {!loading && total === 0 && <div className="feed__item faint">{t("commands.empty")}</div>}
         {filtered.map((g) => (
           <div key={g.capability}>
@@ -79,7 +86,6 @@ export function CommandCatalogScreen() {
             {g.commands.map((c) => (
               <CommandRow
                 key={c.name}
-                cli={cli}
                 cmd={c}
                 open={expanded === c.name}
                 onToggle={() => setExpanded((cur) => (cur === c.name ? null : c.name))}
@@ -92,7 +98,7 @@ export function CommandCatalogScreen() {
   );
 }
 
-function CommandRow({ cli, cmd, open, onToggle }: { cli: string | null; cmd: CommandSpec; open: boolean; onToggle: () => void }) {
+function CommandRow({ cmd, open, onToggle }: { cmd: CommandSpec; open: boolean; onToggle: () => void }) {
   const args = cmd.args ?? [];
   const flags = cmd.flags ?? [];
   const examples = cmd.examples ?? [];
@@ -100,7 +106,7 @@ function CommandRow({ cli, cmd, open, onToggle }: { cli: string | null; cmd: Com
     <div className="feed__item">
       <div className="feed__body">
         <button className="feed__line feed__action cmdcat__head" onClick={onToggle}>
-          <code className="palette__cmd">{cli ? `${cli} ${cmd.name}` : cmd.name}</code>{" "}
+          <code className="palette__cmd">{cmd.name}</code>{" "}
           <span className="muted">{cmd.summary}</span>
           <span className="faint"> <Icon name={open ? "chevronDown" : "chevronRight"} /></span>
         </button>

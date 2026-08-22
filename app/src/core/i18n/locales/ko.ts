@@ -352,6 +352,7 @@ export const ko: Translation = {
     "search.on.decision": "결정",
     "search.on.decisionComment": "결정에 달린 댓글",
     "commands.note": "전체 명령 레퍼런스(agent --json에서 · 읽기 전용)",
+    "commands.prefix": "아래 각 줄은 이것에 이어서 입력합니다:",
     "cli.none": "아직 PATH에 실행할 명령이 없습니다. 이 미리보기는 CLI를 앱 옆에 파일로 함께 제공합니다. ~/.local/bin(또는 PATH에 있는 아무 곳)으로 복사하면 그것이 입력할 명령이 됩니다.",
     "commands.search": "명령 검색", "commands.empty": "명령이 없습니다", "commands.loading": "불러오는 중…",
     "commands.other": "기타", "commands.required": "필수", "commands.examples": "예시",

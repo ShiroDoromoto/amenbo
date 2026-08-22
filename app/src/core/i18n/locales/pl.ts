@@ -365,6 +365,7 @@ export const pl: Translation = {
     "search.on.decision": "Decyzja",
     "search.on.decisionComment": "Komentarz do decyzji",
     "commands.note": "Pełny wykaz poleceń (z agent --json · tylko do odczytu)",
+    "commands.prefix": "Każdy wiersz poniżej wpisuje się po tym:",
     "cli.none": "W twoim PATH nie ma jeszcze żadnego polecenia. Ta wersja podglądowa dostarcza swoje CLI jako plik obok aplikacji — skopiuj go do ~/.local/bin (lub gdziekolwiek w twoim PATH), a stanie się poleceniem, które wpisujesz.",
     "commands.search": "Szukaj poleceń", "commands.empty": "Brak poleceń", "commands.loading": "Wczytywanie…",
     "commands.other": "Inne", "commands.required": "wymagane", "commands.examples": "Przykłady",

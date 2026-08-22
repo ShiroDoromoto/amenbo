@@ -356,6 +356,7 @@ export const de: Translation = {
     "search.on.decision": "Entscheidung",
     "search.on.decisionComment": "Kommentar zu einer Entscheidung",
     "commands.note": "Vollständige Befehlsreferenz (aus agent --json · nur lesend)",
+    "commands.prefix": "Jede Zeile unten folgt auf:",
     "cli.none": "Es liegt noch kein Befehl in Ihrem PATH. Diese Vorschau liefert ihr CLI als Datei neben der App — kopieren Sie sie nach ~/.local/bin (oder irgendwohin in Ihrem PATH), dann wird sie zum Befehl, den Sie eingeben.",
     "commands.search": "Befehle durchsuchen", "commands.empty": "Keine Befehle", "commands.loading": "Wird geladen…",
     "commands.other": "Sonstige", "commands.required": "erforderlich", "commands.examples": "Beispiele",

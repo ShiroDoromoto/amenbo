@@ -365,6 +365,7 @@ export const uk: Translation = {
     "search.on.decision": "Рішення",
     "search.on.decisionComment": "Коментар до рішення",
     "commands.note": "Повний довідник команд (з agent --json · лише для читання)",
+    "commands.prefix": "Кожен рядок нижче набирають після цього:",
     "cli.none": "У вашому PATH ще немає команди. Ця попередня збірка кладе свій CLI окремим файлом поруч із застосунком — скопіюйте його до ~/.local/bin (або будь-куди у вашому PATH), і він стане командою, яку ви набираєте.",
     "commands.search": "Пошук команд", "commands.empty": "Команд немає", "commands.loading": "Завантаження…",
     "commands.other": "Інше", "commands.required": "обов'язково", "commands.examples": "Приклади",

@@ -362,6 +362,7 @@ export const it: Translation = {
     "search.on.decision": "Decisione",
     "search.on.decisionComment": "Commento a una decisione",
     "commands.note": "Riferimento completo dei comandi (da agent --json · sola lettura)",
+    "commands.prefix": "Ogni riga qui sotto si digita dopo questo:",
     "cli.none": "Nel tuo PATH non c'è ancora nessun comando. Questa anteprima include la sua CLI come file accanto all'app: copialo in ~/.local/bin (o ovunque nel tuo PATH) e diventa il comando da digitare.",
     "commands.search": "Cerca comandi", "commands.empty": "Nessun comando", "commands.loading": "Caricamento…",
     "commands.other": "Altri", "commands.required": "obbligatorio", "commands.examples": "Esempi",

@@ -891,6 +891,7 @@ mod tests {
                         ordered: false,
                         role: DimensionRole::None,
                         show_on_card: false,
+                        required: false,
                     },
                 )
                 .unwrap()

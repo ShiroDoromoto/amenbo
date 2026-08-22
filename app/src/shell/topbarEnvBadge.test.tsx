@@ -76,6 +76,12 @@ describe("TopBar environment badge", () => {
     expect(badge()?.textContent).toBe("DEV AMB-T-2133");
   });
 
+  it("a preview CI baked carries the commit and the minute, so two bakes of one theme differ", async () => {
+    hoisted.badge = "DEV AMB-T-3493 · 7901f2b9 · 08-22 07:36";
+    await render();
+    expect(badge()?.textContent).toBe("DEV AMB-T-3493 · 7901f2b9 · 08-22 07:36");
+  });
+
   it("is asked once, not on every render", async () => {
     hoisted.badge = "DEV";
     await render();

@@ -1645,6 +1645,26 @@ pub fn dimension_siblings(
     order_siblings(conn, D.id, D.order_key, Some(Pred::eq(D.project_id, project_id)), exclude)
 }
 
+/// The project's required axes (`AMB-D-734`), as `(id, name)` in display order — the premise
+/// [`crate::ops::task::finish_creating`] reads at the door. Read inside the writer's transaction: the
+/// flag is one an `update` in another transaction can raise, and a creation finished against a stale
+/// answer is one that got through a premise the store already held.
+pub fn required_dimensions(conn: &Connection, project_id: i64) -> Result<Vec<(i64, String)>> {
+    const D: col::dimension::Cols = col::dimension::ALL;
+    let mut sel = Select::new();
+    let (id, name) = (sel.col(D.id), sel.col(D.name));
+    let pred = Pred::eq(D.project_id, project_id).and(Pred::eq(D.required, true));
+    let mut sql = Sql::from(&sel, D.table);
+    sql.push_where(Some(&pred)).order_by([Sort::by(D.order_key), Sort::by(D.id)]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| Ok((id.get(r)?, name.get(r)?)))
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<(i64, String)>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(rows)
+}
+
 /// Live value siblings within one dimension. Same read-then-write reason as [`dimension_siblings`].
 pub fn dimension_value_siblings(
     conn: &Connection,

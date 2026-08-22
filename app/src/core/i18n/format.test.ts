@@ -10,7 +10,7 @@ const snap = { language: null as string | null, dateLocale: null as string | nul
 vi.mock("../snapshot", () => ({ getSnapshot: () => snap }));
 
 import {
-  agoLabel, dueLabel, formatDay, formatDayTime, formatNumber, formatStamp, monthLabel, weekdayLabels,
+  dueLabel, exactLabel, formatDay, formatDayTime, formatNumber, monthLabel, weekdayLabels, whenLabel,
 } from "./format";
 import { tf, tn } from "./index";
 import { de } from "./locales/de";
@@ -23,25 +23,39 @@ beforeEach(() => {
   snap.dateLocale = null;
 });
 
-describe("how long ago", () => {
-  it("words the gap in the largest unit that fits", () => {
-    expect(agoLabel(ago(5), "en-US", NOW)).toBe("now");
-    expect(agoLabel(ago(60), "en-US", NOW)).toBe("1 minute ago");
-    expect(agoLabel(ago(120), "en-US", NOW)).toBe("2 minutes ago");
-    expect(agoLabel(ago(3600), "en-US", NOW)).toBe("1 hour ago");
-    expect(agoLabel(ago(86_400 * 3), "en-US", NOW)).toBe("3 days ago");
-    expect(agoLabel(ago(120), "ja-JP", NOW)).toMatch(/^2\s?分前$/);
+describe("when a timeline row happened", () => {
+  it("words a recent gap in the largest unit that fits", () => {
+    expect(whenLabel(ago(5), "en-US", NOW)).toBe("now");
+    expect(whenLabel(ago(60), "en-US", NOW)).toBe("1 minute ago");
+    expect(whenLabel(ago(120), "en-US", NOW)).toBe("2 minutes ago");
+    expect(whenLabel(ago(3600), "en-US", NOW)).toBe("1 hour ago");
+    expect(whenLabel(ago(86_400 * 3), "en-US", NOW)).toBe("3 days ago");
+    expect(whenLabel(ago(120), "ja-JP", NOW)).toMatch(/^2\s?分前$/);
   });
 
   // A row written a moment ago can carry a timestamp a hair ahead of this clock. "in -0 minutes"
   // would be the tell; the gap is floored at zero instead.
   it("does not run backwards on a timestamp from just ahead", () => {
-    expect(agoLabel(new Date(NOW + 2000).toISOString(), "en-US", NOW)).toBe("now");
+    expect(whenLabel(new Date(NOW + 2000).toISOString(), "en-US", NOW)).toBe("now");
+  });
+
+  // "115 days ago" is not a date anyone can use. Past a week the day itself is shown instead.
+  it("shows the day once the relative wording has stopped being one", () => {
+    expect(whenLabel(ago(86_400 * 7), "en-US", NOW)).toBe(formatDay(new Date(NOW - 86_400_000 * 7), "en-US"));
+    expect(whenLabel(ago(86_400 * 115), "en-US", NOW)).toBe(formatDay(new Date(NOW - 86_400_000 * 115), "en-US"));
   });
 
   // `Intl` throws a RangeError on a NaN, and one unreadable row must not take the screen with it.
   it("renders nothing for a timestamp it cannot read", () => {
-    expect(agoLabel("not a timestamp", "en-US", NOW)).toBe("");
+    expect(whenLabel("not a timestamp", "en-US", NOW)).toBe("");
+    expect(exactLabel("not a timestamp", "en-US")).toBe("");
+  });
+
+  // The rounding `whenLabel` does is exactly what the title has to give back, so it carries seconds.
+  it("says the instant to the second, for the title", () => {
+    const label = exactLabel("2026-06-21T12:00:00Z", "en-US");
+    expect(label).toMatch(/\d{1,2}:\d{2}:\d{2}/);
+    expect(label).toContain("2026");
   });
 });
 
@@ -130,13 +144,6 @@ describe("a date", () => {
     const written = formatDayTime(at, "en-US");
     expect(written).toMatch(/^6\/21, \d{2}:\d{2}/);
     expect(written).not.toContain("2026");
-  });
-
-  // What a decision record is dated by: read years later, it has to say which year.
-  it("carries the year as well when it is a stamp", () => {
-    expect(formatStamp(at, "en-US")).toMatch(/^6\/21\/2026, \d{2}:\d{2}/);
-    expect(formatStamp(at, "ja-JP")).toMatch(/^2026\/6\/21 \d{2}:\d{2}/);
-    expect(formatStamp(new Date("nope"), "en-US")).toBe("");
   });
 });
 

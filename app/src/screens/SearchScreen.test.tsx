@@ -42,7 +42,7 @@ vi.mock("../core/snapshot", async (importOriginal) => {
 });
 
 import { SearchScreen } from "./SearchScreen";
-import { agoLabel, priorityLabel, statusLabel, t } from "../core/i18n";
+import { priorityLabel, statusLabel, t, whenLabel } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -282,12 +282,12 @@ describe("the search screen", () => {
     // target's own wording contains the face's in more than one language.
     const words = (i: number) =>
       Array.from(rows()[i].querySelectorAll(".feed__meta > span")).map((s) => s.textContent);
-    expect(words(1)).toEqual([t("search.on.taskComment"), "AMB-TC-9", agoLabel(AT)]);
+    expect(words(1)).toEqual([t("search.on.taskComment"), "AMB-TC-9", whenLabel(AT)]);
     expect(words(3)).toEqual([
       t("search.on.decisionComment"),
       t("search.face.attachment"),
       "AMB-DC-8",
-      agoLabel(AT),
+      whenLabel(AT),
     ]);
   });
 

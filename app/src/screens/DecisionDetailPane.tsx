@@ -14,7 +14,7 @@ import {
 import { confirmDialog } from "../core/dialog";
 import { isClosed } from "../core/status";
 import { asTyped, isEnterSubmit } from "../core/keys";
-import { errText, formatNumber, formatStamp, statusLabel, t, tf } from "../core/i18n";
+import { errText, exactLabel, formatNumber, statusLabel, t, tf } from "../core/i18n";
 import { decisionRef } from "../core/idref";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
@@ -353,8 +353,9 @@ export function DecisionDetailPane({
  * When this decision was written down, when it was settled, and whether anything has moved since —
  * the freshness the body cannot say. `decidedAt` is there only once a decision is settled (a reopen
  * clears it again), and `updatedAt` moves on any write, an accept included, so it is shown only where
- * it is news: not where it merely repeats the instant the decision was recorded or settled at. The
- * exact timestamp is on the `title`, the way every other stamp on these screens carries it.
+ * it is news: not where it merely repeats the instant the decision was recorded or settled at. Each
+ * one is written out in full rather than as "3 days ago": these are the dates a record is cited by,
+ * and the CLI page prints them outright too. The raw UTC stays on the `title`.
  */
 function DecisionStamps({ d }: { d: Decision }) {
   const stamps: { key: string; label: string; at: string }[] = [
@@ -369,7 +370,7 @@ function DecisionStamps({ d }: { d: Decision }) {
       {stamps.map((s, i) => (
         <span key={s.key} title={s.at}>
           {i > 0 && " · "}
-          {s.label} {formatStamp(new Date(s.at))}
+          {s.label} {exactLabel(s.at)}
         </span>
       ))}
     </div>

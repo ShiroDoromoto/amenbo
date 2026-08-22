@@ -62,7 +62,7 @@ vi.mock("../core/mutations", () => {
 vi.mock("../components/Attachments", () => ({ Attachments: () => null }));
 
 import { DecisionDetailPane } from "./DecisionDetailPane";
-import { formatStamp, t, tf } from "../core/i18n";
+import { exactLabel, t, tf } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -148,7 +148,7 @@ describe("the stamps that say how fresh the record is", () => {
     hoisted.decisions.set(1, decision(1));
     render(1);
     expect(stamps()).toContain(t("dec.recorded"));
-    expect(stamps()).toContain(formatStamp(new Date("2026-07-12T00:00:00Z")));
+    expect(stamps()).toContain(exactLabel("2026-07-12T00:00:00Z"));
     expect(stamps()).not.toContain(t("dec.decided"));
     // Accepting moves `updatedAt` to the instant it was settled at, so a "last changed" beside the
     // decided stamp would be the same moment said twice.
@@ -161,7 +161,7 @@ describe("the stamps that say how fresh the record is", () => {
     }));
     render(1);
     expect(stamps()).toContain(t("dec.decided"));
-    expect(stamps()).toContain(formatStamp(new Date("2026-07-15T09:00:00Z")));
+    expect(stamps()).toContain(exactLabel("2026-07-15T09:00:00Z"));
     expect(stamps()).not.toContain(t("dec.lastChanged"));
   });
 
@@ -171,7 +171,7 @@ describe("the stamps that say how fresh the record is", () => {
     }));
     render(1);
     expect(stamps()).toContain(t("dec.lastChanged"));
-    expect(stamps()).toContain(formatStamp(new Date("2026-08-01T10:00:00Z")));
+    expect(stamps()).toContain(exactLabel("2026-08-01T10:00:00Z"));
   });
 });
 

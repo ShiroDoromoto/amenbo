@@ -286,6 +286,7 @@ pub(super) fn dimension_row(r: &Row) -> rusqlite::Result<Dimension> {
         ordered: get(r, C.ordered)?,
         role: enum_req(r, C.role, DimensionRole::parse)?,
         show_on_card: get(r, C.show_on_card)?,
+        required: get(r, C.required)?,
         order_key: get(r, C.order_key)?,
         created_at,
         updated_at,
@@ -560,6 +561,7 @@ mod tests {
                 // Set for the same reason `at_binding_id` is: `false` is the default, so a column that
                 // failed to round-trip would read as the value this field is meant to be testing.
                 show_on_card: true,
+                required: true,
                 order_key: "a0".to_string(),
                 created_at: now,
                 updated_at: now,

@@ -2694,7 +2694,7 @@ pub fn dimension_add(project_id: i64, name: String) -> Result<WriteAck, CmdError
 #[tauri::command]
 pub fn dimension_rename(id: i64, name: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.dimension_update(id, Some(&name), None, None, None, None)?;
+        store.dimension_update(id, Some(&name), None, None, None, None, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))
@@ -2716,7 +2716,7 @@ pub fn dimension_update(
 ) -> Result<WriteAck, CmdError> {
     let role = time_axis.map(|on| if on { DimensionRole::TimeAxis } else { DimensionRole::None });
     with_store_mut(|store| {
-        store.dimension_update(id, None, notes.as_deref(), ordered, role, show_on_card)?;
+        store.dimension_update(id, None, notes.as_deref(), ordered, role, show_on_card, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))
@@ -3810,22 +3810,17 @@ pub fn agent_hook_requests(project_id: i64) -> Result<AgentHookRequestsDto, CmdE
 /// or a run out of a build tree — the command's own name is the best that can be said, and a reader
 /// whose `PATH` carries it is still reached.
 ///
-/// Two names are tried beside the binary, because two different questions have the same answer on
-/// production and part company on the dev channel: what this build's CLI is **called**
-/// (`command_name` — `amenbo-dev` there) and what the file in the bundle is **named**
-/// (`sidecar_file_name` — always `amenbo`). Production answers `amenbo` to both and stops at the
-/// first, so nothing about it changes; a dev build misses on the first and finds its sidecar on the
-/// second, instead of falling through to a bare word no host can start.
+/// One name is looked for, because the bundle carries the CLI under this build's own name and that
+/// is the same word this build's guidance tells someone to type (`Paths::sidecar_file_name`). Where
+/// it is not found the bare name is still the best that can be said, and a reader whose `PATH`
+/// carries it is reached anyway.
 fn mcp_exe() -> std::path::PathBuf {
-    let cmd = amenbo_core::config::Paths::command_name();
-    let named = if cfg!(windows) { format!("{cmd}.exe") } else { cmd.to_string() };
+    let named = amenbo_core::config::Paths::sidecar_file_name();
     let beside = std::env::current_exe().ok().and_then(|exe| exe.parent().map(|at| at.to_path_buf()));
     if let Some(at) = beside {
-        for name in [named.as_str(), amenbo_core::config::Paths::sidecar_file_name()] {
-            let file = at.join(name);
-            if file.is_file() {
-                return file;
-            }
+        let file = at.join(&named);
+        if file.is_file() {
+            return file;
         }
     }
     std::path::PathBuf::from(named)

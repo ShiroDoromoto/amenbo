@@ -144,6 +144,10 @@ fn updater_target() -> Option<String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+  // Read once and handed to `run` at the end: the claim below needs the bundle identifier while the
+  // app is still being built, and this is where that name lives (the build may override it — a
+  // theme's preview does).
+  let context = tauri::generate_context!();
   #[allow(unused_mut)]
   let mut builder = tauri::Builder::default();
   // One process per store, claimed before anything else this app does: a builder plugin is
@@ -151,7 +155,7 @@ pub fn run() {
   // before a window, a watcher or a migration screen exists to be doubled (`single_instance`).
   #[cfg(desktop)]
   if single_instance::guards_this_run() {
-    builder = builder.plugin(single_instance::init());
+    builder = builder.plugin(single_instance::init(&context.config().identifier));
   }
   builder
     .menu(menu::build)
@@ -389,7 +393,7 @@ pub fn run() {
       commands::plugin_update_apply,
       commands::plugin_update_apply_all,
     ])
-    .run(tauri::generate_context!())
+    .run(context)
     .expect("error while running tauri application");
 }
 

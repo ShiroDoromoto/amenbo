@@ -237,6 +237,7 @@ export async function addTask(
       id, title, notes: notes ?? "", status: "todo", assignee: null, priority: null,
       due: due ?? null, comments: 0, createdBy: me(),
       ref: taskRef(id), projectId, completedAt: null,
+      createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       // A creation lands unfinished, exactly as core's `add` leaves it (`AMB-D-554`): the task is on the
       // board and refused a reservation until the detail pane's "finish creating" ends the second stage.
       ready: false, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [],

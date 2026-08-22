@@ -179,6 +179,7 @@ export const uk: Translation = {
     "detail.commentPh": "Напишіть коментар… (Markdown, Enter — новий рядок)",
     "detail.commentHint": "Markdown · надіслати через ⌘/Ctrl+Enter", "detail.send": "Надіслати",
     "detail.created": "Створено", "detail.restoreHint": "видалення не скасувати",
+    "detail.updated": "Оновлено", "detail.updatedHint": "зсувається за будь-якого запису — коментар, дата, правка заголовка, — а не лише при зміні статусу",
     "detail.delete": "Видалити", "detail.deleteTip": "Видалити це завдання (не скасувати)",
     "detail.deleteConfirm": "Видалити «{title}»?",
     "comment.edit": "Редагувати цей коментар",

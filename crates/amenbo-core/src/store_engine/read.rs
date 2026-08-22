@@ -3509,6 +3509,11 @@ pub struct TaskCardRow {
     /// The subset of `linked_decisions` that is unsettled. Together with `blocked_by` this decides
     /// `ready` (both empty ⇒ ready), mirroring [`reserve_blockers`].
     pub blocked_by_decisions: Vec<DecisionCardRef>,
+    /// When the row was written, and when it was last written to (RFC3339 UTC, as stored). Carried for
+    /// the reader alone — how long a task has been sitting there is a question nothing else on the card
+    /// answers. Never a judgement input: what a face may decide from is an intent column (`AMB-D-372`).
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 /// Hydrate one GUI task card from the read-model (see [`TaskCardRow`]); `None` when no row carries
@@ -3521,6 +3526,7 @@ pub fn task_card_row(conn: &Connection, task_id: i64) -> Result<Option<TaskCardR
     let (priority, due_on, completed_at) = (sel.col(T.priority), sel.col(T.due_on), sel.col(T.completed_at));
     let (start_on, draft) = (sel.col(T.start_on), sel.col(T.draft));
     let (assignee, creator) = (sel.col(T.assignee_kind), sel.col(T.created_by_kind));
+    let (created_at, updated_at) = (sel.col(T.created_at), sel.col(T.updated_at));
     let mut sql = Sql::from(&sel, T.table);
     sql.push_where(Some(&Pred::eq(T.id, task_id)));
     let row = conn
@@ -3541,6 +3547,8 @@ pub fn task_card_row(conn: &Connection, task_id: i64) -> Result<Option<TaskCardR
                     .map(|k| CardActor { name: facet_display(Some(&k)), kind: Some(k) }),
                 created_by: created_by_kind
                     .map(|k| CardActor { name: facet_display(Some(&k)), kind: Some(k) }),
+                created_at: created_at.get(r)?,
+                updated_at: updated_at.get(r)?,
                 placement: None,
                 blocked_by: Vec::new(),
                 num_comments: 0,

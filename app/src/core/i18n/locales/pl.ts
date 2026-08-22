@@ -179,6 +179,7 @@ export const pl: Translation = {
     "detail.commentPh": "Napisz komentarz… (Markdown, Enter przechodzi do nowej linii)",
     "detail.commentHint": "Markdown · wyślij przez ⌘/Ctrl+Enter", "detail.send": "Wyślij",
     "detail.created": "Utworzono", "detail.restoreHint": "usunięcia nie da się cofnąć",
+    "detail.updated": "Zaktualizowano", "detail.updatedHint": "przesuwa je każdy zapis — komentarz, data, poprawka tytułu — nie tylko zmiana statusu",
     "detail.delete": "Usuń", "detail.deleteTip": "Usuń to zadanie (nie da się cofnąć)",
     "detail.deleteConfirm": "Usunąć „{title}”?",
     "comment.edit": "Edytuj ten komentarz",

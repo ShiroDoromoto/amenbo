@@ -176,6 +176,7 @@ export const ko: Translation = {
     "detail.commentPh": "댓글을 쓰세요…(마크다운, Enter는 줄바꿈)",
     "detail.commentHint": "마크다운 · ⌘/Ctrl+Enter로 보내기", "detail.send": "보내기",
     "detail.created": "만든 날", "detail.restoreHint": "삭제는 되돌릴 수 없습니다",
+    "detail.updated": "수정", "detail.updatedHint": "어떤 쓰기에도 갱신됩니다 — 댓글, 날짜, 제목 수정 — 상태가 바뀐 시각이 아닙니다",
     "detail.delete": "삭제", "detail.deleteTip": "이 작업을 삭제합니다(되돌릴 수 없습니다)",
     "detail.deleteConfirm": "“{title}”을(를) 삭제할까요?",
     "comment.edit": "이 댓글 편집",

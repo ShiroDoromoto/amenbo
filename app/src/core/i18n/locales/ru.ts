@@ -179,6 +179,7 @@ export const ru: Translation = {
     "detail.commentPh": "Напишите комментарий… (Markdown, Enter — перенос строки)",
     "detail.commentHint": "Markdown · отправить — ⌘/Ctrl+Enter", "detail.send": "Отправить",
     "detail.created": "Создано", "detail.restoreHint": "удаление необратимо",
+    "detail.updated": "Обновлено", "detail.updatedHint": "сдвигается при любой записи — комментарий, дата, правка заголовка, — а не только при смене статуса",
     "detail.delete": "Удалить", "detail.deleteTip": "Удалить эту задачу (необратимо)",
     "detail.deleteConfirm": "Удалить «{title}»?",
     "comment.edit": "Изменить этот комментарий",

@@ -179,6 +179,7 @@ export const it: Translation = {
     "detail.commentPh": "Scrivi un commento… (Markdown, Invio per andare a capo)",
     "detail.commentHint": "Markdown · invia con ⌘/Ctrl+Invio", "detail.send": "Invia",
     "detail.created": "Creata", "detail.restoreHint": "l'eliminazione non si può annullare",
+    "detail.updated": "Aggiornata", "detail.updatedHint": "qualsiasi scrittura lo sposta — un commento, una data, una correzione del titolo — non solo un cambio di stato",
     "detail.delete": "Elimina", "detail.deleteTip": "Elimina questa attività (non si può annullare)",
     "detail.deleteConfirm": "Eliminare «{title}»?",
     "comment.edit": "Modifica questo commento",

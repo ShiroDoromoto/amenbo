@@ -179,6 +179,7 @@ export const th: Translation = {
     "detail.commentPh": "เขียนความเห็น… (Markdown, Enter เพื่อขึ้นบรรทัดใหม่)",
     "detail.commentHint": "Markdown · ส่งด้วย ⌘/Ctrl+Enter", "detail.send": "ส่ง",
     "detail.created": "สร้างเมื่อ", "detail.restoreHint": "ลบแล้วเรียกคืนไม่ได้",
+    "detail.updated": "อัปเดตเมื่อ", "detail.updatedHint": "การเขียนใด ๆ ก็ขยับค่านี้ — ความคิดเห็น วันที่ การแก้ชื่อเรื่อง — ไม่ใช่แค่การเปลี่ยนสถานะ",
     "detail.delete": "ลบ", "detail.deleteTip": "ลบงานนี้ (เรียกคืนไม่ได้)",
     "detail.deleteConfirm": "ลบ “{title}” ไหม",
     "comment.edit": "แก้ไขความเห็นนี้",

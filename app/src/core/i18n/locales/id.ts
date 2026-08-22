@@ -179,6 +179,7 @@ export const id: Translation = {
     "detail.commentPh": "Tulis komentar… (Markdown, Enter untuk baris baru)",
     "detail.commentHint": "Markdown · kirim dengan ⌘/Ctrl+Enter", "detail.send": "Kirim",
     "detail.created": "Dibuat", "detail.restoreHint": "penghapusan tidak bisa dibatalkan",
+    "detail.updated": "Diperbarui", "detail.updatedHint": "setiap penulisan menggesernya — komentar, tanggal, perbaikan judul — bukan hanya perubahan status",
     "detail.delete": "Hapus", "detail.deleteTip": "Hapus tugas ini (tidak bisa dibatalkan)",
     "detail.deleteConfirm": "Hapus “{title}”?",
     "comment.edit": "Sunting komentar ini",

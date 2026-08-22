@@ -179,6 +179,7 @@ export const fr: Translation = {
     "detail.commentPh": "Écrivez un commentaire… (Markdown, Entrée pour un saut de ligne)",
     "detail.commentHint": "Markdown · envoyer avec ⌘/Ctrl+Entrée", "detail.send": "Envoyer",
     "detail.created": "Créée", "detail.restoreHint": "la suppression est irréversible",
+    "detail.updated": "Mise à jour", "detail.updatedHint": "toute écriture le déplace — un commentaire, une date, une correction de titre —, pas seulement un changement de statut",
     "detail.delete": "Supprimer", "detail.deleteTip": "Supprimer cette tâche (irréversible)",
     "detail.deleteConfirm": "Supprimer « {title} » ?",
     "comment.edit": "Modifier ce commentaire",

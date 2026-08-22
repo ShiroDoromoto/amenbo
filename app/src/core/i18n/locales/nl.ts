@@ -176,6 +176,7 @@ export const nl: Translation = {
     "detail.commentPh": "Schrijf een opmerking… (Markdown, Enter voor een nieuwe regel)",
     "detail.commentHint": "Markdown · versturen met ⌘/Ctrl+Enter", "detail.send": "Versturen",
     "detail.created": "Aangemaakt", "detail.restoreHint": "verwijderen kan niet ongedaan worden gemaakt",
+    "detail.updated": "Bijgewerkt", "detail.updatedHint": "elke schrijfactie verzet dit — een reactie, een datum, een titelcorrectie — niet alleen een statuswijziging",
     "detail.delete": "Verwijderen", "detail.deleteTip": "Deze taak verwijderen (kan niet ongedaan)",
     "detail.deleteConfirm": "“{title}” verwijderen?",
     "comment.edit": "Deze opmerking bewerken",

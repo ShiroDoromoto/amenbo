@@ -176,6 +176,7 @@ export const de: Translation = {
     "detail.commentPh": "Kommentar schreiben… (Markdown, Enter für einen Zeilenumbruch)",
     "detail.commentHint": "Markdown · mit ⌘/Strg+Enter senden", "detail.send": "Senden",
     "detail.created": "Erstellt", "detail.restoreHint": "Löschen lässt sich nicht rückgängig machen",
+    "detail.updated": "Aktualisiert", "detail.updatedHint": "jede Schreiboperation bewegt diesen Wert – ein Kommentar, ein Datum, eine Titelkorrektur –, nicht nur ein Statuswechsel",
     "detail.delete": "Löschen", "detail.deleteTip": "Diese Aufgabe löschen (nicht rückgängig zu machen)",
     "detail.deleteConfirm": "„{title}“ löschen?",
     "comment.edit": "Diesen Kommentar bearbeiten",

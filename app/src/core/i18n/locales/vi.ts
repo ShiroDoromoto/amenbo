@@ -179,6 +179,7 @@ export const vi: Translation = {
     "detail.commentPh": "Viết bình luận… (Markdown, Enter để xuống dòng)",
     "detail.commentHint": "Markdown · gửi bằng ⌘/Ctrl+Enter", "detail.send": "Gửi",
     "detail.created": "Đã tạo", "detail.restoreHint": "xoá rồi không lấy lại được",
+    "detail.updated": "Đã cập nhật", "detail.updatedHint": "mọi thao tác ghi đều dời mốc này — bình luận, ngày, sửa tiêu đề — không chỉ khi đổi trạng thái",
     "detail.delete": "Xoá", "detail.deleteTip": "Xoá việc này (không lấy lại được)",
     "detail.deleteConfirm": "Xoá “{title}”?",
     "comment.edit": "Sửa bình luận này",

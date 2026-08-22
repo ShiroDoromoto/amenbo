@@ -178,6 +178,7 @@ export const ja: Translation = {
     "detail.commentPh": "コメントを書く…（Markdown 可・改行は Enter）",
     "detail.commentHint": "Markdown 可 · ⌘/Ctrl+Enter で送信", "detail.send": "送信",
     "detail.created": "作成", "detail.restoreHint": "削除は元に戻せません",
+    "detail.updated": "更新", "detail.updatedHint": "どの書き込みでも動きます（コメント・日付・タイトルの修正も含む）。ステータスが変わった時刻ではありません",
     "detail.delete": "削除", "detail.deleteTip": "このタスクを削除する（元に戻せません）",
     "detail.deleteConfirm": "「{title}」を削除しますか？",
     "comment.edit": "このコメントを編集",

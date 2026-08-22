@@ -177,6 +177,7 @@ export const zhHans: Translation = {
     "detail.commentPh": "写一条评论…（Markdown，回车换行）",
     "detail.commentHint": "Markdown · 用 ⌘/Ctrl+Enter 发送", "detail.send": "发送",
     "detail.created": "创建于", "detail.restoreHint": "删除无法撤销",
+    "detail.updated": "更新于", "detail.updatedHint": "任何写入都会推进它——评论、日期、标题修改——而不只是状态变更",
     "detail.delete": "删除", "detail.deleteTip": "删除这个任务（无法撤销）",
     "detail.deleteConfirm": "删除“{title}”？",
     "comment.edit": "编辑这条评论",

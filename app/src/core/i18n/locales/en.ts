@@ -192,6 +192,7 @@ const ui = {
   "detail.commentPh": "Write a comment… (Markdown, Enter for newline)",
   "detail.commentHint": "Markdown · send with ⌘/Ctrl+Enter", "detail.send": "Send",
   "detail.created": "Created", "detail.restoreHint": "deletion cannot be undone",
+  "detail.updated": "Updated", "detail.updatedHint": "any write moves this — a comment, a date, a title fix — not just a status change",
   "detail.delete": "Delete", "detail.deleteTip": "Delete this task (cannot be undone)",
   "detail.deleteConfirm": "Delete “{title}”?",
   "comment.edit": "Edit this comment",

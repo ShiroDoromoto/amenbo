@@ -16,6 +16,7 @@ function card(over: Partial<TaskCard>): TaskCard {
     assignee: null, priority: null, due: null, completedAt: null,
     comments: 0, ready: true, blockedBy: [], placement: null, createdBy: null,
     linkedDecisions: [], blockedByDecisions: [], startOn: null, notStartedUntil: null, draft: false,
+    createdAt: "2026-06-01T09:00:00Z", updatedAt: "2026-06-01T09:00:00Z",
     ...over,
   };
 }

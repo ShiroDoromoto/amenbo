@@ -176,6 +176,7 @@ export const tr: Translation = {
     "detail.commentPh": "Yorum yazın… (Markdown, satır atlamak için Enter)",
     "detail.commentHint": "Markdown · ⌘/Ctrl+Enter ile gönder", "detail.send": "Gönder",
     "detail.created": "Oluşturuldu", "detail.restoreHint": "silme geri alınamaz",
+    "detail.updated": "Güncellendi", "detail.updatedHint": "her yazma bunu ilerletir — bir yorum, bir tarih, bir başlık düzeltmesi — yalnızca durum değişikliği değil",
     "detail.delete": "Sil", "detail.deleteTip": "Bu işi sil (geri alınamaz)",
     "detail.deleteConfirm": "“{title}” silinsin mi?",
     "comment.edit": "Bu yorumu düzenle",

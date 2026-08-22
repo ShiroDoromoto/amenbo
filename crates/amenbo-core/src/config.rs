@@ -129,7 +129,8 @@ impl Paths {
     /// The app-data "app name" of the **development** channel — the shared dev build's own directory
     /// (`…/work.amenbo.amenbo-dev`). It is a prefix as much as a name: a throwaway dev GUI built for
     /// one task extends it with that task's number (`amenbo-dev-<id>`, `AMB-D-390`) so two parallel
-    /// sessions never share a store, which is why the channel test below is not an equality.
+    /// sessions never share a store, which is why the channel test below is not an equality. A theme's
+    /// preview build extends it the same way, with the umbrella task's number (`AMB-D-732`).
     pub const DEV_APP_NAME: &'static str = "amenbo-dev";
 
     /// Whether this build is on the development channel: the shared dev build, or a throwaway

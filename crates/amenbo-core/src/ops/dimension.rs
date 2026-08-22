@@ -308,9 +308,28 @@ pub fn value_move(tx: &WriteTx<'_>, value_id: i64, pos: Position) -> Result<Dime
 }
 
 /// Hard-delete a dimension value, and with it every task assignment naming it.
+///
+/// **The last value of a required axis is refused** (`AMB-D-734`). Emptying an axis that demands an
+/// answer leaves a flag nobody can satisfy — every creation on the project would then stop at the
+/// door — which is the same state [`update`] already refuses to create from the other side, and the
+/// assignments this delete takes with it would empty out tasks that had already finished their
+/// creation. Lower the requirement first; that is free, and then the values are ordinary again.
+///
+/// Deleting the axis itself is not this door: [`delete_subtree`] sweeps its values through
+/// [`delete_value_subtree`], which carries no guard, because an axis that is gone demands nothing.
 pub fn value_delete(tx: &WriteTx<'_>, value_id: i64) -> Result<()> {
     let before = live_value_before(tx, value_id)?;
-    live_before(tx, before.dimension_id)?;
+    let axis = live_before(tx, before.dimension_id)?;
+    if axis.required && read::dimension_value_ids(tx.conn(), axis.id)?.len() <= 1 {
+        return Err(Error::Invalid(
+            Msg::new(format!(
+                "'{}' is a required category and this is its last value, so removing it would leave \
+                 a demand nobody can meet — lower the requirement first",
+                axis.name
+            ))
+            .with("name", &axis.name),
+        ));
+    }
     delete_value_subtree(tx, before.id)
 }
 
@@ -806,6 +825,53 @@ mod tests {
         let stage = value_add(tx, free.id, "運用第2期").unwrap();
         set(tx, t, stage.id).unwrap();
         assert!(unset(tx, t, stage.id).unwrap());
+    }
+
+    /// The other route back to empty (`AMB-D-734`): deleting the values themselves. A required axis
+    /// keeps its last one, because losing it would leave a demand nobody can meet — and would empty
+    /// out the tasks already assigned to it, behind the creation premise's back.
+    #[test]
+    fn a_required_axis_keeps_its_last_value() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let t = task_in(tx, "a task", p);
+        let axis = add(tx, p, custom("プロダクト")).unwrap();
+        let core = value_add(tx, axis.id, "Amenbo本体").unwrap();
+        let site = value_add(tx, axis.id, "Amenboサイト").unwrap();
+        set(tx, t, core.id).unwrap();
+        update(tx, axis.id, None, None, None, None, None, Some(true)).unwrap();
+
+        // Down to the last one is fine — the axis can still be answered.
+        value_delete(tx, site.id).unwrap();
+        assert!(val_opt(tx, site.id).is_none());
+
+        assert!(value_delete(tx, core.id).is_err(), "the last value of a required axis stays");
+        assert!(val_opt(tx, core.id).is_some(), "and the refusal wrote nothing");
+        assert_eq!(
+            read::task_dimension_assignments(tx.conn(), t).unwrap(),
+            vec![(axis.id, core.id)],
+            "so the task that answered it is still answering",
+        );
+
+        // Lowering the flag is the way out, and then the value is ordinary again.
+        update(tx, axis.id, None, None, None, None, None, Some(false)).unwrap();
+        value_delete(tx, core.id).unwrap();
+        assert!(val_opt(tx, core.id).is_none());
+    }
+
+    /// Deleting the axis is not that door: an axis that is gone demands nothing, so its values go with
+    /// it however the flag stood.
+    #[test]
+    fn deleting_a_required_axis_takes_its_last_value_with_it() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let axis = add(tx, p, custom("プロダクト")).unwrap();
+        let core = value_add(tx, axis.id, "Amenbo本体").unwrap();
+        update(tx, axis.id, None, None, None, None, None, Some(true)).unwrap();
+        delete(tx, axis.id).unwrap();
+        assert!(val_opt(tx, core.id).is_none());
     }
 
     #[test]

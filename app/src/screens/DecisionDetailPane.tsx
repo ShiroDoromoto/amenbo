@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { Markdown } from "../components/Markdown";
 import { Attachments } from "../components/Attachments";
 import { CommentRow } from "../components/CommentRow";
@@ -368,10 +368,12 @@ function DecisionStamps({ d }: { d: Decision }) {
   return (
     <div className="faint" style={{ marginTop: 4, fontSize: "var(--fs-xs)" }}>
       {stamps.map((s, i) => (
-        <span key={s.key} title={s.at}>
+        // The separator sits outside the stamp so a narrow pane breaks the line between two of them
+        // rather than through the middle of one date.
+        <Fragment key={s.key}>
           {i > 0 && " · "}
-          {s.label} {exactLabel(s.at)}
-        </span>
+          <span title={s.at} style={{ whiteSpace: "nowrap" }}>{s.label} {exactLabel(s.at)}</span>
+        </Fragment>
       ))}
     </div>
   );

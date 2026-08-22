@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import type { Actor } from "../mock/types";
 import { Markdown } from "./Markdown";
-import { FacetAvatar } from "./atoms";
+import { FacetAvatar, When } from "./atoms";
 import { Attachments } from "./Attachments";
 import { inTauri } from "../core/snapshot";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { confirmDialog } from "../core/dialog";
-import { agoLabel, t, errText } from "../core/i18n";
+import { t, errText } from "../core/i18n";
 import { ErrorNote } from "./ErrorNote";
 import { Icon } from "./Icon";
 
@@ -75,8 +75,7 @@ export function CommentRow({ id, author, at, editedAt, text, target, onEdit, onR
     <div className="comment">
       <div className="comment__meta">
         <span>
-          <FacetAvatar actor={author} /> {author.name} · {agoLabel(at)}
-          {editedAt && <span className="faint"> · {t("comment.edited")} {agoLabel(editedAt)}</span>}
+          <FacetAvatar actor={author} /> {author.name} · <When at={at} editedAt={editedAt} />
         </span>
         {inTauri() && !editing && (
           <>

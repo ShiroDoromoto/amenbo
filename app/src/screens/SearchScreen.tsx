@@ -1,7 +1,7 @@
 import { useState, useSyncExternalStore } from "react";
-import { PriorityDot } from "../components/atoms";
+import { PriorityDot, When } from "../components/atoms";
 import { Icon, type IconName } from "../components/Icon";
-import { agoLabel, errText, isPriority, isStatus, statusLabel, t, tf } from "../core/i18n";
+import { errText, isPriority, isStatus, statusLabel, t, tf } from "../core/i18n";
 import { parseRef } from "../core/idref";
 import { SEARCH_PAGE, useSearch, type SearchFace, type SearchHit, type SearchKind } from "../core/reads";
 import { asTyped } from "../core/keys";
@@ -286,7 +286,7 @@ function HitRow({
           <span>{t(targetKey(hit))}</span>
           {hit.face !== "comment" && <span>{t(`search.face.${hit.face}`)}</span>}
           {hit.comment && <span>{hit.comment}</span>}
-          <span>{agoLabel(hit.at)}</span>
+          <span><When at={hit.at} /></span>
         </div>
       </div>
     </div>

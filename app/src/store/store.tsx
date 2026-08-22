@@ -58,6 +58,11 @@ interface Store {
   setDimensionOrdered(id: number, ordered: boolean): void;
   setDimensionTimeAxis(id: number, timeAxis: boolean): void;
   setDimensionShowOnCard(id: number, showOnCard: boolean): void;
+  /**
+   * Make this axis refuse to be left empty (`AMB-D-734`). It is read where a creation is finished and
+   * nowhere else, so raising it never moves a task that is already through that door.
+   */
+  setDimensionRequired(id: number, required: boolean): void;
   removeDimension(id: number): void;
   addDimensionValue(dimensionId: number, name: string): void;
   renameDimensionValue(valueId: number, name: string): void;
@@ -151,6 +156,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setDimensionOrdered(id, ordered) { run(mut.setDimensionOrdered(id, ordered)); },
     setDimensionTimeAxis(id, timeAxis) { run(mut.setDimensionTimeAxis(id, timeAxis)); },
     setDimensionShowOnCard(id, showOnCard) { run(mut.setDimensionShowOnCard(id, showOnCard)); },
+    setDimensionRequired(id, required) { run(mut.setDimensionRequired(id, required)); },
     removeDimension(id) { run(mut.removeDimension(id)); },
     addDimensionValue(dimensionId, name) { run(mut.addDimensionValue(dimensionId, name)); },
     renameDimensionValue(valueId, name) { run(mut.renameDimensionValue(valueId, name)); },

@@ -365,6 +365,7 @@ fn decision_card_from_row(row: amenbo_core::store_engine::read::DecisionCardRow)
             })
             .collect(),
         created_at: Timestamp::parse_rfc3339(&row.created_at).unwrap_or_default().to_rfc3339_z(),
+        updated_at: Timestamp::parse_rfc3339(&row.updated_at).unwrap_or_default().to_rfc3339_z(),
     }
 }
 
@@ -387,6 +388,7 @@ fn collect_store(store: &Store, acc: &mut Acc) -> Result<(), CmdError> {
                 role: d.role.clone(),
                 ordered: d.ordered,
                 show_on_card: d.show_on_card,
+                required: d.required,
                 values: d
                     .values
                     .iter()
@@ -2704,11 +2706,13 @@ pub fn dimension_rename(id: i64, name: String) -> Result<WriteAck, CmdError> {
 }
 
 /// Update a dimension's description (notes), whether its values are ordered (ordered), whether it is
-/// the time axis (time_axis), and whether it goes on the task card (show_on_card). Only the fields
-/// passed are changed — same shape as the CLI's `dimension update`. Turning `ordered` on makes
-/// reordering values (`dimension_value_move`) take effect; turning `time_axis` on makes that axis's
-/// values carry periods; turning `show_on_card` on puts this axis on every task card, for everyone
-/// (`AMB-D-651` — the axis holds the answer, not the device).
+/// the time axis (time_axis), whether it goes on the task card (show_on_card), and whether it refuses
+/// to be left empty (required). Only the fields passed are changed — same shape as the CLI's
+/// `dimension update`. Turning `ordered` on makes reordering values (`dimension_value_move`) take
+/// effect; turning `time_axis` on makes that axis's values carry periods; turning `show_on_card` on
+/// puts this axis on every task card, for everyone (`AMB-D-651` — the axis holds the answer, not the
+/// device); turning `required` on makes a creation on this project wait until the axis is answered
+/// (`AMB-D-734`), and core refuses it on an axis that offers no values.
 #[tauri::command]
 pub fn dimension_update(
     id: i64,
@@ -2716,10 +2720,11 @@ pub fn dimension_update(
     ordered: Option<bool>,
     time_axis: Option<bool>,
     show_on_card: Option<bool>,
+    required: Option<bool>,
 ) -> Result<WriteAck, CmdError> {
     let role = time_axis.map(|on| if on { DimensionRole::TimeAxis } else { DimensionRole::None });
     with_store_mut(|store| {
-        store.dimension_update(id, None, notes.as_deref(), ordered, role, show_on_card, None)?;
+        store.dimension_update(id, None, notes.as_deref(), ordered, role, show_on_card, required)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))

@@ -16,6 +16,7 @@ const dim = (
   role: "none",
   ordered: false,
   showOnCard,
+  required: false,
   values: values.map(([vid, vname]) => ({ id: vid, name: vname })),
 });
 

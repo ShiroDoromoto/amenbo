@@ -110,6 +110,7 @@ export const de: Translation = {
     "dec.edge.supersedeRevisitConfirm": "Diese Entscheidungen bauen auf {target} auf — sieh sie dir noch einmal an, wenn du sie ersetzt:\n{list}\n\nTrotzdem ersetzen?",
     "dec.edge.searchPh": "Entscheidungen zum Verknüpfen suchen (AMB-D-<n>, Titel)",
     "dec.edge.noCandidates": "Keine Entscheidung mehr zum Verknüpfen übrig",
+    "dec.recorded": "Erfasst", "dec.decided": "Entschieden", "dec.lastChanged": "Zuletzt geändert",
     "dec.notFound": "Entscheidung nicht gefunden",
     "dec.unknownName": "(unbekannt)",
     "dec.comments": "Diskussion", "dec.reasonPh": "Begründung (optional, Markdown)…",
@@ -141,6 +142,9 @@ export const de: Translation = {
     "dimmgr.timeAxisHint": "Macht diese Kategorie zur Zeitachse des Projekts: Ihre Werte tragen Zeiträume, und der Wert, der heute abdeckt, wird als aktuell markiert",
     "dimmgr.showOnCard": "Auf der Karte",
     "dimmgr.showOnCardHint": "Zeigt diese Kategorie auf der Aufgabenkarte. Die Antwort gehört der Kategorie, also ändert sie sich für alle — nicht nur auf diesem Gerät",
+    "dimmgr.required": "Pflicht",
+    "dimmgr.requiredHint": "Hält das Erstellen einer Aufgabe an, bis diese Kategorie beantwortet ist. Bereits erstellte Aufgaben bleiben, wie sie sind",
+    "dimmgr.requiredNoValuesHint": "Fügen Sie zuerst einen Wert hinzu — eine Kategorie ohne Werte könnte niemand beantworten",
     "dimmgr.moveUp": "Nach oben", "dimmgr.moveDown": "Nach unten",
     "dimmgr.periodStart": "Startdatum", "dimmgr.periodEnd": "Enddatum",
     "dimmgr.periodStartOpen": "Kein Startdatum", "dimmgr.periodEndOpen": "Laufend",
@@ -165,6 +169,7 @@ export const de: Translation = {
     "detail.blockedBy": "Wartet auf", "detail.blockedByHint": "blockiert (Abhängigkeit)",
     "detail.notStarted": "Beginnt am",
     "detail.draft": "Erstellung", "detail.finishCreating": "Erstellung abschließen",
+    "detail.finishCreatingBlocked": "Füllen Sie zuerst {names} aus",
     "detail.linkedDecisions": "Begründet durch",
     "detail.premiseUnsettled": "Prämisse noch nicht entschieden — warte auf die Entscheidung oder löse die Verknüpfung (kein Reservieren möglich)",
     "detail.priority": "Priorität", "detail.priorityNone": "Keine",
@@ -638,6 +643,8 @@ export const de: Translation = {
     invalid_attachment_too_large:
       "Diese Datei hat {size} Bytes und überschreitet das Limit von {max} Bytes für ihre Art.",
     invalid_dimension_period_order: "Das Startdatum eines Werts darf nicht nach seinem Enddatum liegen.",
+    invalid_dimension_required_unset: "„{name}“ ist eine Pflichtkategorie, der Wert einer Aufgabe darauf lässt sich also nicht leeren — wählen Sie stattdessen einen anderen Wert.",
+    invalid_task_required_dimension: "Diese Aufgabe trägt keinen Wert unter {names}, den dieses Projekt verlangt.",
     invalid_dimension_values_unordered:
       "Die Werte dieser Kategorie tragen keine Reihenfolge und lassen sich deshalb nicht umsortieren.",
     invalid_decision_edit_rejected:

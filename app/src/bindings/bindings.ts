@@ -239,7 +239,12 @@ builtOnBy: Array<DecisionRefDto>, decidedAt: string | null, decidedBy: PlainRefD
 /**
  * Linked tasks (cross-link), carrying status — is the work this decision created still open?
  */
-linkedTasks: Array<LinkedTaskRefDto>, createdAt: string, };
+linkedTasks: Array<LinkedTaskRefDto>, createdAt: string, 
+/**
+ * When it last changed in any way — a body edit and a status transition alike. The pane hides it
+ * where it only repeats `created_at` or `decided_at`, so it reads as "changed since".
+ */
+updatedAt: string, };
 
 /**
  * What `decision_page` returns: the decisions on the page, plus the total count before paging.
@@ -262,9 +267,11 @@ name: string | null, ref?: string, };
  * One unified dimension (classification axis), values included, so the GUI's dimension editor and
  * assignment selects render from real data. `role` is `none` or `time_axis` (phase); `ordered`
  * says whether the values have an order; `showOnCard` says whether a task's value on this axis
- * belongs on its card (`AMB-D-651`) — the axis's own answer, so it reads the same on every device.
+ * belongs on its card (`AMB-D-651`) — the axis's own answer, so it reads the same on every device;
+ * `required` says the axis refuses to be left empty (`AMB-D-734`), which the detail pane reads to
+ * hold "finish creating" back rather than letting the write be refused at the door.
  */
-export type DimensionDto = { id: number, name: string, notes: string, role: "none" | "time_axis", ordered: boolean, showOnCard: boolean, values: Array<DimensionValueDto>, };
+export type DimensionDto = { id: number, name: string, notes: string, role: "none" | "time_axis", ordered: boolean, showOnCard: boolean, required: boolean, values: Array<DimensionValueDto>, };
 
 /**
  * The per-task assigned value for one project × dimension (`taskId`→`valueId`). The board uses it

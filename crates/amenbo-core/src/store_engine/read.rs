@@ -3645,6 +3645,9 @@ pub struct DecisionCardRow {
     pub status: String,
     pub decided_at: Option<String>,
     pub created_at: String,
+    /// When this decision last changed in any way — an edit to the body, and a status transition alike
+    /// (`Decision::updated_at`). Not "when the body was rewritten": accepting one moves it too.
+    pub updated_at: String,
     /// The owning project; `None` when the project is not live.
     pub project: Option<ProjectRef>,
     /// The decisions this one replaced (any liveness; `ref` = `AMB-D-n`). A set, not a single target: one
@@ -3689,6 +3692,7 @@ pub fn decision_card_row(conn: &Connection, decision_id: i64) -> Result<Option<D
     let mut sel = Select::new();
     let (id, title, body, status) = (sel.col(D.id), sel.col(D.title), sel.col(D.body), sel.col(D.status));
     let (decided_at, created_at) = (sel.col(D.decided_at), sel.col(D.created_at));
+    let updated_at = sel.col(D.updated_at);
     let pid = sel.col(D.project_id);
     // `NOT NULL` in the registry, `NULL` through this `LEFT JOIN` when the project is gone — see
     // `decision_list`.
@@ -3710,6 +3714,7 @@ pub fn decision_card_row(conn: &Connection, decision_id: i64) -> Result<Option<D
                 status: status.get(r)?,
                 decided_at: decided_at.get(r)?,
                 created_at: created_at.get(r)?,
+                updated_at: updated_at.get(r)?,
                 // Project: present only when live.
                 project: project_name.map(|name| ProjectRef { id: project_id, name }),
                 // The edge sets are filled below.
@@ -3802,7 +3807,9 @@ pub struct DimensionValueRow {
 /// One dimension (classification axis) of a project overview: id/name/notes plus its live values (in
 /// `order_key` order) and the flags the GUI needs to render/operate it. `role` is the snake_case wire
 /// text (`none`/`time_axis`); `ordered` says whether its values carry an order; `show_on_card` says
-/// whether a task's value on this axis belongs on its card (`AMB-D-651`).
+/// whether a task's value on this axis belongs on its card (`AMB-D-651`); `required` says whether it
+/// refuses to be left empty (`AMB-D-734`), which is what lets the GUI hold the button that ends a
+/// creation instead of letting the write fail at the door.
 pub struct DimensionRow {
     pub id: i64,
     pub name: String,
@@ -3810,6 +3817,7 @@ pub struct DimensionRow {
     pub role: String,
     pub ordered: bool,
     pub show_on_card: bool,
+    pub required: bool,
     pub values: Vec<DimensionValueRow>,
 }
 
@@ -3906,7 +3914,7 @@ fn overview_dimensions(
     let mut sel = Select::new();
     let (project_id, id, name) = (sel.col(D.project_id), sel.col(D.id), sel.col(D.name));
     let (notes, role, ordered) = (sel.col(D.notes), sel.col(D.role), sel.col(D.ordered));
-    let show_on_card = sel.col(D.show_on_card);
+    let (show_on_card, required) = (sel.col(D.show_on_card), sel.col(D.required));
     // The project is joined to keep a dimension whose project is gone out of the overview, not for a
     // column of its own — so it is named here and nowhere else.
     let mut sql = Sql::from(&sel, D.table);
@@ -3925,6 +3933,7 @@ fn overview_dimensions(
                     role: role.get(r)?,
                     ordered: ordered.get(r)?,
                     show_on_card: show_on_card.get(r)?,
+                    required: required.get(r)?,
                     values: Vec::new(),
                 },
             ))

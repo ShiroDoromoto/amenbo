@@ -627,6 +627,7 @@ export const zhHans: Translation = {
     invalid_commit_sha: "提交 SHA 必须是完整的 40 位或 64 位十六进制；短 SHA、分支、标签或 revision 都不行。",
     invalid_attachment_too_large: "该文件为 {size} 字节，超过此类文件 {max} 字节的上限。",
     invalid_dimension_period_order: "值的开始日期不能晚于结束日期。",
+    invalid_dimension_required_without_values: "「{name}」还没有任何值，无法设为必填，请先给它添加一个值。",
     invalid_dimension_required_unset: "「{name}」是必填分类，任务在它上面的值不能清空，请改选其他值。",
     invalid_task_required_dimension: "这个任务在 {names} 上没有值，而本项目要求填写。",
     invalid_dimension_values_unordered: "该分类的值没有顺序，无法重新排序。",

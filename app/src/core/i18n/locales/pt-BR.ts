@@ -658,6 +658,7 @@ export const ptBR: Translation = {
       "Um SHA de commit são os 40 ou 64 caracteres hexadecimais completos; um SHA curto, um branch, uma tag ou uma revisão não servem.",
     invalid_attachment_too_large: "Este arquivo tem {size} bytes e passa do limite de {max} bytes para o tipo dele.",
     invalid_dimension_period_order: "A data de início de um valor não pode ser depois da data de fim.",
+    invalid_dimension_required_without_values: "«{name}» não oferece nenhum valor, então não pode se tornar obrigatória: adicione um valor a ela primeiro.",
     invalid_dimension_required_unset: "«{name}» é uma categoria obrigatória, então o valor de uma tarefa nela não pode ser limpo: escolha outro valor.",
     invalid_task_required_dimension: "Esta tarefa não carrega valor algum em {names}, que este projeto exige.",
     invalid_dimension_values_unordered: "Os valores desta categoria não têm ordem, então não dá para reordená-los.",

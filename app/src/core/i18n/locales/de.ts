@@ -644,6 +644,7 @@ export const de: Translation = {
     invalid_attachment_too_large:
       "Diese Datei hat {size} Bytes und überschreitet das Limit von {max} Bytes für ihre Art.",
     invalid_dimension_period_order: "Das Startdatum eines Werts darf nicht nach seinem Enddatum liegen.",
+    invalid_dimension_required_without_values: "„{name}“ bietet keine Werte, kann also nicht zur Pflicht werden — fügen Sie zuerst einen Wert hinzu.",
     invalid_dimension_required_unset: "„{name}“ ist eine Pflichtkategorie, der Wert einer Aufgabe darauf lässt sich also nicht leeren — wählen Sie stattdessen einen anderen Wert.",
     invalid_task_required_dimension: "Diese Aufgabe trägt keinen Wert unter {names}, den dieses Projekt verlangt.",
     invalid_dimension_values_unordered:

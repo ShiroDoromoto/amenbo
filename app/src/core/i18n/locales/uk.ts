@@ -667,6 +667,7 @@ export const uk: Translation = {
       "SHA коміту — це повні 40 або 64 шістнадцяткові символи; короткий SHA, гілка, тег чи revision не підійдуть.",
     invalid_attachment_too_large: "Цей файл займає {size} байтів і перевищує межу в {max} байтів для свого типу.",
     invalid_dimension_period_order: "Дата початку значення не може бути пізнішою за дату завершення.",
+    invalid_dimension_required_without_values: "«{name}» не пропонує жодного значення, тож її не можна зробити обов'язковою: спершу додайте до неї значення.",
     invalid_dimension_required_unset: "«{name}» — обов'язкова категорія, тож значення завдання в ній не можна очистити: виберіть інше значення.",
     invalid_task_required_dimension: "У цього завдання немає значення в {names}, якого вимагає цей проєкт.",
     invalid_dimension_values_unordered: "Значення цієї категорії не впорядковані, тож переставити їх не можна.",

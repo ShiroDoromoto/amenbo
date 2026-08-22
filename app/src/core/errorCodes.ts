@@ -60,9 +60,12 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "invalid_attachment_too_large",
   "invalid_dimension_period_order",
   "invalid_dimension_values_unordered",
-  // The two refusals a required axis raises (`AMB-D-734`). Both reach the screen: the panel holds the
+  // The three refusals a required axis raises (`AMB-D-734`). All reach the screen: the panel holds the
   // button that ends a creation, but another device can raise the flag between the render and the click,
-  // and clearing a task's value on such an axis is offered by the same select that sets one.
+  // and clearing a task's value on such an axis is offered by the same select that sets one. The panel
+  // greys its required box on an axis offering no values, for the same reason core refuses one — but the
+  // count it greys by is the one it last read, and another device removing the last value re-opens the box.
+  "invalid_dimension_required_without_values",
   "invalid_dimension_required_unset",
   "invalid_task_required_dimension",
   "invalid_decision_edit_rejected",

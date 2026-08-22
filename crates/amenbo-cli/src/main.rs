@@ -5,6 +5,8 @@
 //! is typing it, and `run()`'s dispatch. What each command then does lives in [`cmd`], one module per
 //! unit the dispatch already names.
 
+// A second throwaway line, left by the other half of the same walkthrough; it too says nothing.
+
 // `commands()` in `agent.rs` is one huge `json!([...])` literal, and every entry added pushes it further
 // past the default recursion limit (128). Raise the limit so the spec can stay a single array.
 #![recursion_limit = "256"]

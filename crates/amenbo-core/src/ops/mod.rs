@@ -197,11 +197,12 @@ mod cross_project_tests {
                 role: crate::model::DimensionRole::None,
                 show_on_card: false,
                 required: false,
+                slug: None,
             },
         )
         .expect("add dimension")
         .id;
-        super::dimension::value_add(tx, dimension, value).expect("add value").id
+        super::dimension::value_add(tx, dimension, value, None).expect("add value").id
     }
 
     /// Decision↔decision (supersede / amend / builds_on all funnel into `put_edge`).
@@ -369,6 +370,7 @@ mod delete_children_tests {
                 role: DimensionRole::None,
                 show_on_card: false,
                 required: false,
+                slug: None,
             },
         )
         .expect("add dimension")
@@ -385,7 +387,7 @@ mod delete_children_tests {
         let d = mk_decision(tx, p, "この実装の根拠");
         let d2 = mk_decision(tx, p, "その上に立つ決定");
         let dim = mk_dimension(tx, p, "分類");
-        let value = super::dimension::value_add(tx, dim, "バグ").expect("add value").id;
+        let value = super::dimension::value_add(tx, dim, "バグ", None).expect("add value").id;
 
         super::comment::add_comment(tx, t, ActorKind::Ai, "作業メモ").expect("comment on the task");
         super::decision::add_comment(tx, d, ActorKind::Ai, "裁定の理由").expect("comment on the decision");

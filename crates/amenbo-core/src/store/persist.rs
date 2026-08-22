@@ -853,7 +853,7 @@ impl Store {
     }
 
     /// Update a dimension's name, notes, whether its values are ordered, its role, whether it
-    /// belongs on the task card, and whether it refuses to be left empty (one operation = one
+    /// belongs on the task card, whether it refuses to be left empty, and its slug (one operation = one
     /// transaction).
     #[allow(clippy::too_many_arguments)]
     pub fn dimension_update(
@@ -865,9 +865,12 @@ impl Store {
         role: Option<crate::model::DimensionRole>,
         show_on_card: Option<bool>,
         required: Option<bool>,
+        slug: Option<&str>,
     ) -> Result<crate::model::Dimension> {
         self.write_one(&[WriteTarget::Dimension(id)], |tx| {
-            crate::ops::dimension::update(tx, id, name, notes, ordered, role, show_on_card, required)
+            crate::ops::dimension::update(
+                tx, id, name, notes, ordered, role, show_on_card, required, slug,
+            )
         })
     }
 
@@ -889,15 +892,16 @@ impl Store {
 
     /// Add a value to a dimension (one operation = one transaction). Pass a `period` and the creation
     /// and the period both commit together (`Some((start, end))`; a `None` at either end leaves that
-    /// end open).
+    /// end open). `slug` names the value's readable key; `None` takes the id-derived default.
     pub fn dimension_value_add(
         &mut self,
         dimension_id: i64,
         name: &str,
+        slug: Option<&str>,
         period: Option<(Option<NaiveDate>, Option<NaiveDate>)>,
     ) -> Result<crate::model::DimensionValue> {
         self.write_one(&[WriteTarget::Dimension(dimension_id)], |tx| {
-            let v = crate::ops::dimension::value_add(tx, dimension_id, name)?;
+            let v = crate::ops::dimension::value_add(tx, dimension_id, name, slug)?;
             match period {
                 Some((start_on, end_on)) => {
                     crate::ops::dimension::value_set_dates(tx, v.id, start_on, end_on)
@@ -907,14 +911,15 @@ impl Store {
         })
     }
 
-    /// Update a dimension value's name and period (one operation = one transaction). A `None`
-    /// argument leaves that field as it is. The rename and the period are bundled into one
-    /// transaction, so if the period is rejected for running backwards the rename does not survive
+    /// Update a dimension value's name, slug and period (one operation = one transaction). A `None`
+    /// argument leaves that field as it is. The rename, the slug and the period are bundled into one
+    /// transaction, so if the period is rejected for running backwards neither of the others survives
     /// either.
     pub fn dimension_value_update(
         &mut self,
         value_id: i64,
         name: Option<&str>,
+        slug: Option<&str>,
         period: Option<(Option<NaiveDate>, Option<NaiveDate>)>,
     ) -> Result<crate::model::DimensionValue> {
         self.write_one(&[WriteTarget::DimensionValue(value_id)], |tx| {
@@ -922,6 +927,9 @@ impl Store {
                 Some(name) => Some(crate::ops::dimension::value_rename(tx, value_id, name)?),
                 None => None,
             };
+            if let Some(slug) = slug {
+                v = Some(crate::ops::dimension::value_set_slug(tx, value_id, slug)?);
+            }
             if let Some((start_on, end_on)) = period {
                 v = Some(crate::ops::dimension::value_set_dates(tx, value_id, start_on, end_on)?);
             }

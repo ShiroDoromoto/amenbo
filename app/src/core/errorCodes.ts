@@ -67,6 +67,11 @@ export const CORE_SENTENCE_ERROR_CODES = [
   // count it greys by is the one it last read, and another device removing the last value re-opens the box.
   "invalid_dimension_required_without_values",
   "invalid_dimension_required_unset",
+  // The two refusals a slug meets (`AMB-D-735`): a shape the door does not take, and one another axis
+  // or value in the same reach already answers to. The classification panel is where a slug is typed,
+  // so both land on the screen.
+  "invalid_dimension_slug_shape",
+  "invalid_dimension_slug_taken",
   "invalid_task_required_dimension",
   "invalid_decision_edit_rejected",
   "invalid_decision_accept_rejected",

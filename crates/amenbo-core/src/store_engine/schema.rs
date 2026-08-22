@@ -93,6 +93,13 @@ pub struct Dataset {
     /// Type-specific columns (the universal [`AUDIT`] columns are appended to every table and are
     /// not repeated here). All are writable through the engine's field-write path; `id` never is.
     pub columns: &'static [Column],
+    /// A table-level constraint written after the columns (a composite `UNIQUE`), if it has one — the
+    /// same slot [`PlainTable`] carries, and for a reason a record table feels harder. A uniqueness
+    /// that has to hold on **every** store can be said in only one place: the two sites that emit DDL
+    /// reach disjoint halves of the population — the genesis batch runs before the chain and so may
+    /// name none of the columns a step adds, and a step runs on existing stores only — while the
+    /// table's own declaration is what *both* build the table from (`AMB-D-735`).
+    pub constraint: Option<&'static str>,
 }
 
 impl Dataset {
@@ -152,12 +159,14 @@ const KEY_REF: &str = "BIGINT NOT NULL DEFAULT 0";
 /// Fractional index: ordered by string comparison, never parsed as a number.
 const ORDER_KEY: &str = "TEXT NOT NULL DEFAULT ''";
 const ORDER_KEY_OPT: &str = "TEXT"; // an unplaced (inbox) task carries no order key
-/// A project's human-readable identifier. Unique across the store, but the uniqueness is a
-/// `CREATE UNIQUE INDEX` in `EXTRA_SQL`, not a `UNIQUE` in this decl: SQLite refuses
+/// A readable, stable identifier: a project's, a classification axis's, one of that axis's values'.
+/// Unique within its reach, but never by a `UNIQUE` in *this* decl: SQLite refuses
 /// `ALTER TABLE … ADD COLUMN … UNIQUE`, and a migration step adds a column to an existing store that
 /// way, so a decl an old store cannot take is a decl the fresh schema must not have either
-/// (the two paths have to land on the same table). Nullable, so a row mid-create holds no value that
-/// could collide with another's.
+/// (the two paths have to land on the same table). Where the uniqueness is said instead depends on how
+/// far it reaches — a whole-column one is a `CREATE UNIQUE INDEX` in `EXTRA_SQL` (`project`), a
+/// composite one is the table's own constraint ([`Dataset::constraint`], the dimension pair).
+/// Nullable, so a row mid-create holds no value that could collide with another's.
 const SLUG: &str = "TEXT";
 
 // The `GLOB` patterns the timestamp/date `CHECK`s match are spelled out inside `ts!`/`date_opt!`
@@ -344,15 +353,17 @@ macro_rules! column_type {
 /// typed identifier readers name it by ([`mod@col`]). They cannot drift, because there is no second place
 /// to say it: renaming a column here is a compile error at every reader that still spells the old name.
 /// A line is `<column>: <kind>`; the kinds are the constructors above. Every table also gets `id` and
-/// the universal [`AUDIT`] columns without declaring them.
+/// the universal [`AUDIT`] columns without declaring them. A table-level constraint follows the braces
+/// as `=> "<sql>"`, the way a plain table's does ([`Dataset::constraint`]).
 macro_rules! datasets {
-    ($(#[$meta:meta])* $($dataset:ident => $table:ident { $($cname:ident : $ckind:tt $(($($cargs:tt)*))?),+ $(,)? })+) => {
+    ($(#[$meta:meta])* $($dataset:ident => $table:ident { $($cname:ident : $ckind:tt $(($($cargs:tt)*))?),+ $(,)? } $(=> $tc:literal)?)+) => {
         $(#[$meta])*
         pub const DATASETS: &[Dataset] = &[
             $(Dataset {
                 name: stringify!($dataset),
                 table: stringify!($table),
                 columns: &[$(column!($cname : $ckind $(($($cargs)*))?)),+],
+                constraint: { #[allow(unused_mut, unused_assignments)] let mut c = None; $(c = Some($tc);)? c },
             }),+
         ];
 
@@ -684,17 +695,26 @@ datasets! {
         show_on_card: bool_col,
         required: bool_col,
         order_key: col(ORDER_KEY),
-    }
+        // The axis's readable, stable key — what names it outside Amenbo, where a Japanese display name
+        // with spaces in it cannot go and `AMB-DIM-7` can go but says nothing (`AMB-D-735`). Unique per
+        // project, which is the reach a name has too. Nullable for the reason `SLUG` states, and derived
+        // from the id (`d<id>`) rather than from the name: `slug::base` folds a name with no ASCII in it
+        // to one word, so every axis in this store would be born the same.
+        slug: col(SLUG),
+    } => "UNIQUE (project_id, slug)"
 
     dimension_value => dimension_value {
         dimension_id: fk("dimension", "RESTRICT"),
         name: col(REQ),
         order_key: col(ORDER_KEY),
+        // The value's own readable key, `dimension.slug`'s counterpart — unique within the axis, since
+        // that is where a value's name is unique too. Derived from the id (`v<id>`) when nobody names one.
+        slug: col(SLUG),
         // The period of a `role: time_axis` value (a day, like `task.start_on`). Every value carries
         // the columns; only a time_axis axis gives them meaning (model.rs).
         start_on: date_opt,
         end_on: date_opt,
-    }
+    } => "UNIQUE (dimension_id, slug)"
 
     task_dimension_value => task_dimension_value {
         task_id: fk("task", "RESTRICT"),
@@ -1264,6 +1284,9 @@ fn tables_ddl(datasets: &[Dataset]) -> String {
         for c in d.columns.iter().chain(AUDIT) {
             sql.push_str(&format!(",\n    {} {}", c.name, c.decl));
         }
+        if let Some(c) = d.constraint {
+            sql.push_str(&format!(",\n    {c}"));
+        }
         sql.push_str("\n);\n");
     }
     sql
@@ -1307,6 +1330,9 @@ pub fn table_ddl(d: &Dataset, table: &str) -> String {
     let mut sql = format!("CREATE TABLE {table} (\n    id {RECORD_ID}");
     for c in d.all_columns() {
         sql.push_str(&format!(",\n    {} {}", c.name, c.decl));
+    }
+    if let Some(c) = d.constraint {
+        sql.push_str(&format!(",\n    {c}"));
     }
     sql.push_str("\n);\n");
     sql

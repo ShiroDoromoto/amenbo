@@ -617,13 +617,13 @@ mod tests {
                 },
             )
             .unwrap();
-            let value = crate::ops::dimension::value_add(tx, axis.id, "Amenbo本体").unwrap();
+            let value = crate::ops::dimension::value_add(tx, axis.id, "Amenbo本体", None).unwrap();
 
             // While the axis demands nothing, the creation finishes with the axis blank.
             let other = draft_in(tx, "先に締めたタスク", Some(pid));
             assert!(!finish_creating(tx, other).unwrap().draft);
 
-            crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, Some(true))
+            crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, Some(true), None)
                 .unwrap();
 
             // Raising it does not reopen the creation that already finished — the premise is read at the
@@ -660,8 +660,8 @@ mod tests {
                 },
             )
             .unwrap();
-            crate::ops::dimension::value_add(tx, axis.id, "Amenbo本体").unwrap();
-            crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, Some(true))
+            crate::ops::dimension::value_add(tx, axis.id, "Amenbo本体", None).unwrap();
+            crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, Some(true), None)
                 .unwrap();
 
             let loose = draft_in(tx, "どのプロジェクトにも属さない", None);

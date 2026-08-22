@@ -2839,6 +2839,7 @@ mod filter_tests {
                     role,
                     show_on_card: false,
                     required: false,
+                    slug: None,
                 },
             )
             .unwrap()
@@ -2847,9 +2848,9 @@ mod filter_tests {
         // Name the time axis "Era" — to show that `time_axis:` looks it up by role, not by name.
         let era = axis("Era", DimensionRole::TimeAxis);
         let category = axis("Category", DimensionRole::None);
-        let dev = ops::dimension::value_add(tx, era, "dev").unwrap().id;
-        let ops_era = ops::dimension::value_add(tx, era, "ops").unwrap().id;
-        let bug = ops::dimension::value_add(tx, category, "bug").unwrap().id;
+        let dev = ops::dimension::value_add(tx, era, "dev", None).unwrap().id;
+        let ops_era = ops::dimension::value_add(tx, era, "ops", None).unwrap().id;
+        let bug = ops::dimension::value_add(tx, category, "bug", None).unwrap().id;
 
         let t_dev_bug = task(tx, "dev bug", Some(p));
         let t_ops = task(tx, "ops", Some(p));
@@ -2924,6 +2925,7 @@ mod filter_tests {
                     role,
                     show_on_card: false,
                     required: false,
+                    slug: None,
                 },
             )
             .unwrap()
@@ -2931,9 +2933,9 @@ mod filter_tests {
         };
         let era = axis("Era", DimensionRole::TimeAxis);
         let category = axis("Category", DimensionRole::None);
-        let dev = ops::dimension::value_add(tx, era, "dev").unwrap().id;
-        let ops_era = ops::dimension::value_add(tx, era, "ops").unwrap().id;
-        let bug = ops::dimension::value_add(tx, category, "bug").unwrap().id;
+        let dev = ops::dimension::value_add(tx, era, "dev", None).unwrap().id;
+        let ops_era = ops::dimension::value_add(tx, era, "ops", None).unwrap().id;
+        let bug = ops::dimension::value_add(tx, category, "bug", None).unwrap().id;
 
         let t_dev_bug = task(tx, "dev bug", Some(p));
         let t_ops = task(tx, "ops", Some(p));
@@ -2993,6 +2995,7 @@ mod filter_tests {
                     role,
                     show_on_card: false,
                     required: false,
+                    slug: None,
                 },
             )
             .unwrap()
@@ -3000,8 +3003,8 @@ mod filter_tests {
         };
         let era = add_axis("Era", DimensionRole::TimeAxis);
         let category = add_axis("Category", DimensionRole::None);
-        ops::dimension::value_add(tx, era, "dev").unwrap();
-        ops::dimension::value_add(tx, category, "bug").unwrap();
+        ops::dimension::value_add(tx, era, "dev", None).unwrap();
+        ops::dimension::value_add(tx, category, "bug", None).unwrap();
         let t = task(tx, "task", Some(p));
 
         assert!(err(tx, "dim:Nosuch=bug").contains("Nosuch"), "a nonexistent axis errors, naming it");
@@ -3224,7 +3227,7 @@ mod filter_tests {
             ops::dimension::NewDimension { name: "面".to_string(), ..Default::default() },
         )
         .expect("add dimension");
-        let value = ops::dimension::value_add(tx, axis.id, "コア").expect("add value");
+        let value = ops::dimension::value_add(tx, axis.id, "コア", None).expect("add value");
         ops::dimension::set(tx, t, value.id).expect("place the task on the axis");
         ops::decision::add(
             tx,

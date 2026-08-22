@@ -49,6 +49,10 @@ pub struct NewDimension {
     /// values yet, so raising it here is refused for the same reason [`update`] refuses it on an empty
     /// axis: the flag would be unsatisfiable from the moment it was written.
     pub required: bool,
+    /// The readable key this axis is to be known by outside Amenbo (`AMB-D-735`). `None` takes the
+    /// id-derived default, which is what nearly every axis keeps; naming one here is for the axis whose
+    /// slug somebody outside has to type.
+    pub slug: Option<String>,
 }
 
 impl Default for NewDimension {
@@ -61,6 +65,7 @@ impl Default for NewDimension {
             role: DimensionRole::None,
             show_on_card: false,
             required: false,
+            slug: None,
         }
     }
 }
@@ -76,6 +81,79 @@ fn unsatisfiable_required(name: &str) -> Error {
         ))
         .coded(ErrorCode::InvalidDimensionRequiredWithoutValues)
         .with("name", name),
+    )
+}
+
+/// The longest a slug may be. Long enough to read as a word, short enough for the places a slug is
+/// going — a branch name, a directory, an element of a D-Bus well-known name (`AMB-D-735`).
+const SLUG_MAX: usize = 24;
+
+/// The slug a row is born with when the caller names none: its own id, behind a letter.
+///
+/// **Derived from the id and never from the name.** `crate::slug::base` keeps runs of ASCII
+/// alphanumerics and drops the rest, so a Japanese name yields nothing and every axis in this store
+/// would be born under the same fallback word. The id is the one thing every row already has that is
+/// unique, so the default is unique for free. The leading letter is not decoration: it is what makes
+/// the result satisfy [`checked_slug`], and what keeps a slug usable as a D-Bus name element, which may
+/// not begin with a digit (`AMB-D-733`).
+///
+/// **A default is escaped, not refused.** Unique for free holds against other defaults, not against an
+/// edit: somebody may already have moved `d7` onto another axis by hand, and the row now being created
+/// asked for nothing and has no way to ask for anything else — its slug can only be edited once it
+/// exists. So a taken default takes a numeric suffix, the way a project's derived slug does
+/// (`crate::slug::unique`). A slug the caller *named* is refused instead, because there the caller can
+/// name another.
+fn settled_default<F>(prefix: char, id: i64, taken: F) -> Result<String>
+where
+    F: Fn(&str) -> Result<bool>,
+{
+    let base = format!("{prefix}{id}");
+    if !taken(&base)? {
+        return Ok(base);
+    }
+    for n in 2u32.. {
+        let candidate = format!("{base}-{n}");
+        if !taken(&candidate)? {
+            return Ok(candidate);
+        }
+    }
+    unreachable!("the suffix range is unbounded")
+}
+
+/// The shape a named slug has to have: lower-case ASCII letters, digits and hyphens, opening with a
+/// letter, [`SLUG_MAX`] characters at most (`AMB-D-735`).
+///
+/// **Upper case is refused rather than folded.** SQLite compares text byte-wise, so the store would
+/// hold `Foo` and `foo` as two axes, while the file names and the D-Bus names a slug is carried into
+/// treat them as one — a disagreement that only shows up on the machine that has to resolve it. The
+/// door takes the narrow set and says so.
+fn checked_slug(slug: &str) -> Result<String> {
+    let s = slug.trim();
+    let shaped = s.len() <= SLUG_MAX
+        && s.starts_with(|c: char| c.is_ascii_lowercase())
+        && s.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+    if !shaped {
+        return Err(Error::Invalid(
+            Msg::new(format!(
+                "'{s}' cannot be a slug — use at most {SLUG_MAX} lower-case ASCII letters, digits and \
+                 hyphens, starting with a letter"
+            ))
+            .coded(ErrorCode::InvalidDimensionSlugShape)
+            .with("slug", s)
+            .with("max", SLUG_MAX),
+        ));
+    }
+    Ok(s.to_string())
+}
+
+/// The refusal both slug doors share: somebody within the same reach already answers to it. Raised in
+/// place of the table's own `UNIQUE`, so the caller is told which row holds the slug instead of reading
+/// a constraint violation — and so the refusal arrives before anything in the transaction is written.
+fn slug_taken(what: &str, slug: &str, holder: i64) -> Error {
+    Error::Invalid(
+        Msg::new(format!("'{slug}' is already the slug of {what} {holder}"))
+            .coded(ErrorCode::InvalidDimensionSlugTaken)
+            .with("slug", slug),
     )
 }
 
@@ -95,8 +173,22 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewDimension) -> Result<Dimen
     let sibs = read::dimension_siblings(tx.conn(), project_id, None)?;
     let order_key = place(&sibs, &Position::Bottom)?;
     let now = Timestamp::now();
+    // The id is settled before the record is emitted, which is what lets the default be derived from it.
+    let id = read::next_id(tx.conn(), "dimension")?;
+    let slug = match new.slug.as_deref() {
+        Some(named) => {
+            let named = checked_slug(named)?;
+            if let Some(holder) = read::dimension_id_by_slug(tx.conn(), project_id, &named)? {
+                return Err(slug_taken("the category", &named, holder));
+            }
+            named
+        }
+        None => settled_default('d', id, |candidate| {
+            Ok(read::dimension_id_by_slug(tx.conn(), project_id, candidate)?.is_some())
+        })?,
+    };
     let dimension = Dimension {
-        id: read::next_id(tx.conn(), "dimension")?,
+        id,
         project_id,
         name: new.name.trim().to_string(),
         notes: new.notes,
@@ -105,6 +197,7 @@ pub fn add(tx: &WriteTx<'_>, project_id: i64, new: NewDimension) -> Result<Dimen
         role: new.role,
         show_on_card: new.show_on_card,
         required: new.required,
+        slug: Some(slug),
         order_key,
         created_at: now,
         updated_at: now,
@@ -150,6 +243,11 @@ fn live_value_before(tx: &WriteTx<'_>, id: i64) -> Result<DimensionValue> {
 /// nowhere else — but a draft left open on this project will now be held there until it carries a
 /// value, which the decision names as the cost it accepts.
 ///
+/// `slug` renames the axis's readable key (`AMB-D-735`). It is checked for shape and for a collision
+/// inside the project before anything is written, so the refusal names the axis already holding it
+/// rather than surfacing the table's `UNIQUE`. Passing `None` leaves the slug where it is; there is no
+/// way through this door to clear one, because a saved row is never without one.
+///
 /// The arity is the axis's own: every flag it carries is settable through this one door, and splitting
 /// them into per-flag ops would make "change two things at once" two transactions instead of one.
 #[allow(clippy::too_many_arguments)]
@@ -162,6 +260,7 @@ pub fn update(
     role: Option<DimensionRole>,
     show_on_card: Option<bool>,
     required: Option<bool>,
+    slug: Option<&str>,
 ) -> Result<Dimension> {
     if let Some(n) = name {
         if n.trim().is_empty() {
@@ -190,6 +289,15 @@ pub fn update(
             return Err(unsatisfiable_required(&d.name));
         }
         d.required = r;
+    }
+    if let Some(named) = slug {
+        let named = checked_slug(named)?;
+        match read::dimension_id_by_slug(tx.conn(), d.project_id, &named)? {
+            Some(holder) if holder != d.id => {
+                return Err(slug_taken("the category", &named, holder))
+            }
+            _ => d.slug = Some(named),
+        }
     }
     d.updated_at = Timestamp::now();
     emit_update(tx, record::dimension(&before), record::dimension(&d))?;
@@ -228,7 +336,15 @@ pub(crate) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<()> {
 
 // ───────────────────────────── Dimension values (the choices on an axis) ─────────────────────────────
 
-pub fn value_add(tx: &WriteTx<'_>, dimension_id: i64, name: &str) -> Result<DimensionValue> {
+/// Add a value to an axis. `slug` is the readable key the value answers to outside Amenbo
+/// (`AMB-D-735`); `None` takes the id-derived default, which is what a value keeps unless somebody
+/// outside has to type it.
+pub fn value_add(
+    tx: &WriteTx<'_>,
+    dimension_id: i64,
+    name: &str,
+    slug: Option<&str>,
+) -> Result<DimensionValue> {
     if name.trim().is_empty() {
         return Err(Error::invalid("a dimension value name cannot be empty"));
     }
@@ -238,10 +354,26 @@ pub fn value_add(tx: &WriteTx<'_>, dimension_id: i64, name: &str) -> Result<Dime
     let sibs = read::dimension_value_siblings(tx.conn(), dimension_id, None)?;
     let order_key = place(&sibs, &Position::Bottom)?;
     let now = Timestamp::now();
+    let id = read::next_id(tx.conn(), "dimension_value")?;
+    let slug = match slug {
+        Some(named) => {
+            let named = checked_slug(named)?;
+            if let Some(holder) =
+                read::dimension_value_id_by_slug(tx.conn(), dimension_id, &named)?
+            {
+                return Err(slug_taken("the value", &named, holder));
+            }
+            named
+        }
+        None => settled_default('v', id, |candidate| {
+            Ok(read::dimension_value_id_by_slug(tx.conn(), dimension_id, candidate)?.is_some())
+        })?,
+    };
     let value = DimensionValue {
-        id: read::next_id(tx.conn(), "dimension_value")?,
+        id,
         dimension_id,
         name: name.trim().to_string(),
+        slug: Some(slug),
         order_key,
         // Periods are filled in later with `value_set_dates`; a fresh value has none.
         start_on: None,
@@ -261,6 +393,25 @@ pub fn value_rename(tx: &WriteTx<'_>, value_id: i64, name: &str) -> Result<Dimen
     live_before(tx, before.dimension_id)?;
     let after =
         DimensionValue { name: name.trim().to_string(), updated_at: Timestamp::now(), ..before.clone() };
+    emit_update(tx, record::dimension_value(&before), record::dimension_value(&after))?;
+    Ok(after)
+}
+
+/// Rename a value's readable key (`AMB-D-735`) — [`update`]'s `slug` arm, one value wide, and a door of
+/// its own for the same reason [`value_set_dates`] is one: a value's fields are set one concern at a
+/// time. Checked for shape and for a collision **within the axis**, which is as far as a value's slug is
+/// unique.
+pub fn value_set_slug(tx: &WriteTx<'_>, value_id: i64, slug: &str) -> Result<DimensionValue> {
+    let slug = checked_slug(slug)?;
+    let before = live_value_before(tx, value_id)?;
+    live_before(tx, before.dimension_id)?;
+    if let Some(holder) = read::dimension_value_id_by_slug(tx.conn(), before.dimension_id, &slug)? {
+        if holder != before.id {
+            return Err(slug_taken("the value", &slug, holder));
+        }
+    }
+    let after =
+        DimensionValue { slug: Some(slug), updated_at: Timestamp::now(), ..before.clone() };
     emit_update(tx, record::dimension_value(&before), record::dimension_value(&after))?;
     Ok(after)
 }
@@ -514,6 +665,142 @@ mod tests {
         assert!(add(tx, 999_999, custom("軸")).is_err());
     }
 
+    /// The default every row is born with, and where it comes from (`AMB-D-735`): the id, never the name
+    /// — two axes named in Japanese would otherwise be handed the same slug.
+    #[test]
+    fn a_new_axis_and_a_new_value_are_born_with_a_slug_off_their_id() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let d1 = add(tx, p, custom("フェーズ")).unwrap();
+        let d2 = add(tx, p, custom("製品")).unwrap();
+        assert_eq!(d1.slug.as_deref(), Some(format!("d{}", d1.id).as_str()));
+        assert_ne!(d1.slug, d2.slug, "two Japanese names do not collapse onto one slug");
+        let v = value_add(tx, d1.id, "運用第2期", None).unwrap();
+        assert_eq!(v.slug.as_deref(), Some(format!("v{}", v.id).as_str()));
+        // Named at the door instead, and it is the name that is kept.
+        let named = add(tx, p, NewDimension { slug: Some("release".into()), ..custom("リリース") })
+            .unwrap();
+        assert_eq!(named.slug.as_deref(), Some("release"));
+    }
+
+    /// A default nobody asked for cannot be refused — the row being created has no way to name another,
+    /// since a slug is only editable once the row exists. So it steps past the holder (`AMB-D-735`).
+    #[test]
+    fn a_default_slug_steps_past_one_an_edit_already_took() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let squatter = add(tx, p, custom("先客")).unwrap();
+        // Take the slug the *next* axis would otherwise be born with.
+        let next = squatter.id + 1;
+        update(tx, squatter.id, None, None, None, None, None, None, Some(&format!("d{next}")))
+            .unwrap();
+        let born = add(tx, p, custom("あと")).unwrap();
+        assert_eq!(born.id, next);
+        assert_eq!(born.slug.as_deref(), Some(format!("d{next}-2").as_str()));
+
+        let v = value_add(tx, born.id, "値", None).unwrap();
+        let after = v.id + 1;
+        value_set_slug(tx, v.id, &format!("v{after}")).unwrap();
+        let born_value = value_add(tx, born.id, "つぎの値", None).unwrap();
+        assert_eq!(born_value.id, after);
+        assert_eq!(born_value.slug.as_deref(), Some(format!("v{after}-2").as_str()));
+    }
+
+    /// The shape the door takes, and the shapes it does not (`AMB-D-735`).
+    #[test]
+    fn a_slug_is_lower_case_ascii_opening_with_a_letter() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let d = add(tx, p, custom("軸")).unwrap();
+        for good in ["release", "run-2", "a", &"a".repeat(SLUG_MAX)] {
+            update(tx, d.id, None, None, None, None, None, None, Some(good)).unwrap();
+            assert_eq!(dim(tx, d.id).slug.as_deref(), Some(good));
+        }
+        for bad in [
+            "",              // nothing to read
+            "2026",          // opens with a digit — a D-Bus name element may not
+            "-release",      // nor with a hyphen
+            "Release",       // upper case: the store would keep two, the filesystem one
+            "リリース",      // not ASCII
+            "re_lease",      // underscore is not in the set
+            "re lease",      // nor is a space
+            &"a".repeat(SLUG_MAX + 1),
+        ] {
+            let err = update(tx, d.id, None, None, None, None, None, None, Some(bad)).unwrap_err();
+            assert_eq!(err.code(), ErrorCode::InvalidDimensionSlugShape.as_str(), "{bad:?} is refused");
+        }
+    }
+
+    /// How far a slug has to be unique, and how far it does not (`AMB-D-735`) — the reach the table's
+    /// own constraint holds, said at the door so the refusal names the holder.
+    #[test]
+    fn a_slug_is_refused_where_it_is_already_taken_and_free_where_it_is_not() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let q = project_named(tx, "QJ");
+        let d1 = add(tx, p, NewDimension { slug: Some("phase".into()), ..custom("フェーズ") }).unwrap();
+        let d2 = add(tx, p, custom("製品")).unwrap();
+        let err = update(tx, d2.id, None, None, None, None, None, None, Some("phase")).unwrap_err();
+        assert_eq!(err.code(), ErrorCode::InvalidDimensionSlugTaken.as_str());
+        // Another project is another reach.
+        add(tx, q, NewDimension { slug: Some("phase".into()), ..custom("フェーズ") }).unwrap();
+        // Naming an axis the slug it already holds is not a collision with itself.
+        update(tx, d1.id, None, None, None, None, None, None, Some("phase")).unwrap();
+
+        let v1 = value_add(tx, d1.id, "運用第2期", Some("ops2")).unwrap();
+        let v2 = value_add(tx, d1.id, "運用第1期", None).unwrap();
+        assert_eq!(
+            value_set_slug(tx, v2.id, "ops2").unwrap_err().code(),
+            ErrorCode::InvalidDimensionSlugTaken.as_str()
+        );
+        // Another axis is another reach for a value, too.
+        value_add(tx, d2.id, "本体", Some("ops2")).unwrap();
+        assert_eq!(val(tx, v1.id).slug.as_deref(), Some("ops2"));
+    }
+
+    /// **id → slug → name, in that order** (`AMB-D-735`). The tiers are asked one at a time, so a slug
+    /// that happens to spell another axis's name does not make either reference ambiguous.
+    #[test]
+    fn a_reference_resolves_by_key_then_slug_then_name() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let phase = add(tx, p, NewDimension { slug: Some("phase".into()), ..custom("フェーズ") }).unwrap();
+        // Named exactly what the other one's slug says, which is what makes the order visible.
+        let decoy = add(tx, p, custom("phase")).unwrap();
+        assert_eq!(read::resolve_dimension_in(tx.conn(), None, "phase").unwrap(), vec![phase.id]);
+        assert_eq!(
+            read::resolve_dimension_in(tx.conn(), None, &decoy.id.to_string()).unwrap(),
+            vec![decoy.id],
+            "the key still wins over both",
+        );
+        assert_eq!(
+            read::resolve_dimension_in(tx.conn(), None, "フェーズ").unwrap(),
+            vec![phase.id],
+            "a name nobody's slug spells still resolves",
+        );
+
+        let ops2 = value_add(tx, phase.id, "運用第2期", Some("ops2")).unwrap();
+        let value_decoy = value_add(tx, phase.id, "ops2", None).unwrap();
+        assert_eq!(
+            read::resolve_dimension_value_in(tx.conn(), phase.id, "ops2").unwrap(),
+            vec![ops2.id],
+        );
+        assert_eq!(
+            read::resolve_dimension_value_in(tx.conn(), phase.id, "運用第2期").unwrap(),
+            vec![ops2.id],
+        );
+        assert_eq!(
+            read::resolve_dimension_value_in(tx.conn(), phase.id, &value_decoy.id.to_string())
+                .unwrap(),
+            vec![value_decoy.id],
+        );
+    }
+
     #[test]
     fn rename_move_and_resolve_dimensions() {
         let e = new_engine();
@@ -521,7 +808,7 @@ mod tests {
         let p = project_named(tx, "PJ");
         let d1 = add(tx, p, custom("D1")).unwrap();
         let d2 = add(tx, p, custom("D2")).unwrap();
-        update(tx, d1.id, Some("分類"), None, None, None, None, None).unwrap();
+        update(tx, d1.id, Some("分類"), None, None, None, None, None, None).unwrap();
         assert_eq!(dim(tx, d1.id).name, "分類");
         // Resolves by name or by id (exact match).
         assert_eq!(read::resolve_dimension_in(tx.conn(), None, "分類").unwrap(), vec![d1.id]);
@@ -549,8 +836,8 @@ mod tests {
         let tx = &e.write().unwrap();
         let p = project_named(tx, "PJ");
         let d = add(tx, p, NewDimension { name: "優先度".into(), ordered: true, ..NewDimension::default() }).unwrap();
-        let v1 = value_add(tx, d.id, "低").unwrap();
-        let v2 = value_add(tx, d.id, "高").unwrap();
+        let v1 = value_add(tx, d.id, "低", None).unwrap();
+        let v2 = value_add(tx, d.id, "高", None).unwrap();
         assert!(v1.order_key < v2.order_key);
         value_rename(tx, v1.id, "low").unwrap();
         assert_eq!(val(tx, v1.id).name, "low");
@@ -574,7 +861,7 @@ mod tests {
         let tx = &e.write().unwrap();
         let p = project_named(tx, "PJ");
         let d = add(tx, p, custom("フェーズ")).unwrap();
-        let v = value_add(tx, d.id, "開発期").unwrap();
+        let v = value_add(tx, d.id, "開発期", None).unwrap();
         // A fresh value has no period.
         assert_eq!((v.start_on, v.end_on), (None, None));
 
@@ -639,7 +926,7 @@ mod tests {
         // Dates can be written on a non-time_axis axis (nothing here refuses them), but the
         // resolution reads the time_axis axis alone, so they contribute nothing to it.
         let other = add(tx, p, custom("カテゴリー")).unwrap();
-        let ov = value_add(tx, other.id, "バグ").unwrap();
+        let ov = value_add(tx, other.id, "バグ", None).unwrap();
         value_set_dates(tx, ov.id, Some(day("2026-01-01")), None).unwrap();
         assert!(current(tx, p, day("2026-07-09")).is_none(), "a non-time_axis axis makes no current era");
 
@@ -649,12 +936,12 @@ mod tests {
             NewDimension { role: DimensionRole::TimeAxis, ordered: true, ..custom("時代") },
         )
         .unwrap();
-        let dev = value_add(tx, axis.id, "開発期").unwrap();
+        let dev = value_add(tx, axis.id, "開発期", None).unwrap();
         value_set_dates(tx, dev.id, Some(day("2026-06-20")), Some(day("2026-07-07"))).unwrap();
-        let ops1 = value_add(tx, axis.id, "運用第1期").unwrap();
+        let ops1 = value_add(tx, axis.id, "運用第1期", None).unwrap();
         value_set_dates(tx, ops1.id, Some(day("2026-07-08")), None).unwrap();
         // A value with no period has no window, so it covers no day.
-        value_add(tx, axis.id, "未設定").unwrap();
+        value_add(tx, axis.id, "未設定", None).unwrap();
 
         assert_eq!(current(tx, p, day("2026-07-01")).unwrap(), dev.id);
         assert_eq!(current(tx, p, day("2026-07-07")).unwrap(), dev.id, "the end is inclusive");
@@ -681,20 +968,20 @@ mod tests {
         let tx = &e.write().unwrap();
         let p = project_named(tx, "PJ");
         let d = add(tx, p, custom("時代")).unwrap();
-        let now = value_add(tx, d.id, "運用第1期").unwrap();
+        let now = value_add(tx, d.id, "運用第1期", None).unwrap();
         value_set_dates(tx, now.id, Some(day("2026-07-08")), None).unwrap();
         // An axis with no role makes no current era, dates or not.
         assert!(current(tx, p, day("2026-07-09")).is_none());
 
         // Nominate it later and the very same dates start acting as windows. Name and notes are
         // left as they were.
-        let named = update(tx, d.id, None, None, None, Some(DimensionRole::TimeAxis), None, None).unwrap();
+        let named = update(tx, d.id, None, None, None, Some(DimensionRole::TimeAxis), None, None, None).unwrap();
         assert_eq!(named.name, "時代");
         assert_eq!(current(tx, p, day("2026-07-09")).unwrap(), now.id);
 
         // Un-nominate it and it steps out of the resolution; the dates stay in their columns but
         // stop meaning anything.
-        update(tx, d.id, None, None, None, Some(DimensionRole::None), None, None).unwrap();
+        update(tx, d.id, None, None, None, Some(DimensionRole::None), None, None, None).unwrap();
         assert!(current(tx, p, day("2026-07-09")).is_none());
         assert_eq!(val(tx, now.id).start_on, Some(day("2026-07-08")));
     }
@@ -706,14 +993,14 @@ mod tests {
         let p = project_named(tx, "PJ");
         // Created unordered, its values cannot be reordered.
         let d = add(tx, p, custom("カテゴリー")).unwrap();
-        let a = value_add(tx, d.id, "A").unwrap();
-        let b = value_add(tx, d.id, "B").unwrap();
+        let a = value_add(tx, d.id, "A", None).unwrap();
+        let b = value_add(tx, d.id, "B", None).unwrap();
         assert!(!dim(tx, d.id).ordered);
         assert!(value_move(tx, b.id, Position::Top).is_err(), "an unordered axis cannot be reordered");
 
         // Turn `ordered` on and `order_key` takes effect, so values can be reordered. Name and
         // notes are left as they were.
-        let updated = update(tx, d.id, None, None, Some(true), None, None, None).unwrap();
+        let updated = update(tx, d.id, None, None, Some(true), None, None, None, None).unwrap();
         assert!(updated.ordered);
         assert_eq!(updated.name, "カテゴリー");
         value_move(tx, b.id, Position::Top).unwrap();
@@ -722,7 +1009,7 @@ mod tests {
 
         // Turn `ordered` back off and the values fall back to a stable ascending-id order rather
         // than `order_key`, so the reordering stops showing.
-        update(tx, d.id, None, None, Some(false), None, None, None).unwrap();
+        update(tx, d.id, None, None, Some(false), None, None, None, None).unwrap();
         assert!(!dim(tx, d.id).ordered);
         let mut expected = [("A", &a.id), ("B", &b.id)];
         expected.sort_by(|x, y| x.1.cmp(y.1));
@@ -745,7 +1032,7 @@ mod tests {
 
         // Raise the flag and it is the axis that carries it — name, notes, order and role are not
         // touched on the way through.
-        let raised = update(tx, d.id, None, None, None, None, Some(true), None).unwrap();
+        let raised = update(tx, d.id, None, None, None, None, Some(true), None, None).unwrap();
         assert!(raised.show_on_card);
         assert_eq!(raised.name, "カテゴリー");
         assert!(raised.ordered);
@@ -753,12 +1040,12 @@ mod tests {
         assert!(dim(tx, d.id).show_on_card, "and it is what was written, not just what came back");
 
         // Lower it again. Nothing about the axis remembers it was ever up.
-        update(tx, d.id, None, None, None, None, Some(false), None).unwrap();
+        update(tx, d.id, None, None, None, None, Some(false), None, None).unwrap();
         assert!(!dim(tx, d.id).show_on_card);
 
         // An update that says nothing about the flag leaves it where it stands.
-        update(tx, d.id, None, None, None, None, Some(true), None).unwrap();
-        update(tx, d.id, Some("区分"), None, None, None, None, None).unwrap();
+        update(tx, d.id, None, None, None, None, Some(true), None, None).unwrap();
+        update(tx, d.id, Some("区分"), None, None, None, None, None, None).unwrap();
         let after = dim(tx, d.id);
         assert_eq!(after.name, "区分");
         assert!(after.show_on_card, "an unmentioned flag is not cleared");
@@ -781,22 +1068,22 @@ mod tests {
         let d = add(tx, p, custom("プロダクト")).unwrap();
         assert!(!dim(tx, d.id).required, "a new axis demands nothing");
         assert!(
-            update(tx, d.id, None, None, None, None, None, Some(true)).is_err(),
+            update(tx, d.id, None, None, None, None, None, Some(true), None).is_err(),
             "an axis offering no values cannot be required"
         );
 
         // Give it something to answer with and the same call goes through.
-        value_add(tx, d.id, "Amenbo本体").unwrap();
-        let raised = update(tx, d.id, None, None, None, None, None, Some(true)).unwrap();
+        value_add(tx, d.id, "Amenbo本体", None).unwrap();
+        let raised = update(tx, d.id, None, None, None, None, None, Some(true), None).unwrap();
         assert!(raised.required);
         assert_eq!(raised.name, "プロダクト", "nothing else on the axis moved with the flag");
         assert!(dim(tx, d.id).required, "and it is what was written, not just what came back");
 
         // Lowering it is free, and an update that says nothing about it leaves it standing.
-        update(tx, d.id, None, None, None, None, None, Some(false)).unwrap();
+        update(tx, d.id, None, None, None, None, None, Some(false), None).unwrap();
         assert!(!dim(tx, d.id).required);
-        update(tx, d.id, None, None, None, None, None, Some(true)).unwrap();
-        update(tx, d.id, Some("製品"), None, None, None, None, None).unwrap();
+        update(tx, d.id, None, None, None, None, None, Some(true), None).unwrap();
+        update(tx, d.id, Some("製品"), None, None, None, None, None, None).unwrap();
         assert!(dim(tx, d.id).required, "an unmentioned flag is not cleared");
     }
 
@@ -809,22 +1096,22 @@ mod tests {
         let p = project_named(tx, "PJ");
         let t = task_in(tx, "a task", p);
         let axis = add(tx, p, custom("プロダクト")).unwrap();
-        let core = value_add(tx, axis.id, "Amenbo本体").unwrap();
-        let site = value_add(tx, axis.id, "Amenboサイト").unwrap();
+        let core = value_add(tx, axis.id, "Amenbo本体", None).unwrap();
+        let site = value_add(tx, axis.id, "Amenboサイト", None).unwrap();
         set(tx, t, core.id).unwrap();
 
         // While the axis demands nothing, clearing the assignment is an ordinary removal.
         assert!(unset(tx, t, core.id).unwrap());
         set(tx, t, core.id).unwrap();
 
-        update(tx, axis.id, None, None, None, None, None, Some(true)).unwrap();
+        update(tx, axis.id, None, None, None, None, None, Some(true), None).unwrap();
         assert!(unset(tx, t, core.id).is_err(), "a required axis cannot be emptied");
         // Moving to another value on the same axis is `set`, and it still works — the axis stays answered.
         set(tx, t, site.id).unwrap();
         assert_eq!(read::task_dimension_assignments(tx.conn(), t).unwrap(), vec![(axis.id, site.id)]);
         // An axis that demands nothing is unaffected by the one that does.
         let free = add(tx, p, custom("フェーズ")).unwrap();
-        let stage = value_add(tx, free.id, "運用第2期").unwrap();
+        let stage = value_add(tx, free.id, "運用第2期", None).unwrap();
         set(tx, t, stage.id).unwrap();
         assert!(unset(tx, t, stage.id).unwrap());
     }
@@ -839,10 +1126,10 @@ mod tests {
         let p = project_named(tx, "PJ");
         let t = task_in(tx, "a task", p);
         let axis = add(tx, p, custom("プロダクト")).unwrap();
-        let core = value_add(tx, axis.id, "Amenbo本体").unwrap();
-        let site = value_add(tx, axis.id, "Amenboサイト").unwrap();
+        let core = value_add(tx, axis.id, "Amenbo本体", None).unwrap();
+        let site = value_add(tx, axis.id, "Amenboサイト", None).unwrap();
         set(tx, t, core.id).unwrap();
-        update(tx, axis.id, None, None, None, None, None, Some(true)).unwrap();
+        update(tx, axis.id, None, None, None, None, None, Some(true), None).unwrap();
 
         // Down to the last one is fine — the axis can still be answered.
         value_delete(tx, site.id).unwrap();
@@ -857,7 +1144,7 @@ mod tests {
         );
 
         // Lowering the flag is the way out, and then the value is ordinary again.
-        update(tx, axis.id, None, None, None, None, None, Some(false)).unwrap();
+        update(tx, axis.id, None, None, None, None, None, Some(false), None).unwrap();
         value_delete(tx, core.id).unwrap();
         assert!(val_opt(tx, core.id).is_none());
     }
@@ -870,8 +1157,8 @@ mod tests {
         let tx = &e.write().unwrap();
         let p = project_named(tx, "PJ");
         let axis = add(tx, p, custom("プロダクト")).unwrap();
-        let core = value_add(tx, axis.id, "Amenbo本体").unwrap();
-        update(tx, axis.id, None, None, None, None, None, Some(true)).unwrap();
+        let core = value_add(tx, axis.id, "Amenbo本体", None).unwrap();
+        update(tx, axis.id, None, None, None, None, None, Some(true), None).unwrap();
         delete(tx, axis.id).unwrap();
         assert!(val_opt(tx, core.id).is_none());
     }
@@ -882,7 +1169,7 @@ mod tests {
         let tx = &e.write().unwrap();
         let p = project_named(tx, "PJ");
         let d = add(tx, p, NewDimension { name: "色".into(), ordered: false, ..NewDimension::default() }).unwrap();
-        let v = value_add(tx, d.id, "赤").unwrap();
+        let v = value_add(tx, d.id, "赤", None).unwrap();
         assert!(value_move(tx, v.id, Position::Top).is_err());
     }
 
@@ -891,7 +1178,7 @@ mod tests {
         let e = new_engine();
         let tx = &e.write().unwrap();
         // A value op on a dimension that does not exist is not_found.
-        assert!(value_add(tx, 999_999, "done").is_err());
+        assert!(value_add(tx, 999_999, "done", None).is_err());
     }
 
     /// Deleting a value removes the row, and the task assignments naming it go with it.
@@ -901,7 +1188,7 @@ mod tests {
         let tx = &e.write().unwrap();
         let p = project_named(tx, "PJ");
         let d = add(tx, p, custom("カテゴリー")).unwrap();
-        let v = value_add(tx, d.id, "バグ").unwrap();
+        let v = value_add(tx, d.id, "バグ", None).unwrap();
         let t = task_in(tx, "task", p);
         set(tx, t, v.id).unwrap();
         value_delete(tx, v.id).unwrap();
@@ -919,8 +1206,8 @@ mod tests {
         // Every dimension is single-select: setting a different value drops the previous assignment
         // and keeps it to one row.
         let cat = add(tx, p, custom("カテゴリー")).unwrap();
-        let a = value_add(tx, cat.id, "A").unwrap();
-        let b = value_add(tx, cat.id, "B").unwrap();
+        let a = value_add(tx, cat.id, "A", None).unwrap();
+        let b = value_add(tx, cat.id, "B", None).unwrap();
         set(tx, t, a.id).unwrap();
         set(tx, t, b.id).unwrap();
         let live = read::assignment_ids_on_axis(tx.conn(), t, cat.id).unwrap();
@@ -930,7 +1217,7 @@ mod tests {
 
         // The one-row constraint is per axis; assignments on a different axis coexist.
         let area = add(tx, p, custom("領域")).unwrap();
-        let core = value_add(tx, area.id, "core").unwrap();
+        let core = value_add(tx, area.id, "core", None).unwrap();
         set(tx, t, core.id).unwrap();
         let n = read::task_dimension_assignments(tx.conn(), t).unwrap().len();
         assert_eq!(n, 2, "assignments on a different axis coexist");
@@ -943,7 +1230,7 @@ mod tests {
         let p = project_named(tx, "PJ");
         let t = task_in(tx, "task", p);
         let d = add(tx, p, custom("カテゴリー")).unwrap();
-        let v = value_add(tx, d.id, "A").unwrap();
+        let v = value_add(tx, d.id, "A", None).unwrap();
         let (_, created1) = set(tx, t, v.id).unwrap();
         let (_, created2) = set(tx, t, v.id).unwrap();
         assert!(created1 && !created2, "setting the same value again is idempotent");
@@ -957,7 +1244,7 @@ mod tests {
         let tx = &e.write().unwrap();
         let p = project_named(tx, "PJ");
         let d = add(tx, p, custom("カテゴリー")).unwrap();
-        let v = value_add(tx, d.id, "A").unwrap();
+        let v = value_add(tx, d.id, "A", None).unwrap();
         assert!(set(tx, 9999, v.id).is_err(), "assigning to a task that does not exist is refused");
         let t = task_in(tx, "task", p);
         assert!(set(tx, t, 999_999).is_err());
@@ -970,7 +1257,7 @@ mod tests {
         let tx = &e.write().unwrap();
         let p = project_named(tx, "PJ");
         let d = add(tx, p, custom("カテゴリー")).unwrap();
-        let v = value_add(tx, d.id, "A").unwrap();
+        let v = value_add(tx, d.id, "A", None).unwrap();
         let t = task_in(tx, "task", p);
         set(tx, t, v.id).unwrap();
         delete(tx, d.id).unwrap();

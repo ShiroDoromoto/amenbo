@@ -633,6 +633,8 @@ export const th: Translation = {
     invalid_dimension_period_order: "วันเริ่มต้นของค่าอยู่หลังวันสิ้นสุดไม่ได้",
     invalid_dimension_required_without_values: "«{name}» ยังไม่มีค่าใดเลย จึงตั้งเป็นหมวดที่จำเป็นไม่ได้ กรุณาเพิ่มค่าก่อน",
     invalid_dimension_required_unset: "«{name}» เป็นหมวดที่จำเป็น จึงล้างค่าของงานในหมวดนี้ไม่ได้ กรุณาเลือกค่าอื่นแทน",
+    invalid_dimension_slug_shape: "“{slug}” ใช้เป็นคีย์ไม่ได้ — ใช้ตัวพิมพ์เล็ก ตัวเลข และยัติภังค์ ไม่เกิน {max} ตัว และขึ้นต้นด้วยตัวอักษร",
+    invalid_dimension_slug_taken: "“{slug}” เป็นคีย์ของสิ่งอื่นที่นี่อยู่แล้ว — เลือกคีย์อื่น",
     invalid_task_required_dimension: "งานนี้ไม่มีค่าในหมวด {names} ซึ่งโปรเจกต์นี้กำหนดให้ต้องมี",
     invalid_dimension_values_unordered: "ค่าของหมวดนี้ไม่มีลำดับ จึงจัดเรียงใหม่ไม่ได้",
     invalid_decision_edit_rejected: "{ref} ถูกปฏิเสธไปแล้ว และการตัดสินใจที่ถูกปฏิเสธจะแก้ไขไม่ได้",

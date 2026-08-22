@@ -649,6 +649,14 @@ pub struct Dimension {
     /// stays.
     #[serde(default)]
     pub required: bool,
+    /// The axis's readable, stable key — what names it **outside** Amenbo (`AMB-D-735`). The id is the
+    /// real identifier; the slug is the one that can be read and typed where the id cannot be and the
+    /// display name (Japanese, spaces and all) may not go. Unique within the project. `None` is only
+    /// what a store written before the column says, and what a row holds for the instant between being
+    /// created and being filled: every saved row carries one, and it is `ops::dimension` that holds
+    /// that true, not the table.
+    #[serde(default)]
+    pub slug: Option<String>,
     /// Where the dimension itself sits in the display order.
     pub order_key: String,
     pub created_at: Timestamp,
@@ -668,6 +676,11 @@ pub struct DimensionValue {
     pub id: i64,
     pub dimension_id: i64,
     pub name: String,
+    /// The value's readable, stable key — [`Dimension::slug`]'s counterpart, unique within the axis
+    /// (`AMB-D-735`). It is what a caller outside Amenbo names this value by: a theme's branch, a
+    /// release's folder, anything that has to spell a classification and cannot spell `AMB-DIMV-46`.
+    #[serde(default)]
+    pub slug: Option<String>,
     pub order_key: String,
     /// First day of the period, inclusive. `None` means the start is open.
     #[serde(default)]

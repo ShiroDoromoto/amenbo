@@ -287,6 +287,9 @@ pub(super) fn dimension_row(r: &Row) -> rusqlite::Result<Dimension> {
         role: enum_req(r, C.role, DimensionRole::parse)?,
         show_on_card: get(r, C.show_on_card)?,
         required: get(r, C.required)?,
+        // A store an older binary left behind reads null here (no slug), which is faithful — the same
+        // reading `project_row` gives its own.
+        slug: get(r, C.slug)?,
         order_key: get(r, C.order_key)?,
         created_at,
         updated_at,
@@ -300,6 +303,7 @@ pub(super) fn dimension_value_row(r: &Row) -> rusqlite::Result<DimensionValue> {
         id: get(r, C.id)?,
         dimension_id: get(r, C.dimension_id)?,
         name: get(r, C.name)?,
+        slug: get(r, C.slug)?,
         order_key: get(r, C.order_key)?,
         start_on: date_opt(r, C.start_on)?,
         end_on: date_opt(r, C.end_on)?,
@@ -562,6 +566,8 @@ mod tests {
                 // failed to round-trip would read as the value this field is meant to be testing.
                 show_on_card: true,
                 required: true,
+                // The readable key — exercises the `slug` column, as `project`'s own does above.
+                slug: Some("phase".to_string()),
                 order_key: "a0".to_string(),
                 created_at: now,
                 updated_at: now,
@@ -570,6 +576,7 @@ mod tests {
                 id: 1,
                 dimension_id: 1,
                 name: "done".to_string(),
+                slug: Some("done".to_string()),
                 order_key: "a0".to_string(),
                 start_on: Some("2026-06-20".parse().unwrap()),
                 end_on: Some("2026-07-07".parse().unwrap()),

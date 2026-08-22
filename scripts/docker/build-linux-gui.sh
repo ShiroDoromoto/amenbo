@@ -16,13 +16,35 @@
 # produced AppImage actually matches — otherwise a silent emulation fallback would ship a
 # mislabeled bundle.
 #
-# Mounts expected (set by `make dist-gui-linux`):
+# The same recipe builds the dev channel's preview (`make gui-dev-linux`), which is the shipped
+# bundle with three things different: tauri is told the theme's own product name, identifier and
+# executable name (DEV_CONFIG), the build is told its app-data name (DEV_APP_NAME), and the artifact
+# is collected under a name that says which theme it is (OUT_IMG_NAME). It shares this file rather
+# than getting one of its own because everything else — the Ubuntu 22.04 glibc floor, the tool
+# cache, the arch guard, the rate-limit retry — is the same question on both channels.
+#
+# Mounts expected (set by `make dist-gui-linux` / `make gui-dev-linux`):
 #   /src  (ro)  the repo
 #   /out  (rw)  where dist artifacts are collected  (host: ./dist)
 set -euo pipefail
 
 VERSION="${VERSION:?VERSION must be passed in}"
 TARGET_ARCH="${TARGET_ARCH:?TARGET_ARCH (amd64|arm64) must be passed in}"
+
+# The dev channel's three inputs, or none of them. They arrive together or not at all: a config
+# without an app-data name builds a bundle wearing the theme's identifier over the shared dev
+# store, which is the one way two themes can still collide on a member's machine.
+DEV_APP_NAME="${DEV_APP_NAME:-}"
+DEV_CONFIG="${DEV_CONFIG:-}"
+OUT_IMG_NAME="${OUT_IMG_NAME:-}"
+DEV_CHANNEL=0
+if [ -n "$DEV_APP_NAME" ] || [ -n "$DEV_CONFIG" ] || [ -n "$OUT_IMG_NAME" ]; then
+  if [ -z "$DEV_APP_NAME" ] || [ -z "$DEV_CONFIG" ] || [ -z "$OUT_IMG_NAME" ]; then
+    echo "✗ dev channel: DEV_APP_NAME, DEV_CONFIG and OUT_IMG_NAME must be passed together" >&2
+    exit 2
+  fi
+  DEV_CHANNEL=1
+fi
 
 # The AppImage arch token, and the machine name `file` reads back out of the built ELF.
 case "$TARGET_ARCH" in
@@ -53,7 +75,7 @@ mkdir -p /out
 # arch token in the filename.
 shopt -s nullglob
 
-DIST_IMG="/out/amenbo-app-linux-${IMG_ARCH}.AppImage"
+DIST_IMG="/out/${OUT_IMG_NAME:-amenbo-app-linux-${IMG_ARCH}.AppImage}"
 DIST_IMG_SIG="${DIST_IMG}.sig"
 
 # Signed updater artifact: only when the release CI's signing key is present. With it set, the
@@ -61,8 +83,11 @@ DIST_IMG_SIG="${DIST_IMG}.sig"
 # AppImage in place and writes <name>.AppImage.sig beside it — the artifact the GUI self-update
 # path (tauri-plugin-updater) consumes (Tauri v2 re-uses the .AppImage itself, not a .tar.gz). A
 # local keyless build skips it: the AppImage is still produced, just unsigned.
+# A preview never signs. It carries no release stamp, so it withholds the update check entirely
+# (update_check::withheld_from_build) and the dev channel refuses self-update on top of that
+# (self_update::apply) — an updater artifact would be one nothing can ever consume.
 SIGN_UPDATER=0
-if [ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then SIGN_UPDATER=1; fi
+if [ "$DEV_CHANNEL" = 0 ] && [ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then SIGN_UPDATER=1; fi
 
 # The AppImage stage downloads linuxdeploy/appimagetool from GitHub, which is the 429-prone
 # part: with XDG_CACHE_HOME on a persistent volume the tools are fetched once and reused, but
@@ -85,6 +110,16 @@ retryable() {
 # with a pubkey but no private key fails the build, so a local `make dist-gui-linux` must not pass it.
 img_args=(--bundles appimage)
 if [ "$SIGN_UPDATER" = 1 ]; then img_args+=(-c src-tauri/updater.conf.json); fi
+# The dev channel's icons and defaults come from the committed tauri.dev.conf.json, and the theme's
+# own three names are merged over it — the same two --config arguments, in the same order, that the
+# mac dev bundle is built with (Makefile, gui-dev).
+if [ "$DEV_CHANNEL" = 1 ]; then
+  img_args+=(--config src-tauri/tauri.dev.conf.json --config "$DEV_CONFIG")
+  # Which app-data the built binaries address. Read at compile time by amenbo-core, so it has to be
+  # in the environment of the build, not of the run.
+  export AMENBO_APP_NAME="$DEV_APP_NAME"
+  echo "→ [container] dev channel: app-data $DEV_APP_NAME, config $DEV_CONFIG"
+fi
 
 [ "$SIGN_UPDATER" = 1 ] && sign_note=", signed updater artifact" || sign_note=""
 echo "→ [container] tauri build (appimage${sign_note})"

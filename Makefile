@@ -188,7 +188,7 @@ LINUX_CLI_IMAGE   := amenbo-linux-cli:$(LINUX_CLI_ARCH)
 # so it does not appear here = shell-gate's actionlint sees that.
 SHELL_SOURCES := $(shell git ls-files '*.sh' '.githooks/*')
 
-.PHONY: help install install-dev gui gui-dev gui-dev-names gui-dev-linux install-gui install-gui-dev dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate product-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate ci-aggregate-gate workflow-run-gate brand sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux dist-cli-dev-linux verify-existing-store release codesign-cert devtool
+.PHONY: help install install-dev gui gui-dev gui-dev-names gui-dev-linux install-gui install-gui-dev dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate product-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate gui-inputs-gate ci-aggregate-gate workflow-run-gate brand sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux dist-cli-dev-linux verify-existing-store release codesign-cert devtool
 
 help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
@@ -207,6 +207,7 @@ help:
 	@echo "make sidecar-name-gate - assert the CLI beside the app is looked for under the name the bundle ships it as (a rename on one side hands MCP hosts a path to nothing) = the same guard CI runs (automatic at the start of make test)"
 	@echo "make selfupdate-gate - assert the GUI asks which channel it is before reaching for self-update (a dev build that updates installs prod over itself) = the same guard CI runs (automatic at the start of make test)"
 	@echo "make ts-derive-gate - assert every #[derive(TS)] sits in the GUI crate (a derive elsewhere moves bindings.ts on a change nothing on the GUI side watches) = the same guard CI runs (automatic at the start of make test)"
+	@echo "make gui-inputs-gate - assert every source the GUI reads from outside app/ opens the gui gate (a parity test reads Rust with ?raw, and a filter that misses it skips the GUI job on the very change that breaks it) = the same guard CI runs (automatic at the start of make test)"
 	@echo "make ci-aggregate-gate - assert CI's merge gate waits for every job in _ci.yml (a job missing from its needs is one the required check goes green without) = the same guard CI runs (automatic at the start of make test)"
 	@echo "make workflow-run-gate - assert every workflow_run trigger names a workflow that exists and can fire (a renamed name: stops the trigger without making anything red) = the same guard CI runs (automatic at the start of make test)"
 	@echo "make brand        - re-bake the brand images (assets/brand/, and the app bundle icons under app/src-tauri/) from the origin SVGs. The set is tracked, so run this only when the mark itself moves (macOS; needs Google Chrome and Pillow)"
@@ -592,6 +593,7 @@ gate-cheap:
 	$(MAKE) --no-print-directory sidecar-name-gate
 	$(MAKE) --no-print-directory selfupdate-gate
 	$(MAKE) --no-print-directory ts-derive-gate
+	$(MAKE) --no-print-directory gui-inputs-gate
 	$(MAKE) --no-print-directory ci-aggregate-gate
 	$(MAKE) --no-print-directory workflow-run-gate
 
@@ -781,6 +783,14 @@ selfupdate-gate:
 ## Declared once and shared: `make test` and CI's tree-guards both run this file.
 ts-derive-gate:
 	@guards/check-ts-derive.sh
+
+## Guard the gui layer's reach: the parity tests read Rust straight out of the tree with Vite's
+## `?raw`, so the GUI job's inputs are not confined to app/. A file it reads that no `gui:` pattern
+## matches is one whose change SKIPS the job — green PR, and the parity break lands on main under an
+## unrelated one. A skipped job is not a red one, so nothing else would say it.
+## Declared once and shared: `make test` and CI's tree-guards both run this file.
+gui-inputs-gate:
+	@guards/check-gui-inputs.sh
 
 ## Guard the merge gate itself: CI ends in one aggregate job whose name is the single check the merge
 ## target requires, and it waits for what its `needs:` names and nothing else. A job added without a

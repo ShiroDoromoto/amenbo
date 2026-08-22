@@ -5,8 +5,9 @@
 #   dev   : command `amenbo-dev` / app-data `work.amenbo.amenbo-dev`  … development and experiments (never touch prod data)
 # The app-data name is switched by core via `AMENBO_APP_NAME` (at build time). dev builds into its
 # own target dir so it does not contend with prod over rebuilds.
-# The dev GUI splits once more, by AMB-T-ID: unset is the shared dev app above, AMB-T-ID=<id> is a
-# throwaway instance owned by one task (app-data `work.amenbo.amenbo-dev-<id>`). See GUI_DEV_*.
+# The dev GUI splits once more: unset is the shared dev app above, AMB-T-ID=<id> is a throwaway
+# instance owned by one task (app-data `work.amenbo.amenbo-dev-<id>`), and AMB-THEME=<slug> is one
+# theme's preview (`work.amenbo.amenbo-dev-<slug>`). See GUI_DEV_*.
 
 CARGO_BIN := $(HOME)/.cargo/bin
 APPS_DIR  := /Applications
@@ -21,39 +22,72 @@ GUI_APP     := $(BUNDLE_DIR)/$(GUI_NAME).app
 # and `bundle.externalBin` both say it, and the dev channel says GUI_DEV_DATA in its place.
 CLI_NAME    := amenbo
 
-# The dev GUI comes in two shapes, and AMB-T-ID picks which one every dev-GUI target builds and
+# The dev GUI comes in three shapes, and two doors pick which one every dev-GUI target builds and
 # installs. Unset is the shared dev app: one permanent bundle, the place to keep a grown setup
 # (plugins, catalog, projects) that no task may delete. AMB-T-ID=<id> is a throwaway instance one
 # task owns — its own bundle identifier, product name and app-data, so two parallel sessions verify
 # their own work instead of installing over each other. The instance lives outside the checkout, so
 # `devtool devgui rm <id>` is what reclaims its bundle and its app-data when the task is finished.
+# AMB-THEME=<slug> is a theme's preview, which the workflow builds for every OS and hands to a
+# member (_theme-preview.yml).
+#
+# The two doors are separate because they name different things, and neither name fits through the
+# other. AMB-T-ID is a task number, pinned to the worktree and the branch devtool cuts. A theme is
+# one subject the team touches for weeks, and what names it is the slug its classification value
+# carries — the same word `theme/<slug>` is spelled with. Passing both is refused rather than
+# resolved by precedence: a build is one task's instance or one theme's preview, and a silent winner
+# is a bundle nobody asked for.
 #
 # Each shape also carries its own executable name (GUI_DEV_BIN), which is what lets the OS tell the
 # running apps apart: `pgrep`, System Events and a screenshot harness all address a process by name,
 # and a dev instance sharing the prod name is one an automated click can land on by mistake. Prod
 # keeps `amenbo-app`; only the dev shapes are renamed.
 #
-# The name is amenbo's own task namespace on purpose, and not a plain word like TASK: make reads
-# the environment as well as the command line, so a plain word is one a shell may already export
-# and this build would silently obey. A hyphenated name is one no shell can assign at all, which
-# leaves the command line as the only way in.
+# Both names are amenbo's own namespaces on purpose, and not plain words like TASK or THEME: make
+# reads the environment as well as the command line, so a plain word is one a shell may already
+# export and this build would silently obey. A hyphenated name is one no shell can assign at all,
+# which leaves the command line as the only way in.
 AMB-T-ID ?=
-ifeq ($(strip $(AMB-T-ID)),)
-GUI_DEV_NAME := amenbo (dev)
-GUI_DEV_ID   := work.amenbo.app.dev
-GUI_DEV_DATA := amenbo-dev
-GUI_DEV_BIN  := amenbo-app-dev
-else
+AMB-THEME ?=
+ifneq ($(strip $(AMB-T-ID)),)
+ifneq ($(strip $(AMB-THEME)),)
+$(error pass AMB-T-ID or AMB-THEME, not both — a build is one task's instance or one theme's preview)
+endif
+endif
+
+ifneq ($(strip $(AMB-THEME)),)
+# The slug's own character set: lowercase letters, digits and hyphens, a lowercase letter first, 24
+# at most — the same set a classification value's slug is held to, so the word that names the theme
+# in the backlog is the word that reaches the bundle unchanged. The leading letter is not cosmetic:
+# a D-Bus well-known name cannot have an element that starts with a digit, and the Linux preview
+# registers one. Uppercase is out because SQLite's UNIQUE tells `foo` from `Foo` while macOS and
+# Windows filenames do not, and this name becomes both.
+ifneq ($(shell printf '%s\n' '$(AMB-THEME)' | grep -Eqx '[a-z][a-z0-9-]{0,23}' || echo bad),)
+$(error AMB-THEME must be a slug (lowercase letters, digits and hyphens, starting with a letter, 24 max) — got '$(AMB-THEME)')
+endif
+GUI_DEV_SUFFIX := $(AMB-THEME)
+else ifneq ($(strip $(AMB-T-ID)),)
 # Digits only, the same canonical task ref devtool pins its worktree and branch names to: the
 # bundle name has to be the identical string on both sides, or teardown looks for a bundle that
 # was never built under that name.
 ifneq ($(shell printf '%s' '$(AMB-T-ID)' | tr -d '0-9'),)
 $(error AMB-T-ID must be a task number (digits only) — got '$(AMB-T-ID)')
 endif
-GUI_DEV_NAME := amenbo (dev $(AMB-T-ID))
-GUI_DEV_ID   := work.amenbo.app.dev.$(AMB-T-ID)
-GUI_DEV_DATA := amenbo-dev-$(AMB-T-ID)
-GUI_DEV_BIN  := amenbo-app-dev-$(AMB-T-ID)
+GUI_DEV_SUFFIX := $(AMB-T-ID)
+else
+GUI_DEV_SUFFIX :=
+endif
+
+ifeq ($(strip $(GUI_DEV_SUFFIX)),)
+GUI_DEV_NAME := amenbo (dev)
+GUI_DEV_ID   := work.amenbo.app.dev
+GUI_DEV_DATA := amenbo-dev
+GUI_DEV_BIN  := amenbo-app-dev
+else
+GUI_DEV_NAME := amenbo (dev $(GUI_DEV_SUFFIX))
+GUI_DEV_ID   := work.amenbo.app.dev.$(GUI_DEV_SUFFIX)
+GUI_DEV_DATA := amenbo-dev-$(GUI_DEV_SUFFIX)
+GUI_DEV_BIN  := amenbo-app-dev-$(GUI_DEV_SUFFIX)
 endif
 
 # What a task's instance opens on. Its app-data is seeded from the shared dev store, so the screen
@@ -216,7 +250,7 @@ help:
 	@echo "make dist-gui-mac - build the mac unified .pkg (GUI to /Applications, CLI to /usr/local/bin) into dist/ (the mac release bundle itself; Intel build via MAC_GUI_ARCH=amd64)"
 	@echo "make dist-gui-linux - build the Linux GUI AppImage in Docker into dist/ (needs Docker)"
 	@echo "make dist-cli-linux - build the shipped Linux CLI in the same Docker base as the AppImage, into dist/ (that base is the glibc floor of the distribution; LINUX_CLI_ARCH=arm64 for the other arch; needs Docker)"
-	@echo "make dist-cli-dev-linux AMB-T-ID=<id> - the same Linux CLI named for the build, for a theme preview to hand its member (needs Docker)"
+	@echo "make dist-cli-dev-linux AMB-THEME=<slug> - the same Linux CLI named for the build, for a theme preview to hand its member (needs Docker)"
 	@echo "make verify-gui-linux - exercise 'another process writes → the screen updates' on a real Linux GUI over Xvfb (needs Docker)"
 	@echo "make verify-network-linux - stand up real NFS/SMB and exercise store_watch's network-FS detection (needs Docker; also runs every time in CI)"
 	@echo "make verify-network-mac - the macOS version of the above (MNT_LOCAL detection). Mounts real SMB over loopback and exercises it (needs Docker)"
@@ -233,8 +267,9 @@ help:
 	@echo "make install-gui     - [retired] the prod GUI ships in the unified installer; release with make release"
 	@echo "make install-gui-dev - build the dev GUI and put it in $(APPS_DIR)/$(GUI_DEV_NAME).app"
 	@echo "                       AMB-T-ID=<id> builds that task's own throwaway instance (app-data work.amenbo.amenbo-dev-<id>, seeded from the shared dev store) instead of the shared dev app; devtool devgui rm <id> deletes it"
+	@echo "                       AMB-THEME=<slug> builds that theme's preview under the same split (app-data work.amenbo.amenbo-dev-<slug>, not seeded); the two are exclusive"
 	@echo "make gui-dev-linux - build the dev GUI's Linux AppImage in Docker into dist/ (the preview workflow's Linux leg; needs Docker)"
-	@echo "make gui-dev-names - print the names AMB-T-ID splits a dev build by, as key=value (what the preview workflow reads instead of spelling them again)"
+	@echo "make gui-dev-names - print the names AMB-THEME / AMB-T-ID split a dev build by, as key=value (what the preview workflow reads instead of spelling them again)"
 
 ## Pay the freeze debt an appended migration step creates. The chain defines the format version, so a
 ## step bumps it, and the freeze check goes red until that version's shape is written down. The text can
@@ -410,7 +445,7 @@ dist-cli-linux:
 ## the member beside its AppImage. The AppImage carries a copy, but it is mounted only while the GUI
 ## runs, so this standalone one is the only one with an address that outlives the run, and the name
 ## it lands under is the word the member will type once it is on their PATH.
-## Takes AMB-T-ID like the rest of the dev channel; unset gives the shared dev build's name.
+## Takes AMB-THEME (or AMB-T-ID) like the rest of the dev channel; unset gives the shared dev build's name.
 dist-cli-dev-linux:
 	@$(MAKE) dist-cli-linux CLI_LINUX_OUT="$(CLI_DEV_LINUX_DIST)"
 
@@ -851,9 +886,10 @@ gui:
 	@echo "→ $(GUI_NAME).app (prod): $(GUI_APP)"
 
 ## Dev GUI: the dev identifier/productName/executable name and the dev AMENBO_APP_NAME. AMB-T-ID=<id>
-## swaps all four for that task's throwaway instance (see the GUI_DEV_* block above), and the tick's
-## label with them. The inline --configs are merged over the file, so one recipe covers both shapes;
-## with AMB-T-ID unset the names merely restate what tauri.dev.conf.json already says.
+## swaps all four for that task's throwaway instance, AMB-THEME=<slug> for that theme's preview (see
+## the GUI_DEV_* block above), and the tick's label with them. The inline --configs are merged over
+## the file, so one recipe covers all three shapes; with both unset the names merely restate what
+## tauri.dev.conf.json already says.
 gui-dev:
 	@scripts/write-tick-plist.sh $(TICK_LABEL_DEV) $(GUI_DEV_DATA)
 	cd app && AMENBO_APP_NAME=$(GUI_DEV_DATA) npm run tauri build -- --config src-tauri/tauri.dev.conf.json --config '$(GUI_DEV_CONFIG)' $(call tick-config,$(TICK_LABEL_DEV))
@@ -895,8 +931,8 @@ install-gui-dev: gui-dev
 ## runner has none), so without this it would have to spell the four names a second time, and a
 ## theme whose identifier or app-data differs by OS is no longer one theme on a member's machine.
 ## Printed rather than exported because the reader is a workflow step writing $GITHUB_OUTPUT.
-## The digits-only check on AMB-T-ID above runs first, so an id that is not a task number stops
-## here — which is what makes this the whole preview run's front gate.
+## The character-set check on AMB-THEME above runs first, so a theme name that cannot be spelled
+## into a bundle identifier stops here — which is what makes this the whole preview run's front gate.
 gui-dev-names:
 	@echo 'app_name=$(GUI_DEV_DATA)'
 	@echo 'product_name=$(GUI_DEV_NAME)'

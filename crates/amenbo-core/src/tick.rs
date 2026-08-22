@@ -189,7 +189,8 @@ const TICK_LABEL: &str = "work.amenbo.tick";
 /// left with a registration that reads as held while pointing at somebody else's executable.
 /// Nothing in the probe can tell that apart, [`TickFix::Rewrite`] being deliberately blind to what a
 /// registration points at. Production beside the shared dev build is this repository's ordinary day,
-/// and two per-task instances (`AMB-T-ID=<id>`) are the same collision again.
+/// and two per-task instances (`AMB-T-ID=<id>`) or two themes' previews (`AMB-THEME=<slug>`) are the
+/// same collision again.
 ///
 /// **The production names are untouched**, so an upgrade writes over the row an older build
 /// registered rather than leaving it behind next to a new one.

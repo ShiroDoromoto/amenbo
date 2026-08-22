@@ -39,7 +39,7 @@ on:
   workflow_call:
     inputs:
       theme:
-        description: the theme's id — the umbrella task's number, digits only
+        description: the theme's slug — lowercase letters, digits and hyphens, starting with a letter
         type: string
         required: true
 
@@ -48,8 +48,8 @@ permissions:
 
 jobs:
   # The theme's four names, read once from the Makefile and handed down. This is also the run's
-  # front gate: `AMB-T-ID` takes digits only, so a theme id that is not a task number stops here
-  # instead of three jobs into the run.
+  # front gate: `AMB-THEME` takes the slug's own character set, so a theme name that cannot be spelled
+  # into a bundle identifier stops here instead of three jobs into the run.
   names:
     name: The names this theme is built under
     runs-on: ubuntu-latest
@@ -71,7 +71,7 @@ jobs:
           # Through a variable rather than a pipe into $GITHUB_OUTPUT: the default shell here is
           # `bash -e` without pipefail, so a pipe would hand the step tee's exit status and swallow
           # the one refusal this job exists to make.
-          names=$(make -s gui-dev-names AMB-T-ID="$THEME")
+          names=$(make -s gui-dev-names AMB-THEME="$THEME")
           echo "$names"
           echo "$names" >> "$GITHUB_OUTPUT"
 
@@ -108,7 +108,7 @@ jobs:
           THEME: ${{ inputs.theme }}
           AMENBO_BUILD_SHA: ${{ github.sha }}
           AMENBO_BUILD_TIME: ${{ needs.names.outputs.built_at }}
-        run: make gui-dev AMB-T-ID="$THEME"
+        run: make gui-dev AMB-THEME="$THEME"
 
       # The one thing this workflow must never do is stamp the build. A stamped binary is allowed to
       # migrate a member's production store forward, and that is irreversible — the released app can
@@ -237,7 +237,7 @@ jobs:
           THEME: ${{ inputs.theme }}
           AMENBO_BUILD_SHA: ${{ github.sha }}
           AMENBO_BUILD_TIME: ${{ needs.names.outputs.built_at }}
-        run: make gui-dev-linux AMB-T-ID="$THEME" LINUX_GUI_ARCH=amd64
+        run: make gui-dev-linux AMB-THEME="$THEME" LINUX_GUI_ARCH=amd64
 
       # The CLI goes beside it as its own file, which macOS and Windows do not need: there the CLI
       # inside the bundle has an address that outlives the run (a `.app` in `/Applications`, an
@@ -248,7 +248,7 @@ jobs:
       - name: Build the Linux preview CLI
         env:
           THEME: ${{ inputs.theme }}
-        run: make dist-cli-dev-linux AMB-T-ID="$THEME" LINUX_CLI_ARCH=amd64
+        run: make dist-cli-dev-linux AMB-THEME="$THEME" LINUX_CLI_ARCH=amd64
 
       - uses: actions/upload-artifact@v7
         with:

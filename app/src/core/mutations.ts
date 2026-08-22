@@ -1575,6 +1575,17 @@ export async function renameDimension(id: number, name: string): Promise<void> {
   return invokeAck("dimension_rename", { id, name });
 }
 
+/**
+ * Rename a dimension's readable key — what names the axis outside Amenbo, where a display name with
+ * spaces in it cannot go (`AMB-D-735`). A key is replaced, never cleared: every axis is born with one
+ * derived from its id, and the backend refuses a shape it cannot carry out (lower-case ASCII letters,
+ * digits and hyphens, opening with a letter) or a key another axis in the project already answers to.
+ */
+export async function setDimensionSlug(id: number, slug: string): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("dimension_set_slug", { id, slug });
+}
+
 /** Update a dimension's description (notes). */
 export async function updateDimension(id: number, notes: string): Promise<void> {
   if (!inTauri()) return;
@@ -1634,6 +1645,12 @@ export async function addDimensionValue(dimensionId: number, name: string): Prom
 export async function renameDimensionValue(valueId: number, name: string): Promise<void> {
   if (!inTauri()) return;
   return invokeAck("dimension_value_rename", { valueId, name });
+}
+
+/** Rename a dimension value's readable key — the value's counterpart of `setDimensionSlug`, unique within its axis. */
+export async function setDimensionValueSlug(valueId: number, slug: string): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("dimension_value_set_slug", { valueId, slug });
 }
 
 /**

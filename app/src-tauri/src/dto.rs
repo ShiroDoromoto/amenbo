@@ -34,6 +34,11 @@ pub struct DimensionValueDto {
     #[ts(type = "number")]
     pub(crate) id: i64,
     pub(crate) name: String,
+    /// The value's readable key (`AMB-D-735`) — what names it outside Amenbo, where its display name
+    /// cannot go. Omitted only for a row still being written; every saved value carries one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) slug: Option<String>,
     /// Start of the period, `YYYY-MM-DD` (inclusive). Omitted means an open start. A period is the
     /// payload of `role: time_axis`, not a generic attribute of a value — reads pass it straight
     /// through, and the gatekeeper for showing the date fields sits in the GUI.
@@ -51,7 +56,8 @@ pub struct DimensionValueDto {
 /// says whether the values have an order; `showOnCard` says whether a task's value on this axis
 /// belongs on its card (`AMB-D-651`) — the axis's own answer, so it reads the same on every device;
 /// `required` says the axis refuses to be left empty (`AMB-D-734`), which the detail pane reads to
-/// hold "finish creating" back rather than letting the write be refused at the door.
+/// hold "finish creating" back rather than letting the write be refused at the door; `slug` is the
+/// readable key the axis and each of its values answer to outside Amenbo (`AMB-D-735`).
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -59,6 +65,11 @@ pub struct DimensionDto {
     #[ts(type = "number")]
     pub(crate) id: i64,
     pub(crate) name: String,
+    /// The axis's readable key (`AMB-D-735`), the counterpart of a value's. Omitted only for a row
+    /// still being written; every saved axis carries one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) slug: Option<String>,
     pub(crate) notes: String,
     #[ts(type = "\"none\" | \"time_axis\"")]
     pub(crate) role: String,

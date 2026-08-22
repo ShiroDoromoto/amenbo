@@ -13,9 +13,12 @@ import { Icon } from "../components/Icon";
 // own. It exposes renaming a dimension, editing its notes and removing it; renaming and removing its values; the
 // ordered toggle, the toggle that names an axis the time axis (role: time_axis), the toggle that puts an axis on the
 // task card, the toggle that makes an axis refuse to be left empty, and, on an ordered dimension, reordering the
-// values. Only on a named time axis do the values grow period fields (start/end date) and a "current" marker — a
-// period is payload of the time-axis role, so no other axis shows dates. Naming one is not forced to be unique: core folds "the current era" to a single answer using the order of the
-// dimensions.
+// values. Beside each name sits its readable key (`AMB-D-735`) — what the axis or the value answers to outside
+// Amenbo, where a Japanese display name with spaces in it cannot go. A key is born with the row (derived from its
+// id) and is edited here, never cleared; a key core refuses puts the field back and says why in a toast.
+// Only on a named time axis do the values grow period fields (start/end date) and a "current" marker — a
+// period is payload of the time-axis role, so no other axis shows dates. Naming one is not forced to be unique:
+// core folds "the current era" to a single answer using the order of the dimensions.
 export function DimensionManager({ projectId, onClose }: { projectId: number; onClose: () => void }) {
   const snap = useSyncExternalStore(subscribe, getSnapshot);
   const store = useStore();
@@ -61,6 +64,14 @@ function DimensionRow({ dim, store }: { dim: DimensionDto; store: ReturnType<typ
           value={dim.name}
           placeholder={t("dimmgr.namePh")}
           onCommit={(v) => store.renameDimension(dim.id, v)}
+        />
+        <InlineText
+          className="dimmgr__slug"
+          value={dim.slug ?? ""}
+          placeholder={t("dimmgr.slugPh")}
+          label={t("dimmgr.slug")}
+          title={t("dimmgr.slugHint")}
+          onCommit={(v) => store.setDimensionSlug(dim.id, v)}
         />
         <label className="dimmgr__ordered" title={t("dimmgr.orderedHint")}>
           <input
@@ -188,6 +199,14 @@ function ValueRow({ value, store, ordered, timeAxis, current, onMoveUp, onMoveDo
         placeholder={t("dimmgr.valueNamePh")}
         onCommit={(v) => store.renameDimensionValue(value.id, v)}
       />
+      <InlineText
+        className="dimmgr__valslug"
+        value={value.slug ?? ""}
+        placeholder={t("dimmgr.slugPh")}
+        label={t("dimmgr.valueSlug")}
+        title={t("dimmgr.slugHint")}
+        onCommit={(v) => store.setDimensionValueSlug(value.id, v)}
+      />
       {timeAxis && (
         <span className="dimmgr__period">
           <DateOrOpen
@@ -246,18 +265,25 @@ function DateOrOpen({ date, label, openLabel, onChange }: {
 // remounts it and reseeds — this is a single-user tool, so losing a draft to a concurrent external change is a rare
 // case we accept. The backend rejects an empty name, so a name commits only when it is non-empty and has changed;
 // notes pass allowEmpty and may be cleared.
-function InlineText({ value, placeholder, onCommit, className, allowEmpty = false }: {
+//
+// A mutator that answers whether the write landed (the keys do — a shape or a collision core refuses) puts the field
+// back on a refusal: a success reseeds through the snapshot, but a refusal moves nothing, so without this the box
+// would keep sitting there showing a key nothing was saved under. The toast carries the reason.
+function InlineText({ value, placeholder, onCommit, className, allowEmpty = false, label, title }: {
   value: string;
   placeholder?: string;
-  onCommit: (v: string) => void;
+  onCommit: (v: string) => void | Promise<boolean>;
   className?: string;
   allowEmpty?: boolean;
+  label?: string;
+  title?: string;
 }) {
   const commit = (el: HTMLInputElement) => {
     const v = el.value.trim();
     if (v === value) return;
     if (!v && !allowEmpty) { el.value = value; return; }
-    onCommit(v);
+    const landed = onCommit(v);
+    if (landed) void landed.then((ok) => { if (!ok) el.value = value; });
   };
   return (
     <input
@@ -266,6 +292,8 @@ function InlineText({ value, placeholder, onCommit, className, allowEmpty = fals
       className={className}
       defaultValue={value}
       placeholder={placeholder}
+      aria-label={label}
+      title={title}
       onKeyDown={(e) => {
         if (isEnterSubmit(e)) { e.preventDefault(); e.currentTarget.blur(); }
         if (e.key === "Escape") { e.currentTarget.value = value; e.currentTarget.blur(); }

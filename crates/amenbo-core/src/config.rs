@@ -386,8 +386,8 @@ impl Paths {
     ///
     /// A task instance carries its number, and it is spelled as the ref the task is known by, not as
     /// the raw app-data suffix: the badge is read next to the task it belongs to. A suffix that is not
-    /// a number is shown as it stands rather than dropped — the build only ever writes digits there
-    /// (`AMB-T-ID`), so anything else is worth seeing rather than hiding behind a bare `DEV`.
+    /// a number is shown as it stands — that is a theme's preview, whose suffix is the slug it is
+    /// known by (`AMB-THEME`), and the member reading the badge knows the theme under that word.
     pub(crate) fn dev_badge_for(name: &str) -> Option<String> {
         if name == Self::DEV_APP_NAME {
             return Some(DEV_BADGE.to_owned());
@@ -1335,8 +1335,12 @@ mod tests {
         assert_eq!(Paths::dev_badge_for("amenbo-dev-2133"), Some("DEV AMB-T-2133".to_owned()));
         // Not a dev name at all: no badge, for the same reason production has none.
         assert_eq!(Paths::dev_badge_for("amenbo-devish"), None);
-        // The build writes digits and nothing else there, so an unreadable suffix is shown, not swallowed.
-        assert_eq!(Paths::dev_badge_for("amenbo-dev-wip"), Some("DEV wip".to_owned()));
+        // A theme's preview carries its slug there, and the member knows the theme under that word,
+        // so the suffix is shown as it stands rather than read as a task that does not exist.
+        assert_eq!(
+            Paths::dev_badge_for("amenbo-dev-color-rework"),
+            Some("DEV color-rework".to_owned())
+        );
     }
 
     /// The two bakes of one theme a member is holding differ in nothing the badge said before, so

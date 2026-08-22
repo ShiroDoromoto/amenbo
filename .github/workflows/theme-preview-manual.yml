@@ -1,6 +1,6 @@
 name: theme-preview-manual
 
-# The way a theme's preview is built: dispatch it with the theme's id. What it builds, and why a
+# The way a theme's preview is built: dispatch it with the theme's slug. What it builds, and why a
 # preview is not a distribution, is in _theme-preview.yml.
 #
 # Dispatch is the only trigger, and deliberately: a preview is built when someone wants the team to
@@ -8,14 +8,14 @@ name: theme-preview-manual
 # would produce artifacts nobody asked for and hand members a build they cannot tell from the one
 # they were asked to judge.
 #
-# Dispatch it with the theme branch selected as the ref (`theme/<id>`) — the run builds whatever ref
-# it was started on, and the id below only names the bundle.
+# Dispatch it with the theme branch selected as the ref (`theme/<slug>`) — the run builds whatever
+# ref it was started on, and the slug below only names the bundle.
 
 on:
   workflow_dispatch:
     inputs:
       theme:
-        description: the theme's id — the umbrella task's number, digits only (e.g. 3493)
+        description: the theme's slug — lowercase letters, digits and hyphens, starting with a letter (e.g. color-rework)
         type: string
         required: true
 

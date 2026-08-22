@@ -70,15 +70,38 @@ fn release_build(bin: &Path) -> Result<bool, String> {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
-    use std::os::unix::fs::PermissionsExt;
+    use std::io::Write;
     use std::path::PathBuf;
+    use std::process::Stdio;
 
     /// A stand-in binary that answers `version --json` with `body` on stdout, under `code`.
     fn stand_in(dir: &Path, body: &str, code: i32) -> PathBuf {
         let bin = dir.join("amenbo");
-        std::fs::write(&bin, format!("#!/bin/sh\ncat <<'EOF'\n{body}\nEOF\nexit {code}\n")).unwrap();
-        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        write_program(&bin, &format!("#!/bin/sh\ncat <<'EOF'\n{body}\nEOF\nexit {code}\n"));
         bin
+    }
+
+    /// Write `body` at `path` as a program, leaving no descriptor on it in this process.
+    ///
+    /// A file written here and exec'd a moment later is the classic ETXTBSY race — the same one the
+    /// MCP stand-in dodges by writing nothing at all. These tests run beside each other, and a
+    /// process forked while this one's file was still open for writing carries that descriptor
+    /// until it execs, which is what makes Linux refuse to exec the file it points at: a red on a
+    /// test that had nothing to do with the change, gone on a re-run, holding up a merge in the
+    /// meantime. Handing the writing to a child puts the only descriptor in a process nothing here
+    /// can fork from, and it is gone before the path is run.
+    fn write_program(path: &Path, body: &str) {
+        let mut writer = Command::new("/bin/sh")
+            .arg("-c")
+            .arg(r#"cat > "$0" && chmod 755 "$0""#)
+            .arg(path)
+            .stdin(Stdio::piped())
+            .spawn()
+            .expect("a shell to write the stand-in with");
+        let mut input = writer.stdin.take().expect("its input");
+        input.write_all(body.as_bytes()).expect("the stand-in's body is written");
+        drop(input);
+        assert!(writer.wait().expect("the writer finishes").success(), "the stand-in is runnable");
     }
 
     /// A place to put a stand-in that is not the repository the harness is run from.

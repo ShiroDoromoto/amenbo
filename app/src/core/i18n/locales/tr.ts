@@ -629,6 +629,8 @@ export const tr: Translation = {
       "Commit SHA'sı tam 40 ya da 64 onaltılık karakterdir — kısa SHA, dal, etiket ya da revizyon sayılmaz.",
     invalid_attachment_too_large: "Bu dosya {size} bayt ve türü için geçerli {max} baytlık sınırı aşıyor.",
     invalid_dimension_period_order: "Bir değerin başlangıç tarihi bitiş tarihinden sonra olamaz.",
+    invalid_dimension_required_unset: "«{name}» zorunlu bir kategori, bu yüzden bir görevin oradaki değeri boşaltılamaz — bunun yerine başka bir değer seçin.",
+    invalid_task_required_dimension: "Bu görev {names} alanında değer taşımıyor, oysa bu proje onu zorunlu tutuyor.",
     invalid_dimension_values_unordered: "Bu kategorinin değerleri sıralı değil, bu yüzden yeniden sıralanamaz.",
     invalid_decision_edit_rejected: "{ref} reddedildi ve reddedilmiş bir karar düzenlenemez.",
     invalid_decision_accept_rejected: "{ref} reddedildi ve reddedilmiş bir karar kabul edilemez.",

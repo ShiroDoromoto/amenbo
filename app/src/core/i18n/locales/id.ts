@@ -631,6 +631,8 @@ export const id: Translation = {
       "SHA commit adalah 40 atau 64 karakter heksadesimal penuh — SHA pendek, branch, tag, atau revisi tidak berlaku.",
     invalid_attachment_too_large: "Berkas ini berukuran {size} byte, melebihi batas {max} byte untuk jenisnya.",
     invalid_dimension_period_order: "Tanggal mulai sebuah nilai tidak boleh setelah tanggal berakhirnya.",
+    invalid_dimension_required_unset: "«{name}» adalah kategori wajib, jadi nilai tugas di sana tidak bisa dikosongkan — pilih nilai lain.",
+    invalid_task_required_dimension: "Tugas ini tidak membawa nilai di {names}, yang diwajibkan proyek ini.",
     invalid_dimension_values_unordered: "Nilai kategori ini tidak berurutan, jadi tidak bisa diurutkan ulang.",
     invalid_decision_edit_rejected: "{ref} sudah ditolak, dan keputusan yang ditolak tidak bisa disunting.",
     invalid_decision_accept_rejected: "{ref} sudah ditolak, dan keputusan yang ditolak tidak bisa diterima.",

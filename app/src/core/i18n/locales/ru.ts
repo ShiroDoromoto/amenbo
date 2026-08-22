@@ -669,6 +669,8 @@ export const ru: Translation = {
       "SHA коммита — это полные 40 или 64 шестнадцатеричных символа; короткий SHA, ветка, тег или revision не подойдут.",
     invalid_attachment_too_large: "Этот файл занимает {size} байт и превышает предел в {max} байт для своего типа.",
     invalid_dimension_period_order: "Дата начала значения не может быть позже даты окончания.",
+    invalid_dimension_required_unset: "«{name}» — обязательная категория, поэтому значение задачи в ней нельзя очистить: выберите другое значение.",
+    invalid_task_required_dimension: "У этой задачи нет значения в {names}, которого требует этот проект.",
     invalid_dimension_values_unordered: "Значения этой категории не упорядочены, поэтому их нельзя переставить.",
     invalid_decision_edit_rejected: "{ref} отклонено, а отклонённое решение нельзя редактировать.",
     invalid_decision_accept_rejected: "{ref} отклонено, а отклонённое решение нельзя принять.",

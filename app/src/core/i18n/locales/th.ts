@@ -630,6 +630,8 @@ export const th: Translation = {
       "SHA ของคอมมิตต้องเป็นเลขฐานสิบหกเต็ม 40 หรือ 64 ตัว — SHA แบบย่อ, branch, tag หรือ revision ใช้ไม่ได้",
     invalid_attachment_too_large: "ไฟล์นี้มีขนาด {size} ไบต์ ซึ่งเกินขีดจำกัด {max} ไบต์สำหรับไฟล์ชนิดนี้",
     invalid_dimension_period_order: "วันเริ่มต้นของค่าอยู่หลังวันสิ้นสุดไม่ได้",
+    invalid_dimension_required_unset: "«{name}» เป็นหมวดที่จำเป็น จึงล้างค่าของงานในหมวดนี้ไม่ได้ กรุณาเลือกค่าอื่นแทน",
+    invalid_task_required_dimension: "งานนี้ไม่มีค่าในหมวด {names} ซึ่งโปรเจกต์นี้กำหนดให้ต้องมี",
     invalid_dimension_values_unordered: "ค่าของหมวดนี้ไม่มีลำดับ จึงจัดเรียงใหม่ไม่ได้",
     invalid_decision_edit_rejected: "{ref} ถูกปฏิเสธไปแล้ว และการตัดสินใจที่ถูกปฏิเสธจะแก้ไขไม่ได้",
     invalid_decision_accept_rejected: "{ref} ถูกปฏิเสธไปแล้ว และการตัดสินใจที่ถูกปฏิเสธจะรับไม่ได้",

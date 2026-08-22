@@ -649,6 +649,8 @@ export const ja: Translation = {
     invalid_commit_sha: "コミット SHA は 40 桁または 64 桁の hex 全体です。短縮 SHA・ブランチ・タグ・revision は使えません。",
     invalid_attachment_too_large: "このファイルは {size} バイトで、この種類の上限 {max} バイトを超えています。",
     invalid_dimension_period_order: "値の開始日は終了日より後にできません。",
+    invalid_dimension_required_unset: "「{name}」は必須の分類なので、タスクの値を空に戻せません。別の値を選んでください。",
+    invalid_task_required_dimension: "このタスクは {names} に値がありません。このプロジェクトが必須にしている分類です。",
     invalid_dimension_values_unordered: "この分類の値は順序を持たないため、並べ替えできません。",
     invalid_decision_edit_rejected: "{ref} は却下済みです。却下された決定は編集できません。",
     invalid_decision_accept_rejected: "{ref} は却下済みです。却下された決定は採択できません。",

@@ -706,6 +706,8 @@ const err: Partial<Record<ErrorCode, string>> = {
     "A commit SHA is the full 40 or 64 hex characters — a short SHA, a branch, a tag or a revision is not one.",
   invalid_attachment_too_large: "This file is {size} bytes, over the {max}-byte limit for its kind.",
   invalid_dimension_period_order: "A value's start date cannot fall after its end date.",
+  invalid_dimension_required_unset: "“{name}” is a required category, so a task's value on it cannot be cleared — assign another value instead.",
+  invalid_task_required_dimension: "This task carries no value on {names}, which this project requires.",
   invalid_dimension_values_unordered: "This category's values carry no order, so they cannot be re-ordered.",
   invalid_decision_edit_rejected: "{ref} was rejected, and a rejected decision cannot be edited.",
   invalid_decision_accept_rejected: "{ref} was rejected, and a rejected decision cannot be accepted.",

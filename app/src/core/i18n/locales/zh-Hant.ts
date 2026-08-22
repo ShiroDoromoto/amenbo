@@ -626,6 +626,8 @@ export const zhHant: Translation = {
     invalid_commit_sha: "提交 SHA 必須是完整的 40 或 64 位十六進位；短 SHA、分支、標籤或 revision 都不行。",
     invalid_attachment_too_large: "此檔案為 {size} 位元組，超過這類檔案 {max} 位元組的上限。",
     invalid_dimension_period_order: "值的開始日期不能晚於結束日期。",
+    invalid_dimension_required_unset: "「{name}」是必填分類，任務在它上面的值不能清空，請改選其他值。",
+    invalid_task_required_dimension: "這個任務在 {names} 上沒有值，而本專案要求填寫。",
     invalid_dimension_values_unordered: "此分類的值沒有順序，無法重新排列。",
     invalid_decision_edit_rejected: "{ref} 已遭否決，遭否決的決策無法編輯。",
     invalid_decision_accept_rejected: "{ref} 已遭否決，遭否決的決策無法採納。",

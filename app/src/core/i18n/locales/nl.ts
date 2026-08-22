@@ -630,6 +630,8 @@ export const nl: Translation = {
     invalid_attachment_too_large:
       "Dit bestand is {size} bytes en gaat over de limiet van {max} bytes voor dit soort.",
     invalid_dimension_period_order: "De begindatum van een waarde mag niet na de einddatum liggen.",
+    invalid_dimension_required_unset: "‘{name}’ is een verplichte categorie, dus de waarde van een taak daarop kan niet leeggemaakt worden — kies in plaats daarvan een andere waarde.",
+    invalid_task_required_dimension: "Deze taak draagt geen waarde op {names}, wat dit project vereist.",
     invalid_dimension_values_unordered:
       "De waarden van deze categorie hebben geen volgorde en kunnen dus niet worden herschikt.",
     invalid_decision_edit_rejected: "{ref} is afgewezen, en een afgewezen besluit kan niet worden bewerkt.",

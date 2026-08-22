@@ -629,6 +629,8 @@ export const hi: Translation = {
       "कमिट SHA पूरे 40 या 64 हेक्स अक्षरों का होता है — छोटा SHA, ब्रांच, टैग या revision नहीं चलेगा।",
     invalid_attachment_too_large: "यह फ़ाइल {size} बाइट की है, जो इस प्रकार की {max} बाइट की सीमा से अधिक है।",
     invalid_dimension_period_order: "किसी मान की आरंभ तिथि उसकी समाप्ति तिथि के बाद नहीं हो सकती।",
+    invalid_dimension_required_unset: "«{name}» एक अनिवार्य श्रेणी है, इसलिए किसी कार्य का उसमें रखा मान खाली नहीं किया जा सकता — इसके बजाय दूसरा मान चुनें।",
+    invalid_task_required_dimension: "इस कार्य का {names} में कोई मान नहीं है, जो यह परियोजना अनिवार्य करती है।",
     invalid_dimension_values_unordered:
       "इस श्रेणी के मानों का कोई क्रम नहीं है, इसलिए उन्हें दोबारा क्रमबद्ध नहीं किया जा सकता।",
     invalid_decision_edit_rejected: "{ref} अस्वीकृत है, और अस्वीकृत निर्णय संपादित नहीं किया जा सकता।",

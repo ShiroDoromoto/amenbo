@@ -630,6 +630,8 @@ export const vi: Translation = {
       "SHA của commit là đủ 40 hoặc 64 ký tự hex — SHA rút gọn, nhánh, thẻ hay revision đều không được.",
     invalid_attachment_too_large: "Tệp này nặng {size} byte, vượt giới hạn {max} byte cho loại của nó.",
     invalid_dimension_period_order: "Ngày bắt đầu của một giá trị không thể sau ngày kết thúc.",
+    invalid_dimension_required_unset: "«{name}» là phân loại bắt buộc, nên giá trị của công việc ở đó không thể xoá trống — hãy chọn một giá trị khác.",
+    invalid_task_required_dimension: "Công việc này không mang giá trị nào ở {names}, thứ mà dự án này yêu cầu.",
     invalid_dimension_values_unordered: "Các giá trị của phân loại này không có thứ tự nên không thể sắp xếp lại.",
     invalid_decision_edit_rejected: "{ref} đã bị bác bỏ, và một quyết định bị bác bỏ thì không sửa được.",
     invalid_decision_accept_rejected: "{ref} đã bị bác bỏ, và một quyết định bị bác bỏ thì không chấp nhận được.",

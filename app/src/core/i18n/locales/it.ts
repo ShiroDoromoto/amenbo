@@ -657,6 +657,8 @@ export const it: Translation = {
       "Uno SHA di commit sono i 40 o 64 caratteri esadecimali completi; uno SHA breve, un branch, un tag o una revisione non lo sono.",
     invalid_attachment_too_large: "Questo file occupa {size} byte e supera il limite di {max} byte per il suo tipo.",
     invalid_dimension_period_order: "La data di inizio di un valore non può essere successiva alla data di fine.",
+    invalid_dimension_required_unset: "«{name}» è una categoria obbligatoria, quindi il valore di un'attività su di essa non può essere svuotato: scegli un altro valore.",
+    invalid_task_required_dimension: "Questa attività non porta alcun valore su {names}, che questo progetto richiede.",
     invalid_dimension_values_unordered:
       "I valori di questa categoria non hanno un ordine, quindi non si possono riordinare.",
     invalid_decision_edit_rejected: "{ref} è stata respinta, e una decisione respinta non si può modificare.",

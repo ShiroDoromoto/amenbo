@@ -625,6 +625,8 @@ export const ko: Translation = {
     invalid_commit_sha: "커밋 SHA는 40자 또는 64자 16진수 전체여야 합니다. 짧은 SHA·브랜치·태그·revision은 쓸 수 없습니다.",
     invalid_attachment_too_large: "이 파일은 {size}바이트로, 이 종류의 상한 {max}바이트를 넘습니다.",
     invalid_dimension_period_order: "값의 시작일은 종료일보다 뒤일 수 없습니다.",
+    invalid_dimension_required_unset: "「{name}」은(는) 필수 분류라 작업의 값을 비울 수 없습니다. 대신 다른 값을 고르세요.",
+    invalid_task_required_dimension: "이 작업은 {names}에 값이 없습니다. 이 프로젝트가 필수로 두는 분류입니다.",
     invalid_dimension_values_unordered: "이 분류의 값에는 순서가 없어 재정렬할 수 없습니다.",
     invalid_decision_edit_rejected: "{ref}은(는) 기각되었습니다. 기각된 결정은 편집할 수 없습니다.",
     invalid_decision_accept_rejected: "{ref}은(는) 기각되었습니다. 기각된 결정은 채택할 수 없습니다.",

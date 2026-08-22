@@ -361,6 +361,7 @@ export const uk: Translation = {
     "search.on.decision": "Рішення",
     "search.on.decisionComment": "Коментар до рішення",
     "commands.note": "Повний довідник команд (з agent --json · лише для читання)",
+    "commands.prefix": "Кожен рядок нижче набирають після цього:",
     "cli.none": "У цій збірці немає команди, яку можна запустити: її CLI всередині AppImage і існує лише поки застосунок відкрито. Працюйте в самому застосунку.",
     "commands.search": "Пошук команд", "commands.empty": "Команд немає", "commands.loading": "Завантаження…",
     "commands.other": "Інше", "commands.required": "обов'язково", "commands.examples": "Приклади",

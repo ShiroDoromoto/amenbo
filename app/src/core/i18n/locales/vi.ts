@@ -351,6 +351,7 @@ export const vi: Translation = {
     "search.on.decision": "Quyết định",
     "search.on.decisionComment": "Bình luận trên một quyết định",
     "commands.note": "Tra cứu lệnh đầy đủ (từ agent --json · chỉ đọc)",
+    "commands.prefix": "Mỗi dòng bên dưới được gõ tiếp sau:",
     "cli.none": "Bản dựng này không kèm lệnh nào bạn chạy được: CLI của nó nằm trong AppImage và chỉ tồn tại khi ứng dụng đang mở. Hãy dùng chính ứng dụng.",
     "commands.search": "Tìm lệnh", "commands.empty": "Không có lệnh nào", "commands.loading": "Đang tải…",
     "commands.other": "Khác", "commands.required": "bắt buộc", "commands.examples": "Ví dụ",

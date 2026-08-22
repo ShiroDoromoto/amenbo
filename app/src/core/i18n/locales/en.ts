@@ -369,6 +369,7 @@ const ui = {
   "search.on.task": "Task", "search.on.taskComment": "Comment on a task",
   "search.on.decision": "Decision", "search.on.decisionComment": "Comment on a decision",
   "commands.note": "Full command reference (from agent --json · read-only)",
+  "commands.prefix": "Each line below is typed after this:",
   // The one line a screen shows in place of a command, where the build ships none a reader can run
   // (a Linux preview; see components/NoCli.tsx).
   "cli.none": "This build ships no command you can run: its CLI is inside the AppImage and exists only while the app is open. Use the app itself.",

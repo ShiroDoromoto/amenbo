@@ -348,6 +348,7 @@ export const hi: Translation = {
     "search.on.decision": "निर्णय",
     "search.on.decisionComment": "निर्णय पर टिप्पणी",
     "commands.note": "पूरी कमांड संदर्भिका (agent --json से · सिर्फ़ पढ़ने के लिए)",
+    "commands.prefix": "नीचे की हर पंक्ति इसके बाद टाइप होती है:",
     "cli.none": "इस बिल्ड में चलाने लायक कोई कमांड नहीं है: इसका CLI AppImage के भीतर है और केवल तब तक मौजूद रहता है जब ऐप खुला हो। ऐप से ही आगे बढ़ें।",
     "commands.search": "कमांड खोजें", "commands.empty": "कोई कमांड नहीं", "commands.loading": "लोड हो रहा है…",
     "commands.other": "अन्य", "commands.required": "आवश्यक", "commands.examples": "उदाहरण",

@@ -359,6 +359,7 @@ export const ptBR: Translation = {
     "search.on.decision": "Decisão",
     "search.on.decisionComment": "Comentário em uma decisão",
     "commands.note": "Referência completa de comandos (do agent --json · somente leitura)",
+    "commands.prefix": "Cada linha abaixo é digitada depois disto:",
     "cli.none": "Esta build não traz nenhum comando que você possa executar: a CLI dela está dentro do AppImage e só existe enquanto o app está aberto. Use o próprio app.",
     "commands.search": "Buscar comandos", "commands.empty": "Nenhum comando", "commands.loading": "Carregando…",
     "commands.other": "Outros", "commands.required": "obrigatório", "commands.examples": "Exemplos",

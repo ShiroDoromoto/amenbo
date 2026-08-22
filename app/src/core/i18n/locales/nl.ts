@@ -348,6 +348,7 @@ export const nl: Translation = {
     "search.on.decision": "Besluit",
     "search.on.decisionComment": "Opmerking bij een besluit",
     "commands.note": "Volledig commando-overzicht (uit agent --json · alleen lezen)",
+    "commands.prefix": "Elke regel hieronder typ je hierachter:",
     "cli.none": "Deze build bevat geen commando dat je kunt uitvoeren: de CLI zit in de AppImage en bestaat alleen zolang de app open is. Gebruik de app zelf.",
     "commands.search": "Commando's zoeken", "commands.empty": "Geen commando's", "commands.loading": "Bezig met laden…",
     "commands.other": "Overig", "commands.required": "verplicht", "commands.examples": "Voorbeelden",

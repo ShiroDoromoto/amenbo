@@ -361,6 +361,7 @@ export const ru: Translation = {
     "search.on.decision": "Решение",
     "search.on.decisionComment": "Комментарий к решению",
     "commands.note": "Полный справочник команд (из agent --json · только чтение)",
+    "commands.prefix": "Каждую строку ниже набирают после этого:",
     "cli.none": "В этой сборке нет команды, которую можно запустить: её CLI находится внутри AppImage и существует только пока приложение открыто. Работайте в самом приложении.",
     "commands.search": "Поиск команд", "commands.empty": "Команд нет", "commands.loading": "Загрузка…",
     "commands.other": "Прочие", "commands.required": "обязательно", "commands.examples": "Примеры",

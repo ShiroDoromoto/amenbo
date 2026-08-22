@@ -352,6 +352,7 @@ export const de: Translation = {
     "search.on.decision": "Entscheidung",
     "search.on.decisionComment": "Kommentar zu einer Entscheidung",
     "commands.note": "Vollständige Befehlsreferenz (aus agent --json · nur lesend)",
+    "commands.prefix": "Jede Zeile unten folgt auf:",
     "cli.none": "Dieser Build liefert keinen Befehl, den Sie ausführen können: Sein CLI steckt im AppImage und existiert nur, solange die App geöffnet ist. Nutzen Sie die App selbst.",
     "commands.search": "Befehle durchsuchen", "commands.empty": "Keine Befehle", "commands.loading": "Wird geladen…",
     "commands.other": "Sonstige", "commands.required": "erforderlich", "commands.examples": "Beispiele",

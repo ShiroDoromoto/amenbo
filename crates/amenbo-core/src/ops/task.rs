@@ -171,6 +171,7 @@ pub fn finish_creating(tx: &WriteTx<'_>, id: i64) -> Result<Task> {
                 "this task carries no value on {}, which this project requires",
                 empty.join(", ")
             ))
+            .coded(ErrorCode::InvalidTaskRequiredDimension)
             .with("names", empty.join(", ")),
         ));
     }

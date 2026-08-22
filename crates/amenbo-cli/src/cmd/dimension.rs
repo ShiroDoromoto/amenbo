@@ -19,12 +19,14 @@ use crate::output::{confirm, human, print_json, write_envelope, CliError, Flags}
 pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> Result<i32, CliError> {
     use amenbo_core::model::{DimensionCardinality, DimensionRole};
     use amenbo_core::ops::dimension::NewDimension;
-    // A dimension's kind on one human-readable line (single, ordered, time-axis, show-on-card).
+    // A dimension's kind on one human-readable line (single, ordered, time-axis, show-on-card,
+    // required).
     fn kind_line(
         cardinality: DimensionCardinality,
         ordered: bool,
         role: DimensionRole,
         show_on_card: bool,
+        required: bool,
     ) -> String {
         let mut s = cardinality.as_str().to_string();
         if ordered {
@@ -35,6 +37,9 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
         }
         if show_on_card {
             s.push_str(", show-on-card");
+        }
+        if required {
+            s.push_str(", required");
         }
         s
     }
@@ -74,7 +79,7 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
         (s, e)
     }
     match sub {
-        DimensionCmd::Add { project, name, notes, ordered, time_axis, show_on_card } => {
+        DimensionCmd::Add { project, name, notes, ordered, time_axis, show_on_card, required } => {
             let pid = project_or_bound(store, project)?;
             let new = NewDimension {
                 name,
@@ -84,9 +89,10 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
                 ordered,
                 role: if time_axis { DimensionRole::TimeAxis } else { DimensionRole::None },
                 show_on_card,
-                // A new axis has no values, so it cannot be required at birth — the flag is raised on
-                // `dimension update` once there is something to answer with.
-                required: false,
+                // Core refuses this while the axis has no values, which a new one never does. The flag
+                // is here because `AMB-D-734` names this door as one of the two: passing it is how the
+                // refusal — which says to add a value first — reaches the person who tried.
+                required,
             };
             let d = store.dimension_add(pid, new).map_err(CliError::from)?;
             write_envelope(flags, "dimension.add", "dimension", serde_json::to_value(&d).unwrap(), None, false, format!("✓ Created dimension: {} ({})", d.name, dimension_label(d.id)));
@@ -105,7 +111,7 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
                 human(flags, format!("{} dimension(s)", dims.len()));
                 for d in &dims {
                     let vals = store.dimension_values(d.id).map_err(CliError::from)?;
-                    human(flags, format!("  {}  {} [{}]  {} value(s)", dimension_label(d.id), d.name, kind_line(d.cardinality, d.ordered, d.role, d.show_on_card), vals.len()));
+                    human(flags, format!("  {}  {} [{}]  {} value(s)", dimension_label(d.id), d.name, kind_line(d.cardinality, d.ordered, d.role, d.show_on_card, d.required), vals.len()));
                     for v in &vals {
                         let period = period_line(v).map(|p| format!("  {p}")).unwrap_or_default();
                         human(flags, format!("      {}  {}{}", dimension_value_label(v.id), v.name, period));
@@ -125,7 +131,7 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
                 print_json(&json!({ "dimension": serde_json::to_value(&d).unwrap(), "values": serde_json::to_value(&vals).unwrap() }));
             } else {
                 human(flags, format!("{}  {}", dimension_label(d.id), d.name));
-                human(flags, format!("kind: {}", kind_line(d.cardinality, d.ordered, d.role, d.show_on_card)));
+                human(flags, format!("kind: {}", kind_line(d.cardinality, d.ordered, d.role, d.show_on_card, d.required)));
                 if d.notes.trim().is_empty() {
                     human(flags, "notes: (none)");
                 } else {
@@ -138,7 +144,7 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
                 }
             }
         }
-        DimensionCmd::Update { id, name, notes, ordered, time_axis, show_on_card } => {
+        DimensionCmd::Update { id, name, notes, ordered, time_axis, show_on_card, required } => {
             let did = store.resolve_dimension(None, &id).map_err(CliError::from)?;
             let mut changed = Vec::new();
             if name.is_some() {
@@ -156,9 +162,12 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
             if show_on_card.is_some() {
                 changed.push("show_on_card".to_string());
             }
+            if required.is_some() {
+                changed.push("required".to_string());
+            }
             let role = time_axis
                 .map(|on| if on { DimensionRole::TimeAxis } else { DimensionRole::None });
-            let d = store.dimension_update(did, name.as_deref(), notes.as_deref(), ordered, role, show_on_card, None).map_err(CliError::from)?;
+            let d = store.dimension_update(did, name.as_deref(), notes.as_deref(), ordered, role, show_on_card, required).map_err(CliError::from)?;
             write_envelope(flags, "dimension.update", "dimension", serde_json::to_value(&d).unwrap(), Some(changed), false, format!("✓ Updated dimension: {}", dimension_label(d.id)));
         }
         DimensionCmd::Move { id, before, after, top, bottom } => {

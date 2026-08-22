@@ -219,6 +219,62 @@ fn dimension_marks_and_unmarks_an_axis_for_the_task_card() {
     assert!(!after.contains("show-on-card"), "and it stops saying so: {after}");
 }
 
+/// An axis can demand an answer (`AMB-D-734`), and this face raises it, says so wherever an axis is read,
+/// and reports the one refusal it causes: a creation that cannot be finished while the axis is blank.
+#[test]
+fn dimension_demands_an_answer_and_the_creation_is_held_until_it_gets_one() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "必須PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+
+    // An axis is born with no values, so it cannot be born demanding one.
+    let (err, code) = cli.run_err(&["dimension", "add", "--project", &pid, "--name", "プロダクト", "--required"]);
+    assert_ne!(code, 0, "a new axis has nothing to answer with: {err}");
+
+    let axis = cli.json(&["dimension", "add", "--project", &pid, "--name", "プロダクト", "--json"]);
+    assert_eq!(axis["dimension"]["required"], false, "an axis raised plainly demands nothing");
+    cli.json(&["dimension", "value-add", "プロダクト", "--name", "本体", "--json"]);
+
+    // Raised after the fact, and the envelope names the field that moved.
+    let raised = cli.json(&["dimension", "update", "プロダクト", "--required", "true", "--json"]);
+    assert_eq!(raised["dimension"]["required"], true);
+    assert_eq!(raised["changed"], serde_json::json!(["required"]));
+
+    // Both faces that read an axis say which way it stands.
+    let (shown, _) = cli.run(&["dimension", "show", "プロダクト"]);
+    assert!(shown.contains("required"), "show says the axis demands an answer: {shown}");
+    let (listed, _) = cli.run(&["dimension", "list", "--project", &pid]);
+    assert!(listed.contains("プロダクト [single, required]"), "list says it too: {listed}");
+
+    // A task filed with the axis blank cannot finish its creation, and the refusal names the axis.
+    let t = cli.json(&["task", "add", "--project", &pid, "--title", "分類のないタスク", "--json"]);
+    let tid = id_str(&t["task"]["id"]);
+    let (err, code) = cli.run_err(&["task", "finish-creating", &tid]);
+    assert_ne!(code, 0, "the creation is held: {err}");
+    assert!(err.contains("プロダクト"), "and the axis is named: {err}");
+    assert!(err.contains("dimension set"), "and the hint says how to answer it: {err}");
+
+    // The same refusal in --json carries the code a caller can branch on.
+    let (refused, code) = cli.run_err(&["task", "finish-creating", &tid, "--json"]);
+    assert_ne!(code, 0);
+    let refused: serde_json::Value = serde_json::from_str(&refused).expect("the refusal is JSON");
+    assert_eq!(refused["error"]["code"], "invalid_task_required_dimension");
+
+    // Answer the axis and the creation goes through.
+    cli.json(&["dimension", "set", &tid, "プロダクト", "本体", "--json"]);
+    let done = cli.json(&["task", "finish-creating", &tid, "--json"]);
+    assert_eq!(done["task"]["draft"], false);
+
+    // And a required axis cannot be blanked back out.
+    let (err, code) = cli.run_err(&["dimension", "unset", &tid, "プロダクト", "本体"]);
+    assert_ne!(code, 0, "a required axis cannot be cleared: {err}");
+
+    // Lowering the flag reopens both doors.
+    cli.json(&["dimension", "update", "プロダクト", "--required", "false", "--json"]);
+    let (after, _) = cli.run(&["dimension", "show", "プロダクト"]);
+    assert!(!after.contains("required"), "and it stops saying so: {after}");
+}
+
 /// A new task defaults to the era on its project's time axis that **covers today** — automation, not a
 /// requirement. With no era over today it is created unassigned, and the default can be cleared or overridden.
 #[test]

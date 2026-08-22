@@ -3509,6 +3509,11 @@ pub struct TaskCardRow {
     /// The subset of `linked_decisions` that is unsettled. Together with `blocked_by` this decides
     /// `ready` (both empty ⇒ ready), mirroring [`reserve_blockers`].
     pub blocked_by_decisions: Vec<DecisionCardRef>,
+    /// When the row was written, and when it was last written to (RFC3339 UTC, as stored). Carried for
+    /// the reader alone — how long a task has been sitting there is a question nothing else on the card
+    /// answers. Never a judgement input: what a face may decide from is an intent column (`AMB-D-372`).
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 /// Hydrate one GUI task card from the read-model (see [`TaskCardRow`]); `None` when no row carries
@@ -3521,6 +3526,7 @@ pub fn task_card_row(conn: &Connection, task_id: i64) -> Result<Option<TaskCardR
     let (priority, due_on, completed_at) = (sel.col(T.priority), sel.col(T.due_on), sel.col(T.completed_at));
     let (start_on, draft) = (sel.col(T.start_on), sel.col(T.draft));
     let (assignee, creator) = (sel.col(T.assignee_kind), sel.col(T.created_by_kind));
+    let (created_at, updated_at) = (sel.col(T.created_at), sel.col(T.updated_at));
     let mut sql = Sql::from(&sel, T.table);
     sql.push_where(Some(&Pred::eq(T.id, task_id)));
     let row = conn
@@ -3541,6 +3547,8 @@ pub fn task_card_row(conn: &Connection, task_id: i64) -> Result<Option<TaskCardR
                     .map(|k| CardActor { name: facet_display(Some(&k)), kind: Some(k) }),
                 created_by: created_by_kind
                     .map(|k| CardActor { name: facet_display(Some(&k)), kind: Some(k) }),
+                created_at: created_at.get(r)?,
+                updated_at: updated_at.get(r)?,
                 placement: None,
                 blocked_by: Vec::new(),
                 num_comments: 0,
@@ -3637,6 +3645,9 @@ pub struct DecisionCardRow {
     pub status: String,
     pub decided_at: Option<String>,
     pub created_at: String,
+    /// When this decision last changed in any way — an edit to the body, and a status transition alike
+    /// (`Decision::updated_at`). Not "when the body was rewritten": accepting one moves it too.
+    pub updated_at: String,
     /// The owning project; `None` when the project is not live.
     pub project: Option<ProjectRef>,
     /// The decisions this one replaced (any liveness; `ref` = `AMB-D-n`). A set, not a single target: one
@@ -3681,6 +3692,7 @@ pub fn decision_card_row(conn: &Connection, decision_id: i64) -> Result<Option<D
     let mut sel = Select::new();
     let (id, title, body, status) = (sel.col(D.id), sel.col(D.title), sel.col(D.body), sel.col(D.status));
     let (decided_at, created_at) = (sel.col(D.decided_at), sel.col(D.created_at));
+    let updated_at = sel.col(D.updated_at);
     let pid = sel.col(D.project_id);
     // `NOT NULL` in the registry, `NULL` through this `LEFT JOIN` when the project is gone — see
     // `decision_list`.
@@ -3702,6 +3714,7 @@ pub fn decision_card_row(conn: &Connection, decision_id: i64) -> Result<Option<D
                 status: status.get(r)?,
                 decided_at: decided_at.get(r)?,
                 created_at: created_at.get(r)?,
+                updated_at: updated_at.get(r)?,
                 // Project: present only when live.
                 project: project_name.map(|name| ProjectRef { id: project_id, name }),
                 // The edge sets are filled below.

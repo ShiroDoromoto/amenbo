@@ -357,6 +357,11 @@ amenbo dimension value-update Era Beta --end 2026-12-31
 # it is the project's, not this device's. The axis the board is grouped by is left off
 # the cards under it; the column heading already says it.
 amenbo dimension update Area --show-on-card true
+# --required makes the axis refuse to be left empty: a task carrying no value on it
+# cannot finish its creation, and the refusal names the axis. It bites at that one
+# door, so raising it never disturbs a task already filed. The axis has to offer a
+# value before it can demand one.
+amenbo dimension update Area --required true
 amenbo dimension list --project "Website refresh" --json   # axes + their values
 # Slice tasks by any axis. `dim:` repeats: different axes AND, the same axis twice
 # ORs. `=none` = unassigned on that axis; `time_axis:` is sugar for whichever axis

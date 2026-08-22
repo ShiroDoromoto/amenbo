@@ -30,6 +30,10 @@ export const projects: Project[] = [
   },
 ];
 
+// When the fixtures were filed. A fixed instant rather than "now", so a screenshot of the mock reads the
+// same on every run — nothing in the mock turns on how old a task is.
+const MOCK_FILED_AT = "2026-06-01T09:00:00Z";
+
 // The generated `TaskCardDto` requires every field on the wire, because core always sends them all. A
 // fixture wants to state only what matters, so this factory fills the rest of the wire fields with
 // defaults and keeps the mock pleasant to write.
@@ -37,6 +41,7 @@ type MockTaskInput = Partial<TaskCard> &
   Pick<TaskCard, "id" | "title" | "projectId" | "status" | "assignee" | "priority" | "due" | "comments" | "createdBy">;
 const mt = (t: MockTaskInput): TaskCard => ({
   ref: taskRef(t.id), notes: "", completedAt: null,
+  createdAt: MOCK_FILED_AT, updatedAt: MOCK_FILED_AT,
   ready: true, blockedBy: [], placement: null, linkedDecisions: [], blockedByDecisions: [], startOn: null, notStartedUntil: null,
   draft: false,
   ...t,
@@ -53,6 +58,9 @@ export const tasks: TaskCard[] = [
     due: "2026-06-22",
     comments: 3,
     createdBy: A_H,
+    // The one fixture that has been written to since it was filed — the mock needs both readings of the
+    // detail pane's footer, the task nobody has touched and the task that has moved.
+    updatedAt: "2026-06-14T18:20:00Z",
   }),
   mt({
     id: 2,

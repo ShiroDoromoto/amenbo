@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store/store";
-import { FacetAvatar } from "../components/atoms";
-import { agoLabel, eventText, t, targetTitle, tf } from "../core/i18n";
+import { FacetAvatar, When } from "../components/atoms";
+import { eventText, t, targetTitle, tf } from "../core/i18n";
 import { activityRowKey, dedupActivityRows, loadActivityPage } from "../core/activity";
 import { inTauri } from "../core/snapshot";
 import { confirmDialog } from "../core/dialog";
@@ -164,7 +164,7 @@ export function ActivityFeed({
                   {it.burstCount ? <span className="faint"> <Icon name="chevronDown" /></span> : null}
                 </div>
                 <div className="feed__meta">
-                  <span>{agoLabel(it.at)}{it.editedAt && <span className="faint"> · {t("comment.edited")} {agoLabel(it.editedAt)}</span>}</span>
+                  <span><When at={it.at} editedAt={it.editedAt} /></span>
                   {open ? (
                     <button className="feed__target" onClick={open}>
                       <Icon name="chevronRight" /> {targetTitle(it.target.title)}

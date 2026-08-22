@@ -239,7 +239,12 @@ builtOnBy: Array<DecisionRefDto>, decidedAt: string | null, decidedBy: PlainRefD
 /**
  * Linked tasks (cross-link), carrying status — is the work this decision created still open?
  */
-linkedTasks: Array<LinkedTaskRefDto>, createdAt: string, };
+linkedTasks: Array<LinkedTaskRefDto>, createdAt: string, 
+/**
+ * When it last changed in any way — a body edit and a status transition alike. The pane hides it
+ * where it only repeats `created_at` or `decided_at`, so it reads as "changed since".
+ */
+updatedAt: string, };
 
 /**
  * What `decision_page` returns: the decisions on the page, plus the total count before paging.
@@ -1882,7 +1887,18 @@ draft: boolean,
  * one — `null` for every other status and when nothing changed — so the surface (a chip on the row,
  * a firm warn when the holder leaves `in_progress`) draws exactly when it should.
  */
-premiseChange?: PremiseChangeDto, };
+premiseChange?: PremiseChangeDto, 
+/**
+ * When the task was written (RFC3339 UTC). The detail pane's answer to "how long has this been
+ * sitting here" — nothing else on the card dates the task itself.
+ */
+createdAt: string, 
+/**
+ * When the task was last written to (RFC3339 UTC). **Any** write moves it — a comment, a due date,
+ * a title fix — so it dates the record, not the status: what a status last moved is
+ * `status_changed_at`'s to say, and neither is a judgement input (`AMB-D-372`).
+ */
+updatedAt: string, };
 
 /**
  * One git commit SHA recorded on a task. Amenbo keeps the SHA as an opaque string — it

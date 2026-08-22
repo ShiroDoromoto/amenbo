@@ -8,7 +8,8 @@
 //! `identity.json` directly under the base dir and **holds no secrets**. The `accounts/P0/` layout
 //! written by older builds is lifted to the base dir once, on open ([`lift_legacy_identity`]).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
@@ -179,10 +180,10 @@ impl Paths {
         Self::is_dev_app_name(Self::APP_NAME)
     }
 
-    /// The CLI this build installs, and the name guidance tells a human or an AI to **type**. It is
-    /// this build's own name — the same word as the app-data ([`APP_NAME`](Self::APP_NAME)) and as
-    /// the file the bundle carries the CLI under ([`sidecar_file_name`](Self::sidecar_file_name)):
-    /// `amenbo`, `amenbo-dev`, `amenbo-dev-<id>`.
+    /// What guidance tells a human or an AI to **run** — this build's CLI, worded so that whoever
+    /// reads it can reach it. Usually that is this build's own name: the same word as the app-data
+    /// ([`APP_NAME`](Self::APP_NAME)) and as the file the bundle carries the CLI under
+    /// ([`sidecar_file_name`](Self::sidecar_file_name)) — `amenbo`, `amenbo-dev`, `amenbo-dev-<id>`.
     ///
     /// Every build ships a CLI of its own — a theme's development preview is a whole bundle a team
     /// member installs (`AMB-D-732`), CLI included — and two things break the moment a name is shared
@@ -196,15 +197,84 @@ impl Paths {
     ///   screen of its own telling someone to type `amenbo-dev` sends them to the *shared* dev store:
     ///   an answer that runs and is wrong, which is worse than one that is not found.
     ///
-    /// What this does not do is put the name on `PATH` where no installer does. macOS and Linux carry
-    /// the CLI inside the bundle and nowhere else, so on a member's machine a preview's name is one
-    /// to reach by path rather than to type ([`sidecar_file_name`](Self::sidecar_file_name) is that
-    /// path's last element); `AMB-T-3519` is where that guidance is worded.
+    /// Where no installer does that, the name is not the answer at all and a **path** is — which is
+    /// why this is worded rather than merely named: what comes back is what someone can run, so a
+    /// surface that hands over a command does not have to know which of the two it got.
+    /// [`command_to_run`](Self::command_to_run) is the same answer with the third case kept apart,
+    /// and this is that answer with the third case worded as the name anyway.
     ///
     /// Every surface that words a command for someone to run — the managed block's `{CMD}`, the hook
     /// setup notice, `init`'s closing line — takes it from here.
     pub fn command_name() -> &'static str {
-        Self::APP_NAME
+        Self::command_to_run().unwrap_or(Self::APP_NAME)
+    }
+
+    /// How this build's CLI is reached from a shell, or `None` where nothing on the machine reaches
+    /// it. Three answers, and which one a build gets is decided by who puts its CLI anywhere:
+    ///
+    /// | build | reached as |
+    /// |---|---|
+    /// | Windows, any channel | the name — the NSIS installer puts it on `PATH` |
+    /// | production, any OS | the name — the unified installer puts it on `PATH` |
+    /// | the shared dev build | the name — `make install-dev` puts it in `~/.cargo/bin` |
+    /// | a task or theme instance on macOS | the path to the copy in the bundle |
+    /// | a task or theme instance on Linux | **nothing** |
+    ///
+    /// The last two rows are the same build on two OSes, and they part company because of what a
+    /// member is handed (`AMB-D-732`). macOS hands them a `.app` they drag into `/Applications`,
+    /// where it stays and the CLI inside it has an address anyone can paste. Linux hands them one
+    /// `.AppImage`, whose contents are a squashfs mounted under `/tmp` for as long as the GUI runs
+    /// and gone after: a path there is right for a few minutes and wrong for good, which is worse
+    /// than no path at all. So a Linux preview says there is no command rather than naming one —
+    /// `AMB-T-3521` is where a CLI reaching a Linux member is worked out.
+    ///
+    /// The path is escaped for a shell, not quoted: the bundle's name carries spaces and brackets
+    /// (`amenbo (dev 3519).app`), and the wording it lands in is as often inside quotes already —
+    /// the hook configuration's `echo '<instruction>'` — as it is on a line of its own.
+    pub fn command_to_run() -> Option<&'static str> {
+        static WORDED: OnceLock<Option<String>> = OnceLock::new();
+        WORDED
+            .get_or_init(|| {
+                Self::command_to_run_for(Self::APP_NAME, std::env::consts::OS, Self::bundled_cli().as_deref())
+            })
+            .as_deref()
+    }
+
+    /// The rule [`command_to_run`](Self::command_to_run) applies, with all three facts it stands on
+    /// said out loud — the build's name, the OS, and where the bundle's copy of the CLI is — so a
+    /// test can stand on an OS and a channel other than the one it is running on.
+    pub(crate) fn command_to_run_for(app_name: &str, os: &str, bundled: Option<&Path>) -> Option<String> {
+        let installed_on_path =
+            os == "windows" || !Self::is_dev_app_name(app_name) || app_name == Self::DEV_APP_NAME;
+        if installed_on_path {
+            return Some(app_name.to_owned());
+        }
+        if os == "macos" {
+            return bundled.map(Self::shell_escaped);
+        }
+        None
+    }
+
+    /// The copy of this build's CLI the bundle carries, where the running binary is standing beside
+    /// it. `None` out of a build tree, where the two are not neighbours and no path would be one a
+    /// reader could keep.
+    fn bundled_cli() -> Option<PathBuf> {
+        let beside = std::env::current_exe().ok()?.parent()?.join(Self::sidecar_file_name());
+        beside.is_file().then_some(beside)
+    }
+
+    /// A path as a POSIX shell reads it in one word: everything a shell would act on is preceded by a
+    /// backslash. Only this branch needs it (Windows is never worded as a path here), and only a
+    /// backslash will do — a quoted path would have to survive being pasted into text that is itself
+    /// quoted, and the hook configuration's is exactly that.
+    fn shell_escaped(path: &Path) -> String {
+        path.to_string_lossy()
+            .chars()
+            .flat_map(|c| {
+                let plain = c.is_ascii_alphanumeric() || "/._-+,:=@%".contains(c);
+                (!plain).then_some('\\').into_iter().chain(std::iter::once(c))
+            })
+            .collect()
     }
 
     /// That same name as the file this platform's bundle actually holds — the thing to look for beside
@@ -1140,6 +1210,40 @@ mod tests {
             cfg!(windows),
             "only Windows carries the extension"
         );
+    }
+
+    /// Who puts a build's CLI within reach, per build and per OS. The two rows that matter are the
+    /// last two: they are one build on two machines, and only one of them has an address that
+    /// outlives the run.
+    #[test]
+    fn a_build_is_reached_by_name_where_an_installer_puts_it_there_and_by_path_where_none_does() {
+        let bundled = std::path::Path::new("/Applications/amenbo (dev 3519).app/Contents/MacOS/amenbo-dev-3519");
+        let reach = |name: &str, os: &str| Paths::command_to_run_for(name, os, Some(bundled));
+
+        // Windows installs every channel's CLI on PATH, so the name is what there is to type.
+        assert_eq!(reach("amenbo", "windows").as_deref(), Some("amenbo"));
+        assert_eq!(reach("amenbo-dev-3519", "windows").as_deref(), Some("amenbo-dev-3519"));
+        // So does the unified installer for production, and `make install-dev` for the shared build.
+        assert_eq!(reach("amenbo", "macos").as_deref(), Some("amenbo"));
+        assert_eq!(reach("amenbo-dev", "linux").as_deref(), Some("amenbo-dev"));
+        // A preview on macOS is dragged into /Applications and stays there, so it has an address.
+        assert_eq!(
+            reach("amenbo-dev-3519", "macos").as_deref(),
+            Some(r"/Applications/amenbo\ \(dev\ 3519\).app/Contents/MacOS/amenbo-dev-3519"),
+        );
+        // The same preview on Linux is an AppImage: what is inside it is mounted for the length of
+        // the run and gone after, so there is nothing to hand over.
+        assert_eq!(reach("amenbo-dev-3519", "linux"), None);
+    }
+
+    /// Out of a build tree the bundle's copy is not beside the running binary, and a macOS preview
+    /// has no address either — the wording falls back to the name, which is what
+    /// [`Paths::command_name`] answers with wherever there is nothing better.
+    #[test]
+    fn a_preview_with_no_bundle_beside_it_is_worded_as_the_name() {
+        assert_eq!(Paths::command_to_run_for("amenbo-dev-3519", "macos", None), None);
+        let own = "a test build is production, which is always its own name";
+        assert_eq!(Paths::command_name(), Paths::APP_NAME, "{own}");
     }
 
     /// What each channel calls itself on screen. Production says nothing at all — the one case that

@@ -297,6 +297,9 @@ pub struct DecisionDto {
     /// Linked tasks (cross-link), carrying status — is the work this decision created still open?
     pub(crate) linked_tasks: Vec<LinkedTaskRefDto>,
     pub(crate) created_at: String,
+    /// When it last changed in any way — a body edit and a status transition alike. The pane hides it
+    /// where it only repeats `created_at` or `decided_at`, so it reads as "changed since".
+    pub(crate) updated_at: String,
 }
 
 /// A reference to a task a decision spawned. A [`DecisionRefDto`] plus **status**, so the screen can
@@ -422,6 +425,13 @@ pub struct TaskCardDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) premise_change: Option<PremiseChangeDto>,
+    /// When the task was written (RFC3339 UTC). The detail pane's answer to "how long has this been
+    /// sitting here" — nothing else on the card dates the task itself.
+    pub(crate) created_at: String,
+    /// When the task was last written to (RFC3339 UTC). **Any** write moves it — a comment, a due date,
+    /// a title fix — so it dates the record, not the status: what a status last moved is
+    /// `status_changed_at`'s to say, and neither is a judgement input (`AMB-D-372`).
+    pub(crate) updated_at: String,
 }
 
 #[derive(Serialize, TS)]

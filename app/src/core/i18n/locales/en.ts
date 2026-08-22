@@ -122,6 +122,7 @@ const ui = {
   "dec.edge.supersedeRevisitConfirm": "These decisions stand on {target} — revisit them if you supersede it:\n{list}\n\nSupersede anyway?",
   "dec.edge.searchPh": "Search decisions to link (AMB-D-<n>, title)",
   "dec.edge.noCandidates": "No decision left to link",
+  "dec.recorded": "Recorded", "dec.decided": "Decided", "dec.lastChanged": "Last changed",
   "dec.notFound": "Decision not found",
   "dec.unknownName": "(unknown)",
   "dec.comments": "Discussion", "dec.reasonPh": "Reason (optional, Markdown)…",
@@ -196,6 +197,7 @@ const ui = {
   "detail.commentPh": "Write a comment… (Markdown, Enter for newline)",
   "detail.commentHint": "Markdown · send with ⌘/Ctrl+Enter", "detail.send": "Send",
   "detail.created": "Created", "detail.restoreHint": "deletion cannot be undone",
+  "detail.updated": "Updated", "detail.updatedHint": "any write moves this — a comment, a date, a title fix — not just a status change",
   "detail.delete": "Delete", "detail.deleteTip": "Delete this task (cannot be undone)",
   "detail.deleteConfirm": "Delete “{title}”?",
   "comment.edit": "Edit this comment",
@@ -371,6 +373,9 @@ const ui = {
   "search.on.task": "Task", "search.on.taskComment": "Comment on a task",
   "search.on.decision": "Decision", "search.on.decisionComment": "Comment on a decision",
   "commands.note": "Full command reference (from agent --json · read-only)",
+  // The one line a screen shows in place of a command, where the build ships none a reader can run
+  // (a Linux preview; see components/NoCli.tsx).
+  "cli.none": "This build ships no command you can run: its CLI is inside the AppImage and exists only while the app is open. Use the app itself.",
   "commands.search": "Search commands", "commands.empty": "No commands", "commands.loading": "Loading…",
   "commands.other": "Other", "commands.required": "required", "commands.examples": "Examples",
   // plugin market (the "find one" tab)

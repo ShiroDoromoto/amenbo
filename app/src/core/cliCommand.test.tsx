@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
-// The name every screen that hands over a command asks for. Only the boundary is stubbed (core's
+// The command every screen that hands over one asks for. Only the boundary is stubbed (core's
 // build-time channel, which a test cannot vary); the hook itself runs for real.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const hoisted = vi.hoisted(() => ({
-  /** What core answers for this build's CLI name; null is the browser, with no build to ask. */
+  /** What core answers for this build's CLI; null is a build that ships none a reader can run. */
   cmd: "amenbo" as string | null,
   /** How many times it was asked — the evidence it is a mount-time question, not a per-render one. */
   calls: 0,
@@ -59,10 +59,10 @@ describe("useCliCommandName", () => {
     expect(container.textContent).toBe("amenbo-dev");
   });
 
-  it("stands at the production name when there is no build to ask", async () => {
+  it("says nothing at all where the build ships no command a reader can run", async () => {
     hoisted.cmd = null;
     await render();
-    expect(container.textContent).toBe("amenbo");
+    expect(container.textContent).toBe("");
   });
 
   it("stands at the production name when the question is refused", async () => {

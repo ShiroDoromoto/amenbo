@@ -267,6 +267,8 @@ fn task_card_from_row(store: &Store, row: amenbo_core::store_engine::read::TaskC
         not_started_until: not_started_until.map(date_iso),
         draft: row.draft,
         premise_change,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
     }
 }
 
@@ -363,6 +365,7 @@ fn decision_card_from_row(row: amenbo_core::store_engine::read::DecisionCardRow)
             })
             .collect(),
         created_at: Timestamp::parse_rfc3339(&row.created_at).unwrap_or_default().to_rfc3339_z(),
+        updated_at: Timestamp::parse_rfc3339(&row.updated_at).unwrap_or_default().to_rfc3339_z(),
     }
 }
 
@@ -751,17 +754,19 @@ pub fn dev_badge() -> Option<String> {
     amenbo_core::config::Paths::dev_badge()
 }
 
-/// What this build's CLI is called where someone types it — `amenbo` in production, `amenbo-dev` on
-/// a dev build, the same answer every other surface that words a command takes
-/// ([`amenbo_core::config::Paths::command_name`]). Asked once at startup for the reason
+/// How this build's CLI is run where someone types it — `amenbo` in production, `amenbo-dev` on the
+/// shared dev build, the path into the bundle on a macOS preview, and `None` on a Linux one, where
+/// nothing on the machine reaches it at all
+/// ([`amenbo_core::config::Paths::command_to_run`]). Asked once at startup for the reason
 /// [`dev_badge`] is: the channel is stamped in at build time.
 ///
-/// The onboarding steps are the surface that needs it. They hand over commands to run, and a dev
-/// window that spells them `amenbo` is naming a CLI that is not installed beside it — the reader
-/// types it and reaches production, or nothing at all.
+/// Every screen that hands over a command to run is the surface that needs it, and each of them has
+/// to be able to say nothing rather than name something — a dev window spelling a command `amenbo`
+/// names a CLI that is not installed beside it, and a preview window naming one at all, where the
+/// build ships none a member can reach, is the same lie one step further on.
 #[tauri::command]
-pub fn cli_command_name() -> &'static str {
-    amenbo_core::config::Paths::command_name()
+pub fn cli_command_name() -> Option<&'static str> {
+    amenbo_core::config::Paths::command_to_run()
 }
 
 /// Open the folder holding this machine's logs in the OS file manager — the one step between "please
@@ -6514,6 +6519,55 @@ mod tests {
 
         // A term nowhere is an empty answer, not an error.
         assert!(task_search(project_id, "どこにも無い語".to_string()).unwrap().is_empty());
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// The card dates the task: both stamps ride the wire, so the detail pane can say when a task was
+    /// filed and whether anything has written to it since. Pinned here because the two are the row's own
+    /// columns forwarded untouched — a drop between the read and the DTO would leave the pane silently
+    /// dateless rather than failing.
+    #[test]
+    fn the_card_carries_when_the_task_was_written() {
+        let _env = env_guard();
+        let tmp = amenbo_scratch::scratch("card-stamps");
+        std::env::set_var("AMENBO_HOME", &tmp);
+
+        let mut store = Store::open().unwrap();
+        let project_id = store
+            .project_add(amenbo_core::ops::project::NewProject {
+                name: "テストPJ".into(),
+                view: View::List,
+                notes: String::new(),
+                color: None,
+            })
+            .unwrap()
+            .id;
+        let id = store
+            .add_task(amenbo_core::ops::task::NewTask {
+                title: "いつ書かれたか".into(),
+                project_id: Some(project_id),
+                due_on: None,
+                start_on: None,
+                priority: None,
+                notes: String::new(),
+                created_by_kind: Some(ActorKind::Ai),
+                at_binding_id: None,
+            })
+            .unwrap()
+            .id;
+
+        let card = {
+            let read_model = store.read_model();
+            let row = amenbo_core::store_engine::read::task_card_row(read_model.conn(), id).unwrap().unwrap();
+            task_card_from_row(&store, row)
+        };
+        // The stamps core wrote, forwarded as they are stored. A task nobody has written to since carries
+        // them equal, which is what lets the pane drop the second one.
+        let detail = store.task_detail(id).unwrap();
+        assert_eq!(card.created_at, detail.created_at.to_rfc3339_z(), "the card dates the task");
+        assert_eq!(card.updated_at, detail.updated_at.to_rfc3339_z(), "and says when it was last written to");
+        assert_eq!(card.created_at, card.updated_at, "nothing has written to it since it was filed");
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

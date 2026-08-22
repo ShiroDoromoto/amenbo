@@ -11,9 +11,9 @@ import { addComment as mutAddComment, editComment as mutEditComment, removeComme
 import { activityRowKey, loadTaskActivity } from "../core/activity";
 import { confirmDialog } from "../core/dialog";
 import {
-  DateField, DueChip, FacetAvatar, PremiseChangedField, PriorityDot, StatusSelect, TaskIdChip,
+  DateField, DueChip, FacetAvatar, PremiseChangedField, PriorityDot, StatusSelect, TaskIdChip, When,
 } from "../components/atoms";
-import { agoLabel, errText, eventText, priorityLabel, t, tf } from "../core/i18n";
+import { errText, eventText, exactLabel, priorityLabel, t, tf } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { useRefNav } from "../core/refNav";
 import type { Actor, ActivityItem, Facet, Placement, Priority, TaskCard } from "../mock/types";
@@ -500,8 +500,22 @@ export function TaskDetailPane({
             </div>
           </div>
 
+          {/* Who filed it, and when — the same sentence, finished. Nothing else on this page dates the task
+              itself, so "how long has this been sitting here" had no answer at all. The stamp carries the
+              year, because a task can be any distance back. `updated` is dropped when it has not moved off
+              `created`, so an untouched task says one thing rather than the same stamp twice, and it is
+              hovered to read what moves it: **any** write does (`AMB-D-372`), which is not the same
+              question as when the status last moved. */}
           <div className="meta">
-            {t("detail.created")}: {task.createdBy ? tf("facet.named", { name: task.createdBy.name, facet: t(task.createdBy.kind === "ai" ? "facet.ai" : "facet.human") }) : "—"} · id {task.id} · {t("detail.restoreHint")}
+            {t("detail.created")}: {task.createdBy ? tf("facet.named", { name: task.createdBy.name, facet: t(task.createdBy.kind === "ai" ? "facet.ai" : "facet.human") }) : "—"}
+            {" · "}<span title={task.createdAt}>{exactLabel(task.createdAt)}</span>
+            {task.updatedAt !== task.createdAt && (
+              <>
+                {" · "}{t("detail.updated")}:{" "}
+                <span title={t("detail.updatedHint")}>{exactLabel(task.updatedAt)}</span>
+              </>
+            )}
+            {" · "}id {task.id} · {t("detail.restoreHint")}
           </div>
           <div className="detail__danger">
             <button className="btn btn--danger" onClick={removeTask} title={t("detail.deleteTip")}><Icon name="trash" /> {t("detail.delete")}</button>
@@ -525,7 +539,7 @@ export function TaskDetailPane({
                       {it.kind === "comment" ? tf("comment.quoted", { text: it.text ?? "" }) : it.event && eventText(it.event, it.target.title)}
                     </div>
                     <div className="feed__meta">
-                      <span>{agoLabel(it.at)}{it.editedAt && <span className="faint"> · {t("comment.edited")} {agoLabel(it.editedAt)}</span>}</span>
+                      <span><When at={it.at} editedAt={it.editedAt} /></span>
                     </div>
                   </div>
                 </div>

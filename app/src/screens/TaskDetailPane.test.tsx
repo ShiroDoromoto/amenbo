@@ -109,6 +109,32 @@ describe("TaskDetailPane finishing a creation", () => {
   });
 });
 
+describe("TaskDetailPane dating the task", () => {
+  // The question the page could not answer before: how long has this been sitting here. The stamp is
+  // written in the reader's locale, so the assertion is on the year rather than on a formatted string.
+  it("says when the task was written, and when it was last written to", async () => {
+    render({ taskId: 1 }); // The fixture that has moved since it was filed (mock/data.ts)
+    await settle();
+
+    const meta = container.querySelector(".meta");
+    expect(meta).not.toBeNull();
+    expect(meta!.textContent).toContain(t("detail.updated"));
+    // Both stamps are there — filed in June, last written to a fortnight later.
+    expect(meta!.textContent).toMatch(/2026/);
+    expect(meta!.querySelector(`[title="${t("detail.updatedHint")}"]`)).not.toBeNull();
+  });
+
+  it("says nothing about an update on a task nobody has written to since", async () => {
+    render({ taskId: 2 }); // Filed and untouched: created and updated are the same instant
+    await settle();
+
+    const meta = container.querySelector(".meta");
+    expect(meta).not.toBeNull();
+    expect(meta!.textContent).toContain(t("detail.created"));
+    expect(meta!.textContent).not.toContain(t("detail.updated"));
+  });
+});
+
 describe("TaskDetailPane targeted edit", () => {
   it("the comment named by the pencil becomes an edit box carrying its body text", async () => {
     render({ taskId: 1, editCommentAt: { commentId: 2, nonce: 1 } });

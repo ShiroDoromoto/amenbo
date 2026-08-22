@@ -17,6 +17,7 @@ import { useCliCommandName } from "../core/cliCommand";
 import { errText, t, tf } from "../core/i18n";
 import { ErrorNote } from "./ErrorNote";
 import { Icon } from "./Icon";
+import { NoCli } from "./NoCli";
 import { openTerminal } from "../core/mutations";
 
 /**
@@ -30,8 +31,10 @@ export function FirstLoop({ dir }: { dir: string }) {
   const [copied, setCopied] = useState<"prompt" | "path" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [noTerminal, setNoTerminal] = useState(false);
-  // The request tells the AI to run a command, so it has to name the one this build installs.
-  const prompt = tf("firstloop.prompt", { cmd: useCliCommandName() });
+  // The request tells the AI to run a command, so it has to name the one this build installs — and
+  // where it installs none the reader can run, there is no request to hand over at all.
+  const cli = useCliCommandName();
+  const prompt = cli && tf("firstloop.prompt", { cmd: cli });
 
   const terminal = async () => {
     try {
@@ -76,10 +79,16 @@ export function FirstLoop({ dir }: { dir: string }) {
       </Step>
 
       <Step n={2} title={t("firstloop.s2title")} hint={t("firstloop.s2hint")}>
-        <p className="firstloop__prompt">{prompt}</p>
-        <button className="btn" onClick={() => void copy(prompt, "prompt")}>
-          {copied === "prompt" ? <><Icon name="check" /> {t("firstloop.copied")}</> : <><Icon name="clipboard" /> {t("firstloop.s2btn")}</>}
-        </button>
+        {prompt ? (
+          <>
+            <p className="firstloop__prompt">{prompt}</p>
+            <button className="btn" onClick={() => void copy(prompt, "prompt")}>
+              {copied === "prompt" ? <><Icon name="check" /> {t("firstloop.copied")}</> : <><Icon name="clipboard" /> {t("firstloop.s2btn")}</>}
+            </button>
+          </>
+        ) : (
+          <NoCli />
+        )}
       </Step>
 
       <Step n={3} title={t("firstloop.s3title")} hint={t("firstloop.s3hint")} />

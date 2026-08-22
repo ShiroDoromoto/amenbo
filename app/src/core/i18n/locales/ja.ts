@@ -110,6 +110,7 @@ export const ja: Translation = {
     "dec.edge.supersedeRevisitConfirm": "{target} の上に立つ決定があります。置き換えるなら見直してください:\n{list}\n\nこのまま置き換えますか？",
     "dec.edge.searchPh": "リンク先の決定を検索（AMB-D-<n>・タイトル）",
     "dec.edge.noCandidates": "リンクを張れる決定がありません",
+    "dec.recorded": "記録", "dec.decided": "採択", "dec.lastChanged": "最終更新",
     "dec.notFound": "決定が見つかりません",
     "dec.unknownName": "(不明)",
     "dec.comments": "この決定への議論", "dec.reasonPh": "理由（任意・Markdown 可）を書く…",
@@ -182,6 +183,7 @@ export const ja: Translation = {
     "detail.commentPh": "コメントを書く…（Markdown 可・改行は Enter）",
     "detail.commentHint": "Markdown 可 · ⌘/Ctrl+Enter で送信", "detail.send": "送信",
     "detail.created": "作成", "detail.restoreHint": "削除は元に戻せません",
+    "detail.updated": "更新", "detail.updatedHint": "どの書き込みでも動きます（コメント・日付・タイトルの修正も含む）。ステータスが変わった時刻ではありません",
     "detail.delete": "削除", "detail.deleteTip": "このタスクを削除する（元に戻せません）",
     "detail.deleteConfirm": "「{title}」を削除しますか？",
     "comment.edit": "このコメントを編集",
@@ -356,6 +358,7 @@ export const ja: Translation = {
     "search.on.decision": "決定記録",
     "search.on.decisionComment": "決定記録への発言",
     "commands.note": "全コマンドの仕様（agent --json 由来・表示専用）",
+    "cli.none": "このビルドには、打てるコマンドがありません。CLI は AppImage の中にあり、アプリを開いている間しか存在しません。アプリの画面から進めてください。",
     "commands.search": "コマンドを検索", "commands.empty": "コマンドがありません", "commands.loading": "読み込み中…",
     "commands.other": "その他", "commands.required": "必須", "commands.examples": "サンプル",
     // plugin market (the "find one" tab)

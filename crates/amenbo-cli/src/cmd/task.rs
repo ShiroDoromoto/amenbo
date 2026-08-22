@@ -188,6 +188,22 @@ pub(crate) fn task(store: &mut Store, flags: &Flags, sub: TaskCmd) -> Result<i32
                     None => "-".to_string(),
                 };
                 human(flags, format!("assignee: {} / comments: {}", assignee, detail.num_comments));
+                // When the task was written, and when it was last written to — the one question this page
+                // could not answer ("how long has this been sitting here"). `updated` is dropped when it
+                // has not moved off `created`, so an untouched task says one thing rather than the same
+                // stamp twice. It is qualified out loud, because **any** write moves it — a comment, a due
+                // date, a title fix — and a reader who takes it for "when the status last moved" is reading
+                // a column that does not answer that (`AMB-D-372`).
+                let created = detail.created_at.to_rfc3339_z();
+                let updated = detail.updated_at.to_rfc3339_z();
+                human(
+                    flags,
+                    if updated == created {
+                        format!("created: {created}")
+                    } else {
+                        format!("created: {created} / updated: {updated} (any write)")
+                    },
+                );
                 // Always mark whether the task is placed; never omit the line when empty. Being unplaced
                 // is a meaningful state — a task belonging to no project — so say `(none)` out loud.
                 match &detail.placement {

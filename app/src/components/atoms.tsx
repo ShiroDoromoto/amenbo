@@ -3,7 +3,9 @@ import { createPortal } from "react-dom";
 import type { Actor, Priority, Status, TaskCard } from "../mock/types";
 import type { PremiseChangeDto } from "../bindings/bindings";
 import { dueKind, todayStr } from "../core/calendar";
-import { dueLabel, formatDayTime, formatNumber, priorityLabel, statusLabel, t, tf } from "../core/i18n";
+import {
+  dueLabel, exactLabel, formatDayTime, formatNumber, priorityLabel, statusLabel, t, tf, whenLabel,
+} from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { getSnapshot } from "../core/snapshot";
 import { pushNotice } from "../core/notice";
@@ -470,3 +472,25 @@ export function TriggeredAtChip({ at }: { at?: string | null }) {
   return <span className="chip" title={at}><Icon name="clock" /> {label}</span>;
 }
 
+/**
+ * When a timeline row happened — the meta line under a comment, an activity line and a search hit.
+ * Two readings at once: the wording `whenLabel` picks (relative while that still reads as a time, the
+ * day once it does not), and the instant to the second on the `title`. Without the second one the GUI
+ * is the only face that cannot answer *when exactly*, which the CLI has always printed.
+ *
+ * `editedAt` draws the "edited, <when>" mark the same way, so the two halves of the line never
+ * disagree about how a time is written.
+ */
+export function When({ at, editedAt }: { at: string; editedAt?: string | null }) {
+  return (
+    <>
+      <span title={exactLabel(at)}>{whenLabel(at)}</span>
+      {editedAt && (
+        <span className="faint">
+          {" · "}{t("comment.edited")}{" "}
+          <span title={exactLabel(editedAt)}>{whenLabel(editedAt)}</span>
+        </span>
+      )}
+    </>
+  );
+}

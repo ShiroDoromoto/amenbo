@@ -709,6 +709,8 @@ const err: Partial<Record<ErrorCode, string>> = {
   invalid_dimension_period_order: "A value's start date cannot fall after its end date.",
   invalid_dimension_required_without_values: "“{name}” offers no values, so it cannot be made required — add a value to it first.",
   invalid_dimension_required_unset: "“{name}” is a required category, so a task's value on it cannot be cleared — assign another value instead.",
+  invalid_dimension_slug_shape: "“{slug}” cannot be a key — use at most {max} lower-case letters, digits and hyphens, starting with a letter.",
+  invalid_dimension_slug_taken: "“{slug}” is already the key of something else here — pick another.",
   invalid_task_required_dimension: "This task carries no value on {names}, which this project requires.",
   invalid_dimension_values_unordered: "This category's values carry no order, so they cannot be re-ordered.",
   invalid_decision_edit_rejected: "{ref} was rejected, and a rejected decision cannot be edited.",

@@ -660,6 +660,8 @@ export const fr: Translation = {
     invalid_dimension_period_order: "La date de début d'une valeur ne peut pas être postérieure à sa date de fin.",
     invalid_dimension_required_without_values: "« {name} » n'offre aucune valeur : elle ne peut donc pas devenir obligatoire — ajoutez-y d'abord une valeur.",
     invalid_dimension_required_unset: "« {name} » est une catégorie obligatoire : la valeur d'une tâche sur cet axe ne peut pas être effacée — choisissez plutôt une autre valeur.",
+    invalid_dimension_slug_shape: "« {slug} » ne convient pas comme clé : au plus {max} lettres minuscules, chiffres et traits d'union, en commençant par une lettre.",
+    invalid_dimension_slug_taken: "« {slug} » est déjà la clé d'autre chose ici — choisissez-en une autre.",
     invalid_task_required_dimension: "Cette tâche ne porte aucune valeur sur {names}, ce que ce projet exige.",
     invalid_dimension_values_unordered:
       "Les valeurs de cette catégorie ne portent aucun ordre, elles ne peuvent donc pas être réordonnées.",

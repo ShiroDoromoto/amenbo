@@ -892,11 +892,12 @@ mod tests {
                         role: DimensionRole::None,
                         show_on_card: false,
                         required: false,
+                        slug: None,
                     },
                 )
                 .unwrap()
                 .id;
-            let value = s.dimension_value_add(axis, "a value", None).unwrap().id;
+            let value = s.dimension_value_add(axis, "a value", None, None).unwrap().id;
             s.set_task_dimension_value(task, value).unwrap();
 
             s.attach_url(AttachmentTarget::Task, task, "https://example.com/seed", None, ActorKind::Ai)

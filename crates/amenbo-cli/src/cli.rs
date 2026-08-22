@@ -1054,12 +1054,12 @@ pub enum DimensionCmd {
     },
     /// Show a dimension (name, notes, cardinality/ordered/role/card, values)
     Show {
-        /// dimension ref (AMB-DIM-n) or name
+        /// dimension ref (AMB-DIM-n), slug or name
         id: String,
     },
     /// Update a dimension's name, notes, value ordering, time-axis role, whether it goes on the task card, and/or whether it must be answered (only the given fields change)
     Update {
-        /// dimension ref (AMB-DIM-n) or name
+        /// dimension ref (AMB-DIM-n), slug or name
         id: String,
         #[arg(long)]
         name: Option<String>,
@@ -1080,7 +1080,7 @@ pub enum DimensionCmd {
     },
     /// Reorder a dimension within its project
     Move {
-        /// dimension ref (AMB-DIM-n) or name
+        /// dimension ref (AMB-DIM-n), slug or name
         id: String,
         #[arg(long)]
         before: Option<String>,
@@ -1094,12 +1094,12 @@ pub enum DimensionCmd {
     /// Delete a dimension permanently; its values and task assignments go with it (alias: delete)
     #[command(alias = "delete")]
     Rm {
-        /// dimension ref (AMB-DIM-n) or name
+        /// dimension ref (AMB-DIM-n), slug or name
         id: String,
     },
     /// Add a value to a dimension (appended after existing values)
     ValueAdd {
-        /// dimension ref (AMB-DIM-n) or name
+        /// dimension ref (AMB-DIM-n), slug or name
         dimension: String,
         #[arg(long)]
         name: String,
@@ -1112,9 +1112,9 @@ pub enum DimensionCmd {
     },
     /// Update a dimension value's name and/or period (only the given fields change)
     ValueUpdate {
-        /// dimension ref (AMB-DIM-n) or name
+        /// dimension ref (AMB-DIM-n), slug or name
         dimension: String,
-        /// value ref (AMB-DIMV-n) or name (within the dimension)
+        /// value ref (AMB-DIMV-n), slug or name (within the dimension)
         value: String,
         #[arg(long)]
         name: Option<String>,
@@ -1133,9 +1133,9 @@ pub enum DimensionCmd {
     },
     /// Reorder a value within its dimension
     ValueMove {
-        /// dimension ref (AMB-DIM-n) or name
+        /// dimension ref (AMB-DIM-n), slug or name
         dimension: String,
-        /// value ref (AMB-DIMV-n) or name (within the dimension)
+        /// value ref (AMB-DIMV-n), slug or name (within the dimension)
         value: String,
         #[arg(long)]
         before: Option<String>,
@@ -1150,27 +1150,27 @@ pub enum DimensionCmd {
     /// required axis is refused — lower the requirement first (alias: value-delete)
     #[command(alias = "value-delete")]
     ValueRm {
-        /// dimension ref (AMB-DIM-n) or name
+        /// dimension ref (AMB-DIM-n), slug or name
         dimension: String,
-        /// value ref (AMB-DIMV-n) or name (within the dimension)
+        /// value ref (AMB-DIMV-n), slug or name (within the dimension)
         value: String,
     },
     /// Assign a task a value of a dimension (single-select replaces the task's prior value)
     Set {
         /// task ref (AMB-T-n)
         task: String,
-        /// dimension ref (AMB-DIM-n) or name
+        /// dimension ref (AMB-DIM-n), slug or name
         dimension: String,
-        /// value ref (AMB-DIMV-n) or name (within the dimension)
+        /// value ref (AMB-DIMV-n), slug or name (within the dimension)
         value: String,
     },
     /// Clear a task's value of a dimension
     Unset {
         /// task ref (AMB-T-n)
         task: String,
-        /// dimension ref (AMB-DIM-n) or name
+        /// dimension ref (AMB-DIM-n), slug or name
         dimension: String,
-        /// value ref (AMB-DIMV-n) or name (within the dimension)
+        /// value ref (AMB-DIMV-n), slug or name (within the dimension)
         value: String,
     },
 }

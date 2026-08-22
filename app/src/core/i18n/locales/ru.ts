@@ -672,6 +672,8 @@ export const ru: Translation = {
     invalid_dimension_period_order: "Дата начала значения не может быть позже даты окончания.",
     invalid_dimension_required_without_values: "«{name}» не предлагает ни одного значения, поэтому её нельзя сделать обязательной: сначала добавьте в неё значение.",
     invalid_dimension_required_unset: "«{name}» — обязательная категория, поэтому значение задачи в ней нельзя очистить: выберите другое значение.",
+    invalid_dimension_slug_shape: "«{slug}» не годится в качестве ключа — не более {max} строчных букв, цифр и дефисов, начиная с буквы.",
+    invalid_dimension_slug_taken: "«{slug}» здесь уже занят другим — выберите другой ключ.",
     invalid_task_required_dimension: "У этой задачи нет значения в {names}, которого требует этот проект.",
     invalid_dimension_values_unordered: "Значения этой категории не упорядочены, поэтому их нельзя переставить.",
     invalid_decision_edit_rejected: "{ref} отклонено, а отклонённое решение нельзя редактировать.",

@@ -2699,7 +2699,7 @@ pub fn dimension_add(project_id: i64, name: String) -> Result<WriteAck, CmdError
 #[tauri::command]
 pub fn dimension_rename(id: i64, name: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.dimension_update(id, Some(&name), None, None, None, None, None)?;
+        store.dimension_update(id, Some(&name), None, None, None, None, None, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))
@@ -2724,7 +2724,7 @@ pub fn dimension_update(
 ) -> Result<WriteAck, CmdError> {
     let role = time_axis.map(|on| if on { DimensionRole::TimeAxis } else { DimensionRole::None });
     with_store_mut(|store| {
-        store.dimension_update(id, None, notes.as_deref(), ordered, role, show_on_card, required)?;
+        store.dimension_update(id, None, notes.as_deref(), ordered, role, show_on_card, required, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))
@@ -2758,7 +2758,7 @@ pub fn dimension_rm(id: i64) -> Result<WriteAck, CmdError> {
 #[tauri::command]
 pub fn dimension_value_add(dimension_id: i64, name: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.dimension_value_add(dimension_id, &name, None)?;
+        store.dimension_value_add(dimension_id, &name, None, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))
@@ -2768,7 +2768,7 @@ pub fn dimension_value_add(dimension_id: i64, name: String) -> Result<WriteAck, 
 #[tauri::command]
 pub fn dimension_value_rename(value_id: i64, name: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.dimension_value_update(value_id, Some(&name), None)?;
+        store.dimension_value_update(value_id, Some(&name), None, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))
@@ -2798,7 +2798,7 @@ pub fn dimension_value_set_period(
             return Err(amenbo_core::Error::invalid("only a time-axis dimension's values carry a period")
             .into());
         }
-        store.dimension_value_update(value_id, None, Some((start, end)))?;
+        store.dimension_value_update(value_id, None, None, Some((start, end)))?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))
@@ -7960,8 +7960,8 @@ mod tests {
                 p.id,
                 amenbo_core::ops::dimension::NewDimension { name: "軸".into(), ..Default::default() },
             ).unwrap();
-            let v1 = store.dimension_value_add(d.id, "V1", None).unwrap();
-            let v2 = store.dimension_value_add(d.id, "V2", None).unwrap();
+            let v1 = store.dimension_value_add(d.id, "V1", None, None).unwrap();
+            let v2 = store.dimension_value_add(d.id, "V2", None, None).unwrap();
             (p.id, d.id, v1.id, v2.id)
         };
         let card = |id: i64| tasks_by_ids(vec![id]).unwrap().into_iter().next();

@@ -646,6 +646,8 @@ export const de: Translation = {
     invalid_dimension_period_order: "Das Startdatum eines Werts darf nicht nach seinem Enddatum liegen.",
     invalid_dimension_required_without_values: "„{name}“ bietet keine Werte, kann also nicht zur Pflicht werden — fügen Sie zuerst einen Wert hinzu.",
     invalid_dimension_required_unset: "„{name}“ ist eine Pflichtkategorie, der Wert einer Aufgabe darauf lässt sich also nicht leeren — wählen Sie stattdessen einen anderen Wert.",
+    invalid_dimension_slug_shape: "„{slug}“ eignet sich nicht als Schlüssel — höchstens {max} Kleinbuchstaben, Ziffern und Bindestriche, beginnend mit einem Buchstaben.",
+    invalid_dimension_slug_taken: "„{slug}“ ist hier bereits der Schlüssel von etwas anderem — wählen Sie einen anderen.",
     invalid_task_required_dimension: "Diese Aufgabe trägt keinen Wert unter {names}, den dieses Projekt verlangt.",
     invalid_dimension_values_unordered:
       "Die Werte dieser Kategorie tragen keine Reihenfolge und lassen sich deshalb nicht umsortieren.",

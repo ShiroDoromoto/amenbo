@@ -669,6 +669,8 @@ export const uk: Translation = {
     invalid_dimension_period_order: "Дата початку значення не може бути пізнішою за дату завершення.",
     invalid_dimension_required_without_values: "«{name}» не пропонує жодного значення, тож її не можна зробити обов'язковою: спершу додайте до неї значення.",
     invalid_dimension_required_unset: "«{name}» — обов'язкова категорія, тож значення завдання в ній не можна очистити: виберіть інше значення.",
+    invalid_dimension_slug_shape: "«{slug}» не годиться як ключ — щонайбільше {max} малі літери, цифри й дефіси, починаючи з літери.",
+    invalid_dimension_slug_taken: "«{slug}» тут уже належить іншому — виберіть інший ключ.",
     invalid_task_required_dimension: "У цього завдання немає значення в {names}, якого вимагає цей проєкт.",
     invalid_dimension_values_unordered: "Значення цієї категорії не впорядковані, тож переставити їх не можна.",
     invalid_decision_edit_rejected: "{ref} відхилено, а відхилене рішення не можна редагувати.",

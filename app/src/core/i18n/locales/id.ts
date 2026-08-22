@@ -634,6 +634,8 @@ export const id: Translation = {
     invalid_dimension_period_order: "Tanggal mulai sebuah nilai tidak boleh setelah tanggal berakhirnya.",
     invalid_dimension_required_without_values: "«{name}» belum punya nilai apa pun, jadi tidak bisa dijadikan wajib — tambahkan nilai dulu.",
     invalid_dimension_required_unset: "«{name}» adalah kategori wajib, jadi nilai tugas di sana tidak bisa dikosongkan — pilih nilai lain.",
+    invalid_dimension_slug_shape: "«{slug}» tidak bisa jadi kunci — pakai maksimal {max} huruf kecil, angka, dan tanda hubung, diawali huruf.",
+    invalid_dimension_slug_taken: "«{slug}» sudah jadi kunci hal lain di sini — pilih yang lain.",
     invalid_task_required_dimension: "Tugas ini tidak membawa nilai di {names}, yang diwajibkan proyek ini.",
     invalid_dimension_values_unordered: "Nilai kategori ini tidak berurutan, jadi tidak bisa diurutkan ulang.",
     invalid_decision_edit_rejected: "{ref} sudah ditolak, dan keputusan yang ditolak tidak bisa disunting.",

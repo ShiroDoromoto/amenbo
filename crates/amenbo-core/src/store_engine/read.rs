@@ -190,21 +190,6 @@ fn key_or_name_pred(
     }
 }
 
-/// The same, folding case on the name arm — what the axis references resolve with (`dim:<axis>=…`).
-/// `LOWER()` in SQLite only folds ASCII, so the bound name is ASCII-folded the same way: folding it
-/// with Rust's full-Unicode `to_lowercase` would compare against a column SQLite left alone.
-fn key_or_folded_name_pred(
-    kind: crate::idref::RefKind,
-    id: Col<Int, NotNull>,
-    name: Col<SqlText, NotNull>,
-    reference: &str,
-) -> Pred {
-    let by_name = Pred::eq(name.lower(), reference.to_ascii_lowercase());
-    match crate::ops::parse_id_ref(kind, reference) {
-        Some(n) => Pred::eq(id, n).or(by_name),
-        None => by_name,
-    }
-}
 
 /// The first id the predicate matches, in `id` order, or `None` — the shape of every "the live edge /
 /// assignment between this pair, if there is one" lookup a mutation makes idempotent. At most one row
@@ -4612,29 +4597,77 @@ pub fn status_bucket_ids(
 const DIM: col::dimension::Cols = col::dimension::ALL;
 const DVAL: col::dimension_value::Cols = col::dimension_value::ALL;
 
-/// Live dimension ids matching `reference` as a **key** or an **exact name**, scoped to
-/// `project_id` when given (pass `None` to resolve across the store). The caller collapses the hit set
-/// with `ops::pick_id` (0 = not-found / 1 = resolved / many = ambiguous).
+/// The order a classification reference resolves in: the **key**, then the **slug**, then the **name**
+/// (`AMB-D-735`). The tiers are asked one at a time and the first that matches anything is the whole
+/// answer, so the stable side wins outright — a slug that happens to spell some other axis's name
+/// cannot make the reference ambiguous, and neither can a name that reads like a key. `scope` narrows
+/// every tier alike (a project, an axis); the name tier is the caller's own predicate, because an exact
+/// name and a case-folded one are different questions and only the caller knows which it is asking.
+///
+/// The slug tier is matched byte-exact: a slug is lower-case by construction (`ops::dimension`), so a
+/// reference that is not lower-case is not one, and folding here would only invent hits. A caller whose
+/// name tier folds case does it with `Col::lower` against an ASCII-folded reference — SQLite's `LOWER()`
+/// folds ASCII only, and Rust's full-Unicode `to_lowercase` would compare against a column SQLite left
+/// alone.
+fn key_slug_then_name(
+    conn: &Connection,
+    kind: crate::idref::RefKind,
+    id: Col<Int, NotNull>,
+    slug: Col<SqlText, Nullable>,
+    name_tier: Pred,
+    scope: Option<Pred>,
+    reference: &str,
+) -> Result<Vec<i64>> {
+    let key_tier = crate::ops::parse_id_ref(kind, reference).map(|n| Pred::eq(id, n));
+    for tier in [key_tier, Some(Pred::eq(slug, reference)), Some(name_tier)].into_iter().flatten() {
+        let pred = match &scope {
+            Some(s) => tier.and(s.clone()),
+            None => tier,
+        };
+        let ids = select_ids(conn, id, Some(&pred))?;
+        if !ids.is_empty() {
+            return Ok(ids);
+        }
+    }
+    Ok(Vec::new())
+}
+
+/// Live dimension ids matching `reference` as a **key**, a **slug** or an **exact name**
+/// ([`key_slug_then_name`]), scoped to `project_id` when given (pass `None` to resolve across the
+/// store). The caller collapses the hit set with `ops::pick_id`
+/// (0 = not-found / 1 = resolved / many = ambiguous).
 pub fn resolve_dimension_in(
     conn: &Connection,
     project_id: Option<i64>,
     reference: &str,
 ) -> Result<Vec<i64>> {
-    let mut pred = key_or_name_pred(crate::idref::RefKind::Dimension, DIM.id, DIM.name, reference);
-    if let Some(pid) = project_id {
-        pred = pred.and(Pred::eq(DIM.project_id, pid));
-    }
-    select_ids(conn, DIM.id, Some(&pred))
+    key_slug_then_name(
+        conn,
+        crate::idref::RefKind::Dimension,
+        DIM.id,
+        DIM.slug,
+        Pred::eq(DIM.name, reference),
+        project_id.map(|pid| Pred::eq(DIM.project_id, pid)),
+        reference,
+    )
 }
 
-/// Dimension ids matching `reference` as a key or a **case-insensitive** name ([`key_or_folded_name_pred`]),
-/// across the store — what `dim:<axis>=…` resolves its axis with. Names are per-project, so a name shared
-/// by two projects resolves to both, and the filter ORs them (see `query::ResolvedDimension`); that is why
-/// this returns every hit rather than collapsing with `ops::pick_id` the way [`resolve_dimension_in`]
-/// does. An empty result is the caller's error to raise: an unresolvable axis must not read as
-/// "nothing matched".
+/// Dimension ids matching `reference` as a key, a slug or a **case-insensitive** name
+/// ([`key_slug_then_name`]), across the store — what `dim:<axis>=…` resolves its axis with. Names are
+/// per-project, so a name shared by two projects resolves to both, and the filter ORs them (see
+/// `query::ResolvedDimension`); that is why this returns every hit rather than collapsing with
+/// `ops::pick_id` the way [`resolve_dimension_in`] does. An empty result is the caller's error to raise:
+/// an unresolvable axis must not read as "nothing matched".
 pub fn resolve_dimension_by_ref(conn: &Connection, reference: &str) -> Result<Vec<i64>> {
-    select_ids(conn, DIM.id, Some(&key_or_folded_name_pred(crate::idref::RefKind::Dimension, DIM.id, DIM.name, reference)))
+    key_slug_then_name(
+        conn,
+        crate::idref::RefKind::Dimension,
+        DIM.id,
+        DIM.slug,
+        Pred::eq(DIM.name.lower(), reference.to_ascii_lowercase()),
+        None,
+        reference,
+    )
 }
 
 /// The dimensions designated as the time axis (`role: time_axis`) — what `time_axis:` resolves to, since
@@ -4651,21 +4684,50 @@ pub fn resolve_dimension_value_by_ref(
     dimension_ids: &[i64],
     reference: &str,
 ) -> Result<Vec<i64>> {
-    let pred = key_or_folded_name_pred(crate::idref::RefKind::DimensionValue, DVAL.id, DVAL.name, reference)
-        .and(Pred::is_in(DVAL.dimension_id, dimension_ids.iter().copied()));
-    select_ids(conn, DVAL.id, Some(&pred))
+    key_slug_then_name(
+        conn,
+        crate::idref::RefKind::DimensionValue,
+        DVAL.id,
+        DVAL.slug,
+        Pred::eq(DVAL.name.lower(), reference.to_ascii_lowercase()),
+        Some(Pred::is_in(DVAL.dimension_id, dimension_ids.iter().copied())),
+        reference,
+    )
 }
 
-/// Live value ids of one dimension matching `reference` as a key or an exact name. Collapsed by the
-/// caller with `ops::pick_id`, like [`resolve_dimension_in`].
+/// Live value ids of one dimension matching `reference` as a key, a slug or an exact name. Collapsed by
+/// the caller with `ops::pick_id`, like [`resolve_dimension_in`].
 pub fn resolve_dimension_value_in(
     conn: &Connection,
     dimension_id: i64,
     reference: &str,
 ) -> Result<Vec<i64>> {
-    let pred = key_or_name_pred(crate::idref::RefKind::DimensionValue, DVAL.id, DVAL.name, reference)
-        .and(Pred::eq(DVAL.dimension_id, dimension_id));
-    select_ids(conn, DVAL.id, Some(&pred))
+    key_slug_then_name(
+        conn,
+        crate::idref::RefKind::DimensionValue,
+        DVAL.id,
+        DVAL.slug,
+        Pred::eq(DVAL.name, reference),
+        Some(Pred::eq(DVAL.dimension_id, dimension_id)),
+        reference,
+    )
+}
+
+/// The axis of `project_id` carrying `slug`, or `None`. What the write door asks before it writes one
+/// (`ops::dimension`), so a collision comes back as a sentence naming the axis that already holds the
+/// slug rather than as a constraint violation raised by the table underneath.
+pub fn dimension_id_by_slug(conn: &Connection, project_id: i64, slug: &str) -> Result<Option<i64>> {
+    first_id(conn, DIM.id, &Pred::eq(DIM.slug, slug).and(Pred::eq(DIM.project_id, project_id)))
+}
+
+/// The value of `dimension_id` carrying `slug`, or `None` — [`dimension_id_by_slug`]'s counterpart, one
+/// axis wide, because that is how far a value's slug is unique.
+pub fn dimension_value_id_by_slug(
+    conn: &Connection,
+    dimension_id: i64,
+    slug: &str,
+) -> Result<Option<i64>> {
+    first_id(conn, DVAL.id, &Pred::eq(DVAL.slug, slug).and(Pred::eq(DVAL.dimension_id, dimension_id)))
 }
 
 /// The dimension a value belongs to, or `None` when there is no such value — the

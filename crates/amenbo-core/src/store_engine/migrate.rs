@@ -27,7 +27,7 @@
 use std::ops::ControlFlow;
 use std::path::Path;
 
-use rusqlite::Transaction;
+use rusqlite::{OptionalExtension, Transaction};
 
 use super::{Result, StoreEngine, META_FORMAT_VERSION, META_FORMAT_VERSION_SET_BY};
 use crate::progress::{Phase, Progress};
@@ -462,6 +462,11 @@ pub const STEPS: &[Step] = &[
             "ALTER TABLE dimension ADD COLUMN required BOOLEAN NOT NULL DEFAULT 0 \
                  CHECK(required IN (0, 1));",
         ),
+    },
+    Step {
+        to: 30,
+        name: "give a classification axis and its values a slug, unique where each is named",
+        apply: Apply::Custom(slug_the_dimension_model),
     },
 ];
 
@@ -1061,6 +1066,146 @@ fn key_the_bindings_by_id(ctx: &Ctx<'_>) -> Result<()> {
     Ok(())
 }
 
+/// The shape `dimension` takes from v30 on — frozen text, like every step's: the registry may rename or
+/// reshape the table tomorrow, and what this step built must keep meaning what it meant.
+const DIMENSION_WITH_SLUG: &str = "CREATE TABLE dimension (\n    \
+       id           INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,\n    \
+       project_id   BIGINT NOT NULL DEFAULT 0 REFERENCES project(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,\n    \
+       name         TEXT NOT NULL DEFAULT '',\n    \
+       notes        TEXT NOT NULL DEFAULT '',\n    \
+       cardinality  TEXT NOT NULL DEFAULT '' CHECK(cardinality IN ('', 'single')),\n    \
+       ordered      BOOLEAN NOT NULL DEFAULT 0 CHECK(ordered IN (0, 1)),\n    \
+       role         TEXT NOT NULL DEFAULT '' CHECK(role IN ('', 'none', 'time_axis')),\n    \
+       show_on_card BOOLEAN NOT NULL DEFAULT 0 CHECK(show_on_card IN (0, 1)),\n    \
+       required     BOOLEAN NOT NULL DEFAULT 0 CHECK(required IN (0, 1)),\n    \
+       order_key    TEXT NOT NULL DEFAULT '',\n    \
+       slug         TEXT,\n    \
+       created_at   TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),\n    \
+       updated_at   TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),\n    \
+       UNIQUE (project_id, slug)\n\
+     );";
+
+/// The shape `dimension_value` takes from v30 on — frozen text, as above.
+const DIMENSION_VALUE_WITH_SLUG: &str = "CREATE TABLE dimension_value (\n    \
+       id           INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,\n    \
+       dimension_id BIGINT NOT NULL DEFAULT 0 REFERENCES dimension(id) ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED,\n    \
+       name         TEXT NOT NULL DEFAULT '',\n    \
+       order_key    TEXT NOT NULL DEFAULT '',\n    \
+       slug         TEXT,\n    \
+       start_on     TEXT CHECK(start_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),\n    \
+       end_on       TEXT CHECK(end_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),\n    \
+       created_at   TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),\n    \
+       updated_at   TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'),\n    \
+       UNIQUE (dimension_id, slug)\n\
+     );";
+
+/// The columns this step carries across, named in full — the copy is by name, not by `SELECT *`, because
+/// a store that reached here from an older shape may hold them in another order (two stores at one
+/// version legitimately do).
+const DIMENSION_COLUMNS: &str = "id, project_id, name, notes, cardinality, ordered, role, \
+     show_on_card, required, order_key, created_at, updated_at";
+const DIMENSION_VALUE_COLUMNS: &str =
+    "id, dimension_id, name, order_key, start_on, end_on, created_at, updated_at";
+const TASK_DIMENSION_VALUE_COLUMNS: &str =
+    "id, task_id, dimension_id, value_id, created_at, updated_at";
+
+/// v30: give a classification axis and each of its values a **slug** — a readable, stable key that can
+/// be spoken outside Amenbo, where a Japanese display name cannot go and `AMB-DIMV-46` can go but says
+/// nothing (`AMB-D-735`).
+///
+/// **A rebuild, because the uniqueness is a table constraint and nothing else reaches every store.** The
+/// column alone would be one `ALTER TABLE … ADD COLUMN` per table; what needs the rebuild is
+/// `UNIQUE (project_id, slug)` / `UNIQUE (dimension_id, slug)`. SQLite refuses `ADD COLUMN … UNIQUE`, and
+/// a `CREATE UNIQUE INDEX` in the genesis batch would run on every open *before* this chain does and
+/// break the store it names a column of that is not there yet. A table constraint is the one form both
+/// DDL sites emit, so both halves of the population land on the same table — which is the whole reason
+/// [`super::schema::Dataset`] grew a constraint slot.
+///
+/// **The children are emptied first, and that is not an ornament.** `dimension` is referenced by
+/// `dimension_value` and `task_dimension_value`, and with foreign keys on, `DROP TABLE` performs an
+/// implicit `DELETE` that fires their `RESTRICT` — immediately, and even under
+/// `PRAGMA defer_foreign_keys` the violation simply resurfaces at `COMMIT`, since nothing afterwards
+/// decrements the counter it left behind. (This is exactly the case v25's note excludes itself from: the
+/// table it rebuilt was held by no reference on either side.) So the assignments go to one side, the two
+/// parents are rebuilt with no child row pointing at them, and everything comes back in parent order.
+/// `task_dimension_value` keeps its own table throughout — only its rows travel — so its index and its
+/// declaration are untouched.
+///
+/// **Backfilled from the id, never from the name.** `crate::slug::base` keeps runs of ASCII
+/// alphanumerics, so a Japanese axis name yields one fallback word and every row in this store would
+/// come out of the backfill identical. The id is already unique, so `d<id>` / `v<id>` is unique for
+/// free, and the leading letter is what a D-Bus name element needs (`AMB-D-733`) and what the door's own
+/// shape check demands. Editing one afterwards is `ops::dimension`'s business, not this step's.
+///
+/// **The retired numbers are carried across.** A record id, once issued, is never reissued
+/// (`schema::RECORD_ID`), and the high-water mark that holds that true lives in `sqlite_sequence`, whose
+/// row `DROP TABLE` takes with it. Re-inserting the rows would set the mark back to the largest *live*
+/// id, handing a deleted axis's number to the next one, so the mark is read before and written after.
+///
+/// **Probed, not bare.** A store handed its tables whole by today's genesis already has both columns, so
+/// it arrives here finished and the rebuild would only churn it. Same shape as [`add_outbox_project`]'s
+/// probe, for the same reason.
+fn slug_the_dimension_model(ctx: &Ctx<'_>) -> Result<()> {
+    let held: i64 = ctx.tx.query_row(
+        "SELECT COUNT(*) FROM pragma_table_info('dimension') WHERE name = 'slug'",
+        [],
+        |r| r.get(0),
+    )?;
+    if held > 0 {
+        return Ok(());
+    }
+
+    // The high-water marks, before the drop takes their rows out of `sqlite_sequence`.
+    let mut retired: Vec<(&str, i64)> = Vec::new();
+    for table in ["dimension", "dimension_value"] {
+        let seq: Option<i64> = ctx
+            .tx
+            .query_row("SELECT seq FROM sqlite_sequence WHERE name = ?1", [table], |r| r.get(0))
+            .optional()?;
+        if let Some(seq) = seq {
+            retired.push((table, seq));
+        }
+    }
+
+    ctx.tx.execute_batch(&format!(
+        "CREATE TABLE dimension_v30 AS SELECT {DIMENSION_COLUMNS} FROM dimension;
+         CREATE TABLE dimension_value_v30 AS SELECT {DIMENSION_VALUE_COLUMNS} FROM dimension_value;
+         CREATE TABLE task_dimension_value_v30 AS \
+             SELECT {TASK_DIMENSION_VALUE_COLUMNS} FROM task_dimension_value;
+         DELETE FROM task_dimension_value;
+         DROP TABLE dimension_value;
+         DROP TABLE dimension;
+         {DIMENSION_WITH_SLUG}
+         {DIMENSION_VALUE_WITH_SLUG}
+         INSERT INTO dimension ({DIMENSION_COLUMNS}, slug) \
+             SELECT {DIMENSION_COLUMNS}, 'd' || id FROM dimension_v30;
+         INSERT INTO dimension_value ({DIMENSION_VALUE_COLUMNS}, slug) \
+             SELECT {DIMENSION_VALUE_COLUMNS}, 'v' || id FROM dimension_value_v30;
+         INSERT INTO task_dimension_value ({TASK_DIMENSION_VALUE_COLUMNS}) \
+             SELECT {TASK_DIMENSION_VALUE_COLUMNS} FROM task_dimension_value_v30;
+         DROP TABLE dimension_v30;
+         DROP TABLE dimension_value_v30;
+         DROP TABLE task_dimension_value_v30;"
+    ))?;
+
+    for (table, seq) in retired {
+        // An `UPDATE` alone would miss a table whose rows were all deleted before this ran: it holds a
+        // mark and no rows, so re-inserting nothing leaves it with no `sqlite_sequence` row to update.
+        let moved = ctx.tx.execute(
+            "UPDATE sqlite_sequence SET seq = ?1 WHERE name = ?2 AND seq < ?1",
+            rusqlite::params![seq, table],
+        )?;
+        if moved == 0 {
+            ctx.tx.execute(
+                "INSERT INTO sqlite_sequence (name, seq) SELECT ?2, ?1 \
+                 WHERE NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name = ?2)",
+                rusqlite::params![seq, table],
+            )?;
+        }
+    }
+    Ok(())
+}
+
 /// The version a store ends at once the chain has run — the last step's, or the baseline if there is
 /// no step. **The chain defines the format version**, so a step cannot be added without the version
 /// moving with it, and the version cannot move without a step to carry a store there.
@@ -1173,7 +1318,6 @@ mod tests {
     use super::*;
     use crate::store_engine::schema;
     use crate::store_engine::schema_frozen::{frozen_or_panic, OLDEST_FROZEN_VERSION};
-    use rusqlite::OptionalExtension;
 
     fn scratch(tag: &str) -> std::path::PathBuf {
         let dir = amenbo_scratch::scratch(&format!("migrate-{tag}"));
@@ -2425,6 +2569,105 @@ mod tests {
     /// machines upgrading the same index arrive at the same ids. What the pair keeps is its uniqueness, now
     /// as a `UNIQUE` rather than the key; what the id gains is retirement, so a folder unbound does not
     /// hand its number to the next one bound.
+    /// **v30 on every shape the chain starts from** (`AMB-D-735`). A store born at any frozen version
+    /// comes out of the chain with a slug on every axis and every value, with both pairs held unique, and
+    /// with the classification it carried still attached — which is the part the rebuild puts at risk,
+    /// since the assignments have to leave their table and come back.
+    #[test]
+    fn the_chain_slugs_the_dimension_model_and_keeps_each_unique() {
+        // The last version before the column: a store born at v30 is handed it by genesis with nothing
+        // to migrate.
+        const SLUGLESS_DIMENSION_VERSION: i64 = 29;
+        for born in OLDEST_FROZEN_VERSION..=SLUGLESS_DIMENSION_VERSION {
+            let dir = scratch(&format!("dimension-slug-v{born}"));
+            let engine = store_at(&dir, born);
+            engine
+                .conn()
+                .execute_batch(
+                    "INSERT INTO project (id, name) VALUES (1, 'P'), (2, 'Q');
+                     INSERT INTO task (id, title) VALUES (1, 'T');
+                     INSERT INTO dimension (id, project_id, name) \
+                       VALUES (1, 1, 'フェーズ'), (2, 1, '製品'), (3, 2, 'フェーズ');
+                     INSERT INTO dimension_value (id, dimension_id, name) \
+                       VALUES (1, 1, '運用第2期'), (2, 1, '運用第1期'), (3, 2, 'Amenbo本体');
+                     INSERT INTO task_dimension_value (id, task_id, dimension_id, value_id) \
+                       VALUES (1, 1, 1, 1);
+                     -- A number issued and then given up: the mark it left must not be handed on.
+                     INSERT INTO dimension (id, project_id, name) VALUES (9, 1, 'gone');
+                     DELETE FROM dimension WHERE id = 9;",
+                )
+                .unwrap();
+
+            run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+            let slugs = |sql: &str| -> Vec<(i64, String)> {
+                let conn = engine.conn();
+                let mut stmt = conn.prepare(sql).unwrap();
+                let rows = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?))).unwrap();
+                rows.filter_map(|r| r.ok()).collect()
+            };
+            assert_eq!(
+                slugs("SELECT id, slug FROM dimension ORDER BY id"),
+                vec![(1, "d1".to_string()), (2, "d2".to_string()), (3, "d3".to_string())],
+                "v{born}: every axis is backfilled from its id, name or no name",
+            );
+            assert_eq!(
+                slugs("SELECT id, slug FROM dimension_value ORDER BY id"),
+                vec![(1, "v1".to_string()), (2, "v2".to_string()), (3, "v3".to_string())],
+                "v{born}: every value is backfilled from its id",
+            );
+            let assignments: Vec<(i64, i64, i64, i64)> = {
+                let conn = engine.conn();
+                let mut stmt = conn
+                    .prepare("SELECT id, task_id, dimension_id, value_id FROM task_dimension_value")
+                    .unwrap();
+                let rows = stmt
+                    .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+                    .unwrap();
+                rows.filter_map(|r| r.ok()).collect()
+            };
+            assert_eq!(
+                assignments,
+                vec![(1, 1, 1, 1)],
+                "v{born}: the classification comes back exactly as it left — the rebuild moves the \
+                 assignments out of the way and must put every one of them back",
+            );
+            assert!(
+                engine
+                    .conn()
+                    .execute("UPDATE dimension SET slug = 'd2' WHERE id = 1", [])
+                    .is_err(),
+                "v{born}: two axes of one project cannot answer to the same slug",
+            );
+            engine
+                .conn()
+                .execute("UPDATE dimension SET slug = 'd1' WHERE id = 3", [])
+                .expect("the same slug in another project is another slug");
+            assert!(
+                engine
+                    .conn()
+                    .execute("UPDATE dimension_value SET slug = 'v2' WHERE id = 1", [])
+                    .is_err(),
+                "v{born}: two values of one axis cannot answer to the same slug",
+            );
+            engine
+                .conn()
+                .execute("UPDATE dimension_value SET slug = 'v1' WHERE id = 3", [])
+                .expect("the same slug on another axis is another slug");
+            engine
+                .conn()
+                .execute("INSERT INTO dimension (project_id, name) VALUES (1, 'next')", [])
+                .unwrap();
+            assert_eq!(
+                slugs("SELECT id, name FROM dimension WHERE name = 'next'"),
+                vec![(10, "next".to_string())],
+                "v{born}: the number a deleted axis held is still retired — the rebuild carried the \
+                 high-water mark across",
+            );
+            std::fs::remove_dir_all(&dir).ok();
+        }
+    }
+
     #[test]
     fn the_chain_gives_a_bound_folder_an_id_and_keeps_the_pair_unique() {
         // The last version whose bindings were keyed by the pair alone, named literally: the question is

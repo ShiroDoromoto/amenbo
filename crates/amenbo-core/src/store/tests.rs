@@ -623,7 +623,7 @@ fn project_and_dimension_writes_commit_per_operation() {
     let d = s
         .dimension_add(p.id, crate::ops::dimension::NewDimension { name: "軸".into(), ..Default::default() })
         .unwrap();
-    let v = s.dimension_value_add(d.id, "値", None).unwrap();
+    let v = s.dimension_value_add(d.id, "値", None, None).unwrap();
     let t = s.add_task(task("分類されるタスク", Some(p.id))).unwrap();
     s.set_task_dimension_value(t.id, v.id).unwrap();
     drop(s);
@@ -677,10 +677,10 @@ fn order_key_placement_reads_the_siblings_from_the_truth_source() {
     let d = s
         .dimension_add(p1.id, crate::ops::dimension::NewDimension { name: "軸".into(), ..Default::default() })
         .unwrap();
-    let v1 = s.dimension_value_add(d.id, "先住の値", None).unwrap();
+    let v1 = s.dimension_value_add(d.id, "先住の値", None, None).unwrap();
 
     let p2 = s.project_add(project("あとから来たPJ")).unwrap();
-    let v2 = s.dimension_value_add(d.id, "あとから来た値", None).unwrap();
+    let v2 = s.dimension_value_add(d.id, "あとから来た値", None, None).unwrap();
     assert_ne!(p2.order_key, p1.order_key, "a project's tail key is placed after its siblings in the source of truth");
     assert_ne!(v2.order_key, v1.order_key, "a dimension value's tail key is placed after its siblings in the source of truth too");
     fs::remove_dir_all(&dir).ok();
@@ -719,8 +719,8 @@ fn setting_a_dimension_value_replaces_within_the_axis_in_one_transaction() {
     let d = s
         .dimension_add(p.id, crate::ops::dimension::NewDimension { name: "軸".into(), ..Default::default() })
         .unwrap();
-    let a = s.dimension_value_add(d.id, "A", None).unwrap();
-    let b = s.dimension_value_add(d.id, "B", None).unwrap();
+    let a = s.dimension_value_add(d.id, "A", None, None).unwrap();
+    let b = s.dimension_value_add(d.id, "B", None, None).unwrap();
     let t = s.add_task(task("分類されるタスク", Some(p.id))).unwrap();
     s.set_task_dimension_value(t.id, a.id).unwrap();
     s.set_task_dimension_value(t.id, b.id).unwrap();
@@ -753,12 +753,12 @@ fn a_board_reads_only_its_own_project_and_only_the_axis_it_asked_for() {
     let axis = s
         .dimension_add(p.id, crate::ops::dimension::NewDimension { name: "状態".into(), ..Default::default() })
         .unwrap();
-    let doing = s.dimension_value_add(axis.id, "着手", None).unwrap();
+    let doing = s.dimension_value_add(axis.id, "着手", None, None).unwrap();
     // A second axis in the same project — it must not bleed in.
     let sibling = s
         .dimension_add(p.id, crate::ops::dimension::NewDimension { name: "区分".into(), ..Default::default() })
         .unwrap();
-    let bug = s.dimension_value_add(sibling.id, "バグ", None).unwrap();
+    let bug = s.dimension_value_add(sibling.id, "バグ", None, None).unwrap();
     let t = s.add_task(task("こちらのタスク", Some(p.id))).unwrap();
     s.set_task_dimension_value(t.id, doing.id).unwrap();
     s.set_task_dimension_value(t.id, bug.id).unwrap();
@@ -802,8 +802,8 @@ fn a_tasks_classification_reads_by_axis_and_drops_a_deleted_value() {
         s.dimension_add(p.id, NewDimension { name: "リリース".into(), ..Default::default() }).unwrap();
     let second =
         s.dimension_add(p.id, NewDimension { name: "区分".into(), ..Default::default() }).unwrap();
-    let bucket = s.dimension_value_add(first.id, "第1弾", None).unwrap();
-    let kind = s.dimension_value_add(second.id, "バグ", None).unwrap();
+    let bucket = s.dimension_value_add(first.id, "第1弾", None, None).unwrap();
+    let kind = s.dimension_value_add(second.id, "バグ", None, None).unwrap();
 
     let t = s.add_task(task("分類されたタスク", Some(p.id))).unwrap();
     // Filed on the second axis first, so the order that comes back cannot be the order they were made.
@@ -858,7 +858,7 @@ fn add_task_defaults_to_the_time_axis_value_covering_today() {
     let category = s
         .dimension_add(proj.id, NewDimension { name: "カテゴリー".into(), ..NewDimension::default() })
         .unwrap();
-    s.dimension_value_add(category.id, "バグ", Some((Some(crate::time::today()), None))).unwrap();
+    s.dimension_value_add(category.id, "バグ", None, Some((Some(crate::time::today()), None))).unwrap();
     let uncategorized = s.add_task(task("非時間軸", Some(proj.id))).unwrap();
     assert!(assigned(&s, uncategorized.id).is_empty(), "a non-time_axis dimension creates no default assignment");
 
@@ -871,13 +871,13 @@ fn add_task_defaults_to_the_time_axis_value_covering_today() {
         )
         .unwrap();
     let yesterday = crate::time::today().pred_opt().unwrap();
-    let past = s.dimension_value_add(axis.id, "開発期", Some((None, Some(yesterday)))).unwrap();
+    let past = s.dimension_value_add(axis.id, "開発期", None, Some((None, Some(yesterday)))).unwrap();
     let outside = s.add_task(task("窓の外", Some(proj.id))).unwrap();
     assert!(assigned(&s, outside.id).is_empty(), "with no era covering today, nothing is assigned");
 
     // Add an open-ended, current window and every task created from here on picks it up by default.
     let current = s
-        .dimension_value_add(axis.id, "運用第1期", Some((Some(crate::time::today()), None)))
+        .dimension_value_add(axis.id, "運用第1期", None, Some((Some(crate::time::today()), None)))
         .unwrap();
     let fresh = s.add_task(task("既定つき", Some(proj.id))).unwrap();
     assert_eq!(assigned(&s, fresh.id), vec![current.id], "assigns by default the era that contains today");
@@ -928,19 +928,19 @@ fn a_value_named_at_creation_lands_with_the_task_and_beats_the_default() {
     let category = s
         .dimension_add(proj.id, NewDimension { name: "カテゴリー".into(), ..NewDimension::default() })
         .unwrap();
-    let bug = s.dimension_value_add(category.id, "バグ", None).unwrap();
+    let bug = s.dimension_value_add(category.id, "バグ", None, None).unwrap();
     let area = s
         .dimension_add(proj.id, NewDimension { name: "領域".into(), ..NewDimension::default() })
         .unwrap();
-    let core = s.dimension_value_add(area.id, "コア", None).unwrap();
+    let core = s.dimension_value_add(area.id, "コア", None, None).unwrap();
     let axis = s
         .dimension_add(
             proj.id,
             NewDimension { name: "時代".into(), role: DimensionRole::TimeAxis, ordered: true, ..NewDimension::default() },
         )
         .unwrap();
-    let past = s.dimension_value_add(axis.id, "開発期", Some((None, Some(crate::time::today().pred_opt().unwrap())))).unwrap();
-    let current = s.dimension_value_add(axis.id, "運用第1期", Some((Some(crate::time::today()), None))).unwrap();
+    let past = s.dimension_value_add(axis.id, "開発期", None, Some((None, Some(crate::time::today().pred_opt().unwrap())))).unwrap();
+    let current = s.dimension_value_add(axis.id, "運用第1期", None, Some((Some(crate::time::today()), None))).unwrap();
 
     // Two axes at once, neither of them the time axis: both land, and the default still fills the era.
     let filed = s.add_task_with_dimensions(task("分類つき", Some(proj.id)), &[bug.id, core.id]).unwrap();

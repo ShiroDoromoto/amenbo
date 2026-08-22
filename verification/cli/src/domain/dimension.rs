@@ -34,6 +34,19 @@ impl Driver<'_> {
                 };
                 Ok(Outcome::action(note))
             }
+            // Whether the axis refuses to be left empty. The command takes the answer as a word rather
+            // than as a bare switch, since it is lowered as often as it is raised.
+            "required" => {
+                let dimension = req_str(with, "dimension")?;
+                let demand = opt_bool(with, "required").unwrap_or(true);
+                let flag = if demand { "true" } else { "false" };
+                self.run_json(&["dimension", "update", dimension, "--required", flag, "--json"])?;
+                let note = match demand {
+                    true => format!("made `{dimension}` demand an answer"),
+                    false => format!("stopped `{dimension}` demanding an answer"),
+                };
+                Ok(Outcome::action(note))
+            }
             // Filing a task under an axis and taking it back off. The axis and value go by name, which
             // is what the command takes — a bare number there would be read as a name, not an id.
             verb @ ("set" | "unset") => {

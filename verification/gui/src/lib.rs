@@ -639,6 +639,13 @@ impl Instructor {
             // The one premise a reader settles where it is reported: the row that says the creation is
             // still open is the row carrying the button that ends it, so the move is opening the task
             // and pressing it rather than going anywhere else for it.
+            // A creation this face will not let end is held rather than refused: the button is shut and
+            // the axes still to answer are named beside it, so a line telling a reader to press it would
+            // have them hunting for a press that was never on offer.
+            (Domain::Task, "finish-creating") if with.contains_key("refused") => format!(
+                "Open the task \"{}\" and find the button that finishes creating it shut, with the categories still to answer named beside it.",
+                self.target_label(with)
+            ),
             (Domain::Task, "finish-creating") => format!(
                 "Open the task \"{}\" and press the button that finishes creating it.",
                 self.target_label(with)
@@ -798,6 +805,33 @@ impl Instructor {
             (Domain::Project, "group-by") => format!(
                 "Above the board, in the row of buttons that choose what its columns are cut along, press \"{}\". The columns become that axis's values.",
                 req(with, "axis")?
+            ),
+            // The two moves the classification side of this face has, and the manager is opened inside the
+            // first of them: it is reached from the same row above the board that cuts the columns, so a
+            // step that sent a reader anywhere else would be describing a screen that is not there.
+            //
+            // Neither line names the box by its label. What is drawn on it is each reader's own language,
+            // and what the road means is the answer the box carries — so it is named by what it does, the
+            // way every other control on these roads is.
+            (Domain::Dimension, "required") => {
+                let dimension = req(with, "dimension")?;
+                match with.get("required").and_then(|v| v.as_bool()).unwrap_or(true) {
+                    true => format!(
+                        "Above the board, open the way into managing the project's categories, find the row for \"{dimension}\", and turn on the box that makes the category demand an answer.",
+                    ),
+                    false => format!(
+                        "Above the board, open the way into managing the project's categories, find the row for \"{dimension}\", and turn off the box that makes the category demand an answer.",
+                    ),
+                }
+            }
+            // Filing the task under one of the axis's values, from the task's own pane. The screen keeps
+            // one control per axis there, so the axis is named as well as the value: a line naming the
+            // value alone would leave a reader hunting the pane for which control carries it.
+            (Domain::Dimension, "set") => format!(
+                "Open the task \"{}\" and, in the control its pane keeps for the category \"{}\", choose \"{}\".",
+                self.target_label(with),
+                req(with, "dimension")?,
+                req(with, "value")?
             ),
             // `dir` is a name and not a path here as it is everywhere else: which folder is linked is
             // the run's to decide, and what the scenario writes down is what to call the one it picked.
@@ -4055,6 +4089,70 @@ steps_gui:
         );
         let said = Instructor::new().render(&carded(true)).unwrap();
         assert!(said.contains("heading"), "and the line says where the word will be standing: {said}");
+    }
+
+    /// The demand an axis can carry, and the two controls this face answers it with. A terminal meets
+    /// both refusals as codes on an exit status; here there is no code to compare, so what stands in
+    /// for each one is a control held shut — the box that would raise a demand nobody could answer,
+    /// and the button that would end a creation the demand is not met on. The held creation is the one
+    /// line whose instruction changes with `refused:`: a reader told to press a button that is shut
+    /// would be hunting for a press that was never on offer.
+    #[test]
+    fn a_demand_an_axis_carries_is_answered_by_the_controls_it_holds_shut() {
+        let raise = |dimension: &str, on: Option<bool>, refused: bool| {
+            let mut with: Args =
+                [("dimension".to_string(), serde_yaml::Value::from(dimension))].into_iter().collect();
+            if let Some(on) = on {
+                with.insert("required".to_string(), serde_yaml::Value::from(on));
+            }
+            if refused {
+                with.insert(
+                    "refused".to_string(),
+                    serde_yaml::Value::from("invalid_dimension_required_without_values"),
+                );
+            }
+            Step::Action { domain: Domain::Dimension, op: "required".to_string(), with, bind: None }
+        };
+        let said = Instructor::new().render(&raise("Focus", None, true)).unwrap();
+        assert!(said.contains("Focus") && said.contains("turn on"), "got: {said}");
+        assert!(said.contains("turned away rather than to go through"), "got: {said}");
+        let lowered = Instructor::new().render(&raise("Medium", Some(false), false)).unwrap();
+        assert!(lowered.contains("turn off"), "the other half of the same box: {lowered}");
+
+        // The creation the demand holds, and the same step once it is answered. Both name the task, and
+        // only the held one names the button as shut.
+        let finish = |refused: bool| {
+            let mut with: Args =
+                [("target".to_string(), serde_yaml::Value::from("seed"))].into_iter().collect();
+            if refused {
+                with.insert(
+                    "refused".to_string(),
+                    serde_yaml::Value::from("invalid_task_required_dimension"),
+                );
+            }
+            Step::Action { domain: Domain::Task, op: "finish-creating".to_string(), with, bind: None }
+        };
+        let held = Instructor::new().render(&finish(true)).unwrap();
+        assert!(held.contains("shut") && held.contains("named beside it"), "got: {held}");
+        let ended = Instructor::new().render(&finish(false)).unwrap();
+        assert!(ended.contains("press the button"), "got: {ended}");
+
+        // And the answer itself, put on from the task's own pane — the place the held button sends a
+        // reader, so the line names the axis as well as the value.
+        let set = Step::Action {
+            domain: Domain::Dimension,
+            op: "set".to_string(),
+            with: [
+                ("target".to_string(), serde_yaml::Value::from("seed")),
+                ("dimension".to_string(), serde_yaml::Value::from("Medium")),
+                ("value".to_string(), serde_yaml::Value::from("print")),
+            ]
+            .into_iter()
+            .collect(),
+            bind: None,
+        };
+        let said = Instructor::new().render(&set).unwrap();
+        assert!(said.contains("Medium") && said.contains("print"), "got: {said}");
     }
 
     /// The crossing a setting is held at, named on a screen road — refused rather than passed over. A

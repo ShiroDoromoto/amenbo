@@ -17,6 +17,7 @@ import { formatAheadDetail } from "../core/formatAhead";
 import { currentLang, normalizeLang, t, tf } from "../core/i18n";
 import { inTauri } from "../core/snapshot";
 import { Icon } from "../components/Icon";
+import { NoCli } from "../components/NoCli";
 
 /**
  * The gate that announces the overtaking — a store too new to open. When this is noticed at startup the snapshot
@@ -27,7 +28,7 @@ export function RestartGate() {
   const [lang, setLang] = useState(currentLang);
   const [failed, setFailed] = useState(false);
   // The restore line is a command to type, and the build that is stuck here is the one whose CLI the
-  // reader has beside them.
+  // reader has beside them — or, on a build that ships none they can run, does not.
   const cli = useCliCommandName();
   // Read once: the flag never lowers, so neither does what raised it.
   const [detail] = useState(formatAheadDetail);
@@ -86,7 +87,9 @@ export function RestartGate() {
             </pre>
           )}
           <p className="muted">{t("restart.stuck.how", lang)}</p>
-          <pre className="restart__detail" style={{ whiteSpace: "pre-wrap" }}>{tf("restart.stuck.command", { cmd: cli }, lang)}</pre>
+          {cli
+            ? <pre className="restart__detail" style={{ whiteSpace: "pre-wrap" }}>{tf("restart.stuck.command", { cmd: cli }, lang)}</pre>
+            : <NoCli />}
           <p className="faint" style={{ fontSize: "var(--fs-xs)" }}>{t("restart.stuck.where", lang)}</p>
         </div>
       </div>

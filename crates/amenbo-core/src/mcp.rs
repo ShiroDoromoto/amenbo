@@ -19,11 +19,17 @@ use std::path::{Path, PathBuf};
 /// What a host files Amenbo under — one name for this machine, whatever folders the server is given
 /// (`AMB-D-679`).
 ///
-/// It is this build's own command name rather than the product's, for the same reason the channels are
-/// three different commands: a dev build names the dev binary, and an entry landing on the production
+/// It is this build's own name rather than the product's, for the same reason the channels are three
+/// different commands: a dev build names the dev binary, and an entry landing on the production
 /// build's name would put that binary behind the server the reader already had.
+///
+/// The **name**, not what a shell would be told to run ([`crate::config::Paths::command_name`]): a
+/// host files the entry under this and [`is_superseded_name`] reads old ones back off it, so it has
+/// to be a key that keeps its spelling. Where a build's CLI is reached by path rather than by name,
+/// the path is the machine's answer and the key is still the build's — and the path is answered
+/// separately, where a server is started rather than filed (`mcp_exe`).
 pub fn name() -> &'static str {
-    crate::config::Paths::command_name()
+    crate::config::Paths::APP_NAME
 }
 
 /// Whether `candidate` is a name Amenbo filed a server under **before** the name said the machine

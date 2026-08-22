@@ -357,6 +357,7 @@ export const fr: Translation = {
     "search.on.decision": "Décision",
     "search.on.decisionComment": "Commentaire sur une décision",
     "commands.note": "Référence complète des commandes (depuis agent --json · lecture seule)",
+    "cli.none": "Cette version ne fournit aucune commande exécutable : son CLI est dans l'AppImage et n'existe que tant que l'application est ouverte. Passez par l'application.",
     "commands.search": "Chercher une commande", "commands.empty": "Aucune commande", "commands.loading": "Chargement…",
     "commands.other": "Autres", "commands.required": "obligatoire", "commands.examples": "Exemples",
     "plugins.market": "Place de marché", "plugins.searchPh": "Chercher des extensions",

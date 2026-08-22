@@ -353,6 +353,7 @@ export const ja: Translation = {
     "search.on.decision": "決定記録",
     "search.on.decisionComment": "決定記録への発言",
     "commands.note": "全コマンドの仕様（agent --json 由来・表示専用）",
+    "cli.none": "このビルドには、打てるコマンドがありません。CLI は AppImage の中にあり、アプリを開いている間しか存在しません。アプリの画面から進めてください。",
     "commands.search": "コマンドを検索", "commands.empty": "コマンドがありません", "commands.loading": "読み込み中…",
     "commands.other": "その他", "commands.required": "必須", "commands.examples": "サンプル",
     // plugin market (the "find one" tab)

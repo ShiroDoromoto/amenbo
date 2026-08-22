@@ -129,10 +129,12 @@ function DoneStep({ created, onOpenProject, onOpenMcp }: { created: Created; onO
   const { id, name, dir } = created;
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // What is copied is meant to be pasted into a terminal, so it has to be the command this build installs.
+  // What is copied is meant to be pasted into a terminal, so it has to be the command this build
+  // installs — and where it installs none the reader can run, there is nothing to offer copying.
   const cli = useCliCommandName();
 
   const copyStatus = async () => {
+    if (!cli) return;
     try {
       await navigator.clipboard.writeText(`${cli} status`);
       setError(null);
@@ -164,9 +166,11 @@ function DoneStep({ created, onOpenProject, onOpenMcp }: { created: Created; onO
               <span className="fieldlabel">{t("newproj.moreTitle")}</span>
               <div className="buttonrow">
                 <button className="btn" onClick={() => void reveal()}><Icon name="folder" /> {t("newproj.openFinder")}</button>
-                <button className="btn" onClick={() => void copyStatus()}>
-                  {copied ? <><Icon name="check" /> {t("newproj.copied")}</> : <><Icon name="clipboard" /> {tf("newproj.copyStatus", { cmd: cli })}</>}
-                </button>
+                {cli && (
+                  <button className="btn" onClick={() => void copyStatus()}>
+                    {copied ? <><Icon name="check" /> {t("newproj.copied")}</> : <><Icon name="clipboard" /> {tf("newproj.copyStatus", { cmd: cli })}</>}
+                  </button>
+                )}
                 {/* One line out to where an AI is connected, rather than a second place to hand the
                     request over from (`AMB-D-684`). It is named and not conditioned: the fold it
                     replaced asked the reader whether their AI can open a folder, which is the one

@@ -752,17 +752,19 @@ pub fn dev_badge() -> Option<String> {
     amenbo_core::config::Paths::dev_badge()
 }
 
-/// What this build's CLI is called where someone types it — `amenbo` in production, `amenbo-dev` on
-/// a dev build, the same answer every other surface that words a command takes
-/// ([`amenbo_core::config::Paths::command_name`]). Asked once at startup for the reason
+/// How this build's CLI is run where someone types it — `amenbo` in production, `amenbo-dev` on the
+/// shared dev build, the path into the bundle on a macOS preview, and `None` on a Linux one, where
+/// nothing on the machine reaches it at all
+/// ([`amenbo_core::config::Paths::command_to_run`]). Asked once at startup for the reason
 /// [`dev_badge`] is: the channel is stamped in at build time.
 ///
-/// The onboarding steps are the surface that needs it. They hand over commands to run, and a dev
-/// window that spells them `amenbo` is naming a CLI that is not installed beside it — the reader
-/// types it and reaches production, or nothing at all.
+/// Every screen that hands over a command to run is the surface that needs it, and each of them has
+/// to be able to say nothing rather than name something — a dev window spelling a command `amenbo`
+/// names a CLI that is not installed beside it, and a preview window naming one at all, where the
+/// build ships none a member can reach, is the same lie one step further on.
 #[tauri::command]
-pub fn cli_command_name() -> &'static str {
-    amenbo_core::config::Paths::command_name()
+pub fn cli_command_name() -> Option<&'static str> {
+    amenbo_core::config::Paths::command_to_run()
 }
 
 /// Open the folder holding this machine's logs in the OS file manager — the one step between "please

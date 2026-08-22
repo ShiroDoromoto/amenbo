@@ -8,6 +8,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CommentRow } from "./CommentRow";
+import { exactLabel } from "../core/i18n";
 
 const hoisted = vi.hoisted(() => ({
   /** The confirm dialog's answers, consumed from the front; once exhausted, everything is an OK. */
@@ -109,5 +110,18 @@ describe("CommentRow remove", () => {
     await flush();
     expect(onRemove).not.toHaveBeenCalled();
     expect(container.querySelector(".errortext")).toBeNull();
+  });
+
+  // The meta line is the only place a comment's time is written, so the exact instant has to be
+  // reachable from it — the CLI prints it outright, and an old comment's wording no longer carries a
+  // date on its own.
+  it("puts the exact instant on the when, for both the posting and the edit", () => {
+    const at = "2026-01-02T03:04:05Z";
+    const editedAt = "2026-03-04T05:06:07Z";
+    render({ at, editedAt });
+    // The avatar carries a title of its own, so the two times are read off the end of the line.
+    const titles = Array.from(container.querySelectorAll<HTMLElement>(".comment__meta span[title]"))
+      .map((el) => el.title);
+    expect(titles.slice(-2)).toEqual([exactLabel(at), exactLabel(editedAt)]);
   });
 });

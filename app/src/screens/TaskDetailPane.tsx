@@ -11,9 +11,9 @@ import { addComment as mutAddComment, editComment as mutEditComment, removeComme
 import { activityRowKey, loadTaskActivity } from "../core/activity";
 import { confirmDialog } from "../core/dialog";
 import {
-  DateField, DueChip, FacetAvatar, PremiseChangedField, PriorityDot, StatusSelect, TaskIdChip,
+  DateField, DueChip, FacetAvatar, PremiseChangedField, PriorityDot, StatusSelect, TaskIdChip, When,
 } from "../components/atoms";
-import { agoLabel, errText, eventText, priorityLabel, t, tf } from "../core/i18n";
+import { errText, eventText, priorityLabel, t, tf } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { useRefNav } from "../core/refNav";
 import type { Actor, ActivityItem, Facet, Placement, Priority, TaskCard } from "../mock/types";
@@ -509,7 +509,7 @@ export function TaskDetailPane({
                       {it.kind === "comment" ? tf("comment.quoted", { text: it.text ?? "" }) : it.event && eventText(it.event, it.target.title)}
                     </div>
                     <div className="feed__meta">
-                      <span>{agoLabel(it.at)}{it.editedAt && <span className="faint"> · {t("comment.edited")} {agoLabel(it.editedAt)}</span>}</span>
+                      <span><When at={it.at} editedAt={it.editedAt} /></span>
                     </div>
                   </div>
                 </div>

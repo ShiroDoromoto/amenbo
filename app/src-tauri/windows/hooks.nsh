@@ -18,18 +18,101 @@
 
 !include "LogicLib.nsh"
 !include "WinMessages.nsh"
-!include "StrFunc.nsh"
 
-; StrFunc requires each used function be declared once, at global scope, before use.
-${StrStr}    ; installer:   substring search (idempotent-append guard)
-${UnStrRep}  ; uninstaller: substring replace (PATH segment removal)
+; ---------------------------------------------------------------------------
+; PATH is a ";"-separated list, so both hooks work on it a *whole segment* at a
+; time. A substring test cannot: $INSTDIR is `%LOCALAPPDATA%\<productName>` and
+; productName is channel-specific, so a theme preview's `…\amenbo (dev 3497)`
+; contains the release build's `…\amenbo` — and any PATH entry can contain
+; another (`…\foo` inside `…\foo\tools`). Measured on Windows 11 with a
+; substring implementation (`AMB-T-3497`): the append silently did nothing
+; because it "found" its own directory inside a longer one, and the removal
+; clipped the *neighbouring* entry it had matched inside, turning it into a
+; path that does not exist — with no error either way.
+;
+; AmenboPathDropSegment rebuilds PATH without one directory, and reports
+; whether it was there. Both hooks need exactly that: the installer to decide
+; whether to append, the uninstaller to take its own entry back out.
+;
+; In:   top of stack = the PATH string, below it = the directory to drop
+; Out:  top of stack = PATH without that segment (every occurrence),
+;       below it = "1" if it was present, "" if not
+; Empty segments are preserved; comparison is case-insensitive (StrCmp), which
+; is what Windows paths want.
+!macro AmenboPathDropSegment UN
+Function ${UN}AmenboPathDropSegment
+  Exch $R0        ; $R0 = PATH
+  Exch
+  Exch $R1        ; $R1 = the directory to drop
+  Push $R2        ; what is left to scan
+  Push $R3        ; the segment cut off its front (and the char being scanned)
+  Push $R4        ; the rebuilt PATH, every kept segment prefixed with ";"
+  Push $R5        ; "1" once our segment has been seen
+  Push $R6        ; scan cursor
+
+  StrCpy $R2 $R0
+  StrCpy $R4 ""
+  StrCpy $R5 ""
+
+  loop:
+    StrCmp $R2 "" done
+    StrCpy $R6 0
+    find:
+      StrCpy $R3 $R2 1 $R6
+      StrCmp $R3 "" last
+      StrCmp $R3 ";" cut
+      IntOp $R6 $R6 + 1
+      Goto find
+    last:                    ; no separator left — the rest is one segment
+      StrCpy $R3 $R2
+      StrCpy $R2 ""
+      Goto have
+    cut:
+      IntCmp $R6 0 empty     ; StrCpy's maxlen 0 means "all of it", not "none"
+      StrCpy $R3 $R2 $R6
+      Goto advance
+    empty:
+      StrCpy $R3 ""
+    advance:
+      IntOp $R6 $R6 + 1
+      StrCpy $R2 $R2 "" $R6
+    have:
+      StrCmp $R3 $R1 0 keep
+      StrCpy $R5 "1"
+      Goto loop
+    keep:
+      StrCpy $R4 "$R4;$R3"
+      Goto loop
+  done:
+  StrCmp $R4 "" +2
+    StrCpy $R4 $R4 "" 1      ; drop the ";" the first kept segment was given
+
+  StrCpy $R0 $R4
+  StrCpy $R1 $R5
+  Pop $R6
+  Pop $R5
+  Pop $R4
+  Pop $R3
+  Pop $R2
+  Exch $R1        ; leave the "was it there" flag
+  Exch
+  Exch $R0        ; leave the rebuilt PATH on top of it
+FunctionEnd
+!macroend
+
+!insertmacro AmenboPathDropSegment ""
+!insertmacro AmenboPathDropSegment "un."
 
 !macro NSIS_HOOK_POSTINSTALL
   DetailPrint "Registering amenbo CLI on PATH…"
   ReadRegStr $0 HKCU "Environment" "Path"
   ; Append $INSTDIR only if absent, so re-installs and in-place updates don't
   ; grow PATH with duplicates.
-  ${StrStr} $1 "$0" "$INSTDIR"
+  Push "$INSTDIR"
+  Push "$0"
+  Call AmenboPathDropSegment
+  Pop $2   ; PATH without our segment — not needed here, only the flag is
+  Pop $1
   ${If} $1 == ""
     ${If} $0 == ""
       StrCpy $0 "$INSTDIR"
@@ -77,15 +160,15 @@ ${UnStrRep}  ; uninstaller: substring replace (PATH segment removal)
 !macro NSIS_HOOK_POSTUNINSTALL
   DetailPrint "Removing amenbo CLI from PATH…"
   ReadRegStr $0 HKCU "Environment" "Path"
-  ; Strip our segment. Handle the sole-entry case exactly (avoids a bare
-  ; mid-string replace that could clip a longer path sharing our prefix);
-  ; otherwise drop the "…;$INSTDIR" / "$INSTDIR;…" forms.
-  ${If} $0 == "$INSTDIR"
-    StrCpy $1 ""
-  ${Else}
-    ${UnStrRep} $1 "$0" ";$INSTDIR" ""
-    ${UnStrRep} $1 "$1" "$INSTDIR;" ""
+  Push "$INSTDIR"
+  Push "$0"
+  Call un.AmenboPathDropSegment
+  Pop $1   ; PATH without our segment
+  Pop $2   ; whether it was there at all
+  ; Only write when we actually had an entry — an install we never registered
+  ; must not have its PATH rewritten on the way out.
+  ${If} $2 != ""
+    WriteRegExpandStr HKCU "Environment" "Path" "$1"
+    SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=5000
   ${EndIf}
-  WriteRegExpandStr HKCU "Environment" "Path" "$1"
-  SendMessage ${HWND_BROADCAST} ${WM_SETTINGCHANGE} 0 "STR:Environment" /TIMEOUT=5000
 !macroend

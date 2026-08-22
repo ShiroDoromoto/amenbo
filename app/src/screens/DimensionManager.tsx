@@ -12,9 +12,9 @@ import { Icon } from "../components/Icon";
 // The management panel for classification (unified dimensions), reached from the board's axis bar as a modal of its
 // own. It exposes renaming a dimension, editing its notes and removing it; renaming and removing its values; the
 // ordered toggle, the toggle that names an axis the time axis (role: time_axis), the toggle that puts an axis on the
-// task card, and, on an ordered dimension, reordering the values. Only on a named time axis do the values grow period
-// fields (start/end date) and a "current" marker — a period is payload of the time-axis role, so no other axis shows
-// dates. Naming one is not forced to be unique: core folds "the current era" to a single answer using the order of the
+// task card, the toggle that makes an axis refuse to be left empty, and, on an ordered dimension, reordering the
+// values. Only on a named time axis do the values grow period fields (start/end date) and a "current" marker — a
+// period is payload of the time-axis role, so no other axis shows dates. Naming one is not forced to be unique: core folds "the current era" to a single answer using the order of the
 // dimensions.
 export function DimensionManager({ projectId, onClose }: { projectId: number; onClose: () => void }) {
   const snap = useSyncExternalStore(subscribe, getSnapshot);
@@ -78,7 +78,7 @@ function DimensionRow({ dim, store }: { dim: DimensionDto; store: ReturnType<typ
           />
           {t("dimmgr.timeAxis")}
         </label>
-        {/* Whether this axis rides on the task card. It sits beside the other two because it is the same
+        {/* Whether this axis rides on the task card. It sits beside the others because it is the same
             kind of thing: an answer the axis carries, so it moves for everyone at once and not just for
             whoever ticked it (`AMB-D-651`). */}
         <label className="dimmgr__ordered" title={t("dimmgr.showOnCardHint")}>
@@ -88,6 +88,22 @@ function DimensionRow({ dim, store }: { dim: DimensionDto; store: ReturnType<typ
             onChange={(e) => store.setDimensionShowOnCard(dim.id, e.target.checked)}
           />
           {t("dimmgr.showOnCard")}
+        </label>
+        {/* Whether this axis refuses to be left empty (`AMB-D-734`). It is the same kind of answer as the
+            three beside it — the axis's own, so it moves for everyone — and it bites in one place: a task
+            carrying no value here cannot finish its creation. An axis offering no values could never be
+            answered, so core refuses to raise it there and the box stays off until a value exists. */}
+        <label
+          className="dimmgr__ordered"
+          title={dim.values.length === 0 ? t("dimmgr.requiredNoValuesHint") : t("dimmgr.requiredHint")}
+        >
+          <input
+            type="checkbox"
+            checked={dim.required}
+            disabled={dim.values.length === 0}
+            onChange={(e) => store.setDimensionRequired(dim.id, e.target.checked)}
+          />
+          {t("dimmgr.required")}
         </label>
         <button className="feed__action dimmgr__danger" onClick={removeDim}>{t("dimmgr.removeDim")}</button>
       </div>

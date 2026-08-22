@@ -946,8 +946,11 @@ button.feed__target:hover { color: var(--c-accent); }
 .dimmgr__empty { margin: 0; }
 .dimmgr__list { display: flex; flex-direction: column; gap: var(--s-3); overflow-y: auto; }
 .dimmgr__dim { border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface-2); padding: var(--s-3) var(--s-4); display: flex; flex-direction: column; gap: var(--s-2); }
-.dimmgr__dimhead { display: flex; align-items: center; gap: var(--s-3); }
-.dimmgr__name { flex: 1; font-weight: var(--fw-bold); background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 2px var(--s-2); color: inherit; }
+/* The head carries the name and every flag the axis holds, so it wraps: the fourth toggle
+   (required) is what took it past one line at this width, and without wrapping the delete
+   button is the item that gets squeezed until its label breaks a character at a time. */
+.dimmgr__dimhead { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); }
+.dimmgr__name { flex: 1; min-width: 12ch; font-weight: var(--fw-bold); background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 2px var(--s-2); color: inherit; }
 .dimmgr__notes { width: 100%; background: transparent; border: 1px solid transparent; border-radius: var(--r-sm); padding: 2px var(--s-2); color: var(--c-text-muted); font-size: var(--fs-sm); }
 .dimmgr__name:hover, .dimmgr__notes:hover, .dimmgr__valname:hover { border-color: var(--c-border); }
 .dimmgr__name:focus, .dimmgr__notes:focus, .dimmgr__valname:focus { border-color: var(--c-accent); background: var(--c-surface); outline: none; }
@@ -973,7 +976,7 @@ button.feed__target:hover { color: var(--c-accent); }
 .dimmgr__open { background: transparent; border: 1px dashed var(--c-border); border-radius: var(--r-sm); padding: 0 var(--s-1); color: var(--c-text-muted); font-size: var(--fs-xs); cursor: pointer; }
 .dimmgr__open:hover { border-color: var(--c-accent); color: var(--c-accent); }
 .dimmgr__current { border-radius: 999px; padding: 0 var(--s-2); background: var(--c-accent); color: #fff; font-size: var(--fs-xs); }
-.dimmgr__danger { color: var(--c-stop); }
+.dimmgr__danger { color: var(--c-stop); white-space: nowrap; }
 .dimmgr__adddim { align-self: flex-start; }
 .dimmgr__ordered { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--c-text-muted); cursor: pointer; white-space: nowrap; }
 .dimmgr__reorder { display: inline-flex; gap: 1px; margin-right: 2px; }

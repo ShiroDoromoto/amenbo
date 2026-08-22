@@ -1,0 +1,267 @@
+# An axis a project cannot be left empty on, and the one place the demand bites. Classification is
+# otherwise entirely optional — a task filed under nothing is a task like any other — so what this
+# raises is the exception: the axis whose answer a project will not do without. The demand lands on
+# the step that ends a creation and nowhere else, which is what keeps raising it from stopping a
+# board that is already full: the work already filed is finished being written, so it never meets
+# the guard. A road that walked only the filing would read the same over a build whose flag does
+# nothing, so this one is written to be turned away three times — on the axis nobody could answer,
+# on the creation that left the answer out, and on the hand that would take the answer back off.
+id: make-an-axis-nobody-can-leave-empty
+title: An axis marked required turns away the creation that left it empty, and lets it end once the value is on
+description: >
+  Raise the demand on an axis offering no values and be refused — a requirement nobody could answer
+  would stop every creation on the project. Raise it on an axis that offers two, file a task without
+  answering it, and watch the creation refused and the task held out of the mailbox. Put a value on
+  and watch the same creation end. Then try to take the value back off and be refused there too,
+  until the demand itself is lowered. The work that was already on the board when the demand went up
+  is read once more at the end, untouched.
+# Two axes and one piece of settled work. The axes are the world rather than the road: filing under
+# one is `classify-work-along-an-axis`'s road, and walking it again here would prove that road twice
+# and this one not at all. `Focus` is left offering nothing on purpose — it is the axis the first
+# refusal is about. And the standing task is finished being written *before* any demand goes up,
+# which is the state the last line reads back: a demand raised over a board changes nothing already
+# on it.
+given:
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: Focus
+
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: Medium
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Medium
+      value: print
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Medium
+      value: web
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO WORLD — work this board already carried
+    as: standing
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: standing
+
+steps_cli:
+  # The demand nobody could satisfy, refused where it would be raised. An axis offering no values has
+  # no answer to give, so a task could never carry one — and the creation it would hold is every
+  # creation on the project.
+  - type: action
+    domain: dimension
+    op: required
+    with:
+      dimension: Focus
+      refused: invalid_dimension_required_without_values
+
+  # The same move on an axis that has answers to give, and it goes through. The two lines together are
+  # what says the guard is about the values and not about the flag.
+  - type: action
+    domain: dimension
+    op: required
+    with:
+      dimension: Medium
+
+  # Raising it over a board changes nothing already on it: the work whose writing was finished before
+  # the demand went up is finished still.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: standing
+      field: draft
+      equals: false
+
+  # Nothing about filing this one says the axis is required — the first stage of a creation asks for
+  # nothing, which is what makes the second stage the place the demand is met.
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — filed with the answer missing
+    as: seed
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: seed
+      refused: invalid_task_required_dimension
+
+  # Turned away leaves the task where it was rather than half-finished: still being written, and so
+  # still out of the one listing a session takes its next work from.
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: draft
+      equals: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo ready:yes"
+      target: seed
+      present: false
+
+  # The answer goes on, and the very same step that was turned away now ends the creation — which is
+  # what says the demand let go rather than never having been there.
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: seed
+      dimension: Medium
+      value: print
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: seed
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: draft
+      equals: false
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "status:todo ready:yes"
+      target: seed
+      present: true
+
+  # And the door does not swing back. A demand met only at the creation would be a demand anyone could
+  # empty a minute later, so taking the value off a required axis is refused as well — the way back to
+  # an empty answer is to lower the demand, not to slip under it.
+  - type: action
+    domain: dimension
+    op: unset
+    with:
+      target: seed
+      dimension: Medium
+      value: print
+      refused: invalid_dimension_required_unset
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:Medium=print"
+      target: seed
+      present: true
+
+  # Lowered, the axis is an ordinary one again and the same hand goes through. The demand is an
+  # attribute and not a one-way gate: what it holds shut, lowering it opens.
+  - type: action
+    domain: dimension
+    op: required
+    with:
+      dimension: Medium
+      required: false
+
+  - type: action
+    domain: dimension
+    op: unset
+    with:
+      target: seed
+      dimension: Medium
+      value: print
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:Medium=print"
+      target: seed
+      present: false
+
+steps_gui:
+  # The screen's half, and it is a different half. A terminal meets the refusals as codes on an exit
+  # status; this face has no code to give back, so what it does instead is hold the controls — the box
+  # that would raise a demand nobody could answer, and the button that would end a creation the demand
+  # is not met on. A held control is a thing only a screen can be asked about, which is why the road
+  # here is the two of them and not the codes again.
+  - type: action
+    domain: dimension
+    op: required
+    with:
+      dimension: Focus
+      refused: invalid_dimension_required_without_values
+
+  - type: action
+    domain: dimension
+    op: required
+    with:
+      dimension: Medium
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO SEED — filed with the answer missing
+    as: seed
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: seed
+      refused: invalid_task_required_dimension
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: draft
+      equals: true
+
+  # Answered from the task's own pane, where the axis's control sits — the same place the held button
+  # names, so a reader turned away by it has nowhere else to go.
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: seed
+      dimension: Medium
+      value: print
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: seed
+
+  - type: assert
+    domain: task
+    op: field
+    with:
+      target: seed
+      field: draft
+      equals: false

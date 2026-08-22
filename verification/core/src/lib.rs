@@ -345,6 +345,12 @@ const REGISTRY: &[OpSpec] = &[
     // card draws follows from the store, so the world a `given:` sets is the world any face opens
     // on. `show: false` lowers it again, for a road that needs the axis off the card.
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "show-on-card", required: &["dimension"], refs: &[], strings: &["dimension"], binds: false },
+    // Whether the axis refuses to be left empty. It is the axis's own answer like the one above it,
+    // and it bites in exactly one place — the step that ends a creation — so a road that raises it
+    // proves it by being turned away there and nowhere else. `required: false` lowers it again, for a
+    // road that needs the demand out of the way. An axis offering no values could never be answered,
+    // so raising it on one is refused, which is a road of its own to walk.
+    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "required", required: &["dimension"], refs: &[], strings: &["dimension"], binds: false },
     // Ordering between two tasks, and the anchor back to the history that carried the work out.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "depend", required: &["target", "on"], refs: &["target", "on"], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "undepend", required: &["target", "on"], refs: &["target", "on"], strings: &[], binds: false },

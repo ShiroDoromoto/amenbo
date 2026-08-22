@@ -209,7 +209,7 @@ fn dimension_marks_and_unmarks_an_axis_for_the_task_card() {
     let (shown, _) = cli.run(&["dimension", "show", "種別"]);
     assert!(shown.contains("show-on-card"), "show says the axis is marked: {shown}");
     let (listed, _) = cli.run(&["dimension", "list", "--project", &pid]);
-    assert!(listed.contains("エリア [single, show-on-card]"), "list says it too: {listed}");
+    assert!(listed.contains("エリア (d1) [single, show-on-card]"), "list says it too: {listed}");
 
     // Lowered again, and nothing else on the axis moved with it.
     let cleared = cli.json(&["dimension", "update", "種別", "--show-on-card", "false", "--json"]);
@@ -244,7 +244,7 @@ fn dimension_demands_an_answer_and_the_creation_is_held_until_it_gets_one() {
     let (shown, _) = cli.run(&["dimension", "show", "プロダクト"]);
     assert!(shown.contains("required"), "show says the axis demands an answer: {shown}");
     let (listed, _) = cli.run(&["dimension", "list", "--project", &pid]);
-    assert!(listed.contains("プロダクト [single, required]"), "list says it too: {listed}");
+    assert!(listed.contains("プロダクト (d1) [single, required]"), "list says it too: {listed}");
 
     // A task filed with the axis blank cannot finish its creation, and the refusal names the axis.
     let t = cli.json(&["task", "add", "--project", &pid, "--title", "分類のないタスク", "--json"]);
@@ -273,6 +273,69 @@ fn dimension_demands_an_answer_and_the_creation_is_held_until_it_gets_one() {
     cli.json(&["dimension", "update", "プロダクト", "--required", "false", "--json"]);
     let (after, _) = cli.run(&["dimension", "show", "プロダクト"]);
     assert!(!after.contains("required"), "and it stops saying so: {after}");
+}
+
+/// The readable key an axis and its values are named by outside Amenbo (`AMB-D-735`): what a row is
+/// born with when nobody names one, what `--slug` puts there instead, where both faces show it, and
+/// that a reference resolves by it — including the one case that says which tier wins, where a slug
+/// spells another axis's name.
+#[test]
+fn a_slug_is_the_readable_key_an_axis_and_its_values_answer_to() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "鍵PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+
+    // Nobody names one, so the key comes off the id — the display name is Japanese and yields nothing.
+    let plain = cli.json(&["dimension", "add", "--project", &pid, "--name", "製品", "--json"]);
+    let plain_id = id_str(&plain["dimension"]["id"]);
+    assert_eq!(plain["dimension"]["slug"], format!("d{plain_id}"));
+
+    // Named at the door instead, on the axis and on a value.
+    let axis = cli.json(&["dimension", "add", "--project", &pid, "--name", "フェーズ", "--slug", "phase", "--json"]);
+    let did = id_str(&axis["dimension"]["id"]);
+    assert_eq!(axis["dimension"]["slug"], "phase");
+    let v = cli.json(&["dimension", "value-add", "phase", "--name", "運用第2期", "--slug", "ops2", "--json"]);
+    let vid = id_str(&v["dimension_value"]["id"]);
+    assert_eq!(v["dimension_value"]["slug"], "ops2");
+    let derived = cli.json(&["dimension", "value-add", "phase", "--name", "運用第3期", "--json"]);
+    assert_eq!(derived["dimension_value"]["slug"], format!("v{}", id_str(&derived["dimension_value"]["id"])));
+
+    // Both faces put the key beside the name, so what a person would type is on the line they read.
+    let (shown, _) = cli.run(&["dimension", "show", "phase"]);
+    assert!(shown.contains("フェーズ (phase)"), "show names the axis by both: {shown}");
+    assert!(shown.contains("運用第2期 (ops2)"), "and its values too: {shown}");
+    let (listed, _) = cli.run(&["dimension", "list", "--project", &pid]);
+    assert!(listed.contains("フェーズ (phase)"), "list names the axis by both: {listed}");
+    assert!(listed.contains("運用第2期 (ops2)"), "and its values too: {listed}");
+
+    // Renaming a key is one field of the same door, and the envelope says which field moved.
+    let renamed = cli.json(&["dimension", "update", "phase", "--slug", "era", "--json"]);
+    assert_eq!(renamed["dimension"]["slug"], "era");
+    assert_eq!(renamed["changed"], serde_json::json!(["slug"]));
+    let value_renamed = cli.json(&["dimension", "value-update", "era", "ops2", "--slug", "ops-2", "--json"]);
+    assert_eq!(value_renamed["dimension_value"]["slug"], "ops-2");
+    assert_eq!(value_renamed["changed"], serde_json::json!(["slug"]));
+
+    // A key the door will not take, and one somebody else already answers to.
+    let (refused, code) = cli.run_err(&["dimension", "update", "era", "--slug", "Bad", "--json"]);
+    assert_ne!(code, 0);
+    let refused: Value = serde_json::from_str(&refused).expect("the refusal is JSON");
+    assert_eq!(refused["error"]["code"], "invalid_dimension_slug_shape");
+    let (taken, code) = cli.run_err(&["dimension", "update", &plain_id, "--slug", "era", "--json"]);
+    assert_ne!(code, 0);
+    let taken: Value = serde_json::from_str(&taken).expect("the refusal is JSON");
+    assert_eq!(taken["error"]["code"], "invalid_dimension_slug_taken");
+
+    // **id → slug → name.** This axis is *named* what the other one's key says, and the key still wins;
+    // the id wins over both.
+    let decoy = cli.json(&["dimension", "add", "--project", &pid, "--name", "era", "--json"]);
+    let decoy_id = id_str(&decoy["dimension"]["id"]);
+    assert_eq!(id_str(&cli.json(&["dimension", "show", "era", "--json"])["dimension"]["id"]), did);
+    assert_eq!(id_str(&cli.json(&["dimension", "show", &decoy_id, "--json"])["dimension"]["id"]), decoy_id);
+    // The same order one axis down: a value named what another value's key says.
+    cli.json(&["dimension", "value-add", "era", "--name", "ops-2", "--json"]);
+    let hit = cli.json(&["dimension", "set", &id_str(&cli.json(&["task", "add", "--title", "T", "--project", &pid, "--json"])["task"]["id"]), "era", "ops-2", "--json"]);
+    assert_eq!(id_str(&hit["task_dimension_value"]["value_id"]), vid);
 }
 
 /// A new task defaults to the era on its project's time axis that **covers today** — automation, not a

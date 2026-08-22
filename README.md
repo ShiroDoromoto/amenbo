@@ -362,7 +362,14 @@ amenbo dimension update Area --show-on-card true
 # door, so raising it never disturbs a task already filed. The axis has to offer a
 # value before it can demand one.
 amenbo dimension update Area --required true
-amenbo dimension list --project "Website refresh" --json   # axes + their values
+# An axis and each of its values also carry a slug: a readable key for naming one
+# outside Amenbo, where a display name may not go and an id says nothing. Lower-case
+# letters, digits and hyphens, starting with a letter. Nobody has to pick one — a row
+# is born with the key its id gives it — and `--slug` is there for the one somebody
+# outside has to type. A reference resolves by id, then slug, then name.
+amenbo dimension update Area --slug area
+amenbo dimension value-add Area --name "Design" --slug design
+amenbo dimension list --project "Website refresh" --json   # axes + their values, keys included
 # Slice tasks by any axis. `dim:` repeats: different axes AND, the same axis twice
 # ORs. `=none` = unassigned on that axis; `time_axis:` is sugar for whichever axis
 # you marked --time-axis.

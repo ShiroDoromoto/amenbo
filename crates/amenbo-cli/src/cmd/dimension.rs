@@ -46,6 +46,16 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
     /// A value's period `[start_on, end_on]` (both ends inclusive) on one human-readable line. An open end
     /// reads `…` at the start and `ongoing` at the finish. With neither end set there is no period at all,
     /// and nothing is shown.
+    /// The name with its readable key beside it — how an axis and a value are shown wherever a person
+    /// reads one, so the key they would type is on the same line as the name they know it by
+    /// (`AMB-D-735`). A row with no key is one an older build wrote and no migration has reached yet;
+    /// it reads as the bare name rather than as an empty pair of brackets.
+    fn named(name: &str, slug: Option<&String>) -> String {
+        match slug {
+            Some(slug) => format!("{name} ({slug})"),
+            None => name.to_string(),
+        }
+    }
     fn period_line(v: &amenbo_core::model::DimensionValue) -> Option<String> {
         let (s, e) = (v.start_on, v.end_on);
         if s.is_none() && e.is_none() {
@@ -79,7 +89,7 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
         (s, e)
     }
     match sub {
-        DimensionCmd::Add { project, name, notes, ordered, time_axis, show_on_card, required } => {
+        DimensionCmd::Add { project, name, notes, ordered, time_axis, show_on_card, required, slug } => {
             let pid = project_or_bound(store, project)?;
             let new = NewDimension {
                 name,
@@ -93,9 +103,9 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
                 // is here because `AMB-D-734` names this door as one of the two: passing it is how the
                 // refusal — which says to add a value first — reaches the person who tried.
                 required,
-                // No `--slug` here yet: the door takes the id-derived default, which is what an axis
-                // keeps until somebody outside has to type its key (`AMB-T-3529`).
-                slug: None,
+                // Omitted leaves the door to derive one from the id, which is what an axis keeps
+                // unless somebody outside has to type its key (`AMB-D-735`).
+                slug,
             };
             let d = store.dimension_add(pid, new).map_err(CliError::from)?;
             write_envelope(flags, "dimension.add", "dimension", serde_json::to_value(&d).unwrap(), None, false, format!("✓ Created dimension: {} ({})", d.name, dimension_label(d.id)));
@@ -114,10 +124,10 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
                 human(flags, format!("{} dimension(s)", dims.len()));
                 for d in &dims {
                     let vals = store.dimension_values(d.id).map_err(CliError::from)?;
-                    human(flags, format!("  {}  {} [{}]  {} value(s)", dimension_label(d.id), d.name, kind_line(d.cardinality, d.ordered, d.role, d.show_on_card, d.required), vals.len()));
+                    human(flags, format!("  {}  {} [{}]  {} value(s)", dimension_label(d.id), named(&d.name, d.slug.as_ref()), kind_line(d.cardinality, d.ordered, d.role, d.show_on_card, d.required), vals.len()));
                     for v in &vals {
                         let period = period_line(v).map(|p| format!("  {p}")).unwrap_or_default();
-                        human(flags, format!("      {}  {}{}", dimension_value_label(v.id), v.name, period));
+                        human(flags, format!("      {}  {}{}", dimension_value_label(v.id), named(&v.name, v.slug.as_ref()), period));
                     }
                 }
             }
@@ -133,7 +143,7 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
             if flags.json {
                 print_json(&json!({ "dimension": serde_json::to_value(&d).unwrap(), "values": serde_json::to_value(&vals).unwrap() }));
             } else {
-                human(flags, format!("{}  {}", dimension_label(d.id), d.name));
+                human(flags, format!("{}  {}", dimension_label(d.id), named(&d.name, d.slug.as_ref())));
                 human(flags, format!("kind: {}", kind_line(d.cardinality, d.ordered, d.role, d.show_on_card, d.required)));
                 if d.notes.trim().is_empty() {
                     human(flags, "notes: (none)");
@@ -143,11 +153,11 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
                 human(flags, format!("{} value(s)", vals.len()));
                 for v in &vals {
                     let period = period_line(v).map(|p| format!("  {p}")).unwrap_or_default();
-                    human(flags, format!("  {}  {}{}", dimension_value_label(v.id), v.name, period));
+                    human(flags, format!("  {}  {}{}", dimension_value_label(v.id), named(&v.name, v.slug.as_ref()), period));
                 }
             }
         }
-        DimensionCmd::Update { id, name, notes, ordered, time_axis, show_on_card, required } => {
+        DimensionCmd::Update { id, name, notes, ordered, time_axis, show_on_card, required, slug } => {
             let did = store.resolve_dimension(None, &id).map_err(CliError::from)?;
             let mut changed = Vec::new();
             if name.is_some() {
@@ -168,9 +178,12 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
             if required.is_some() {
                 changed.push("required".to_string());
             }
+            if slug.is_some() {
+                changed.push("slug".to_string());
+            }
             let role = time_axis
                 .map(|on| if on { DimensionRole::TimeAxis } else { DimensionRole::None });
-            let d = store.dimension_update(did, name.as_deref(), notes.as_deref(), ordered, role, show_on_card, required, None).map_err(CliError::from)?;
+            let d = store.dimension_update(did, name.as_deref(), notes.as_deref(), ordered, role, show_on_card, required, slug.as_deref()).map_err(CliError::from)?;
             write_envelope(flags, "dimension.update", "dimension", serde_json::to_value(&d).unwrap(), Some(changed), false, format!("✓ Updated dimension: {}", dimension_label(d.id)));
         }
         DimensionCmd::Move { id, before, after, top, bottom } => {
@@ -189,7 +202,7 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
             store.dimension_delete(did).map_err(CliError::from)?;
             write_envelope(flags, "dimension.rm", "dimension", json!({ "id": did, "deleted": true }), None, false, format!("✓ Deleted dimension: {}", dimension_label(did)));
         }
-        DimensionCmd::ValueAdd { dimension, name, start, end } => {
+        DimensionCmd::ValueAdd { dimension, name, start, end, slug } => {
             let did = store.resolve_dimension(None, &dimension).map_err(CliError::from)?;
             let start_on = parse_date_opt(&start)?;
             let end_on = parse_date_opt(&end)?;
@@ -198,10 +211,10 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
                 ensure_time_axis(store, did)?;
             }
             let period = dated.then_some((start_on, end_on));
-            let v = store.dimension_value_add(did, &name, None, period).map_err(CliError::from)?;
+            let v = store.dimension_value_add(did, &name, slug.as_deref(), period).map_err(CliError::from)?;
             write_envelope(flags, "dimension.value-add", "dimension_value", serde_json::to_value(&v).unwrap(), None, false, format!("✓ Added value: {} ({})", v.name, dimension_value_label(v.id)));
         }
-        DimensionCmd::ValueUpdate { dimension, value, name, start, end, clear_start, clear_end } => {
+        DimensionCmd::ValueUpdate { dimension, value, name, start, end, clear_start, clear_end, slug } => {
             let did = store.resolve_dimension(None, &dimension).map_err(CliError::from)?;
             let vid = store.resolve_dimension_value(did, &value).map_err(CliError::from)?;
             let start_on = parse_date_opt(&start)?;
@@ -209,6 +222,9 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
             let mut changed = Vec::new();
             if name.is_some() {
                 changed.push("name".to_string());
+            }
+            if slug.is_some() {
+                changed.push("slug".to_string());
             }
             if start.is_some() || clear_start {
                 changed.push("start_on".to_string());
@@ -225,7 +241,7 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
             })?;
             let period = touches_period
                 .then(|| merged_period(&cur, start_on, end_on, clear_start, clear_end));
-            let v = store.dimension_value_update(vid, name.as_deref(), None, period).map_err(CliError::from)?;
+            let v = store.dimension_value_update(vid, name.as_deref(), slug.as_deref(), period).map_err(CliError::from)?;
             write_envelope(flags, "dimension.value-update", "dimension_value", serde_json::to_value(&v).unwrap(), Some(changed), false, format!("✓ Updated value: {}", dimension_value_label(v.id)));
         }
         DimensionCmd::ValueMove { dimension, value, before, after, top, bottom } => {

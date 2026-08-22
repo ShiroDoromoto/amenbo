@@ -113,6 +113,7 @@ export const uk: Translation = {
     "dec.edge.supersedeRevisitConfirm": "Ці рішення спираються на {target} — якщо ви його заміните, перегляньте їх:\n{list}\n\nВсе одно замінити?",
     "dec.edge.searchPh": "Пошук рішення для прив'язки (AMB-D-<n>, заголовок)",
     "dec.edge.noCandidates": "Рішень для прив'язки не лишилося",
+    "dec.recorded": "Записано", "dec.decided": "Ухвалено", "dec.lastChanged": "Остання зміна",
     "dec.notFound": "Рішення не знайдено",
     "dec.unknownName": "(невідомо)",
     "dec.comments": "Обговорення", "dec.reasonPh": "Причина (необов'язково, Markdown)…",

@@ -113,6 +113,7 @@ export const ru: Translation = {
     "dec.edge.supersedeRevisitConfirm": "Эти решения опираются на {target} — пересмотрите их, если замените его:\n{list}\n\nВсё равно заменить?",
     "dec.edge.searchPh": "Поиск решений для связи (AMB-D-<n>, заголовок)",
     "dec.edge.noCandidates": "Больше нечего связывать",
+    "dec.recorded": "Записано", "dec.decided": "Принято", "dec.lastChanged": "Последнее изменение",
     "dec.notFound": "Решение не найдено",
     "dec.unknownName": "(неизвестно)",
     "dec.comments": "Обсуждение", "dec.reasonPh": "Причина (необязательно, Markdown)…",

@@ -124,6 +124,18 @@ export function formatDayTime(at: Date, locale: string = dateLocale()): string {
   }).format(at);
 }
 
+/**
+ * A day and a time with the year — for a timestamp a reader dates rather than places in the week. A
+ * decision record is read years after it was written, and `formatDayTime`'s year-less shape cannot
+ * say which year that was.
+ */
+export function formatStamp(at: Date, locale: string = dateLocale()): string {
+  if (!Number.isFinite(at.getTime())) return "";
+  return dateTimeFormat(locale, {
+    year: "numeric", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
+  }).format(at);
+}
+
 /** The calendar's month heading (month is 0..11, as in `getMonth`). */
 export function monthLabel(year: number, month: number, locale: string = dateLocale()): string {
   return dateTimeFormat(locale, { year: "numeric", month: "long", timeZone: "UTC" })

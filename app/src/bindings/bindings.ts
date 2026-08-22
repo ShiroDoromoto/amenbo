@@ -239,7 +239,12 @@ builtOnBy: Array<DecisionRefDto>, decidedAt: string | null, decidedBy: PlainRefD
 /**
  * Linked tasks (cross-link), carrying status — is the work this decision created still open?
  */
-linkedTasks: Array<LinkedTaskRefDto>, createdAt: string, };
+linkedTasks: Array<LinkedTaskRefDto>, createdAt: string, 
+/**
+ * When it last changed in any way — a body edit and a status transition alike. The pane hides it
+ * where it only repeats `created_at` or `decided_at`, so it reads as "changed since".
+ */
+updatedAt: string, };
 
 /**
  * What `decision_page` returns: the decisions on the page, plus the total count before paging.

@@ -10,7 +10,7 @@ const snap = { language: null as string | null, dateLocale: null as string | nul
 vi.mock("../snapshot", () => ({ getSnapshot: () => snap }));
 
 import {
-  agoLabel, dueLabel, formatDay, formatDayTime, formatNumber, monthLabel, weekdayLabels,
+  agoLabel, dueLabel, formatDay, formatDayTime, formatNumber, formatStamp, monthLabel, weekdayLabels,
 } from "./format";
 import { tf, tn } from "./index";
 import { de } from "./locales/de";
@@ -130,6 +130,13 @@ describe("a date", () => {
     const written = formatDayTime(at, "en-US");
     expect(written).toMatch(/^6\/21, \d{2}:\d{2}/);
     expect(written).not.toContain("2026");
+  });
+
+  // What a decision record is dated by: read years later, it has to say which year.
+  it("carries the year as well when it is a stamp", () => {
+    expect(formatStamp(at, "en-US")).toMatch(/^6\/21\/2026, \d{2}:\d{2}/);
+    expect(formatStamp(at, "ja-JP")).toMatch(/^2026\/6\/21 \d{2}:\d{2}/);
+    expect(formatStamp(new Date("nope"), "en-US")).toBe("");
   });
 });
 

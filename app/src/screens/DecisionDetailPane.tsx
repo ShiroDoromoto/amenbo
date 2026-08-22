@@ -14,7 +14,7 @@ import {
 import { confirmDialog } from "../core/dialog";
 import { isClosed } from "../core/status";
 import { asTyped, isEnterSubmit } from "../core/keys";
-import { errText, formatNumber, statusLabel, t, tf } from "../core/i18n";
+import { errText, formatNumber, formatStamp, statusLabel, t, tf } from "../core/i18n";
 import { decisionRef } from "../core/idref";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
@@ -174,6 +174,8 @@ export function DecisionDetailPane({
           <button className="feed__action" style={{ marginLeft: 6 }} onClick={startEdit}>{t("detail.edit")}</button>
         )}
       </div>
+
+      <DecisionStamps d={d} />
 
       {editing ? (
         <div className="compose" style={{ marginTop: 8, maxWidth: "var(--measure-prose)" }}>
@@ -343,6 +345,33 @@ export function DecisionDetailPane({
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * When this decision was written down, when it was settled, and whether anything has moved since —
+ * the freshness the body cannot say. `decidedAt` is there only once a decision is settled (a reopen
+ * clears it again), and `updatedAt` moves on any write, an accept included, so it is shown only where
+ * it is news: not where it merely repeats the instant the decision was recorded or settled at. The
+ * exact timestamp is on the `title`, the way every other stamp on these screens carries it.
+ */
+function DecisionStamps({ d }: { d: Decision }) {
+  const stamps: { key: string; label: string; at: string }[] = [
+    { key: "recorded", label: t("dec.recorded"), at: d.createdAt },
+  ];
+  if (d.decidedAt) stamps.push({ key: "decided", label: t("dec.decided"), at: d.decidedAt });
+  if (d.updatedAt && d.updatedAt !== d.createdAt && d.updatedAt !== d.decidedAt) {
+    stamps.push({ key: "changed", label: t("dec.lastChanged"), at: d.updatedAt });
+  }
+  return (
+    <div className="faint" style={{ marginTop: 4, fontSize: "var(--fs-xs)" }}>
+      {stamps.map((s, i) => (
+        <span key={s.key} title={s.at}>
+          {i > 0 && " · "}
+          {s.label} {formatStamp(new Date(s.at))}
+        </span>
+      ))}
     </div>
   );
 }

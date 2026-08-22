@@ -110,6 +110,7 @@ export const nl: Translation = {
     "dec.edge.supersedeRevisitConfirm": "Deze besluiten staan op {target} — kijk ze na als je het vervangt:\n{list}\n\nToch vervangen?",
     "dec.edge.searchPh": "Zoek een besluit om te koppelen (AMB-D-<n>, titel)",
     "dec.edge.noCandidates": "Er is geen besluit meer om te koppelen",
+    "dec.recorded": "Vastgelegd", "dec.decided": "Besloten", "dec.lastChanged": "Laatst gewijzigd",
     "dec.notFound": "Besluit niet gevonden",
     "dec.unknownName": "(onbekend)",
     "dec.comments": "Discussie", "dec.reasonPh": "Reden (optioneel, Markdown)…",

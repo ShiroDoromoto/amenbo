@@ -92,6 +92,18 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
             } else {
                 human(flags, format!("{}  {}", detail.r#ref, detail.title));
                 human(flags, format!("status: {}", detail.status.as_str()));
+                // How fresh the record is — the one thing a reader cannot get from the body. `recorded`
+                // is when it was written down, `decided` when it was settled (a proposed decision has no
+                // such moment, and a reopen clears it again). `last changed` moves on any write, an
+                // accept included, so it is said only where it is news: not when it merely repeats the
+                // instant the decision was recorded or settled at.
+                human(flags, format!("recorded: {}", detail.created_at.to_rfc3339_z()));
+                if let Some(at) = detail.decided_at {
+                    human(flags, format!("decided: {}", at.to_rfc3339_z()));
+                }
+                if detail.updated_at != detail.created_at && Some(detail.updated_at) != detail.decided_at {
+                    human(flags, format!("last changed: {}", detail.updated_at.to_rfc3339_z()));
+                }
                 // Each edge kind is a set — one decision may supersede or amend several others — so every
                 // edge gets its own line.
                 for (label, edges) in [

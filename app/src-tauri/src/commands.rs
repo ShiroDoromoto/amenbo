@@ -363,6 +363,7 @@ fn decision_card_from_row(row: amenbo_core::store_engine::read::DecisionCardRow)
             })
             .collect(),
         created_at: Timestamp::parse_rfc3339(&row.created_at).unwrap_or_default().to_rfc3339_z(),
+        updated_at: Timestamp::parse_rfc3339(&row.updated_at).unwrap_or_default().to_rfc3339_z(),
     }
 }
 

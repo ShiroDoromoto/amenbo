@@ -111,6 +111,7 @@ export const zhHant: Translation = {
     "dec.edge.supersedeRevisitConfirm": "以下決策建立在 {target} 之上——取代它之後請重新檢視它們：\n{list}\n\n仍要取代嗎？",
     "dec.edge.searchPh": "搜尋要連結的決策（AMB-D-<n>、標題）",
     "dec.edge.noCandidates": "沒有可連結的決策了",
+    "dec.recorded": "記錄於", "dec.decided": "採納於", "dec.lastChanged": "最後變更",
     "dec.notFound": "找不到該決策",
     "dec.unknownName": "（未知）",
     "dec.comments": "討論", "dec.reasonPh": "理由（選填，Markdown）…",

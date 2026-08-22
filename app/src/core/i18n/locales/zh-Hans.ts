@@ -111,6 +111,7 @@ export const zhHans: Translation = {
     "dec.edge.supersedeRevisitConfirm": "以下决策建立在 {target} 之上——取代它之后请复查它们：\n{list}\n\n仍要取代吗？",
     "dec.edge.searchPh": "搜索要关联的决策（AMB-D-<n>、标题）",
     "dec.edge.noCandidates": "没有可关联的决策了",
+    "dec.recorded": "记录于", "dec.decided": "采纳于", "dec.lastChanged": "最后变更",
     "dec.notFound": "找不到该决策",
     "dec.unknownName": "（未知）",
     "dec.comments": "讨论", "dec.reasonPh": "理由（可选，Markdown）…",

@@ -62,7 +62,7 @@ vi.mock("../core/mutations", () => {
 vi.mock("../components/Attachments", () => ({ Attachments: () => null }));
 
 import { DecisionDetailPane } from "./DecisionDetailPane";
-import { t, tf } from "../core/i18n";
+import { formatStamp, t, tf } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -76,7 +76,8 @@ function decision(id: number, over: Partial<Decision> = {}): Decision {
     id, ref: `D-${id}`, title: `決定${id}`, body: "", status: "proposed",
     project: { id: 1, name: "検証PJ" },
     supersedes: [], supersededBy: [], amends: [], amendedBy: [], buildsOn: [], builtOnBy: [],
-    decidedAt: null, decidedBy: null, linkedTasks: [], createdAt: "2026-07-12T00:00:00Z",
+    decidedAt: null, decidedBy: null, linkedTasks: [],
+    createdAt: "2026-07-12T00:00:00Z", updatedAt: "2026-07-12T00:00:00Z",
     ...over,
   } as Decision;
 }
@@ -138,6 +139,40 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+});
+
+describe("the stamps that say how fresh the record is", () => {
+  const stamps = () => container.querySelector(".faint")?.textContent ?? "";
+
+  it("say when it was recorded, and nothing more while it has not moved since", () => {
+    hoisted.decisions.set(1, decision(1));
+    render(1);
+    expect(stamps()).toContain(t("dec.recorded"));
+    expect(stamps()).toContain(formatStamp(new Date("2026-07-12T00:00:00Z")));
+    expect(stamps()).not.toContain(t("dec.decided"));
+    // Accepting moves `updatedAt` to the instant it was settled at, so a "last changed" beside the
+    // decided stamp would be the same moment said twice.
+    expect(stamps()).not.toContain(t("dec.lastChanged"));
+  });
+
+  it("say when it was settled, and hold back the change the settling itself made", () => {
+    hoisted.decisions.set(1, decision(1, {
+      status: "accepted", decidedAt: "2026-07-15T09:00:00Z", updatedAt: "2026-07-15T09:00:00Z",
+    }));
+    render(1);
+    expect(stamps()).toContain(t("dec.decided"));
+    expect(stamps()).toContain(formatStamp(new Date("2026-07-15T09:00:00Z")));
+    expect(stamps()).not.toContain(t("dec.lastChanged"));
+  });
+
+  it("say when it last changed once something has moved since", () => {
+    hoisted.decisions.set(1, decision(1, {
+      status: "accepted", decidedAt: "2026-07-15T09:00:00Z", updatedAt: "2026-08-01T10:00:00Z",
+    }));
+    render(1);
+    expect(stamps()).toContain(t("dec.lastChanged"));
+    expect(stamps()).toContain(formatStamp(new Date("2026-08-01T10:00:00Z")));
+  });
 });
 
 describe("edge rows (navigation and unlink)", () => {

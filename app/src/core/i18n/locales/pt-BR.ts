@@ -114,6 +114,7 @@ export const ptBR: Translation = {
     "dec.edge.supersedeRevisitConfirm": "Estas decisões se apoiam em {target} — revise-as se substituí-la:\n{list}\n\nSubstituir mesmo assim?",
     "dec.edge.searchPh": "Buscar decisões para vincular (AMB-D-<n>, título)",
     "dec.edge.noCandidates": "Não sobrou nenhuma decisão para vincular",
+    "dec.recorded": "Registrada", "dec.decided": "Decidida", "dec.lastChanged": "Última alteração",
     "dec.notFound": "Decisão não encontrada",
     "dec.unknownName": "(desconhecido)",
     "dec.comments": "Discussão", "dec.reasonPh": "Motivo (opcional, Markdown)…",

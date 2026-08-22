@@ -122,6 +122,7 @@ const ui = {
   "dec.edge.supersedeRevisitConfirm": "These decisions stand on {target} — revisit them if you supersede it:\n{list}\n\nSupersede anyway?",
   "dec.edge.searchPh": "Search decisions to link (AMB-D-<n>, title)",
   "dec.edge.noCandidates": "No decision left to link",
+  "dec.recorded": "Recorded", "dec.decided": "Decided", "dec.lastChanged": "Last changed",
   "dec.notFound": "Decision not found",
   "dec.unknownName": "(unknown)",
   "dec.comments": "Discussion", "dec.reasonPh": "Reason (optional, Markdown)…",

@@ -113,6 +113,7 @@ export const fr: Translation = {
     "dec.edge.supersedeRevisitConfirm": "Ces décisions s'appuient sur {target} — revoyez-les si vous la remplacez :\n{list}\n\nLa remplacer quand même ?",
     "dec.edge.searchPh": "Chercher des décisions à lier (AMB-D-<n>, titre)",
     "dec.edge.noCandidates": "Plus aucune décision à lier",
+    "dec.recorded": "Enregistrée", "dec.decided": "Décidée", "dec.lastChanged": "Dernière modification",
     "dec.notFound": "Décision introuvable",
     "dec.unknownName": "(inconnu)",
     "dec.comments": "Discussion", "dec.reasonPh": "Raison (facultatif, Markdown)…",

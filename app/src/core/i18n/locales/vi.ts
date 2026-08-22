@@ -113,6 +113,7 @@ export const vi: Translation = {
     "dec.edge.supersedeRevisitConfirm": "Những quyết định sau dựa trên {target} — nếu bạn thay thế nó thì hãy xem lại chúng:\n{list}\n\nVẫn thay thế?",
     "dec.edge.searchPh": "Tìm quyết định để nối (AMB-D-<n>, tiêu đề)",
     "dec.edge.noCandidates": "Không còn quyết định nào để nối",
+    "dec.recorded": "Ghi lại", "dec.decided": "Quyết định", "dec.lastChanged": "Thay đổi cuối",
     "dec.notFound": "Không thấy quyết định",
     "dec.unknownName": "(không rõ)",
     "dec.comments": "Thảo luận", "dec.reasonPh": "Lý do (không bắt buộc, Markdown)…",

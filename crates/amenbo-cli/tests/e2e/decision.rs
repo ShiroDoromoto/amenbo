@@ -575,3 +575,47 @@ fn search_narrows_by_side_while_several_words_ask_the_record() {
         "with neither side narrowed off, both records still answer both words"
     );
 }
+
+/// A decision record is read for its conclusion, and judged by its age — so the page dates itself.
+/// `recorded` is always there; `decided` only once it is settled; and `last changed` only where it is
+/// news, since accepting one moves `updated_at` onto the very instant `decided` already names.
+#[test]
+fn a_decision_page_dates_itself() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let pid = cli.a_project();
+    let did = id_str(
+        &cli.json(&["decision", "add", "--project", &pid, "--title", "時刻は UTC で持つ", "--json"])
+            ["decision"]["id"],
+    );
+
+    // Freshly written: when it was recorded, and nothing else — it is neither settled nor changed since.
+    let (human, code) = cli.run(&["decision", "show", &did]);
+    assert_eq!(code, 0);
+    let created = cli.json(&["decision", "show", &did, "--json"])["created_at"].as_str().unwrap().to_string();
+    assert!(human.contains(&format!("recorded: {created}")), "the page says when it was written: {human}");
+    assert!(!human.contains("decided:"), "nothing was settled yet: {human}");
+    assert!(!human.contains("last changed:"), "nothing moved since it was written: {human}");
+
+    // Past the second `created_at` was stamped in, so an edit is unambiguously later than the writing.
+    std::thread::sleep(std::time::Duration::from_millis(2000));
+
+    // Edited while still under discussion: what moved is said, and there is still nothing settled.
+    cli.json(&["decision", "edit", &did, "--body", "UTC で持ち、表示だけ現地時刻にする", "--json"]);
+    let (human, _) = cli.run(&["decision", "show", &did]);
+    let updated = cli.json(&["decision", "show", &did, "--json"])["updated_at"].as_str().unwrap().to_string();
+    assert_ne!(updated, created, "the edit moved the clock");
+    assert!(human.contains(&format!("last changed: {updated}")), "the edit is dated: {human}");
+    assert!(!human.contains("decided:"), "an edit settles nothing: {human}");
+
+    // Settled: the decided stamp arrives, and the change the settling itself made is held back rather
+    // than printed as a second line naming the same instant.
+    cli.json(&["decision", "accept", &did, "--json"]);
+    let (human, _) = cli.run(&["decision", "show", &did]);
+    let shown = cli.json(&["decision", "show", &did, "--json"]);
+    let decided = shown["decided_at"].as_str().unwrap().to_string();
+    assert_eq!(shown["updated_at"].as_str(), Some(decided.as_str()), "accepting moves both stamps together");
+    assert!(human.contains(&format!("decided: {decided}")), "the ruling is dated: {human}");
+    assert!(!human.contains("last changed:"), "the settling is not said twice: {human}");
+    assert!(human.contains(&format!("recorded: {created}")), "the writing is still dated: {human}");
+}

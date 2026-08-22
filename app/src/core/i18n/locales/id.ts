@@ -113,6 +113,7 @@ export const id: Translation = {
     "dec.edge.supersedeRevisitConfirm": "Keputusan-keputusan ini berdiri di atas {target} — tinjau ulang jika Anda menggantikannya:\n{list}\n\nTetap gantikan?",
     "dec.edge.searchPh": "Cari keputusan untuk ditautkan (AMB-D-<n>, judul)",
     "dec.edge.noCandidates": "Tidak ada lagi keputusan untuk ditautkan",
+    "dec.recorded": "Dicatat", "dec.decided": "Diputuskan", "dec.lastChanged": "Terakhir diubah",
     "dec.notFound": "Keputusan tidak ditemukan",
     "dec.unknownName": "(tidak diketahui)",
     "dec.comments": "Diskusi", "dec.reasonPh": "Alasan (opsional, Markdown)…",

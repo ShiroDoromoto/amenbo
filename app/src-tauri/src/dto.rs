@@ -49,7 +49,9 @@ pub struct DimensionValueDto {
 /// One unified dimension (classification axis), values included, so the GUI's dimension editor and
 /// assignment selects render from real data. `role` is `none` or `time_axis` (phase); `ordered`
 /// says whether the values have an order; `showOnCard` says whether a task's value on this axis
-/// belongs on its card (`AMB-D-651`) — the axis's own answer, so it reads the same on every device.
+/// belongs on its card (`AMB-D-651`) — the axis's own answer, so it reads the same on every device;
+/// `required` says the axis refuses to be left empty (`AMB-D-734`), which the detail pane reads to
+/// hold "finish creating" back rather than letting the write be refused at the door.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -62,6 +64,7 @@ pub struct DimensionDto {
     pub(crate) role: String,
     pub(crate) ordered: bool,
     pub(crate) show_on_card: bool,
+    pub(crate) required: bool,
     pub(crate) values: Vec<DimensionValueDto>,
 }
 

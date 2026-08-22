@@ -1601,6 +1601,18 @@ export async function setDimensionShowOnCard(id: number, showOnCard: boolean): P
   return invokeAck("dimension_update", { id, showOnCard });
 }
 
+/**
+ * Make this dimension refuse to be left empty, or let it be left empty again (`AMB-D-734`). It bites at
+ * one point only — a task cannot finish its creation while it carries no value here — so raising it
+ * leaves every task already through that door alone. Core refuses to raise it on an axis that offers no
+ * values, since nobody could answer it; the panel keeps the box off in that case, and the refusal is the
+ * backstop.
+ */
+export async function setDimensionRequired(id: number, required: boolean): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("dimension_update", { id, required });
+}
+
 /** Delete a dimension; its values and the task assignments to them go with it. */
 export async function removeDimension(id: number): Promise<void> {
   if (!inTauri()) return;

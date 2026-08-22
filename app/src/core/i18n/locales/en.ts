@@ -153,6 +153,9 @@ const ui = {
   "dimmgr.timeAxisHint": "Make this category the project's time axis: its values carry periods, and the one covering today is marked current",
   "dimmgr.showOnCard": "Show on card",
   "dimmgr.showOnCardHint": "Put this category on the task card. The category carries the answer, so it changes for everyone — not just on this device",
+  "dimmgr.required": "Required",
+  "dimmgr.requiredHint": "Hold a task's creation until this category is answered. Tasks already created stay as they are",
+  "dimmgr.requiredNoValuesHint": "Add a value first — a category with no values could never be answered",
   "dimmgr.moveUp": "Move up", "dimmgr.moveDown": "Move down",
   "dimmgr.periodStart": "Start date", "dimmgr.periodEnd": "End date",
   "dimmgr.periodStartOpen": "No start date", "dimmgr.periodEndOpen": "Ongoing",
@@ -181,6 +184,7 @@ const ui = {
   // The fourth premise, and the move that ends it. Never "publish" or "approve": the one who created the
   // task is the one who ends the creation, and there is nobody to ask (`AMB-D-558`).
   "detail.draft": "Creation", "detail.finishCreating": "Finish creating",
+  "detail.finishCreatingBlocked": "Fill in {names} first",
   "detail.linkedDecisions": "Motivated by",
   "detail.premiseUnsettled": "premise not settled — wait for the ruling or unlink it (cannot reserve)",
   "detail.priority": "Priority", "detail.priorityNone": "None",

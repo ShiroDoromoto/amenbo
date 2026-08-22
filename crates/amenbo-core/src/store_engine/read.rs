@@ -3794,7 +3794,9 @@ pub struct DimensionValueRow {
 /// One dimension (classification axis) of a project overview: id/name/notes plus its live values (in
 /// `order_key` order) and the flags the GUI needs to render/operate it. `role` is the snake_case wire
 /// text (`none`/`time_axis`); `ordered` says whether its values carry an order; `show_on_card` says
-/// whether a task's value on this axis belongs on its card (`AMB-D-651`).
+/// whether a task's value on this axis belongs on its card (`AMB-D-651`); `required` says whether it
+/// refuses to be left empty (`AMB-D-734`), which is what lets the GUI hold the button that ends a
+/// creation instead of letting the write fail at the door.
 pub struct DimensionRow {
     pub id: i64,
     pub name: String,
@@ -3802,6 +3804,7 @@ pub struct DimensionRow {
     pub role: String,
     pub ordered: bool,
     pub show_on_card: bool,
+    pub required: bool,
     pub values: Vec<DimensionValueRow>,
 }
 
@@ -3898,7 +3901,7 @@ fn overview_dimensions(
     let mut sel = Select::new();
     let (project_id, id, name) = (sel.col(D.project_id), sel.col(D.id), sel.col(D.name));
     let (notes, role, ordered) = (sel.col(D.notes), sel.col(D.role), sel.col(D.ordered));
-    let show_on_card = sel.col(D.show_on_card);
+    let (show_on_card, required) = (sel.col(D.show_on_card), sel.col(D.required));
     // The project is joined to keep a dimension whose project is gone out of the overview, not for a
     // column of its own — so it is named here and nowhere else.
     let mut sql = Sql::from(&sel, D.table);
@@ -3917,6 +3920,7 @@ fn overview_dimensions(
                     role: role.get(r)?,
                     ordered: ordered.get(r)?,
                     show_on_card: show_on_card.get(r)?,
+                    required: required.get(r)?,
                     values: Vec::new(),
                 },
             ))

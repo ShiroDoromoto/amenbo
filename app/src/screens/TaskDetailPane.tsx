@@ -131,6 +131,10 @@ export function TaskDetailPane({
 
   const notesProjectId = placementOf(task)?.project.id ?? task.projectId ?? null;
   const axisProject = notesProjectId ? getSnapshot().projects.find((p) => p.id === notesProjectId) : undefined;
+  // The axes this project refuses to be left empty on, that this task still carries no value on
+  // (`AMB-D-734`). Core reads the same premise when a creation is finished; reading it here too is what
+  // lets the pane hold the button and name what is missing, instead of the click coming back refused.
+  const unmetRequired = (axisProject?.dimensions ?? []).filter((d) => d.required && !dimValues[d.id]);
 
   const startEditNotes = () => { setNotesDraft(task.notes ?? ""); setEditingNotes(true); };
 
@@ -343,9 +347,21 @@ export function TaskDetailPane({
               <span className="detail__flabel">{t("detail.draft")}</span>
               <span title={t("block.draft")}>
                 <Icon name="pencil" /> {t("chip.draft")}
-                <button className="btn" style={{ marginLeft: 6 }} onClick={() => store.finishCreating(taskId)}>
+                <button
+                  className="btn"
+                  style={{ marginLeft: 6 }}
+                  disabled={unmetRequired.length > 0}
+                  onClick={() => store.finishCreating(taskId)}
+                >
                   {t("detail.finishCreating")}
                 </button>
+                {/* Why the button is held, written out rather than left to a tooltip: the axes to fill in
+                    are right above in this same pane, so naming them is the whole instruction. */}
+                {unmetRequired.length > 0 && (
+                  <span className="faint" style={{ marginLeft: 6 }}>
+                    {tf("detail.finishCreatingBlocked", { names: unmetRequired.map((d) => d.name).join(", ") })}
+                  </span>
+                )}
               </span>
             </div>
           )}

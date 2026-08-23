@@ -27,6 +27,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::io::{Read, Write};
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 use base64::Engine as _;
@@ -85,6 +86,11 @@ pub struct Terminals(Mutex<HashMap<String, Terminal>>);
 /// again, which is what lets that thread run without contending for the registry's lock on every
 /// chunk it reads.
 pub struct Terminal {
+    /// The folder this terminal was opened in, as the filesystem spells it. It is kept because it is
+    /// also the fence [`crate::fileproto`] reads a file inside — so what the person can see in the
+    /// pane and what they can be shown the contents of are one answer, settled when the pane opened
+    /// and not re-derived per request. A terminal opened without one can be read nothing at all.
+    folder: Option<PathBuf>,
     /// The master side, kept for one purpose: telling the terminal how large the pane is.
     master: Box<dyn MasterPty + Send>,
     /// The keystrokes side. Writing to the master is what a key press is.
@@ -133,9 +139,11 @@ fn gone(session: &str) -> CmdError {
 
 /// Open a terminal, start the user's login shell in it, and return the id of the session it is.
 ///
-/// `cwd` is the folder the shell starts in; with none given it starts in the user's home. `cols`
-/// and `rows` are the pane's size in characters, which the emulator on the far side measures from
-/// the space it has.
+/// `cwd` is the folder the shell starts in; with none given it starts in the user's home. It is
+/// resolved on the filesystem before anything is started, both because a folder that is not there is
+/// worth saying so about rather than failing inside `spawn`, and because the resolved form is what
+/// [`crate::fileproto`] measures a file against. `cols` and `rows` are the pane's size in characters,
+/// which the emulator on the far side measures from the space it has.
 ///
 /// What is started is the user's own shell, reached for the way [`crate::launch`] reaches for it on
 /// this operating system. Which agent to start inside it is settled on top of this rather than here.
@@ -156,7 +164,11 @@ pub fn pty_open(
     };
     let pair = native_pty_system().openpty(size).map_err(failed)?;
 
-    let mut cmd = launch::command(cwd, None);
+    let folder = cwd
+        .map(|dir| std::fs::canonicalize(dir).map_err(failed))
+        .transpose()?;
+
+    let mut cmd = launch::command(folder.clone(), None);
     cmd.env(SESSION_ENV, &session);
 
     let mut child = pair.slave.spawn_command(cmd).map_err(failed)?;
@@ -172,6 +184,7 @@ pub fn pty_open(
     terminals.0.lock().expect("terminals lock").insert(
         session.clone(),
         Terminal {
+            folder,
             master: pair.master,
             writer,
             killer,
@@ -297,6 +310,23 @@ impl CursorQuery {
         }
         (Cow::Owned(out), asked)
     }
+}
+
+/// The folder a session was opened in, if it is still open and was given one.
+///
+/// This is what [`crate::fileproto`] fences a request with, and the answer being `None` is the whole
+/// of the refusal: a session that has closed, an id that never named one, and a pane opened without a
+/// folder are all the same "nothing is reachable through this". The registry entry is dropped when the
+/// program in the terminal exits, so a folder stops being readable at the moment the pane showing it
+/// stops being live.
+pub fn folder(app: &tauri::AppHandle, session: &str) -> Option<PathBuf> {
+    app.state::<Terminals>()
+        .0
+        .lock()
+        .expect("terminals lock")
+        .get(session)?
+        .folder
+        .clone()
 }
 
 /// Send what was typed into the pane to the terminal. `data` is the text the emulator produced for

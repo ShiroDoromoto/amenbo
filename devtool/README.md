@@ -7,7 +7,8 @@ On macOS it gives a task its own throwaway **dev GUI** — bundle, app-data and
 all — so several implementation sessions can run in parallel without installing
 over each other, and it stands up a **fake outside world** the dev GUI can be
 verified against — including the failures the real one will not produce on
-demand.
+demand. It also raises the throwaway **macOS VM** that GUI is driven in, so
+verification takes a screen that is not the one being worked on.
 
 ## Build
 
@@ -420,6 +421,104 @@ checkout to look at afterwards — is the plugin author's, who is the only one w
 knows what "it worked" means. The queues are emptied with `amenbo plugin flush`,
 asked again while any queue is still held by a runner a write started, and a
 window that closes with something still waiting is reported as that.
+
+### `devtool vm up | rm | status`
+
+Raises the throwaway macOS VM the GUI is verified in, and throws it away.
+
+```sh
+devtool vm up          # prints the address on stdout
+# 192.168.64.4
+```
+
+Driving a screen means posting `CGEvent`s to `cghidEventTap`, which takes the
+keyboard and the mouse of whatever Mac it runs on for as long as it runs. The way
+out is a second screen, and a guest of the same arch and OS generation is one the
+existing tools work inside unchanged.
+
+- **The golden image is never started.** `up` cuts a clone from it (0.03s, no
+  disk of its own until it is written to) and starts that. A golden that has been
+  booted has picked up state and stopped being a known ground.
+- **A clone already running is used as it stands.** A test does not raise a second
+  VM, and it does not throw away the one a session has been working in.
+- **`rm` is the only thing that throws it away**, and nothing here decides on its
+  own that a session is over.
+- The VM is started `--no-graphics`: no window on the host, and a virtual display
+  in the guest all the same. `system_profiler SPDisplaysDataType` answers empty in
+  there and the display is nonetheless real — do not read that answer as "no
+  screen".
+- **`up` waits for a GUI session, not for a ping.** `/dev/console` owned by the
+  account is what says there is a screen to draw on; without one the screen tools
+  fail in the shape that is hardest to read — exit 0, nothing delivered. Measured:
+  address at ~7s, ssh at ~10s, console at ~11s.
+- `tart run` is detached into its own process group, so a Ctrl-C on devtool does
+  not take the VM with it. Its output goes to
+  `$TMPDIR/amenbo-vm-amenbo-vm.log`, which is where a VM that failed to boot says
+  so.
+- `status` reports the golden, the clone and its address.
+
+### `devtool vm exec -- <command…>` / `devtool vm push <local…> <remote>`
+
+Reach into the running clone. `exec` runs a command in there with this process's
+own stdio and **ends the way it ended**, so a step that failed in the guest does
+not read as green out here; `push` sends files, recursively, since what is
+usually sent is a `.app`.
+
+```sh
+devtool vm exec -- 'stat -f %Su /dev/console'
+devtool vm push "/Applications/amenbo (dev 3578).app" /Users/admin/
+```
+
+Arguments to `exec` go after `--`, and quoting is the caller's the same way it is
+with `ssh` — what follows is joined and handed to the guest's shell.
+
+The host key is deliberately **neither checked nor remembered**: a clone is cut
+fresh from the golden and carries a new one each time, so a pinned entry would
+refuse the next clone rather than catch anything. What is reached is a VM on this
+machine's own private network, raised from an image on this machine's own disk.
+
+### `devtool vm screen`
+
+Compiles this checkout's `scripts/screen.swift` on the host, puts the binary in
+the guest at `/Users/admin/screen`, and prints that path on stdout.
+
+Compiled and sent rather than baked into the golden: the golden then holds no copy
+of a tool this tree keeps changing (12s to build cold, 0.09s to send — measured),
+the guest needs no Swift toolchain, and the golden can be replaced without
+anything having to be re-baked into it.
+
+**`click`/`click-named` in there still want a `front` first.** The tool does not
+call it, and a VM's bare desktop has a Terminal on it that a click is otherwise
+taken by — exit 0, nothing delivered.
+
+### `devtool vm golden [--refresh]`
+
+Reports on the image clones are cut from — is the base pulled, is the golden
+there, is the key where it is looked for — and with `--refresh` takes the base
+again (`tart pull`) and cuts the golden from it anew.
+
+The base is a third party's (`ghcr.io/cirruslabs/macos-tahoe-base`): SIP disabled,
+TCC granted to `/usr/libexec/sshd-keygen-wrapper`, Gatekeeper off — none of which
+we set, and all of which the screen tools need. Its contents are not inspected.
+Only the way the golden is made would change to move off it.
+
+- **The clone is checked before the pull.** The pull is the expensive half, and
+  refusing afterwards would have spent it for nothing.
+- **Enrolling the key is left to a person, and named rather than done.** It takes
+  the image's password, which is a credential to type. `--refresh` prints the
+  `ssh-copy-id` line to run and says to stop the golden again afterwards.
+
+### Host and guest drifting apart
+
+Every command that reaches the clone compares `sw_vers -productVersion` on both
+sides and says when they have drifted, on major and minor. **Nothing is stopped
+over it**: what the guest is for is standing in for this machine,
+and a guest several releases away stops standing in for it — but what it costs to
+be wrong about that is a rebuilt golden.
+
+The patch is left out on purpose. A guest one security update behind is the
+ordinary state of an image republished weekly, and reporting it every single run
+is how a warning stops being read.
 
 ## Env
 

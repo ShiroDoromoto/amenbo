@@ -51,6 +51,8 @@ func main() {
 		fixturesCmd(args[1:])
 	case "plugin":
 		pluginCmd(args[1:])
+	case "vm":
+		vmCmd(args[1:])
 	case "help", "-h", "--help":
 		usage()
 	default:
@@ -73,6 +75,11 @@ Usage:
   devtool fixtures refresh [--catalog <url|path>] [--repo owner/name]
   devtool fixtures gui     [--fail <face>=<status|timeout>] [--port n] [--app path] [--no-launch]
   devtool plugin round     --manifest <path.json> [--program path] [--set k=v] [--events list] [--keep]
+  devtool vm up | rm | status
+  devtool vm exec          -- <command…>
+  devtool vm push          <local…> <remote>
+  devtool vm screen
+  devtool vm golden        [--refresh]
 
 devgui seed  clone the shared dev store into the app-data of the task's own
              throwaway dev GUI, so the instance opens on the setup grown in the
@@ -126,7 +133,18 @@ plugin round run one plugin through one lap of a store that is thrown away
              Nothing is asserted — the receiving side (a webhook to stand in for,
              a checkout to look at) is the plugin author's. Without --program it
              installs devtool's stand-in, which records the documents it is
-             handed, so a payload can be read without writing a plugin for it.`)
+             handed, so a payload can be read without writing a plugin for it.
+vm           the throwaway macOS VM the GUI is verified in. Driving a screen
+             takes the keyboard and mouse of whatever Mac it runs on, so the
+             screen is moved into a guest of the same arch and OS generation and
+             the host's stays free. 'up' raises a clone of the golden (using the
+             one already running if there is one) and prints its address; 'rm'
+             throws it away — nothing here decides on its own that a session is
+             over. 'exec' and 'push' reach in, 'screen' compiles this tree's
+             screen tool on the host and puts the binary in there, and 'golden'
+             reports on the image clones are cut from, or takes it again with
+             --refresh. Host and guest macOS versions are compared whenever the
+             clone is reached; a drift is said and never stopped over.`)
 }
 
 // parseAroundID parses `fs` over args in which the task id may sit on either side of

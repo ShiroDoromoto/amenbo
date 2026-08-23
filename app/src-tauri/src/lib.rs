@@ -11,6 +11,10 @@ mod commands;
 mod diag;
 mod dto;
 mod error;
+/// What a terminal is started as on each operating system — the shell the user signed in with, and
+/// what a terminal owes the program in it. Detecting a tool and starting it go through here
+/// together, so a probe cannot find what the pane could not have started (`AMB-D-747`).
+mod launch;
 #[cfg(target_os = "macos")]
 mod macos_notify;
 mod menu;

@@ -483,6 +483,10 @@ export const vi: Translation = {
     "talk.retry": "Tìm lại",
     "talk.open": "Mở",
     "talk.agent": "Tác nhân",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "Đang trao đổi", "talk.holding": "{n} việc",
+    "talk.finished": "xong {n}", "talk.premiseBroken": "Một tiền đề đã không còn đúng",
     "face.switch": "Cửa sổ này đang hiển thị gì",
     "face.tasks": "Công việc",
     "face.terminal": "Terminal",

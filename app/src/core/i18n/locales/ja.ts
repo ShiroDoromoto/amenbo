@@ -492,6 +492,10 @@ export const ja: Translation = {
     "talk.retry": "もう一度さがす",
     "talk.open": "開く",
     "talk.agent": "エージェント",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "相談中", "talk.holding": "{n}件",
+    "talk.finished": "済 {n}件", "talk.premiseBroken": "前提が崩れています",
     "face.switch": "この窓が出す面",
     "face.tasks": "タスク",
     "face.terminal": "ターミナル",

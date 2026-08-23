@@ -501,6 +501,10 @@ export const fr: Translation = {
     "talk.retry": "Rechercher à nouveau",
     "talk.open": "Ouvrir",
     "talk.agent": "Agent",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "En conversation", "talk.holding": "{n} tâches",
+    "talk.finished": "{n} terminées", "talk.premiseBroken": "Une prémisse ne tient plus",
     "face.switch": "Ce que montre cette fenêtre",
     "face.tasks": "Tâches",
     "face.terminal": "Terminal",

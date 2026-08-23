@@ -480,6 +480,10 @@ export const zhHans: Translation = {
     "talk.retry": "再找一次",
     "talk.open": "打开",
     "talk.agent": "智能体",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "商议中", "talk.holding": "{n} 项",
+    "talk.finished": "已完成 {n} 项", "talk.premiseBroken": "有一个前提不成立了",
     "face.switch": "此窗口显示的界面",
     "face.tasks": "任务",
     "face.terminal": "终端",

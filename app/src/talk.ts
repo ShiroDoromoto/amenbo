@@ -12,8 +12,8 @@
 // hands it over the same way. Neither end restarts anything — a pane is a drawing of a session, not
 // the session (`./talk/terminal`).
 //
-// **What is happening now is held here and nowhere else.** The window keeps what it knows about the
-// sessions running in its panes (`./talk/sessions`) for as long as they run, because a session has no
+// **What is happening now is held above the pane and nowhere else.** The label there keeps what it
+// knows about the session in it (`./talk/plate`) for as long as it runs, because a session has no
 // existence outside the terminal it runs in (`AMB-D-749`). What is kept between runs is what the panes
 // are called (`./talk/frames`), which belongs to the frame rather than to the process in it.
 //
@@ -33,16 +33,12 @@ import { initTheme } from "./core/theme";
 import { mountAgentFrame } from "./talk/agent";
 import { elevationBand } from "./talk/elevation";
 import { frameNames, nameFrame, ONLY_FRAME, type FrameNames, type NamedBy } from "./talk/frames";
-import { closed, NO_SESSIONS, opened, said, type Sessions } from "./talk/sessions";
+import { mountPlate } from "./talk/plate";
 import "./styles/tokens.css";
 import "./styles/global.css";
 import "./styles/talk.css";
 
 initTheme();
-
-// The sessions running in this window's panes. Nothing here is written down: it is gone when the
-// window is, which is exactly as long as the processes it describes.
-let sessions: Sessions = NO_SESSIONS;
 
 // What the panes are called, as this device has them. Read once at the start, and again from whatever
 // a naming answers with — the answer is the whole set, because a naming can be refused.
@@ -95,6 +91,7 @@ function mergeButton(): HTMLElement {
 void frameNames()
   .then((known) => {
     names = known;
+    plate?.named(known);
     retitle();
   })
   .catch(() => {});
@@ -105,40 +102,56 @@ function name(text: string, by: NamedBy): void {
   void nameFrame(ONLY_FRAME, text, by)
     .then((known) => {
       names = known;
+      plate?.named(known);
       retitle();
     })
     .catch(() => {});
 }
 
-// The frame, and the pane inside it. It waits on the language because everything the frame says
-// before a terminal is running — the offer, the notice, the row on a closed pane — is a sentence out
-// of the dictionary, and drawing it in English first would be a flicker of the wrong language rather
-// than a pane arriving sooner.
+// The label above the pane, once there is a pane to put it above.
+let plate: ReturnType<typeof mountPlate> | null = null;
+
+// The pane. A terminal is a live process, so a failure to start one is not a thing to swallow — the
+// window would come up empty and say nothing about why. What the host refused with goes on the page
+// instead, in the only place there is to put it.
 const root = document.getElementById("root");
 if (root) {
   root.className = "talk";
+  const label = document.createElement("div");
   const face = document.createElement("div");
   face.className = "talk__face";
-  root.append(mergeButton(), face);
-  void language.then((lang) =>
+  root.append(mergeButton(), label, face);
+  // The language is not known yet, and the label is drawn before it answers. What it is drawn in until
+  // then is English, the way the title bar and the merge button are: a window that waited would come up
+  // with a blank line above the pane for as long as the wait.
+  let lang: Lang = normalizeLang(null);
+  void language.then((answered) => {
+    lang = answered;
+  });
+  plate = mountPlate(label, () => lang);
+  // The frame does wait on the language, unlike the label: everything it says before a terminal is
+  // running — the offer, the install notice, the row on a closed pane — is a whole sentence, and one
+  // drawn in English first would be a flicker of the wrong language rather than a pane arriving
+  // sooner.
+  void language.then((answered) =>
     mountAgentFrame(
       face,
-      lang,
+      answered,
       {
         opened: (session, startedAt) => {
-          sessions = opened(sessions, { session, startedAt });
+          plate?.opened(session, startedAt);
         },
         said: (statement) => {
-          sessions = said(sessions, statement);
+          plate?.said(statement);
         },
         closed: (session) => {
-          sessions = closed(sessions, session);
+          plate?.closed(session);
           // What is on the screen stays as it was — that is what a terminal ends with — and this is
           // the part of it the screen cannot show for itself: a finished shell looks exactly like one
           // waiting to be typed at.
           const note = document.createElement("div");
           note.className = "talk__note";
-          note.textContent = t("face.ended", lang);
+          note.textContent = t("face.ended", answered);
           face.after(note);
         },
         name,

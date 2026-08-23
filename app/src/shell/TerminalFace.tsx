@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { mountAgentFrame } from "../talk/agent";
 import { nameFrame, ONLY_FRAME } from "../talk/frames";
-import { closed, NO_SESSIONS, opened, said, type Sessions } from "../talk/sessions";
+import { mountPlate } from "../talk/plate";
 import { currentLang, t } from "../core/i18n";
 
 /**
@@ -17,8 +17,8 @@ import { currentLang, t } from "../core/i18n";
  * rebuilds the interface — this does come down, and the session does not: the pane detaches, and
  * whatever draws next adopts what is still running (`app/src/talk/terminal.ts`).
  *
- * What runs in the pane is not settled here. The frame put up inside it asks the host which agent
- * this folder starts with, and draws the offer or the install notice where that has no single answer
+ * What runs in the pane is not settled here. The frame put up inside it asks the host which agent this
+ * folder starts with, and draws the offer or the install notice where that has no single answer
  * (`app/src/talk/agent.ts`) — which is also where a refusal to start one is shown, so nothing here
  * holds a failure of its own.
  *
@@ -27,37 +27,36 @@ import { currentLang, t } from "../core/i18n";
  */
 export function TerminalFace({ onSplitOut, note }: { onSplitOut: () => void; note: string | null }) {
   const paneRef = useRef<HTMLDivElement>(null);
-  // What is running in the pane. It is held for as long as the pane is, the way the talk window holds
-  // its own (`app/src/talk/sessions.ts`) — a session has no existence outside the terminal it runs in,
-  // so what knows about one is whatever is drawing it.
-  const sessions = useRef<Sessions>(NO_SESSIONS);
-  // What the pane has to say for itself when it is not simply a terminal: the host's refusal if one
-  // could not be started, and the fact of the program having exited, which the screen cannot show on
-  // its own — what a finished shell leaves behind looks exactly like one waiting to be typed at.
+  const labelRef = useRef<HTMLDivElement>(null);
+  // The fact of the program having exited, which the screen cannot show on its own — what a finished
+  // shell leaves behind looks exactly like one waiting to be typed at.
   const [ended, setEnded] = useState(false);
 
   useEffect(() => {
     const host = paneRef.current;
-    if (!host) return;
+    const label = labelRef.current;
+    if (!host || !label) return;
     let taken = false;
     let detach: (() => void) | null = null;
     setEnded(false);
+    // The line above the pane. It holds what is known about the session running there for as long as
+    // it runs, which is the same line the split-out window draws (`app/src/talk/plate.ts`).
+    const plate = mountPlate(label);
     void mountAgentFrame(host, currentLang(), {
       opened: (session, startedAt) => {
-        sessions.current = opened(sessions.current, { session, startedAt });
+        plate.opened(session, startedAt);
       },
       said: (statement) => {
-        sessions.current = said(sessions.current, statement);
+        plate.said(statement);
       },
       closed: (session) => {
-        sessions.current = closed(sessions.current, session);
+        plate.closed(session);
         setEnded(true);
       },
-      // The name is offered to the store and nothing here draws it: this window is the board, and
-      // what it is called is not the pane's to say. What does draw it is the pane's own frame, once
-      // there are frames to draw (`AMB-T-3607`).
+      // The window's own title is not the pane's to say — this window is the board. The name goes to
+      // the store, and what draws it is the line above the pane.
       name: (text, by) => {
-        void nameFrame(ONLY_FRAME, text, by).catch(() => {});
+        void nameFrame(ONLY_FRAME, text, by).then(plate.named).catch(() => {});
       },
     }, "termface__pane")
       .then((take) => {
@@ -70,6 +69,7 @@ export function TerminalFace({ onSplitOut, note }: { onSplitOut: () => void; not
     return () => {
       taken = true;
       detach?.();
+      plate.stop();
     };
   }, []);
 
@@ -80,6 +80,7 @@ export function TerminalFace({ onSplitOut, note }: { onSplitOut: () => void; not
         {ended && <span className="termface__note">{t("face.ended")}</span>}
         {note !== null && <span className="termface__note">{note}</span>}
       </div>
+      <div ref={labelRef} />
       <div className="termface__face" ref={paneRef} />
     </div>
   );

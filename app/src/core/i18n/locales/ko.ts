@@ -479,6 +479,10 @@ export const ko: Translation = {
     "talk.retry": "다시 찾기",
     "talk.open": "열기",
     "talk.agent": "에이전트",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "상의 중", "talk.holding": "{n}건",
+    "talk.finished": "완료 {n}건", "talk.premiseBroken": "전제가 무너졌습니다",
     "face.switch": "이 창이 보여 주는 화면",
     "face.tasks": "작업",
     "face.terminal": "터미널",

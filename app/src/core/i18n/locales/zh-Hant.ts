@@ -480,6 +480,10 @@ export const zhHant: Translation = {
     "talk.retry": "再找一次",
     "talk.open": "開啟",
     "talk.agent": "代理",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "商議中", "talk.holding": "{n} 項",
+    "talk.finished": "已完成 {n} 項", "talk.premiseBroken": "有一個前提不成立了",
     "face.switch": "此視窗顯示的介面",
     "face.tasks": "任務",
     "face.terminal": "終端機",

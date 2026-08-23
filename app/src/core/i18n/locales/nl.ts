@@ -480,6 +480,10 @@ export const nl: Translation = {
     "talk.retry": "Opnieuw zoeken",
     "talk.open": "Openen",
     "talk.agent": "Agent",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "In gesprek", "talk.holding": "{n} taken",
+    "talk.finished": "{n} klaar", "talk.premiseBroken": "Een aanname klopt niet meer",
     "face.switch": "Wat dit venster toont",
     "face.tasks": "Taken",
     "face.terminal": "Terminal",

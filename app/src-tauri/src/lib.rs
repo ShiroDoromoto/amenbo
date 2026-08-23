@@ -434,6 +434,7 @@ pub fn run() {
       commands::plugin_update_apply_all,
       wake::wake_probe,
       wake::wake_remember,
+      commands::session_work,
       commands::frame_names,
       commands::name_frame,
       launch::elevated,

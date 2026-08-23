@@ -158,6 +158,9 @@ fn real_main() -> i32 {
         no_color: parsed.no_color,
         actor,
     };
+    // Whether the refs this run writes are links. It is a fact about the terminal this process was
+    // started in, so it is settled once, here, ahead of anything that could name a record.
+    cmd::labels::settle_link_rendering();
     match run(parsed, &flags) {
         Ok(code) => code,
         Err(err) => render_error(&flags, &err),

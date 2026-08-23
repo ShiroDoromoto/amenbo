@@ -392,7 +392,7 @@ impl<'a> Driver<'a> {
     /// errors.
     fn exec(&mut self, step: &Step) -> Result<Outcome, String> {
         match step {
-            Step::Action { domain, op, with, bind } => match with.get("refused") {
+            Step::Action { domain, op, with, bind, .. } => match with.get("refused") {
                 Some(code) => {
                     let want = code
                         .as_str()
@@ -402,7 +402,7 @@ impl<'a> Driver<'a> {
                 }
                 None => self.action(*domain, op, with, bind.as_deref()),
             },
-            Step::Assert { domain, op, with } => self.assert(*domain, op, with),
+            Step::Assert { domain, op, with, .. } => self.assert(*domain, op, with),
         }
     }
 
@@ -833,7 +833,7 @@ mod tests {
     fn the_premise_and_the_road_are_numbered_apart() {
         let mut report = Report::new(&scenario("premise-numbering"));
         report.push_premise(0, Outcome::action("a project is already there".to_string()));
-        report.push(0, &Step::Assert { domain: Domain::Task, op: "field".into(), with: Args::new() },
+        report.push(0, &Step::Assert { domain: Domain::Task, op: "field".into(), with: Args::new(), window: None },
             Outcome::assert(true, "the board holds it".to_string()));
 
         let lines = report.to_json();

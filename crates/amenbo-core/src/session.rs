@@ -68,6 +68,32 @@ pub fn surface() -> Option<Surface> {
     from_parts(crate::env::session(), crate::env::session_dir())
 }
 
+/// The longest session id a write will carry into the ledger. The window mints 32 hex characters
+/// ([`SESSION_VAR`]); the cap is here because the variable is inherited from an environment anything
+/// can set, and a ledger line above its own size limit is dropped rather than written — a stray value
+/// would take the event down with it. A longer id is refused whole rather than cut: a shortened one
+/// names a session that does not exist, and naming the wrong session is worse than naming none.
+pub const MAX_ID_BYTES: usize = 128;
+
+/// The session a write records itself as coming from, or `None` when the process is running outside the
+/// talk window's terminal.
+///
+/// This is not the surface layer ([`surface`]) and asks for less. A statement needs somewhere to be
+/// left, so half an environment is no window at all; a name tag needs nothing but the name — it rides a
+/// write that was going to the ledger regardless, and stamping it costs nothing when nobody reads it.
+///
+/// Blank, whitespace, or past [`MAX_ID_BYTES`]: `None`. An empty author is allowed to mean "unknown";
+/// a guess is not.
+pub fn id() -> Option<String> {
+    id_from(crate::env::session())
+}
+
+/// The rule [`id`] applies, apart from the environment it reads — separate for the reason
+/// [`from_parts`] is: the environment is process-wide and a test suite is not.
+fn id_from(raw: Option<String>) -> Option<String> {
+    raw.filter(|s| !s.trim().is_empty() && s.len() <= MAX_ID_BYTES)
+}
+
 /// The rule [`surface`] applies, apart from the environment it reads: both halves present, and neither
 /// of them blank. It is separate because the environment is process-wide while a test suite is not —
 /// the rule can be asked directly, where setting the variables to ask it could not be undone.
@@ -328,6 +354,37 @@ mod tests {
         assert!(
             from_parts(None, Some("/tmp/drop".into())).is_none(),
             "and a directory with no session names nothing the window could file it under",
+        );
+    }
+
+    #[test]
+    fn a_write_carries_the_session_it_was_made_in_and_never_a_guess_at_one() {
+        let stamp = |raw: &str| id_from(Some(raw.to_string()));
+        assert_eq!(stamp("pane-1").as_deref(), Some("pane-1"), "the window named it: the write carries it");
+        assert_eq!(stamp(""), None, "a blank variable names no session");
+        assert_eq!(stamp("  "), None, "and neither does whitespace");
+        assert_eq!(
+            stamp(&"x".repeat(MAX_ID_BYTES + 1)),
+            None,
+            "past the cap the id is dropped whole — a cut one would name a session nobody has",
+        );
+        assert_eq!(
+            stamp(&"x".repeat(MAX_ID_BYTES)).map(|s| s.len()),
+            Some(MAX_ID_BYTES),
+            "the cap itself is inside it",
+        );
+        assert_eq!(id_from(None), None, "outside the window there is nothing to carry");
+    }
+
+    #[test]
+    fn a_name_tag_asks_for_less_than_a_statement_does() {
+        // `surface` needs somewhere to leave a statement; a stamp on a write that was happening anyway
+        // needs nothing but the name, so half an environment still names the session it came from.
+        assert!(from_parts(Some("pane-1".into()), None).is_none(), "no drop box: not the surface layer");
+        assert_eq!(
+            id_from(Some("pane-1".into())).as_deref(),
+            Some("pane-1"),
+            "but the write still knows which pane it was made in",
         );
     }
 

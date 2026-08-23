@@ -122,10 +122,13 @@ devgui pid   print the pid of a running dev GUI, for the screen tool
              pid is a pid in there -- what takes it is the screen tool in the
              guest, or 'devtool vm exec'.
 devgui shot  capture that instance's own window and print the png's path. The
-             screen tool is handed the pid and hands back the file: which window
-             it shot, and the id it shot by, stay in there, so nothing here can
-             aim a click by a rectangle -- press what a thing is called
-             ('swift scripts/screen.swift click-named <pid> <name>') instead. It
+             screen tool is handed the pid and hands back the file: the id it
+             shot by stays in there, so nothing here can aim a click by a
+             rectangle -- press what a thing is called
+             ('swift scripts/screen.swift click-named <pid> <name>') instead.
+             An instance drawing more than one window is a question devtool
+             cannot answer, so the tool refuses it rather than shooting
+             whichever was in front: say '--window <title>'. It
              fronts the instance first, since a window behind a Space cannot be
              found at all; --no-front leaves the front alone. --vm shoots the
              instance in the VM with the screen tool in there and brings the png
@@ -307,6 +310,7 @@ func devGUICmd(args []string) {
 	case "pid":
 		fs := flag.NewFlagSet("devgui pid", flag.ExitOnError)
 		front := fs.Bool("front", false, "bring the instance to the front before printing its pid")
+		window := fs.String("window", "", "with --front, raise the window with this title rather than leaving the app to choose")
 		vm := fs.Bool("vm", false, "answer for the instance running in the VM instead of one on this machine")
 		id, extra := parseAroundID(fs, args[1:])
 		if len(extra) > 0 {
@@ -321,7 +325,7 @@ func devGUICmd(args []string) {
 		if *vm {
 			show = vmDevGUIShowPID
 		}
-		if err := show(id, *front); err != nil {
+		if err := show(id, *front, *window); err != nil {
 			logf("devtool: %v", err)
 			os.Exit(1)
 		}
@@ -332,6 +336,7 @@ func devGUICmd(args []string) {
 		// disturb.
 		fs := flag.NewFlagSet("devgui shot", flag.ExitOnError)
 		noFront := fs.Bool("no-front", false, "shoot the instance where it is, without bringing it to the front")
+		window := fs.String("window", "", "shoot the window with this title (needed once an instance draws more than one)")
 		vm := fs.Bool("vm", false, "shoot the instance running in the VM, and bring the png back out")
 		id, extra := parseAroundID(fs, args[1:])
 		if len(extra) > 0 {
@@ -346,7 +351,7 @@ func devGUICmd(args []string) {
 		if *vm {
 			shoot = vmDevGUIShot
 		}
-		if err := shoot(id, !*noFront); err != nil {
+		if err := shoot(id, !*noFront, *window); err != nil {
 			logf("devtool: %v", err)
 			os.Exit(1)
 		}

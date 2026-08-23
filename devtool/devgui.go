@@ -415,7 +415,7 @@ type devGUITarget struct {
 // — a task worktree's own instance ahead of the shared app — so the same words work from either.
 // `front` brings it forward first, because a window behind another Space cannot be found at all and a
 // shot of a window nobody fronted is a shot of what is over it.
-func resolveDevGUI(id string, front bool) (devGUITarget, error) {
+func resolveDevGUI(id string, front bool, window string) (devGUITarget, error) {
 	if runtime.GOOS != "darwin" {
 		return devGUITarget{}, fmt.Errorf("the dev GUI is only installed on macOS — there is nothing to address here")
 	}
@@ -431,7 +431,8 @@ func resolveDevGUI(id string, front bool) (devGUITarget, error) {
 			continue
 		}
 		if front {
-			if _, err := run("", "swift", screenTool(), "front", strconv.Itoa(pid)); err != nil {
+			raise := append([]string{screenTool(), "front", strconv.Itoa(pid)}, windowArgs(window)...)
+			if _, err := run("", "swift", raise...); err != nil {
 				logf("  warning: bringing %s to the front failed (%v) — it is still the instance addressed below", bundle, err)
 			}
 		}
@@ -439,6 +440,20 @@ func resolveDevGUI(id string, front bool) (devGUITarget, error) {
 		return devGUITarget{bundle: bundle, pid: pid}, nil
 	}
 	return devGUITarget{}, fmt.Errorf("no dev GUI is running (%s) — build it with `%s`, then open it", strings.Join(bundles, ", "), build)
+}
+
+// windowArgs is how a window reaches the screen tool: `--window <title>`, or nothing said at all.
+//
+// devtool names no window of its own. An instance drawing one window is unambiguous and always was;
+// one drawing two is a question only the caller can answer, and the tool refuses it rather than
+// shooting whichever window was in front — which is the same reason `devgui pid` exists at all, one
+// level down: a screen picked by whatever happened to be frontmost is not the screen anybody asked
+// for.
+func windowArgs(window string) []string {
+	if window == "" {
+		return nil
+	}
+	return []string{"--window", window}
 }
 
 // screenTool is the mac screen tool in this tree — the one door to fronting a window, shooting it and
@@ -450,8 +465,8 @@ func screenTool() string {
 
 // devGUIShowPID prints on stdout the pid of a dev GUI instance, so a caller can hand it straight to
 // the screen tool.
-func devGUIShowPID(id string, front bool) error {
-	target, err := resolveDevGUI(id, front)
+func devGUIShowPID(id string, front bool, window string) error {
+	target, err := resolveDevGUI(id, front, window)
 	if err != nil {
 		return err
 	}
@@ -468,8 +483,8 @@ func devGUIShowPID(id string, front bool) error {
 // there — a caller that never sees a rectangle has nothing to aim a click by, which is the point:
 // press what a thing is called (`screen click-named <pid> <name>`) rather than a point worked out
 // from a shot, whose pixels are screen points times the scale of the display it was on.
-func devGUIShot(id string, front bool) error {
-	target, err := resolveDevGUI(id, front)
+func devGUIShot(id string, front bool, window string) error {
+	target, err := resolveDevGUI(id, front, window)
 	if err != nil {
 		return err
 	}
@@ -484,7 +499,8 @@ func devGUIShot(id string, front bool) error {
 	}
 	path := file.Name()
 	file.Close()
-	if _, err := run("", "swift", screenTool(), "shot", strconv.Itoa(target.pid), path); err != nil {
+	shot := append([]string{screenTool(), "shot", strconv.Itoa(target.pid), path}, windowArgs(window)...)
+	if _, err := run("", "swift", shot...); err != nil {
 		os.Remove(path)
 		return fmt.Errorf("shooting the window of %s failed: %w — screen recording has to be granted to the terminal running this", target.bundle, err)
 	}

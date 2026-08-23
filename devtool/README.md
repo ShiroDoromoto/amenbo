@@ -451,11 +451,40 @@ existing tools work inside unchanged.
   account is what says there is a screen to draw on; without one the screen tools
   fail in the shape that is hardest to read — exit 0, nothing delivered. Measured:
   address at ~7s, ssh at ~10s, console at ~11s.
+- **`up` also settles what that screen is** — see below. A screen nobody set is
+  not a screen anything can be asserted against twice.
 - `tart run` is detached into its own process group, so a Ctrl-C on devtool does
   not take the VM with it. Its output goes to
   `$TMPDIR/amenbo-vm-amenbo-vm.log`, which is where a VM that failed to boot says
   so.
-- `status` reports the golden, the clone and its address.
+- `status` reports the golden, the clone, its address and the mode its screen is on.
+
+#### The screen the guest comes up on
+
+Two things have to be said for the guest to have a screen worth shooting, and
+`up` says both:
+
+1. **How big the panel is.** `up` sets it on the clone before starting it
+   (`tart set --display 1920x1200`), rather than inheriting whatever the golden
+   carried — a shot is only comparable against a shot taken on the same screen,
+   and `vm golden --refresh` would otherwise move it. The size is read as
+   **points**, so the panel behind it is 3840x2400 pixels. Asking in pixels
+   instead (`1920x1200px`) builds a 1x panel, and text read off a 1x shot comes
+   back wrong often enough to fail asserts that are sound (`Inbox ame`,
+   `♥ Installed`).
+2. **Which mode the desktop takes on it.** macOS does not take the panel's own:
+   measured on a clone freshly cut from the golden with the panel set to
+   1920x1200pt, the desktop comes up **1024x768pt stretched across it** — too
+   narrow for the layouts that only appear on a wide window (the horizontal
+   rail), and stretched under every shot. The mode is in the guest's
+   own list the whole time; it has to be asked for, which `up` does for the
+   session (nothing is written into the clone's preferences — the clone is
+   thrown away, and `up` asks again every time).
+
+The asking is a second small Swift tool, carried inside devtool and compiled and
+sent the way the screen tool is. It is not a verb on `scripts/screen.swift`
+because that one runs on a developer's own Mac as well, and something that
+reconfigures a display does not belong next to click and type there.
 
 ### `devtool vm exec -- <command…>` / `devtool vm push <local…> <remote>`
 

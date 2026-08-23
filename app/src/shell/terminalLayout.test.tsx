@@ -10,25 +10,28 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { Place } from "../talk/terminal";
+import type { PaneStart } from "../talk/terminal";
 import { TerminalFace } from "./TerminalFace";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-type Mounted = { place: Place; said: (statement: unknown) => void; session: string };
+type Mounted = { start: PaneStart; said: (statement: unknown) => void; session: string };
 
 const hoisted = vi.hoisted(() => ({ mounts: [] as unknown[], detached: 0 }));
 
-// The pane, stood in for. It answers the way a real one does — a session id comes back, and what the
-// agent in it says arrives through the same callback — so the face has something to arrange.
-vi.mock("../talk/terminal", () => ({
-  mountTerminal: (
+// The frame a slot puts up, stood in for. It answers the way a real one does — a session id comes
+// back, and what the agent in it says arrives through the same callback — so the face has something
+// to arrange. What agent runs in it is the frame's own question and not this one's (`../talk/agent`).
+vi.mock("../talk/agent", () => ({
+  mountAgentFrame: (
     _host: HTMLElement,
+    _lang: string,
     on: { opened: (s: string, at: string) => void; said: (statement: unknown) => void },
-    place: Place = {},
+    _paneClass: string,
+    start: PaneStart = {},
   ) => {
-    const session = place.session ?? `s${hoisted.mounts.length + 1}`;
-    hoisted.mounts.push({ place, said: on.said, session });
+    const session = start.session ?? `s${hoisted.mounts.length + 1}`;
+    hoisted.mounts.push({ start, said: on.said, session });
     on.opened(session, "2026-08-24T00:00:00Z");
     return Promise.resolve(() => { hoisted.detached++; });
   },
@@ -55,7 +58,7 @@ beforeEach(async () => {
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => {
-    root.render(createElement(TerminalFace, { onSplitOut: () => {}, note: null }));
+    root.render(createElement(TerminalFace, { onSplitOut: () => {}, note: null, onWaiting: () => {} }));
   });
 });
 
@@ -84,7 +87,7 @@ describe("one page, one project", () => {
     });
     await click(q(".slot--empty")[0]!);
     expect(mounts()).toHaveLength(2);
-    expect(mounts()[1]!.place.cwd).toBe("/repo");
+    expect(mounts()[1]!.start.cwd).toBe("/repo");
   });
 
   it("gives a fresh page its own folder rather than the one before it", async () => {
@@ -94,7 +97,7 @@ describe("one page, one project", () => {
     await click(q(".slot--empty")[0]!);
     await press("2");
     await click(q(".slot--empty")[0]!);
-    expect(mounts()[2]!.place.cwd).toBeNull();
+    expect(mounts()[2]!.start.cwd).toBeNull();
   });
 });
 
@@ -110,7 +113,7 @@ describe("turning a page", () => {
 
     await press("1");
     expect(mounts()).toHaveLength(4);
-    expect(mounts().slice(2).map((one) => one.place.session), "the panes were given different terminals")
+    expect(mounts().slice(2).map((one) => one.start.session), "the panes were given different terminals")
       .toEqual(started);
   });
 
@@ -122,7 +125,7 @@ describe("turning a page", () => {
     document.body.appendChild(hidden);
     const other = createRoot(hidden);
     await act(async () => {
-      other.render(createElement(TerminalFace, { onSplitOut: () => {}, note: null }));
+      other.render(createElement(TerminalFace, { onSplitOut: () => {}, note: null, onWaiting: () => {} }));
     });
     const before = hidden.querySelector(".termface__page--on")!.textContent;
     await act(async () => {

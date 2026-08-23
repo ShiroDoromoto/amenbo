@@ -494,6 +494,13 @@ export const es: Translation = {
     "act.nameless": "(eliminado)",
     "app.loadError": "No se pudieron cargar los datos.", "app.loading": "Cargando…",
     "app.talkWindow": "Amenbo — Conversación",
+    "talk.searching": "Buscando los agentes de esta máquina…",
+    "talk.ask": "¿Con qué agente trabajas en esta carpeta?",
+    "talk.none": "No se encontró ningún agente que Amenbo pueda iniciar en esta máquina.",
+    "talk.noneHint": "Amenbo buscó estos comandos en el PATH de tu shell: {commands}. Instala uno y vuelve a buscar.",
+    "talk.retry": "Buscar de nuevo",
+    "talk.open": "Abrir",
+    "talk.agent": "Agente",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "En conversación", "talk.holding": "{n} tareas",
@@ -510,6 +517,7 @@ export const es: Translation = {
     "face.page": "Página {n}",
     "face.open": "Abrir una terminal aquí",
     "face.rename": "Cambiar el nombre de este panel",
+    "face.needsYou": "te está esperando",
     "talk.elevated.title": "Amenbo se está ejecutando como administrador",
     "talk.elevated.body": "Una terminal abierta aquí lo hereda, y un administrador no sigue los enlaces tras los que scoop instala sus paquetes. Esas herramientas no se pueden alcanzar desde esta ventana: Amenbo dirá que no están instaladas, aunque lo estén.",
     "talk.elevated.fix": "Cierra Amenbo y ábrelo de nuevo sin «Ejecutar como administrador», y volverán.",
@@ -659,6 +667,10 @@ export const es: Translation = {
       "{url} publica ahora {serving}, no la {agreed} que se te mostró. Regístralo otra vez y comprueba la huella nueva.",
     pty_failed: "No se pudo iniciar la terminal: {reason}",
     pty_gone: "Esa terminal ya no está abierta.",
+    wake_unknown_agent: "Amenbo no sabe cómo iniciar {agent}.",
+    wake_no_folder: "No se pudo leer esa carpeta: {reason}",
+    wake_no_config: "Amenbo no pudo encontrar sus propios archivos.",
+    wake_not_kept: "No se pudo guardar la elección.",
     window_failed: "No se pudo abrir esa ventana: {reason}",
 
     already_reserved:

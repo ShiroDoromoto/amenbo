@@ -1,8 +1,12 @@
 // The talk window's entry — the window someone splits the terminal out into, so the two faces can sit
 // on two displays (`AMB-D-753`). It is not opened at launch and is not declared in `tauri.conf.json`:
 // the app comes up as one window showing the board, and this one is built when it is asked for
-// (`crate::windows`). What is in it is a terminal: one pane, filling the window, with the user's
-// shell running in it.
+// (`crate::windows`). What is in it is a terminal: one pane, filling the window, with this folder's
+// agent running in it.
+//
+// **What goes in the pane is not decided here.** The frame around it asks the host which agent this
+// folder starts with, and draws the offer or the install notice where that has no single answer
+// (`./talk/agent`).
 //
 // The terminal it draws is the one that was already running in the board, and folding the app back
 // hands it over the same way. Neither end restarts anything — a pane is a drawing of a session, not
@@ -26,10 +30,10 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { type Lang, normalizeLang, t } from "./core/i18n";
 import { invoke } from "./core/ipc";
 import { initTheme } from "./core/theme";
+import { mountAgentFrame } from "./talk/agent";
 import { elevationBand } from "./talk/elevation";
 import { frameNames, nameFrame, ONLY_FRAME, type FrameNames, type NamedBy } from "./talk/frames";
 import { mountPlate } from "./talk/plate";
-import { mountTerminal } from "./talk/terminal";
 import "./styles/tokens.css";
 import "./styles/global.css";
 import "./styles/talk.css";
@@ -114,9 +118,9 @@ const root = document.getElementById("root");
 if (root) {
   root.className = "talk";
   const label = document.createElement("div");
-  const pane = document.createElement("div");
-  pane.className = "talk__pane";
-  root.append(mergeButton(), label, pane);
+  const face = document.createElement("div");
+  face.className = "talk__face";
+  root.append(mergeButton(), label, face);
   // The language is not known yet, and the label is drawn before it answers. What it is drawn in until
   // then is English, the way the title bar and the merge button are: a window that waited would come up
   // with a blank line above the pane for as long as the wait.
@@ -125,30 +129,36 @@ if (root) {
     lang = answered;
   });
   plate = mountPlate(label, () => lang);
-  void mountTerminal(pane, {
-    opened: (session, startedAt) => {
-      plate?.opened(session, startedAt);
-    },
-    said: (statement) => {
-      plate?.said(statement);
-    },
-    closed: (session) => {
-      plate?.closed(session);
-      // What is on the screen stays as it was — that is what a terminal ends with — and this is the
-      // part of it the screen cannot show for itself: a finished shell looks exactly like one waiting
-      // to be typed at.
-      void language.then((lang) => {
-        const note = document.createElement("div");
-        note.className = "talk__note";
-        note.textContent = t("face.ended", lang);
-        pane.after(note);
-      });
-    },
-    name,
-  }).catch((e: unknown) => {
-    pane.className = "talk__failed";
-    pane.textContent = e instanceof Error ? e.message : String(e);
-  });
+  // The frame does wait on the language, unlike the label: everything it says before a terminal is
+  // running — the offer, the install notice, the row on a closed pane — is a whole sentence, and one
+  // drawn in English first would be a flicker of the wrong language rather than a pane arriving
+  // sooner.
+  void language.then((answered) =>
+    mountAgentFrame(
+      face,
+      answered,
+      {
+        opened: (session, startedAt) => {
+          plate?.opened(session, startedAt);
+        },
+        said: (statement) => {
+          plate?.said(statement);
+        },
+        closed: (session) => {
+          plate?.closed(session);
+          // What is on the screen stays as it was — that is what a terminal ends with — and this is
+          // the part of it the screen cannot show for itself: a finished shell looks exactly like one
+          // waiting to be typed at.
+          const note = document.createElement("div");
+          note.className = "talk__note";
+          note.textContent = t("face.ended", answered);
+          face.after(note);
+        },
+        name,
+      },
+      "talk__pane",
+    ),
+  );
 
   // The band above the pane, and only when there is something to say. It is asked for after the
   // terminal is mounted rather than before it: the pane is what the window is for, and a question

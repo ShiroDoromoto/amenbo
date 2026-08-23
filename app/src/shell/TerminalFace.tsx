@@ -26,10 +26,29 @@ import { t, tf } from "../core/i18n";
  * rebuilds the interface — this does come down, and the sessions do not: the panes detach, and
  * whatever draws next adopts what is still running (`../talk/terminal.ts`).
  *
+ * What runs in a pane is not settled here either. The frame put up inside each slot asks the host
+ * which agent that folder starts with, and draws the offer or the install notice where that has no
+ * single answer (`../talk/agent.ts`) — which is also where a refusal to start one is shown, so
+ * nothing here holds a failure of its own.
+ *
  * `note` is what the shell has to say about this face that the pane cannot — a window that could not
  * be split out, which is the press of the button here having come to nothing.
+ *
+ * `onWaiting` is the one thing this face says back to the shell: whether **any** pane on it is
+ * waiting on a person. Behind the other face no label above a pane can be seen at all, so the shell
+ * puts a badge on the face switch instead (`./terminalBadge`) — and it is told the fact, not what to
+ * do about it. Which pane it was is the rail's to show, and a badge that counted would be a number a
+ * reader has to go and check.
  */
-export function TerminalFace({ onSplitOut, note }: { onSplitOut: () => void; note: string | null }) {
+export function TerminalFace({
+  onSplitOut,
+  note,
+  onWaiting,
+}: {
+  onSplitOut: () => void;
+  note: string | null;
+  onWaiting: (waiting: boolean) => void;
+}) {
   const rootRef = useRef<HTMLDivElement>(null);
   // The face comes up with a terminal, the way a single-pane face always did: the first slot of the
   // first page is made here so there is a place for it to be in.
@@ -46,6 +65,23 @@ export function TerminalFace({ onSplitOut, note }: { onSplitOut: () => void; not
   // that has had its terminal started is off the list, so turning back to a page whose program exited
   // offers the way to open one again instead of quietly starting a second shell.
   const startNow = useRef(new Set<string>([layout.frames[0]!.id]));
+
+  // Which panes are waiting on a person. Held as the set rather than a count: a pane that goes away
+  // has to take its own answer with it, and the shell is told the one fact it draws — that somebody's
+  // turn has come somewhere behind this face.
+  const waiting = useRef(new Set<string>());
+  // Read through a ref for the same reason the panes' callbacks are: the face is mounted once and
+  // must not come down to be handed a fresh one.
+  const tell = useRef(onWaiting);
+  tell.current = onWaiting;
+
+  const paneWaiting = useCallback((frame: string, is: boolean) => {
+    const was = waiting.current.size > 0;
+    if (is) waiting.current.add(frame);
+    else waiting.current.delete(frame);
+    const now = waiting.current.size > 0;
+    if (now !== was) tell.current(now);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -169,7 +205,7 @@ export function TerminalFace({ onSplitOut, note }: { onSplitOut: () => void; not
                   key={frame.id}
                   frame={frame.id}
                   names={names}
-                  place={{
+                  start={{
                     session: frame.session,
                     // Only the first slot of the first page may take up a terminal it did not start:
                     // that is where a session split out into its own window comes back to.
@@ -187,6 +223,7 @@ export function TerminalFace({ onSplitOut, note }: { onSplitOut: () => void; not
                   onClosed={(session) => setLayout((was) => closedIn(was, session))}
                   onName={named}
                   onFocus={(id) => setLayout((was) => focusOn(was, id))}
+                  onWaiting={paneWaiting}
                 />
               )
               : (

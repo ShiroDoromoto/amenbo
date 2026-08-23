@@ -91,6 +91,7 @@ pub mod tmpdir;
 pub mod update_check;
 pub mod validate;
 pub mod view;
+pub mod wake;
 pub mod worktree;
 
 pub use error::{Error, ErrorCode, Fields, Msg, Result};

@@ -499,6 +499,13 @@ export const pl: Translation = {
     "act.nameless": "(usunięte)",
     "app.loadError": "Nie udało się wczytać danych.", "app.loading": "Wczytywanie…",
     "app.talkWindow": "Amenbo — Rozmowa",
+    "talk.searching": "Szukanie agentów na tym komputerze…",
+    "talk.ask": "Z którym agentem pracujesz w tym folderze?",
+    "talk.none": "Na tym komputerze nie znaleziono agenta, którego Amenbo mogłoby uruchomić.",
+    "talk.noneHint": "Amenbo szukało tych poleceń w PATH twojej powłoki: {commands}. Zainstaluj jedno z nich, a potem poszukaj ponownie.",
+    "talk.retry": "Szukaj ponownie",
+    "talk.open": "Otwórz",
+    "talk.agent": "Agent",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "W rozmowie", "talk.holding": "zadania: {n}",
@@ -515,6 +522,7 @@ export const pl: Translation = {
     "face.page": "Strona {n}",
     "face.open": "Otwórz tu terminal",
     "face.rename": "Zmień nazwę tego panelu",
+    "face.needsYou": "czeka na Ciebie",
     "talk.elevated.title": "Amenbo działa jako administrator",
     "talk.elevated.body": "Terminal otwarty tutaj dziedziczy te uprawnienia, a administrator nie podąża za dowiązaniami, za którymi scoop instaluje swoje pakiety. Tych narzędzi nie da się osiągnąć z tego okna — Amenbo zgłosi je jako niezainstalowane, choć są.",
     "talk.elevated.fix": "Zamknij Amenbo i otwórz je ponownie bez „Uruchom jako administrator”, a wrócą.",
@@ -668,6 +676,10 @@ export const pl: Translation = {
       "{url} wydaje teraz {serving}, a nie pokazany Ci wcześniej {agreed}. Zarejestruj go ponownie i sprawdź nowy odcisk.",
     pty_failed: "Nie udało się uruchomić terminala: {reason}",
     pty_gone: "Ten terminal nie jest już otwarty.",
+    wake_unknown_agent: "Amenbo nie wie, jak uruchomić {agent}.",
+    wake_no_folder: "Nie udało się odczytać tego folderu: {reason}",
+    wake_no_config: "Amenbo nie znalazło własnych plików.",
+    wake_not_kept: "Nie udało się zapisać wyboru.",
     window_failed: "Nie udało się otworzyć tego okna: {reason}",
 
     already_reserved:

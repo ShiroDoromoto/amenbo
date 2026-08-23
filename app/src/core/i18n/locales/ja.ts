@@ -485,6 +485,13 @@ export const ja: Translation = {
     "act.nameless": "（削除済み）",
     "app.loadError": "データを読み込めませんでした。", "app.loading": "読み込み中…",
     "app.talkWindow": "Amenbo — 対話",
+    "talk.searching": "この機械にあるエージェントをさがしています…",
+    "talk.ask": "このフォルダではどのエージェントを使いますか？",
+    "talk.none": "この機械には、Amenbo が起こせるエージェントが見つかりませんでした。",
+    "talk.noneHint": "シェルの PATH で、次の名前をさがしました: {commands}。どれか1つを入れてから、もう一度さがしてください。",
+    "talk.retry": "もう一度さがす",
+    "talk.open": "開く",
+    "talk.agent": "エージェント",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "相談中", "talk.holding": "{n}件",
@@ -501,6 +508,7 @@ export const ja: Translation = {
     "face.page": "{n} ページ目",
     "face.open": "ここで端末を開く",
     "face.rename": "このペインの名前を変える",
+    "face.needsYou": "手が要ります",
     "talk.elevated.title": "Amenbo を管理者として実行しています",
     "talk.elevated.body": "ここで開いた端末にも管理者の権限が引き継がれます。管理者の権限では scoop がパッケージを置くリンクをたどれないので、この窓からはその道具に届きません。入っていても、Amenbo は「入っていない」と答えます。",
     "talk.elevated.fix": "Amenbo を終了し、「管理者として実行」を使わずに開き直すと、道具は戻ります。",
@@ -653,6 +661,10 @@ export const ja: Translation = {
       "{url} の鍵が、確認した指紋（{agreed}）から {serving} に変わりました。登録し直して、新しい指紋を確かめてください。",
     pty_failed: "端末を起動できませんでした: {reason}",
     pty_gone: "この端末はもう開いていません。",
+    wake_unknown_agent: "{agent} の起こし方を Amenbo は知りません。",
+    wake_no_folder: "そのフォルダを読めませんでした: {reason}",
+    wake_no_config: "Amenbo が自分のファイルを見つけられませんでした。",
+    wake_not_kept: "選んだ内容を保存できませんでした。",
     window_failed: "その窓を開けませんでした: {reason}",
 
     already_reserved: "{ref} は「未着手」ではないため予約できません。別のセッションが着手済みかもしれません。",

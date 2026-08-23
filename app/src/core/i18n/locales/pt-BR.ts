@@ -495,6 +495,13 @@ export const ptBR: Translation = {
     "act.nameless": "(excluído)",
     "app.loadError": "Não foi possível carregar os dados.", "app.loading": "Carregando…",
     "app.talkWindow": "Amenbo — Conversa",
+    "talk.searching": "Procurando os agentes desta máquina…",
+    "talk.ask": "Com qual agente você trabalha nesta pasta?",
+    "talk.none": "Nenhum agente que o Amenbo possa iniciar foi encontrado nesta máquina.",
+    "talk.noneHint": "O Amenbo procurou estes comandos no PATH do seu shell: {commands}. Instale um deles e procure de novo.",
+    "talk.retry": "Procurar de novo",
+    "talk.open": "Abrir",
+    "talk.agent": "Agente",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "Em conversa", "talk.holding": "{n} tarefas",
@@ -511,6 +518,7 @@ export const ptBR: Translation = {
     "face.page": "Página {n}",
     "face.open": "Abrir um terminal aqui",
     "face.rename": "Renomear este painel",
+    "face.needsYou": "esperando por você",
     "talk.elevated.title": "O Amenbo está sendo executado como administrador",
     "talk.elevated.body": "Um terminal aberto aqui herda isso, e um administrador não segue os links por trás dos quais o scoop instala seus pacotes. Essas ferramentas não podem ser alcançadas desta janela — o Amenbo dirá que não estão instaladas, embora estejam.",
     "talk.elevated.fix": "Feche o Amenbo e abra-o novamente sem “Executar como administrador”, e elas voltam.",
@@ -660,6 +668,10 @@ export const ptBR: Translation = {
       "{url} agora publica {serving}, e não a {agreed} que foi mostrada a você. Registre de novo e confira a nova impressão.",
     pty_failed: "Não foi possível iniciar o terminal: {reason}",
     pty_gone: "Esse terminal não está mais aberto.",
+    wake_unknown_agent: "O Amenbo não sabe como iniciar {agent}.",
+    wake_no_folder: "Não foi possível ler essa pasta: {reason}",
+    wake_no_config: "O Amenbo não encontrou os próprios arquivos.",
+    wake_not_kept: "Não foi possível salvar a escolha.",
     window_failed: "Não foi possível abrir essa janela: {reason}",
 
     already_reserved: "{ref} não está em “A fazer”, então não dá para reservar — outra sessão pode já estar com ela.",

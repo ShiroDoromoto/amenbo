@@ -65,10 +65,11 @@ pub fn managed_block_version(text: &str) -> Option<u32> {
 /// The one instruction the managed block carries, on a single line: run `agent --json` before acting,
 /// and declare the facet. `cmd` is the launch command name, as in [`managed_block_body`].
 ///
-/// It is a function of its own because the block is no longer the only place it is said — a session-start
-/// hook injects this same line ([`crate::harness`]), which is the whole of what such a hook is for. Two
-/// copies of a sentence drift; this one has a test holding it to the block's wording, so rewording the
-/// block moves what the hooks inject with it.
+/// It is a function of its own because the block is no longer the only place it is said. A session-start
+/// hook injects this same line, which is the whole of what such a hook is for, and a terminal Amenbo
+/// opens itself hands it to the agent as its opening prompt — both out of [`crate::harness`]. Two copies
+/// of a sentence drift; this one has a test holding it to the block's wording, so rewording the block
+/// moves what the other two carry with it.
 pub fn launch_instruction(cmd: &str) -> String {
     format!(
         "Before you act on any request in this directory, you MUST first run \

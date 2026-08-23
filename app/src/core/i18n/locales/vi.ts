@@ -476,6 +476,13 @@ export const vi: Translation = {
     "act.nameless": "(đã xoá)",
     "app.loadError": "Không tải được dữ liệu.", "app.loading": "Đang tải…",
     "app.talkWindow": "Amenbo — Hội thoại",
+    "talk.searching": "Đang tìm các tác nhân trên máy này…",
+    "talk.ask": "Bạn làm việc với tác nhân nào trong thư mục này?",
+    "talk.none": "Không tìm thấy tác nhân nào mà Amenbo có thể khởi chạy trên máy này.",
+    "talk.noneHint": "Amenbo đã tìm các lệnh này trong PATH của shell: {commands}. Cài một trong số đó rồi tìm lại.",
+    "talk.retry": "Tìm lại",
+    "talk.open": "Mở",
+    "talk.agent": "Tác nhân",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "Đang trao đổi", "talk.holding": "{n} việc",
@@ -492,6 +499,7 @@ export const vi: Translation = {
     "face.page": "Trang {n}",
     "face.open": "Mở terminal ở đây",
     "face.rename": "Đổi tên khung này",
+    "face.needsYou": "đang chờ bạn",
     "talk.elevated.title": "Amenbo đang chạy với quyền quản trị",
     "talk.elevated.body": "Cửa sổ dòng lệnh mở ở đây cũng thừa hưởng quyền đó, và quyền quản trị không đi theo các liên kết mà scoop dùng để đặt gói của nó. Không thể tiếp cận những công cụ đó từ cửa sổ này — Amenbo sẽ báo là chưa cài, dù chúng đã được cài.",
     "talk.elevated.fix": "Hãy thoát Amenbo và mở lại mà không dùng “Run as administrator”, các công cụ sẽ trở lại.",
@@ -633,6 +641,10 @@ export const vi: Translation = {
       "{url} giờ đưa ra {serving}, không phải {agreed} mà bạn đã được cho xem. Hãy đăng ký lại và đối chiếu vân tay mới.",
     pty_failed: "Không thể khởi động terminal: {reason}",
     pty_gone: "Terminal đó không còn mở.",
+    wake_unknown_agent: "Amenbo không biết cách khởi chạy {agent}.",
+    wake_no_folder: "Không đọc được thư mục đó: {reason}",
+    wake_no_config: "Amenbo không tìm thấy tệp của chính nó.",
+    wake_not_kept: "Không lưu được lựa chọn.",
     window_failed: "Không thể mở cửa sổ đó: {reason}",
 
     already_reserved: "{ref} không ở trạng thái “Cần làm” nên không thể nhận — có thể một phiên khác đã giữ nó.",

@@ -473,6 +473,13 @@ export const tr: Translation = {
     "act.nameless": "(silinmiş)",
     "app.loadError": "Veriler yüklenemedi.", "app.loading": "Yükleniyor…",
     "app.talkWindow": "Amenbo — Sohbet",
+    "talk.searching": "Bu makinedeki ajanlar aranıyor…",
+    "talk.ask": "Bu klasörde hangi ajanla çalışıyorsun?",
+    "talk.none": "Bu makinede Amenbo'nun başlatabileceği bir ajan bulunamadı.",
+    "talk.noneHint": "Amenbo kabuğunuzun PATH'inde şu komutları aradı: {commands}. Birini kurun, sonra yeniden arayın.",
+    "talk.retry": "Yeniden ara",
+    "talk.open": "Aç",
+    "talk.agent": "Ajan",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "Konuşuluyor", "talk.holding": "{n} görev",
@@ -489,6 +496,7 @@ export const tr: Translation = {
     "face.page": "Sayfa {n}",
     "face.open": "Burada bir terminal aç",
     "face.rename": "Bu bölmeyi yeniden adlandır",
+    "face.needsYou": "sizi bekliyor",
     "talk.elevated.title": "Amenbo yönetici olarak çalışıyor",
     "talk.elevated.body": "Burada açılan bir terminal bunu devralır ve bir yönetici, scoop'un paketlerini arkasına kurduğu bağlantıları izlemez. Bu araçlara bu pencereden ulaşılamaz — kurulu olsalar da Amenbo kurulu değil diyecektir.",
     "talk.elevated.fix": "Amenbo'dan çıkın ve “Yönetici olarak çalıştır” demeden yeniden açın; araçlar geri gelir.",
@@ -631,6 +639,10 @@ export const tr: Translation = {
       "{url} artık size gösterilen {agreed} yerine {serving} sunuyor. Yeniden kaydedin ve yeni parmak izini karşılaştırın.",
     pty_failed: "Terminal başlatılamadı: {reason}",
     pty_gone: "O terminal artık açık değil.",
+    wake_unknown_agent: "Amenbo {agent} uygulamasını nasıl başlatacağını bilmiyor.",
+    wake_no_folder: "O klasör okunamadı: {reason}",
+    wake_no_config: "Amenbo kendi dosyalarını bulamadı.",
+    wake_not_kept: "Seçim kaydedilemedi.",
     window_failed: "O pencere açılamadı: {reason}",
 
     already_reserved:

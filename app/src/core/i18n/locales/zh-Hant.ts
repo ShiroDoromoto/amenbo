@@ -473,6 +473,13 @@ export const zhHant: Translation = {
     "act.nameless": "（已刪除）",
     "app.loadError": "資料載入失敗。", "app.loading": "載入中…",
     "app.talkWindow": "Amenbo — 對話",
+    "talk.searching": "正在尋找這台機器上的智慧代理…",
+    "talk.ask": "在這個資料夾裡你使用哪個代理？",
+    "talk.none": "這台機器上找不到 Amenbo 能啟動的代理。",
+    "talk.noneHint": "Amenbo 在你 shell 的 PATH 裡尋找了這些指令：{commands}。裝上其中一個，然後再找一次。",
+    "talk.retry": "再找一次",
+    "talk.open": "開啟",
+    "talk.agent": "代理",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "商議中", "talk.holding": "{n} 項",
@@ -489,6 +496,7 @@ export const zhHant: Translation = {
     "face.page": "第 {n} 頁",
     "face.open": "在此開啟終端機",
     "face.rename": "重新命名此窗格",
+    "face.needsYou": "在等你",
     "talk.elevated.title": "Amenbo 正以系統管理員身分執行",
     "talk.elevated.body": "在此開啟的終端機會繼承該權限，而系統管理員不會跟隨 scoop 安放套件所用的連結。這些工具在本視窗中無法存取——即使已安裝，Amenbo 仍會回報為未安裝。",
     "talk.elevated.fix": "結束 Amenbo，不使用「以系統管理員身分執行」重新開啟，工具就會回來。",
@@ -630,6 +638,10 @@ export const zhHant: Translation = {
       "{url} 現在公布的是 {serving}，而不是給你看過的 {agreed}。請重新登錄，並核對新的指紋。",
     pty_failed: "無法啟動終端機：{reason}",
     pty_gone: "該終端機已經關閉。",
+    wake_unknown_agent: "Amenbo 不知道如何啟動 {agent}。",
+    wake_no_folder: "讀不到那個資料夾：{reason}",
+    wake_no_config: "Amenbo 找不到自己的檔案。",
+    wake_not_kept: "沒能保存這個選擇。",
     window_failed: "無法開啟該視窗：{reason}",
 
     already_reserved: "{ref} 不是「待辦」，無法認領；可能已有另一個工作階段在處理。",

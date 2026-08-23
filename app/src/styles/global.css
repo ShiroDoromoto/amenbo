@@ -86,6 +86,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* The program in the terminal having exited. What is on the screen stays as it was — that is what a
    terminal ends with — and this is the part of it the screen cannot show for itself. */
 .termface__note { color: var(--c-text-muted); font-size: var(--fs-sm); }
+/* What the face holds: the frame the agent question is put in, and the pane once one is running
+   (`app/src/talk/agent.ts`). It takes the room the bar above it leaves. */
+.termface__face { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+
 /* The terminal's box. xterm.js measures the element it was opened in, so this is what decides how
    many columns and rows the program inside is told it has. */
 .termface__pane {
@@ -96,17 +100,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--c-surface);
   overflow: hidden;
 }
-/* What is shown instead when the terminal could not be started: what the host said, because there is
-   nothing this side knows to add to it. */
-.termface__failed {
-  flex: 1;
-  padding: var(--s-4);
-  color: var(--c-text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--fs-sm);
-  white-space: pre-wrap;
-}
-
 /* The controls that pick what is on screen: how many panes, and which page. Both are rows of every
    choice with the one in force marked, rather than a control that says the next step — which of them
    is on is the thing being chosen between, and a reader should not have to press to find out.
@@ -382,6 +375,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .topbar__face:hover { color: var(--c-text); }
 .topbar__face--on { background: var(--c-surface); color: var(--c-text); font-weight: var(--fw-bold); }
+/* A turn standing behind the other face (`shell/terminalBadge.ts`). It is the accent dot the inbox
+   badge wears, in the one place that can be seen from the face the person is on — inline after the
+   label rather than pinned to a corner, so the segment simply grows by a dot and nothing shifts
+   under the pointer. */
+.topbar__face-badge {
+  display: inline-block; width: 6px; height: 6px; margin-left: var(--s-1);
+  border-radius: 50%; background: var(--c-accent); vertical-align: middle;
+}
 .topbar__refresh {
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--c-surface-sunken); border: 1px solid var(--c-border);
@@ -510,6 +511,86 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .step-stop { color: var(--c-stop); }
 .step-heed { color: var(--c-heed); }
 
+/* Which agent a pane starts as (`app/src/talk/agent.ts`). The classes are here rather than beside
+   either face's own because both faces draw this frame, and only one of them loads `talk.css`. The
+   pane's own box is not here for the same reason in reverse: each face styles its terminal itself,
+   and hands this frame the class to draw it with. */
+.agent__frame {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-height: 0;
+}
+
+/* What the frame says while it is working out what this folder starts with. */
+.agent__looking {
+  padding: var(--s-4);
+  color: var(--c-text-muted);
+  font-size: var(--fs-sm);
+}
+
+/* The offer and the install notice share a box: both are a sentence and then something to press. */
+.agent__ask {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-2);
+  padding: var(--s-4);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+}
+
+.agent__askTitle { font-size: var(--fs-md); font-weight: 600; }
+
+/* What was looked for, and what to do about it. Prose rather than monospace: the command names sit
+   inside a sentence, and a whole sentence set in the terminal's face reads as output. */
+.agent__hint {
+  max-width: 60ch;
+  color: var(--c-text-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+}
+
+.agent__choice {
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  background: var(--c-surface);
+  color: var(--c-text);
+  cursor: pointer;
+  font: inherit;
+}
+
+.agent__choice:hover { border-color: var(--c-accent); }
+
+/* The closed frame's row. It exists only once the program has ended — while one is running there is
+   nothing here to press, which is what "the agent cannot be changed mid-run" looks like on screen. */
+.agent__row {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+}
+
+.agent__pick { display: flex; align-items: center; gap: var(--s-1); font-size: var(--fs-sm); }
+
+/* What is shown instead when a terminal could not be started, or the question could not be put. */
+.agent__failed {
+  flex: 1;
+  padding: var(--s-4);
+  color: var(--c-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  white-space: pre-wrap;
 /* The one line above a pane: what it is called, what its session is on, and the one thing worth saying
    about it. One line and no more — a row that can grow is a row that pushes the terminal about every
    time an agent says something long. */

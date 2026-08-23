@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { mountTerminal, type Place } from "../talk/terminal";
+import { mountAgentFrame } from "../talk/agent";
 import { mountPlate, type Plate } from "../talk/plate";
 import type { FrameNames, NamedBy } from "../talk/frames";
+import type { PaneStart } from "../talk/terminal";
 import type { SessionSaidDto } from "../bindings/bindings";
-import { t } from "../core/i18n";
+import { currentLang, t } from "../core/i18n";
 
 /**
  * One slot of the terminal face: a frame, and the terminal in it when there is one.
@@ -11,8 +12,9 @@ import { t } from "../core/i18n";
  * **A frame is a place, so an empty one is not nothing.** It is a slot on this page with a way to
  * open a terminal in it, and it stays a place after the program in it exits — what is on the screen
  * is what a terminal ends with, and taking the pane away would be the app deciding the reader had
- * finished reading it. So this starts a terminal once and then keeps the pane, whatever happens to
- * the process.
+ * finished reading it. So this puts the frame up once and then keeps it, whatever happens to the
+ * process: what runs in it, what is offered when nothing can be started, and the row a closed frame
+ * carries are all the frame's (`../talk/agent`).
  *
  * The pane comes down when the slot stops being on the screen — the page turned, or fewer panes were
  * asked for — and **the terminal does not**: a pane is a drawing of a session, and detaching leaves
@@ -20,15 +22,17 @@ import { t } from "../core/i18n";
  * session id is handed back up: the frame is what remembers, and this is only what draws.
  */
 export function TerminalPane({
-  frame, names, place, autoStart, focused, onOpened, onSaid, onClosed, onName, onFocus,
+  frame, names, start, autoStart, focused,
+  onOpened, onSaid, onClosed, onName, onFocus, onWaiting,
 }: {
   /** Which of the arrangement's places this is (`../talk/layout`). */
   frame: string;
   /** What every frame is called, so a naming from anywhere reaches this row. */
   names: FrameNames;
   /** Which terminal to draw here, and where to start one. */
-  place: Place;
-  /** True for the slot that puts a terminal up without being asked — the one the face comes up with. */
+  start: PaneStart;
+  /** True for the slot that puts a terminal up without being asked — the one the face comes up with,
+   *  and the one a person has just pressed the way in on. */
   autoStart: boolean;
   focused: boolean;
   onOpened: (frame: string, session: string, folder: string | null) => void;
@@ -36,24 +40,25 @@ export function TerminalPane({
   onClosed: (session: string) => void;
   onName: (frame: string, name: string, by: NamedBy) => void;
   onFocus: (frame: string) => void;
+  /** Whether a turn is standing in this pane. The face gathers them: behind the ledger no label can
+   *  be seen at all, so what the shell badges is the face and not a pane (`./terminalBadge`). */
+  onWaiting: (frame: string, waiting: boolean) => void;
 }) {
   const paneRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
   const plateRef = useRef<Plate | null>(null);
   // Once a terminal has been asked for here it stays asked for: a slot whose program exited keeps the
-  // pane, and a person who pressed the button once has not un-pressed it.
+  // frame, and a person who pressed the button once has not un-pressed it.
   const [running, setRunning] = useState(autoStart);
-  // What the pane has to say for itself when it is not simply a terminal: the host's refusal if one
-  // could not be started, and the fact of the program having exited, which the screen cannot show on
-  // its own — what a finished shell leaves behind looks exactly like one waiting to be typed at.
-  const [failed, setFailed] = useState<string | null>(null);
+  // The fact of the program having exited, which the screen cannot show on its own — what a finished
+  // shell leaves behind looks exactly like one waiting to be typed at.
   const [ended, setEnded] = useState(false);
 
   // What the face wants done with what happens here, read at the moment it happens. The pane is put up
   // once and lives longer than any one render, so the effect below must not be re-run to see a newer
   // callback — that would take the terminal down to learn something it could have been told.
-  const on = useRef({ onOpened, onSaid, onClosed, onName });
-  on.current = { onOpened, onSaid, onClosed, onName };
+  const on = useRef({ onOpened, onSaid, onClosed, onName, onWaiting });
+  on.current = { onOpened, onSaid, onClosed, onName, onWaiting };
 
   useEffect(() => {
     if (!running) return;
@@ -65,12 +70,17 @@ export function TerminalPane({
     setEnded(false);
     // The line above the pane. It holds what is known about the session running there for as long as
     // it runs, which is the same line the split-out window draws (`../talk/plate.ts`).
-    const plate = mountPlate(label, undefined, frame);
+    const plate = mountPlate(
+      label,
+      currentLang,
+      (waiting) => on.current.onWaiting(frame, waiting),
+      frame,
+    );
     plateRef.current = plate;
-    void mountTerminal(host, {
+    void mountAgentFrame(host, currentLang(), {
       opened: (session, startedAt) => {
         plate.opened(session, startedAt);
-        on.current.onOpened(frame, session, place.cwd ?? null);
+        on.current.onOpened(frame, session, start.cwd ?? null);
       },
       said: (statement) => {
         plate.said(statement);
@@ -84,21 +94,24 @@ export function TerminalPane({
       // The window's own title is not the pane's to say — this window is the board. The name goes to
       // the store, and what draws it is the line above the pane.
       name: (text, by) => on.current.onName(frame, text, by),
-    }, place)
+    }, "termface__pane", start)
       .then((take) => {
         // Taken away while the host was still answering. Detaching leaves the terminal running for
         // whatever draws it next, which is exactly what a pane that never got shown should do.
         if (taken) take();
         else detach = take;
       })
-      .catch((e: unknown) => setFailed(e instanceof Error ? e.message : String(e)));
+      .catch(() => {});
     return () => {
       taken = true;
       detach?.();
       plate.stop();
       plateRef.current = null;
+      // A pane that has gone is not a turn that has been taken: what it was waiting on is still
+      // waiting, but nothing on this screen can be looked at for it any more.
+      on.current.onWaiting(frame, false);
     };
-    // Only `running` is a reason to do any of this again. `place` and `frame` are what this pane *is*
+    // Only `running` is a reason to do any of this again. `start` and `frame` are what this pane *is*
     // — a change of either would be a different pane, and the face gives that one a different key.
   }, [running]);
 
@@ -118,9 +131,7 @@ export function TerminalPane({
           <>
             <div ref={labelRef} />
             {ended && <span className="termface__note">{t("face.ended")}</span>}
-            {failed === null
-              ? <div className="termface__pane" ref={paneRef} />
-              : <div className="termface__failed">{failed}</div>}
+            <div className="termface__face" ref={paneRef} />
           </>
         )
         : (

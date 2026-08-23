@@ -1,0 +1,79 @@
+# The one thing nothing outside a pane can find out, arriving where a person reads it.
+#
+# An agent working in a terminal goes quiet for two reasons that look identical from outside: it is
+# thinking, or it is waiting for the person. Nothing watching the process can tell them apart — which
+# is why the surface layer exists, and why saying a turn has come is one of the two words an agent
+# owes rather than offers. This road is that word going the whole way: typed in the pane by the thing
+# running there, read out of the drop box by the app, drawn on the label above the pane.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road here and no gap in one. The layer has no existence outside a pane — said
+# anywhere else it is refused, deliberately and loudly — so a terminal driver has nowhere to say it
+# and nothing to read it off. The refusal itself is a different goal from this one.
+#
+# ── Why a hand types it ──────────────────────────────────────────────────────────────────────────
+# Every other premise on these roads is stood up by a driver before the app opens. This one cannot be:
+# the words are only accepted from inside the pane that is running, which does not exist until the app
+# does, and a world stood up before the launch would have written them from nowhere. So the operator
+# types what an agent types. That is not a shortcut around the seam — it is the seam, walked by the
+# only door there is.
+#
+# ── What is read, and why it is the agent's own words ────────────────────────────────────────────
+# Both readings are words the road wrote itself. Everything else on that row belongs to the interface,
+# so a reading of one would hold this gate to whichever language the run's machine is set to — and
+# more to the point, what is under test is that *what the agent said* is what a person sees. A label
+# drawn from anything else would be the app talking about the session rather than the session talking.
+#
+# The pane is named before the turn is handed over, which is the order an agent works in and not a
+# flourish: the first line sent into a pane names its frame, so a road that only ran the one command
+# would have the pane called `amenbo session waiting …` for the rest of its life. Naming it first is
+# also the smaller half of the same seam, read on the same row.
+#
+# The world is empty on purpose. What the label says here is the session's, not the ledger's: a
+# pane holding no task is exactly the state this road is about, and standing tasks up would put words
+# on the row that came from somewhere else.
+id: be-told-in-the-pane-that-your-turn-has-come
+title: An agent hands the turn over from inside its pane, and the person reads it on the label
+description: >
+  Open the terminal face and let the thing running in the pane speak for itself: name the pane, then
+  hand the turn over with the reason in the same breath. Both arrive on the label above the pane, in
+  the agent's own words. What is under test is the whole seam — a word said with the CLI inside a
+  terminal, read out of the drop box by the app, and drawn where somebody looking at the screen will
+  see that it is their turn and why.
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Named first, and by the agent rather than by the hand: a name typed as a line would name the frame
+  # too, but this road is about the layer, so the name comes through the layer.
+  - type: action
+    domain: terminal
+    op: say
+    with:
+      verb: name
+      text: SCENARIO the migration
+
+  - type: assert
+    domain: terminal
+    op: label
+    with:
+      shows: SCENARIO the migration
+
+  # The word that is owed. The reason travels with it because a turn nobody can act on is not a turn
+  # handed over — "your turn" alone leaves the person to go and find out what for.
+  - type: action
+    domain: terminal
+    op: say
+    with:
+      verb: waiting
+      text: SCENARIO the ledger migration needs a decision
+
+  - type: assert
+    domain: terminal
+    op: label
+    with:
+      shows: SCENARIO the ledger migration needs a decision

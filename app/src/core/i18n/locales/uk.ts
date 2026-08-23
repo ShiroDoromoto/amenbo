@@ -499,6 +499,13 @@ export const uk: Translation = {
     "act.nameless": "(видалене)",
     "app.loadError": "Не вдалося завантажити дані.", "app.loading": "Завантаження…",
     "app.talkWindow": "Amenbo — Діалог",
+    "talk.searching": "Шукаємо агентів на цій машині…",
+    "talk.ask": "З яким агентом ви працюєте в цій теці?",
+    "talk.none": "На цій машині не знайдено жодного агента, якого Amenbo може запустити.",
+    "talk.noneHint": "Amenbo шукав у PATH вашої оболонки такі команди: {commands}. Встановіть одну з них і пошукайте знову.",
+    "talk.retry": "Шукати знову",
+    "talk.open": "Відкрити",
+    "talk.agent": "Агент",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "Обговорення", "talk.holding": "завдань: {n}",
@@ -515,6 +522,7 @@ export const uk: Translation = {
     "face.page": "Сторінка {n}",
     "face.open": "Відкрити тут термінал",
     "face.rename": "Перейменувати цю панель",
+    "face.needsYou": "чекає на вас",
     "talk.elevated.title": "Amenbo запущено від імені адміністратора",
     "talk.elevated.body": "Термінал, відкритий тут, успадковує це, а адміністратор не переходить за посиланнями, за якими scoop розміщує свої пакунки. З цього вікна такі інструменти недосяжні — Amenbo повідомить, що їх не встановлено, хоча вони встановлені.",
     "talk.elevated.fix": "Закрийте Amenbo й відкрийте його знову без «Запуску від імені адміністратора» — інструменти повернуться.",
@@ -668,6 +676,10 @@ export const uk: Translation = {
       "{url} тепер видає {serving}, а не показаний вам {agreed}. Зареєструйте його заново й звірте новий відбиток.",
     pty_failed: "Не вдалося запустити термінал: {reason}",
     pty_gone: "Цей термінал більше не відкритий.",
+    wake_unknown_agent: "Amenbo не знає, як запустити {agent}.",
+    wake_no_folder: "Не вдалося прочитати цю теку: {reason}",
+    wake_no_config: "Amenbo не знайшов власні файли.",
+    wake_not_kept: "Не вдалося зберегти вибір.",
     window_failed: "Не вдалося відкрити це вікно: {reason}",
 
     already_reserved:

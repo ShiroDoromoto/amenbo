@@ -1803,6 +1803,20 @@ const REGISTRY: &[OpSpec] = &[
     // how a road tells "the same terminal, moved" from "another terminal, started". The absent half
     // is what a road reads while the other face is up.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "pane", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    // Something the agent in the pane said about its own session — the surface layer, said with the
+    // CLI from inside the terminal it is about. `verb` is which of the layer's words was used and
+    // `text` is what was said in it; both travel as values because the layer is one seam with several
+    // words, and an op per word would be the same instruction written four times.
+    //
+    // It is walked by a hand rather than by a driver on purpose. The layer exists only inside a pane
+    // — said anywhere else it is refused — so there is no way to reach it except the one an agent
+    // reaches it by, and a road that stood it up some other way would prove a path nobody walks.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "say", required: &["verb", "text"], refs: &[], strings: &["verb", "text"], binds: false },
+    // And what the pane's label carries afterwards. This is the whole of what the surface layer is
+    // for: a word said in a terminal that nothing outside it can find out, arriving where a person
+    // reads it. The words are the agent's own, so a reading finds them on the label and nowhere in
+    // the interface around it.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "label", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
 
 ];
 

@@ -227,6 +227,37 @@ fn failed(e: impl std::fmt::Display) -> CmdError {
     )
 }
 
+/// The catalog row a webview's agent id names, or the refusal for an id nothing lists.
+///
+/// The lookup is what keeps the pane's command line out of the webview's hands: an id that is not in
+/// the catalog is turned away here rather than handed to a shell. It is refused under `crate::wake`'s
+/// code, because what it names is that rule and not this door — the same id is turned away the same
+/// way where a folder's answer is written down.
+fn started_as(agent: &str) -> Result<&'static amenbo_core::harness::Harness, CmdError> {
+    amenbo_core::wake::started_as(agent).ok_or_else(|| {
+        CmdError::coded(
+            "wake_unknown_agent",
+            "That is not an agent Amenbo knows how to start.",
+            serde_json::json!({ "agent": agent }),
+        )
+    })
+}
+
+/// The command line one catalogued agent is started as: the program, with the launch instruction
+/// handed to it as its opening prompt (`AMB-T-3596`).
+///
+/// **Every terminal this window opens gets it, and it is never put to the person first.** It is
+/// plumbing — the sentence that points an agent at `agent --json` — and a pane that asked before
+/// sending it would be asking whether the person wants their AI to know where it is working.
+///
+/// The instruction names the binary this build is ([`amenbo_core::config::Paths::command_name`]), so
+/// a dev-channel window starts agents on the dev channel's own command rather than on the production
+/// one the reader may not have installed.
+fn opening_line(harness: &amenbo_core::harness::Harness) -> String {
+    let cmd = amenbo_core::config::Paths::command_name();
+    launch::command_line(harness.command, &amenbo_core::harness::opening(harness, cmd))
+}
+
 /// The refusal for a session id that names no open terminal — closed while the pane still had it,
 /// or never opened at all.
 fn gone(session: &str) -> CmdError {
@@ -246,13 +277,18 @@ fn gone(session: &str) -> CmdError {
 /// which the emulator on the far side measures from the space it has.
 ///
 /// What is started is the user's own shell, reached for the way [`crate::launch`] reaches for it on
-/// this operating system. Which agent to start inside it is settled on top of this rather than here.
+/// this operating system. `agent` is the catalogued id of the AI to start inside that shell
+/// ([`crate::wake`]); with none given the pane is a bare prompt. **The id is turned into a command
+/// here**, out of the catalog — what the webview names is a row, never a command line — and the
+/// launch instruction rides in on that command line as the agent's opening prompt
+/// ([`opening_line`]).
 #[tauri::command]
 pub fn pty_open(
     app: tauri::AppHandle,
     window: tauri::Window,
     terminals: tauri::State<'_, Terminals>,
     cwd: Option<String>,
+    agent: Option<String>,
     cols: u16,
     rows: u16,
 ) -> Result<PtySessionDto, CmdError> {
@@ -270,7 +306,8 @@ pub fn pty_open(
         .map(|dir| std::fs::canonicalize(dir).map_err(failed))
         .transpose()?;
 
-    let mut cmd = launch::command(folder.clone(), None);
+    let run = agent.as_deref().map(started_as).transpose()?.map(opening_line);
+    let mut cmd = launch::command(folder.clone(), run.as_deref());
     cmd.env(SESSION_ENV, &session);
     // The drop box is made here rather than left for the first statement to make, so that a pane which
     // cannot be spoken to is one the surface layer refuses in from the start: with no directory named,
@@ -307,7 +344,7 @@ pub fn pty_open(
         },
     );
 
-    listen(app.clone(), session.clone(), drop_box);
+    listen(app.clone(), session.clone(), Arc::clone(&pane), drop_box);
 
     let id = session.clone();
     std::thread::spawn(move || {
@@ -430,7 +467,7 @@ fn sweep_in(dir: &std::path::Path, older_than: std::time::Duration) {
 ///
 /// The registry is asked *before* each read and the loop ends *after* one, so the statements an agent
 /// makes in its last breath are carried before the box is taken away.
-fn listen(app: tauri::AppHandle, session: String, dir: std::path::PathBuf) {
+fn listen(app: tauri::AppHandle, session: String, pane: Arc<Pane>, dir: std::path::PathBuf) {
     std::thread::spawn(move || {
         let mut last: Option<String> = None;
         loop {
@@ -445,7 +482,10 @@ fn listen(app: tauri::AppHandle, session: String, dir: std::path::PathBuf) {
             for said in amenbo_core::session::said_after(&dir, last.as_deref()).unwrap_or_default() {
                 last = Some(said.name.clone());
                 let dto = SessionSaidDto::of(&session, said);
-                if app.emit_to(crate::windows::TALK, SAID_EVENT, dto).is_err() {
+                // To the window drawing the pane, which is where the output goes and for the same
+                // reason: the terminal is drawn in whichever window is its home right now, and a
+                // statement sent to a fixed one would reach nobody as soon as it moved (`AMB-D-753`).
+                if app.emit_to(pane.target().as_str(), SAID_EVENT, dto).is_err() {
                     return;
                 }
             }

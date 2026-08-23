@@ -473,6 +473,13 @@ export const nl: Translation = {
     "act.nameless": "(verwijderd)",
     "app.loadError": "Gegevens laden is mislukt.", "app.loading": "Bezig met laden…",
     "app.talkWindow": "Amenbo — Gesprek",
+    "talk.searching": "Bezig met zoeken naar de agents op deze machine…",
+    "talk.ask": "Met welke agent werk je in deze map?",
+    "talk.none": "Op deze machine is geen agent gevonden die Amenbo kan starten.",
+    "talk.noneHint": "Amenbo heeft in het PATH van je shell naar deze commando's gezocht: {commands}. Installeer er een en zoek opnieuw.",
+    "talk.retry": "Opnieuw zoeken",
+    "talk.open": "Openen",
+    "talk.agent": "Agent",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "In gesprek", "talk.holding": "{n} taken",
@@ -489,6 +496,7 @@ export const nl: Translation = {
     "face.page": "Pagina {n}",
     "face.open": "Hier een terminal openen",
     "face.rename": "Dit deelvenster hernoemen",
+    "face.needsYou": "wacht op je",
     "talk.elevated.title": "Amenbo draait als administrator",
     "talk.elevated.body": "Een terminal die hier opent, erft dat, en een administrator volgt de koppelingen niet waarachter scoop zijn pakketten installeert. Die tools zijn vanuit dit venster onbereikbaar — Amenbo meldt ze als niet geïnstalleerd, terwijl ze dat wel zijn.",
     "talk.elevated.fix": "Sluit Amenbo af en open het opnieuw zonder “Als administrator uitvoeren”, dan zijn ze er weer.",
@@ -631,6 +639,10 @@ export const nl: Translation = {
       "{url} publiceert nu {serving}, niet de {agreed} die je te zien kreeg. Registreer haar opnieuw en controleer de nieuwe vingerafdruk.",
     pty_failed: "De terminal kon niet worden gestart: {reason}",
     pty_gone: "Die terminal is niet meer open.",
+    wake_unknown_agent: "Amenbo weet niet hoe {agent} gestart moet worden.",
+    wake_no_folder: "Die map kon niet gelezen worden: {reason}",
+    wake_no_config: "Amenbo kon zijn eigen bestanden niet vinden.",
+    wake_not_kept: "De keuze kon niet opgeslagen worden.",
     window_failed: "Dat venster kon niet worden geopend: {reason}",
 
     already_reserved:

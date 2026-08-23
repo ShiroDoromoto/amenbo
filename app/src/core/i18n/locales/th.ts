@@ -476,6 +476,13 @@ export const th: Translation = {
     "act.nameless": "(ถูกลบไปแล้ว)",
     "app.loadError": "โหลดข้อมูลไม่สำเร็จ", "app.loading": "กำลังโหลด…",
     "app.talkWindow": "Amenbo — บทสนทนา",
+    "talk.searching": "กำลังค้นหาเอเจนต์ในเครื่องนี้…",
+    "talk.ask": "ในโฟลเดอร์นี้คุณใช้เอเจนต์ตัวไหน",
+    "talk.none": "ไม่พบเอเจนต์ที่ Amenbo เริ่มทำงานได้ในเครื่องนี้",
+    "talk.noneHint": "Amenbo ค้นหาคำสั่งเหล่านี้ใน PATH ของเชลล์คุณ: {commands} ติดตั้งสักตัวแล้วค้นหาอีกครั้ง",
+    "talk.retry": "ค้นหาอีกครั้ง",
+    "talk.open": "เปิด",
+    "talk.agent": "เอเจนต์",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "กำลังปรึกษากันอยู่", "talk.holding": "{n} งาน",
@@ -492,6 +499,7 @@ export const th: Translation = {
     "face.page": "หน้า {n}",
     "face.open": "เปิดเทอร์มินัลที่นี่",
     "face.rename": "เปลี่ยนชื่อบานหน้าต่างนี้",
+    "face.needsYou": "กำลังรอคุณอยู่",
     "talk.elevated.title": "Amenbo กำลังทำงานในฐานะผู้ดูแลระบบ",
     "talk.elevated.body": "เทอร์มินัลที่เปิดที่นี่จะได้รับสิทธิ์นั้นต่อ และผู้ดูแลระบบจะไม่ตามลิงก์ที่ scoop ใช้วางแพ็กเกจของมัน เครื่องมือเหล่านั้นจึงเข้าถึงไม่ได้จากหน้าต่างนี้ — Amenbo จะรายงานว่ายังไม่ได้ติดตั้ง ทั้งที่ติดตั้งไว้แล้ว",
     "talk.elevated.fix": "ปิด Amenbo แล้วเปิดใหม่โดยไม่ใช้ “Run as administrator” เครื่องมือก็จะกลับมา",
@@ -633,6 +641,10 @@ export const th: Translation = {
       "{url} ตอนนี้ให้ {serving} ไม่ใช่ {agreed} ที่เคยแสดงให้คุณดู ให้ลงทะเบียนใหม่และตรวจลายนิ้วมืออันใหม่",
     pty_failed: "ไม่สามารถเริ่มเทอร์มินัลได้: {reason}",
     pty_gone: "เทอร์มินัลนี้ไม่ได้เปิดอยู่แล้ว",
+    wake_unknown_agent: "Amenbo ไม่รู้วิธีเริ่ม {agent}",
+    wake_no_folder: "อ่านโฟลเดอร์นั้นไม่ได้: {reason}",
+    wake_no_config: "Amenbo หาไฟล์ของตัวเองไม่พบ",
+    wake_not_kept: "บันทึกตัวเลือกไม่ได้",
     window_failed: "ไม่สามารถเปิดหน้าต่างนั้นได้: {reason}",
 
     already_reserved: "{ref} ไม่ได้อยู่ในสถานะ “รอทำ” จึงจองไม่ได้ — อาจมีเซสชันอื่นถืออยู่แล้ว",

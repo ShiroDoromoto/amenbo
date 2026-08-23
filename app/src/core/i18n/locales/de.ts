@@ -483,6 +483,13 @@ export const de: Translation = {
     "act.nameless": "(gelöscht)",
     "app.loadError": "Die Daten ließen sich nicht laden.", "app.loading": "Wird geladen…",
     "app.talkWindow": "Amenbo — Dialog",
+    "talk.searching": "Suche nach den Agenten auf diesem Rechner …",
+    "talk.ask": "Mit welchem Agenten arbeitest du in diesem Ordner?",
+    "talk.none": "Auf diesem Rechner wurde kein Agent gefunden, den Amenbo starten kann.",
+    "talk.noneHint": "Amenbo hat im PATH deiner Shell nach diesen Befehlen gesucht: {commands}. Installiere einen davon und suche dann erneut.",
+    "talk.retry": "Erneut suchen",
+    "talk.open": "Öffnen",
+    "talk.agent": "Agent",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "Im Gespräch", "talk.holding": "{n} Aufgaben",
@@ -499,6 +506,7 @@ export const de: Translation = {
     "face.page": "Seite {n}",
     "face.open": "Hier ein Terminal öffnen",
     "face.rename": "Diesen Bereich umbenennen",
+    "face.needsYou": "wartet auf Sie",
     "talk.elevated.title": "Amenbo läuft als Administrator",
     "talk.elevated.body": "Ein hier geöffnetes Terminal erbt das, und ein Administrator folgt den Verknüpfungen nicht, hinter denen scoop seine Pakete ablegt. Diese Werkzeuge sind aus diesem Fenster nicht erreichbar – Amenbo meldet sie als nicht installiert, obwohl sie es sind.",
     "talk.elevated.fix": "Beenden Sie Amenbo und öffnen Sie es erneut ohne „Als Administrator ausführen“, dann sind sie wieder da.",
@@ -644,6 +652,10 @@ export const de: Translation = {
       "{url} veröffentlicht jetzt {serving} statt des gezeigten {agreed}. Trage es erneut ein und prüfe den neuen Fingerabdruck.",
     pty_failed: "Das Terminal konnte nicht gestartet werden: {reason}",
     pty_gone: "Dieses Terminal ist nicht mehr geöffnet.",
+    wake_unknown_agent: "Amenbo weiß nicht, wie {agent} gestartet wird.",
+    wake_no_folder: "Dieser Ordner ließ sich nicht lesen: {reason}",
+    wake_no_config: "Amenbo konnte seine eigenen Dateien nicht finden.",
+    wake_not_kept: "Die Auswahl ließ sich nicht speichern.",
     window_failed: "Dieses Fenster konnte nicht geöffnet werden: {reason}",
 
     already_reserved:

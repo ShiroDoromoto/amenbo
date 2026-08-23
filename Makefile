@@ -55,6 +55,19 @@ $(error pass AMB-T-ID or AMB-THEME, not both — a build is one task's instance 
 endif
 endif
 
+# The VM route is one task's instance and nothing else: it is a screen to verify a task on, and the
+# shared dev app is this machine's permanent setup, which nothing sends anywhere. Refused while the
+# makefile is read rather than in the recipe, because the recipe runs after a two-minute build and a
+# door that says no afterwards has already spent it.
+ifneq (,$(filter install-gui-dev-vm,$(MAKECMDGOALS)))
+ifeq ($(strip $(AMB-T-ID)),)
+$(error install-gui-dev-vm puts one task's own instance in the VM — pass AMB-T-ID=<id>)
+endif
+ifneq (,$(shell command -v devtool >/dev/null 2>&1 || echo missing))
+$(error install-gui-dev-vm needs devtool, which reaches the VM — `make devtool` builds it)
+endif
+endif
+
 ifneq ($(strip $(AMB-THEME)),)
 # The slug's own character set: lowercase letters, digits and hyphens, a lowercase letter first, 24
 # at most — the same set a classification value's slug is held to, so the word that names the theme
@@ -222,7 +235,7 @@ LINUX_CLI_IMAGE   := amenbo-linux-cli:$(LINUX_CLI_ARCH)
 # so it does not appear here = shell-gate's actionlint sees that.
 SHELL_SOURCES := $(shell git ls-files '*.sh' '.githooks/*')
 
-.PHONY: help install install-dev gui gui-dev gui-dev-names gui-dev-linux install-gui install-gui-dev dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate product-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate gui-inputs-gate ci-aggregate-gate workflow-run-gate brand sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux dist-cli-dev-linux verify-existing-store release codesign-cert devtool
+.PHONY: help install install-dev gui gui-dev gui-dev-names gui-dev-linux install-gui install-gui-dev install-gui-dev-vm dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate product-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate gui-inputs-gate ci-aggregate-gate workflow-run-gate brand sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux dist-cli-dev-linux verify-existing-store release codesign-cert devtool
 
 help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
@@ -268,6 +281,7 @@ help:
 	@echo "make install-gui-dev - build the dev GUI and put it in $(APPS_DIR)/$(GUI_DEV_NAME).app"
 	@echo "                       AMB-T-ID=<id> builds that task's own throwaway instance (app-data work.amenbo.amenbo-dev-<id>, seeded from the shared dev store) instead of the shared dev app; devtool devgui rm <id> deletes it"
 	@echo "                       AMB-THEME=<slug> builds that theme's preview under the same split (app-data work.amenbo.amenbo-dev-<slug>, not seeded); the two are exclusive"
+	@echo "make install-gui-dev-vm AMB-T-ID=<id> - build that instance here and put it in the throwaway macOS VM instead of on this machine (needs devtool + tart; devtool vm rm throws the VM away)"
 	@echo "make gui-dev-linux - build the dev GUI's Linux AppImage in Docker into dist/ (the preview workflow's Linux leg; needs Docker)"
 	@echo "make gui-dev-names - print the names AMB-THEME / AMB-T-ID split a dev build by, as key=value (what the preview workflow reads instead of spelling them again)"
 
@@ -925,6 +939,16 @@ install-gui-dev: gui-dev
 	@# one bundle for the whole machine, so a parallel session can land its own build over this one.
 	@scripts/verify-gui-front.sh "$(APPS_DIR)/$(GUI_DEV_NAME).app"
 	@echo "→ updated $(APPS_DIR)/$(GUI_DEV_NAME).app (dev; app-data: work.amenbo.$(GUI_DEV_DATA))"
+
+## Build the dev GUI here and put it in the throwaway macOS VM instead of on this machine — the
+## screen a task is verified on, so driving one does not take this Mac's keyboard and mouse.
+## Build and placing are split by destination, not by tool: the bundle is baked here either way, so
+## the guest needs neither Rust nor node, and only where it lands changes.
+## The host target above is untouched and stays the default — a clone or a fork with one Mac has no
+## VM, and this is a second destination rather than a replacement.
+## AMB-T-ID=<id> is required (see the guard above); devtool raises the VM if none is running.
+install-gui-dev-vm: gui-dev
+	devtool devgui install $(AMB-T-ID) --vm
 
 ## The names a theme's dev build is split by, as `key=value` lines — the one way anything outside
 ## make reads them. The preview workflow's Windows leg builds the installer without make (the

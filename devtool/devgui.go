@@ -38,6 +38,11 @@ func taskDevAppData(id string) string { return sharedDevAppData + "-" + id }
 // taskDevBundle is the product name — and so the bundle's file name — of that same instance.
 func taskDevBundle(id string) string { return "amenbo (dev " + id + ")" }
 
+// taskDevExecutable is the name the instance's own process runs under (the Makefile's GUI_DEV_BIN),
+// which is how the OS is asked about one instance and not another: `pgrep -x` matches a process
+// name exactly, and the bundle name — parentheses, spaces and all — is no name a process carries.
+func taskDevExecutable(id string) string { return "amenbo-app-dev-" + id }
+
 // taskIDFromCheckout names the task a checkout belongs to, and "" for the main one. A task worktree
 // sits at `<repo-name>-worktrees/<id>` (see paths), so the directory name is the id — read back
 // through the same canonical form every other route takes, or a hand-made directory beside the real

@@ -68,6 +68,11 @@ permanent place a grown setup (plugins, catalog, projects) lives.
 | built by | `make install-gui-dev` | `make install-gui-dev AMB-T-ID=<id>` |
 | deleted by | nothing — it is permanent | `devtool devgui rm <id>` |
 
+The right-hand column is where it lands on **this machine**. The same instance goes
+into the throwaway VM instead with `make install-gui-dev-vm AMB-T-ID=<id>` — same
+names, same layout, another machine — and is thrown away with the VM rather than
+by `devgui rm`. See [`devgui install`](#devtool-devgui-install-id---vm).
+
 Each build runs under an executable name of its own — production keeps
 `amenbo-app` — so a name reaches one app and not another: `pgrep -x
 amenbo-app-dev-<id>` finds that one instance, and `System Events` lists it under
@@ -146,6 +151,56 @@ instance the ordinary way never types it. Details:
   verify, never a reason to fail the build that asked.
 - The bundle itself is not built here; that is the Makefile's, and only the
   tasks that look at a GUI pay for one.
+
+### `devtool devgui install <id> --vm`
+
+Puts the task's own dev GUI **in the throwaway VM** instead of on this machine —
+the screen it is driven on, so a verification run does not take this Mac's
+keyboard and mouse:
+
+```sh
+make install-gui-dev-vm AMB-T-ID=696     # build it here, put it in there
+devtool devgui install 696 --vm          # put the built bundle in there again
+# /Applications/amenbo (dev 696).app
+```
+
+**The build stays on the host.** Only the placing moves, so the guest needs
+neither Rust nor node, and the `.app` baked here runs in there unchanged — same
+arch, same OS generation (43MB across in 0.96s, measured).
+
+**This machine stays the default destination**, and that route is the Makefile's
+own (`make install-gui-dev AMB-T-ID=<id>`): a clone or a fork with one Mac has no
+VM, and a default that needed one would leave it unable to verify anything.
+So `--vm` is not optional here — it is the whole reason the
+command exists, and without it you are asking for the route that has one already.
+
+- **It raises the VM if none is running.** When a clone is thrown away is a
+  person's call (`devtool vm rm`); when one is raised is not.
+- **The instance is quit in the guest first**, by executable name
+  (`amenbo-app-dev-<id>`). An app replaced under itself writes its store back on
+  the way out, over the bundle just sent. One that will not quit is a non-zero
+  exit, not a half-replaced bundle.
+- **What is sent is staged and moved into place**, never copied over what is
+  there: `scp -r` onto an existing directory merges into it, and a bundle
+  carrying files from an older build looks exactly like an implementation that
+  does not work.
+- **The store is this machine's shared dev store, sent across** — the same setup
+  (plugins, catalog, projects) a host instance is seeded from. The guest has no
+  shared dev app of its own and never will: it is a clone thrown away at the end
+  of a session. A store already in there is left alone, and everything past that
+  reports and carries on — an instance that opens empty is a poorer screen, not
+  a reason to fail the placing that asked.
+- **The guest layout mirrors this machine's exactly** (`/Applications` bundle,
+  `~/Library/Application Support` store), so what addresses an instance by path
+  reads the same on both sides and only the machine it is asked of changes.
+- **Nothing lands on this machine.** The bundle is read out of the build
+  directory, so the host `/Applications` and the host app-data are untouched —
+  and `devgui rm` reclaims neither of the guest's halves. Throwing the VM away is
+  what reclaims those, all at once.
+
+Opening it is one line — `devtool vm exec -- open -a '/Applications/amenbo (dev
+696).app'` — and the printed path is that argument. macOS only, and it needs
+`tart` the way everything under `vm` does.
 
 ### `devtool devgui cli <id> [--no-build] -- <amenbo args…>`
 

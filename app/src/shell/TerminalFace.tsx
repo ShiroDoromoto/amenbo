@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { mountTerminal } from "../talk/terminal";
 import { nameFrame, ONLY_FRAME } from "../talk/frames";
-import { closed, NO_SESSIONS, opened, said, type Sessions } from "../talk/sessions";
+import { anyWaiting, closed, NO_SESSIONS, opened, said, type Sessions } from "../talk/sessions";
 import { t } from "../core/i18n";
 
 /**
@@ -19,8 +19,20 @@ import { t } from "../core/i18n";
  *
  * `note` is what the shell has to say about this face that the pane cannot — a window that could not
  * be split out, which is the press of the button here having come to nothing.
+ *
+ * `onWaiting` is the one thing this face says back to the shell: whether a pane in it is waiting on a
+ * person. Behind the other face the nameplates cannot be seen at all, so the shell puts a badge on
+ * the segment instead (`./terminalBadge`) — and it is told the fact, not what to do about it.
  */
-export function TerminalFace({ onSplitOut, note }: { onSplitOut: () => void; note: string | null }) {
+export function TerminalFace({
+  onSplitOut,
+  note,
+  onWaiting,
+}: {
+  onSplitOut: () => void;
+  note: string | null;
+  onWaiting: (waiting: boolean) => void;
+}) {
   const paneRef = useRef<HTMLDivElement>(null);
   // What is running in the pane. It is held for as long as the pane is, the way the talk window holds
   // its own (`app/src/talk/sessions.ts`) — a session has no existence outside the terminal it runs in,
@@ -31,22 +43,38 @@ export function TerminalFace({ onSplitOut, note }: { onSplitOut: () => void; not
   // its own — what a finished shell leaves behind looks exactly like one waiting to be typed at.
   const [failed, setFailed] = useState<string | null>(null);
   const [ended, setEnded] = useState(false);
+  // What the shell was last told, so it hears the changes and not every statement: an agent at work
+  // says a great deal, and almost none of it moves whether a turn is standing.
+  const told = useRef(false);
+  // Held in a ref because the pane is put up once, in an effect that runs once: reading the prop
+  // through this is what lets the shell pass a fresh callback without the terminal coming down.
+  const tell = useRef(onWaiting);
+  tell.current = onWaiting;
 
   useEffect(() => {
     const host = paneRef.current;
     if (!host) return;
+    const report = () => {
+      const waiting = anyWaiting(sessions.current);
+      if (waiting === told.current) return;
+      told.current = waiting;
+      tell.current(waiting);
+    };
     let taken = false;
     let detach: (() => void) | null = null;
     setEnded(false);
     void mountTerminal(host, {
       opened: (session, startedAt) => {
         sessions.current = opened(sessions.current, { session, startedAt });
+        report();
       },
       said: (statement) => {
         sessions.current = said(sessions.current, statement);
+        report();
       },
       closed: (session) => {
         sessions.current = closed(sessions.current, session);
+        report();
         setEnded(true);
       },
       // The name is offered to the store and nothing here draws it: this window is the board, and
@@ -66,6 +94,10 @@ export function TerminalFace({ onSplitOut, note }: { onSplitOut: () => void; not
     return () => {
       taken = true;
       detach?.();
+      // The pane is going: whatever was standing in it is nobody's turn to be knocked about any
+      // more. It has to be said on the way out, because the shell is what keeps the badge.
+      sessions.current = NO_SESSIONS;
+      report();
     };
   }, []);
 

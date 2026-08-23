@@ -14,7 +14,7 @@ import { notifyStoreChangeReflected } from "../core/snapshot";
 let container: HTMLDivElement;
 let root: Root;
 
-const props = { onBack: () => {}, onForward: () => {}, canBack: false, canForward: false, sidebarCollapsed: false, onToggleSidebar: () => {}, face: "tasks" as const, onSelectFace: () => {} };
+const props = { onBack: () => {}, onForward: () => {}, canBack: false, canForward: false, sidebarCollapsed: false, onToggleSidebar: () => {}, face: "tasks" as const, onSelectFace: () => {}, terminalBadge: false };
 const ws = () => container.querySelector(".topbar__ws")!;
 
 beforeEach(() => {

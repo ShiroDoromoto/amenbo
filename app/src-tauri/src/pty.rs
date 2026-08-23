@@ -307,7 +307,7 @@ pub fn pty_open(
         },
     );
 
-    listen(app.clone(), session.clone(), drop_box);
+    listen(app.clone(), session.clone(), Arc::clone(&pane), drop_box);
 
     let id = session.clone();
     std::thread::spawn(move || {
@@ -430,7 +430,7 @@ fn sweep_in(dir: &std::path::Path, older_than: std::time::Duration) {
 ///
 /// The registry is asked *before* each read and the loop ends *after* one, so the statements an agent
 /// makes in its last breath are carried before the box is taken away.
-fn listen(app: tauri::AppHandle, session: String, dir: std::path::PathBuf) {
+fn listen(app: tauri::AppHandle, session: String, pane: Arc<Pane>, dir: std::path::PathBuf) {
     std::thread::spawn(move || {
         let mut last: Option<String> = None;
         loop {
@@ -445,7 +445,10 @@ fn listen(app: tauri::AppHandle, session: String, dir: std::path::PathBuf) {
             for said in amenbo_core::session::said_after(&dir, last.as_deref()).unwrap_or_default() {
                 last = Some(said.name.clone());
                 let dto = SessionSaidDto::of(&session, said);
-                if app.emit_to(crate::windows::TALK, SAID_EVENT, dto).is_err() {
+                // To the window drawing the pane, which is where the output goes and for the same
+                // reason: the terminal is drawn in whichever window is its home right now, and a
+                // statement sent to a fixed one would reach nobody as soon as it moved (`AMB-D-753`).
+                if app.emit_to(pane.target().as_str(), SAID_EVENT, dto).is_err() {
                     return;
                 }
             }

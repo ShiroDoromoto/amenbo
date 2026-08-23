@@ -479,6 +479,7 @@ export const zhHant: Translation = {
     "face.splitOut": "在另一個視窗開啟",
     "face.merge": "合併回單一視窗",
     "face.ended": "此終端機中的程式已結束。",
+    "face.needsYou": "在等你",
     "talk.elevated.title": "Amenbo 正以系統管理員身分執行",
     "talk.elevated.body": "在此開啟的終端機會繼承該權限，而系統管理員不會跟隨 scoop 安放套件所用的連結。這些工具在本視窗中無法存取——即使已安裝，Amenbo 仍會回報為未安裝。",
     "talk.elevated.fix": "結束 Amenbo，不使用「以系統管理員身分執行」重新開啟，工具就會回來。",

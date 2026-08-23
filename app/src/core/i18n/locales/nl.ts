@@ -479,6 +479,7 @@ export const nl: Translation = {
     "face.splitOut": "In een apart venster openen",
     "face.merge": "Terug naar één venster",
     "face.ended": "Het programma in deze terminal is gestopt.",
+    "face.needsYou": "wacht op je",
     "talk.elevated.title": "Amenbo draait als administrator",
     "talk.elevated.body": "Een terminal die hier opent, erft dat, en een administrator volgt de koppelingen niet waarachter scoop zijn pakketten installeert. Die tools zijn vanuit dit venster onbereikbaar — Amenbo meldt ze als niet geïnstalleerd, terwijl ze dat wel zijn.",
     "talk.elevated.fix": "Sluit Amenbo af en open het opnieuw zonder “Als administrator uitvoeren”, dan zijn ze er weer.",

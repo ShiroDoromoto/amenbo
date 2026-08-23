@@ -1,10 +1,11 @@
 // The file face: the right side of the terminal face, where what the agent in the pane is doing to
 // the folder can be seen without leaving the window (`AMB-T-3602`).
 //
-// **It belongs to the project, not to the pane.** The rows are rooted at a folder the project is
-// bound to, so switching panes does not move them — what changed in the repository is the same
-// question whichever terminal is in front of it. The row that does follow the pane is the one above
-// these two ("what was pointed at"), and it is `AMB-T-3603`'s to add.
+// **Two of the rows belong to the project and one to the pane.** What changed lately and the folder
+// itself are rooted at a folder the project is bound to, so switching panes does not move them — what
+// changed in the repository is the same question whichever terminal is in front of it. The top row is
+// the other way round: it is what the focused pane's agent pointed at, and it follows the focus
+// (`AMB-T-3603`). Mixing the two would leave a reader unable to say what happened where.
 //
 // **What changed lately is watched, not asked for.** The host lays a watch over the folder and
 // says what is in it as it moves (`crate::folder_watch`), so the row is right while a person is
@@ -20,18 +21,32 @@ import { useEffect, useMemo, useState } from "react";
 import type { FolderChangesDto } from "../bindings/bindings";
 import { Markdown } from "../components/Markdown";
 import { useBoundFolders } from "../core/boundFolders";
-import { t, whenLabel } from "../core/i18n";
-import { RefNavProvider, useRefNav } from "../core/refNav";
+import { t, tf, whenLabel } from "../core/i18n";
+import { openExternalUrl } from "../core/mutations";
+import { resolveRef } from "../core/reads";
+import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
 import { folderEntries, folderRead, folderUnwatch, folderWatch, onFolderChanged } from "./folder";
+import { fileUnder, isRef, isUrl, unread, type Pointed } from "./pointed";
 
 /** The names a file's text is drawn as Markdown under. The one thing here the name decides. */
 const MARKDOWN = [".md", ".markdown"];
 
-export function FilesPanel({ projectId, onOpenLedger }: {
+export function FilesPanel({ projectId, onOpenLedger, pointed }: {
   /** The project whose folder the face is rooted at; nothing is drawn without one. */
   projectId: number | null;
-  /** Leave the terminal face for the ledger — what a reference in a file means when it is clicked. */
+  /** Leave the terminal face for the ledger — what a reference or a record means when it is clicked. */
   onOpenLedger?: () => void;
+  /** What the focused pane's agent has pointed at, and whose pane it is (`AMB-T-3603`). */
+  pointed?: {
+    /** The rows, newest first. */
+    points: readonly Pointed[];
+    /** What that pane is called, where anybody has named it. */
+    name: string | null;
+    /** Whether the session that said these has ended. */
+    ended: boolean;
+    /** Somebody opened one of them. */
+    onRead: (at: string) => void;
+  };
 }) {
   // `0` names no project, which is what the folder read then answers with: none. A window with no
   // project on it draws the invitation, the same as one whose project has no folder.
@@ -79,6 +94,15 @@ export function FilesPanel({ projectId, onOpenLedger }: {
 
   return (
     <div className="files">
+      {pointed !== undefined && (
+        <PointedRow
+          root={root}
+          pointed={pointed}
+          onRead={(at) => pointed.onRead(at)}
+          onOpenFile={setReading}
+          onOpenLedger={onOpenLedger}
+        />
+      )}
       <section className="files__row">
         <h3 className="files__head">{t("files.changed")}</h3>
         {changes.changed.length === 0
@@ -117,6 +141,98 @@ export function FilesPanel({ projectId, onOpenLedger }: {
       </section>
     </div>
   );
+}
+
+/**
+ * What the focused pane's agent pointed at.
+ *
+ * Nothing is announced while the agent is working — the count beside the heading is the whole of
+ * what this row says during a run, because an agent at work is not the moment to interrupt. When the
+ * session ends, anything nobody opened is said once, and nothing is held up over it: a reader who
+ * ignores the line has still finished (`AMB-T-3603`).
+ */
+function PointedRow({ root, pointed, onRead, onOpenFile, onOpenLedger }: {
+  root: string | null;
+  pointed: { points: readonly Pointed[]; name: string | null; ended: boolean };
+  onRead: (at: string) => void;
+  onOpenFile: (path: string[]) => void;
+  onOpenLedger?: () => void;
+}) {
+  const nav = useLedgerNav(onOpenLedger);
+  const left = unread(pointed.points);
+
+  const open = (one: Pointed) => {
+    onRead(one.at);
+    if (isRef(one.target)) {
+      void resolveRef(one.target).then((target) => {
+        if (!target) return;
+        onOpenLedger?.();
+        if (target.kind === "task") nav.selectTask?.(target.id);
+        else nav.selectDecision?.(target.id);
+      });
+      return;
+    }
+    if (isUrl(one.target)) {
+      void openExternalUrl(one.target);
+      return;
+    }
+    const path = root === null ? null : fileUnder(root, one.cwd, one.target);
+    if (path) onOpenFile(path);
+  };
+
+  return (
+    <section className="files__row">
+      <h3 className="files__head">
+        {t("files.pointed")}
+        {/* The count, and nothing else, while the agent is at work. */}
+        {left > 0 && <span className="files__when">{left}</span>}
+      </h3>
+      {pointed.name !== null && <span className="files__where">{pointed.name}</span>}
+      {pointed.points.length === 0
+        ? <p className="files__none">{t("files.nothingPointed")}</p>
+        : (
+          <ul className="files__list">
+            {pointed.points.map((one) => {
+              // A row that opens nothing is not drawn as one that does: a path outside the folder
+              // the face is rooted at has nowhere here to go (`AMB-D-747`).
+              const reachable = isRef(one.target) || isUrl(one.target)
+                || (root !== null && fileUnder(root, one.cwd, one.target) !== null);
+              return (
+                <li key={one.at}>
+                  {reachable
+                    ? (
+                      <button
+                        className={`files__file${one.read ? " files__file--read" : ""}`}
+                        onClick={() => open(one)}
+                      >
+                        <span className="files__name">{one.target}</span>
+                      </button>
+                    )
+                    : <span className="files__name files__none">{one.target}</span>}
+                  {one.why !== "" && <span className="files__where">{one.why}</span>}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      {/* Said once, at the end, and only about what is still unopened. */}
+      {pointed.ended && left > 0 && (
+        <p className="files__none">{tf("files.unopened", { n: left })}</p>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Following something from this face means leaving it: what a record opens on is the ledger, and a
+ * click that selected it behind this face would look like a link that did nothing (`AMB-D-747`).
+ */
+function useLedgerNav(onOpenLedger?: () => void): RefNav {
+  const outer = useRefNav();
+  return useMemo(() => ({
+    selectTask: (id: number) => { onOpenLedger?.(); outer.selectTask?.(id); },
+    selectDecision: (id: number | null) => { onOpenLedger?.(); outer.selectDecision?.(id); },
+  }), [outer, onOpenLedger]);
 }
 
 /** One folder's worth of names, and whatever of it has been opened. */
@@ -192,14 +308,9 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger }: {
     return () => { alive = false; };
   }, [projectId, root, path.join("/")]);
 
-  // A reference in a file is a live link or it is nothing at all (`AMB-D-747`). Selecting the task
-  // happens on the other face, so following one from here has to leave this face — otherwise the
-  // click lands on a pane the reader cannot see and reads as a link that does nothing.
-  const outer = useRefNav();
-  const nav = useMemo(() => ({
-    selectTask: (id: number) => { onOpenLedger?.(); outer.selectTask?.(id); },
-    selectDecision: (id: number | null) => { onOpenLedger?.(); outer.selectDecision?.(id); },
-  }), [outer, onOpenLedger]);
+  // A reference in a file is a live link or it is nothing at all (`AMB-D-747`), and following one
+  // leaves this face for the same reason a pointed-at record does.
+  const nav = useLedgerNav(onOpenLedger);
 
   return (
     <div className="files files--reading">

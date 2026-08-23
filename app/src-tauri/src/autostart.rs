@@ -1,8 +1,8 @@
 //! Start at login (`AMB-D-541`): the registration the OS reads when the user signs in, and the switch
 //! that writes or removes it.
 //!
-//! What is registered is a plain launch of this executable — the window comes up the way it does when
-//! the user opens the app themselves. There is no tray-resident shape behind this, and none is assumed:
+//! What is registered is a plain launch of this executable — the windows come up the way they do when
+//! the user opens the app themselves, board in front and talk window behind (`crate::windows`). There is no tray-resident shape behind this, and none is assumed:
 //! the reason to be up early is that the inbox items which arrived while the app was closed are
 //! collected on the next open (`AMB-D-310`), so opening more often is noticing sooner.
 //!

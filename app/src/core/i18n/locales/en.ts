@@ -511,6 +511,9 @@ const ui = {
   // to word, from the bare timestamp the backend sends (see core/i18n/format).
   // app / shell chrome
   "app.loadError": "Failed to load data.", "app.loading": "Loading…",
+  // The talk window names itself from here — `tauri.conf.json` can hold only one fixed string,
+  // and two windows both called "Amenbo" cannot be told apart in a window list (`AMB-T-3588`).
+  "app.talkWindow": "Amenbo — Talk",
   // lint hook consent: the question Amenbo asks before writing into .git/hooks
   "hooks.title": "Keep Amenbo's refs out of your commits?",
   "hooks.why": "A ref like AMB-T-… means nothing outside the store that issued it. A git hook stops one before it reaches a commit.",

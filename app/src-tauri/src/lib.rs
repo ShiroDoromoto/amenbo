@@ -37,6 +37,9 @@ pub mod store_watch;
 /// The hourly tick's startup pass: what this device answered about being woken, settled against what
 /// its scheduler holds (`AMB-D-707`).
 mod tick;
+/// The labels of the two windows this app opens (board and talk), and which of them anything that
+/// raises a window from outside the webview means.
+mod windows;
 #[cfg(target_os = "windows")]
 mod windows_notify;
 

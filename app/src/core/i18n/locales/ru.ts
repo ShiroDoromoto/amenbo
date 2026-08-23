@@ -501,6 +501,7 @@ export const ru: Translation = {
     "act.nDecisions.one": "{n} решение", "act.nDecisions.few": "{n} решения", "act.nDecisions.many": "{n} решений", "act.nDecisions.other": "{n} решения",
     "act.nameless": "(удалено)",
     "app.loadError": "Не удалось загрузить данные.", "app.loading": "Загрузка…",
+    "app.talkWindow": "Amenbo — Диалог",
     "hooks.title": "Не пускать ссылки Amenbo в ваши коммиты?",
     "hooks.why": "Ссылка вида AMB-T-… ничего не значит за пределами тех данных, что её выдали. Хук git останавливает её до того, как она попадёт в коммит.",
     "hooks.scope": "Спрашивается один раз. Ваш ответ распространяется на репозитории, с которыми работает Amenbo, — и на нынешние, и на те, что вы добавите позже.",

@@ -475,6 +475,7 @@ export const id: Translation = {
     "act.nDecisions.other": "{n} keputusan",
     "act.nameless": "(dihapus)",
     "app.loadError": "Gagal memuat data.", "app.loading": "Memuat…",
+    "app.talkWindow": "Amenbo — Percakapan",
     "hooks.title": "Jauhkan rujukan Amenbo dari commit Anda?",
     "hooks.why": "Rujukan seperti AMB-T-… tidak berarti apa-apa di luar data yang menerbitkannya. Sebuah git hook menghentikannya sebelum ia sampai ke commit.",
     "hooks.scope": "Ditanyakan sekali. Jawaban Anda berlaku untuk repositori tempat Amenbo bekerja, yang sekarang maupun yang Anda tambahkan nanti.",

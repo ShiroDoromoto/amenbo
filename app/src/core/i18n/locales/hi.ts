@@ -472,6 +472,7 @@ export const hi: Translation = {
     "act.nDecisions.one": "{n} निर्णय", "act.nDecisions.other": "{n} निर्णय",
     "act.nameless": "(मिटाया हुआ)",
     "app.loadError": "डेटा लोड नहीं हो सका।", "app.loading": "लोड हो रहा है…",
+    "app.talkWindow": "Amenbo — संवाद",
     "hooks.title": "Amenbo के संदर्भ आपके कमिट से बाहर रखें?",
     "hooks.why": "AMB-T-… जैसा संदर्भ उस डेटा के बाहर कुछ नहीं कहता जिसने उसे जारी किया। एक git हुक उसे कमिट तक पहुँचने से पहले रोक देता है।",
     "hooks.scope": "एक बार पूछा जाता है। आपका उत्तर उन सभी रिपॉज़िटरी पर लागू होता है जिनमें Amenbo काम करता है — अभी की भी, और आगे जोड़ी जाने वाली भी।",

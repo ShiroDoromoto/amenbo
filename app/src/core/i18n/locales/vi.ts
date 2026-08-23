@@ -475,6 +475,7 @@ export const vi: Translation = {
     "act.nDecisions.other": "{n} quyết định",
     "act.nameless": "(đã xoá)",
     "app.loadError": "Không tải được dữ liệu.", "app.loading": "Đang tải…",
+    "app.talkWindow": "Amenbo — Hội thoại",
     "hooks.title": "Giữ các mã tham chiếu của Amenbo ra ngoài commit của bạn?",
     "hooks.why": "Một mã như AMB-T-… chẳng có nghĩa gì bên ngoài kho dữ liệu đã cấp nó. Một git hook chặn nó lại trước khi nó vào tới commit.",
     "hooks.scope": "Chỉ hỏi một lần. Câu trả lời của bạn áp cho các kho mã mà Amenbo làm việc trong đó, cả bây giờ lẫn những kho bạn thêm về sau.",

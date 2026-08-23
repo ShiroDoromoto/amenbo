@@ -36,14 +36,14 @@ static APP: OnceLock<tauri::AppHandle> = OnceLock::new();
 /// The event emitted to the front end on a click; the webview takes it and opens the inbox.
 const ACTIVATED_EVENT: &str = "notification-activated";
 
-/// What a click on the toast does: raise the window and ask the front end to go to the inbox. An
+/// What a click on the toast does: raise the board and ask the front end to go to the inbox. An
 /// arrival notification is an aggregate count (`notifyArrival(n)`) and names no single task, so the
-/// inbox is as specific as the destination can get.
+/// inbox is as specific as the destination can get — and the inbox is the board's (`crate::windows`).
 fn on_activated() {
     let Some(app) = APP.get() else { return };
     // The click has the OS activate the app, but restoring from minimized/hidden and coming to the
     // front are spelled out here.
-    if let Some(win) = app.get_webview_window("main") {
+    if let Some(win) = app.get_webview_window(crate::windows::BOARD) {
         let _ = win.unminimize();
         let _ = win.show();
         let _ = win.set_focus();

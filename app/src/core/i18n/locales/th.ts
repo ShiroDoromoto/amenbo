@@ -475,6 +475,7 @@ export const th: Translation = {
     "act.nDecisions.other": "{n} การตัดสินใจ",
     "act.nameless": "(ถูกลบไปแล้ว)",
     "app.loadError": "โหลดข้อมูลไม่สำเร็จ", "app.loading": "กำลังโหลด…",
+    "app.talkWindow": "Amenbo — บทสนทนา",
     "hooks.title": "กันรหัสอ้างอิงของ Amenbo ออกจากคอมมิตของคุณไหม",
     "hooks.why": "รหัสอย่าง AMB-T-… ไม่มีความหมายเลยนอกข้อมูลที่ออกมันมา git hook จะหยุดมันไว้ก่อนไปถึงคอมมิต",
     "hooks.scope": "ถามครั้งเดียว คำตอบของคุณครอบคลุมรีโปที่ Amenbo ทำงานด้วย ทั้งตอนนี้และที่คุณเพิ่มทีหลัง",

@@ -472,6 +472,7 @@ export const nl: Translation = {
     "act.nDecisions.one": "{n} besluit", "act.nDecisions.other": "{n} besluiten",
     "act.nameless": "(verwijderd)",
     "app.loadError": "Gegevens laden is mislukt.", "app.loading": "Bezig met laden…",
+    "app.talkWindow": "Amenbo — Gesprek",
     "hooks.title": "Amenbo-verwijzingen uit je commits houden?",
     "hooks.why": "Een verwijzing als AMB-T-… betekent niets buiten de gegevens die haar hebben uitgegeven. Een git-hook houdt er een tegen voordat hij in een commit belandt.",
     "hooks.scope": "Wordt één keer gevraagd. Je antwoord geldt voor de repositories waarin Amenbo werkt, nu en die je later toevoegt.",

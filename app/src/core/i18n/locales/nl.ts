@@ -501,6 +501,7 @@ export const nl: Translation = {
     "face.openHere": "Nog een terminal op deze pagina openen",
     "face.rename": "Dit deelvenster hernoemen",
     "face.needsYou": "wacht op je",
+    "face.nothingNeedsYou": "Voor zover het register weet, is er niets dat u nodig heeft.",
     "files.pointed": "Aangewezen",
     "files.nothingPointed": "Er is nog niets aangewezen.",
     "files.unopened": "{n} hiervan zijn nooit geopend.",

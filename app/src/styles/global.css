@@ -130,6 +130,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
 }
 .termface__page--on { background: var(--c-accent); border-color: var(--c-accent); color: #fff; }
+/* A turn standing on a page that is not the one showing. The dot is `--c-heed` — the step that means
+   "it moves, know this while it does" (`styles/tokens.css`) — because that is exactly what it says:
+   somebody is needed there, not that anything is wrong. A page whose panes have finished wears
+   nothing at all: what is over is not something a person is needed for (`AMB-T-3610`). */
+.termface__page { position: relative; }
+.termface__needs {
+  position: absolute; top: -1px; right: -1px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--c-heed); border: 1px solid var(--c-bg);
+}
 
 /* The rail and the panes, side by side. The rail keeps its width and the panes take what is left:
    the panes are what the face is for, and a list of them that grew with their names would take the

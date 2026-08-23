@@ -527,6 +527,7 @@ export const pl: Translation = {
     "face.openHere": "Otwórz kolejny terminal na tej stronie",
     "face.rename": "Zmień nazwę tego panelu",
     "face.needsYou": "czeka na Ciebie",
+    "face.nothingNeedsYou": "Z tego, co wie rejestr, nic nie czeka na ciebie.",
     "files.pointed": "Wskazane",
     "files.nothingPointed": "Nic jeszcze nie zostało wskazane.",
     "files.unopened": "{n} z nich nigdy nie otwarto.",

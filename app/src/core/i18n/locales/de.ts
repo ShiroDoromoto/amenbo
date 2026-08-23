@@ -511,6 +511,7 @@ export const de: Translation = {
     "face.openHere": "Ein weiteres Terminal auf dieser Seite öffnen",
     "face.rename": "Diesen Bereich umbenennen",
     "face.needsYou": "wartet auf Sie",
+    "face.nothingNeedsYou": "Soweit das Verzeichnis weiß, wird nirgends jemand gebraucht.",
     "files.pointed": "Hingewiesen auf",
     "files.nothingPointed": "Bisher wurde auf nichts hingewiesen.",
     "files.unopened": "{n} davon wurden nie geöffnet.",

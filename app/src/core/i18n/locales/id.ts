@@ -504,6 +504,7 @@ export const id: Translation = {
     "face.openHere": "Buka terminal lain di halaman ini",
     "face.rename": "Ganti nama panel ini",
     "face.needsYou": "menunggu Anda",
+    "face.nothingNeedsYou": "Sejauh yang tercatat, tidak ada yang membutuhkan Anda.",
     "files.pointed": "Yang ditunjuk",
     "files.nothingPointed": "Belum ada yang ditunjuk.",
     "files.unopened": "{n} di antaranya tidak pernah dibuka.",

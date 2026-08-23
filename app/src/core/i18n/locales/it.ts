@@ -522,6 +522,7 @@ export const it: Translation = {
     "face.openHere": "Apri un altro terminale in questa pagina",
     "face.rename": "Rinomina questo riquadro",
     "face.needsYou": "ti sta aspettando",
+    "face.nothingNeedsYou": "Per quel che risulta al registro, nulla ha bisogno di te.",
     "files.pointed": "Segnalati",
     "files.nothingPointed": "Non è stato ancora segnalato nulla.",
     "files.unopened": "{n} di questi non sono mai stati aperti.",

@@ -501,6 +501,7 @@ export const hi: Translation = {
     "face.openHere": "इस पेज पर एक और टर्मिनल खोलें",
     "face.rename": "इस पैन का नाम बदलें",
     "face.needsYou": "आपकी प्रतीक्षा में",
+    "face.nothingNeedsYou": "बहीखाते के अनुसार, अभी कहीं आपकी ज़रूरत नहीं है।",
     "files.pointed": "बताई गई चीज़ें",
     "files.nothingPointed": "अभी तक कुछ नहीं बताया गया।",
     "files.unopened": "इनमें से {n} कभी खोली नहीं गईं।",

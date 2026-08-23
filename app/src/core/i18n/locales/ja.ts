@@ -513,6 +513,7 @@ export const ja: Translation = {
     "face.openHere": "このページにもう1枚ひらく",
     "face.rename": "このペインの名前を変える",
     "face.needsYou": "手が要ります",
+    "face.nothingNeedsYou": "台帳の上では、手が要るものはありません。",
     "files.pointed": "指されたもの",
     "files.nothingPointed": "まだ何も指されていません。",
     "files.unopened": "開いていないものが {n} 件あります。",

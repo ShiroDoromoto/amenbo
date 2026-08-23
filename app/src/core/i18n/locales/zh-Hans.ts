@@ -501,6 +501,7 @@ export const zhHans: Translation = {
     "face.openHere": "在这一页再开一个终端",
     "face.rename": "重命名此窗格",
     "face.needsYou": "在等你",
+    "face.nothingNeedsYou": "就账本所知，没有需要你的地方。",
     "files.pointed": "指出的东西",
     "files.nothingPointed": "还没有指出任何东西。",
     "files.unopened": "其中 {n} 项一直没有打开。",

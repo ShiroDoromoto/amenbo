@@ -117,9 +117,10 @@ export function TerminalPane({
       detach?.();
       plate.stop();
       plateRef.current = null;
-      // A pane that has gone is not a turn that has been taken: what it was waiting on is still
-      // waiting, but nothing on this screen can be looked at for it any more.
-      on.current.onWaiting(frame, false);
+      // **The turn is not taken down with the pane.** A pane goes away when the person turns to
+      // another page, which is exactly when they are not looking at it — saying the turn was over
+      // because the page turned would erase the one fact the dot on that page exists to carry
+      // (`AMB-T-3610`). What ends a turn is the pane saying so, or the session ending.
     };
     // Only `running` is a reason to do any of this again. `start` and `frame` are what this pane *is*
     // — a change of either would be a different pane, and the face gives that one a different key.

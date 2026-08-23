@@ -523,6 +523,7 @@ export const ptBR: Translation = {
     "face.openHere": "Abrir outro terminal nesta página",
     "face.rename": "Renomear este painel",
     "face.needsYou": "esperando por você",
+    "face.nothingNeedsYou": "Pelo que o registro sabe, nada precisa de você.",
     "files.pointed": "Apontado",
     "files.nothingPointed": "Nada foi apontado ainda.",
     "files.unopened": "{n} destes nunca foram abertos.",

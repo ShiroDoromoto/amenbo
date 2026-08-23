@@ -2268,3 +2268,33 @@ pub struct FolderImageDto {
     /// The whole picture, base64-encoded, for a `data:` URL.
     pub(crate) base64: String,
 }
+
+/// The talk window's arrangement, as this device left it (`amenbo_core::frames::SavedLayout`).
+///
+/// The shape only: how many panes to a page, the frames in slot order, and the folder each was
+/// working in. **What was running is not here** — a session died with the last run, and a pane drawn
+/// as though it were still there would be the window saying something untrue (`AMB-T-3607`).
+#[derive(Deserialize, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct TalkLayoutDto {
+    /// How many panes to a page.
+    pub(crate) count: u32,
+    /// The next frame id to hand out — ids are never reused, so a name stays on its own frame.
+    pub(crate) next_id: u32,
+    /// The frames, in slot order.
+    pub(crate) frames: Vec<TalkFrameDto>,
+}
+
+/// One frame of a kept arrangement: where it sat, and what it was working on.
+#[derive(Deserialize, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct TalkFrameDto {
+    /// The id its name is kept against (`FrameNameDto`).
+    pub(crate) id: String,
+    /// The folder its terminal was working in, where it had one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) folder: Option<String>,
+}

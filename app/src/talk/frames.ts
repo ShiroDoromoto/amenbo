@@ -12,8 +12,9 @@
 // good. The ranking itself is the store's (`amenbo_core::frames`), so this file never decides whether a
 // name takes: it says who is naming and draws what comes back.
 
-import type { FrameNameDto } from "../bindings/bindings";
+import type { FrameNameDto, TalkLayoutDto } from "../bindings/bindings";
 import { invoke } from "../core/ipc";
+import type { SavedLayout } from "./layout";
 
 /** Who is naming a frame. Ranked in the store, lowest first. */
 export type NamedBy = "typed" | "session" | "person";
@@ -99,4 +100,24 @@ export function typed(so_far: Typing, data: string): Typing {
     if (key >= " ") line += key;
   }
   return { line, sent: false, esc };
+}
+
+/**
+ * The arrangement this device left behind, or nothing where it left none.
+ *
+ * Read once, as the face comes up. What comes back is a shape and no sessions, so nothing about it
+ * starts anything (`./layout`).
+ */
+export async function savedLayout(): Promise<SavedLayout | null> {
+  return await invoke<TalkLayoutDto | null>("talk_layout", {});
+}
+
+/**
+ * Keep the arrangement as it stands.
+ *
+ * Written as the window is changed rather than as it closes: a window that is killed, or a machine
+ * that loses power, is exactly the case a person wants their panes back after.
+ */
+export async function keepLayout(layout: SavedLayout): Promise<void> {
+  await invoke<void>("save_talk_layout", { layout });
 }

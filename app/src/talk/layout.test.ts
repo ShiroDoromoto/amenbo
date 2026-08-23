@@ -1,8 +1,9 @@
 // What the arrangement has to keep true, none of which is visible in the arithmetic that does it.
 import { describe, expect, it } from "vitest";
 import {
-  closedIn, EMPTY_LAYOUT, focusOn, folderOfPage, frameFor, goPage, MAX_PAGES, movedTo, openedIn,
-  pageCount, pageOfFrame, setCount, settledIn, sidesAreDrawers, slotsOf, type Layout,
+  closedIn, EMPTY_LAYOUT, focusOn, folderOfPage, frameFor, goPage, laidOut, MAX_PAGES, movedTo,
+  openedIn, pageCount, pageOfFrame, restored, setCount, settledIn, sidesAreDrawers, slotsOf,
+  type Layout,
 } from "./layout";
 
 /** A layout with `n` frames materialised at the given count, the way pressing through slots leaves one. */
@@ -125,5 +126,48 @@ describe("the sides", () => {
   it("are columns otherwise", () => {
     expect(sidesAreDrawers(2, 1400)).toBe(false);
     expect(sidesAreDrawers(4, 1400)).toBe(false);
+  });
+});
+
+describe("an arrangement kept between runs", () => {
+  it("keeps the shape and lets the sessions go", () => {
+    let layout = frameFor(EMPTY_LAYOUT, 1, 1).layout;
+    layout = openedIn(layout, "1", "session-a", "/work/repo");
+    layout = openedIn(layout, "2", "session-b", "/work/repo");
+
+    const kept = laidOut(layout);
+    expect(kept.count).toBe(layout.count);
+    expect(kept.frames).toEqual([
+      { id: "1", folder: "/work/repo" },
+      { id: "2", folder: "/work/repo" },
+    ]);
+    // What was running is not in it at all: a session died with the last run, and a pane drawn as
+    // though it were still there would be the window saying something untrue.
+    expect(JSON.stringify(kept)).not.toContain("session-a");
+  });
+
+  it("comes back as places to open a terminal in, in the same slots", () => {
+    const back = restored({
+      count: 4,
+      nextId: 3,
+      frames: [{ id: "1", folder: "/work/repo" }, { id: "2" }],
+    })!;
+    expect(back.count).toBe(4);
+    expect(back.frames.map((one) => one.session)).toEqual([null, null]);
+    expect(back.frames.map((one) => one.folder)).toEqual(["/work/repo", null]);
+    // The face has to be working somewhere, and the first place is where a fresh one starts too.
+    expect(back.focus).toBe("1");
+    expect(back.page).toBe(1);
+  });
+
+  it("hands the next frame an id no name is already on", () => {
+    // A kept arrangement whose `nextId` is behind its own frames — an older build, or a file nobody
+    // can vouch for — must not let a fresh frame take the name of one that came back.
+    const back = restored({ count: 2, nextId: 1, frames: [{ id: "1" }, { id: "7" }] })!;
+    expect(frameFor(back, 2, 0).frame.id).toBe("8");
+  });
+
+  it("is nothing to come back to when it holds no frames", () => {
+    expect(restored({ count: 2, nextId: 1, frames: [] })).toBeNull();
   });
 });

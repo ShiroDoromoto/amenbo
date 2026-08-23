@@ -405,6 +405,16 @@ impl Store {
         crate::frames::name_frame(&self.engine, frame, name, by)
     }
 
+    /// The arrangement of the talk window this device left behind ([`crate::frames`]).
+    pub fn saved_layout(&self) -> Result<Option<crate::frames::SavedLayout>> {
+        crate::frames::saved_layout(&self.engine)
+    }
+
+    /// Keep the arrangement of the talk window, as this device has it now.
+    pub fn save_layout(&self, layout: &crate::frames::SavedLayout) -> Result<()> {
+        crate::frames::save_layout(&self.engine, layout)
+    }
+
     /// Count one launch of the app on this device (the tally two of the metrics are read from).
     pub fn record_launch(&self) -> Result<()> {
         crate::nudge::record_launch(&self.engine)

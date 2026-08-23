@@ -2068,6 +2068,40 @@ export type StoreLocationsDto = {
  */
 root: string, };
 
+/**
+ * One frame of a kept arrangement: where it sat, and what it was working on.
+ */
+export type TalkFrameDto = { 
+/**
+ * The id its name is kept against (`FrameNameDto`).
+ */
+id: string, 
+/**
+ * The folder its terminal was working in, where it had one.
+ */
+folder?: string, };
+
+/**
+ * The talk window's arrangement, as this device left it (`amenbo_core::frames::SavedLayout`).
+ *
+ * The shape only: how many panes to a page, the frames in slot order, and the folder each was
+ * working in. **What was running is not here** — a session died with the last run, and a pane drawn
+ * as though it were still there would be the window saying something untrue (`AMB-T-3607`).
+ */
+export type TalkLayoutDto = { 
+/**
+ * How many panes to a page.
+ */
+count: number, 
+/**
+ * The next frame id to hand out — ids are never reused, so a name stays on its own frame.
+ */
+nextId: number, 
+/**
+ * The frames, in slot order.
+ */
+frames: Array<TalkFrameDto>, };
+
 export type TaskCardDto = { id: number, title: string, 
 /**
  * The name it goes by on screen, `#<n>` (the display form of `id`).

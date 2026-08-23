@@ -3793,6 +3793,42 @@ pub fn name_frame(
     Ok(named(open_store()?.name_frame(&frame, &name, by)?))
 }
 
+/// The arrangement of the talk window this device left behind, or nothing where it left none.
+///
+/// It is answered as the window comes up and is what the face is laid out from. Nothing in it is
+/// started: the frames come back as places to open a terminal in, and a person presses for the ones
+/// they want (`AMB-T-3607`).
+#[tauri::command]
+pub fn talk_layout() -> Result<Option<TalkLayoutDto>, CmdError> {
+    Ok(open_store_read()?.saved_layout()?.map(|saved| TalkLayoutDto {
+        count: saved.count,
+        next_id: saved.next_id,
+        frames: saved
+            .frames
+            .into_iter()
+            .map(|frame| TalkFrameDto { id: frame.id, folder: frame.folder })
+            .collect(),
+    }))
+}
+
+/// Keep the arrangement of the talk window, as this device has it now.
+///
+/// Written as the window is changed rather than as it closes: a window that is killed, or a machine
+/// that loses power, is exactly the case a person wants their panes back after.
+#[tauri::command]
+pub fn save_talk_layout(layout: TalkLayoutDto) -> Result<(), CmdError> {
+    open_store()?.save_layout(&amenbo_core::frames::SavedLayout {
+        count: layout.count,
+        next_id: layout.next_id,
+        frames: layout
+            .frames
+            .into_iter()
+            .map(|frame| amenbo_core::frames::SavedFrame { id: frame.id, folder: frame.folder })
+            .collect(),
+    })?;
+    Ok(())
+}
+
 /// The frame names in the shape the webview reads them: a list, in frame order, rather than a map —
 /// the window draws them in a row, and a map's order is the caller's to rebuild.
 fn named(

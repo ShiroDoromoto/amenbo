@@ -2,13 +2,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AdriftSlot } from "./AdriftSlot";
 import { TerminalPane } from "./TerminalPane";
 import { PaneRail } from "./PaneRail";
-import { frameNames, nameFrame, type FrameNames, type NamedBy } from "../talk/frames";
 import {
-  closedIn, COUNTS, EMPTY_LAYOUT, focusOn, folderOfPage, frameFor, goPage, MAX_PAGES, movedTo,
-  openedIn, pageCount, setCount, settledIn, sidesAreDrawers, slotsOf, type Count, type Layout,
+  frameNames, keepLayout, nameFrame, savedLayout, type FrameNames, type NamedBy,
+} from "../talk/frames";
+import {
+  closedIn, COUNTS, EMPTY_LAYOUT, focusOn, folderOfPage, frameFor, goPage, laidOut, MAX_PAGES,
+  movedTo, openedIn, pageCount, restored, setCount, settledIn, sidesAreDrawers, slotsOf,
+  type Count, type Layout,
 } from "../talk/layout";
 import { FilesPanel } from "../files/FilesPanel";
 import { markRead, tookPoint, type PointedBySession } from "../files/pointed";
+import { inTauri } from "../core/snapshot";
 import { t, tf } from "../core/i18n";
 
 /**
@@ -69,6 +73,11 @@ export function TerminalFace({
     return { ...made.layout, focus: made.frame.id };
   });
   const [names, setNames] = useState<FrameNames>(new Map());
+  // Whether the arrangement this device left behind has been answered for. Nothing is drawn into a
+  // slot before it has: a pane put up first and replaced afterwards would start a terminal in a
+  // frame the restore was about to take away (`AMB-T-3607`). Outside Tauri nothing is kept, so there
+  // is nothing to wait for.
+  const [settled, setSettled] = useState(!inTauri());
   // What each pane's agent has pointed at, and which sessions have ended. Both are the window's to
   // hold and nobody else's: a session has no existence outside the rectangle it runs in, so neither
   // has what was said in one (`AMB-D-749`).
@@ -109,6 +118,35 @@ export function TerminalFace({
     void frameNames().then((known) => { if (alive) setNames(known); }).catch(() => {});
     return () => { alive = false; };
   }, []);
+
+  // The arrangement, read once as the face comes up. What comes back is places and folders and no
+  // sessions, so the frames that return are offers to open a terminal — the person presses for the
+  // ones they want, and a window that started them all would be starting work nobody asked for.
+  useEffect(() => {
+    let alive = true;
+    void savedLayout()
+      .then((saved) => {
+        if (!alive) return;
+        const back = saved === null ? null : restored(saved);
+        if (back) {
+          setLayout(back);
+          startNow.current.clear();
+        }
+      })
+      .catch(() => {})
+      .finally(() => { if (alive) setSettled(true); });
+    return () => { alive = false; };
+  }, []);
+
+  // And kept as it changes. Only the shape is written, so a session opening or closing is not a
+  // write — what is kept is where the panes are, not what is in them.
+  const shape = JSON.stringify(laidOut(layout));
+  useEffect(() => {
+    // Before the restore has been answered for, what is here is the face's own opening arrangement:
+    // writing that would overwrite the one being read with a blank one.
+    if (!settled || !inTauri()) return;
+    void keepLayout(JSON.parse(shape) as ReturnType<typeof laidOut>).catch(() => {});
+  }, [settled, shape]);
 
   // How wide the face actually is, which is half of whether the columns beside the panes are columns.
   useEffect(() => {
@@ -227,7 +265,7 @@ export function TerminalFace({
           ? railOpen && <div className="termface__drawer">{rail}</div>
           : rail}
         <div className={`termface__page-grid termface__page-grid--${layout.count}`}>
-          {slotsOf(layout, layout.page).map((frame, slot) =>
+          {(settled ? slotsOf(layout, layout.page) : []).map((frame, slot) =>
             frame
               ? (
                 <TerminalPane

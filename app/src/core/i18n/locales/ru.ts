@@ -525,6 +525,7 @@ export const ru: Translation = {
     "face.paneCount": "Панелей на экране",
     "face.pages": "Страницы",
     "face.page": "Страница {n}",
+    "face.adrift": "В этом проекте что-то всё ещё занято, и никто над этим не работает. Продолжить?",
     "face.open": "Открыть здесь терминал",
     "face.rename": "Переименовать эту панель",
     "face.needsYou": "ждёт вас",

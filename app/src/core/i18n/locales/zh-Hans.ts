@@ -496,6 +496,7 @@ export const zhHans: Translation = {
     "face.paneCount": "屏幕上的窗格数",
     "face.pages": "页",
     "face.page": "第 {n} 页",
+    "face.adrift": "这个项目里有任务还停在进行中，没有人在做。要继续吗？",
     "face.open": "在此打开终端",
     "face.rename": "重命名此窗格",
     "face.needsYou": "在等你",

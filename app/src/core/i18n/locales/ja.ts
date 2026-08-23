@@ -508,6 +508,7 @@ export const ja: Translation = {
     "face.paneCount": "画面に出す枚数",
     "face.pages": "ページ",
     "face.page": "{n} ページ目",
+    "face.adrift": "このプロジェクトに、進行中のまま止まっているタスクがあります。続けますか？",
     "face.open": "ここで端末を開く",
     "face.rename": "このペインの名前を変える",
     "face.needsYou": "手が要ります",

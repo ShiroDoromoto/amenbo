@@ -496,6 +496,7 @@ export const tr: Translation = {
     "face.paneCount": "Ekrandaki bölme sayısı",
     "face.pages": "Sayfalar",
     "face.page": "Sayfa {n}",
+    "face.adrift": "Bu projede hâlâ ayrılmış ve üzerinde kimsenin çalışmadığı bir iş var. Devam etmek ister misiniz?",
     "face.open": "Burada bir terminal aç",
     "face.rename": "Bu bölmeyi yeniden adlandır",
     "face.needsYou": "sizi bekliyor",

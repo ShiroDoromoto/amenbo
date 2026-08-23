@@ -522,6 +522,7 @@ export const uk: Translation = {
     "face.paneCount": "Панелей на екрані",
     "face.pages": "Сторінки",
     "face.page": "Сторінка {n}",
+    "face.adrift": "У цьому проєкті щось усе ще зайняте, і ніхто над цим не працює. Продовжити?",
     "face.open": "Відкрити тут термінал",
     "face.rename": "Перейменувати цю панель",
     "face.needsYou": "чекає на вас",

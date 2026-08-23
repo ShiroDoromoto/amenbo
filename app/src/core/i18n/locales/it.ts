@@ -517,6 +517,7 @@ export const it: Translation = {
     "face.paneCount": "Riquadri sullo schermo",
     "face.pages": "Pagine",
     "face.page": "Pagina {n}",
+    "face.adrift": "In questo progetto qualcosa è ancora prenotato e nessuno ci sta lavorando. Vuoi riprenderlo?",
     "face.open": "Apri un terminale qui",
     "face.rename": "Rinomina questo riquadro",
     "face.needsYou": "ti sta aspettando",

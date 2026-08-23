@@ -15,7 +15,7 @@ import { type AttachTargetType } from "./reads";
 import { guessLang, t, tf, type CmdError, type CmdErrorPart, type ViewKind } from "./i18n";
 import { isClosed } from "./status";
 import type { ActivityItem, Facet, Priority, Status, TaskCard } from "../mock/types";
-import type { ActivityTargetDto, AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, McpRequestDto, McpSetupDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
+import type { ActivityTargetDto, AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto, TaskCardDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, McpRequestDto, McpSetupDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
 import { taskRef } from "./idref";
 import { todayStr } from "./calendar";
 
@@ -1003,6 +1003,23 @@ export async function setAssignee(id: number, kind: Facet | null): Promise<void>
   }));
 }
 
+
+/**
+ * The reservations in this folder's project that nothing is working on any more — what the terminal
+ * face puts to a person in an empty slot (`../shell/AdriftSlot`).
+ *
+ * A pane can die and the ledger not hear about it, leaving a task reserved with nobody at it and out of
+ * everybody's mailbox. What makes those findable is that a reservation made in a pane carries the
+ * session that made it, and the host knows which sessions are still running — so this is a fact rather
+ * than a guess, and a reservation made at somebody's own terminal is never among them (`tasks_adrift`).
+ *
+ * Read-only, so no ack. Outside Tauri (browser iteration) there are no panes and no ledger, so nothing
+ * can have been left behind: the answer is empty.
+ */
+export async function fetchAdriftTasks(folder: string): Promise<TaskCardDto[]> {
+  if (!inTauri()) return [];
+  return await invoke<TaskCardDto[]>("tasks_adrift", { folder });
+}
 
 /**
  * Open the native folder picker and return the absolute path chosen — this backs every place a folder

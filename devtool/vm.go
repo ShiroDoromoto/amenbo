@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -47,7 +48,24 @@ const (
 	vmScreenPath = "/Users/" + vmUser + "/screen"
 	// vmGuestHome is the guest account's home, and the one place anything is put in there.
 	vmGuestHome = "/Users/" + vmUser
+	// vmDisplayPath is where the compiled display tool is put in the guest, on the same terms.
+	vmDisplayPath = vmGuestHome + "/display"
+	// vmDisplaySize is the screen verification runs on, in points, declared here rather than
+	// inherited from whatever the golden happened to carry: a shot is only comparable against
+	// another shot taken on the same screen, and `vm golden --refresh` would otherwise move it.
+	//
+	// Wide enough for the layouts that only appear on a wide window (the horizontal rail), and
+	// read as points so the panel behind it is twice that in pixels — an assert that reads words
+	// off a shot needs the 2x.
+	vmDisplaySize = "1920x1200"
 )
+
+// vmDisplaySource is the display tool, compiled on the host and sent into the guest the way the
+// screen tool is. It is carried in the binary rather than read out of the checkout because it is
+// devtool's own, not one of the tools this tree ships to a screen.
+//
+//go:embed vmdisplay.swift
+var vmDisplaySource string
 
 // vmCmd dispatches the `vm` subcommands: the two that raise the clone and throw it away, the two
 // that reach into it, and the two that report — on the golden, and on the clone.
@@ -232,6 +250,9 @@ func vmEnsureUp() (string, error) {
 		logf("  vm      : %s is already running — using it", vmCloneName)
 	case ok:
 		logf("  vm      : %s is there but stopped — starting it", vmCloneName)
+		if err := setDisplaySize(); err != nil {
+			return "", err
+		}
 		if err := tartRun(); err != nil {
 			return "", err
 		}
@@ -243,6 +264,9 @@ func vmEnsureUp() (string, error) {
 		if _, err := run("", "tart", "clone", vmGoldenName, vmCloneName); err != nil {
 			return "", err
 		}
+		if err := setDisplaySize(); err != nil {
+			return "", err
+		}
 		if err := tartRun(); err != nil {
 			return "", err
 		}
@@ -252,8 +276,81 @@ func vmEnsureUp() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if err := vmTakeNativeDisplay(ip); err != nil {
+		return "", err
+	}
 	reportVersionDrift(ip)
 	return ip, nil
+}
+
+// setDisplaySize gives the clone the screen verification runs on, before it is started — the size
+// is part of the VM, so it cannot be changed under a running one.
+//
+// Points, not pixels: tart reads a bare size as points for a macOS guest, and the panel it builds is
+// twice that in pixels. Asking in pixels instead builds a 1x panel, which reads badly enough under
+// OCR to fail asserts that are otherwise sound.
+func setDisplaySize() error {
+	_, err := run("", "tart", "set", vmCloneName, "--display", vmDisplaySize)
+	return err
+}
+
+// vmTakeNativeDisplay puts the guest's screen on the mode its panel is built for.
+//
+// It has to be asked for. A macOS guest comes up on a stretched 1024x768pt desktop no matter how
+// wide the panel behind it is (measured on a clone freshly cut from the golden), which is too narrow
+// for the window under verification and stretched under every shot. The mode is in the guest's own
+// list the whole time.
+//
+// Compiled and sent every time rather than kept in the guest, on the same grounds as the screen
+// tool: the golden holds no copy of a tool this tree changes, and a clone cannot answer with a
+// stale one.
+func vmTakeNativeDisplay(ip string) error {
+	bin, cleanup, err := buildDisplayTool()
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	args := append(sshOpts(), bin, vmUser+"@"+ip+":"+vmDisplayPath)
+	if _, err := run("", "scp", args...); err != nil {
+		return err
+	}
+	mode, err := sshRun(ip, vmDisplayPath, "native")
+	if err != nil {
+		return fmt.Errorf("putting %s on the mode its panel is built for: %w", vmCloneName, err)
+	}
+	logf("  display : %s", strings.TrimSpace(mode))
+	return nil
+}
+
+// buildDisplayTool writes the embedded display tool out and compiles it on the host, answering with
+// the binary and the way to take the temporary directory back.
+func buildDisplayTool() (bin string, cleanup func(), err error) {
+	dir, err := os.MkdirTemp("", "amenbo-display-")
+	if err != nil {
+		return "", func() {}, err
+	}
+	cleanup = func() { os.RemoveAll(dir) }
+	src := filepath.Join(dir, "display.swift")
+	if err := os.WriteFile(src, []byte(vmDisplaySource), 0o644); err != nil {
+		cleanup()
+		return "", func() {}, err
+	}
+	bin = filepath.Join(dir, "display")
+	if _, err := run("", "swiftc", "-O", "-o", bin, src); err != nil {
+		cleanup()
+		return "", func() {}, fmt.Errorf("compiling the display tool: %w", err)
+	}
+	return bin, cleanup, nil
+}
+
+// reportDisplay says which mode the guest's screen is on, and stays quiet when it cannot ask. The
+// tool is put there by `vm up`, so a clone raised any other way simply has nothing to report.
+func reportDisplay(ip string) {
+	mode, err := sshRun(ip, "test -x "+vmDisplayPath+" && "+vmDisplayPath)
+	if err != nil {
+		return
+	}
+	logf("  display : %s", strings.TrimSpace(mode))
 }
 
 // tartRun starts the clone without a window of its own (`--no-graphics`), which is the point of the
@@ -596,6 +693,7 @@ func vmStatus() error {
 		return nil
 	}
 	logf("  clone   : %s running at %s", vmCloneName, ip)
+	reportDisplay(ip)
 	reportVersionDrift(ip)
 	return nil
 }

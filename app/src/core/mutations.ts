@@ -1671,10 +1671,11 @@ export async function setDimensionValuePeriod(
   });
 }
 
-/** Delete a dimension value; the task assignments to it go with it. */
-export async function removeDimensionValue(valueId: number): Promise<void> {
+/** Delete a dimension value; the task assignments to it go with it, unless `reassignTo` names another
+ * value of the same axis for them to move to — which a required axis demands whenever there are any. */
+export async function removeDimensionValue(valueId: number, reassignTo: number | null = null): Promise<void> {
   if (!inTauri()) return;
-  return invokeAck("dimension_value_rm", { valueId });
+  return invokeAck("dimension_value_rm", { valueId, reassignTo });
 }
 
 /** Reorder a dimension value: give the anchor value's id under exactly one of `before` / `after`. Ordered dimensions only. */

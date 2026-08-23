@@ -821,7 +821,7 @@ fn a_tasks_classification_reads_by_axis_and_drops_a_deleted_value() {
 
     // A value deleted takes its filings with it: what is left names an axis and nothing on it, which is
     // not a classification anyone can be shown.
-    s.dimension_value_delete(kind.id).unwrap();
+    s.dimension_value_delete(kind.id, None).unwrap();
     assert_eq!(named(&s), vec![("リリース".to_string(), "第1弾".to_string())]);
     fs::remove_dir_all(&dir).ok();
 }

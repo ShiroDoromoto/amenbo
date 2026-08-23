@@ -591,6 +591,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   font-family: var(--font-mono);
   font-size: var(--fs-sm);
   white-space: pre-wrap;
+}
+
 /* The one line above a pane: what it is called, what its session is on, and the one thing worth saying
    about it. One line and no more — a row that can grow is a row that pushes the terminal about every
    time an agent says something long. */

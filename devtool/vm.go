@@ -46,8 +46,10 @@ const (
 	// vmScreenPath is where the compiled screen tool is put in the guest. Fixed, so a caller
 	// that sent it and a caller that uses it need not agree on anything but this.
 	vmScreenPath = "/Users/" + vmUser + "/screen"
+	// vmGuestHome is the guest account's home, and the one place anything is put in there.
+	vmGuestHome = "/Users/" + vmUser
 	// vmDisplayPath is where the compiled display tool is put in the guest, on the same terms.
-	vmDisplayPath = "/Users/" + vmUser + "/display"
+	vmDisplayPath = vmGuestHome + "/display"
 	// vmDisplaySize is the screen verification runs on, in points, declared here rather than
 	// inherited from whatever the golden happened to carry: a shot is only comparable against
 	// another shot taken on the same screen, and `vm golden --refresh` would otherwise move it.
@@ -128,6 +130,8 @@ func vmCmd(args []string) {
 		fs.Parse(args[1:])
 		noArgs(fs)
 		fail(vmSendScreen())
+	case "verify":
+		vmVerifyCmd(args[1:])
 	case "golden":
 		fs := flag.NewFlagSet("vm golden", flag.ExitOnError)
 		refresh := fs.Bool("refresh", false, "pull the base image and cut the golden from it again")
@@ -221,12 +225,24 @@ func requireTart() error {
 // is written to), and the wait runs to a GUI session rather than to a ping: `/dev/console` owned by
 // the account is what says a screen exists to draw on, and everything here is for drawing on it.
 func vmUp() error {
-	if err := requireTart(); err != nil {
+	ip, err := vmEnsureUp()
+	if err != nil {
 		return err
+	}
+	logf("  vm      : %s ready at %s — `devtool vm rm` throws it away", vmCloneName, ip)
+	fmt.Printf("%s\n", ip)
+	return nil
+}
+
+// vmEnsureUp is that same raise, answering with the address instead of printing it — what the
+// commands built on top of the VM start with, none of which want an address on their stdout.
+func vmEnsureUp() (string, error) {
+	if err := requireTart(); err != nil {
+		return "", err
 	}
 	vms, err := tartVMs()
 	if err != nil {
-		return err
+		return "", err
 	}
 	clone, ok := findVM(vms, vmCloneName)
 	switch {
@@ -235,38 +251,36 @@ func vmUp() error {
 	case ok:
 		logf("  vm      : %s is there but stopped — starting it", vmCloneName)
 		if err := setDisplaySize(); err != nil {
-			return err
+			return "", err
 		}
 		if err := tartRun(); err != nil {
-			return err
+			return "", err
 		}
 	default:
 		if _, ok := findVM(vms, vmGoldenName); !ok {
-			return fmt.Errorf("no golden image %q — `devtool vm golden --refresh` cuts one from %s", vmGoldenName, vmBase)
+			return "", fmt.Errorf("no golden image %q — `devtool vm golden --refresh` cuts one from %s", vmGoldenName, vmBase)
 		}
 		logf("  vm      : cloning %s → %s", vmGoldenName, vmCloneName)
 		if _, err := run("", "tart", "clone", vmGoldenName, vmCloneName); err != nil {
-			return err
+			return "", err
 		}
 		if err := setDisplaySize(); err != nil {
-			return err
+			return "", err
 		}
 		if err := tartRun(); err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	ip, err := vmWaitReady()
 	if err != nil {
-		return err
+		return "", err
 	}
 	if err := vmTakeNativeDisplay(ip); err != nil {
-		return err
+		return "", err
 	}
 	reportVersionDrift(ip)
-	logf("  vm      : %s ready at %s — `devtool vm rm` throws it away", vmCloneName, ip)
-	fmt.Printf("%s\n", ip)
-	return nil
+	return ip, nil
 }
 
 // setDisplaySize gives the clone the screen verification runs on, before it is started — the size

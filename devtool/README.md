@@ -7,8 +7,9 @@ On macOS it gives a task its own throwaway **dev GUI** — bundle, app-data and
 all — so several implementation sessions can run in parallel without installing
 over each other, and it stands up a **fake outside world** the dev GUI can be
 verified against — including the failures the real one will not produce on
-demand. It also raises the throwaway **macOS VM** that GUI is driven in, so
-verification takes a screen that is not the one being worked on.
+demand. It also raises the throwaway **macOS VM** that GUI is driven in — and
+walks a pre-distribution screen road inside it — so verification takes a screen
+that is not the one being worked on.
 
 ## Build
 
@@ -66,6 +67,11 @@ permanent place a grown setup (plugins, catalog, projects) lives.
 | the CLI it names | `amenbo-dev` | `amenbo-dev` — it installs none of its own |
 | built by | `make install-gui-dev` | `make install-gui-dev AMB-T-ID=<id>` |
 | deleted by | nothing — it is permanent | `devtool devgui rm <id>` |
+
+The right-hand column is where it lands on **this machine**. The same instance goes
+into the throwaway VM instead with `make install-gui-dev-vm AMB-T-ID=<id>` — same
+names, same layout, another machine — and is thrown away with the VM rather than
+by `devgui rm`. See [`devgui install`](#devtool-devgui-install-id---vm).
 
 Each build runs under an executable name of its own — production keeps
 `amenbo-app` — so a name reaches one app and not another: `pgrep -x
@@ -145,6 +151,56 @@ instance the ordinary way never types it. Details:
   verify, never a reason to fail the build that asked.
 - The bundle itself is not built here; that is the Makefile's, and only the
   tasks that look at a GUI pay for one.
+
+### `devtool devgui install <id> --vm`
+
+Puts the task's own dev GUI **in the throwaway VM** instead of on this machine —
+the screen it is driven on, so a verification run does not take this Mac's
+keyboard and mouse:
+
+```sh
+make install-gui-dev-vm AMB-T-ID=696     # build it here, put it in there
+devtool devgui install 696 --vm          # put the built bundle in there again
+# /Applications/amenbo (dev 696).app
+```
+
+**The build stays on the host.** Only the placing moves, so the guest needs
+neither Rust nor node, and the `.app` baked here runs in there unchanged — same
+arch, same OS generation (43MB across in 0.96s, measured).
+
+**This machine stays the default destination**, and that route is the Makefile's
+own (`make install-gui-dev AMB-T-ID=<id>`): a clone or a fork with one Mac has no
+VM, and a default that needed one would leave it unable to verify anything.
+So `--vm` is not optional here — it is the whole reason the
+command exists, and without it you are asking for the route that has one already.
+
+- **It raises the VM if none is running.** When a clone is thrown away is a
+  person's call (`devtool vm rm`); when one is raised is not.
+- **The instance is quit in the guest first**, by executable name
+  (`amenbo-app-dev-<id>`). An app replaced under itself writes its store back on
+  the way out, over the bundle just sent. One that will not quit is a non-zero
+  exit, not a half-replaced bundle.
+- **What is sent is staged and moved into place**, never copied over what is
+  there: `scp -r` onto an existing directory merges into it, and a bundle
+  carrying files from an older build looks exactly like an implementation that
+  does not work.
+- **The store is this machine's shared dev store, sent across** — the same setup
+  (plugins, catalog, projects) a host instance is seeded from. The guest has no
+  shared dev app of its own and never will: it is a clone thrown away at the end
+  of a session. A store already in there is left alone, and everything past that
+  reports and carries on — an instance that opens empty is a poorer screen, not
+  a reason to fail the placing that asked.
+- **The guest layout mirrors this machine's exactly** (`/Applications` bundle,
+  `~/Library/Application Support` store), so what addresses an instance by path
+  reads the same on both sides and only the machine it is asked of changes.
+- **Nothing lands on this machine.** The bundle is read out of the build
+  directory, so the host `/Applications` and the host app-data are untouched —
+  and `devgui rm` reclaims neither of the guest's halves. Throwing the VM away is
+  what reclaims those, all at once.
+
+Opening it is one line — `devtool vm exec -- open -a '/Applications/amenbo (dev
+696).app'` — and the printed path is that argument. macOS only, and it needs
+`tart` the way everything under `vm` does.
 
 ### `devtool devgui cli <id> [--no-build] -- <amenbo args…>`
 
@@ -476,10 +532,10 @@ Two things have to be said for the guest to have a screen worth shooting, and
    measured on a clone freshly cut from the golden with the panel set to
    1920x1200pt, the desktop comes up **1024x768pt stretched across it** — too
    narrow for the layouts that only appear on a wide window (the horizontal
-   rail), and stretched under every shot. The mode is in the guest's
-   own list the whole time; it has to be asked for, which `up` does for the
-   session (nothing is written into the clone's preferences — the clone is
-   thrown away, and `up` asks again every time).
+   rail), and stretched under every shot. The mode is in the guest's own list
+   the whole time; it has to be asked for, which `up` does for the session
+   (nothing is written into the clone's preferences — the clone is thrown away,
+   and `up` asks again every time).
 
 The asking is a second small Swift tool, carried inside devtool and compiled and
 sent the way the screen tool is. It is not a verb on `scripts/screen.swift`
@@ -536,6 +592,68 @@ Only the way the golden is made would change to move off it.
 - **Enrolling the key is left to a person, and named rather than done.** It takes
   the image's password, which is a credential to type. `--refresh` prints the
   `ssh-copy-id` line to run and says to stop the golden again afterwards.
+
+### `devtool vm verify install | run | step | log | pull`
+
+Walks a **pre-distribution screen road** (`verification/scenarios/`) inside that VM.
+
+```sh
+devtool vm verify install ~/dist/amenbo-darwin-arm64.pkg     # or --from-run <run id>
+devtool vm verify run verification/scenarios/link-a-folder.yaml
+# … drive the screen in the guest, then:
+devtool vm verify step --note 'pressed Link a folder'
+devtool vm verify pull --out ./evidence
+```
+
+**The harness is not changed, and nothing here repeats what it does.** `verify-gui` still launches
+the shipped bundle, holds the pid that launch answered with, stands up the world the scenario
+declares and shoots one screen per step. That is the reason the harness *moves into* the guest
+rather than being driven from outside: a pid held on this side would name a process on that one.
+
+What is added is the four things a run in there needs and a run here does not.
+
+**`install`** sends and installs the shipped build, the harness, the scenarios, the fixtures and the
+screen tool.
+
+- **The build is a path, or `--from-run <run id>`** — the mac artifact of a CI run, never the
+  release's download URL: a release download is counted, and a development one cannot be subtracted
+  afterwards. Holding the bytes against what the release published is the release procedure's own
+  step, upstream of this, which is what handing this command a path keeps room for.
+- **A build for the other architecture is refused by name.** It installs cleanly and then will not
+  start, which is a failure several steps away from its cause.
+- **Nothing is built for the guest.** Host and guest are the same architecture, so the harness
+  compiled here runs there, and the guest needs neither Rust nor node.
+- The first `swift <source>` on a machine builds a module cache and takes some twenty seconds; every
+  one after it is under a second. That is paid here, rather than inside the harness's own window for
+  the app to draw a window — which that first call would otherwise run out.
+
+**`run`** starts one road and comes back when the harness has handed over its first step. It does
+not wait for the run: a road is walked by somebody, and that somebody is whoever calls `step`
+between one hand-over and the next.
+
+- **`--screen` is passed explicitly.** The harness resolves the tool relative to its own executable,
+  which in the guest is a path on this side of the machine — a run without it fails a minute in,
+  having launched an app and photographed nothing.
+- A previous run's app is taken down first. The harness takes its own down when it ends, and the one
+  case it cannot is the one that matters: a run somebody stopped part-way leaves a window that the
+  next run's shots would have in front of them.
+
+**`step`** sends one line and waits for the harness to say something next. **The steps come from a
+file that is appended to, not from a pipe somebody holds** — the harness's stdin is `tail -n 0 -f`
+over that file, so nothing has to stay alive between two commands, what was sent stays on disk to be
+counted, and a run that has ended takes the tail down with it. `log` re-reads the same tail without
+advancing.
+
+**`pull`** brings the shots and the manifest out. They are what a `Review` step is closed from and
+what a red one is read by, and they are of no use inside a machine that is thrown away.
+
+The road itself is still walked by whoever is driving. In the guest that is the screen tool:
+
+```sh
+devtool vm exec -- 'PID=$(pgrep -f "Amenbo.app/Contents/MacOS/amenbo-app" | head -1);
+  swift /Users/admin/screen.swift find $PID'
+devtool vm exec -- '… swift /Users/admin/screen.swift click-named $PID "Link a folder"'
+```
 
 ### Host and guest drifting apart
 

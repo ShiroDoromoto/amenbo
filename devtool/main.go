@@ -68,6 +68,7 @@ func usage() {
 Usage:
   devtool devgui seed      <id>
   devtool devgui cli       <id> [--no-build] -- <amenbo args…>
+  devtool devgui install   <id> --vm
   devtool devgui pid       [<id>] [--front]
   devtool devgui shot      [<id>] [--no-front]
   devtool devgui rm        <id>
@@ -80,6 +81,9 @@ Usage:
   devtool vm push          <local…> <remote>
   devtool vm screen
   devtool vm golden        [--refresh]
+  devtool vm verify install [<path.pkg>] [--from-run <run id>]
+  devtool vm verify run    <scenario.yaml>
+  devtool vm verify step | log | pull
 
 devgui seed  clone the shared dev store into the app-data of the task's own
              throwaway dev GUI, so the instance opens on the setup grown in the
@@ -92,6 +96,15 @@ devgui cli   run an amenbo command against the store the task's own dev GUI
              that store with AMENBO_HOME, not a second CLI built for the task:
              what the app-data name fixes at build time is a directory, and
              that names the same one at run time. Arguments go after '--'.
+devgui install
+             put the task's own dev GUI where it is to be driven from. --vm
+             sends the bundle built here into the throwaway VM and gives it a
+             store cloned from this machine's shared dev store; the build stays
+             on the host, so the guest needs neither Rust nor node. This machine
+             stays the default destination and is the Makefile's own route
+             ('make install-gui-dev AMB-T-ID=<id>'), so --vm is not optional
+             here. It raises the VM if none is running -- when one is thrown
+             away is a person's call, when one is raised is not.
 devgui pid   print the pid of a running dev GUI, for the screen tool
              ('scripts/screen.swift') to aim at. The front window is whichever
              app is in front, which is rarely the one being verified; devtool
@@ -144,7 +157,19 @@ vm           the throwaway macOS VM the GUI is verified in. Driving a screen
              screen tool on the host and puts the binary in there, and 'golden'
              reports on the image clones are cut from, or takes it again with
              --refresh. Host and guest macOS versions are compared whenever the
-             clone is reached; a drift is said and never stopped over.`)
+             clone is reached; a drift is said and never stopped over.
+vm verify    walk a pre-distribution screen road inside that VM. The harness is
+             not changed and nothing here repeats what it does — it still
+             launches the shipped bundle, holds that pid, stands up the world
+             and shoots one screen per step, which is why the harness moves into
+             the guest rather than being driven from outside. 'install' sends and
+             installs the shipped build (a path, or --from-run to take the mac
+             artifact of a CI run), the harness, the scenarios and the screen
+             tool; 'run' starts one road and comes back when the first step is
+             handed over; 'step' sends one line and waits for what the harness
+             says next; 'log' re-reads that without advancing; 'pull' brings the
+             shots and the manifest back out. The road itself is still walked by
+             whoever is driving — the screen tool in the guest is how.`)
 }
 
 // parseAroundID parses `fs` over args in which the task id may sit on either side of
@@ -224,6 +249,24 @@ func devGUICmd(args []string) {
 			os.Exit(1)
 		}
 		os.Exit(code)
+	case "install":
+		// The destination is named rather than defaulted: this machine is where a dev GUI goes
+		// unless somebody says otherwise, and that route is the Makefile's own — it quits the
+		// app, replaces the bundle and checks which frontend went in. Nothing here repeats it,
+		// so a `--vm`-less call is one this command has no answer for.
+		fs := flag.NewFlagSet("devgui install", flag.ExitOnError)
+		vm := fs.Bool("vm", false, "put it in the throwaway VM instead of on this machine")
+		id, extra := parseAroundID(fs, args[1:])
+		refuseExtra(extra)
+		id = mustID(id)
+		if !*vm {
+			logf("devtool: devgui install puts an instance somewhere other than this machine — pass --vm; this machine's own is `make install-gui-dev AMB-T-ID=%s`", id)
+			os.Exit(2)
+		}
+		if err := devGUIInstallVM(id); err != nil {
+			logf("devtool: %v", err)
+			os.Exit(1)
+		}
 	case "rm":
 		fs := flag.NewFlagSet("devgui rm", flag.ExitOnError)
 		id, extra := parseAroundID(fs, args[1:])

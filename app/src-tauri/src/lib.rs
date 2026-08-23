@@ -430,6 +430,7 @@ pub fn run() {
       commands::plugin_update_apply_all,
       commands::frame_names,
       commands::name_frame,
+      launch::elevated,
       pty::pty_open,
       pty::pty_write,
       pty::pty_resize,

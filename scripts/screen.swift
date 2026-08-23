@@ -237,9 +237,11 @@ func axName(_ el: AXUIElement) -> String? {
 /// returns is not the point (a webview declines to hold the attribute and serves the tree
 /// regardless), and the tree stays served for the rest of the app's life, so doing it on every run
 /// costs one call and no state.
+///
+/// The contents arrive from the web process afterwards, so the asking is only half of it — what
+/// follows is the wait, in appElements below.
 func openTree(_ app: AXUIElement) {
     AXUIElementSetAttributeValue(app, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
-    usleep(300_000) // the contents arrive from the web process, not from the call
 }
 
 /// Every named element under `el`, in the order the tree holds them.
@@ -256,13 +258,45 @@ func elements(under el: AXUIElement, depth: Int = 0) -> [Element] {
     return found
 }
 
+/// Whether the webview's contents have arrived under `el`.
+///
+/// Before they do, the tree of a freshly launched app is the window and the title drawn in it and
+/// nothing else — there is no web area at all — so a web area *holding something* is the one signal
+/// that separates "not yet" from "this screen really is that empty".
+func contentsArrived(_ el: AXUIElement, depth: Int = 0) -> Bool {
+    guard depth < 60 else { return false } // a tree deeper than this is a cycle, not a screen
+    let children = axAttribute(el, kAXChildrenAttribute as String) as? [AXUIElement] ?? []
+    if axString(el, kAXRoleAttribute as String) == "AXWebArea" { return !children.isEmpty }
+    return children.contains { contentsArrived($0, depth: depth + 1) }
+}
+
 /// The elements of one app, menu bar left out: it belongs to whichever app is frontmost rather than
 /// to the window under test, and its items carry names that collide with the screen's own.
+///
+/// The contents are *waited for*, not slept on. A fixed pause was enough on the machine this was
+/// written on and not in the verification VM, where the first command after a launch found the
+/// window, nothing inside it, and said the screen did not hold the name — while the very next
+/// command, over the tree the failed one had opened, found it (measured 2026-08-23, both runs in the
+/// guest). One silent miss per launch is the worst shape that failure has: a road is walked once,
+/// and it does not press the button a second time to see whether it was true.
+///
+/// A window that never grows a web area — a native panel — costs the whole budget and is then
+/// answered with what it has. That is the right way round: this drives a webview app, so waiting on
+/// contents that are coming is what happens on every run, and the wait for ones that never come is
+/// paid by the exception.
 func appElements(pid: Int) -> [Element] {
     let app = AXUIElementCreateApplication(pid_t(pid))
     openTree(app)
-    let windows = axAttribute(app, kAXWindowsAttribute as String) as? [AXUIElement] ?? []
-    if windows.isEmpty { fail("no window for pid \(pid) — is the app running and on screen?") }
+    let deadline = Date().addingTimeInterval(5)
+    var windows: [AXUIElement] = []
+    var sawWindow = false
+    repeat {
+        windows = axAttribute(app, kAXWindowsAttribute as String) as? [AXUIElement] ?? []
+        sawWindow = sawWindow || !windows.isEmpty
+        if windows.contains(where: { contentsArrived($0) }) { break }
+        usleep(100_000)
+    } while Date() < deadline
+    if !sawWindow { fail("no window for pid \(pid) — is the app running and on screen?") }
     return windows.flatMap { elements(under: $0) }
 }
 

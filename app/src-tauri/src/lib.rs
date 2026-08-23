@@ -11,6 +11,9 @@ mod commands;
 mod diag;
 mod dto;
 mod error;
+/// The custom protocol that hands the webview a file by its path, and the fence that keeps that from
+/// meaning any path: a session this app opened, and then a path inside that session's folder.
+mod fileproto;
 /// What a terminal is started as on each operating system — the shell the user signed in with, and
 /// what a terminal owes the program in it. Detecting a tool and starting it go through here
 /// together, so a probe cannot find what the pane could not have started (`AMB-D-747`).
@@ -44,6 +47,9 @@ pub mod store_watch;
 /// The hourly tick's startup pass: what this device answered about being woken, settled against what
 /// its scheduler holds (`AMB-D-707`).
 mod tick;
+/// What every custom-protocol answer owes, whatever door it came out of — the served type's allowlist,
+/// the headers that keep it from being read back as a document, and `Range`.
+mod webproto;
 /// The labels of the two windows this app opens (board and talk), and which of them anything that
 /// raises a window from outside the webview means.
 mod windows;
@@ -55,6 +61,11 @@ mod windows_notify;
 /// serves the bytes out of the blob store with Range support. The frontend hands the URL that
 /// [`blobproto`] builds to the src of an img, audio, video or iframe element.
 const BLOB_SCHEME: &str = "amenboblob";
+
+/// Name of the custom protocol that streams a file out of a session's folder. Unlike [`BLOB_SCHEME`] it is
+/// addressed by path, so `<scheme>://localhost/<session>/<path>` is the whole of what may be named: the
+/// session says which folder, and [`fileproto`] refuses everything that is not inside it.
+const FILE_SCHEME: &str = "amenbofile";
 
 /// Emitted to the webview when the user picks "check for updates" from the app menu
 /// (`menu::CHECK_UPDATES_ID`). The front end runs a fresh check and shows the update banner, or an
@@ -182,6 +193,12 @@ pub fn run() {
     .register_asynchronous_uri_scheme_protocol(BLOB_SCHEME, |_ctx, request, responder| {
       // Keep the file IO (the Range read) off the webview and main threads.
       std::thread::spawn(move || responder.respond(blobproto::serve(&request)));
+    })
+    .register_asynchronous_uri_scheme_protocol(FILE_SCHEME, |ctx, request, responder| {
+      // Same reason as above, and one more: the fence resolves the path on the real filesystem, which
+      // on a cold cache is the slowest part of answering.
+      let app = ctx.app_handle().clone();
+      std::thread::spawn(move || responder.respond(fileproto::serve(&app, &request)));
     })
     .setup(|app| {
       let config = amenbo_core::config::Paths::resolve()

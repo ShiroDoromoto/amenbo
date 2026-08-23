@@ -37,7 +37,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: amenboblob: http://amenboblob.localhost; media-src 'self' blob: amenboblob: http://amenboblob.localhost; frame-src amenboblob: http://amenboblob.localhost; connect-src 'self' ipc: http://ipc.localhost amenboblob: http://amenboblob.localhost; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: amenboblob: http://amenboblob.localhost amenbofile: http://amenbofile.localhost; media-src 'self' blob: amenboblob: http://amenboblob.localhost amenbofile: http://amenbofile.localhost; frame-src amenboblob: http://amenboblob.localhost amenbofile: http://amenbofile.localhost; connect-src 'self' ipc: http://ipc.localhost amenboblob: http://amenboblob.localhost amenbofile: http://amenbofile.localhost; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
     }
   },
   "bundle": {

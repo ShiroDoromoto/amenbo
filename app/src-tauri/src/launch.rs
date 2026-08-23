@@ -26,6 +26,7 @@
 //! asks for another one.
 
 use std::ffi::OsString;
+use std::path::PathBuf;
 
 use portable_pty::CommandBuilder;
 
@@ -58,7 +59,7 @@ const LANG: &str = "C.UTF-8";
 /// With `run` given, the shell is handed that one command instead of a prompt — the same shell, the
 /// same profile, the same `PATH`. That is the whole reason detection is spelled this way: what a
 /// probe finds here is what the pane will be able to start.
-pub fn command(cwd: Option<String>, run: Option<&str>) -> CommandBuilder {
+pub fn command(cwd: Option<PathBuf>, run: Option<&str>) -> CommandBuilder {
     let (program, login) = shell();
     let mut cmd = CommandBuilder::new(program);
     cmd.args(login);
@@ -241,7 +242,7 @@ mod tests {
     fn the_shell_starts_in_the_folder_it_was_given() {
         assert_eq!(command(None, None).get_cwd(), None);
         assert_eq!(
-            command(Some("/tmp".to_string()), None).get_cwd(),
+            command(Some(PathBuf::from("/tmp")), None).get_cwd(),
             Some(&OsString::from("/tmp"))
         );
     }

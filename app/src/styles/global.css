@@ -245,6 +245,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--c-text); text-align: left; cursor: pointer;
 }
 .files__file:hover, .files__dir:hover { color: var(--c-accent); }
+/* One that has been opened. It stays on the list — what was pointed at was pointed at — and says
+   for itself that it has been seen (`app/src/files/pointed.ts`). */
+.files__file--read .files__name { color: var(--c-text-muted); }
 .files__dir::before { content: "▸ "; color: var(--c-text-muted); }
 .files__dir[aria-expanded="true"]::before { content: "▾ "; }
 .files__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

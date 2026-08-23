@@ -7,6 +7,7 @@ import {
   openedIn, pageCount, setCount, settledIn, sidesAreDrawers, slotsOf, type Count, type Layout,
 } from "../talk/layout";
 import { FilesPanel } from "../files/FilesPanel";
+import { markRead, tookPoint, type PointedBySession } from "../files/pointed";
 import { t, tf } from "../core/i18n";
 
 /**
@@ -67,6 +68,15 @@ export function TerminalFace({
     return { ...made.layout, focus: made.frame.id };
   });
   const [names, setNames] = useState<FrameNames>(new Map());
+  // What each pane's agent has pointed at, and which sessions have ended. Both are the window's to
+  // hold and nobody else's: a session has no existence outside the rectangle it runs in, so neither
+  // has what was said in one (`AMB-D-749`).
+  const [pointed, setPointed] = useState<PointedBySession>(new Map());
+  const [ended, setEnded] = useState<ReadonlySet<string>>(new Set());
+  // The pane the top row of the file face follows. A frame with nothing running in it points at
+  // nothing, which is the empty row rather than the row of whichever pane spoke last.
+  const focusedSession =
+    layout.frames.find((frame) => frame.id === layout.focus)?.session ?? null;
   const [width, setWidth] = useState(() => (typeof window === "undefined" ? 0 : window.innerWidth));
   const [railOpen, setRailOpen] = useState(false);
 
@@ -238,8 +248,12 @@ export function TerminalFace({
                     if (statement.cwd) {
                       setLayout((was) => movedTo(was, statement.session, statement.cwd!));
                     }
+                    setPointed((was) => tookPoint(was, statement));
                   }}
-                  onClosed={(session) => setLayout((was) => closedIn(was, session))}
+                  onClosed={(session) => {
+                    setLayout((was) => closedIn(was, session));
+                    setEnded((was) => new Set(was).add(session));
+                  }}
                   onName={named}
                   onFocus={(id) => setLayout((was) => focusOn(was, id))}
                   onWaiting={paneWaiting}
@@ -259,7 +273,18 @@ export function TerminalFace({
                 </button>
               ))}
         </div>
-        <FilesPanel projectId={projectId ?? null} onOpenLedger={onOpenLedger} />
+        <FilesPanel
+          projectId={projectId ?? null}
+          onOpenLedger={onOpenLedger}
+          pointed={{
+            points: focusedSession === null ? [] : (pointed.get(focusedSession) ?? []),
+            name: layout.focus === null ? null : (names.get(layout.focus) ?? null),
+            ended: focusedSession !== null && ended.has(focusedSession),
+            onRead: (at) => {
+              if (focusedSession !== null) setPointed((was) => markRead(was, focusedSession, at));
+            },
+          }}
+        />
       </div>
     </div>
   );

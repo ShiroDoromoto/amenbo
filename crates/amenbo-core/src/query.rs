@@ -2885,7 +2885,7 @@ mod filter_tests {
         // counts when both hops, assignment → value, are live). The deleted value's name now points at
         // nothing, so filtering by it is an error rather than an empty result (see the dedicated test
         // below).
-        ops::dimension::value_delete(tx, dev).unwrap();
+        ops::dimension::value_delete(tx, dev, None).unwrap();
         let mut time_axis_none = vec![t_dev_bug, t_bare];
         time_axis_none.sort();
         assert_eq!(ids(tx, Some("time_axis:none")), time_axis_none, "an assignment to a deleted value counts as unclassified");

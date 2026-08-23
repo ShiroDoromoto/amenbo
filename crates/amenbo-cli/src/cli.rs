@@ -1158,14 +1158,19 @@ pub enum DimensionCmd {
         #[arg(long)]
         bottom: bool,
     },
-    /// Delete a dimension value permanently; its task assignments go with it. The last value of a
-    /// required axis is refused — lower the requirement first (alias: value-delete)
+    /// Delete a dimension value permanently; its task assignments go with it unless --reassign-to
+    /// moves them. On a required axis: assignments demand --reassign-to, and the last value is refused
+    /// — lower the requirement first (alias: value-delete)
     #[command(alias = "value-delete")]
     ValueRm {
         /// dimension ref (AMB-DIM-n), slug or name
         dimension: String,
         /// value ref (AMB-DIMV-n), slug or name (within the dimension)
         value: String,
+        /// move the tasks classified as this value to another value of the same dimension, instead of
+        /// letting their classification go with it (ref, slug or name)
+        #[arg(long, value_name = "VALUE")]
+        reassign_to: Option<String>,
     },
     /// Assign a task a value of a dimension (single-select replaces the task's prior value)
     Set {

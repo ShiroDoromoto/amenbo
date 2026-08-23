@@ -464,17 +464,29 @@ pub fn value_move(tx: &WriteTx<'_>, value_id: i64, pos: Position) -> Result<Dime
     Ok(after)
 }
 
-/// Hard-delete a dimension value, and with it every task assignment naming it.
+/// Hard-delete a dimension value, and with it every task assignment naming it. `reassign_to` names
+/// another value **on the same axis** to move those assignments to first, so the tasks keep an answer
+/// instead of losing one.
 ///
-/// **The last value of a required axis is refused** (`AMB-D-734`). Emptying an axis that demands an
-/// answer leaves a flag nobody can satisfy — every creation on the project would then stop at the
-/// door — which is the same state [`update`] already refuses to create from the other side, and the
-/// assignments this delete takes with it would empty out tasks that had already finished their
-/// creation. Lower the requirement first; that is free, and then the values are ordinary again.
+/// **A required axis refuses to empty tasks out** (`AMB-D-734`). Two ways to that state pass through
+/// here, and both are shut:
+///
+/// - **The last value of a required axis** leaves a flag nobody can satisfy — every creation on the
+///   project would then stop at the door, which is the same state [`update`] already refuses to create
+///   from the other side. Lower the requirement first; that is free, and then the values are ordinary
+///   again.
+/// - **Any value a task is classified as** takes that classification with it, dropping a task that had
+///   already finished its creation back to no value at all — the one state [`unset`] refuses one task
+///   at a time, reached here for every task on the value at once, behind the creation premise's back.
+///   So a required axis demands `reassign_to`: the delete says where the tasks go, or it does not
+///   happen (`AMB-D-751` had to close this by hand every time a theme ended).
+///
+/// An axis that is not required carries no such demand — its assignments go with the value as before —
+/// but `reassign_to` is honoured there too: naming a destination means the same thing on any axis.
 ///
 /// Deleting the axis itself is not this door: [`delete_subtree`] sweeps its values through
 /// [`delete_value_subtree`], which carries no guard, because an axis that is gone demands nothing.
-pub fn value_delete(tx: &WriteTx<'_>, value_id: i64) -> Result<()> {
+pub fn value_delete(tx: &WriteTx<'_>, value_id: i64, reassign_to: Option<i64>) -> Result<()> {
     let before = live_value_before(tx, value_id)?;
     let axis = live_before(tx, before.dimension_id)?;
     if axis.required && read::dimension_value_ids(tx.conn(), axis.id)?.len() <= 1 {
@@ -487,7 +499,58 @@ pub fn value_delete(tx: &WriteTx<'_>, value_id: i64) -> Result<()> {
             .with("name", &axis.name),
         ));
     }
+    let assignments = read::assignment_ids_of_value(tx.conn(), before.id)?;
+    match reassign_to {
+        Some(target_id) => {
+            let target = live_value_before(tx, target_id)?;
+            if target.id == before.id {
+                return Err(Error::invalid(format!(
+                    "'{}' is the value being removed, so the tasks on it cannot move there — name \
+                     another value of '{}'",
+                    before.name, axis.name
+                )));
+            }
+            if target.dimension_id != axis.id {
+                return Err(Error::invalid(format!(
+                    "'{}' is not a value of '{}', so the tasks on '{}' cannot move to it — a task's \
+                     classification names a value of the axis it answers",
+                    target.name, axis.name, before.name
+                )));
+            }
+            move_assignments(tx, &assignments, target.id)?;
+        }
+        None if axis.required && !assignments.is_empty() => {
+            return Err(Error::Invalid(
+                Msg::new(format!(
+                    "'{}' is a required category and {} task(s) are classified as '{}', so removing \
+                     it would leave them with no value at all — say which value they move to instead",
+                    axis.name,
+                    assignments.len(),
+                    before.name
+                ))
+                .with("name", &axis.name),
+            ));
+        }
+        None => {}
+    }
     delete_value_subtree(tx, before.id)
+}
+
+/// Re-point assignments at another value of the same axis (checked by the caller). The row keeps its
+/// id rather than being deleted and re-created: it is the same classification of the same task, moved,
+/// and a carrier reading the change feed sees one update instead of a disappearance and an arrival.
+/// One row per `(task, axis)` still holds — the tasks here all answered the axis with the value being
+/// removed, so none of them has a second row on it to collide with.
+fn move_assignments(tx: &WriteTx<'_>, assignment_ids: &[i64], target_id: i64) -> Result<()> {
+    let now = Timestamp::now();
+    for &id in assignment_ids {
+        let cur = read::task_dimension_value(tx.conn(), id)?
+            .expect("the assignment id was just read from the same transaction");
+        let moved =
+            TaskDimensionValue { value_id: target_id, updated_at: now, ..cur.clone() };
+        emit_update(tx, record::task_dimension_value(&cur), record::task_dimension_value(&moved))?;
+    }
+    Ok(())
 }
 
 /// Hard-delete one dimension value and the assignments on it (pass an id already checked to exist) —
@@ -1122,8 +1185,7 @@ mod tests {
     }
 
     /// The other route back to empty (`AMB-D-734`): deleting the values themselves. A required axis
-    /// keeps its last one, because losing it would leave a demand nobody can meet — and would empty
-    /// out the tasks already assigned to it, behind the creation premise's back.
+    /// keeps its last one, because losing it would leave a demand nobody can meet.
     #[test]
     fn a_required_axis_keeps_its_last_value() {
         let e = new_engine();
@@ -1136,11 +1198,12 @@ mod tests {
         set(tx, t, core.id).unwrap();
         update(tx, axis.id, None, None, None, None, None, Some(true), None).unwrap();
 
-        // Down to the last one is fine — the axis can still be answered.
-        value_delete(tx, site.id).unwrap();
+        // Down to the last one is fine — the axis can still be answered. Nobody answers with this one,
+        // so it goes without anywhere to send anyone.
+        value_delete(tx, site.id, None).unwrap();
         assert!(val_opt(tx, site.id).is_none());
 
-        assert!(value_delete(tx, core.id).is_err(), "the last value of a required axis stays");
+        assert!(value_delete(tx, core.id, None).is_err(), "the last value of a required axis stays");
         assert!(val_opt(tx, core.id).is_some(), "and the refusal wrote nothing");
         assert_eq!(
             read::task_dimension_assignments(tx.conn(), t).unwrap(),
@@ -1150,8 +1213,80 @@ mod tests {
 
         // Lowering the flag is the way out, and then the value is ordinary again.
         update(tx, axis.id, None, None, None, None, None, Some(false), None).unwrap();
-        value_delete(tx, core.id).unwrap();
+        value_delete(tx, core.id, None).unwrap();
         assert!(val_opt(tx, core.id).is_none());
+    }
+
+    /// The same refusal, one step earlier (`AMB-D-734`, `AMB-D-751`): a required axis will not let a
+    /// value go while tasks answer with it, because they would be emptied out behind the creation
+    /// premise's back — the state `unset` refuses one task at a time. `reassign_to` is what says where
+    /// they go, and then the value goes.
+    #[test]
+    fn a_required_axis_wants_somewhere_for_its_tasks_to_go() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let t = task_in(tx, "a task", p);
+        let axis = add(tx, p, custom("テーマ")).unwrap();
+        let main = value_add(tx, axis.id, "メイン", None).unwrap();
+        let theme = value_add(tx, axis.id, "検索の作り直し", None).unwrap();
+        let other = add(tx, p, custom("プロダクト")).unwrap();
+        let core = value_add(tx, other.id, "Amenbo本体", None).unwrap();
+        set(tx, t, theme.id).unwrap();
+        update(tx, axis.id, None, None, None, None, None, Some(true), None).unwrap();
+
+        let assignment = read::assignment_id(tx.conn(), t, theme.id).unwrap().unwrap();
+
+        assert!(value_delete(tx, theme.id, None).is_err(), "a task answers with it, so it stays");
+        assert!(val_opt(tx, theme.id).is_some(), "and the refusal wrote nothing");
+
+        // A destination has to be somewhere the classification could actually land.
+        assert!(value_delete(tx, theme.id, Some(core.id)).is_err(), "not a value of this axis");
+        assert!(value_delete(tx, theme.id, Some(theme.id)).is_err(), "not the value being removed");
+        assert_eq!(
+            read::task_dimension_assignments(tx.conn(), t).unwrap(),
+            vec![(axis.id, theme.id)],
+            "neither refusal moved anybody",
+        );
+
+        value_delete(tx, theme.id, Some(main.id)).unwrap();
+        assert!(val_opt(tx, theme.id).is_none(), "and now it goes");
+        assert_eq!(
+            read::task_dimension_assignments(tx.conn(), t).unwrap(),
+            vec![(axis.id, main.id)],
+            "with the task carried over rather than emptied",
+        );
+        assert_eq!(
+            read::assignment_id(tx.conn(), t, main.id).unwrap(),
+            Some(assignment),
+            "the same classification, moved — not a new row",
+        );
+    }
+
+    /// An axis that demands nothing is unchanged: its assignments still go with the value. Naming a
+    /// destination there is honoured all the same — it means the same thing on any axis.
+    #[test]
+    fn an_optional_axis_still_lets_its_assignments_go() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = project_named(tx, "PJ");
+        let dropped = task_in(tx, "dropped", p);
+        let moved = task_in(tx, "moved", p);
+        let axis = add(tx, p, custom("区分")).unwrap();
+        let bug = value_add(tx, axis.id, "バグ", None).unwrap();
+        let chore = value_add(tx, axis.id, "雑務", None).unwrap();
+        set(tx, dropped, bug.id).unwrap();
+        set(tx, moved, chore.id).unwrap();
+
+        value_delete(tx, bug.id, None).unwrap();
+        assert!(read::task_dimension_assignments(tx.conn(), dropped).unwrap().is_empty());
+
+        let main = value_add(tx, axis.id, "その他", None).unwrap();
+        value_delete(tx, chore.id, Some(main.id)).unwrap();
+        assert_eq!(
+            read::task_dimension_assignments(tx.conn(), moved).unwrap(),
+            vec![(axis.id, main.id)],
+        );
     }
 
     /// Deleting the axis is not that door: an axis that is gone demands nothing, so its values go with
@@ -1196,7 +1331,7 @@ mod tests {
         let v = value_add(tx, d.id, "バグ", None).unwrap();
         let t = task_in(tx, "task", p);
         set(tx, t, v.id).unwrap();
-        value_delete(tx, v.id).unwrap();
+        value_delete(tx, v.id, None).unwrap();
         assert!(val_opt(tx, v.id).is_none());
         assert!(read::assignment_id(tx.conn(), t, v.id).unwrap().is_none(), "the assignments go too");
     }

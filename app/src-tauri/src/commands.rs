@@ -2855,11 +2855,12 @@ pub fn dimension_value_move(value_id: i64, before: Option<i64>, after: Option<i6
 }
 
 /// Delete a dimension value permanently (the delete op takes the task assignments on it first — same
-/// shape as the CLI's `dimension value-rm`).
+/// shape as the CLI's `dimension value-rm`). `reassign_to` names another value of the same axis to move
+/// those assignments to, which a required axis demands whenever there are any.
 #[tauri::command]
-pub fn dimension_value_rm(value_id: i64) -> Result<WriteAck, CmdError> {
+pub fn dimension_value_rm(value_id: i64, reassign_to: Option<i64>) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.dimension_value_delete(value_id)?;
+        store.dimension_value_delete(value_id, reassign_to)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))

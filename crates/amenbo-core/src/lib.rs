@@ -24,6 +24,7 @@ pub mod error;
 pub mod hooks;
 pub mod identity;
 pub mod export;
+pub mod frames;
 pub mod harness;
 pub mod idref;
 pub mod lint;

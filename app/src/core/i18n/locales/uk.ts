@@ -526,6 +526,7 @@ export const uk: Translation = {
     "face.open": "Відкрити тут термінал",
     "face.rename": "Перейменувати цю панель",
     "face.needsYou": "чекає на вас",
+    "face.nothingNeedsYou": "Наскільки відомо журналу, ви ніде не потрібні.",
     "files.pointed": "На що вказали",
     "files.nothingPointed": "Поки ні на що не вказали.",
     "files.unopened": "{n} з них так і не відкрили.",

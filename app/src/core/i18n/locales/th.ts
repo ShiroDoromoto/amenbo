@@ -503,6 +503,7 @@ export const th: Translation = {
     "face.open": "เปิดเทอร์มินัลที่นี่",
     "face.rename": "เปลี่ยนชื่อบานหน้าต่างนี้",
     "face.needsYou": "กำลังรอคุณอยู่",
+    "face.nothingNeedsYou": "เท่าที่บันทึกรู้ ยังไม่มีอะไรต้องให้คุณจัดการ",
     "files.pointed": "สิ่งที่ชี้ไว้",
     "files.nothingPointed": "ยังไม่มีอะไรถูกชี้ไว้",
     "files.unopened": "ในจำนวนนี้ {n} รายการยังไม่ได้เปิด",

@@ -499,6 +499,7 @@ export const ko: Translation = {
     "face.open": "여기에 터미널 열기",
     "face.rename": "이 페인 이름 바꾸기",
     "face.needsYou": "사용자를 기다리는 중",
+    "face.nothingNeedsYou": "장부에 있는 것 중에는 손이 필요한 것이 없습니다.",
     "files.pointed": "가리킨 것",
     "files.nothingPointed": "아직 가리킨 것이 없습니다.",
     "files.unopened": "그중 {n}개는 열어 보지 않았습니다.",

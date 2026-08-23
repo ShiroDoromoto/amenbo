@@ -9,7 +9,7 @@ import {
   sayOf,
   sayText,
   type Dot,
-  type Held,
+  type Held, standsAsTurn,
 } from "./nameplate";
 import { NO_SESSIONS, opened, said, type Sessions } from "./sessions";
 
@@ -158,5 +158,17 @@ describe("the row on the page", () => {
     draw({ name: null, now: { kind: "idle" }, say: { kind: "silent" }, dot: STILL }, EN);
     expect(host.querySelector(".plate")).toBe(row);
     expect((row as HTMLElement).hidden).toBe(false);
+  });
+});
+
+describe("what counts as a turn standing", () => {
+  it("is what the row leads with when a person is needed, and nothing else", () => {
+    // The two a person is needed for: the agent handing a turn over, and the ledger saying what the
+    // pane holds is no longer ready.
+    expect(standsAsTurn({ kind: "waiting", text: "which of the two" })).toBe(true);
+    expect(standsAsTurn({ kind: "premise" })).toBe(true);
+    // The two that are not. Silence least of all: it is not a claim about anything (`AMB-D-748`).
+    expect(standsAsTurn({ kind: "note", text: "running the tests" })).toBe(false);
+    expect(standsAsTurn({ kind: "silent" })).toBe(false);
   });
 });

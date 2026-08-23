@@ -529,6 +529,7 @@ export const ru: Translation = {
     "face.open": "Открыть здесь терминал",
     "face.rename": "Переименовать эту панель",
     "face.needsYou": "ждёт вас",
+    "face.nothingNeedsYou": "Насколько известно журналу, вы нигде не нужны.",
     "files.pointed": "На что указали",
     "files.nothingPointed": "Пока ни на что не указали.",
     "files.unopened": "{n} из них так и не открыли.",

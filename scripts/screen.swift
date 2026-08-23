@@ -16,7 +16,7 @@
 //   swift screen.swift shot <pid> <out.png>      shoot that app's window into a png
 //   swift screen.swift read <image.png>          the words on a shot, as JSON: corrected, and as read
 //   swift screen.swift find <pid> [name]         every named element on screen, or those that name reaches
-//   swift screen.swift click-named <pid> <name>  left-click what that name names (a part of it will do)
+//   swift screen.swift click-named <pid> <name>  left-click what that name names (fronts the app first)
 //   swift screen.swift click <x> <y>             left-click at a screen point
 //   swift screen.swift dblclick <x> <y>          double-click at a screen point (what opens a dialog's row)
 //   swift screen.swift type "text"               type into the focused element (Unicode direct, so no IME)
@@ -28,6 +28,10 @@
 // panel and 1 on an external one, and the screen may have reflowed since the shot was taken —
 // opening the right pane moves a column header by tens of pixels. An element wider than the error
 // swallows both, so the two go unnoticed until something small is aimed at.
+//
+// A click lands on whatever is frontmost where it is aimed, so `click-named` brings its app to the
+// front before pressing — the one action here that does not have to be sequenced by its caller.
+// `click` and `type` take no pid, so what is in front is still the caller's to know.
 //
 // The tool holds no notion of what to operate in which order: an app-specific sequence burned in
 // here would go false every time the UI moves.
@@ -311,7 +315,13 @@ func find(pid: Int, name: String?) {
 /// The click is a real one, at where the element stands now: what the name saves is the arithmetic,
 /// not the input path, and a press delivered through the accessibility API would go through whether
 /// or not anything was covering the element.
+///
+/// Which is also why the app is brought to the front first, rather than left to the caller: a real
+/// press lands on whatever is frontmost at that point, so anything that took the front — a sleeping
+/// display, a permission dialog — swallows the click and the run still exits 0. A shot says so by
+/// failing; a click cannot, so it is not asked to.
 func clickNamed(pid: Int, name: String) {
+    front(pid: pid)
     let found = named(name, among: appElements(pid: pid))
     guard let first = found.first else { fail("nothing on screen is called \(name)") }
 

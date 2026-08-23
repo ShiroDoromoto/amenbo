@@ -612,6 +612,8 @@ export const vi: Translation = {
       "Đăng ký {url} nghĩa là tin vào khoá ký của nó ({serving}). Hãy đối chiếu vân tay trước khi nó được ghim.",
     plugin_catalog_key_changed:
       "{url} giờ đưa ra {serving}, không phải {agreed} mà bạn đã được cho xem. Hãy đăng ký lại và đối chiếu vân tay mới.",
+    pty_failed: "Không thể khởi động terminal: {reason}",
+    pty_gone: "Terminal đó không còn mở.",
 
     already_reserved: "{ref} không ở trạng thái “Cần làm” nên không thể nhận — có thể một phiên khác đã giữ nó.",
     not_ready: "{ref} chưa thể nhận: {reasons}",

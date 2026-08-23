@@ -609,6 +609,8 @@ export const zhHant: Translation = {
       "登錄 {url} 表示信任它的簽署金鑰（{serving}）。釘住之前請先核對指紋。",
     plugin_catalog_key_changed:
       "{url} 現在公布的是 {serving}，而不是給你看過的 {agreed}。請重新登錄，並核對新的指紋。",
+    pty_failed: "無法啟動終端機：{reason}",
+    pty_gone: "該終端機已經關閉。",
 
     already_reserved: "{ref} 不是「待辦」，無法認領；可能已有另一個工作階段在處理。",
     not_ready: "{ref} 還不能認領：{reasons}",

@@ -639,6 +639,8 @@ export const ptBR: Translation = {
       "Registrar {url} significa confiar na chave de assinatura dele ({serving}). Confira a impressão antes de fixá-la.",
     plugin_catalog_key_changed:
       "{url} agora publica {serving}, e não a {agreed} que foi mostrada a você. Registre de novo e confira a nova impressão.",
+    pty_failed: "Não foi possível iniciar o terminal: {reason}",
+    pty_gone: "Esse terminal não está mais aberto.",
 
     already_reserved: "{ref} não está em “A fazer”, então não dá para reservar — outra sessão pode já estar com ela.",
     not_ready: "{ref} ainda não dá para reservar: {reasons}",

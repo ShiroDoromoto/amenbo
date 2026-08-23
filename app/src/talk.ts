@@ -1,6 +1,6 @@
 // The talk window's entry — the second window of the one app (`AMB-T-3588`). The board (`main.tsx`)
-// is "what has happened"; this one is "what is happening now", and it is empty until the panes that
-// belong here arrive.
+// is "what has happened"; this one is "what is happening now", and what is happening now is a
+// terminal: one pane, filling the window, with the user's shell running in it.
 //
 // What it does own from the start is its own name. Two windows both titled "Amenbo" are
 // indistinguishable in the window list, the taskbar and the switcher, and the words that tell them
@@ -15,8 +15,10 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { normalizeLang, t } from "./core/i18n";
 import { invoke } from "./core/ipc";
 import { initTheme } from "./core/theme";
+import { mountTerminal } from "./talk/terminal";
 import "./styles/tokens.css";
 import "./styles/global.css";
+import "./styles/talk.css";
 
 initTheme();
 
@@ -25,3 +27,18 @@ void invoke<string | null>("ui_language")
   // Outside Tauri (`npm run dev` in a browser) there is no window to name, and a title that could
   // not be set is not worth failing an otherwise-working window over.
   .catch(() => {});
+
+// The pane. A terminal is a live process, so a failure to start one is not a thing to swallow — the
+// window would come up empty and say nothing about why. What the host refused with goes on the page
+// instead, in the only place there is to put it.
+const root = document.getElementById("root");
+if (root) {
+  root.className = "talk";
+  const pane = document.createElement("div");
+  pane.className = "talk__pane";
+  root.append(pane);
+  void mountTerminal(pane).catch((e: unknown) => {
+    pane.className = "talk__failed";
+    pane.textContent = e instanceof Error ? e.message : String(e);
+  });
+}

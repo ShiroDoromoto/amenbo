@@ -632,6 +632,8 @@ export const ja: Translation = {
       "{url} を登録すると、その署名鍵（{serving}）を信頼することになります。指紋を確かめてから登録してください。",
     plugin_catalog_key_changed:
       "{url} の鍵が、確認した指紋（{agreed}）から {serving} に変わりました。登録し直して、新しい指紋を確かめてください。",
+    pty_failed: "端末を起動できませんでした: {reason}",
+    pty_gone: "この端末はもう開いていません。",
 
     already_reserved: "{ref} は「未着手」ではないため予約できません。別のセッションが着手済みかもしれません。",
     not_ready: "{ref} はまだ予約できません: {reasons}",

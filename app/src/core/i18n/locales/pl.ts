@@ -647,6 +647,8 @@ export const pl: Translation = {
       "Rejestracja {url} oznacza zaufanie jego kluczowi podpisującemu ({serving}). Sprawdź odcisk, zanim zostanie przypięty.",
     plugin_catalog_key_changed:
       "{url} wydaje teraz {serving}, a nie pokazany Ci wcześniej {agreed}. Zarejestruj go ponownie i sprawdź nowy odcisk.",
+    pty_failed: "Nie udało się uruchomić terminala: {reason}",
+    pty_gone: "Ten terminal nie jest już otwarty.",
 
     already_reserved:
       "{ref} nie ma statusu „Do zrobienia”, więc nie można go zarezerwować — być może trzyma go już inna sesja.",

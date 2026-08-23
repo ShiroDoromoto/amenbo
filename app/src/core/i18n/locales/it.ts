@@ -638,6 +638,8 @@ export const it: Translation = {
       "Registrare {url} significa fidarsi della sua chiave di firma ({serving}). Controlla l'impronta prima che venga fissata.",
     plugin_catalog_key_changed:
       "{url} ora pubblica {serving}, non la {agreed} che ti era stata mostrata. Registralo di nuovo e controlla la nuova impronta.",
+    pty_failed: "Non è stato possibile avviare il terminale: {reason}",
+    pty_gone: "Quel terminale non è più aperto.",
 
     already_reserved:
       "{ref} non è in “Da fare”, quindi non si può prendere in carico — forse un'altra sessione la tiene già.",

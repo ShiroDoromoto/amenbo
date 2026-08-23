@@ -2021,3 +2021,22 @@ pub enum PluginUpdateReachDto {
     /// Somebody asked in so many words. Go to the catalog whatever the cache's age.
     Now,
 }
+
+/// One chunk of a terminal's output, on its way to the pane drawing it (the payload of the talk
+/// window's `pty://output` event).
+///
+/// The bytes travel base64-encoded because they are not text: an escape sequence is split wherever
+/// the read ended, and a multi-byte character with it, and only the emulator that reassembles them
+/// may decode. Anything that turned them into a string here would corrupt exactly the chunks that
+/// crossed a boundary.
+// Clone because Tauri's `emit_to` takes the payload by value and may hand it to more than one
+// listener; the chunk is a string this thread just built and nothing else holds.
+#[derive(Clone, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct PtyChunkDto {
+    /// The session whose terminal this came out of.
+    pub(crate) session: String,
+    /// The chunk, base64-encoded.
+    pub(crate) base64: String,
+}

@@ -638,6 +638,8 @@ export const es: Translation = {
       "Registrar {url} significa confiar en su clave de firma ({serving}). Comprueba la huella antes de fijarla.",
     plugin_catalog_key_changed:
       "{url} publica ahora {serving}, no la {agreed} que se te mostró. Regístralo otra vez y comprueba la huella nueva.",
+    pty_failed: "No se pudo iniciar la terminal: {reason}",
+    pty_gone: "Esa terminal ya no está abierta.",
 
     already_reserved:
       "{ref} no está en “Pendiente”, así que no se puede reservar: puede que otra sesión ya la tenga.",

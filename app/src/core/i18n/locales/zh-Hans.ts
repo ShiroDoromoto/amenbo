@@ -609,6 +609,8 @@ export const zhHans: Translation = {
       "登记 {url} 意味着信任它的签名密钥（{serving}）。固定之前请先核对指纹。",
     plugin_catalog_key_changed:
       "{url} 现在公布的是 {serving}，而不是给你看过的 {agreed}。请重新登记，并核对新的指纹。",
+    pty_failed: "无法启动终端：{reason}",
+    pty_gone: "该终端已经关闭。",
 
     already_reserved: "{ref} 不是“待办”，无法认领；可能已有另一个会话在处理。",
     not_ready: "{ref} 还不能认领：{reasons}",

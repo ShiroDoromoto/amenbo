@@ -511,6 +511,7 @@ export const es: Translation = {
     "face.splitOut": "Abrir en una ventana aparte",
     "face.merge": "Volver a una sola ventana",
     "face.ended": "El programa de esta terminal ha terminado.",
+    "face.needsYou": "te está esperando",
     "talk.elevated.title": "Amenbo se está ejecutando como administrador",
     "talk.elevated.body": "Una terminal abierta aquí lo hereda, y un administrador no sigue los enlaces tras los que scoop instala sus paquetes. Esas herramientas no se pueden alcanzar desde esta ventana: Amenbo dirá que no están instaladas, aunque lo estén.",
     "talk.elevated.fix": "Cierra Amenbo y ábrelo de nuevo sin «Ejecutar como administrador», y volverán.",

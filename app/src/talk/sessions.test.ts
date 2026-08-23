@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SessionSaidDto } from "../bindings/bindings";
-import { closed, NO_SESSIONS, opened, said, seen } from "./sessions";
+import { anyWaiting, closed, NO_SESSIONS, opened, said, seen } from "./sessions";
 
 const AT = "2026-08-24T09:00:00Z";
 
@@ -50,6 +50,25 @@ describe("the sessions the window is running", () => {
 
     map = said(map, statement({ verb: "waiting", text: "another decision" }));
     expect(map.get("pane-1")?.seen).toBeNull();
+  });
+
+  it("says a turn is standing while any one pane has one, and output alone never counts", () => {
+    let map = opened(NO_SESSIONS, { session: "pane-1", startedAt: AT });
+    map = opened(map, { session: "pane-2", startedAt: AT });
+    expect(anyWaiting(map)).toBe(false);
+
+    // A pane hard at work says a great deal. None of it is a turn.
+    map = said(map, statement({ verb: "note", text: "running the tests" }));
+    expect(anyWaiting(map)).toBe(false);
+
+    map = said(map, statement({ session: "pane-2", verb: "waiting", text: "which of the two" }));
+    expect(anyWaiting(map)).toBe(true);
+    // The other pane going back to work does not answer pane-2's turn.
+    map = said(map, statement({ verb: "finished", text: "green" }));
+    expect(anyWaiting(map)).toBe(true);
+
+    map = said(map, statement({ session: "pane-2", verb: "note", text: "on it" }));
+    expect(anyWaiting(map)).toBe(false);
   });
 
   it("keeps nothing of a session whose terminal has closed", () => {

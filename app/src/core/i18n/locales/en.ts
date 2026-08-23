@@ -534,6 +534,7 @@ const ui = {
   "face.splitOut": "Open in a separate window",
   "face.merge": "Back to one window",
   "face.ended": "The program in this terminal has exited.",
+  "face.needsYou": "waiting on you",
   // The talk window's standing band, shown only while Amenbo itself holds an administrator's token
   // on Windows. What it warns about is not a right the user lacks but one they have too much of:
   // the terminal opens, and the tools behind scoop's links are unreachable from inside it

@@ -500,6 +500,7 @@ export const de: Translation = {
     "face.splitOut": "In einem eigenen Fenster öffnen",
     "face.merge": "Zurück zu einem Fenster",
     "face.ended": "Das Programm in diesem Terminal wurde beendet.",
+    "face.needsYou": "wartet auf Sie",
     "talk.elevated.title": "Amenbo läuft als Administrator",
     "talk.elevated.body": "Ein hier geöffnetes Terminal erbt das, und ein Administrator folgt den Verknüpfungen nicht, hinter denen scoop seine Pakete ablegt. Diese Werkzeuge sind aus diesem Fenster nicht erreichbar – Amenbo meldet sie als nicht installiert, obwohl sie es sind.",
     "talk.elevated.fix": "Beenden Sie Amenbo und öffnen Sie es erneut ohne „Als Administrator ausführen“, dann sind sie wieder da.",

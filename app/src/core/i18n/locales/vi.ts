@@ -493,6 +493,7 @@ export const vi: Translation = {
     "face.splitOut": "Mở trong cửa sổ riêng",
     "face.merge": "Trở lại một cửa sổ",
     "face.ended": "Chương trình trong terminal này đã kết thúc.",
+    "face.needsYou": "đang chờ bạn",
     "talk.elevated.title": "Amenbo đang chạy với quyền quản trị",
     "talk.elevated.body": "Cửa sổ dòng lệnh mở ở đây cũng thừa hưởng quyền đó, và quyền quản trị không đi theo các liên kết mà scoop dùng để đặt gói của nó. Không thể tiếp cận những công cụ đó từ cửa sổ này — Amenbo sẽ báo là chưa cài, dù chúng đã được cài.",
     "talk.elevated.fix": "Hãy thoát Amenbo và mở lại mà không dùng “Run as administrator”, các công cụ sẽ trở lại.",

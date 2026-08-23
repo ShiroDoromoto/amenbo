@@ -38,6 +38,7 @@ const props = {
   onToggleSidebar: () => {},
   face: "tasks" as const,
   onSelectFace: () => {},
+  terminalBadge: false,
 };
 const badge = () => container.querySelector(".topbar__envbadge");
 

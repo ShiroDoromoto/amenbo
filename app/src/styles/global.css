@@ -262,6 +262,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .topbar__face:hover { color: var(--c-text); }
 .topbar__face--on { background: var(--c-surface); color: var(--c-text); font-weight: var(--fw-bold); }
+/* A turn standing behind the other face (`shell/terminalBadge.ts`). It is the accent dot the inbox
+   badge wears, in the one place that can be seen from the face the person is on — inline after the
+   label rather than pinned to a corner, so the segment simply grows by a dot and nothing shifts
+   under the pointer. */
+.topbar__face-badge {
+  display: inline-block; width: 6px; height: 6px; margin-left: var(--s-1);
+  border-radius: 50%; background: var(--c-accent); vertical-align: middle;
+}
 .topbar__refresh {
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--c-surface-sunken); border: 1px solid var(--c-border);

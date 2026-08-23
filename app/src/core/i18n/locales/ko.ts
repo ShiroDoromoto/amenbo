@@ -476,6 +476,15 @@ export const ko: Translation = {
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "상의 중", "talk.holding": "{n}건",
     "talk.finished": "완료 {n}건", "talk.premiseBroken": "전제가 무너졌습니다",
+    "face.switch": "이 창이 보여 주는 화면",
+    "face.tasks": "작업",
+    "face.terminal": "터미널",
+    "face.splitOut": "별도 창으로 열기",
+    "face.merge": "하나의 창으로 되돌리기",
+    "face.ended": "이 터미널의 프로그램이 종료되었습니다.",
+    "talk.elevated.title": "Amenbo가 관리자 권한으로 실행 중입니다",
+    "talk.elevated.body": "여기서 연 터미널도 그 권한을 물려받습니다. 관리자 권한은 scoop이 패키지를 두는 링크를 따라가지 않으므로, 이 창에서는 그 도구에 닿을 수 없습니다. 설치되어 있어도 Amenbo는 설치되지 않았다고 답합니다.",
+    "talk.elevated.fix": "Amenbo를 종료하고 “관리자 권한으로 실행”을 쓰지 않고 다시 열면 도구가 돌아옵니다.",
     "hooks.title": "Amenbo의 참조를 커밋에서 막을까요?",
     "hooks.why": "AMB-T-… 같은 참조는 그것을 발급한 데이터 밖에서는 아무것도 가리키지 않습니다. git 훅이 커밋에 닿기 전에 잡아 줍니다.",
     "hooks.scope": "한 번만 묻습니다. 그 답은 Amenbo가 다루는 저장소 전체에 적용됩니다. 지금 것도, 나중에 더할 것도요.",
@@ -614,6 +623,7 @@ export const ko: Translation = {
       "{url}이(가) 이제 보여 준 {agreed}가 아니라 {serving}을(를) 내놓습니다. 다시 등록하고 새 지문을 확인하세요.",
     pty_failed: "터미널을 시작할 수 없습니다: {reason}",
     pty_gone: "해당 터미널은 더 이상 열려 있지 않습니다.",
+    window_failed: "그 창을 열 수 없습니다: {reason}",
 
     already_reserved: "{ref}은(는) ‘할 일’이 아니어서 맡을 수 없습니다. 다른 세션이 이미 진행 중일 수 있습니다.",
     not_ready: "{ref}은(는) 아직 맡을 수 없습니다: {reasons}",

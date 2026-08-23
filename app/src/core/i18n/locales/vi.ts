@@ -480,6 +480,15 @@ export const vi: Translation = {
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "Đang trao đổi", "talk.holding": "{n} việc",
     "talk.finished": "xong {n}", "talk.premiseBroken": "Một tiền đề đã không còn đúng",
+    "face.switch": "Cửa sổ này đang hiển thị gì",
+    "face.tasks": "Công việc",
+    "face.terminal": "Terminal",
+    "face.splitOut": "Mở trong cửa sổ riêng",
+    "face.merge": "Trở lại một cửa sổ",
+    "face.ended": "Chương trình trong terminal này đã kết thúc.",
+    "talk.elevated.title": "Amenbo đang chạy với quyền quản trị",
+    "talk.elevated.body": "Cửa sổ dòng lệnh mở ở đây cũng thừa hưởng quyền đó, và quyền quản trị không đi theo các liên kết mà scoop dùng để đặt gói của nó. Không thể tiếp cận những công cụ đó từ cửa sổ này — Amenbo sẽ báo là chưa cài, dù chúng đã được cài.",
+    "talk.elevated.fix": "Hãy thoát Amenbo và mở lại mà không dùng “Run as administrator”, các công cụ sẽ trở lại.",
     "hooks.title": "Giữ các mã tham chiếu của Amenbo ra ngoài commit của bạn?",
     "hooks.why": "Một mã như AMB-T-… chẳng có nghĩa gì bên ngoài kho dữ liệu đã cấp nó. Một git hook chặn nó lại trước khi nó vào tới commit.",
     "hooks.scope": "Chỉ hỏi một lần. Câu trả lời của bạn áp cho các kho mã mà Amenbo làm việc trong đó, cả bây giờ lẫn những kho bạn thêm về sau.",
@@ -618,6 +627,7 @@ export const vi: Translation = {
       "{url} giờ đưa ra {serving}, không phải {agreed} mà bạn đã được cho xem. Hãy đăng ký lại và đối chiếu vân tay mới.",
     pty_failed: "Không thể khởi động terminal: {reason}",
     pty_gone: "Terminal đó không còn mở.",
+    window_failed: "Không thể mở cửa sổ đó: {reason}",
 
     already_reserved: "{ref} không ở trạng thái “Cần làm” nên không thể nhận — có thể một phiên khác đã giữ nó.",
     not_ready: "{ref} chưa thể nhận: {reasons}",

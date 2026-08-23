@@ -518,6 +518,21 @@ const ui = {
   // worth saying about it. "{n}" is a count of tasks.
   "talk.idle": "Talking it over", "talk.holding": "{n} tasks",
   "talk.finished": "{n} done", "talk.premiseBroken": "A premise has broken",
+  // The two faces of the one window, and the moves between one window and two (`AMB-D-753`).
+  "face.switch": "Tasks or terminal",
+  "face.tasks": "Tasks",
+  "face.terminal": "Terminal",
+  "face.splitOut": "Open in a separate window",
+  "face.merge": "Back to one window",
+  "face.ended": "The program in this terminal has exited.",
+  // The talk window's standing band, shown only while Amenbo itself holds an administrator's token
+  // on Windows. What it warns about is not a right the user lacks but one they have too much of:
+  // the terminal opens, and the tools behind scoop's links are unreachable from inside it
+  // (`AMB-T-3565`). Amenbo will say they are not installed, and be wrong in a way only this can
+  // explain.
+  "talk.elevated.title": "Amenbo is running as administrator",
+  "talk.elevated.body": "A terminal opened here inherits that, and an administrator does not follow the links scoop installs its packages behind. Those tools cannot be reached from this window — Amenbo will report them as not installed, though they are.",
+  "talk.elevated.fix": "Quit Amenbo and start it again without “Run as administrator”, and they come back.",
   // lint hook consent: the question Amenbo asks before writing into .git/hooks
   "hooks.title": "Keep Amenbo's refs out of your commits?",
   "hooks.why": "A ref like AMB-T-… means nothing outside the store that issued it. A git hook stops one before it reaches a commit.",
@@ -685,6 +700,7 @@ const err: Partial<Record<ErrorCode, string>> = {
     "{url} now publishes {serving}, not the {agreed} you were shown. Register it again and check the new fingerprint.",
   pty_failed: "The terminal could not be started: {reason}",
   pty_gone: "That terminal is no longer open.",
+  window_failed: "That window could not be opened: {reason}",
 
   // The sentences the GUI shows a person, named one at a time (`AMB-D-413`). Which refusals get a code of
   // their own was settled by measuring what the front end actually surfaces: a form the screen already

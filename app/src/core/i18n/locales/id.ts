@@ -480,6 +480,15 @@ export const id: Translation = {
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "Sedang berdiskusi", "talk.holding": "{n} tugas",
     "talk.finished": "{n} selesai", "talk.premiseBroken": "Sebuah prasyarat sudah tidak berlaku",
+    "face.switch": "Yang ditampilkan jendela ini",
+    "face.tasks": "Tugas",
+    "face.terminal": "Terminal",
+    "face.splitOut": "Buka di jendela terpisah",
+    "face.merge": "Kembali ke satu jendela",
+    "face.ended": "Program di terminal ini telah berhenti.",
+    "talk.elevated.title": "Amenbo berjalan sebagai administrator",
+    "talk.elevated.body": "Terminal yang dibuka di sini mewarisi hak itu, dan administrator tidak mengikuti tautan tempat scoop memasang paketnya. Alat-alat itu tidak dapat dijangkau dari jendela ini — Amenbo akan melaporkannya tidak terpasang, padahal terpasang.",
+    "talk.elevated.fix": "Tutup Amenbo lalu buka lagi tanpa “Run as administrator”, dan alat-alat itu kembali.",
     "hooks.title": "Jauhkan rujukan Amenbo dari commit Anda?",
     "hooks.why": "Rujukan seperti AMB-T-… tidak berarti apa-apa di luar data yang menerbitkannya. Sebuah git hook menghentikannya sebelum ia sampai ke commit.",
     "hooks.scope": "Ditanyakan sekali. Jawaban Anda berlaku untuk repositori tempat Amenbo bekerja, yang sekarang maupun yang Anda tambahkan nanti.",
@@ -618,6 +627,7 @@ export const id: Translation = {
       "{url} kini menyajikan {serving}, bukan {agreed} yang ditunjukkan kepada Anda. Daftarkan lagi dan periksa sidik jari yang baru.",
     pty_failed: "Terminal tidak dapat dijalankan: {reason}",
     pty_gone: "Terminal itu sudah tidak terbuka.",
+    window_failed: "Jendela itu tidak dapat dibuka: {reason}",
 
     already_reserved:
       "{ref} tidak berstatus “Akan dikerjakan”, jadi tidak bisa diambil — mungkin sesi lain sudah memegangnya.",

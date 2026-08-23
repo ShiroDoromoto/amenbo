@@ -498,6 +498,15 @@ export const it: Translation = {
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "In conversazione", "talk.holding": "{n} attività",
     "talk.finished": "{n} completate", "talk.premiseBroken": "Una premessa non regge più",
+    "face.switch": "Che cosa mostra questa finestra",
+    "face.tasks": "Attività",
+    "face.terminal": "Terminale",
+    "face.splitOut": "Apri in una finestra separata",
+    "face.merge": "Torna a una sola finestra",
+    "face.ended": "Il programma di questo terminale è terminato.",
+    "talk.elevated.title": "Amenbo è in esecuzione come amministratore",
+    "talk.elevated.body": "Un terminale aperto qui lo eredita, e un amministratore non segue i collegamenti dietro cui scoop installa i suoi pacchetti. Quegli strumenti non sono raggiungibili da questa finestra: Amenbo li segnalerà come non installati, anche se lo sono.",
+    "talk.elevated.fix": "Chiudi Amenbo e riaprilo senza «Esegui come amministratore»: torneranno.",
     "hooks.title": "Tenere i riferimenti di Amenbo fuori dai tuoi commit?",
     "hooks.why": "Un riferimento come AMB-T-… non significa nulla fuori dai dati che l'hanno emesso. Un hook di git lo ferma prima che arrivi in un commit.",
     "hooks.scope": "Chiesto una volta. La tua risposta copre i repository su cui Amenbo lavora, quelli di adesso e quelli che aggiungerai.",
@@ -644,6 +653,7 @@ export const it: Translation = {
       "{url} ora pubblica {serving}, non la {agreed} che ti era stata mostrata. Registralo di nuovo e controlla la nuova impronta.",
     pty_failed: "Non è stato possibile avviare il terminale: {reason}",
     pty_gone: "Quel terminale non è più aperto.",
+    window_failed: "Non è stato possibile aprire quella finestra: {reason}",
 
     already_reserved:
       "{ref} non è in “Da fare”, quindi non si può prendere in carico — forse un'altra sessione la tiene già.",

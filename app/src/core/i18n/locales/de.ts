@@ -487,6 +487,15 @@ export const de: Translation = {
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "Im Gespräch", "talk.holding": "{n} Aufgaben",
     "talk.finished": "{n} erledigt", "talk.premiseBroken": "Eine Voraussetzung ist weggefallen",
+    "face.switch": "Was dieses Fenster zeigt",
+    "face.tasks": "Aufgaben",
+    "face.terminal": "Terminal",
+    "face.splitOut": "In einem eigenen Fenster öffnen",
+    "face.merge": "Zurück zu einem Fenster",
+    "face.ended": "Das Programm in diesem Terminal wurde beendet.",
+    "talk.elevated.title": "Amenbo läuft als Administrator",
+    "talk.elevated.body": "Ein hier geöffnetes Terminal erbt das, und ein Administrator folgt den Verknüpfungen nicht, hinter denen scoop seine Pakete ablegt. Diese Werkzeuge sind aus diesem Fenster nicht erreichbar – Amenbo meldet sie als nicht installiert, obwohl sie es sind.",
+    "talk.elevated.fix": "Beenden Sie Amenbo und öffnen Sie es erneut ohne „Als Administrator ausführen“, dann sind sie wieder da.",
     "hooks.title": "Amenbos Referenzen aus deinen Commits heraushalten?",
     "hooks.why": "Eine Referenz wie AMB-T-… bedeutet außerhalb der Daten, die sie vergeben haben, nichts. Ein git-Hook hält sie auf, bevor sie in einen Commit gelangt.",
     "hooks.scope": "Wird einmal gefragt. Deine Antwort gilt für die Repositorys, mit denen Amenbo arbeitet — die jetzigen und die, die du später hinzufügst.",
@@ -629,6 +638,7 @@ export const de: Translation = {
       "{url} veröffentlicht jetzt {serving} statt des gezeigten {agreed}. Trage es erneut ein und prüfe den neuen Fingerabdruck.",
     pty_failed: "Das Terminal konnte nicht gestartet werden: {reason}",
     pty_gone: "Dieses Terminal ist nicht mehr geöffnet.",
+    window_failed: "Dieses Fenster konnte nicht geöffnet werden: {reason}",
 
     already_reserved:
       "{ref} ist nicht „Offen“ und lässt sich deshalb nicht übernehmen — vielleicht hat eine andere Sitzung sie schon.",

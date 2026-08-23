@@ -477,6 +477,15 @@ export const zhHans: Translation = {
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "商议中", "talk.holding": "{n} 项",
     "talk.finished": "已完成 {n} 项", "talk.premiseBroken": "有一个前提不成立了",
+    "face.switch": "此窗口显示的界面",
+    "face.tasks": "任务",
+    "face.terminal": "终端",
+    "face.splitOut": "在单独窗口中打开",
+    "face.merge": "合并回一个窗口",
+    "face.ended": "此终端中的程序已退出。",
+    "talk.elevated.title": "Amenbo 正以管理员身份运行",
+    "talk.elevated.body": "在此打开的终端会继承该权限，而管理员不会跟随 scoop 安放软件包所用的链接。这些工具在本窗口中无法访问——即使已经安装，Amenbo 也会报告为未安装。",
+    "talk.elevated.fix": "退出 Amenbo，不使用“以管理员身份运行”重新打开，工具就会回来。",
     "hooks.title": "要把 Amenbo 的引用挡在提交之外吗？",
     "hooks.why": "像 AMB-T-… 这样的引用，出了签发它的这份数据就什么都不指。git 钩子能在它进入提交之前拦下来。",
     "hooks.scope": "只问一次。你的答复覆盖 Amenbo 所处理的仓库，现在的和之后添加的都算。",
@@ -615,6 +624,7 @@ export const zhHans: Translation = {
       "{url} 现在公布的是 {serving}，而不是给你看过的 {agreed}。请重新登记，并核对新的指纹。",
     pty_failed: "无法启动终端：{reason}",
     pty_gone: "该终端已经关闭。",
+    window_failed: "无法打开该窗口：{reason}",
 
     already_reserved: "{ref} 不是“待办”，无法认领；可能已有另一个会话在处理。",
     not_ready: "{ref} 还不能认领：{reasons}",

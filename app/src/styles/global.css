@@ -28,6 +28,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .shell > .topbar { grid-row: 1; }
 .shell > .shell__banners { grid-row: 2; }
 .shell > .shell__body { grid-row: 3; }
+/* The terminal face shares the body's row: the two are the same window showing one thing or the
+   other (`AMB-D-753`). `hidden` is spelled out because `display: grid` / `display: flex` below is an
+   author rule and would otherwise beat the user agent's `[hidden]`, leaving both faces drawn on top
+   of each other. Hiding — rather than not rendering — is the whole of "the switch does not kill the
+   terminal": the emulator stays, and the PTY keeps flowing behind it. */
+.shell > .shell__terminal { grid-row: 3; }
+.shell__body[hidden], .shell__terminal[hidden] { display: none; }
 /* One band under the last, in the order they are written. */
 .shell__banners { display: flex; flex-direction: column; min-width: 0; }
 /* 2 rows x 3 columns. The header row (the project header) spans the full width of main
@@ -57,6 +64,47 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .shell__body--sidebar-collapsed .sidebar-wrap { display: none; }
 /* The project header (the board's toolbar) is portalled in here; BoardScreen renders it. */
 .shell__header { grid-area: header; min-width: 0; }
+
+/* ---------- the terminal face ---------- */
+/* The terminal as the board's window draws it: a bar with the way out to a window of its own, and
+   under it the pane. The talk window draws the same two the other way round (styles/talk.css) — the
+   control there is the way back. */
+.shell__terminal { min-height: 0; }
+.termface {
+  height: 100%; min-height: 0;
+  padding: var(--s-3);
+  display: flex; flex-direction: column; gap: var(--s-2);
+}
+.termface__bar { display: flex; align-items: center; gap: var(--s-3); }
+.termface__action {
+  background: var(--c-surface-sunken); border: 1px solid var(--c-border);
+  border-radius: var(--r-md); padding: var(--s-1) var(--s-3);
+  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1.6;
+}
+.termface__action:hover { color: var(--c-text); }
+/* The program in the terminal having exited. What is on the screen stays as it was — that is what a
+   terminal ends with — and this is the part of it the screen cannot show for itself. */
+.termface__note { color: var(--c-text-muted); font-size: var(--fs-sm); }
+/* The terminal's box. xterm.js measures the element it was opened in, so this is what decides how
+   many columns and rows the program inside is told it has. */
+.termface__pane {
+  flex: 1; min-height: 0;
+  padding: var(--s-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+  overflow: hidden;
+}
+/* What is shown instead when the terminal could not be started: what the host said, because there is
+   nothing this side knows to add to it. */
+.termface__failed {
+  flex: 1;
+  padding: var(--s-4);
+  color: var(--c-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  white-space: pre-wrap;
+}
 
 /* ---------- the band across the top of the app ---------- */
 /* One band, the app's news drawn in it — the integrity check, an update waiting, a folder that has
@@ -204,6 +252,23 @@ button { font: inherit; color: inherit; cursor: pointer; }
   white-space: nowrap;
 }
 .topbar__spacer { flex: 1; }
+/* The two faces of the window, as one segmented control in the middle of the bar (`AMB-D-753`). It
+   is the same control in both shapes — with the terminal split out, its segment raises that window
+   rather than switching this one — so there is one place to look for the terminal however the app is
+   arranged. */
+.topbar__faces {
+  display: inline-flex;
+  background: var(--c-surface-sunken);
+  border: 1px solid var(--c-border); border-radius: var(--r-md);
+  padding: 2px;
+}
+.topbar__face {
+  background: none; border: 0; border-radius: calc(var(--r-md) - 2px);
+  padding: var(--s-1) var(--s-3);
+  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1.6;
+}
+.topbar__face:hover { color: var(--c-text); }
+.topbar__face--on { background: var(--c-surface); color: var(--c-text); font-weight: var(--fw-bold); }
 .topbar__refresh {
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--c-surface-sunken); border: 1px solid var(--c-border);
@@ -331,3 +396,55 @@ button { font: inherit; color: inherit; cursor: pointer; }
    takes the tone of the words it stands in (`.muted` / `.faint`) or a colour of its own. */
 .step-stop { color: var(--c-stop); }
 .step-heed { color: var(--c-heed); }
+
+/* The one line above a pane: what it is called, what its session is on, and the one thing worth saying
+   about it. One line and no more — a row that can grow is a row that pushes the terminal about every
+   time an agent says something long. */
+.plate {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  padding: 0 var(--s-2) var(--s-2);
+  font-size: var(--fs-sm);
+  color: var(--c-text-muted);
+  white-space: nowrap;
+}
+
+/* The pane's name. It belongs to the frame, so it is the one part of the row that does not move when
+   the process in it does. */
+.plate__name {
+  font-weight: 600;
+  color: var(--c-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* What the session is on. It takes the room that is left, and gives it up to what is said on the right
+   rather than pushing that off the end. */
+.plate__now {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The one thing said, on the right. It is the agent's own words, so it is bounded by the room it has
+   and not by trusting the sentence to be short. */
+.plate__say {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ⏸ / ⚠ / ⏹ — each sits in front of the part it belongs to, and an empty one takes no room. */
+.plate__mark:empty {
+  display: none;
+}
+
+/* A person's turn has come. Nothing else on the row is asking for anything, so nothing else is drawn
+   to be noticed (`AMB-D-748`). */
+.plate[data-say="waiting"] .plate__say,
+.plate[data-say="premise"] .plate__say {
+  color: var(--c-text);
+}

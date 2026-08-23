@@ -21,19 +21,6 @@
         "resizable": true,
         "fullscreen": false,
         "dragDropEnabled": false
-      },
-      {
-        "label": "talk",
-        "title": "Amenbo",
-        "url": "talk.html",
-        "width": 1280,
-        "height": 820,
-        "minWidth": 960,
-        "minHeight": 640,
-        "resizable": true,
-        "fullscreen": false,
-        "focus": false,
-        "dragDropEnabled": false
       }
     ],
     "security": {

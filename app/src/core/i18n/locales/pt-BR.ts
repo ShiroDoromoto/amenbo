@@ -499,6 +499,15 @@ export const ptBR: Translation = {
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "Em conversa", "talk.holding": "{n} tarefas",
     "talk.finished": "{n} concluídas", "talk.premiseBroken": "Uma premissa deixou de valer",
+    "face.switch": "O que esta janela mostra",
+    "face.tasks": "Tarefas",
+    "face.terminal": "Terminal",
+    "face.splitOut": "Abrir em uma janela separada",
+    "face.merge": "Voltar para uma única janela",
+    "face.ended": "O programa deste terminal foi encerrado.",
+    "talk.elevated.title": "O Amenbo está sendo executado como administrador",
+    "talk.elevated.body": "Um terminal aberto aqui herda isso, e um administrador não segue os links por trás dos quais o scoop instala seus pacotes. Essas ferramentas não podem ser alcançadas desta janela — o Amenbo dirá que não estão instaladas, embora estejam.",
+    "talk.elevated.fix": "Feche o Amenbo e abra-o novamente sem “Executar como administrador”, e elas voltam.",
     "hooks.title": "Manter as referências do Amenbo fora dos seus commits?",
     "hooks.why": "Uma referência como AMB-T-… não significa nada fora dos dados que a emitiram. Um hook do git a segura antes de ela chegar a um commit.",
     "hooks.scope": "Perguntado uma vez. Sua resposta cobre os repositórios com que o Amenbo trabalha, agora e os que você adicionar depois.",
@@ -645,6 +654,7 @@ export const ptBR: Translation = {
       "{url} agora publica {serving}, e não a {agreed} que foi mostrada a você. Registre de novo e confira a nova impressão.",
     pty_failed: "Não foi possível iniciar o terminal: {reason}",
     pty_gone: "Esse terminal não está mais aberto.",
+    window_failed: "Não foi possível abrir essa janela: {reason}",
 
     already_reserved: "{ref} não está em “A fazer”, então não dá para reservar — outra sessão pode já estar com ela.",
     not_ready: "{ref} ainda não dá para reservar: {reasons}",

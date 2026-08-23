@@ -498,6 +498,15 @@ export const fr: Translation = {
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "En conversation", "talk.holding": "{n} tâches",
     "talk.finished": "{n} terminées", "talk.premiseBroken": "Une prémisse ne tient plus",
+    "face.switch": "Ce que montre cette fenêtre",
+    "face.tasks": "Tâches",
+    "face.terminal": "Terminal",
+    "face.splitOut": "Ouvrir dans une fenêtre séparée",
+    "face.merge": "Revenir à une seule fenêtre",
+    "face.ended": "Le programme de ce terminal s'est arrêté.",
+    "talk.elevated.title": "Amenbo s'exécute en tant qu'administrateur",
+    "talk.elevated.body": "Un terminal ouvert ici en hérite, et un administrateur ne suit pas les liens derrière lesquels scoop installe ses paquets. Ces outils sont inaccessibles depuis cette fenêtre : Amenbo les signalera comme non installés, alors qu'ils le sont.",
+    "talk.elevated.fix": "Quittez Amenbo et rouvrez-le sans « Exécuter en tant qu'administrateur » : ils reviennent.",
     "hooks.title": "Tenir les références d'Amenbo hors de vos commits ?",
     "hooks.why": "Une référence comme AMB-T-… ne signifie rien en dehors des données qui l'ont émise. Un hook git l'arrête avant qu'elle n'atteigne un commit.",
     "hooks.scope": "Demandé une fois. Votre réponse couvre les dépôts sur lesquels Amenbo travaille, maintenant et ceux que vous ajouterez.",
@@ -644,6 +653,7 @@ export const fr: Translation = {
       "{url} publie désormais {serving}, et non la {agreed} qui vous a été montrée. Enregistrez-le à nouveau et vérifiez la nouvelle empreinte.",
     pty_failed: "Le terminal n'a pas pu être démarré : {reason}",
     pty_gone: "Ce terminal n'est plus ouvert.",
+    window_failed: "Cette fenêtre n'a pas pu être ouverte : {reason}",
 
     already_reserved:
       "{ref} n'est pas « À faire », donc impossible de la réserver — une autre session la tient peut-être déjà.",

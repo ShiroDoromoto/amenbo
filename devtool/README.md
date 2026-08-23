@@ -18,9 +18,16 @@ without Go, and nothing outside this directory depends on it. Build it only if
 you want it.
 
 ```sh
-make devtool        # builds to ~/.cargo/bin/devtool
+make devtool        # installs to ~/.cargo/bin/devtool, to type by hand
 # or: cd devtool && go build -o ~/.cargo/bin/devtool .
 ```
+
+That copy is **for a person to type**, and it is one file for the whole machine.
+The root makefile's own targets do not call it: they build `devtool/.bin/devtool`
+from the checkout they are running in and call that, so what a build runs is the
+tree in front of it rather than whoever installed last. Two checkouts each
+installing their own is otherwise how a target comes to ask for a subcommand the
+installed copy has not got — after the minutes it spent building.
 
 ## Model
 

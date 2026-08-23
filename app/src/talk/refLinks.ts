@@ -52,6 +52,14 @@ export interface At {
   y: number;
 }
 
+/** A path found in the buffer: what was drawn, and where it sits. */
+export interface TerminalPath {
+  /** The path as it was drawn, e.g. `src/main.rs` or `/work/repo/notes/a.md`. */
+  text: string;
+  /** Where it sits — both ends inclusive, spanning two rows where it was drawn across the fold. */
+  range: { start: At; end: At };
+}
+
 /** A ref found in the buffer: what it says, what it names, and where it sits. */
 export interface TerminalRef {
   /** The ref as it was drawn, e.g. `AMB-T-42`. */
@@ -151,4 +159,59 @@ export function refFromUrl(url: string): { space: RefSpace; num: number } | null
   if (!m) return null;
   const num = Number(m[2]);
   return Number.isSafeInteger(num) ? { space: m[1] as RefSpace, num } : null;
+}
+
+/**
+ * The characters a path is made of, as drawn. Deliberately **without the colon**, except for the one
+ * a Windows drive is written with: a colon is what `src/main.rs:12` hangs a line number on and what
+ * a URL hangs its scheme on, and stopping the run there answers both — the line number falls off,
+ * and `https` is left as a word of its own.
+ */
+const PATH_CHARS = /(?:[A-Za-z]:)?[A-Za-z0-9_.+@~\-/\\]+/g;
+
+/** The punctuation a sentence leaves on the end of a path it mentioned. */
+const TRAILING = /[.,;:)\]}>]/;
+
+/** Longer than any path worth offering. A run this long is a line of output, not a name. */
+const PATH_MAX = 300;
+
+/**
+ * The file paths reachable on row `y` (0-based), the same way refs are (`refsOnRow`).
+ *
+ * **What counts as a path is a run with a separator in it**, and nothing cleverer. A word is not a
+ * path however file-like it looks, because a bare `README` in a sentence is a word — and a run that
+ * came after a scheme's colon is not one either, which is what keeps the tail of a URL from being
+ * offered as a file. The trailing punctuation a sentence leaves behind is dropped, so "see
+ * src/main.rs." offers the file and not the full stop.
+ *
+ * **Being wrong is cheap in both directions** and that is what makes this worth doing: a false hit
+ * tries to open something that is not there and is told so, and a miss leaves characters that were
+ * never clickable anyway. What it must not do is claim more than it found — where the path leads is
+ * resolved against the pane's own folder by whoever opens it, and a path outside the folder the file
+ * face is rooted at is not drawn as a link at all (`app/src/files/pointed.ts`).
+ */
+export function pathsOnRow(rows: Rows, y: number): TerminalPath[] {
+  if (y < 0 || y >= rows.length) return [];
+  const { text, at } = joined(rows, y);
+  const re = new RegExp(PATH_CHARS.source, PATH_CHARS.flags);
+  const found: TerminalPath[] = [];
+  for (let m = re.exec(text); m !== null; m = re.exec(text)) {
+    const from = m.index;
+    let to = m.index + m[0].length - 1;
+    while (to > from && TRAILING.test(text[to]!)) to--;
+    const run = text.slice(from, to + 1);
+    if (run.length > PATH_MAX) continue;
+    // A run with no separator is a word, and separators with nothing between them name nothing.
+    if (!/[\\/]/.test(run) || !/[A-Za-z0-9_.+@~-]/.test(run)) continue;
+    // What followed a colon and began with a double separator followed a scheme: the rest of a URL
+    // is not a file on this machine. A drive letter's colon is part of the run, not before it, and a
+    // UNC share begins with the double separator but follows no colon — so neither is caught here.
+    if (from > 0 && text[from - 1] === ":" && run.startsWith("//")) continue;
+    const start = at[from];
+    const end = at[to];
+    if (!start || !end) continue;
+    if (start.y > y + 1 || end.y < y + 1) continue;
+    found.push({ text: run, range: { start, end } });
+  }
+  return found;
 }

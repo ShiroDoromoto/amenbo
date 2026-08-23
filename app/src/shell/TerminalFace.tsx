@@ -83,6 +83,9 @@ export function TerminalFace({
   // hold and nobody else's: a session has no existence outside the rectangle it runs in, so neither
   // has what was said in one (`AMB-D-749`).
   const [pointed, setPointed] = useState<PointedBySession>(new Map());
+  // The file a path clicked in a pane asked for, and a count that makes asking twice two answers:
+  // the same file clicked again is a reader saying "open it" again, not a state that has not moved.
+  const [show, setShow] = useState<{ target: string; cwd: string | null; nth: number } | null>(null);
   const [ended, setEnded] = useState<ReadonlySet<string>>(new Set());
   // The pane the top row of the file face follows. A frame with nothing running in it points at
   // nothing, which is the empty row rather than the row of whichever pane spoke last.
@@ -194,6 +197,21 @@ export function TerminalFace({
     // What comes back is the whole set rather than an acknowledgement: a naming can be refused, and
     // drawing what was asked for would show a name that is not the frame's (`../talk/frames`).
     void nameFrame(frame, name, by).then(setNames).catch(() => {});
+  }, []);
+
+  /**
+   * A path drawn in a pane was clicked, as it was drawn.
+   *
+   * It travels with the folder **that pane** is in, because that is what a relative one is read
+   * against and the pane is the only thing that knows it. Whether it lands inside the folder the
+   * file face is rooted at is the face's own question, and it is asked there (`../files/FilesPanel`).
+   */
+  const pathClicked = useCallback((frame: string, target: string) => {
+    setLayout((was) => {
+      const cwd = was.frames.find((one) => one.id === frame)?.folder ?? null;
+      setShow((asked) => ({ target, cwd, nth: (asked?.nth ?? 0) + 1 }));
+      return was;
+    });
   }, []);
 
   const opened = useCallback((frame: string, session: string, folder: string | null) => {
@@ -347,6 +365,7 @@ export function TerminalFace({
                   focused={layout.focus === frame.id}
                   onOpened={opened}
                   onChose={chose}
+                  onPath={pathClicked}
                   onSaid={(statement) => {
                     if (statement.cwd) {
                       setLayout((was) => movedTo(was, statement.session, statement.cwd!));
@@ -383,6 +402,7 @@ export function TerminalFace({
         <FilesPanel
           projectId={projectId ?? null}
           onOpenLedger={onOpenLedger}
+          show={show}
           pointed={{
             points: focusedSession === null ? [] : (pointed.get(focusedSession) ?? []),
             name: layout.focus === null ? null : (names.get(layout.focus) ?? null),

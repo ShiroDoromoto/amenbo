@@ -34,11 +34,17 @@ import { fileUnder, isRef, isUrl, unread, type Pointed } from "./pointed";
 /** The names a file's text is drawn as Markdown under. The one thing here the name decides. */
 const MARKDOWN = [".md", ".markdown"];
 
-export function FilesPanel({ projectId, onOpenLedger, pointed }: {
+export function FilesPanel({ projectId, onOpenLedger, pointed, show }: {
   /** The project whose folder the face is rooted at; nothing is drawn without one. */
   projectId: number | null;
   /** Leave the terminal face for the ledger — what a reference or a record means when it is clicked. */
   onOpenLedger?: () => void;
+  /**
+   * A path clicked in a pane, as it was drawn, with the folder that pane is in — what a relative one
+   * is read against. `nth` counts the asking, so the same file clicked twice opens twice
+   * (`AMB-T-3630`).
+   */
+  show?: { target: string; cwd: string | null; nth: number } | null;
   /** What the focused pane's agent has pointed at, and whose pane it is (`AMB-T-3603`). */
   pointed?: {
     /** The rows, newest first. */
@@ -62,6 +68,17 @@ export function FilesPanel({ projectId, onOpenLedger, pointed }: {
   // per row: only one can be open, and a row that held its own would keep it after the list moved
   // under it (`AMB-T-3605`).
   const [menu, setMenu] = useState<{ path: string[]; x: number; y: number } | null>(null);
+
+  // A path clicked in a pane. It opens only where it lands inside the folder this face is rooted at
+  // — the same rule a pointed-at file is held to, and the same fence the host applies. One that
+  // lands outside opens nothing: the pane keeps the characters it drew, and no reader is shown a
+  // file from somewhere this face cannot answer for (`AMB-D-747`).
+  useEffect(() => {
+    if (show === undefined || show === null || root === null) return;
+    const path = fileUnder(root, show.cwd, show.target);
+    if (path) setReading(path);
+    // `nth` is what makes the same file asked for twice two answers.
+  }, [show?.nth, root]);
 
   useEffect(() => {
     if (projectId === null || root === null) return;

@@ -24,7 +24,7 @@ import { currentLang, t } from "../core/i18n";
  */
 export function TerminalPane({
   frame, names, start, autoStart, focused,
-  onOpened, onChose, onSaid, onClosed, onName, onFocus, onWaiting,
+  onOpened, onChose, onSaid, onPath, onClosed, onName, onFocus, onWaiting,
 }: {
   /** Which of the arrangement's places this is (`../talk/layout`). */
   frame: string;
@@ -41,6 +41,8 @@ export function TerminalPane({
    *  in it. It is what puts a page in a project (`../talk/layout`). */
   onChose: (frame: string, folder: string) => void;
   onSaid: (statement: SessionSaidDto) => void;
+  /** A file path drawn in this pane was clicked, as it was drawn. */
+  onPath: (frame: string, target: string) => void;
   onClosed: (session: string) => void;
   onName: (frame: string, name: string, by: NamedBy) => void;
   onFocus: (frame: string) => void;
@@ -64,8 +66,8 @@ export function TerminalPane({
   // What the face wants done with what happens here, read at the moment it happens. The pane is put up
   // once and lives longer than any one render, so the effect below must not be re-run to see a newer
   // callback — that would take the terminal down to learn something it could have been told.
-  const on = useRef({ onOpened, onChose, onSaid, onClosed, onName, onWaiting });
-  on.current = { onOpened, onChose, onSaid, onClosed, onName, onWaiting };
+  const on = useRef({ onOpened, onChose, onSaid, onPath, onClosed, onName, onWaiting });
+  on.current = { onOpened, onChose, onSaid, onPath, onClosed, onName, onWaiting };
 
   useEffect(() => {
     if (!running) return;
@@ -93,6 +95,9 @@ export function TerminalPane({
         // settles the page (`../talk/layout`).
         on.current.onOpened(frame, session, where ?? start.cwd ?? null);
       },
+      // A path drawn in this pane was clicked. Where it leads is the face's to work out — it knows
+      // the folder this frame is in and the one the file face is rooted at (`AMB-T-3630`).
+      path: (target) => on.current.onPath(frame, target),
       // Straight through and nowhere else: the row above the pane is the only thing that reads it, and
       // what it reads is the time (`../talk/moving`).
       output: () => plate.output(),

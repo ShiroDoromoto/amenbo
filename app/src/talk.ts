@@ -141,6 +141,10 @@ if (root) {
         opened: (session, startedAt) => {
           plate?.opened(session, startedAt);
         },
+        // The window split out of the board draws a pane and nothing beside it (`AMB-D-753`), so a
+        // path clicked here has nowhere to open. It stays text rather than becoming a link that
+        // opens nothing.
+        path: () => {},
         output: () => {
           plate?.output();
         },

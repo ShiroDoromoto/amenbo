@@ -27,7 +27,7 @@ import type { PtyChunkDto, PtySessionDto, SessionSaidDto } from "../bindings/bin
 import type { RefSpace } from "../core/idref";
 import { invoke } from "../core/ipc";
 import { NOTHING_TYPED, typed, type NamedBy } from "./frames";
-import { refFromUrl, refsOnRow, type Cell, type Rows } from "./refLinks";
+import { pathsOnRow, refFromUrl, refsOnRow, type Cell, type Rows } from "./refLinks";
 
 // The events the host sends this pane. Output is a chunk; closed is the program in the terminal
 // having exited, which arrives once and is the last thing that session says.
@@ -55,6 +55,10 @@ export type PaneEvents = {
   output(): void;
   /** The agent said something about its session. */
   said(statement: SessionSaidDto): void;
+  /** A file path drawn in this pane was clicked, as it was drawn. Where it leads is not the pane's to
+   *  say: a relative one is read against the folder this session is in, and only the window knows
+   *  whether that lands inside the folder the file face is rooted at (`AMB-T-3630`). */
+  path(target: string): void;
   /** The program in the terminal has exited. Nothing running is kept. */
   closed(session: string): void;
   /** This frame has settled where it works, before anything is running there — the person chose a
@@ -273,12 +277,23 @@ export async function mountTerminal(
     provideLinks(bufferLineNumber, callback) {
       // The row number a provider is given counts from 1 over the whole buffer, scrollback included,
       // and is the same number a link's range is written in.
-      const found = refsOnRow(rowsOf(term), bufferLineNumber - 1);
-      callback(found.map((ref) => ({
-        range: ref.range,
-        text: ref.text,
-        activate: () => showRef(ref.space, ref.num),
-      })));
+      const rows = rowsOf(term);
+      const found = refsOnRow(rows, bufferLineNumber - 1);
+      // Paths are read off the same drawn buffer, by the same rules, and are the second kind of
+      // thing in a pane that is a thing rather than a string (`AMB-T-3630`).
+      const paths = pathsOnRow(rows, bufferLineNumber - 1);
+      callback([
+        ...found.map((ref) => ({
+          range: ref.range,
+          text: ref.text,
+          activate: () => showRef(ref.space, ref.num),
+        })),
+        ...paths.map((path) => ({
+          range: path.range,
+          text: path.text,
+          activate: () => on.path(path.text),
+        })),
+      ]);
     },
   });
 

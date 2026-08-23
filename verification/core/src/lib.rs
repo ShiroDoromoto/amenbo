@@ -278,6 +278,19 @@ const REGISTRY: &[OpSpec] = &[
     // (and the reserve), `done` / `reopen` / `block` are the three the CLI gives their own verb.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "status", required: &["target", "status"], refs: &["target"], strings: &["status"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "done", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    // Reserved, and by a pane that is no longer running — the state a process dying leaves behind, and
+    // the one thing about a reservation Amenbo can find out for itself.
+    //
+    // It is one op and not two moves because the second one cannot be written: what makes a
+    // reservation a pane's is the session id the app puts in the environment when it opens the
+    // terminal, and no driver has a pane. A world is stood up before the app opens, and even after it
+    // does, a pane is the app's to make. So the reservation is made *as* a pane would have made it, and
+    // it is adrift from the first moment anything looks — which is the state under test.
+    //
+    // It is deliberately not the only way to reserve. A road that means to show what is **not** adrift
+    // uses `status` and gets a reservation with no session on it, which is what a person's own terminal
+    // leaves and what Amenbo must never read as abandoned.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "adrift", required: &["target"], refs: &["target"], strings: &[], binds: false },
     // The other terminal. A reason is required by the command, so it is required here: what separates
     // work decided against from work carried out is why, and it is recorded rather than remembered.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "reject", required: &["target", "reason"], refs: &["target"], strings: &["reason"], binds: false },
@@ -1810,6 +1823,18 @@ const REGISTRY: &[OpSpec] = &[
     // how a road tells "the same terminal, moved" from "another terminal, started". The absent half
     // is what a road reads while the other face is up.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "pane", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    // What an empty slot asks about: work in this page's project that nothing is doing any more. The
+    // task is named by reference rather than by words, because what is drawn is the record's own title
+    // and a road that spelt it out would be checking its own typing.
+    //
+    // The absent half is the one that matters most. A reservation with no session on it is one Amenbo
+    // cannot speak for, and the road reads its absence here — a screen that asked about it would be
+    // telling somebody at their own terminal that their work had stopped.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "adrift", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    // Pressing one of them. It is the whole of what the question offers, and the whole of what it may
+    // offer: the screen does not know the work stopped, only that nothing it opened is at it, so the
+    // press opens the task where a person answers rather than answering for them. It leaves this face.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-adrift", required: &["target"], refs: &["target"], strings: &[], binds: false },
     // Something the agent in the pane said about its own session — the surface layer, said with the
     // CLI from inside the terminal it is about. `verb` is which of the layer's words was used and
     // `text` is what was said in it; both travel as values because the layer is one seam with several
@@ -1853,6 +1878,12 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     (Domain::Task, "finish-creating"),
     (Domain::Task, "assign"),
     (Domain::Task, "status"),
+    // A reservation made in a pane that is no longer running. It is here for the reason `store
+    // worn-in` is: **no road reaches this world.** What makes a reservation a pane's is the session id
+    // the app puts in the environment when it opens the terminal, and a driver has no pane to be given
+    // one by — nor could a road make one and then end it, since ending a terminal is not something the
+    // interface offers. A road that reads the question has to open on the state.
+    (Domain::Task, "adrift"),
     (Domain::Task, "update"),
     // How that work is classified: the axes a project declares, the values they offer, the filing of
     // a task under one, and whether the axis goes on the card. A screen road about what the board

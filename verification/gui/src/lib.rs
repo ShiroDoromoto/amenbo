@@ -319,6 +319,9 @@ impl Instructor {
     /// and a screen road can end nothing at all, since this harness maps no op that would. It is
     /// walked on the road as well anyway — the rule is that an action noted is an action walked, so
     /// mapping one of them later needs nothing remembered here.
+    ///
+    /// `adrift` moves a status too and is deliberately not among them: it reserves, and a reserve is
+    /// refused from anywhere but `todo`, so a task that ended cannot arrive at it.
     fn note_end(&mut self, domain: Domain, op: &str, with: &Args) {
         if domain != Domain::Task {
             return;
@@ -705,6 +708,11 @@ impl Instructor {
             // words that are not on the shot.
             (Domain::Terminal, "pane") | (Domain::Terminal, "label") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
+            }
+            // A task the empty slot asks about, read by the title it was created with — the record's
+            // own words, which is why the road names the task rather than spelling them out again.
+            (Domain::Terminal, "adrift") => {
+                Some(Expectation { text: self.target_label(with), present: present(with) })
             }
             _ => None,
         }
@@ -1213,6 +1221,13 @@ impl Instructor {
                 "On the terminal face, press the one control it offers — the way to choose a folder — and in the picker that opens choose a folder the road calls \"{}\". The pane opens in it as soon as the picker closes: nothing is named and nothing is submitted.",
                 req(with, "dir")?
             ),
+            // Pressing one of the tasks the empty slot asks about. What it does is open that task on
+            // the ledger's face — the screen is left, deliberately, because a press that selected
+            // without switching would land on a face the reader cannot see.
+            (Domain::Terminal, "open-adrift") => format!(
+                "In the empty slot's question, press \"{}\". The window switches to the ledger with that task open.",
+                self.target_label(with)
+            ),
             // A line typed into the pane and sent. It is typed rather than pasted because what is
             // under test is a terminal: keys are what a terminal is driven by, and a line that
             // arrived some other way would be evidence of a path nobody walks.
@@ -1324,11 +1339,12 @@ impl Instructor {
                     .ok_or_else(|| "arg `axes` must say how many axes are narrowing".to_string())?
             ),
             // Which record the press opened. Both halves name the phrase rather than the record's title:
-            // the title is standing on the hit row as well, so a line read on it would pass over a press
-            // that opened nothing, and over one that opened the wrong record just as quietly.
+            // whatever row led here is carrying the title too — a hit, or the question an empty slot
+            // puts — so a line read on it would pass over a press that opened nothing, and over one that
+            // opened the wrong record just as quietly.
             (Domain::Task, "opened") => match present(with) {
                 true => format!(
-                    "Confirm the record \"{}\" is standing open beside the hits, showing \"{}\" — words the hits themselves do not carry.",
+                    "Confirm the record \"{}\" is the one standing open in the pane, showing \"{}\" — words the row that led here does not carry.",
                     self.target_label(with),
                     req(with, "shows")?
                 ),
@@ -2013,6 +2029,19 @@ impl Instructor {
                 false => format!(
                     "Confirm the line \"{}\" is nowhere on the screen — the terminal is not the face being shown.",
                     req(with, "shows")?
+                ),
+            },
+            // What an empty slot asks about. The absent half is not the same sentence turned round: it
+            // says which reservation is being looked for and that the slot is right not to name it, so
+            // an operator reading it knows a screen with nothing on it at all would be a fail.
+            (Domain::Terminal, "adrift") => match present(with) {
+                true => format!(
+                    "In the empty slot on the terminal face, confirm the question about work nothing is doing any more names \"{}\".",
+                    self.target_label(with)
+                ),
+                false => format!(
+                    "In the same empty slot, confirm \"{}\" is not among what it asks about — the question is drawn, and this one is not on it.",
+                    self.target_label(with)
                 ),
             },
             _ => return Err(unmapped(domain, op)),

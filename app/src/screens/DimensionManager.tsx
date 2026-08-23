@@ -3,6 +3,7 @@ import { getSnapshot, subscribe } from "../core/snapshot";
 import { t, tf } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { confirmDialog } from "../core/dialog";
+import { fetchProjectDimensionAssignments } from "../core/mutations";
 import { useStore } from "../store/store";
 import { todayStr } from "../core/calendar";
 import { currentTimeAxisValueId, isTimeAxis } from "../core/timeAxis";
@@ -13,7 +14,10 @@ import { Icon } from "../components/Icon";
 // own. It exposes renaming a dimension, editing its notes and removing it; renaming and removing its values; the
 // ordered toggle, the toggle that names an axis the time axis (role: time_axis), the toggle that puts an axis on the
 // task card, the toggle that makes an axis refuse to be left empty, and, on an ordered dimension, reordering the
-// values. Beside each name sits its readable key (`AMB-D-735`) — what the axis or the value answers to outside
+// values. Removing a value from a required axis is the one of those that asks a question first: the tasks answering
+// with it have to be told which other value they move to, and the axis's last value is out of reach entirely, core
+// keeping it so the demand stays answerable.
+// Beside each name sits its readable key (`AMB-D-735`) — what the axis or the value answers to outside
 // Amenbo, where a Japanese display name with spaces in it cannot go. A key is born with the row (derived from its
 // id) and is edited here, never cleared; a key core refuses puts the field back and says why in a toast.
 // Only on a named time axis do the values grow period fields (start/end date) and a "current" marker — a
@@ -36,7 +40,7 @@ export function DimensionManager({ projectId, onClose }: { projectId: number; on
         ) : (
           <div className="dimmgr__list">
             {dims.map((d) => (
-              <DimensionRow key={d.id} dim={d} store={store} />
+              <DimensionRow key={d.id} dim={d} projectId={projectId} store={store} />
             ))}
           </div>
         )}
@@ -51,7 +55,7 @@ export function DimensionManager({ projectId, onClose }: { projectId: number; on
   );
 }
 
-function DimensionRow({ dim, store }: { dim: DimensionDto; store: ReturnType<typeof useStore> }) {
+function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId: number; store: ReturnType<typeof useStore> }) {
   const currentId = currentTimeAxisValueId(dim, todayStr());
   async function removeDim() {
     if (await confirmDialog(tf("dimmgr.confirmRemoveDim", { name: dim.name }))) store.removeDimension(dim.id);
@@ -132,6 +136,10 @@ function DimensionRow({ dim, store }: { dim: DimensionDto; store: ReturnType<typ
             key={v.id}
             value={v}
             store={store}
+            projectId={projectId}
+            dimensionId={dim.id}
+            required={dim.required}
+            siblings={dim.values.filter((o) => o.id !== v.id)}
             ordered={dim.ordered}
             timeAxis={isTimeAxis(dim)}
             current={v.id === currentId}
@@ -154,17 +162,43 @@ function DimensionRow({ dim, store }: { dim: DimensionDto; store: ReturnType<typ
   );
 }
 
-function ValueRow({ value, store, ordered, timeAxis, current, onMoveUp, onMoveDown }: {
+function ValueRow({ value, store, projectId, dimensionId, required, siblings, ordered, timeAxis, current, onMoveUp, onMoveDown }: {
   value: DimensionValueDto;
   store: ReturnType<typeof useStore>;
+  projectId: number;
+  dimensionId: number;
+  required: boolean;
+  siblings: DimensionValueDto[];
   ordered: boolean;
   timeAxis: boolean;
   current: boolean;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
 }) {
+  // Where the tasks answering with this value are to go, once the panel has decided it has to ask.
+  // `null` is not asking; a number is the answer chosen so far, and 0 stands for "asked, nothing
+  // chosen yet" so the button that carries it out can stay shut until one is.
+  const [moveTo, setMoveTo] = useState<number | null>(null);
+  // The last value of a required axis does not go at any price — core keeps it so the demand stays
+  // answerable, and lowering the demand is the way out. Said on the button rather than found by
+  // pressing it, the way the box that raises the demand says why it is off.
+  const stuck = required && siblings.length === 0;
   async function removeValue() {
+    // A required axis will not let the value take its tasks' answers with it, so the panel asks where
+    // they go before it asks whether to delete — and only where there are any. The count is read at
+    // the press rather than held: what it decides is one dialog, and a number kept since the panel
+    // opened could have moved under it.
+    if (required && (await countOnValue(projectId, dimensionId, value.id)) > 0) {
+      setMoveTo(0);
+      return;
+    }
     if (await confirmDialog(tf("dimmgr.confirmRemoveValue", { name: value.name }))) store.removeDimensionValue(value.id);
+  }
+  async function removeValueMoving(to: DimensionValueDto) {
+    if (await confirmDialog(tf("dimmgr.confirmRemoveValueMoving", { name: value.name, to: to.name }))) {
+      store.removeDimensionValue(value.id, to.id);
+    }
+    setMoveTo(null);
   }
   // The date fields are edited one end at a time, but the backend is always sent both ends (the other keeps its current value).
   const setPeriod = (start: string | undefined, end: string | undefined) =>
@@ -227,9 +261,52 @@ function ValueRow({ value, store, ordered, timeAxis, current, onMoveUp, onMoveDo
           )}
         </span>
       )}
-      <button className="feed__action dimmgr__danger" onClick={removeValue}>{t("dimmgr.removeValue")}</button>
+      {moveTo === null ? (
+        <button
+          className="feed__action dimmgr__danger"
+          disabled={stuck}
+          title={stuck ? t("dimmgr.removeValueLastHint") : undefined}
+          onClick={removeValue}
+        >
+          {t("dimmgr.removeValue")}
+        </button>
+      ) : (
+        <span className="dimmgr__reassign">
+          <label className="faint" htmlFor={`dimmgr-move-${value.id}`}>{t("dimmgr.reassignTo")}</label>
+          <select
+            id={`dimmgr-move-${value.id}`}
+            className="dimmgr__reassignpick"
+            value={moveTo || ""}
+            onChange={(e) => setMoveTo(Number(e.target.value))}
+          >
+            <option value="" disabled>{t("dimmgr.reassignPick")}</option>
+            {siblings.map((o) => (
+              <option key={o.id} value={o.id}>{o.name}</option>
+            ))}
+          </select>
+          <button
+            className="feed__action dimmgr__danger"
+            disabled={!moveTo}
+            onClick={() => {
+              const to = siblings.find((o) => o.id === moveTo);
+              if (to) void removeValueMoving(to);
+            }}
+          >
+            {t("dimmgr.removeValue")}
+          </button>
+          <button className="feed__action" onClick={() => setMoveTo(null)}>{t("dimmgr.cancel")}</button>
+        </span>
+      )}
     </div>
   );
+}
+
+/** How many tasks on this project answer the axis with this value — the count core refuses a removal
+ * over. Outside Tauri the read answers nothing, which reads as an unclassified value and leaves the
+ * mock panel on its plain confirm. */
+async function countOnValue(projectId: number, dimensionId: number, valueId: number): Promise<number> {
+  const rows = await fetchProjectDimensionAssignments(projectId, dimensionId);
+  return rows.filter((r) => r.valueId === valueId).length;
 }
 
 // One end of a period. An empty `<input type="date">` is drawn by the webview with **today** as a faint placeholder,

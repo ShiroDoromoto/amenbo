@@ -77,7 +77,12 @@ interface Store {
   /** The value's counterpart of `setDimensionSlug`, unique within its axis, and refusable the same way. */
   setDimensionValueSlug(valueId: number, slug: string): Promise<boolean>;
   setDimensionValuePeriod(valueId: number, startOn: string | undefined, endOn: string | undefined): void;
-  removeDimensionValue(valueId: number): void;
+  /**
+   * Delete a value of an axis. `reassignTo` names another value of the same axis for the tasks
+   * answering with this one to move to — which a required axis demands rather than emptying them out.
+   * Left out, their classification goes with the value, as it does on an ordinary axis.
+   */
+  removeDimensionValue(valueId: number, reassignTo?: number): void;
   moveDimensionValue(valueId: number, pos: { before?: number; after?: number }): void;
   /**
    * Put a task on an axis, or take it off. Both answer whether the write landed, because both can be
@@ -190,7 +195,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     renameDimensionValue(valueId, name) { run(mut.renameDimensionValue(valueId, name)); },
     setDimensionValueSlug(valueId, slug) { return runOk(mut.setDimensionValueSlug(valueId, slug)); },
     setDimensionValuePeriod(valueId, startOn, endOn) { run(mut.setDimensionValuePeriod(valueId, startOn, endOn)); },
-    removeDimensionValue(valueId) { run(mut.removeDimensionValue(valueId)); },
+    removeDimensionValue(valueId, reassignTo) { run(mut.removeDimensionValue(valueId, reassignTo ?? null)); },
     moveDimensionValue(valueId, pos) { run(mut.moveDimensionValue(valueId, pos)); },
     setTaskDimensionValue(taskId, valueId) { return runOk(mut.setTaskDimensionValue(taskId, valueId)); },
     unsetTaskDimensionValue(taskId, valueId) { return runOk(mut.unsetTaskDimensionValue(taskId, valueId)); },

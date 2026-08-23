@@ -271,9 +271,10 @@ steps_cli:
 steps_gui:
   # The screen's half, and it is a different half. A terminal meets the refusals as codes on an exit
   # status; this face has no code to give back, so what it does instead is hold the controls — the box
-  # that would raise a demand nobody could answer, and the button that would end a creation the demand
-  # is not met on. A held control is a thing only a screen can be asked about, which is why the road
-  # here is the two of them and not the codes again.
+  # that would raise a demand nobody could answer, the button that would end a creation the demand is
+  # not met on, and the removal that will not go until it has been told where the tasks land. A held
+  # control is a thing only a screen can be asked about, which is why the road here is those three and
+  # not the codes again.
   - type: action
     domain: dimension
     op: required
@@ -332,3 +333,24 @@ steps_gui:
       target: seed
       field: draft
       equals: false
+
+  # And the other control this face holds: the value the answer was given cannot simply be removed
+  # while the answer stands on it, so the manager asks where the tasks go and carries them there. A
+  # terminal names the destination on the command line; here it is a control that has to be found, and
+  # the reading afterwards is of the board rather than of a refusal — the task is drawn under the value
+  # it was moved to, which no exit status could have said.
+  - type: action
+    domain: dimension
+    op: value-rm
+    with:
+      dimension: Medium
+      value: print
+      to: web
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:Medium=web"
+      target: seed
+      present: true

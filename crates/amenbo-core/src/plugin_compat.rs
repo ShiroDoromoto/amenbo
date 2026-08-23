@@ -183,6 +183,7 @@ mod tests {
     fn manifest(payload_v: u32, min_amenbo: Option<&str>) -> Manifest {
         Manifest {
             name: "slack".into(),
+            title: None,
             desc: String::new(),
             about: None,
             author: String::new(),

@@ -227,6 +227,7 @@ mod tests {
             program: PathBuf::from(format!("/plugins/{name}/{name}")),
             manifest: Manifest {
                 name: name.to_string(),
+                title: None,
                 desc: "Isolate each task in its own git worktree".into(),
                 about: None,
                 author: "amenbo".into(),

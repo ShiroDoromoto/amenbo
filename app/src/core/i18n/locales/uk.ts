@@ -526,6 +526,7 @@ export const uk: Translation = {
     "files.changed": "Нещодавно змінені",
     "files.tree": "Тека",
     "files.nothingChanged": "Поки нічого не змінилося.",
+    "files.partial": "Частина цієї теки не відстежується.",
     "files.noFolder": "Цей проєкт ще не має теки.",
     "files.back": "Назад до списку",
     "files.notText": "Це не текст, тому показати його тут не можна.",

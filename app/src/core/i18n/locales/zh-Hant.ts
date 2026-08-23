@@ -500,6 +500,7 @@ export const zhHant: Translation = {
     "files.changed": "最近變動",
     "files.tree": "資料夾",
     "files.nothingChanged": "還沒有任何變動。",
+    "files.partial": "這個資料夾有一部分沒有被監看。",
     "files.noFolder": "這個專案還沒有資料夾。",
     "files.back": "返回列表",
     "files.notText": "這不是文字，無法在這裡顯示。",

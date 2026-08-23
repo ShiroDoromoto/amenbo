@@ -500,6 +500,7 @@ export const hi: Translation = {
     "files.changed": "हाल में बदली फ़ाइलें",
     "files.tree": "फ़ोल्डर",
     "files.nothingChanged": "अभी तक कुछ नहीं बदला।",
+    "files.partial": "इस फ़ोल्डर का कुछ हिस्सा देखा नहीं जा रहा है।",
     "files.noFolder": "इस प्रोजेक्ट का अभी कोई फ़ोल्डर नहीं है।",
     "files.back": "सूची पर वापस",
     "files.notText": "यह टेक्स्ट नहीं है, इसलिए इसे यहाँ नहीं दिखाया जा सकता।",

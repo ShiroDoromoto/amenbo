@@ -529,6 +529,7 @@ export const ru: Translation = {
     "files.changed": "Недавно изменённые",
     "files.tree": "Папка",
     "files.nothingChanged": "Пока ничего не изменилось.",
+    "files.partial": "Часть этой папки не отслеживается.",
     "files.noFolder": "У этого проекта пока нет папки.",
     "files.back": "Назад к списку",
     "files.notText": "Это не текст, поэтому показать его здесь нельзя.",

@@ -503,6 +503,7 @@ export const th: Translation = {
     "files.changed": "เปลี่ยนแปลงล่าสุด",
     "files.tree": "โฟลเดอร์",
     "files.nothingChanged": "ยังไม่มีอะไรเปลี่ยนแปลง",
+    "files.partial": "โฟลเดอร์นี้บางส่วนไม่ได้ถูกเฝ้าดู",
     "files.noFolder": "โปรเจกต์นี้ยังไม่มีโฟลเดอร์",
     "files.back": "กลับไปที่รายการ",
     "files.notText": "นี่ไม่ใช่ข้อความ จึงแสดงที่นี่ไม่ได้",

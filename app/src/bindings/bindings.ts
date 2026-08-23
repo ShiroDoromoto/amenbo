@@ -392,6 +392,25 @@ path: Array<string>,
 modified: string, };
 
 /**
+ * What the file face's second row is drawn from: the rows, and whether they are the whole story
+ * (`crate::folder_watch`).
+ *
+ * `partial` is the one thing the rows cannot say for themselves. A watch is a set of watches, one
+ * per folder, and the kernel's limit is per user — so some may be refused while the rest work.
+ * Drawn as a whole watch, that reads as "nothing has changed" in the half nobody is watching.
+ */
+export type FolderChangesDto = { 
+/**
+ * The files written to most recently, newest first.
+ */
+changed: Array<FolderChangedDto>, 
+/**
+ * Whether some of the folder is unwatched — a walk that stopped at its cap, or a watch the
+ * kernel refused.
+ */
+partial: boolean, };
+
+/**
  * One name inside a folder, as the file face draws a row of its tree (`crate::folder`).
  *
  * It says what the row is and nothing about what is under it: a folder answers for its own

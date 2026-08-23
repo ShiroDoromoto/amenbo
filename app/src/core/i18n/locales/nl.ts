@@ -500,6 +500,7 @@ export const nl: Translation = {
     "files.changed": "Onlangs gewijzigd",
     "files.tree": "De map",
     "files.nothingChanged": "Er is nog niets gewijzigd.",
+    "files.partial": "Een deel van deze map wordt niet in de gaten gehouden.",
     "files.noFolder": "Dit project heeft nog geen map.",
     "files.back": "Terug naar de lijst",
     "files.notText": "Dit is geen tekst en kan hier niet worden getoond.",

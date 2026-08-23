@@ -2192,11 +2192,30 @@ pub struct FolderEntryDto {
     pub(crate) is_dir: bool,
 }
 
+/// What the file face's second row is drawn from: the rows, and whether they are the whole story
+/// (`crate::folder_watch`).
+///
+/// `partial` is the one thing the rows cannot say for themselves. A watch is a set of watches, one
+/// per folder, and the kernel's limit is per user — so some may be refused while the rest work.
+/// Drawn as a whole watch, that reads as "nothing has changed" in the half nobody is watching.
+// Clone because the answer to the first call is also what the thread starts out holding, and
+// PartialEq because a wake-up is only worth telling anybody about when it moved these rows.
+#[derive(Clone, PartialEq, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderChangesDto {
+    /// The files written to most recently, newest first.
+    pub(crate) changed: Vec<FolderChangedDto>,
+    /// Whether some of the folder is unwatched — a walk that stopped at its cap, or a watch the
+    /// kernel refused.
+    pub(crate) partial: bool,
+}
+
 /// A file that changed lately, as the file face's second row draws it (`crate::folder`).
 ///
 /// The path is the segments from the folder the face is rooted at, so the row can be opened by
 /// handing the same list back — nothing here is a path a caller has to take apart.
-#[derive(Serialize, TS)]
+#[derive(Clone, PartialEq, Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct FolderChangedDto {

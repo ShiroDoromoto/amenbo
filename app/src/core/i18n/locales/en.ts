@@ -547,6 +547,7 @@ const ui = {
   "files.changed": "Changed lately",
   "files.tree": "The folder",
   "files.nothingChanged": "Nothing has changed yet.",
+  "files.partial": "Some of this folder is not being watched.",
   "files.noFolder": "This project has no folder yet.",
   "files.back": "Back to the list",
   "files.notText": "This is not text, so it cannot be shown here.",

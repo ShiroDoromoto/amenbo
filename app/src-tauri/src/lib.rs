@@ -17,6 +17,9 @@ mod fileproto;
 /// What a folder holds, which the door above refuses to say: the names inside it, what changed in it
 /// lately, and what one file has to show. Rooted at a folder the project is bound to (`AMB-T-3602`).
 mod folder;
+/// Being told what changed in that folder instead of going to look: a non-recursive watch per
+/// folder over the pruned tree, and a scan to say what actually moved (`AMB-T-3604`).
+mod folder_watch;
 /// What a terminal is started as on each operating system — the shell the user signed in with, and
 /// what a terminal owes the program in it. Detecting a tool and starting it go through here
 /// together, so a probe cannot find what the pane could not have started (`AMB-D-747`).
@@ -190,6 +193,7 @@ pub fn run() {
     // what a pane types into and what drains its output both reach for the same session, from
     // different threads and long after the call that opened it returned (`pty`).
     .manage(pty::Terminals::default())
+    .manage(folder_watch::FolderWatches::default())
     .menu(menu::build)
     .on_menu_event(|app, event| {
       if event.id() == menu::CHECK_UPDATES_ID {
@@ -443,8 +447,9 @@ pub fn run() {
       launch::elevated,
       windows::show_ref,
       folder::folder_entries,
-      folder::folder_recent,
       folder::folder_read,
+      folder_watch::folder_watch,
+      folder_watch::folder_unwatch,
       pty::pty_open,
       pty::pty_sessions,
       pty::pty_attach,

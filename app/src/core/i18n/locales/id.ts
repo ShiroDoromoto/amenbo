@@ -503,6 +503,7 @@ export const id: Translation = {
     "files.changed": "Baru berubah",
     "files.tree": "Folder",
     "files.nothingChanged": "Belum ada yang berubah.",
+    "files.partial": "Sebagian folder ini tidak sedang dipantau.",
     "files.noFolder": "Proyek ini belum punya folder.",
     "files.back": "Kembali ke daftar",
     "files.notText": "Ini bukan teks, jadi tidak bisa ditampilkan di sini.",

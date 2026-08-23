@@ -44,10 +44,10 @@ const SAID_EVENT = "session://said";
  * frames are called; a pane is where those things happen, not where they are kept.
  */
 export type PaneEvents = {
-  /** A terminal is running in this pane, under this session id, since `startedAt`. It is said of a
-   *  terminal this pane adopted as much as of one it started: what the window holds is what is
-   *  running in it, and a session that moved windows is running in the one it moved to. */
-  opened(session: string, startedAt: string): void;
+  /** A terminal is running in this pane, under this session id, since `startedAt`, in `folder`. It is
+   *  said of a terminal this pane adopted as much as of one it started: what the window holds is what
+   *  is running in it, and a session that moved windows is running in the one it moved to. */
+  opened(session: string, startedAt: string, folder: string | null): void;
   /** A chunk has crossed and been drawn. Said per chunk and carrying nothing: what is read off it is
    *  the time it happened, which is the one thing about a stream that means the same for every program
    *  in a pane (`./moving`). The tail a pane is handed on picking a terminal up is not one of these —
@@ -57,6 +57,10 @@ export type PaneEvents = {
   said(statement: SessionSaidDto): void;
   /** The program in the terminal has exited. Nothing running is kept. */
   closed(session: string): void;
+  /** This frame has settled where it works, before anything is running there — the person chose a
+   *  folder (`./agent`). It is said of the choice and not of the terminal because the two can be a
+   *  long way apart, and a page that waited for a started terminal would ask its other slots again. */
+  chose(folder: string): void;
   /** Something has named this pane's frame. Whether the name takes is the store's to say — a person's
    *  name for a frame is not taken back off it by the agent (`./frames`). */
   name(name: string, by: NamedBy): void;
@@ -84,9 +88,10 @@ export type PaneStart = {
    * terminal's home when the app is one window (`AMB-D-753`).
    */
   adopt?: boolean;
-  /** The folder the shell starts in — canonical, as `wake_probe` answered with it. With none, the
-   *  shell starts where a shell handed no directory lands, which is the person's home. Panes on one
-   *  page are opened in one folder, which is what keeps a screen to a single project (`./layout`). */
+  /** The folder the shell starts in — canonical, as `wake_probe` answered with it. Panes on one page
+   *  are opened in one folder, which is what keeps a screen to a single project (`./layout`); a page
+   *  that has none yet is one where nothing has been started, and what the frame there puts up is the
+   *  way to choose one (`./agent`). */
   cwd?: string | null;
   /**
    * The catalogued id of the agent to start (`crate::wake`). A pane with none is a bare prompt.
@@ -298,7 +303,10 @@ export async function mountTerminal(
   // The host's own answer for when it began, not the moment this pane went up: a session that moved
   // windows started when it started, and a pane that said otherwise would have the window telling the
   // reader the wrong thing about how long their work has been running.
-  on.opened(running.session, running.startedAt);
+  // The folder comes off the session rather than off `start`, because those are the same answer only
+  // for a terminal this pane started. One it took up runs where it was started, which is what the page
+  // holding it has to be told (`./layout`).
+  on.opened(running.session, running.startedAt, running.folder ?? null);
   for (const chunk of held.splice(0)) {
     if (chunk.session !== session) continue;
     term.write(decode(chunk.base64));

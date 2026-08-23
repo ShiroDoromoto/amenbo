@@ -1005,17 +1005,40 @@ export async function setAssignee(id: number, kind: Facet | null): Promise<void>
 
 
 /**
- * Open the native folder picker and return the absolute path chosen — this backs the folder field on
- * the creation screen. Null if the dialog is cancelled. **It does not read the folder's contents**: it
+ * Open the native folder picker and return the absolute path chosen — this backs every place a folder
+ * is asked for: the creation screen's field, the settings screen's list, and the terminal face's way in
+ * (`chooseWorkFolder`). Null if the dialog is cancelled. **It does not read the folder's contents**: it
  * returns a path string, and the actual binding (placing the `.amenbo` pointer) is done on the Rust
- * side by `createProject(name, dir)`. Outside Tauri (browser) nothing touches the filesystem, so this
- * is a no-op returning null.
+ * side by whatever the caller does with it. Outside Tauri (browser) nothing touches the filesystem, so
+ * this is a no-op returning null.
  */
 export async function pickFolder(): Promise<string | null> {
   if (!inTauri()) return null;
   const { open } = await import("@tauri-apps/plugin-dialog");
   const dir = await open({ directory: true, multiple: false });
   return typeof dir === "string" ? dir : null; // anything but a string means the dialog was cancelled
+}
+
+/**
+ * Choose the folder to work in, and make it one that can be worked in — the terminal face's single way
+ * in (`AMB-T-3606`).
+ *
+ * **One press is the whole of it.** Picking a folder there means three things at once: the folder is
+ * the one the AI is shown, it belongs to a project (raised here and named after the folder if it did
+ * not already), and a terminal opens in it. Nothing is typed and nothing is submitted, so there is no
+ * step between the dialog closing and the pane opening — which is why this binds rather than handing
+ * the caller a path to bind later, and why a folder that already belongs to a project comes back
+ * unchanged instead of as a refusal (`folder_open`).
+ *
+ * Returns the folder chosen, or null where nothing was — the dialog cancelled, or the browser
+ * iteration, which has no folders to choose from. Anything the binding refuses is thrown, because the
+ * caller has an invitation on screen to say it on.
+ */
+export async function chooseWorkFolder(): Promise<string | null> {
+  const dir = await pickFolder();
+  if (dir === null) return null;
+  await invokeAck("folder_open", { dir });
+  return dir;
 }
 
 /**

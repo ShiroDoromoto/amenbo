@@ -14,6 +14,9 @@ mod error;
 /// The custom protocol that hands the webview a file by its path, and the fence that keeps that from
 /// meaning any path: a session this app opened, and then a path inside that session's folder.
 mod fileproto;
+/// What a folder holds, which the door above refuses to say: the names inside it, what changed in it
+/// lately, and what one file has to show. Rooted at a folder the project is bound to (`AMB-T-3602`).
+mod folder;
 /// What a terminal is started as on each operating system — the shell the user signed in with, and
 /// what a terminal owes the program in it. Detecting a tool and starting it go through here
 /// together, so a probe cannot find what the pane could not have started (`AMB-D-747`).
@@ -392,6 +395,7 @@ pub fn run() {
       commands::project_bound_folders,
       commands::project_bind_folder,
       commands::project_unbind_folder,
+      commands::folder_open,
       commands::stale_managed_blocks,
       commands::resync_managed_blocks,
       commands::orphan_bindings,
@@ -439,6 +443,9 @@ pub fn run() {
       commands::name_frame,
       launch::elevated,
       windows::show_ref,
+      folder::folder_entries,
+      folder::folder_recent,
+      folder::folder_read,
       pty::pty_open,
       pty::pty_sessions,
       pty::pty_attach,

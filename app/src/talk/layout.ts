@@ -146,6 +146,21 @@ function withFrame(layout: Layout, frame: string, change: (was: Frame) => Frame)
   return { ...layout, frames };
 }
 
+/**
+ * The folder a frame works in, settled before anything has been started in it.
+ *
+ * Choosing a folder is what a frame with none offers, and it settles the page there and then — not
+ * when a terminal finally starts in it (`./agent`). The two are usually a moment apart and sometimes
+ * never join: on a machine with no agent to start, the pane says so instead of opening, and a page
+ * that took its folder from a started terminal would go on asking every other slot where to work.
+ *
+ * A frame that already has one keeps it. The page's folder is where its first pane was settled, and a
+ * second answer would be a screen that quietly changed project.
+ */
+export function settledIn(layout: Layout, frame: string, folder: string): Layout {
+  return withFrame(layout, frame, (was) => (was.folder === null ? { ...was, folder } : was));
+}
+
 /** A terminal has started in a frame. The folder is the one it was started in, which is the page's
  *  from the second pane onwards. */
 export function openedIn(layout: Layout, frame: string, session: string, folder: string | null): Layout {

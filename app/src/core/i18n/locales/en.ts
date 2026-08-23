@@ -514,8 +514,12 @@ const ui = {
   // The talk window names itself from here — `tauri.conf.json` can hold only one fixed string,
   // and two windows both called "Amenbo" cannot be told apart in a window list (`AMB-T-3588`).
   "app.talkWindow": "Amenbo — Talk",
-  // talk window: which agent a folder's pane opens with, and the row a closed frame offers
-  // (`AMB-T-3591`). `{commands}` is the list of program names that were looked for on the PATH.
+  // talk window: the folder a pane opens in (`AMB-T-3606`), which agent it opens with, and the row a
+  // closed frame offers (`AMB-T-3591`). `{commands}` is the list of program names that were looked for
+  // on the PATH. `talk.folder` says what the folder is rather than what the agent will do in it: what
+  // a given tool asks before it acts is not Amenbo's to promise (`AMB-D-749`).
+  "talk.folder": "Choose the folder you show the AI. What you put there is all it can see.",
+  "talk.chooseFolder": "Choose a folder",
   "talk.searching": "Looking for the agents on this machine…",
   "talk.ask": "Which agent do you work with in this folder?",
   "talk.none": "No agent Amenbo can start was found on this machine.",
@@ -541,6 +545,17 @@ const ui = {
   "face.open": "Open a terminal here",
   "face.rename": "Rename this pane",
   "face.needsYou": "waiting on you",
+  // The file face beside the terminal's pane: what changed in the project's folder lately, and
+  // the folder itself, folded. What a file turns out not to be is said in its own words — a
+  // binary is not a failure, it is simply not something a panel can show.
+  "files.changed": "Changed lately",
+  "files.tree": "The folder",
+  "files.nothingChanged": "Nothing has changed yet.",
+  "files.noFolder": "This project has no folder yet.",
+  "files.back": "Back to the list",
+  "files.notText": "This is not text, so it cannot be shown here.",
+  "files.cut": "Only the beginning is shown.",
+  "files.unreadable": "This file could not be read.",
   // The talk window's standing band, shown only while Amenbo itself holds an administrator's token
   // on Windows. What it warns about is not a right the user lacks but one they have too much of:
   // the terminal opens, and the tools behind scoop's links are unreachable from inside it

@@ -189,11 +189,16 @@ export function sayText(say: Say, lang: Lang): { mark: string; text: string } {
  * The elements are made once and only their words change, so a redraw on every store write costs
  * nothing and nothing under the pointer moves out from under it.
  *
+ * **Handing over nothing takes the row down.** A label is about a session, and a pane that has never
+ * had one has nothing to be labelled — the face there is the invitation to choose a folder
+ * (`AMB-T-3606`), and a row saying the session is idle would be saying it of a session that does not
+ * exist. The row is hidden rather than removed for the same reason it is redrawn rather than rebuilt.
+ *
  * The language is handed in rather than asked for: the talk window loads no snapshot — the store is
  * what a startup migration holds shut, and a window with a terminal in it has no reason to wait on one
  * — so `currentLang` here would answer with a guess from the browser instead of the reader's choice.
  */
-export function mountNameplate(host: HTMLElement): (plate: Plate, lang: Lang) => void {
+export function mountNameplate(host: HTMLElement): (plate: Plate | null, lang: Lang) => void {
   const row = document.createElement("div");
   row.className = "plate";
   const part = (name: string) => {
@@ -221,7 +226,9 @@ export function mountNameplate(host: HTMLElement): (plate: Plate, lang: Lang) =>
   // only where the answer has changed, which is also the only moment it can be out of step.
   let moving: boolean | null = null;
 
-  return (plate: Plate, lang: Lang) => {
+  return (plate: Plate | null, lang: Lang) => {
+    row.hidden = plate === null;
+    if (plate === null) return;
     dot.style.setProperty("--dot-hue", String(hueOf(plate.dot.frame)));
     if (plate.dot.moving !== moving) {
       moving = plate.dot.moving;

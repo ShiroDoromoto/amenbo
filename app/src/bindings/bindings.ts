@@ -376,6 +376,76 @@ attachments: number,
 missing: number, };
 
 /**
+ * A file that changed lately, as the file face's second row draws it (`crate::folder`).
+ *
+ * The path is the segments from the folder the face is rooted at, so the row can be opened by
+ * handing the same list back — nothing here is a path a caller has to take apart.
+ */
+export type FolderChangedDto = { 
+/**
+ * The segments from the root, the file's own name last.
+ */
+path: Array<string>, 
+/**
+ * When it was last written (RFC3339 UTC).
+ */
+modified: string, };
+
+/**
+ * One name inside a folder, as the file face draws a row of its tree (`crate::folder`).
+ *
+ * It says what the row is and nothing about what is under it: a folder answers for its own
+ * children only when it is opened, so a tree that is still folded costs one directory read.
+ */
+export type FolderEntryDto = { 
+/**
+ * The name on its own — one segment, never a path.
+ */
+name: string, 
+/**
+ * Whether opening it lists more names.
+ */
+isDir: boolean, };
+
+/**
+ * What a file has to show for itself, as far as a panel can show it (`crate::folder`).
+ *
+ * Exactly one of `text` and `image` is filled, and both are empty for a file that is neither —
+ * what a reader is then told is that it cannot be read here, which is the honest answer for a
+ * binary. Text is cut at a cap, because a panel is not a pager and a very long file would be paid
+ * for in full to draw a screen of it.
+ */
+export type FolderFileDto = { 
+/**
+ * The text, where the head of the file holds no NUL byte.
+ */
+text?: string, 
+/**
+ * True when `text` stops short of the file's end.
+ */
+truncated: boolean, 
+/**
+ * The picture, where the bytes say they are one and there are few enough of them to carry.
+ */
+image?: FolderImageDto, };
+
+/**
+ * A picture out of a folder, carried whole so the webview can draw it without a URL of its own.
+ *
+ * The bytes come over the command seam rather than through [`crate::fileproto`], because that door
+ * is fenced by a session's folder and this face is rooted at the project's (`AMB-T-3602`).
+ */
+export type FolderImageDto = { 
+/**
+ * The type the bytes themselves say they are — read off the first of them, never off the name.
+ */
+mime: string, 
+/**
+ * The whole picture, base64-encoded, for a `data:` URL.
+ */
+base64: string, };
+
+/**
  * That folder's `.amenbo` was written by a build of another channel
  * ([`amenbo_core::binding::DirBinding::mismatched_store`]) — production against `amenbo-dev`, or a
  * throwaway `amenbo-dev-<task>`. The CLI refuses outright there (`pointer_other_store`); the GUI,
@@ -1643,7 +1713,17 @@ session: string,
 /**
  * When the terminal was started (RFC3339 UTC).
  */
-startedAt: string, };
+startedAt: string, 
+/**
+ * The folder the terminal is running in, as the filesystem spells it — `None` for one opened
+ * without any.
+ *
+ * It is here for the pane that **adopts** this session: where a terminal runs was settled when it
+ * started, and a frame that took one over rather than starting it has no other way to learn it. A
+ * frame that does not know would have to ask the person for the folder again the next time it has
+ * a terminal to start, which is the one flow the face has asked for twice.
+ */
+folder: string | null, };
 
 /**
  * What a reference resolves to (`kind` — task or decision — and the entity's id). The GUI branches

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { mountTerminal } from "../talk/terminal";
 import { nameFrame, ONLY_FRAME } from "../talk/frames";
-import { closed, NO_SESSIONS, opened, said, type Sessions } from "../talk/sessions";
+import { mountPlate } from "../talk/plate";
 import { t } from "../core/i18n";
 
 /**
@@ -22,10 +22,7 @@ import { t } from "../core/i18n";
  */
 export function TerminalFace({ onSplitOut, note }: { onSplitOut: () => void; note: string | null }) {
   const paneRef = useRef<HTMLDivElement>(null);
-  // What is running in the pane. It is held for as long as the pane is, the way the talk window holds
-  // its own (`app/src/talk/sessions.ts`) — a session has no existence outside the terminal it runs in,
-  // so what knows about one is whatever is drawing it.
-  const sessions = useRef<Sessions>(NO_SESSIONS);
+  const labelRef = useRef<HTMLDivElement>(null);
   // What the pane has to say for itself when it is not simply a terminal: the host's refusal if one
   // could not be started, and the fact of the program having exited, which the screen cannot show on
   // its own — what a finished shell leaves behind looks exactly like one waiting to be typed at.
@@ -34,26 +31,29 @@ export function TerminalFace({ onSplitOut, note }: { onSplitOut: () => void; not
 
   useEffect(() => {
     const host = paneRef.current;
-    if (!host) return;
+    const label = labelRef.current;
+    if (!host || !label) return;
     let taken = false;
     let detach: (() => void) | null = null;
     setEnded(false);
+    // The line above the pane. It holds what is known about the session running there for as long as
+    // it runs, which is the same line the split-out window draws (`app/src/talk/plate.ts`).
+    const plate = mountPlate(label);
     void mountTerminal(host, {
       opened: (session, startedAt) => {
-        sessions.current = opened(sessions.current, { session, startedAt });
+        plate.opened(session, startedAt);
       },
       said: (statement) => {
-        sessions.current = said(sessions.current, statement);
+        plate.said(statement);
       },
       closed: (session) => {
-        sessions.current = closed(sessions.current, session);
+        plate.closed(session);
         setEnded(true);
       },
-      // The name is offered to the store and nothing here draws it: this window is the board, and
-      // what it is called is not the pane's to say. What does draw it is the pane's own frame, once
-      // there are frames to draw (`AMB-T-3607`).
+      // The window's own title is not the pane's to say — this window is the board. The name goes to
+      // the store, and what draws it is the line above the pane.
       name: (text, by) => {
-        void nameFrame(ONLY_FRAME, text, by).catch(() => {});
+        void nameFrame(ONLY_FRAME, text, by).then(plate.named).catch(() => {});
       },
     })
       .then((take) => {
@@ -66,6 +66,7 @@ export function TerminalFace({ onSplitOut, note }: { onSplitOut: () => void; not
     return () => {
       taken = true;
       detach?.();
+      plate.stop();
     };
   }, []);
 
@@ -76,6 +77,7 @@ export function TerminalFace({ onSplitOut, note }: { onSplitOut: () => void; not
         {ended && <span className="termface__note">{t("face.ended")}</span>}
         {note !== null && <span className="termface__note">{note}</span>}
       </div>
+      <div ref={labelRef} />
       {failed === null
         ? <div className="termface__pane" ref={paneRef} />
         : <div className="termface__failed">{failed}</div>}

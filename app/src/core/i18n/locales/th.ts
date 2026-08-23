@@ -476,6 +476,10 @@ export const th: Translation = {
     "act.nameless": "(ถูกลบไปแล้ว)",
     "app.loadError": "โหลดข้อมูลไม่สำเร็จ", "app.loading": "กำลังโหลด…",
     "app.talkWindow": "Amenbo — บทสนทนา",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "กำลังปรึกษากันอยู่", "talk.holding": "{n} งาน",
+    "talk.finished": "เสร็จ {n}", "talk.premiseBroken": "เงื่อนไขตั้งต้นไม่เป็นจริงแล้ว",
     "face.switch": "หน้าต่างนี้กำลังแสดงอะไร",
     "face.tasks": "งาน",
     "face.terminal": "เทอร์มินัล",

@@ -502,6 +502,10 @@ export const ru: Translation = {
     "act.nameless": "(удалено)",
     "app.loadError": "Не удалось загрузить данные.", "app.loading": "Загрузка…",
     "app.talkWindow": "Amenbo — Диалог",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "Обсуждение", "talk.holding": "задач: {n}",
+    "talk.finished": "готово: {n}", "talk.premiseBroken": "Предпосылка перестала выполняться",
     "face.switch": "Что показывает это окно",
     "face.tasks": "Задачи",
     "face.terminal": "Терминал",

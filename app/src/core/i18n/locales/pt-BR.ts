@@ -495,6 +495,10 @@ export const ptBR: Translation = {
     "act.nameless": "(excluído)",
     "app.loadError": "Não foi possível carregar os dados.", "app.loading": "Carregando…",
     "app.talkWindow": "Amenbo — Conversa",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "Em conversa", "talk.holding": "{n} tarefas",
+    "talk.finished": "{n} concluídas", "talk.premiseBroken": "Uma premissa deixou de valer",
     "face.switch": "O que esta janela mostra",
     "face.tasks": "Tarefas",
     "face.terminal": "Terminal",

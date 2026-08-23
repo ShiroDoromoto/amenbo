@@ -473,6 +473,10 @@ export const tr: Translation = {
     "act.nameless": "(silinmiş)",
     "app.loadError": "Veriler yüklenemedi.", "app.loading": "Yükleniyor…",
     "app.talkWindow": "Amenbo — Sohbet",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "Konuşuluyor", "talk.holding": "{n} görev",
+    "talk.finished": "{n} tamamlandı", "talk.premiseBroken": "Bir ön koşul artık geçerli değil",
     "face.switch": "Bu pencerenin gösterdiği",
     "face.tasks": "Görevler",
     "face.terminal": "Terminal",

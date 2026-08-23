@@ -514,6 +514,10 @@ const ui = {
   // The talk window names itself from here — `tauri.conf.json` can hold only one fixed string,
   // and two windows both called "Amenbo" cannot be told apart in a window list (`AMB-T-3588`).
   "app.talkWindow": "Amenbo — Talk",
+  // The one line above a pane of the talk window: what its session is on, and the one thing
+  // worth saying about it. "{n}" is a count of tasks.
+  "talk.idle": "Talking it over", "talk.holding": "{n} tasks",
+  "talk.finished": "{n} done", "talk.premiseBroken": "A premise has broken",
   // The two faces of the one window, and the moves between one window and two (`AMB-D-753`).
   "face.switch": "Tasks or terminal",
   "face.tasks": "Tasks",

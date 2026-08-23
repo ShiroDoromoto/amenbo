@@ -476,6 +476,10 @@ export const id: Translation = {
     "act.nameless": "(dihapus)",
     "app.loadError": "Gagal memuat data.", "app.loading": "Memuat…",
     "app.talkWindow": "Amenbo — Percakapan",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "Sedang berdiskusi", "talk.holding": "{n} tugas",
+    "talk.finished": "{n} selesai", "talk.premiseBroken": "Sebuah prasyarat sudah tidak berlaku",
     "face.switch": "Yang ditampilkan jendela ini",
     "face.tasks": "Tugas",
     "face.terminal": "Terminal",

@@ -499,6 +499,10 @@ export const uk: Translation = {
     "act.nameless": "(видалене)",
     "app.loadError": "Не вдалося завантажити дані.", "app.loading": "Завантаження…",
     "app.talkWindow": "Amenbo — Діалог",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "Обговорення", "talk.holding": "завдань: {n}",
+    "talk.finished": "готово: {n}", "talk.premiseBroken": "Передумова перестала виконуватися",
     "face.switch": "Що показує це вікно",
     "face.tasks": "Завдання",
     "face.terminal": "Термінал",

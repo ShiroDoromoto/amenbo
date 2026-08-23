@@ -472,6 +472,10 @@ export const ko: Translation = {
     "act.nameless": "(삭제됨)",
     "app.loadError": "데이터를 불러오지 못했습니다.", "app.loading": "불러오는 중…",
     "app.talkWindow": "Amenbo — 대화",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "상의 중", "talk.holding": "{n}건",
+    "talk.finished": "완료 {n}건", "talk.premiseBroken": "전제가 무너졌습니다",
     "face.switch": "이 창이 보여 주는 화면",
     "face.tasks": "작업",
     "face.terminal": "터미널",

@@ -485,6 +485,10 @@ export const ja: Translation = {
     "act.nameless": "（削除済み）",
     "app.loadError": "データを読み込めませんでした。", "app.loading": "読み込み中…",
     "app.talkWindow": "Amenbo — 対話",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "相談中", "talk.holding": "{n}件",
+    "talk.finished": "済 {n}件", "talk.premiseBroken": "前提が崩れています",
     "face.switch": "この窓が出す面",
     "face.tasks": "タスク",
     "face.terminal": "ターミナル",

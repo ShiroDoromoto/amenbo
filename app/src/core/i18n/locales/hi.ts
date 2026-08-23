@@ -473,6 +473,10 @@ export const hi: Translation = {
     "act.nameless": "(मिटाया हुआ)",
     "app.loadError": "डेटा लोड नहीं हो सका।", "app.loading": "लोड हो रहा है…",
     "app.talkWindow": "Amenbo — संवाद",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "बातचीत जारी", "talk.holding": "{n} कार्य",
+    "talk.finished": "{n} पूरे", "talk.premiseBroken": "एक पूर्वशर्त टूट गई है",
     "face.switch": "यह विंडो क्या दिखाती है",
     "face.tasks": "कार्य",
     "face.terminal": "टर्मिनल",

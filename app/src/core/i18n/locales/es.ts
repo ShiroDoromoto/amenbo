@@ -494,6 +494,10 @@ export const es: Translation = {
     "act.nameless": "(eliminado)",
     "app.loadError": "No se pudieron cargar los datos.", "app.loading": "Cargando…",
     "app.talkWindow": "Amenbo — Conversación",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "En conversación", "talk.holding": "{n} tareas",
+    "talk.finished": "{n} terminadas", "talk.premiseBroken": "Se ha roto una premisa",
     "face.switch": "Qué muestra esta ventana",
     "face.tasks": "Tareas",
     "face.terminal": "Terminal",

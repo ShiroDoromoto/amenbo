@@ -524,6 +524,7 @@ export const pl: Translation = {
     "face.page": "Strona {n}",
     "face.adrift": "W tym projekcie coś jest wciąż zarezerwowane i nikt nad tym nie pracuje. Kontynuować?",
     "face.open": "Otwórz tu terminal",
+    "face.openHere": "Otwórz kolejny terminal na tej stronie",
     "face.rename": "Zmień nazwę tego panelu",
     "face.needsYou": "czeka na Ciebie",
     "files.pointed": "Wskazane",

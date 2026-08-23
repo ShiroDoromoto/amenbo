@@ -99,6 +99,21 @@ export function slotsOf(layout: Layout, page: number): readonly (Frame | null)[]
     layout.frames[indexOf(layout.count, page, slot)] ?? null);
 }
 
+/**
+ * The first slot on `page` with no frame in it, or null where the page is full.
+ *
+ * It is what the rail's way in asks twice: once to know whether to offer itself at all — a control
+ * that cannot do anything is one a reader learns to ignore — and once to know where the pane goes.
+ * Both have to be the same answer, which is why it is one function.
+ *
+ * There is always at least one page with a free slot, because the arrangement offers one more page
+ * than the frames fill (`pageCount`).
+ */
+export function freeSlot(layout: Layout, page: number): number | null {
+  const at = slotsOf(layout, page).findIndex((frame) => frame === null);
+  return at < 0 ? null : at;
+}
+
 /** The page a frame is on, or null for an id no frame has. */
 export function pageOfFrame(layout: Layout, frame: string): number | null {
   const at = layout.frames.findIndex((one) => one.id === frame);

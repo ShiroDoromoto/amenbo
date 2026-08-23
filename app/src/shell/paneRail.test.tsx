@@ -14,6 +14,7 @@ let container: HTMLDivElement;
 let root: Root;
 const picked = vi.fn();
 const renamed = vi.fn();
+const opened = vi.fn();
 
 /** Four frames at two a page: two pages, the first of them with terminals in it. */
 function twoPages(): Layout {
@@ -27,7 +28,9 @@ function twoPages(): Layout {
 
 async function draw(layout: Layout, names: Map<string, string> = new Map()) {
   await act(async () => {
-    root.render(createElement(PaneRail, { layout, names, onPick: picked, onRename: renamed }));
+    root.render(createElement(PaneRail, {
+      layout, names, onPick: picked, onRename: renamed, onOpen: opened,
+    }));
   });
 }
 
@@ -36,6 +39,7 @@ const rows = () => [...container.querySelectorAll<HTMLElement>(".rail__row")];
 beforeEach(() => {
   picked.mockReset();
   renamed.mockReset();
+  opened.mockReset();
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -67,6 +71,22 @@ describe("the rail", () => {
     await draw(twoPages());
     expect(rows()[0]!.querySelector(".rail__idle")).toBeNull();
     expect(rows()[1]!.querySelector(".rail__idle")).not.toBeNull();
+  });
+
+  it("offers the way in only on a page with somewhere to put one", async () => {
+    await draw(twoPages());
+    // Two full pages and the one there is room to grow into: the way in is on that one alone.
+    const ways = [...container.querySelectorAll(".rail__page")]
+      .map((page) => page.querySelector(".rail__open") !== null);
+    expect(ways).toEqual([false, false, true]);
+  });
+
+  it("opens a pane on the page it was pressed on, and says which page that was", async () => {
+    await draw(twoPages());
+    await act(async () => {
+      container.querySelector(".rail__open")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(opened).toHaveBeenCalledWith(3);
   });
 
   it("goes to a pane on a page that is not the one showing", async () => {

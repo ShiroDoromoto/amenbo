@@ -519,6 +519,7 @@ export const fr: Translation = {
     "face.page": "Page {n}",
     "face.adrift": "Dans ce projet, quelque chose est toujours réservé et personne n’y travaille. Voulez-vous le reprendre ?",
     "face.open": "Ouvrir un terminal ici",
+    "face.openHere": "Ouvrir un autre terminal sur cette page",
     "face.rename": "Renommer ce volet",
     "face.needsYou": "vous attend",
     "files.pointed": "Signalé",

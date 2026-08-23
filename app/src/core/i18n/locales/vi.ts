@@ -501,6 +501,7 @@ export const vi: Translation = {
     "face.page": "Trang {n}",
     "face.adrift": "Trong dự án này có việc vẫn đang được giữ mà không ai làm. Bạn có muốn tiếp tục không?",
     "face.open": "Mở terminal ở đây",
+    "face.openHere": "Mở thêm một terminal ở trang này",
     "face.rename": "Đổi tên khung này",
     "face.needsYou": "đang chờ bạn",
     "files.pointed": "Được chỉ tới",

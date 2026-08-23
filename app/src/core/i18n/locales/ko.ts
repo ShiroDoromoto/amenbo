@@ -497,6 +497,7 @@ export const ko: Translation = {
     "face.page": "{n}페이지",
     "face.adrift": "이 프로젝트에 진행 중인 채로 멈춘 작업이 있습니다. 이어서 하시겠습니까?",
     "face.open": "여기에 터미널 열기",
+    "face.openHere": "이 페이지에 터미널 하나 더 열기",
     "face.rename": "이 페인 이름 바꾸기",
     "face.needsYou": "사용자를 기다리는 중",
     "files.pointed": "가리킨 것",

@@ -547,6 +547,7 @@ const ui = {
   // not know the work stopped, only that nothing it opened is at it (`AMB-D-748`).
   "face.adrift": "Something in this project is still reserved, and nothing is working on it. Carry on with it?",
   "face.open": "Open a terminal here",
+  "face.openHere": "Open another terminal on this page",
   "face.rename": "Rename this pane",
   "face.needsYou": "waiting on you",
   // The file face beside the terminal's pane: what changed in the project's folder lately, and

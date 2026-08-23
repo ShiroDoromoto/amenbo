@@ -80,6 +80,9 @@ Usage:
   devtool vm push          <local…> <remote>
   devtool vm screen
   devtool vm golden        [--refresh]
+  devtool vm verify install [<path.pkg>] [--from-run <run id>]
+  devtool vm verify run    <scenario.yaml>
+  devtool vm verify step | log | pull
 
 devgui seed  clone the shared dev store into the app-data of the task's own
              throwaway dev GUI, so the instance opens on the setup grown in the
@@ -144,7 +147,19 @@ vm           the throwaway macOS VM the GUI is verified in. Driving a screen
              screen tool on the host and puts the binary in there, and 'golden'
              reports on the image clones are cut from, or takes it again with
              --refresh. Host and guest macOS versions are compared whenever the
-             clone is reached; a drift is said and never stopped over.`)
+             clone is reached; a drift is said and never stopped over.
+vm verify    walk a pre-distribution screen road inside that VM. The harness is
+             not changed and nothing here repeats what it does — it still
+             launches the shipped bundle, holds that pid, stands up the world
+             and shoots one screen per step, which is why the harness moves into
+             the guest rather than being driven from outside. 'install' sends and
+             installs the shipped build (a path, or --from-run to take the mac
+             artifact of a CI run), the harness, the scenarios and the screen
+             tool; 'run' starts one road and comes back when the first step is
+             handed over; 'step' sends one line and waits for what the harness
+             says next; 'log' re-reads that without advancing; 'pull' brings the
+             shots and the manifest back out. The road itself is still walked by
+             whoever is driving — the screen tool in the guest is how.`)
 }
 
 // parseAroundID parses `fs` over args in which the task id may sit on either side of

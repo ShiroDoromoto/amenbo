@@ -2,12 +2,16 @@
 // the author's own when they did not. Pinned here rather than at each face, because the four faces that
 // draw a plugin's words must not each answer it differently — an untranslated label beside a translated
 // one is the ordinary state, and it has to read as one line of prose either way.
+//
+// `pluginTitle` is the exception that proves it: a display name is a product name, so no language is
+// asked for at all (`AMB-D-739`) — what it falls back to is the name the plugin is known by.
 import { describe, expect, it } from "vitest";
 import type { PluginConfigOptionDto, PluginWantedSettingDto } from "../bindings/bindings";
 import {
   optionLabel,
   pluginAbout,
   pluginDesc,
+  pluginTitle,
   settingHelp,
   settingLabel,
   settingPlaceholder,
@@ -30,6 +34,18 @@ const option = (over: Partial<PluginConfigOptionDto>): PluginConfigOptionDto => 
   label: "Task finished",
   when: [],
   ...over,
+});
+
+describe("pluginTitle", () => {
+  it("draws the display name the catalog published", () => {
+    expect(pluginTitle({ name: "viewer", title: "Amenbo Viewer" })).toBe("Amenbo Viewer");
+  });
+
+  // A plugin whose author wrote none is the ordinary case, and it looks exactly as it always did.
+  it("falls back to the name it is known by, and treats null as absent", () => {
+    expect(pluginTitle({ name: "viewer" })).toBe("viewer");
+    expect(pluginTitle({ name: "viewer", title: null })).toBe("viewer");
+  });
 });
 
 describe("pluginDesc", () => {

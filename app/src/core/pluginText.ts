@@ -18,6 +18,27 @@ import type {
   PluginWantedSettingDto,
 } from "../bindings/bindings";
 
+/**
+ * Anything carrying a display name beside the name it is known by: a catalog entry, an installed plugin,
+ * or the build an update offers.
+ */
+export interface PluginNamed {
+  name: string;
+  title?: string | null;
+}
+
+/**
+ * What to call a plugin on screen (`AMB-D-739`): the display name the catalog published, else the name
+ * the plugin is known by. A plugin whose author wrote none is the ordinary case, and it is drawn exactly
+ * as it always was.
+ *
+ * The display name is never translated (`AMB-D-739`) — a product name is not a line of prose — which is
+ * why nothing here takes a reader's language into account, unlike everything below it.
+ */
+export function pluginTitle(p: PluginNamed): string {
+  return p.title ?? p.name;
+}
+
 /** Anything carrying an author's one-line description: a catalog entry, or the build an update offers. */
 export interface PluginDescribed {
   desc: string;

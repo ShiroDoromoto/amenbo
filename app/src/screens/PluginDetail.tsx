@@ -13,7 +13,7 @@ import {
   type PluginEntry,
 } from "../core/pluginCatalog";
 import { formFields, installPlugin, type PluginInstall } from "../core/pluginInstalls";
-import { pluginAbout, pluginDesc, settingLabel } from "../core/pluginText";
+import { pluginAbout, pluginDesc, pluginTitle, settingLabel } from "../core/pluginText";
 import { Icon } from "../components/Icon";
 
 // The one plugin a user opened (`AMB-D-347`).
@@ -67,7 +67,7 @@ export function PluginDetail({ entry, install, onOpenInstalled, onClose }: {
     <div className="modal__overlay" onClick={onClose}>
       <div className="plugdet" onClick={(e) => e.stopPropagation()}>
         <div className="plugdet__head">
-          <strong className="plugdet__name">{entry.name}</strong>
+          <strong className="plugdet__name">{pluginTitle(entry)}</strong>
           <span className={`chip ${layer === "official" ? "chip--official" : ""}`}>
             {pluginLayerLabel(entry)}
           </span>

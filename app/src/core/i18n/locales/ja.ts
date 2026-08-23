@@ -154,6 +154,11 @@ export const ja: Translation = {
     "dimmgr.current": "現在", "dimmgr.currentHint": "今日がこの期間に入っています",
     "dimmgr.confirmRemoveDim": "分類「{name}」を削除しますか？値とタスクへの割り当ても外れます。",
     "dimmgr.confirmRemoveValue": "値「{name}」を削除しますか？この値のタスク割り当ても外れます。",
+    "dimmgr.confirmRemoveValueMoving": "値「{name}」を削除しますか？この値のタスクは「{to}」へ移ります。",
+    "dimmgr.reassignTo": "タスクの移送先",
+    "dimmgr.reassignPick": "値を選ぶ",
+    "dimmgr.removeValueLastHint": "必須の分類は最後の1つを残します。先に「必須」を外してください",
+    "dimmgr.cancel": "やめる",
     // The column holds both terminals, so the affordance names them together — and the count beside the
     // heading stays the completed one alone, with the rejected said separately and never added in.
     "board.seeClosedInList": "閉じたものをリストで見る（全 {n} 件）",

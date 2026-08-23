@@ -532,7 +532,9 @@ spans two launches, and no single run holds both.
 And the last one is about no record at all. **`terminal`** is the face an agent is run in: whether
 the app is showing the ledger or the pane (`show-face`), what a reader typed into that pane
 (`type-line`), and whether the pane is a face of the one window or a window of its own (`split-out`
-/ `fold-back`), with `pane` reading the line back. It is a domain of its own because a session is a
+/ `fold-back`), with `pane` reading the line back. `say` is the other half — the surface layer, said
+with the CLI from *inside* the pane it is about (`verb` naming which of its words, `text` what was
+said in it) — and `label` reads what the row above the pane carries afterwards. It is a domain of its own because a session is a
 process — what is under test is *where it is drawn*, which is this machine's arrangement of one
 screen and nothing the store holds. Screen roads alone, and for a reason no other domain has: the
 terminal is the surface a reader is already typing in, so the question does not arise for somebody
@@ -547,6 +549,15 @@ carries: it is how `window:` names a window by a word the road chose instead of 
 wrote. `put-the-terminal-on-its-own-screen` is the road, and it folds the window back before it ends
 — the shape a machine was last used in belongs to the webview rather than to the throwaway store, so
 a run that walked away split would hand the next person two windows they never asked for.
+
+`say` is the one action on any road here that a driver could not stand up as a premise even in
+principle. The surface layer has no existence outside a pane — said anywhere else it is refused, on
+purpose — so the pane has to be running before the words can be said at all, which is after the app
+is up and after a premise's turn is over. The operator types what an agent types, and that is not a
+shortcut around the seam: it is the only door there is.
+`be-told-in-the-pane-that-your-turn-has-come` is the road, and what it defends is the one thing
+nothing outside a pane can find out — an agent going quiet because it is waiting for a person, rather
+than because it is thinking — arriving where that person reads it.
 
 A few ops exist to put something **wrong**, because a repair cannot be shown working over a store
 where there is nothing to repair — and a sweep that sweeps nothing looks exactly like one that works.

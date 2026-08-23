@@ -495,6 +495,7 @@ export const id: Translation = {
     "face.splitOut": "Buka di jendela terpisah",
     "face.merge": "Kembali ke satu jendela",
     "face.ended": "Program di terminal ini telah berhenti.",
+    "face.needsYou": "menunggu Anda",
     "talk.elevated.title": "Amenbo berjalan sebagai administrator",
     "talk.elevated.body": "Terminal yang dibuka di sini mewarisi hak itu, dan administrator tidak mengikuti tautan tempat scoop memasang paketnya. Alat-alat itu tidak dapat dijangkau dari jendela ini — Amenbo akan melaporkannya tidak terpasang, padahal terpasang.",
     "talk.elevated.fix": "Tutup Amenbo lalu buka lagi tanpa “Run as administrator”, dan alat-alat itu kembali.",

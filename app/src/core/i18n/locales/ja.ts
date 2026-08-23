@@ -504,6 +504,7 @@ export const ja: Translation = {
     "face.splitOut": "別ウィンドウで開く",
     "face.merge": "1つの窓に戻す",
     "face.ended": "この端末のプログラムは終了しました。",
+    "face.needsYou": "手が要ります",
     "talk.elevated.title": "Amenbo を管理者として実行しています",
     "talk.elevated.body": "ここで開いた端末にも管理者の権限が引き継がれます。管理者の権限では scoop がパッケージを置くリンクをたどれないので、この窓からはその道具に届きません。入っていても、Amenbo は「入っていない」と答えます。",
     "talk.elevated.fix": "Amenbo を終了し、「管理者として実行」を使わずに開き直すと、道具は戻ります。",

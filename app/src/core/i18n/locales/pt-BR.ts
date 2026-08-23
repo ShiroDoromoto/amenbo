@@ -514,6 +514,7 @@ export const ptBR: Translation = {
     "face.splitOut": "Abrir em uma janela separada",
     "face.merge": "Voltar para uma única janela",
     "face.ended": "O programa deste terminal foi encerrado.",
+    "face.needsYou": "esperando por você",
     "talk.elevated.title": "O Amenbo está sendo executado como administrador",
     "talk.elevated.body": "Um terminal aberto aqui herda isso, e um administrador não segue os links por trás dos quais o scoop instala seus pacotes. Essas ferramentas não podem ser alcançadas desta janela — o Amenbo dirá que não estão instaladas, embora estejam.",
     "talk.elevated.fix": "Feche o Amenbo e abra-o novamente sem “Executar como administrador”, e elas voltam.",

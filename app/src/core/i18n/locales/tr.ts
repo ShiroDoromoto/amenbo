@@ -492,6 +492,7 @@ export const tr: Translation = {
     "face.splitOut": "Ayrı pencerede aç",
     "face.merge": "Tek pencereye dön",
     "face.ended": "Bu terminaldeki program sona erdi.",
+    "face.needsYou": "sizi bekliyor",
     "talk.elevated.title": "Amenbo yönetici olarak çalışıyor",
     "talk.elevated.body": "Burada açılan bir terminal bunu devralır ve bir yönetici, scoop'un paketlerini arkasına kurduğu bağlantıları izlemez. Bu araçlara bu pencereden ulaşılamaz — kurulu olsalar da Amenbo kurulu değil diyecektir.",
     "talk.elevated.fix": "Amenbo'dan çıkın ve “Yönetici olarak çalıştır” demeden yeniden açın; araçlar geri gelir.",

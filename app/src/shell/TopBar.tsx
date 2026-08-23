@@ -21,6 +21,7 @@ export function TopBar({
   onToggleSidebar,
   face,
   onSelectFace,
+  terminalBadge,
 }: {
   onBack: () => void;
   onForward: () => void;
@@ -30,6 +31,7 @@ export function TopBar({
   onToggleSidebar: () => void;
   face: Face;
   onSelectFace: (face: Face) => void;
+  terminalBadge: boolean;
 }) {
   const [reflecting, setReflecting] = useState(false);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -101,7 +103,7 @@ export function TopBar({
         <Icon name="refresh" />
       </button>
       <div className="topbar__spacer" />
-      <FaceSwitch face={face} onSelect={onSelectFace} />
+      <FaceSwitch face={face} onSelect={onSelectFace} badge={terminalBadge} />
       <div className="topbar__spacer" />
       {devBadge && <span className="topbar__envbadge">{devBadge}</span>}
       <span className="topbar__brand" title="amenbo"><BrandMark /></span>
@@ -132,8 +134,14 @@ export function TopBar({
  * in both shapes, and there is one place to look for the terminal however the app is arranged.
  * Which is why the terminal segment is not marked as the current one there: the face this window is
  * showing is the ledger, and it does not stop being so because the other window came forward.
+ *
+ * `badge` is a turn standing behind the other face (`./terminalBadge`). It is a dot and no number:
+ * what is waiting is one pane's business and is said on the pane, so all this has to carry across
+ * the switch is that there is something over there to go and look at. Its label is read as part of
+ * the segment's own name — "Terminal, waiting on you" — so it is worded to finish that sentence
+ * rather than to stand alone.
  */
-function FaceSwitch({ face, onSelect }: { face: Face; onSelect: (face: Face) => void }) {
+function FaceSwitch({ face, onSelect, badge }: { face: Face; onSelect: (face: Face) => void; badge: boolean }) {
   return (
     <div className="topbar__faces" role="tablist" aria-label={t("face.switch")}>
       <button
@@ -151,6 +159,7 @@ function FaceSwitch({ face, onSelect }: { face: Face; onSelect: (face: Face) => 
         onClick={() => onSelect("terminal")}
       >
         {t("face.terminal")}
+        {badge && <span className="topbar__face-badge" role="img" aria-label={t("face.needsYou")} title={t("face.needsYou")} />}
       </button>
     </div>
   );

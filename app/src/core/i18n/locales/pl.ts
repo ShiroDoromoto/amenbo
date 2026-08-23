@@ -518,6 +518,7 @@ export const pl: Translation = {
     "face.splitOut": "Otwórz w osobnym oknie",
     "face.merge": "Wróć do jednego okna",
     "face.ended": "Program w tym terminalu zakończył działanie.",
+    "face.needsYou": "czeka na Ciebie",
     "talk.elevated.title": "Amenbo działa jako administrator",
     "talk.elevated.body": "Terminal otwarty tutaj dziedziczy te uprawnienia, a administrator nie podąża za dowiązaniami, za którymi scoop instaluje swoje pakiety. Tych narzędzi nie da się osiągnąć z tego okna — Amenbo zgłosi je jako niezainstalowane, choć są.",
     "talk.elevated.fix": "Zamknij Amenbo i otwórz je ponownie bez „Uruchom jako administrator”, a wrócą.",

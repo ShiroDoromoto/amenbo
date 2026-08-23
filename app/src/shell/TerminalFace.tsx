@@ -24,13 +24,30 @@ import { currentLang, t } from "../core/i18n";
  *
  * `note` is what the shell has to say about this face that the pane cannot — a window that could not
  * be split out, which is the press of the button here having come to nothing.
+ *
+ * `onWaiting` is the one thing this face says back to the shell: whether the pane in it is waiting on
+ * a person. Behind the other face the label above the pane cannot be seen at all, so the shell puts a
+ * badge on the face switch instead (`./terminalBadge`) — and it is told the fact, not what to do
+ * about it. The answer is the plate's, which is what holds the session (`../talk/plate`).
  */
-export function TerminalFace({ onSplitOut, note }: { onSplitOut: () => void; note: string | null }) {
+export function TerminalFace({
+  onSplitOut,
+  note,
+  onWaiting,
+}: {
+  onSplitOut: () => void;
+  note: string | null;
+  onWaiting: (waiting: boolean) => void;
+}) {
   const paneRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
   // The fact of the program having exited, which the screen cannot show on its own — what a finished
   // shell leaves behind looks exactly like one waiting to be typed at.
   const [ended, setEnded] = useState(false);
+  // Held in a ref because the pane is put up once, in an effect that runs once: reading the prop
+  // through this is what lets the shell pass a fresh callback without the terminal coming down.
+  const tell = useRef(onWaiting);
+  tell.current = onWaiting;
 
   useEffect(() => {
     const host = paneRef.current;
@@ -41,7 +58,7 @@ export function TerminalFace({ onSplitOut, note }: { onSplitOut: () => void; not
     setEnded(false);
     // The line above the pane. It holds what is known about the session running there for as long as
     // it runs, which is the same line the split-out window draws (`app/src/talk/plate.ts`).
-    const plate = mountPlate(label);
+    const plate = mountPlate(label, currentLang, (waiting) => tell.current(waiting));
     void mountAgentFrame(host, currentLang(), {
       opened: (session, startedAt) => {
         plate.opened(session, startedAt);

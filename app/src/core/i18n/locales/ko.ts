@@ -491,6 +491,7 @@ export const ko: Translation = {
     "face.splitOut": "별도 창으로 열기",
     "face.merge": "하나의 창으로 되돌리기",
     "face.ended": "이 터미널의 프로그램이 종료되었습니다.",
+    "face.needsYou": "사용자를 기다리는 중",
     "talk.elevated.title": "Amenbo가 관리자 권한으로 실행 중입니다",
     "talk.elevated.body": "여기서 연 터미널도 그 권한을 물려받습니다. 관리자 권한은 scoop이 패키지를 두는 링크를 따라가지 않으므로, 이 창에서는 그 도구에 닿을 수 없습니다. 설치되어 있어도 Amenbo는 설치되지 않았다고 답합니다.",
     "talk.elevated.fix": "Amenbo를 종료하고 “관리자 권한으로 실행”을 쓰지 않고 다시 열면 도구가 돌아옵니다.",

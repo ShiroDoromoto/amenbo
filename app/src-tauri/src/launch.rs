@@ -86,6 +86,44 @@ pub fn command(cwd: Option<PathBuf>, run: Option<&str>) -> CommandBuilder {
     cmd
 }
 
+/// One command line for a pane's shell: `program`, then `args` quoted the way the shell that reads
+/// them quotes.
+///
+/// This exists because what a pane starts an agent with is no longer a bare program name: the launch
+/// instruction goes in as an argument ([`amenbo_core::harness::opening`]), and it is prose — spaces,
+/// backticks, an em dash. Written into a command line unquoted, prose is not an argument, it is more
+/// command line.
+///
+/// The program is written as it stands. It is a catalog row's own name
+/// ([`amenbo_core::harness::Harness::command`]), held to [`plain`] by the same test the probe's script
+/// is held to, and quoting it would need a different spelling again on each shell — PowerShell reads a
+/// quoted string at the head of a line as a string, not as something to run.
+pub fn command_line(program: &str, args: &[String]) -> String {
+    let mut line = program.to_string();
+    for arg in args {
+        line.push(' ');
+        line.push_str(&quoted(arg));
+    }
+    line
+}
+
+/// One argument, quoted so the shell hands it to the program whole.
+///
+/// Single quotes on both operating systems, because inside them neither shell expands anything — a
+/// POSIX shell reads no `$` or backtick there, and PowerShell reads no `$` or subexpression. They part
+/// only over a single quote in the text: a POSIX shell has to leave the quoting to write one, and
+/// PowerShell doubles it.
+#[cfg(unix)]
+fn quoted(arg: &str) -> String {
+    format!("'{}'", arg.replace('\'', r"'\''"))
+}
+
+/// The PowerShell form of [`quoted`].
+#[cfg(windows)]
+fn quoted(arg: &str) -> String {
+    format!("'{}'", arg.replace('\'', "''"))
+}
+
 /// Whether this process holds an administrator's token — which on Windows is the same thing as
 /// saying the tools the user installed for themselves are unreachable from every terminal it opens.
 ///
@@ -419,6 +457,47 @@ mod tests {
             [RUN.to_string(), "command -v claude".to_string()],
             "the command was not handed over whole"
         );
+    }
+
+    /// The command line is the program as it stands, and every argument inside quotes. Asserted on the
+    /// string because this is the half a shell never sees: a program name that came back quoted would
+    /// be a string rather than something to run on PowerShell, and the pane would open on nothing.
+    #[test]
+    fn a_command_line_leaves_the_program_bare_and_quotes_the_rest() {
+        assert_eq!(command_line("claude", &[]), "claude");
+        let line = command_line("copilot", &["-i".to_string(), "do the thing".to_string()]);
+        assert_eq!(line, "copilot '-i' 'do the thing'");
+    }
+
+    /// And the half only a shell can answer: an argument reaches the program whole, whatever is in it.
+    /// The launch instruction is one of the cases because it is the real one — prose with backticks, an
+    /// em dash and spaces in it — and because what goes wrong if the quoting is off is not a crash: the
+    /// agent starts, having been handed a dozen arguments it makes nothing of.
+    #[cfg(unix)]
+    #[test]
+    fn the_shell_hands_a_quoted_argument_over_whole() {
+        let instruction = amenbo_core::harness::opening(
+            amenbo_core::harness::find("claude-code").expect("the catalog lists it"),
+            "amenbo",
+        )
+        .pop()
+        .expect("an opening is at least the instruction");
+        let cases = [
+            "plain".to_string(),
+            "two words".to_string(),
+            "a `backtick`, a $HOME and a $(command)".to_string(),
+            "it's got a quote in it".to_string(),
+            instruction,
+        ];
+        for arg in cases {
+            let line = command_line("printf", &["%s".to_string(), arg.clone()]);
+            let out = std::process::Command::new("/bin/sh")
+                .arg("-c")
+                .arg(&line)
+                .output()
+                .expect("a shell to read it");
+            assert_eq!(String::from_utf8_lossy(&out.stdout), arg, "the shell rewrote it: {line}");
+        }
     }
 
     /// The terminal says what it is only when the launch arrived without an answer. Which branch is

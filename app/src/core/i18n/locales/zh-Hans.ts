@@ -492,6 +492,7 @@ export const zhHans: Translation = {
     "face.splitOut": "在单独窗口中打开",
     "face.merge": "合并回一个窗口",
     "face.ended": "此终端中的程序已退出。",
+    "face.needsYou": "在等你",
     "talk.elevated.title": "Amenbo 正以管理员身份运行",
     "talk.elevated.body": "在此打开的终端会继承该权限，而管理员不会跟随 scoop 安放软件包所用的链接。这些工具在本窗口中无法访问——即使已经安装，Amenbo 也会报告为未安装。",
     "talk.elevated.fix": "退出 Amenbo，不使用“以管理员身份运行”重新打开，工具就会回来。",

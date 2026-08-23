@@ -513,6 +513,7 @@ export const fr: Translation = {
     "face.splitOut": "Ouvrir dans une fenêtre séparée",
     "face.merge": "Revenir à une seule fenêtre",
     "face.ended": "Le programme de ce terminal s'est arrêté.",
+    "face.needsYou": "vous attend",
     "talk.elevated.title": "Amenbo s'exécute en tant qu'administrateur",
     "talk.elevated.body": "Un terminal ouvert ici en hérite, et un administrateur ne suit pas les liens derrière lesquels scoop installe ses paquets. Ces outils sont inaccessibles depuis cette fenêtre : Amenbo les signalera comme non installés, alors qu'ils le sont.",
     "talk.elevated.fix": "Quittez Amenbo et rouvrez-le sans « Exécuter en tant qu'administrateur » : ils reviennent.",

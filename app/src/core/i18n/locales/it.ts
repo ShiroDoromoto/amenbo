@@ -513,6 +513,7 @@ export const it: Translation = {
     "face.splitOut": "Apri in una finestra separata",
     "face.merge": "Torna a una sola finestra",
     "face.ended": "Il programma di questo terminale è terminato.",
+    "face.needsYou": "ti sta aspettando",
     "talk.elevated.title": "Amenbo è in esecuzione come amministratore",
     "talk.elevated.body": "Un terminale aperto qui lo eredita, e un amministratore non segue i collegamenti dietro cui scoop installa i suoi pacchetti. Quegli strumenti non sono raggiungibili da questa finestra: Amenbo li segnalerà come non installati, anche se lo sono.",
     "talk.elevated.fix": "Chiudi Amenbo e riaprilo senza «Esegui come amministratore»: torneranno.",

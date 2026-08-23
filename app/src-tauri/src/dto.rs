@@ -2036,6 +2036,44 @@ pub enum PluginUpdateReachDto {
     Now,
 }
 
+/// One agent a folder's pane could be opened with, and what the folder and this machine say about
+/// it (`crate::wake`).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct WakeCandidateDto {
+    /// The catalogued id, which is what a face hands back when the reader picks this one.
+    pub(crate) id: String,
+    /// The product's own name for itself.
+    pub(crate) label: String,
+    /// What it is started as — shown where it is missing, because that is the word to install.
+    pub(crate) command: String,
+    /// Whether this folder shows a trace of the provider being used here.
+    pub(crate) traced: bool,
+    /// Whether this machine can start it. Never more than that: see `amenbo_core::wake`.
+    pub(crate) installed: bool,
+}
+
+/// Which agent a folder's pane opens with, and what to put to the reader when that is not settled.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct WakeDto {
+    /// The folder this answers for, canonical — what the face opens the pane in, so that the pane
+    /// and the answer are about the same folder.
+    pub(crate) folder: String,
+    /// Every catalogued agent, in catalog order. The install notice is drawn from this, which is why
+    /// the ones this machine does not have are here too.
+    pub(crate) candidates: Vec<WakeCandidateDto>,
+    /// The ids worth offering, in catalog order. Empty means nothing on this machine can be started.
+    pub(crate) offered: Vec<String>,
+    /// The id to open with, when nothing needs asking. `None` with a non-empty `offered` is the
+    /// question; `None` with an empty one is the notice.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) settled: Option<String>,
+}
+
 /// One thing an AI said about the session it is running in, on its way to the pane drawing it.
 ///
 /// It is the surface layer's record ([`amenbo_core::session::Said`]) in the shape the webview reads.

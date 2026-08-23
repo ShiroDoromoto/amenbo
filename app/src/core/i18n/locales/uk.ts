@@ -499,6 +499,13 @@ export const uk: Translation = {
     "act.nameless": "(видалене)",
     "app.loadError": "Не вдалося завантажити дані.", "app.loading": "Завантаження…",
     "app.talkWindow": "Amenbo — Діалог",
+    "talk.searching": "Шукаємо агентів на цій машині…",
+    "talk.ask": "З яким агентом ви працюєте в цій теці?",
+    "talk.none": "На цій машині не знайдено жодного агента, якого Amenbo може запустити.",
+    "talk.noneHint": "Amenbo шукав у PATH вашої оболонки такі команди: {commands}. Встановіть одну з них і пошукайте знову.",
+    "talk.retry": "Шукати знову",
+    "talk.open": "Відкрити",
+    "talk.agent": "Агент",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "Обговорення", "talk.holding": "завдань: {n}",
@@ -662,6 +669,10 @@ export const uk: Translation = {
       "{url} тепер видає {serving}, а не показаний вам {agreed}. Зареєструйте його заново й звірте новий відбиток.",
     pty_failed: "Не вдалося запустити термінал: {reason}",
     pty_gone: "Цей термінал більше не відкритий.",
+    wake_unknown_agent: "Amenbo не знає, як запустити {agent}.",
+    wake_no_folder: "Не вдалося прочитати цю теку: {reason}",
+    wake_no_config: "Amenbo не знайшов власні файли.",
+    wake_not_kept: "Не вдалося зберегти вибір.",
     window_failed: "Не вдалося відкрити це вікно: {reason}",
 
     already_reserved:

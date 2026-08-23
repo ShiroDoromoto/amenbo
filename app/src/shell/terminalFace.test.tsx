@@ -18,9 +18,11 @@ import { TerminalFace } from "./TerminalFace";
 const hoisted = vi.hoisted(() => ({ mounted: 0, detached: 0 }));
 
 // The pane, stood in for: putting one up is a host round trip, and what is being counted here is how
-// many times the component asks for one — not what a terminal does once it has one.
-vi.mock("../talk/terminal", () => ({
-  mountTerminal: () => {
+// many times the component asks for one — not what a terminal does once it has one. What is stubbed
+// is the frame around the pane (`../talk/agent`), because that is what the face asks for now: which
+// agent to start is settled there, and the terminal is put up on the far side of it.
+vi.mock("../talk/agent", () => ({
+  mountAgentFrame: () => {
     hoisted.mounted++;
     return Promise.resolve(() => {
       hoisted.detached++;

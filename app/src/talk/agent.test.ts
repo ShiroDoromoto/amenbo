@@ -50,10 +50,18 @@ vi.mock("./terminal", () => ({
     async (
       host: HTMLElement,
       on: PaneEvents,
-      start: { cwd?: string | null; agent?: string | null },
+      // What the frame hands a terminal it is *starting*: where, with what, and never taking one up —
+      // adopting is settled before the question is put, and a started pane must not take a running
+      // terminal off another slot (`./layout`).
+      start: { cwd?: string | null; agent?: string | null; adopt?: boolean; session?: string | null },
     ) => {
       hoisted.panes.push(start);
-      hoisted.end = () => on.closed("session-1");
+      // What the real one says: the session running here, and **where it runs** — which for a terminal
+      // the pane took up is where that one was started, not the folder this pane was handed.
+      const took = start.adopt !== false ? hoisted.running[0] : undefined;
+      const session = took?.session ?? "session-1";
+      on.opened(session, took?.startedAt ?? "2026-01-01T00:00:00Z", took?.folder ?? start.cwd ?? null);
+      hoisted.end = () => on.closed(session);
       host.textContent = "(a terminal)";
       return () => {};
     },
@@ -150,7 +158,7 @@ describe("a frame with no folder asks for one, and asks for nothing else", () =>
 
     expect(hoisted.chose, "the person was taken to the dialog more than once").toBe(1);
     expect(hoisted.sent).toContainEqual(["wake_probe", { folder: "/work/here" }]);
-    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "claude-code" }]);
+    expect(hoisted.panes).toEqual([{ adopt: false, cwd: "/work/here", agent: "claude-code" }]);
   });
 
   it("leaves the invitation standing when the dialog is cancelled", async () => {
@@ -180,12 +188,12 @@ describe("a frame with no folder asks for one, and asks for nothing else", () =>
     const root = await put(wake({ offered: ["claude-code"], settled: "claude-code" }));
 
     expect(hoisted.chose, "a running terminal was asked about").toBe(0);
-    // The pane adopts rather than starts, so the folder it is handed decides nothing — it is there
-    // because it is where the session runs, which is what the frame has just learnt.
-    expect(hoisted.panes).toEqual([{ cwd: "/work/adopted", agent: null }]);
+    // Taken up rather than started, so this pane is handed no folder to start in — it is the session
+    // that says where it runs, and saying so is what the frame learns its folder from.
+    expect(hoisted.panes).toEqual([{ cwd: null, agent: null }]);
 
     // The program ends and the frame is asked to open again: it knows where, because the session it
-    // took over said so.
+    // took up said so.
     hoisted.running = [];
     hoisted.end?.();
     buttons(root).find((b) => b.textContent === "Open")?.click();
@@ -193,7 +201,7 @@ describe("a frame with no folder asks for one, and asks for nothing else", () =>
 
     expect(hoisted.chose, "the folder was asked for a second time").toBe(0);
     expect(hoisted.sent).toContainEqual(["wake_probe", { folder: "/work/adopted" }]);
-    expect(hoisted.panes[hoisted.panes.length - 1]).toEqual({ cwd: "/work/here", agent: "claude-code" });
+    expect(hoisted.panes[hoisted.panes.length - 1]).toEqual({ adopt: false, cwd: "/work/here", agent: "claude-code" });
   });
 });
 
@@ -201,7 +209,7 @@ describe("the frame draws what the host settled", () => {
   it("opens the pane without asking when one agent answers", async () => {
     const root = await draw(wake({ offered: ["claude-code"], settled: "claude-code" }));
 
-    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "claude-code" }]);
+    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "claude-code", adopt: false }]);
     expect(buttons(root)).toEqual([]);
     expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_remember");
   });
@@ -219,7 +227,7 @@ describe("the frame draws what the host settled", () => {
       "wake_remember",
       { folder: "/work/here", agent: "codex-cli" },
     ]);
-    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "codex-cli" }]);
+    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "codex-cli", adopt: false }]);
   });
 
   it("says what it looked for, and looks again on request, when nothing is startable", async () => {
@@ -234,7 +242,7 @@ describe("the frame draws what the host settled", () => {
     again?.click();
     await new Promise((r) => setTimeout(r, 0));
 
-    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "claude-code" }]);
+    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "claude-code", adopt: false }]);
   });
 });
 
@@ -269,6 +277,7 @@ describe("the agent can be changed only on a frame that has closed", () => {
     expect(hoisted.panes[hoisted.panes.length - 1]).toEqual({
       cwd: "/work/here",
       agent: "codex-cli",
+      adopt: false,
     });
   });
 

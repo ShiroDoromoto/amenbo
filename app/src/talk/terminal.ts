@@ -2,9 +2,10 @@
 //
 // The pane is a drawing of a session, not the session. A terminal belongs to the process, so a pane
 // can be taken away and put up again — in the window the user split it out into, back in the board
-// when they folded it, or in the interface a language change rebuilt around it — and the program
-// inside it never learns that any of it happened (`AMB-D-753`). What a pane cannot carry across is
-// the emulator's scrollback, so what it draws first is the tail the host kept (`crate::pty`).
+// when they folded it, on the page they turned back to (`./layout`), or in the interface a language
+// change rebuilt around it — and the program inside it never learns that any of it happened
+// (`AMB-D-753`). What a pane cannot carry across is the emulator's scrollback, so what it draws first
+// is the tail the host kept (`crate::pty`).
 //
 // Nothing here interprets what crosses. A chunk of output arrives base64-encoded because the bytes
 // are not text — an escape sequence is split wherever the host's read ended, and a multi-byte
@@ -43,10 +44,10 @@ const SAID_EVENT = "session://said";
  * frames are called; a pane is where those things happen, not where they are kept.
  */
 export type PaneEvents = {
-  /** A terminal is running in this pane, under this session id, since `startedAt`. It is said of a
-   *  terminal this pane adopted as much as of one it started: what the window holds is what is
-   *  running in it, and a session that moved windows is running in the one it moved to. */
-  opened(session: string, startedAt: string): void;
+  /** A terminal is running in this pane, under this session id, since `startedAt`, in `folder`. It is
+   *  said of a terminal this pane adopted as much as of one it started: what the window holds is what
+   *  is running in it, and a session that moved windows is running in the one it moved to. */
+  opened(session: string, startedAt: string, folder: string | null): void;
   /** The agent said something about its session. */
   said(statement: SessionSaidDto): void;
   /** The program in the terminal has exited. Nothing running is kept. */
@@ -57,17 +58,31 @@ export type PaneEvents = {
 };
 
 /**
- * Where a pane's terminal is started, and with what running in it (`./agent`).
+ * Which terminal this pane draws — and, where one has to be started, where it opens and with what
+ * running in it (`./agent`).
  *
- * It is only ever read when a terminal is **started**. A pane that adopts one already running takes it
- * as it is — the folder it is standing in and the program in it were settled when it started, and a
- * pane moving between windows does not restart anything (`AMB-D-753`).
+ * A pane comes up for reasons it cannot tell apart from the inside: a person asked for a terminal
+ * here, or the pane that had one moved, or the page it is on came back round. What the window holds is
+ * which slot had what (`./layout`), so it says; a pane left to work it out would have to guess, and
+ * there is nothing to guess from.
+ *
+ * The last two fields are only ever read when a terminal is **started**. A pane that takes up one
+ * already running takes it as it is — the folder it is standing in and the program in it were settled
+ * when it started, and a pane moving between windows or pages does not restart anything (`AMB-D-753`).
  */
 export type PaneStart = {
-  /** The folder the shell starts in — canonical, as `wake_probe` answered with it. A frame that is
-   *  starting a terminal always has one, because choosing a folder is what a face with no pane offers
-   *  and the pane is what choosing leaves (`./agent`); none is the pane that adopts a running terminal,
-   *  which starts nothing and reads this at all. */
+  /** The terminal this slot already had. Taken up again where it is still running. */
+  session?: string | null;
+  /**
+   * Whether a terminal running with no pane drawing it may be taken up here. It is how a session comes
+   * back from the window it was split out into, so exactly one pane may offer: the slot that is the
+   * terminal's home when the app is one window (`AMB-D-753`).
+   */
+  adopt?: boolean;
+  /** The folder the shell starts in — canonical, as `wake_probe` answered with it. Panes on one page
+   *  are opened in one folder, which is what keeps a screen to a single project (`./layout`); a page
+   *  that has none yet is one where nothing has been started, and what the frame there puts up is the
+   *  way to choose one (`./agent`). */
   cwd?: string | null;
   /**
    * The catalogued id of the agent to start (`crate::wake`). A pane with none is a bare prompt.
@@ -147,23 +162,28 @@ function refit(fit: FitAddon, host: HTMLElement): boolean {
 }
 
 /**
- * Put a terminal in front of this pane: the one already running, if there is one, else a new one.
+ * Which terminal this pane is to draw, as the thing putting it up knows it.
  *
- * A pane comes up for two reasons it cannot tell apart from the inside — the user asked for a
- * terminal, or the pane it already had moved. Asking the host what is open answers both, and is the
- * only thing that can: a webview that went away took its emulator with it and left nothing behind to
- * be asked.
+ * A pane comes up for reasons it cannot tell apart from the inside — a person asked for a terminal
+ * here, or the pane that had one moved, or the interface was rebuilt around a running session. What
+ * the window holds is which slot had what, so it says; a pane left to work it out for itself would
+ * have to guess, and there is nothing to guess from.
  */
+/** Put a terminal in front of this pane: the one it is meant to have, else a new one. */
 async function draw(term: Terminal, start: PaneStart): Promise<PtySessionDto> {
   const open = await invoke<PtySessionDto[]>("pty_sessions").catch(() => [] as PtySessionDto[]);
-  // One open session is the only count that names one without guessing. There is a single terminal in
-  // the app today; when there are several, which pane draws which is the slots' to say and not this
-  // (`AMB-T-3609`).
-  if (open.length === 1) {
+  // The slot's own terminal where it has one. Otherwise, and only where this pane is the one that may:
+  // a single open session is the only count that names one without guessing.
+  const want = start.session
+    ? open.find((one) => one.session === start.session)
+    : start.adopt !== false && open.length === 1
+      ? open[0]
+      : undefined;
+  if (want) {
     try {
-      const replay = await invoke<string>("pty_attach", { session: open[0].session });
+      const replay = await invoke<string>("pty_attach", { session: want.session });
       if (replay) term.write(decode(replay));
-      return open[0];
+      return want;
     } catch {
       // It ended between the two calls. Opening one is what the pane was there to do anyway.
     }
@@ -185,9 +205,9 @@ async function draw(term: Terminal, start: PaneStart): Promise<PtySessionDto> {
  * full-screen interface reflows to.
  *
  * `on` is how the window is told what happened here — the session running in the pane, what the agent
- * said about it, and the name the pane's frame should carry. `start` is where a terminal would open
- * and what would run in it, which the frame around the pane has already settled (`./agent`) — and
- * which is read only when there is nothing to adopt.
+ * said about it, and the name the pane's frame should carry. `start` is the other direction: which
+ * terminal this slot is to draw, which only the window holding the arrangement knows — and, where one
+ * has to be started, where it opens and what runs in it (`./agent`).
  *
  * What comes back takes the pane away and **leaves the terminal running** for whatever draws it next.
  * There is no other way to end a pane, because there is no way yet to end a terminal: nothing in the
@@ -271,7 +291,10 @@ export async function mountTerminal(
   // The host's own answer for when it began, not the moment this pane went up: a session that moved
   // windows started when it started, and a pane that said otherwise would have the window telling the
   // reader the wrong thing about how long their work has been running.
-  on.opened(running.session, running.startedAt);
+  // The folder comes off the session rather than off `start`, because those are the same answer only
+  // for a terminal this pane started. One it took up runs where it was started, which is what the page
+  // holding it has to be told (`./layout`).
+  on.opened(running.session, running.startedAt, running.folder ?? null);
   for (const chunk of held.splice(0)) {
     if (chunk.session === session) term.write(decode(chunk.base64));
   }

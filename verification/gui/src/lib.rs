@@ -1216,8 +1216,12 @@ impl Instructor {
             // A line typed into the pane and sent. It is typed rather than pasted because what is
             // under test is a terminal: keys are what a terminal is driven by, and a line that
             // arrived some other way would be evidence of a path nobody walks.
+            //
+            // *Which* pane has to be said. The face shows a page of slots, and the ones nothing has
+            // been started in offer to open a terminal rather than holding one — a reader who clicked
+            // the wrong box would start a second shell and type this line into it.
             (Domain::Terminal, "type-line") => format!(
-                "Click into the terminal pane, type \"{}\" and press return. The shell will not know the command — what the line is for is being on the screen, and being the name the pane takes.",
+                "Click into the pane that has a terminal running in it — the one the face came up with, not a slot offering to open one — then type \"{}\" and press return. The shell will not know the command — what the line is for is being on the screen, and being the name the pane takes.",
                 req(with, "text")?
             ),
             // The two moves between one window and two. Named by what each does rather than by the
@@ -1241,16 +1245,16 @@ impl Instructor {
                 let text = req(with, "text")?;
                 match req(with, "verb")? {
                     "name" => format!(
-                        "In the terminal pane, run: amenbo session name \"{text}\" — this is the agent naming the pane it is running in."
+                        "In the pane that has a terminal running in it, run: amenbo session name \"{text}\" — this is the agent naming the pane it is running in."
                     ),
                     "note" => format!(
-                        "In the terminal pane, run: amenbo session note \"{text}\" — this is the agent saying what it is doing now."
+                        "In the pane that has a terminal running in it, run: amenbo session note \"{text}\" — this is the agent saying what it is doing now."
                     ),
                     "waiting" => format!(
-                        "In the terminal pane, run: amenbo session waiting \"{text}\" — this is the agent handing the turn over, and saying why."
+                        "In the pane that has a terminal running in it, run: amenbo session waiting \"{text}\" — this is the agent handing the turn over, and saying why."
                     ),
                     "finished" => format!(
-                        "In the terminal pane, run: amenbo session finished \"{text}\" — this is the agent saying what came of the work."
+                        "In the pane that has a terminal running in it, run: amenbo session finished \"{text}\" — this is the agent saying what came of the work."
                     ),
                     other => return Err(format!("action `say` does not know the verb `{other}`")),
                 }
@@ -1993,17 +1997,17 @@ impl Instructor {
             // never because they were printed in the terminal.
             (Domain::Terminal, "label") => match present(with) {
                 true => format!(
-                    "On the row above the terminal pane, confirm the label carries \"{}\" — said in the pane, read off the screen.",
+                    "On the row above the pane running a terminal, confirm the label carries \"{}\" — said in the pane, read off the screen.",
                     req(with, "shows")?
                 ),
                 false => format!(
-                    "On the row above the terminal pane, confirm the label carries nothing saying \"{}\".",
+                    "On the row above the pane running a terminal, confirm the label carries nothing saying \"{}\".",
                     req(with, "shows")?
                 ),
             },
             (Domain::Terminal, "pane") => match present(with) {
                 true => format!(
-                    "Confirm the terminal pane still shows the line \"{}\" — the same terminal, drawn here.",
+                    "Confirm the pane running a terminal still shows the line \"{}\" — the same terminal, drawn here.",
                     req(with, "shows")?
                 ),
                 false => format!(

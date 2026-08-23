@@ -13,15 +13,15 @@
 // **Before any of that there is the folder**, because a terminal has to be started somewhere and only
 // the person knows where. Choosing one is the whole of the first run: it is the folder the AI is shown,
 // it is what makes the folder a project's, and it is what opens the terminal — one press, three
-// meanings, and no word the reader has to be taught first (`AMB-T-3606`). A frame that has no folder
-// yet puts the invitation and nothing else; a frame that has one never asks again.
+// meanings, and no word the reader has to be taught first (`AMB-T-3606`). A frame with no folder puts
+// the invitation and nothing else, and it is asked for once per page rather than once per pane: the
+// second frame on a screen opens in the folder the first settled (`./layout`).
 //
 // **Nothing is asked about a terminal that is already running.** A pane adopts one rather than
 // starting it (`./terminal`), and what is running was settled when it started — asking again would be
 // asking about a decision that has already been carried out. So the question is put exactly where a
-// terminal would be started, and nowhere else. That holds for the folder too: an adopted session says
-// where it runs (`PtySessionDto.folder`), so taking one over answers the question rather than raising
-// it.
+// terminal would be started, and nowhere else. That holds for the folder too: a session says where it
+// runs, so taking one up answers the question rather than raising it.
 //
 // **The switch sits on the row of a frame that has closed, and only there.** A pane that is running
 // holds a live process, and there is nothing a change of agent could mean for it short of killing
@@ -34,7 +34,7 @@ import type { PtySessionDto, WakeCandidateDto, WakeDto } from "../bindings/bindi
 import { errText, type Lang, t, tf } from "../core/i18n";
 import { invoke } from "../core/ipc";
 import { chooseWorkFolder } from "../core/mutations";
-import { mountTerminal, type PaneEvents } from "./terminal";
+import { mountTerminal, type PaneEvents, type PaneStart } from "./terminal";
 
 /**
  * Fill `host` with the frame — the pane, and whatever has to be put to the reader before or after
@@ -43,12 +43,17 @@ import { mountTerminal, type PaneEvents } from "./terminal";
  * `on` is passed straight through to whatever pane is running: this module decides what starts, not
  * what is heard. `paneClass` is the class the terminal's box is drawn with, because the two faces
  * that draw a pane style theirs differently and neither's box is this module's to name.
+ *
+ * `start` is which terminal this frame is for. A slot that already had one takes it up again and asks
+ * nothing (`./layout`); a folder given here is where the question is put and where a started terminal
+ * opens, which is what keeps one page's panes in one project.
  */
 export async function mountAgentFrame(
   host: HTMLElement,
   lang: Lang,
   on: PaneEvents,
   paneClass: string,
+  start: PaneStart = {},
 ): Promise<() => void> {
   const frame = document.createElement("div");
   frame.className = "agent__frame";
@@ -59,10 +64,11 @@ export async function mountAgentFrame(
   // until then, which is the whole reason a closed frame is still a frame.
   let close: (() => void) | null = null;
   let wake: WakeDto | null = null;
-  // Where this frame's terminals are started. Null until there is an answer — the person chose one, or
-  // a session the frame adopted said where it runs — and once there is one it is not asked for again:
-  // the frame goes on opening in the same folder for as long as it is up, closed panes included.
-  let folder: string | null = null;
+  // Where this frame's terminals are started. It begins as the page's — every pane on one screen opens
+  // in one folder (`./layout`) — and is null only where nothing has been started on that page yet. That
+  // is the frame with the invitation on it; once a folder is answered, by the person choosing one or by
+  // a terminal this frame took up saying where it runs, it is not asked for again.
+  let folder: string | null = start.cwd ?? null;
   // Which pane the frame is on. A terminal takes a round trip to mount, and the frame can be cleared
   // while one is in flight — so what comes back is checked against this and thrown away if the frame
   // has moved on. Without it a pane nobody can see keeps its PTY open for the life of the window.
@@ -81,12 +87,15 @@ export async function mountAgentFrame(
   const look = async () => {
     clear();
     const running = await invoke<PtySessionDto[]>("pty_sessions").catch(() => [] as PtySessionDto[]);
-    if (running.length === 1) {
-      // Where the adopted session runs is this frame's folder from now on: it is the answer to the
-      // question the invitation would put, arrived at by a terminal having already been started there.
-      folder = running[0].folder ?? folder;
-      return open(null);
-    }
+    // This slot's own terminal, where it still has one. Otherwise a single open session, and only for
+    // the slot that may take one up: with several panes on the screen, every one of them adopting the
+    // one running terminal would leave the rest empty and the person short of the panes they asked for.
+    const mine = start.session !== null && start.session !== undefined
+      ? running.some((one) => one.session === start.session)
+      : start.adopt !== false && running.length === 1;
+    if (mine) return open(null, start);
+    // Nothing to take up, and nowhere to start: the folder is what this frame is short of, and asking
+    // for it is the whole of what it can do until it has one.
     if (folder === null) return invite(null);
     frame.append(said("agent__looking", t("talk.searching", lang)));
     try {
@@ -102,10 +111,10 @@ export async function mountAgentFrame(
 
   /** Put up a pane, replacing whatever the frame held. `agent` is what a started terminal runs; a
    *  pane that adopts one is given none, and the running program is whatever it already was. */
-  const open = (agent: string | null) => {
+  const open = (agent: string | null, take: PaneStart = { adopt: false }) => {
     // The host's spelling of the folder where there is one, because a probe canonicalises what it was
     // given and a terminal started under the other spelling is a terminal in a folder nothing else
-    // names. A pane that adopts one was never probed, and starts nothing anyway.
+    // names. A pane that takes one up was never probed, and starts nothing anyway.
     const cwd = wake?.folder ?? folder;
     clear();
     const mine = showing;
@@ -114,12 +123,18 @@ export async function mountAgentFrame(
     frame.append(pane);
     const events: PaneEvents = {
       ...on,
+      opened: (session, startedAt, where) => {
+        // What is running here settles the frame's folder — which for a terminal this pane took up is
+        // the answer the invitation would otherwise have asked for a second time.
+        folder = where ?? folder;
+        on.opened(session, startedAt, where);
+      },
       closed: (session) => {
         on.closed(session);
         if (mine === showing) frame.append(row(agent));
       },
     };
-    void mountTerminal(pane, events, { cwd, agent })
+    void mountTerminal(pane, events, { ...take, cwd, agent })
       .then((dispose) => {
         if (mine === showing) close = dispose;
         else dispose();

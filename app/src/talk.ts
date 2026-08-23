@@ -23,9 +23,10 @@
 // The language is asked of core directly instead of through the snapshot: the store is what a startup
 // migration holds shut, and a window with nothing in it has no reason to be the one waiting on it.
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { normalizeLang, t, type Lang } from "./core/i18n";
+import { type Lang, normalizeLang, t } from "./core/i18n";
 import { invoke } from "./core/ipc";
 import { initTheme } from "./core/theme";
+import { elevationBand } from "./talk/elevation";
 import { frameNames, nameFrame, ONLY_FRAME, type FrameNames, type NamedBy } from "./talk/frames";
 import { closed, NO_SESSIONS, opened, said, type Sessions } from "./talk/sessions";
 import { mountTerminal } from "./talk/terminal";
@@ -43,10 +44,7 @@ let sessions: Sessions = NO_SESSIONS;
 // a naming answers with — the answer is the whole set, because a naming can be refused.
 let names: FrameNames = new Map();
 
-// The reader's language, until the host says which it is. Everything drawn here is drawn before that
-// answer lands — a window that waited for it would come up blank — and written again when it does.
-let lang: Lang = "en";
-let title = t("app.talkWindow", lang);
+let title = t("app.talkWindow", "en");
 
 /** Name the window after the pane's frame, falling back to what the window is when it has no name. */
 function retitle(): void {
@@ -58,22 +56,37 @@ function retitle(): void {
     .catch(() => {});
 }
 
-// The way back to a single window, and the only thing on the bar above the pane. The board is told
-// nothing here — this window going is what says it, whether it went from this button or from the
-// title bar, and the board watches for the window rather than for the press (`crate::windows`).
-const merge = document.createElement("button");
-merge.className = "talk__action";
-merge.textContent = t("face.merge", lang);
-merge.addEventListener("click", () => void invoke("talk_close").catch(() => {}));
+// The language this page is written in. The title is not the only thing that waits on it — a band may
+// have to be worded too — so the answer is held as something the rest of the page can wait on rather
+// than being spent where it lands.
+const language: Promise<Lang> = invoke<string | null>("ui_language")
+  .then((code) => normalizeLang(code))
+  // Outside Tauri (`npm run dev` in a browser) nothing answers, and English is where every lookup
+  // lands anyway when a language has no dictionary.
+  .catch(() => normalizeLang(null));
 
-void invoke<string | null>("ui_language")
-  .then((code) => {
-    lang = normalizeLang(code);
-    title = t("app.talkWindow", lang);
+void language.then((lang) => {
+  title = t("app.talkWindow", lang);
+  retitle();
+});
+
+// The way back to a single window. The board is told nothing here — this window going is what says
+// it, whether it went from this button or from the title bar, and the board watches for the window
+// rather than for the press (`crate::windows`). Worded in English until the language answers, the way
+// the title is: a bar that waited would be a window with no way out of it for as long as the wait.
+function mergeButton(): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "talk__bar";
+  const merge = document.createElement("button");
+  merge.className = "talk__action";
+  merge.textContent = t("face.merge", "en");
+  merge.addEventListener("click", () => void invoke("talk_close").catch(() => {}));
+  void language.then((lang) => {
     merge.textContent = t("face.merge", lang);
-    retitle();
-  })
-  .catch(() => {});
+  });
+  row.append(merge);
+  return row;
+}
 
 void frameNames()
   .then((known) => {
@@ -99,12 +112,9 @@ function name(text: string, by: NamedBy): void {
 const root = document.getElementById("root");
 if (root) {
   root.className = "talk";
-  const bar = document.createElement("div");
-  bar.className = "talk__bar";
-  bar.append(merge);
   const pane = document.createElement("div");
   pane.className = "talk__pane";
-  root.append(bar, pane);
+  root.append(mergeButton(), pane);
   void mountTerminal(pane, {
     opened: (session, startedAt) => {
       sessions = opened(sessions, { session, startedAt });
@@ -117,14 +127,28 @@ if (root) {
       // What is on the screen stays as it was — that is what a terminal ends with — and this is the
       // part of it the screen cannot show for itself: a finished shell looks exactly like one waiting
       // to be typed at.
-      const note = document.createElement("div");
-      note.className = "talk__note";
-      note.textContent = t("face.ended", lang);
-      pane.after(note);
+      void language.then((lang) => {
+        const note = document.createElement("div");
+        note.className = "talk__note";
+        note.textContent = t("face.ended", lang);
+        pane.after(note);
+      });
     },
     name,
   }).catch((e: unknown) => {
     pane.className = "talk__failed";
     pane.textContent = e instanceof Error ? e.message : String(e);
   });
+
+  // The band above the pane, and only when there is something to say. It is asked for after the
+  // terminal is mounted rather than before it: the pane is what the window is for, and a question
+  // about this process's own token has no business delaying it. It goes in *above* the pane in the
+  // page, which is why it is inserted at the top rather than appended.
+  void Promise.all([invoke<boolean>("elevated"), language])
+    .then(([elevated, lang]) => {
+      if (elevated) root.prepend(elevationBand(lang));
+    })
+    // Nothing answered, so there is nothing established to warn about. A band raised on a failed
+    // question would be shown to every browser this page is opened in.
+    .catch(() => {});
 }

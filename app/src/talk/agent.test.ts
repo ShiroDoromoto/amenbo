@@ -35,7 +35,10 @@ vi.mock("./terminal", () => ({
     async (
       host: HTMLElement,
       on: PaneEvents,
-      start: { cwd?: string | null; agent?: string | null },
+      // What the frame hands a terminal it is *starting*: where, with what, and never taking one up —
+      // adopting is settled before the question is put, and a started pane must not take a running
+      // terminal off another slot (`./layout`).
+      start: { cwd?: string | null; agent?: string | null; adopt?: boolean },
     ) => {
       hoisted.panes.push(start);
       hoisted.end = () => on.closed("session-1");
@@ -103,7 +106,7 @@ describe("the frame draws what the host settled", () => {
   it("opens the pane without asking when one agent answers", async () => {
     const root = await draw(wake({ offered: ["claude-code"], settled: "claude-code" }));
 
-    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "claude-code" }]);
+    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "claude-code", adopt: false }]);
     expect(buttons(root)).toEqual([]);
     expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_remember");
   });
@@ -121,7 +124,7 @@ describe("the frame draws what the host settled", () => {
       "wake_remember",
       { folder: "/work/here", agent: "codex-cli" },
     ]);
-    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "codex-cli" }]);
+    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "codex-cli", adopt: false }]);
   });
 
   it("says what it looked for, and looks again on request, when nothing is startable", async () => {
@@ -136,7 +139,7 @@ describe("the frame draws what the host settled", () => {
     again?.click();
     await new Promise((r) => setTimeout(r, 0));
 
-    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "claude-code" }]);
+    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "claude-code", adopt: false }]);
   });
 });
 
@@ -171,6 +174,7 @@ describe("the agent can be changed only on a frame that has closed", () => {
     expect(hoisted.panes[hoisted.panes.length - 1]).toEqual({
       cwd: "/work/here",
       agent: "codex-cli",
+      adopt: false,
     });
   });
 

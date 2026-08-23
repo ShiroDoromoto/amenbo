@@ -534,6 +534,12 @@ const ui = {
   "face.splitOut": "Open in a separate window",
   "face.merge": "Back to one window",
   "face.ended": "The program in this terminal has exited.",
+  "face.rail": "Panes",
+  "face.paneCount": "Panes on screen",
+  "face.pages": "Pages",
+  "face.page": "Page {n}",
+  "face.open": "Open a terminal here",
+  "face.rename": "Rename this pane",
   "face.needsYou": "waiting on you",
   // The talk window's standing band, shown only while Amenbo itself holds an administrator's token
   // on Windows. What it warns about is not a right the user lacks but one they have too much of:

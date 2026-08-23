@@ -1053,7 +1053,7 @@ impl AgentCommand {
 /// ```yaml
 /// settings:
 ///   check: config check          # run when the plugin is enabled — one call
-///   actions:                     # what a user may press (four at most)
+///   actions:                     # what a user may press (ten at most)
 ///     - cmd: config test
 ///       label: Send a test message
 ///       ask:                     # handed to that one run, and never stored

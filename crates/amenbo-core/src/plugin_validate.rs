@@ -116,10 +116,13 @@ pub const MAX_PLACEHOLDER_BYTES: usize = 80;
 /// writing is a rule engine, and the way to say something that complicated is a second plugin.
 pub const MAX_WHEN_CLAUSES: usize = 4;
 
-/// The most operations a settings face may offer (`AMB-D-664`). Every one of them is a button on one
-/// form, so the ceiling is what a screen can hold without becoming a menu — and a plugin needing more of
-/// them is a plugin whose work belongs on its command face, where a caller may pass anything.
-pub const MAX_SETTINGS_ACTIONS: usize = 4;
+/// The most operations a settings face may offer (`AMB-D-664`, at ten since `AMB-D-743`). Every one of them
+/// is a button on one form, so what the ceiling bounds is that form, not a count picked in advance: ten
+/// buttons are still a row a user takes in at a glance, and a face wanting more of them is a menu — which is
+/// work belonging on the plugin's command face, where a caller may pass anything. Four was refused for that
+/// same reason: it was a number no screen had asked for, and a plugin ran out of room while the form it drew
+/// was nowhere near full.
+pub const MAX_SETTINGS_ACTIONS: usize = 10;
 /// The most one operation's button label may weigh, **in UTF-8 bytes, per language** (`AMB-D-664`) — the
 /// base label and each translation of it held to the same cap, as the supporting texts are.
 ///
@@ -2842,11 +2845,17 @@ ConfigEntry::schema(            vec![ConfigField { help: Some("AMB-D-411 makes t
     }
 
     /// Every operation is a button on one form, so the list has a ceiling — a plugin needing more of them
-    /// has a command face where a caller may pass anything.
+    /// has a command face where a caller may pass anything. What the ceiling has to leave room for is a
+    /// form a plugin actually draws (`AMB-D-743`), so a face filled to it passes.
     #[test]
     fn too_many_actions_is_refused() {
-        let actions =
-            (0..MAX_SETTINGS_ACTIONS + 1).map(|i| action(&format!("c{i}"), "Press")).collect();
+        let filled: Vec<_> =
+            (0..MAX_SETTINGS_ACTIONS).map(|i| action(&format!("c{i}"), "Press")).collect();
+        let at_the_ceiling = validate_manifest(&with_settings(None, filled.clone()));
+        assert!(at_the_ceiling.is_empty(), "{at_the_ceiling:?}");
+
+        let mut actions = filled;
+        actions.push(action("one_too_many", "Press"));
         let problems = validate_manifest(&with_settings(None, actions));
         assert!(codes(&problems).contains(&ProblemCode::TooManyFields));
         assert!(problems.iter().any(|p| p.location == "settings.actions"), "{problems:?}");

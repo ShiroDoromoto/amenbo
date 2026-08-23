@@ -109,3 +109,83 @@ func TestScreenLandsWhereEveryCallerLooks(t *testing.T) {
 		t.Errorf("vmScreenPath = %q, want %q", got, want)
 	}
 }
+
+// TestGuestPathsAreOneAgreement pins the paths a run's four commands share. `run`, `step`, `log` and
+// `pull` are separate invocations with nothing between them but the guest's own disk, so a path that
+// drifted on one side would have a command reading a file another one never wrote.
+func TestGuestPathsAreOneAgreement(t *testing.T) {
+	for _, c := range []struct{ got, want string }{
+		{vmVerifyBin, "/Users/admin/verify-gui"},
+		{vmVerifySteps, "/Users/admin/verify-gui-steps.txt"},
+		{vmVerifyLog, "/Users/admin/verify-gui.log"},
+		{vmVerifyEvidence, "/Users/admin/verify-gui-evidence"},
+		{vmScreenSource, "/Users/admin/screen.swift"},
+		{vmGuestApp, "/Users/admin/Applications/Amenbo.app"},
+	} {
+		if c.got != c.want {
+			t.Errorf("guest path = %q, want %q", c.got, c.want)
+		}
+	}
+}
+
+// TestForeignArchIsRefusedByName covers the failure that would otherwise surface several steps from
+// its cause: a build for the other architecture installs cleanly and then will not start.
+func TestForeignArchIsRefusedByName(t *testing.T) {
+	if err := refuseForeignArch("/x/amenbo-darwin-amd64.pkg", "arm64"); err == nil {
+		t.Error("an amd64 build was accepted for an arm64 guest")
+	}
+	if err := refuseForeignArch("/x/amenbo-darwin-arm64.pkg", "arm64"); err != nil {
+		t.Errorf("the matching build was refused: %v", err)
+	}
+	if err := refuseForeignArch("/x/amenbo-darwin-arm64.pkg", "x86_64"); err == nil {
+		t.Error("an arm64 build was accepted for an x86_64 guest")
+	}
+	// A name that says nothing about architecture is nobody's to refuse: a path a caller chose is
+	// still the build they meant, and the installer is the one that knows.
+	if err := refuseForeignArch("/x/amenbo.pkg", "arm64"); err != nil {
+		t.Errorf("a name carrying no architecture was refused: %v", err)
+	}
+}
+
+// TestPkgArchNamesTheDistributable holds the two words a mac distributable is published under
+// against the two `uname -m` answers, since the download picks a file by that name.
+func TestPkgArchNamesTheDistributable(t *testing.T) {
+	if got := pkgArch("arm64"); got != "arm64" {
+		t.Errorf("pkgArch(arm64) = %q", got)
+	}
+	if got := pkgArch("x86_64"); got != "amd64" {
+		t.Errorf("pkgArch(x86_64) = %q", got)
+	}
+}
+
+// TestOriginRepoReadsBothURLForms covers the two shapes git writes, since the repository a build is
+// downloaded from is read off the remote rather than written down.
+func TestOriginRepoReadsBothURLForms(t *testing.T) {
+	dir := t.TempDir()
+	for _, c := range []struct{ url, want string }{
+		{"git@github.com:owner/name.git", "owner/name"},
+		{"https://github.com/owner/name.git", "owner/name"},
+		{"https://github.com/owner/name", "owner/name"},
+		{"ssh://git@github.com/owner/name.git", "owner/name"},
+	} {
+		if _, err := run(dir, "git", "init", "-q"); err != nil {
+			t.Skipf("no git here: %v", err)
+		}
+		if _, err := run(dir, "git", "remote", "remove", "origin"); err != nil {
+			_ = err // there is none on the first pass, which is not a failure
+		}
+		if _, err := run(dir, "git", "remote", "add", "origin", c.url); err != nil {
+			t.Fatal(err)
+		}
+		got, err := originRepo(dir)
+		if err != nil || got != c.want {
+			t.Errorf("originRepo(%q) = %q, %v; want %q", c.url, got, err, c.want)
+		}
+	}
+	if _, err := run(dir, "git", "remote", "set-url", "origin", "https://gitlab.com/owner/name.git"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := originRepo(dir); err == nil {
+		t.Error("a non-GitHub remote was accepted; downloading from the wrong repository is worse than refusing")
+	}
+}

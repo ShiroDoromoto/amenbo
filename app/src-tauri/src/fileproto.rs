@@ -30,7 +30,7 @@
 //! allowlist, active types are demoted to source, and nothing may be sniffed back.
 
 use std::io::{Read as _, Seek as _, SeekFrom};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 use tauri::http::{header, Request, Response, StatusCode};
 
@@ -100,40 +100,25 @@ fn try_serve(
     }
 }
 
-/// The file `rest` names inside `root`, or nothing at all — the fence itself.
+/// The file `rest` names inside `root`, or nothing at all.
 ///
-/// Nothing is resolved before it is judged and nothing is judged before it is resolved: the segments are
-/// checked one at a time as text, and what they add up to is then checked again against the real filesystem.
-/// A path that passes the first check can still leave the folder through a symbolic link, and a path that
-/// would pass the second could still have been written as `..` — neither check subsumes the other.
+/// The fence itself is shared with the door that lists what a folder holds ([`crate::folder::under`]):
+/// the segments are checked one at a time as text, and what they add up to is then checked again
+/// against the real filesystem. What is added here is what this door is for — the segments arrive
+/// percent-encoded, an address with nothing after the session names no file, and a folder is not a
+/// file, whatever else it may be to a caller that lists names.
 fn under(root: &Path, rest: &str) -> Option<PathBuf> {
-    let root = root.canonicalize().ok()?;
-
-    let mut path = root.clone();
-    let mut named = false;
-    for segment in rest.split('/').filter(|s| !s.is_empty()) {
-        let decoded = percent_decode(segment);
-        // One ordinary name and nothing else. `..`, `.`, an embedded separator, a root and a drive letter all
-        // come back as some other kind of component, or as more than one — none of which is a file name.
-        let mut parts = Path::new(&decoded).components();
-        match (parts.next(), parts.next()) {
-            (Some(Component::Normal(name)), None) => path.push(name),
-            _ => return None,
-        }
-        named = true;
-    }
+    let segments: Vec<String> = rest
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .map(percent_decode)
+        .collect();
     // The folder itself is not a file, and an address with nothing after the session is not an address.
-    if !named {
+    if segments.is_empty() {
         return None;
     }
-
-    // Now the filesystem's own answer, links followed. A link inside the folder that points out of it is only
-    // caught here, which is why the text check above is not the end of it.
-    let path = path.canonicalize().ok()?;
-    if !path.starts_with(&root) || !path.is_file() {
-        return None;
-    }
-    Some(path)
+    let path = crate::folder::under(root, &segments)?;
+    path.is_file().then_some(path)
 }
 
 /// Read `len` bytes from `start`. Short files and ranges that run past the end come back shorter, which is

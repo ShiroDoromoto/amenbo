@@ -211,6 +211,60 @@ button { font: inherit; color: inherit; cursor: pointer; }
   box-shadow: var(--shadow-md);
   padding: var(--s-2);
 }
+/* ---------- the file face ---------- */
+/* The right side of the terminal face: what changed in the project's folder lately, and the folder
+   itself, folded (`app/src/files/FilesPanel.tsx`). */
+.files {
+  width: 16rem; flex: none;
+  min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+  font-size: var(--fs-sm);
+}
+.files--empty { color: var(--c-text-muted); }
+.files__row { min-width: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+.files__head {
+  margin: 0; padding: 0;
+  color: var(--c-text-muted); font-size: var(--fs-sm); font-weight: 600;
+  text-align: left; background: none; border: 0;
+}
+.files__head--button { cursor: pointer; }
+.files__head--button::before { content: "▸ "; }
+.files__head--button[aria-expanded="true"]::before { content: "▾ "; }
+.files__none { margin: 0; color: var(--c-text-muted); }
+.files__list { list-style: none; margin: 0; padding: 0; }
+.files__list--tree { padding-left: var(--s-3); }
+/* A row is one line and never wraps: the name is what is read, and a path that folded would push
+   the next row off the panel. */
+.files__file, .files__dir {
+  display: flex; align-items: baseline; gap: var(--s-2);
+  width: 100%; padding: 0; border: 0; background: none;
+  color: var(--c-text); text-align: left; cursor: pointer;
+}
+.files__file:hover, .files__dir:hover { color: var(--c-accent); }
+.files__dir::before { content: "▸ "; color: var(--c-text-muted); }
+.files__dir[aria-expanded="true"]::before { content: "▾ "; }
+.files__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.files__when, .files__where {
+  color: var(--c-text-muted); font-size: var(--fs-xs);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.files__when { margin-left: auto; flex: none; }
+.files__where { display: block; padding-left: var(--s-2); }
+/* Reading one file: the way back, the name, and whatever the file turned out to be. */
+.files--reading { gap: var(--s-2); }
+.files__bar { display: flex; align-items: baseline; gap: var(--s-2); }
+.files__back {
+  flex: none; padding: 0; border: 0; background: none;
+  color: var(--c-text-muted); cursor: pointer;
+}
+.files__back:hover { color: var(--c-text); }
+.files__body { min-height: 0; overflow-y: auto; }
+.files__text { margin: 0; font-family: var(--font-mono); font-size: var(--fs-xs); white-space: pre-wrap; word-break: break-word; }
+.files__image { max-width: 100%; height: auto; }
 
 /* ---------- the band across the top of the app ---------- */
 /* One band, the app's news drawn in it — the integrity check, an update waiting, a folder that has

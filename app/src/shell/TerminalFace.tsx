@@ -6,6 +6,7 @@ import {
   closedIn, COUNTS, EMPTY_LAYOUT, focusOn, folderOfPage, frameFor, goPage, MAX_PAGES, movedTo,
   openedIn, pageCount, setCount, sidesAreDrawers, slotsOf, type Count, type Layout,
 } from "../talk/layout";
+import { FilesPanel } from "../files/FilesPanel";
 import { t, tf } from "../core/i18n";
 
 /**
@@ -39,15 +40,24 @@ import { t, tf } from "../core/i18n";
  * puts a badge on the face switch instead (`./terminalBadge`) — and it is told the fact, not what to
  * do about it. Which pane it was is the rail's to show, and a badge that counted would be a number a
  * reader has to go and check.
+ *
+ * Beside the page is the file face (`app/src/files/FilesPanel.tsx`), which is rooted at the
+ * project's folder rather than at any pane's session — so it does not move when the page or the
+ * focused pane does (`AMB-T-3602`). It is why this component is told which project the window is on,
+ * and how to leave this face for the ledger, neither of which a terminal has any use for.
  */
 export function TerminalFace({
   onSplitOut,
   note,
   onWaiting,
+  projectId,
+  onOpenLedger,
 }: {
   onSplitOut: () => void;
   note: string | null;
   onWaiting: (waiting: boolean) => void;
+  projectId?: number | null;
+  onOpenLedger?: () => void;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   // The face comes up with a terminal, the way a single-pane face always did: the first slot of the
@@ -240,6 +250,7 @@ export function TerminalFace({
                 </button>
               ))}
         </div>
+        <FilesPanel projectId={projectId ?? null} onOpenLedger={onOpenLedger} />
       </div>
     </div>
   );

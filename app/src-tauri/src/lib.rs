@@ -432,6 +432,7 @@ pub fn run() {
       commands::frame_names,
       commands::name_frame,
       launch::elevated,
+      windows::show_ref,
       pty::pty_open,
       pty::pty_sessions,
       pty::pty_attach,

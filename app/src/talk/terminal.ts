@@ -12,13 +12,21 @@
 // that can put the split ones back together. Keystrokes go the other way just as plainly: what the
 // emulator produced for the key is what the program in the terminal is given, so arrow keys, Ctrl-C,
 // tab completion and bracketed paste all work because nothing tried to make them work.
+//
+// Refs are read **after** all of that, off what was drawn rather than out of what crossed
+// (`./refLinks`), which is what keeps the line above true: the stream is still nobody's to read, and
+// a cell already holds a character every escape has finished with. It is the one thing owning a
+// terminal buys that a standard one cannot do — the characters in a pane are records to amenbo and
+// a string to everything else — and it costs the stream nothing.
 
 import { FitAddon } from "@xterm/addon-fit";
-import { Terminal } from "@xterm/xterm";
+import { Terminal, type IBufferCell } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import type { PtyChunkDto, PtySessionDto, SessionSaidDto } from "../bindings/bindings";
+import type { RefSpace } from "../core/idref";
 import { invoke } from "../core/ipc";
 import { NOTHING_TYPED, typed, type NamedBy } from "./frames";
+import { refFromUrl, refsOnRow, type Cell, type Rows } from "./refLinks";
 
 // The events the host sends this pane. Output is a chunk; closed is the program in the terminal
 // having exited, which arrives once and is the last thing that session says.
@@ -60,6 +68,38 @@ function themeColors(): { background: string; foreground: string; cursor: string
     foreground: token("--c-text", "#23211c"),
     cursor: token("--c-accent", "#0e7c7b"),
   };
+}
+
+// The terminal's drawn buffer, as much of it as a ref scan reads (`./refLinks`). Cells are copied
+// out one at a time rather than the row translated to a string: a wide character covers two columns
+// and a blank one covers a column with nothing in it, so a string would lose exactly the arithmetic a
+// clickable range is made of.
+function rowsOf(term: Terminal): Rows {
+  const buffer = term.buffer.active;
+  // One cell object, filled again per column: `getCell` writes into what it is handed, and what is
+  // read out of it here is copied immediately.
+  let scratch: IBufferCell | undefined;
+  return {
+    length: buffer.length,
+    wrapped: (y) => buffer.getLine(y)?.isWrapped ?? false,
+    cells: (y) => {
+      const line = buffer.getLine(y);
+      if (!line) return [];
+      const cells: Cell[] = [];
+      for (let x = 0; x < line.length; x++) {
+        scratch = line.getCell(x, scratch);
+        cells.push({ chars: scratch?.getChars() ?? "", width: scratch?.getWidth() ?? 1 });
+      }
+      return cells;
+    },
+  };
+}
+
+// Show the record on the board. The window it is read in belongs to the same process and not to this
+// webview, so raising it is the host's (`crate::windows::show_ref`); a failure leaves the pane exactly
+// as it was, which is the honest outcome for a click that could not be carried out.
+function showRef(space: RefSpace, num: number): void {
+  void invoke("show_ref", { kind: space, id: num }).catch(() => {});
 }
 
 // A chunk as it travelled: base64 in, bytes out. `atob` gives one character per byte, which is what
@@ -132,11 +172,39 @@ export async function mountTerminal(host: HTMLElement, on: PaneEvents): Promise<
     fontSize: 13,
     cursorBlink: true,
     theme: themeColors(),
+    // The second way a ref becomes clickable: our own output wraps one in OSC 8, so the escape says
+    // where the text points and no pattern has to find it (`AMB-T-3595`). Non-HTTP addresses have to
+    // be let through for `amenbo://` to arrive at all — which is safe here because arriving is not
+    // being followed: an address this does not recognise is dropped, and the ones it does recognise
+    // reach a function that selects a record by number. Nothing here opens a URL.
+    linkHandler: {
+      allowNonHttpProtocols: true,
+      activate: (_event, text) => {
+        const target = refFromUrl(text);
+        if (target) showRef(target.space, target.num);
+      },
+    },
   });
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.open(host);
   refit(fit, host);
+
+  // The first way, and the one that works on any program's output: read the refs back out of what was
+  // drawn. It covers what the escape cannot — an agent's own words, a git log, a grep — and the escape
+  // covers what this cannot, which is a ref the pane wrapped or a TUI elided.
+  const links = term.registerLinkProvider({
+    provideLinks(bufferLineNumber, callback) {
+      // The row number a provider is given counts from 1 over the whole buffer, scrollback included,
+      // and is the same number a link's range is written in.
+      const found = refsOnRow(rowsOf(term), bufferLineNumber - 1);
+      callback(found.map((ref) => ({
+        range: ref.range,
+        text: ref.text,
+        activate: () => showRef(ref.space, ref.num),
+      })));
+    },
+  });
 
   // The session is not known until the host answers, and what the terminal has to say can be on its
   // way before that answer lands — the first prompt of a shell being started, or the next line of a
@@ -210,6 +278,7 @@ export async function mountTerminal(host: HTMLElement, on: PaneEvents): Promise<
   return () => {
     resize.disconnect();
     theme.disconnect();
+    links.dispose();
     keys.dispose();
     void unlistenOutput();
     void unlistenClosed();

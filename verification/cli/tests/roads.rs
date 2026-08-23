@@ -31,7 +31,7 @@ fn scenario_files() -> Vec<PathBuf> {
 fn names_a_crossing(step: &Step) -> Option<&str> {
     let (domain, op, with) = match step {
         Step::Action { domain, op, with, .. } => (domain, op, with),
-        Step::Assert { domain, op, with } => (domain, op, with),
+        Step::Assert { domain, op, with, .. } => (domain, op, with),
     };
     if *domain != Domain::Plugin || !matches!(op.as_str(), "config-set" | "config") {
         return None;

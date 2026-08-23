@@ -324,11 +324,18 @@ It resolves the pid and hands it to the screen tool
 shoots it. Finding the instance is devtool's half; operating a screen is the
 tool's.
 
-- **Which window it shot, and the id it shot by, stay in the tool.** Nothing here
-  can aim a click by a rectangle, which is the point: name the thing to press
+- **The id it shot by stays in the tool.** Nothing here can aim a click by a
+  rectangle, which is the point: name the thing to press
   (`swift scripts/screen.swift click-named <pid> <name>`) and neither the shot's
   scale — an external panel shoots at 1 where the built-in one shoots at 2 — nor
   a screen that has moved since the shot is yours to get right.
+- **An instance drawing two windows has to be told which one** — `--window
+  <title>`, passed straight through to the tool, which matches the title drawn in
+  the bar (whole first, then by part). Left out, the tool refuses and lists the
+  titles that are up rather than shooting whichever was in front: a shot of the
+  wrong window is a picture of a screen nobody asked for, and it looks exactly
+  like a picture of the right one. An instance drawing one window says nothing
+  and is answered, as it always was.
 - **It fronts the instance first**, the opposite default from `pid`: a window
   behind another Space is not on-screen at all, so it cannot even be found.
   `--no-front` is for capturing a state that fronting would disturb.
@@ -629,6 +636,11 @@ anything having to be re-baked into it.
 **`click`/`click-named` in there still want a `front` first.** The tool does not
 call it, and a VM's bare desktop has a Terminal on it that a click is otherwise
 taken by — exit 0, nothing delivered.
+
+**`find`/`click-named` read one window, not the app.** They take the same
+`--window <title>`, and with two windows up they refuse without it — a name
+reached on the wrong window is a check that passed without looking at the screen
+it was written for.
 
 ### `devtool vm golden [--refresh]`
 

@@ -23,6 +23,15 @@
 //   swift screen.swift key <keycode>             one virtual keycode (36=Return / 48=Tab / 53=Esc / 125=Down / 126=Up)
 //   swift screen.swift trusted                   whether the accessibility permission is granted (prompts if not)
 //
+// Anything aimed at a pid also takes `--window <title>`, anywhere in the line. An app draws one
+// screen per window, so a pid alone stops naming a screen the moment it has two: `front` raises the
+// window named, `shot` shoots it, and `find` / `click-named` read and press inside it and nowhere
+// else. Left out, it means the app's one window — and an app with two is told to say which rather
+// than answered with whichever the list held first. That silence is the failure worth refusing: a
+// road reading the wrong window finds nothing it expected and comes out red for a reason nobody can
+// see, or finds a name both windows carry and comes out green without having looked at the screen
+// under test.
+//
 // Reach for `click-named` over a point. A point costs two conversions a name costs neither of: a
 // shot's pixels are the window's points times the scale of *that* display, which is 2 on a built-in
 // panel and 1 on an external one, and the screen may have reflowed since the shot was taken —
@@ -50,16 +59,63 @@ func fail(_ msg: String) -> Never {
 }
 
 // ---------------------------------------------------------------------------
-// The window: found here, shot here, and never handed out
+// The window: named here, found here, shot here, and never handed out
 // ---------------------------------------------------------------------------
 
-/// windowID answers with the substantial window of the given pid — the real one, not a title bar or
-/// a shadow. A window behind another Space is not counted as on-screen, so an app that has not been
-/// fronted comes back empty.
-func windowID(pid: Int) -> Int {
+/// The one of `all` that `wanted` names — exact first and then by part, the same rule a name reaches
+/// an element with (`named`), and for the same reason: one window's title is often the start of
+/// another's ("Amenbo", over "Amenbo — Talk"), so a whole title has to be able to name the shorter.
+///
+/// Nothing is guessed at either end. A name that reaches none is a caller naming a window this app
+/// does not have; a name that reaches two, and no name at all when two are up, is a caller who has
+/// not said which. Both are answered with the titles that are up, because the caller can then write
+/// one down — where picking whichever the list held first would be a screen chosen by an ordering
+/// nobody controls, reported as the screen that was asked for.
+func theWindow<W>(_ wanted: String?, among all: [W], titled title: (W) -> String, of pid: Int) -> W {
+    func listing(_ ws: [W]) -> String { ws.map { "\"\(oneLine(title($0)))\"" }.joined(separator: " / ") }
+    if all.isEmpty { fail("no window for pid \(pid) — is the app running, on screen and in front?") }
+    guard let wanted else {
+        if all.count == 1 { return all[0] }
+        fail("pid \(pid) has \(all.count) windows on screen — \(listing(all)); say which with --window <title>")
+    }
+    let exact = all.filter { title($0) == wanted }
+    let found = exact.isEmpty ? all.filter { title($0).contains(wanted) } : exact
+    if found.isEmpty { fail("no window of pid \(pid) is called \(wanted) — it has \(listing(all))") }
+    if found.count > 1 {
+        fail("\(found.count) windows of pid \(pid) hold \(wanted) — \(listing(found)); name one of them in full")
+    }
+    return found[0]
+}
+
+/// The title drawn in a window's bar. It is the only name a window carries out of the app: the label
+/// the app knows its own windows by does not reach the accessibility tree at all, and the address
+/// behind a webview is not something a person reads off the screen and could write in a road.
+func windowTitle(_ w: AXUIElement) -> String {
+    axString(w, kAXTitleAttribute as String) ?? ""
+}
+
+/// The windows of an app that a person would say are windows.
+///
+/// A webview app keeps panels beside its real ones — a shadow, a drag surface — and they arrive in
+/// the same list, untitled and filed under `AXUnknown`. Counting them would make an app with a single
+/// window look ambiguous, and then every call would have to name a window that has no name.
+func standardWindows(of app: AXUIElement) -> [AXUIElement] {
+    let all = axAttribute(app, kAXWindowsAttribute as String) as? [AXUIElement] ?? []
+    return all.filter { axString($0, kAXSubroleAttribute as String) == (kAXStandardWindowSubrole as String) }
+}
+
+/// The id `screencapture -l` takes, for the window the caller named. Resolved and spent inside `shot`,
+/// so a caller shoots by pid and holds no window of its own. A window behind another Space is not
+/// counted as on-screen, so an app that has not been fronted comes back empty.
+///
+/// The titles come off the window list, which serves them only to a process granted Screen Recording
+/// — the same permission shooting needs, so a run that can take the picture can also say which window
+/// it took.
+func windowID(pid: Int, named wanted: String?) -> Int {
     guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else {
         fail("could not read the window list")
     }
+    var windows: [(id: Int, title: String)] = []
     for w in list {
         guard let owner = w[kCGWindowOwnerPID as String] as? Int, owner == pid,
               let id = w[kCGWindowNumber as String] as? Int,
@@ -67,15 +123,19 @@ func windowID(pid: Int) -> Int {
               let height = b["Height"] as? Double,
               height > 200 // drop the incidental windows: shadows, tooltips and the like
         else { continue }
-        return id
+        windows.append((id, w[kCGWindowName as String] as? String ?? ""))
     }
-    fail("no window for pid \(pid) — is the app running, on screen and in front?")
+    return theWindow(wanted, among: windows, titled: { $0.title }, of: pid).id
 }
 
-/// Bring the app owning that pid to the front, so its window counts as on-screen. By pid and not by
-/// name: two builds of one app carry the same name, and the pid is what every other subcommand here
-/// is aimed with.
-func front(pid: Int) {
+/// Bring the app owning that pid to the front, so its windows count as on-screen, and — when one is
+/// named — raise that one within the app. By pid and not by name: two builds of one app carry the
+/// same name, and the pid is what every other subcommand here is aimed with.
+///
+/// Without a name this is the app's move and nothing more, which is unambiguous however many windows
+/// it has: what an app being frontmost decides is that its windows are shootable at all. Which of
+/// them is in front is a second question, and it is asked only when the caller asks it.
+func front(pid: Int, window wanted: String?) {
     guard let app = NSRunningApplication(processIdentifier: pid_t(pid)) else {
         fail("no running application with pid \(pid)")
     }
@@ -85,12 +145,14 @@ func front(pid: Int) {
         app.activate(options: [.activateIgnoringOtherApps])
     }
     usleep(400_000) // the window arrives in front after the call returns, not with it
+    guard wanted != nil else { return }
+    AXUIElementPerformAction(appWindow(pid: pid, named: wanted), kAXRaiseAction as CFString)
+    usleep(200_000) // the raise lands after the call returns, as the activation does
 }
 
-/// Shoot the app's window into `path`. The id `screencapture -l` takes is resolved and spent here,
-/// so a caller shoots by pid and holds no window of its own.
-func shot(pid: Int, path: String) {
-    let id = windowID(pid: pid)
+/// Shoot the window into `path`.
+func shot(pid: Int, window: String?, path: String) {
+    let id = windowID(pid: pid, named: window)
     let p = Process()
     p.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
     // -x is silent, -l shoots the one window rather than a display (a window on a second monitor is
@@ -270,8 +332,7 @@ func contentsArrived(_ el: AXUIElement, depth: Int = 0) -> Bool {
     return children.contains { contentsArrived($0, depth: depth + 1) }
 }
 
-/// The elements of one app, menu bar left out: it belongs to whichever app is frontmost rather than
-/// to the window under test, and its items carry names that collide with the screen's own.
+/// The app's window the caller named, waited for until what is drawn in it has arrived.
 ///
 /// The contents are *waited for*, not slept on. A fixed pause was enough on the machine this was
 /// written on and not in the verification VM, where the first command after a launch found the
@@ -280,24 +341,39 @@ func contentsArrived(_ el: AXUIElement, depth: Int = 0) -> Bool {
 /// guest). One silent miss per launch is the worst shape that failure has: a road is walked once,
 /// and it does not press the button a second time to see whether it was true.
 ///
+/// The wait is on *that* window, not on any of them. A second window fills at its own pace, so a
+/// wait satisfied by whichever filled first would hand back the named one still empty — the same
+/// silent miss, arriving now on the runs where two windows are up.
+///
 /// A window that never grows a web area — a native panel — costs the whole budget and is then
 /// answered with what it has. That is the right way round: this drives a webview app, so waiting on
 /// contents that are coming is what happens on every run, and the wait for ones that never come is
 /// paid by the exception.
-func appElements(pid: Int) -> [Element] {
+func appWindow(pid: Int, named wanted: String?) -> AXUIElement {
     let app = AXUIElementCreateApplication(pid_t(pid))
     openTree(app)
     let deadline = Date().addingTimeInterval(5)
     var windows: [AXUIElement] = []
-    var sawWindow = false
     repeat {
-        windows = axAttribute(app, kAXWindowsAttribute as String) as? [AXUIElement] ?? []
-        sawWindow = sawWindow || !windows.isEmpty
-        if windows.contains(where: { contentsArrived($0) }) { break }
+        windows = standardWindows(of: app)
+        // Resolved on each pass rather than once at the end: until the named window is both there
+        // and filled, there is nothing to wait on and nothing to hand back.
+        if windows.count == 1 || wanted != nil {
+            let named = wanted.map { w in windows.filter { windowTitle($0).contains(w) } } ?? windows
+            if named.count == 1, contentsArrived(named[0]) { break }
+        }
         usleep(100_000)
     } while Date() < deadline
-    if !sawWindow { fail("no window for pid \(pid) — is the app running and on screen?") }
-    return windows.flatMap { elements(under: $0) }
+    return theWindow(wanted, among: windows, titled: windowTitle, of: pid)
+}
+
+/// The elements of one window of one app — the menu bar left out, since it belongs to whichever app
+/// is frontmost rather than to the window under test and its items carry names that collide with the
+/// screen's own, and the app's other windows left out too. Two windows of one app draw two screens,
+/// and a name read off the wrong one is a road that passed without looking at the screen it was
+/// written for.
+func windowElements(pid: Int, window wanted: String?) -> [Element] {
+    elements(under: appWindow(pid: pid, named: wanted))
 }
 
 /// The elements `wanted` names: the ones called exactly that, or — when the screen carries no such
@@ -323,8 +399,8 @@ func oneLine(_ s: String) -> String {
     s.replacingOccurrences(of: "\n", with: "\\n")
 }
 
-func find(pid: Int, name: String?) {
-    let all = appElements(pid: pid)
+func find(pid: Int, name: String?, window: String?) {
+    let all = windowElements(pid: pid, window: window)
     let found = name.map { named($0, among: all) } ?? all
     for e in found {
         print("\(e.role)\t\(e.name)\t\(Int(e.frame.minX)) \(Int(e.frame.minY)) \(Int(e.frame.width)) \(Int(e.frame.height))")
@@ -354,9 +430,9 @@ func find(pid: Int, name: String?) {
 /// press lands on whatever is frontmost at that point, so anything that took the front — a sleeping
 /// display, a permission dialog — swallows the click and the run still exits 0. A shot says so by
 /// failing; a click cannot, so it is not asked to.
-func clickNamed(pid: Int, name: String) {
-    front(pid: pid)
-    let found = named(name, among: appElements(pid: pid))
+func clickNamed(pid: Int, name: String, window: String?) {
+    front(pid: pid, window: window)
+    let found = named(name, among: windowElements(pid: pid, window: window))
     guard let first = found.first else { fail("nothing on screen is called \(name)") }
 
     var reached: [String] = []
@@ -429,27 +505,49 @@ func key(_ code: CGKeyCode) {
     CGEvent(keyboardEventSource: src, virtualKey: code, keyDown: false)?.post(tap: .cghidEventTap)
 }
 
-let args = CommandLine.arguments
+/// Pull `--window <title>` out of the line, wherever in it the caller wrote it, and hand back what is
+/// left as the positional arguments each subcommand already reads. Which window is a qualifier on the
+/// aim rather than another thing to name, so it is not given a place in any subcommand's order — a
+/// `find <pid> [name]` whose optional name and optional window sat side by side would read a one-word
+/// call either way round.
+func takeWindow(_ argv: [String]) -> (window: String?, rest: [String]) {
+    var window: String?
+    var rest: [String] = []
+    var i = 0
+    while i < argv.count {
+        if argv[i] == "--window" {
+            guard i + 1 < argv.count else { fail("--window needs the title of a window") }
+            window = argv[i + 1]
+            i += 2
+            continue
+        }
+        rest.append(argv[i])
+        i += 1
+    }
+    return (window, rest)
+}
+
+let (window, args) = takeWindow(CommandLine.arguments)
 guard args.count >= 2 else {
-    fail("usage: screen <front|shot|read|find|click-named|click|dblclick|type|key|trusted> …")
+    fail("usage: screen <front|shot|read|find|click-named|click|dblclick|type|key|trusted> … [--window <title>]")
 }
 
 switch args[1] {
 case "front":
-    guard args.count == 3, let pid = Int(args[2]) else { fail("usage: screen front <pid>") }
-    front(pid: pid)
+    guard args.count == 3, let pid = Int(args[2]) else { fail("usage: screen front <pid> [--window <title>]") }
+    front(pid: pid, window: window)
 case "shot":
-    guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen shot <pid> <out.png>") }
-    shot(pid: pid, path: args[3])
+    guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen shot <pid> <out.png> [--window <title>]") }
+    shot(pid: pid, window: window, path: args[3])
 case "read":
     guard args.count == 3 else { fail("usage: screen read <image.png>") }
     readText(path: args[2])
 case "find":
-    guard args.count == 3 || args.count == 4, let pid = Int(args[2]) else { fail("usage: screen find <pid> [name]") }
-    find(pid: pid, name: args.count == 4 ? args[3] : nil)
+    guard args.count == 3 || args.count == 4, let pid = Int(args[2]) else { fail("usage: screen find <pid> [name] [--window <title>]") }
+    find(pid: pid, name: args.count == 4 ? args[3] : nil, window: window)
 case "click-named":
-    guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen click-named <pid> <name>") }
-    clickNamed(pid: pid, name: args[3])
+    guard args.count == 4, let pid = Int(args[2]) else { fail("usage: screen click-named <pid> <name> [--window <title>]") }
+    clickNamed(pid: pid, name: args[3], window: window)
 case "click":
     guard args.count == 4, let x = Double(args[2]), let y = Double(args[3]) else { fail("usage: screen click <x> <y>") }
     click(x: x, y: y)

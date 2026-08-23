@@ -90,7 +90,7 @@ impl Gui<'_> {
                     "the app exited while starting ({status}) — no window was ever put on screen"
                 ));
             }
-            let last = match front(self.pid, screen).and_then(|()| shoot(self.pid, &probe, screen)) {
+            let last = match front(self.pid, screen).and_then(|()| shoot(self.pid, None, &probe, screen)) {
                 Ok(()) => {
                     let _ = std::fs::remove_file(&probe);
                     return Ok(());

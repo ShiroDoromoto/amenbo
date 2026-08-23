@@ -155,7 +155,7 @@ fn run(opts: &Opts) -> Result<bool, String> {
     let outcome = walk(
         &scenario,
         &evidence,
-        |path| shoot(pid, path, &screen),
+        |window, path| shoot(pid, window, path, &screen),
         |image| read_shot(image, &screen),
         |brief| hand_over(&stdin, brief),
     )?;

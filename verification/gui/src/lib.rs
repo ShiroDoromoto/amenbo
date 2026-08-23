@@ -3,8 +3,12 @@
 //! The same scenario the CLI driver black-box-drives, this harness reads as a **screen
 //! checklist**. It bakes in no command line and no pixel: each step becomes a plain-language
 //! instruction of what to do or confirm on screen, and every step is shot into an evidence
-//! directory by the screen tool (`scripts/screen.swift`), which is named the app's pid and hands
-//! back a file — which window it shot, and the id it shot by, never leave it. The pid it is named
+//! directory by the screen tool (`scripts/screen.swift`), which is named the app's pid — and, where
+//! a road says so, the title of the window within it — and hands back a file: the id it shot by
+//! never leaves the tool. A window is named by a road only when the app draws more than one, and
+//! then it has to be: the tool refuses to pick between two windows, because a shot of the wrong one
+//! is evidence of a screen nobody stood at and reads on the manifest exactly like the right one.
+//! The pid it is named
 //! is the harness's own: the app under test is started here, against a throwaway store
 //! ([`launch`], [`scratch`]), and goes down with the run. The world that store holds when the app
 //! opens it is the scenario's `given`, stood up beforehand with the CLI the bundle ships
@@ -87,12 +91,16 @@ pub struct Reading {
     pub raw: String,
 }
 
-/// Run one of the tool's subcommands and hand back its stdout.
-fn tool(screen: &Path, cmd: &str, args: &[&OsStr]) -> Result<Vec<u8>, String> {
-    let out = Command::new("swift")
-        .arg(screen)
-        .arg(cmd)
-        .args(args)
+/// Run one of the tool's subcommands and hand back its stdout. A window named by the step is passed
+/// on as the tool's own qualifier on the aim — one more thing said about *where*, never an argument
+/// of the subcommand.
+fn tool(screen: &Path, cmd: &str, args: &[&OsStr], window: Option<&str>) -> Result<Vec<u8>, String> {
+    let mut command = Command::new("swift");
+    command.arg(screen).arg(cmd).args(args);
+    if let Some(window) = window {
+        command.arg("--window").arg(window);
+    }
+    let out = command
         .output()
         .map_err(|e| format!("could not run `swift {} {cmd}`: {e}", screen.display()))?;
     if !out.status.success() {
@@ -105,22 +113,29 @@ fn tool(screen: &Path, cmd: &str, args: &[&OsStr]) -> Result<Vec<u8>, String> {
 }
 
 /// Bring the app under test to the front, so the window the tool goes looking for counts as
-/// on-screen (one behind another Space does not).
+/// on-screen (one behind another Space does not). The app and not one of its windows: what being
+/// frontmost decides is whether any of them can be shot at all.
 pub fn front(pid: i64, screen: &Path) -> Result<(), String> {
-    tool(screen, "front", &[OsStr::new(&pid.to_string())]).map(|_| ())
+    tool(screen, "front", &[OsStr::new(&pid.to_string())], None).map(|_| ())
 }
 
-/// Shoot the app's window into `path`. The harness names the app by pid and receives a file: which
-/// of its windows was shot, and the id the shot was taken by, are the tool's and stay there.
-pub fn shoot(pid: i64, path: &Path, screen: &Path) -> Result<(), String> {
-    tool(screen, "shot", &[OsStr::new(&pid.to_string()), path.as_os_str()]).map(|_| ())
+/// Shoot the window `window` names into `path` — or the app's one window, when a road named none.
+/// The harness names the app by pid and the window by its title, and receives a file: the id the
+/// shot was taken by is the tool's and stays there.
+///
+/// A road that names no window against an app drawing two is refused by the tool rather than
+/// answered with whichever was in front. That refusal is the point of naming: a shot of the wrong
+/// window is evidence of a screen nobody was standing at, and it reads on the manifest exactly like
+/// evidence of the right one.
+pub fn shoot(pid: i64, window: Option<&str>, path: &Path, screen: &Path) -> Result<(), String> {
+    tool(screen, "shot", &[OsStr::new(&pid.to_string()), path.as_os_str()], window).map(|_| ())
 }
 
 /// Read the words off a shot. An error is an execution failure, not a miss: a shot the reader found
 /// no text in comes back as an empty [`Reading`], which is the honest answer for an assert that
 /// expected words there.
 pub fn read_shot(image: &Path, screen: &Path) -> Result<Reading, String> {
-    let out = tool(screen, "read", &[image.as_os_str()])?;
+    let out = tool(screen, "read", &[image.as_os_str()], None)?;
     let v: serde_json::Value = serde_json::from_slice(&out)
         .map_err(|e| format!("could not read `screen read {}` as JSON: {e}", image.display()))?;
     let field = |k: &str| {
@@ -285,7 +300,7 @@ impl Instructor {
     /// ops that never reach the screen, and this harness maps the screen's.
     fn learn(&mut self, steps: &[Step]) {
         for step in steps {
-            if let Step::Action { domain, op, with, bind } = step {
+            if let Step::Action { domain, op, with, bind, .. } = step {
                 if let Some(name) = bind {
                     if let Some(label) = label(with) {
                         self.labels.insert(name.clone(), label.to_string());
@@ -356,9 +371,23 @@ impl Instructor {
     /// One step → one instruction. Fails closed on a registry op this harness has not mapped yet
     /// — the same contract the CLI driver keeps, so a new op surfaces loudly here too rather than
     /// walking past with a blank instruction. An action also records the label later steps read by.
+    ///
+    /// A window the road named is written into the sentence rather than kept beside it, so it
+    /// reaches everywhere the sentence does — what `--print` shows while a road is being written,
+    /// what the operator is handed mid-run, and what the manifest keeps afterwards — and so an
+    /// operator is told which screen to stand at *before* being told what to do there.
     fn render(&mut self, step: &Step) -> Result<String, String> {
+        let sentence = self.sentence(step)?;
+        Ok(match step.window() {
+            Some(window) => format!("In the window called \"{window}\": {sentence}"),
+            None => sentence,
+        })
+    }
+
+    /// The step itself, said without reference to which window it is said of.
+    fn sentence(&mut self, step: &Step) -> Result<String, String> {
         match step {
-            Step::Action { domain, op, with, bind } => {
+            Step::Action { domain, op, with, bind, .. } => {
                 let mut text = self.action(*domain, op, with)?;
                 // A step that says the screen will turn it away. The code `refused:` names is what a
                 // driver reading an exit status compares against, and there is no exit status here — so
@@ -378,7 +407,7 @@ impl Instructor {
                 self.note_end(*domain, op, with);
                 Ok(text)
             }
-            Step::Assert { domain, op, with } => self.assert(*domain, op, with),
+            Step::Assert { domain, op, with, .. } => self.assert(*domain, op, with),
         }
     }
 
@@ -573,7 +602,7 @@ impl Instructor {
     /// of the interface nor a title drawn twice over — it is what a reader types for somewhere outside
     /// Amenbo — so it stands on the shot in the one field it was typed into, and nowhere else.
     fn expectation(&self, step: &Step) -> Option<Expectation> {
-        let Step::Assert { domain, op, with } = step else { return None };
+        let Step::Assert { domain, op, with, .. } = step else { return None };
         match (*domain, op.as_str()) {
             // The two that read a task's own title off a card or a row, where a title that has ended
             // is drawn through. Nothing derived from it can be matched, in either direction: a reading
@@ -2112,6 +2141,11 @@ pub struct StepRecord {
     pub kind: &'static str,
     pub domain: String,
     pub op: String,
+    /// The window this step was carried out in, as the road named it — `None` for the app's one
+    /// window. It is kept on the record because a shot cannot say which window it is of: two windows
+    /// of one app are the same app at the same size, and a manifest that did not name the window
+    /// would leave a reader to tell them apart by what is drawn in them.
+    pub window: Option<String>,
     pub instruction: String,
     pub screenshot: String,
     pub verdict: Verdict,
@@ -2140,6 +2174,9 @@ pub struct StepBrief<'a> {
     pub index: usize,
     /// `action` or `assert` — what is being asked of whoever is standing at the screen.
     pub kind: &'static str,
+    /// The window the step is carried out in, as the road named it — `None` for the app's one
+    /// window. Whoever is driving stands at that window before answering.
+    pub window: Option<&'a str>,
     /// The step rendered as the sentence an operator reads.
     pub instruction: &'a str,
     /// What OCR will be asked to find on the shot, for an assert that named it. `None` on an action,
@@ -2168,7 +2205,7 @@ pub fn walk<C, O, H>(
     mut hand_over: H,
 ) -> Result<WalkOutcome, String>
 where
-    C: FnMut(&Path) -> Result<(), String>,
+    C: FnMut(Option<&str>, &Path) -> Result<(), String>,
     O: FnMut(&Path) -> Result<Reading, String>,
     H: FnMut(&StepBrief<'_>) -> Result<(), String>,
 {
@@ -2188,6 +2225,7 @@ where
         };
         let instruction = instructor.render(step)?;
         let expected = instructor.expectation(step);
+        let window = step.window();
         let domain = domain_str(domain);
         let screenshot = format!("{:02}-{kind}-{domain}-{op}.png", i + 1);
         let shot_path = evidence_dir.join(&screenshot);
@@ -2197,12 +2235,13 @@ where
         hand_over(&StepBrief {
             index: i,
             kind,
+            window,
             instruction: &instruction,
             expected: expected.as_ref(),
         })
         .map_err(|e| format!("step {}: handing the step over failed: {e}", i + 1))?;
 
-        capture(&shot_path)
+        capture(window, &shot_path)
             .map_err(|e| format!("step {}: capturing `{screenshot}` failed: {e}", i + 1))?;
 
         // Judge an assert that named an expectation; keep the reading as evidence.
@@ -2234,6 +2273,7 @@ where
             kind,
             domain: domain.to_string(),
             op,
+            window: window.map(str::to_string),
             instruction,
             screenshot,
             verdict,
@@ -2292,8 +2332,15 @@ pub fn write_manifest(
                 ),
                 _ => String::new(),
             };
+            // The window only when the road named one: an app with a single window has nothing to
+            // say here, and a key carrying `null` on every step of every road would read as a
+            // question each of them had been asked.
+            let window = match &r.window {
+                Some(w) => format!(",\"window\":{}", js(w)),
+                None => String::new(),
+            };
             format!(
-                "{{\"step\":{},\"kind\":{},\"domain\":{},\"op\":{},\"verdict\":{},\"instruction\":{},\"screenshot\":{}{}}}",
+                "{{\"step\":{},\"kind\":{},\"domain\":{},\"op\":{},\"verdict\":{},\"instruction\":{},\"screenshot\":{}{}{}}}",
                 r.index + 1,
                 js(r.kind),
                 js(&r.domain),
@@ -2301,6 +2348,7 @@ pub fn write_manifest(
                 js(r.verdict.as_str()),
                 js(&r.instruction),
                 js(&r.screenshot),
+                window,
                 expect
             )
         })
@@ -4005,6 +4053,7 @@ steps_gui:
             ]
             .into_iter()
             .collect(),
+            window: None,
         };
         let said = Instructor::new().render(&warns).unwrap();
         assert!(said.contains("nothing opened"), "the row is read before the press: {said}");
@@ -4023,6 +4072,7 @@ steps_gui:
             ]
             .into_iter()
             .collect(),
+            window: None,
         };
         assert!(
             Instructor::new().expectation(&lists).is_some(),
@@ -4044,6 +4094,7 @@ steps_gui:
             ]
             .into_iter()
             .collect(),
+            window: None,
         };
         let said = Instructor::new().render(&step).unwrap();
         assert!(said.contains("no badge"), "got: {said}");
@@ -4059,6 +4110,7 @@ steps_gui:
             op: "open-view".to_string(),
             with: [("view".to_string(), serde_yaml::Value::from("overdue"))].into_iter().collect(),
             bind: None,
+            window: None,
         };
         let err = Instructor::new().render(&open).unwrap_err();
         assert!(err.contains("overdue"), "got: {err}");
@@ -4073,6 +4125,7 @@ steps_gui:
             ]
             .into_iter()
             .collect(),
+            window: None,
         };
         let err = Instructor::new().render(&warns).unwrap_err();
         assert!(err.contains("plain"), "got: {err}");
@@ -4093,6 +4146,7 @@ steps_gui:
             ]
             .into_iter()
             .collect(),
+            window: None,
         };
         let err = Instructor::new().render(&step).unwrap_err();
         assert!(err.contains("count"), "got: {err}");
@@ -4106,6 +4160,7 @@ steps_gui:
             domain: Domain::Repo,
             op: "ai-launch-answer".to_string(),
             with: [("answer".to_string(), serde_yaml::Value::from("maybe"))].into_iter().collect(),
+            window: None,
         };
         let err = Instructor::new().render(&step).unwrap_err();
         assert!(err.contains("maybe"), "got: {err}");
@@ -4122,6 +4177,7 @@ steps_gui:
                 op: "ai-launch-consent".to_string(),
                 with: [("answer".to_string(), serde_yaml::Value::from(answer))].into_iter().collect(),
                 bind: None,
+                window: None,
             };
             let err = Instructor::new().render(&step).unwrap_err();
             assert!(err.contains(answer), "got: {err}");
@@ -4138,6 +4194,7 @@ steps_gui:
             op: "group-by".to_string(),
             with: [("axis".to_string(), serde_yaml::Value::from("Medium"))].into_iter().collect(),
             bind: None,
+            window: None,
         };
         let said = Instructor::new().render(&regroup).unwrap();
         assert!(said.contains("Medium"), "the move names the axis to press: {said}");
@@ -4154,7 +4211,7 @@ steps_gui:
             if grouping {
                 with.insert("grouping".to_string(), serde_yaml::Value::from(true));
             }
-            Step::Assert { domain: Domain::Task, op: "carded".to_string(), with }
+            Step::Assert { domain: Domain::Task, op: "carded".to_string(), with, window: None }
         };
         assert!(
             Instructor::new().expectation(&carded(false)).is_some(),
@@ -4188,7 +4245,7 @@ steps_gui:
                     serde_yaml::Value::from("invalid_dimension_required_without_values"),
                 );
             }
-            Step::Action { domain: Domain::Dimension, op: "required".to_string(), with, bind: None }
+            Step::Action { domain: Domain::Dimension, op: "required".to_string(), with, bind: None, window: None }
         };
         let said = Instructor::new().render(&raise("Focus", None, true)).unwrap();
         assert!(said.contains("Focus") && said.contains("turn on"), "got: {said}");
@@ -4207,7 +4264,7 @@ steps_gui:
                     serde_yaml::Value::from("invalid_task_required_dimension"),
                 );
             }
-            Step::Action { domain: Domain::Task, op: "finish-creating".to_string(), with, bind: None }
+            Step::Action { domain: Domain::Task, op: "finish-creating".to_string(), with, bind: None, window: None }
         };
         let held = Instructor::new().render(&finish(true)).unwrap();
         assert!(held.contains("shut") && held.contains("named beside it"), "got: {held}");
@@ -4227,6 +4284,7 @@ steps_gui:
             .into_iter()
             .collect(),
             bind: None,
+            window: None,
         };
         let said = Instructor::new().render(&set).unwrap();
         assert!(said.contains("Medium") && said.contains("print"), "got: {said}");
@@ -4252,7 +4310,7 @@ steps_gui:
             if let Some(code) = refused {
                 with.insert("refused".to_string(), serde_yaml::Value::from(code));
             }
-            Step::Action { domain: Domain::Dimension, op: "rekey".to_string(), with, bind: None }
+            Step::Action { domain: Domain::Dimension, op: "rekey".to_string(), with, bind: None, window: None }
         };
         let axis = Instructor::new().render(&rekey(None, "channel", None)).unwrap();
         assert!(axis.contains("Medium") && axis.contains("channel"), "got: {axis}");
@@ -4275,7 +4333,7 @@ steps_gui:
             if let Some(value) = value {
                 with.insert("value".to_string(), serde_yaml::Value::from(value));
             }
-            Step::Assert { domain: Domain::Dimension, op: "key".to_string(), with }
+            Step::Assert { domain: Domain::Dimension, op: "key".to_string(), with, window: None }
         };
         let exp = Instructor::new().expectation(&read(None)).expect("a key is read, not reviewed");
         assert_eq!(exp.text, "channel");
@@ -4307,8 +4365,9 @@ steps_gui:
             op: "config-set".to_string(),
             with: with(),
             bind: None,
+            window: None,
         };
-        let read = Step::Assert { domain: Domain::Plugin, op: "config".to_string(), with: with() };
+        let read = Step::Assert { domain: Domain::Plugin, op: "config".to_string(), with: with(), window: None };
         for step in [wrote, read] {
             let err = Instructor::new().render(&step).unwrap_err();
             assert!(err.contains("Greenhouse"), "the refusal names what was written: {err}");
@@ -4331,6 +4390,7 @@ steps_gui:
             .into_iter()
             .collect(),
             bind: None,
+            window: None,
         };
 
         for (field, day) in [("due", "due date"), ("start", "start date")] {
@@ -4357,6 +4417,7 @@ steps_gui:
             ]
             .into_iter()
             .collect(),
+            window: None,
         };
         let said = Instructor::new().render(&step).unwrap();
         assert!(said.contains("shows no due_on"), "the absence is what is asked for: {said}");
@@ -4374,6 +4435,7 @@ steps_gui:
             op: "frobnicate".to_string(),
             with: Args::new(),
             bind: None,
+            window: None,
         };
         let err = Instructor::new().render(&step).unwrap_err();
         assert!(err.contains("not yet mapped"), "got: {err}");
@@ -4391,7 +4453,7 @@ steps_gui:
         let outcome = walk(
             &s,
             &dir,
-            |p| {
+            |_, p| {
                 *shots.borrow_mut() += 1;
                 std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
             },
@@ -4421,6 +4483,56 @@ steps_gui:
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// A road that names a window says it to all three: the operator standing at the screen, the tool
+    /// taking the shot, and whoever reads the manifest afterwards. The tool's half is what nothing
+    /// else can recover — two windows of one app are the same app at the same size, so a shot cannot
+    /// be traced back to the window it is of.
+    #[test]
+    fn a_window_a_road_names_reaches_the_operator_the_tool_and_the_manifest() {
+        let s = load(&SCENARIO.replace(
+            "    with: { filter: \"assignee:me-ai status:todo\", target: seed, present: true }",
+            "    with: { filter: \"assignee:me-ai status:todo\", target: seed, present: true }\n    window: \"Amenbo — Talk\"",
+        ));
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-window-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let mut aimed: Vec<Option<String>> = Vec::new();
+        let mut handed: Vec<String> = Vec::new();
+        let outcome = walk(
+            &s,
+            &dir,
+            |window, p| {
+                aimed.push(window.map(str::to_string));
+                std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
+            },
+            |_| Ok(reading("SEED — a card on the me-ai board")),
+            |brief| {
+                handed.push(brief.instruction.to_string());
+                Ok(())
+            },
+        )
+        .expect("walk");
+
+        // The tool is aimed at the named window on the step that named one, and at the app's one
+        // window on the steps that did not — a road says which screen per step, not per run.
+        assert_eq!(aimed, vec![None, None, Some("Amenbo — Talk".to_string())]);
+        // The operator is told where to stand before being told what to do there.
+        assert!(
+            handed[2].starts_with("In the window called \"Amenbo — Talk\": "),
+            "got: {}",
+            handed[2]
+        );
+        assert_eq!(outcome.records[2].window.as_deref(), Some("Amenbo — Talk"));
+
+        let manifest = write_manifest(&dir, &s, &[], &outcome).expect("manifest");
+        let text = std::fs::read_to_string(&manifest).unwrap();
+        assert!(text.contains("\"window\":\"Amenbo — Talk\""), "got: {text}");
+        // And a step that named none carries no window at all, rather than a null saying it was
+        // asked and left blank.
+        assert_eq!(text.matches("\"window\"").count(), 1, "got: {text}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// When the expected title is NOT on the shot, a `present: true` assert fails and reddens the
     /// run — the reading is the whole verdict, not a pixel diff.
     #[test]
@@ -4432,7 +4544,7 @@ steps_gui:
         let outcome = walk(
             &s,
             &dir,
-            |p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| Ok(reading("an empty board with no such card")),
             |_| Ok(()),
         )
@@ -4517,7 +4629,7 @@ steps_gui:
         let outcome = walk(
             &s,
             &dir,
-            |p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
+            |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| Ok(reading("SCENARIO — nobodv holds it")),
             |_| Ok(()),
         )
@@ -4539,7 +4651,7 @@ steps_gui:
         let s = load(SCENARIO);
         let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-fail-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        let err = walk(&s, &dir, |_| Err("no screen".to_string()), |_| Ok(reading("")), |_| Ok(()))
+        let err = walk(&s, &dir, |_, _| Err("no screen".to_string()), |_| Ok(reading("")), |_| Ok(()))
             .unwrap_err();
         assert!(err.contains("step 1") && err.contains("no screen"), "got: {err}");
         let _ = std::fs::remove_dir_all(&dir);
@@ -4558,7 +4670,7 @@ steps_gui:
         let outcome = walk(
             &s,
             &dir,
-            |p| {
+            |_, p| {
                 *shots.borrow_mut() += 1;
                 std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
             },
@@ -4595,7 +4707,7 @@ steps_gui:
         let err = walk(
             &s,
             &dir,
-            |p| {
+            |_, p| {
                 *shots.borrow_mut() += 1;
                 std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
             },

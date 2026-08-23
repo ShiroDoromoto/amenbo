@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import type { RefTargetDto } from "../bindings/bindings";
 import { TopBar } from "./TopBar";
 import { useNavHistory, NO_SELECTION } from "./navHistory";
 import { isBlankSpaceClose } from "./outsideClose";
@@ -264,6 +265,30 @@ export function AppShell() {
       unlisten?.();
     };
   }, [navTo]);
+
+  // A ref clicked in a pane of the talk window. The host has already brought this window forward and
+  // settled what was clicked (`crate::windows::show_ref`); what is left is the move this shell alone
+  // knows how to make, and it is the same one an in-body ref makes — down to the unsaved-input
+  // confirmation, which a ref arriving from the other window has no more right to walk past than one
+  // clicked here.
+  useEffect(() => {
+    if (!inTauri()) return;
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) => listen<RefTargetDto>("ref-activated", ({ payload }) => {
+        if (payload.kind === "task") void selectTask(payload.id);
+        else void selectDecision(payload.id);
+      }))
+      .then((un) => {
+        if (disposed) un();
+        else unlisten = un;
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [selectTask, selectDecision]);
 
   // The app menu's "check for updates" click arrives as a Tauri event (menu.rs → lib.rs). Run the fresh check and let
   // the outcome drive the feedback note; `available` clears the note because the UpdateBanner shows the offer instead.

@@ -814,9 +814,16 @@ pub struct SearchResultDto {
     pub(crate) total_matched: usize,
 }
 
-/// What a reference in a body resolves to (`kind` — task or decision — and the entity's id). The GUI
-/// branches on it to decide which detail pane a body link opens.
-#[derive(Serialize, TS)]
+/// What a reference resolves to (`kind` — task or decision — and the entity's id). The GUI branches
+/// on it to decide which detail pane a link opens.
+///
+/// It is the answer to `resolve_ref` and the payload of the board's `ref-activated` event, which are
+/// the two ways a ref becomes a destination: one clicked in a body, and one clicked in a pane of the
+/// talk window (`crate::windows::show_ref`). The same shape for both on purpose — a ref that came
+/// from the other window is not a second kind of destination, and giving it one would be an invitation
+/// for the two to drift over what a click opens.
+// Clone because Tauri's `emit` takes the payload by value and may hand it to more than one listener.
+#[derive(Clone, Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct RefTargetDto {
@@ -2095,3 +2102,4 @@ pub struct PtyChunkDto {
     /// The chunk, base64-encoded.
     pub(crate) base64: String,
 }
+

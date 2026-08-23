@@ -3362,26 +3362,38 @@ pub async fn run_export(window: tauri::Window, path: String) -> Result<ExportRep
     })
 }
 
-/// Raise an OS notification when something arrives in the inbox. macOS delivers it ourselves through
-/// UNUserNotificationCenter, Windows through notify-rust (with the click wired to inbox navigation),
-/// and Linux through `tauri-plugin-notification` (D-Bus). If the OS drops it — permission not
-/// granted, say — that is not fatal (the app has no sound of its own; the arrival sound is the OS
-/// notification's).
+/// Raise an OS notification. macOS delivers it ourselves through UNUserNotificationCenter, Windows
+/// through notify-rust, and Linux through `tauri-plugin-notification` (D-Bus). If the OS drops it —
+/// permission not granted, say — that is not fatal (the app has no sound of its own; the sound is the
+/// OS notification's).
+///
+/// `kind` is what the toast is about, and it decides where a click lands: the inbox is on the board,
+/// and a turn is in the terminal, which may be a window of its own (`crate::notify`). An unknown word
+/// is read as an arrival, which is where this started.
 #[tauri::command]
 #[cfg_attr(any(target_os = "macos", target_os = "windows"), allow(unused_variables))]
-pub fn notify_os(app: tauri::AppHandle, title: String, body: String) -> Result<(), String> {
+pub fn notify_os(
+    app: tauri::AppHandle,
+    title: String,
+    body: String,
+    kind: String,
+) -> Result<(), String> {
+    let kind = crate::notify::Kind::parse(&kind);
     #[cfg(target_os = "macos")]
     {
-        crate::macos_notify::send(&title, &body);
+        crate::macos_notify::send(&title, &body, kind);
         Ok(())
     }
     #[cfg(target_os = "windows")]
     {
-        crate::windows_notify::send(&app, title, body);
+        crate::windows_notify::send(&app, title, body, kind);
         Ok(())
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
+        // The plugin's toast carries no click of ours, so the kind reaches no further here. What it
+        // decides — where a click lands — is a thing this platform does not offer.
+        let _ = kind;
         use tauri_plugin_notification::NotificationExt;
         app.notification()
             .builder()

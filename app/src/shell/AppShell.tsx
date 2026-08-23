@@ -33,7 +33,8 @@ import { TaskComposePane } from "../screens/TaskComposePane";
 import { dataAdapter } from "../mock/adapter";
 import { checkForUpdatesFresh, inTauri, subscribe } from "../core/snapshot";
 import { type Face, getWindowShape, setWindowShape, type WindowShape } from "../core/windowShape";
-import { badgeUp, looked, NO_ATTENTION, turnCame } from "./terminalBadge";
+import { badgeUp, knock, looked, NO_ATTENTION, turnCame } from "./terminalBadge";
+import { notifyTurn } from "../core/osNotify";
 import { invoke } from "../core/ipc";
 import { confirmDialog } from "../core/dialog";
 import { clampRightpaneWidth, getRightpaneWidth, setRightpaneWidth } from "../core/rightpaneWidth";
@@ -228,7 +229,14 @@ export function AppShell() {
   const facing = useRef(face);
   facing.current = face;
   const noteWaiting = useCallback((waiting: boolean) => {
-    setAttention((a) => turnCame(a, waiting, facing.current === "terminal"));
+    setAttention((was) => {
+      const now = turnCame(was, waiting, facing.current === "terminal");
+      // The badge going up is also the moment to knock on the OS: the same question — a turn came up
+      // while the person was not looking at the terminal — answered on the screen for whoever is at it
+      // and off the screen for whoever is not (`./terminalBadge`).
+      if (knock(was, now)) void notifyTurn();
+      return now;
+    });
   }, []);
   // Every way onto the terminal face is being shown what is standing there — the segment, the other
   // window closing, a window that could not be built — so the badge is spent here rather than at each
@@ -362,7 +370,15 @@ export function AppShell() {
     let unlisten: (() => void) | undefined;
     let disposed = false;
     void import("@tauri-apps/api/event")
-      .then(({ listen }) => listen("notification-activated", () => navTo({ type: "view", id: "inbox" })))
+      // Where a click on a toast lands: what it was about says which face, and the host has already
+      // raised the window that face is in — with the terminal split out that is a different window,
+      // and this one cannot raise it (`crate::notify`).
+      .then(({ listen }) =>
+        listen<string>("notification-activated", ({ payload }) => {
+          if (payload === "turn") selectFace("terminal");
+          else navTo({ type: "view", id: "inbox" });
+        }),
+      )
       .then((un) => {
         if (disposed) un();
         else unlisten = un;

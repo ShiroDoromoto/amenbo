@@ -496,6 +496,8 @@ export const vi: Translation = {
     "face.splitOut": "Mở trong cửa sổ riêng",
     "face.merge": "Trở lại một cửa sổ",
     "face.end": "Kết thúc terminal trong khung này",
+    "face.turnTitle": "Amenbo — đến lượt bạn",
+    "face.turnBody": "Một terminal đang đợi bạn.",
     "face.ended": "Chương trình trong terminal này đã kết thúc.",
     "face.rail": "Khung",
     "face.paneCount": "Số khung trên màn hình",

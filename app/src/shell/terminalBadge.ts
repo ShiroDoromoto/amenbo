@@ -48,3 +48,17 @@ export function looked(attention: Attention): Attention {
 export function badgeUp(attention: Attention): boolean {
   return attention.waiting && !attention.shown;
 }
+
+/**
+ * Whether this move is also the moment to knock on the OS.
+ *
+ * It is the badge going up and nothing else. The two answer the same question — a turn came up while
+ * the person was not looking at the terminal — and they are the same question deliberately: the badge
+ * is what a person sees when they are at the screen, and the toast is what reaches them when they are
+ * not. Reading them off one state is what keeps them from ever disagreeing, and what gives the toast
+ * the badge's rule for free: **once per turn**, and never for a turn that came up while the terminal
+ * was the face being looked at.
+ */
+export function knock(was: Attention, now: Attention): boolean {
+  return badgeUp(now) && !badgeUp(was);
+}

@@ -493,6 +493,8 @@ export const hi: Translation = {
     "face.splitOut": "अलग विंडो में खोलें",
     "face.merge": "एक ही विंडो में लौटें",
     "face.end": "इस पैन का टर्मिनल समाप्त करें",
+    "face.turnTitle": "Amenbo — अब आपकी बारी",
+    "face.turnBody": "एक टर्मिनल आपका इंतज़ार कर रहा है।",
     "face.ended": "इस टर्मिनल का प्रोग्राम समाप्त हो गया।",
     "face.rail": "पैन",
     "face.paneCount": "स्क्रीन पर पैन",

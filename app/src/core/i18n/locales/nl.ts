@@ -493,6 +493,8 @@ export const nl: Translation = {
     "face.splitOut": "In een apart venster openen",
     "face.merge": "Terug naar één venster",
     "face.end": "De terminal in dit deelvenster beëindigen",
+    "face.turnTitle": "Amenbo — jij bent",
+    "face.turnBody": "Een terminal wacht op je.",
     "face.ended": "Het programma in deze terminal is gestopt.",
     "face.rail": "Deelvensters",
     "face.paneCount": "Deelvensters op het scherm",

@@ -522,6 +522,8 @@ export const ru: Translation = {
     "face.splitOut": "Открыть в отдельном окне",
     "face.merge": "Вернуть в одно окно",
     "face.end": "Завершить терминал в этой панели",
+    "face.turnTitle": "Amenbo — ваш ход",
+    "face.turnBody": "Терминал вас ждёт.",
     "face.ended": "Программа в этом терминале завершилась.",
     "face.rail": "Панели",
     "face.paneCount": "Панелей на экране",

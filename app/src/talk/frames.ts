@@ -18,8 +18,9 @@ import { invoke } from "../core/ipc";
 /** Who is naming a frame. Ranked in the store, lowest first. */
 export type NamedBy = "typed" | "session" | "person";
 
-/** The frame the talk window's one pane is. Panes are laid out and remembered by `AMB-T-3607` and
- *  `AMB-T-3609`; until then there is one frame, and it needs a name that keeps still across runs. */
+/** The frame the split-out window's one pane is. That window is a single pane by construction
+ *  (`AMB-D-753`), so it is always the first of the arrangement's places; the board's face has the
+ *  rest of them (`./layout`), and keeping an arrangement across runs is `AMB-T-3607`'s. */
 export const ONLY_FRAME = "1";
 
 /** Frame → what it is called. */

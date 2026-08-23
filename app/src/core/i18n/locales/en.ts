@@ -534,6 +534,12 @@ const ui = {
   "face.splitOut": "Open in a separate window",
   "face.merge": "Back to one window",
   "face.ended": "The program in this terminal has exited.",
+  "face.rail": "Panes",
+  "face.paneCount": "Panes on screen",
+  "face.pages": "Pages",
+  "face.page": "Page {n}",
+  "face.open": "Open a terminal here",
+  "face.rename": "Rename this pane",
   "face.needsYou": "waiting on you",
   // The file face beside the terminal's pane: what changed in the project's folder lately, and
   // the folder itself, folded. What a file turns out not to be is said in its own words — a

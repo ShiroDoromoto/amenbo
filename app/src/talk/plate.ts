@@ -45,6 +45,10 @@ export type Plate = {
  * snapshot, and the split-out window learns it from a question it asks as it comes up, so neither can
  * hand over a settled answer at the moment the pane is built.
  *
+ * `frame` is which of the arrangement's places this pane is in (`./layout`), because the name on the
+ * row belongs to the place rather than to the session (`./frames`). The split-out window is one pane
+ * and has only ever had one frame, so it takes the default.
+ *
  * `onWaiting` is told whenever the answer to "is a turn standing in this pane" changes. It is said
  * from here because the session map is here, and the one caller who wants it is the board: with the
  * terminal behind the other face, this label cannot be seen at all, so the shell puts a badge on the
@@ -56,6 +60,7 @@ export function mountPlate(
   host: HTMLElement,
   lang: () => Lang = currentLang,
   onWaiting: (waiting: boolean) => void = () => {},
+  frame: string = ONLY_FRAME,
 ): Plate {
   const draw = mountNameplate(host);
 
@@ -86,7 +91,7 @@ export function mountPlate(
     changeover = next;
     draw(
       {
-        name: names.get(ONLY_FRAME) ?? null,
+        name: names.get(frame) ?? null,
         now,
         say: sayOf(held, running === null ? undefined : sessions.get(running)),
       },

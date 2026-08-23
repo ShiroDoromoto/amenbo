@@ -25,7 +25,7 @@
 import type { PtySessionDto, WakeCandidateDto, WakeDto } from "../bindings/bindings";
 import { errText, type Lang, t, tf } from "../core/i18n";
 import { invoke } from "../core/ipc";
-import { mountTerminal, type PaneEvents } from "./terminal";
+import { mountTerminal, type PaneEvents, type PaneStart } from "./terminal";
 
 /**
  * Fill `host` with the frame — the pane, and whatever has to be put to the reader before or after
@@ -34,12 +34,17 @@ import { mountTerminal, type PaneEvents } from "./terminal";
  * `on` is passed straight through to whatever pane is running: this module decides what starts, not
  * what is heard. `paneClass` is the class the terminal's box is drawn with, because the two faces
  * that draw a pane style theirs differently and neither's box is this module's to name.
+ *
+ * `start` is which terminal this frame is for. A slot that already had one takes it up again and asks
+ * nothing (`./layout`); a folder given here is where the question is put and where a started terminal
+ * opens, which is what keeps one page's panes in one project.
  */
 export async function mountAgentFrame(
   host: HTMLElement,
   lang: Lang,
   on: PaneEvents,
   paneClass: string,
+  start: PaneStart = {},
 ): Promise<() => void> {
   const frame = document.createElement("div");
   frame.className = "agent__frame";
@@ -67,10 +72,16 @@ export async function mountAgentFrame(
   const look = async () => {
     clear();
     const running = await invoke<PtySessionDto[]>("pty_sessions").catch(() => [] as PtySessionDto[]);
-    if (running.length === 1) return open(null);
+    // This slot's own terminal, where it still has one. Otherwise a single open session, and only for
+    // the slot that may take one up: with several panes on the screen, every one of them adopting the
+    // one running terminal would leave the rest empty and the person short of the panes they asked for.
+    const mine = start.session !== null && start.session !== undefined
+      ? running.some((one) => one.session === start.session)
+      : start.adopt !== false && running.length === 1;
+    if (mine) return open(null, start);
     frame.append(said("agent__looking", t("talk.searching", lang)));
     try {
-      wake = await invoke<WakeDto>("wake_probe", { folder: null });
+      wake = await invoke<WakeDto>("wake_probe", { folder: start.cwd ?? null });
     } catch (e: unknown) {
       frame.replaceChildren(said("agent__failed", errText(e, lang)));
       return;
@@ -82,8 +93,8 @@ export async function mountAgentFrame(
 
   /** Put up a pane, replacing whatever the frame held. `agent` is what a started terminal runs; a
    *  pane that adopts one is given none, and the running program is whatever it already was. */
-  const open = (agent: string | null) => {
-    const folder = wake?.folder ?? null;
+  const open = (agent: string | null, take: PaneStart = { adopt: false }) => {
+    const folder = wake?.folder ?? start.cwd ?? null;
     clear();
     const mine = showing;
     const pane = document.createElement("div");
@@ -96,7 +107,7 @@ export async function mountAgentFrame(
         if (mine === showing) frame.append(row(agent));
       },
     };
-    void mountTerminal(pane, events, { cwd: folder, agent })
+    void mountTerminal(pane, events, { ...take, cwd: folder, agent })
       .then((dispose) => {
         if (mine === showing) close = dispose;
         else dispose();

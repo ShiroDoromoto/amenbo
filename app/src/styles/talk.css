@@ -1,7 +1,7 @@
 /* The talk window's own page — the window the terminal is split out into (`AMB-D-753`). A bar with
    the way back to one window, then anything standing that has to be said about the terminal, and the
-   pane filling what they leave: the frame that will hold several panes, and the rail beside them, are
-   not here yet. */
+   pane filling what they leave. One pane and no more: pages, slots and the rail beside them belong to
+   the board's face, which is where several panes are watched at once (../talk/layout.ts). */
 .talk {
   display: flex;
   flex-direction: column;

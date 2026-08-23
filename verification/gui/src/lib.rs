@@ -1207,8 +1207,12 @@ impl Instructor {
             // A line typed into the pane and sent. It is typed rather than pasted because what is
             // under test is a terminal: keys are what a terminal is driven by, and a line that
             // arrived some other way would be evidence of a path nobody walks.
+            //
+            // *Which* pane has to be said. The face shows a page of slots, and the ones nothing has
+            // been started in offer to open a terminal rather than holding one — a reader who clicked
+            // the wrong box would start a second shell and type this line into it.
             (Domain::Terminal, "type-line") => format!(
-                "Click into the terminal pane, type \"{}\" and press return. The shell will not know the command — what the line is for is being on the screen, and being the name the pane takes.",
+                "Click into the pane that has a terminal running in it — the one the face came up with, not a slot offering to open one — then type \"{}\" and press return. The shell will not know the command — what the line is for is being on the screen, and being the name the pane takes.",
                 req(with, "text")?
             ),
             // The two moves between one window and two. Named by what each does rather than by the
@@ -1956,7 +1960,7 @@ impl Instructor {
             // the absent half is read with the ledger up, where the pane is hidden rather than gone.
             (Domain::Terminal, "pane") => match present(with) {
                 true => format!(
-                    "Confirm the terminal pane still shows the line \"{}\" — the same terminal, drawn here.",
+                    "Confirm the pane running a terminal still shows the line \"{}\" — the same terminal, drawn here.",
                     req(with, "shows")?
                 ),
                 false => format!(

@@ -2,9 +2,10 @@
 //
 // The pane is a drawing of a session, not the session. A terminal belongs to the process, so a pane
 // can be taken away and put up again — in the window the user split it out into, back in the board
-// when they folded it, or in the interface a language change rebuilt around it — and the program
-// inside it never learns that any of it happened (`AMB-D-753`). What a pane cannot carry across is
-// the emulator's scrollback, so what it draws first is the tail the host kept (`crate::pty`).
+// when they folded it, on the page they turned back to (`./layout`), or in the interface a language
+// change rebuilt around it — and the program inside it never learns that any of it happened
+// (`AMB-D-753`). What a pane cannot carry across is the emulator's scrollback, so what it draws first
+// is the tail the host kept (`crate::pty`).
 //
 // Nothing here interprets what crosses. A chunk of output arrives base64-encoded because the bytes
 // are not text — an escape sequence is split wherever the host's read ended, and a multi-byte
@@ -126,28 +127,49 @@ function refit(fit: FitAddon, host: HTMLElement): boolean {
 }
 
 /**
- * Put a terminal in front of this pane: the one already running, if there is one, else a new one.
+ * Which terminal this pane is to draw, as the thing putting it up knows it.
  *
- * A pane comes up for two reasons it cannot tell apart from the inside — the user asked for a
- * terminal, or the pane it already had moved. Asking the host what is open answers both, and is the
- * only thing that can: a webview that went away took its emulator with it and left nothing behind to
- * be asked.
+ * A pane comes up for reasons it cannot tell apart from the inside — a person asked for a terminal
+ * here, or the pane that had one moved, or the interface was rebuilt around a running session. What
+ * the window holds is which slot had what, so it says; a pane left to work it out for itself would
+ * have to guess, and there is nothing to guess from.
  */
-async function draw(term: Terminal): Promise<PtySessionDto> {
+export type Place = {
+  /** The terminal this slot already had. Picked up again where it is still running. */
+  readonly session?: string | null;
+  /** Whether a terminal running with no pane drawing it may be taken up here. It is how a session
+   *  comes back from the window it was split out into, so exactly one pane may offer: the slot that
+   *  is the terminal's home when the app is one window (`AMB-D-753`). */
+  readonly adopt?: boolean;
+  /** The folder to start a terminal in, where one has to be started. Panes on one page are opened in
+   *  one folder, which is what keeps a screen to a single project (`./layout`). */
+  readonly cwd?: string | null;
+};
+
+/** Put a terminal in front of this pane: the one it is meant to have, else a new one. */
+async function draw(term: Terminal, place: Place): Promise<PtySessionDto> {
   const open = await invoke<PtySessionDto[]>("pty_sessions").catch(() => [] as PtySessionDto[]);
-  // One open session is the only count that names one without guessing. There is a single terminal in
-  // the app today; when there are several, which pane draws which is the slots' to say and not this
-  // (`AMB-T-3609`).
-  if (open.length === 1) {
+  // The slot's own terminal where it has one. Otherwise, and only where this pane is the one that may:
+  // a single open session is the only count that names one without guessing.
+  const want = place.session
+    ? open.find((one) => one.session === place.session)
+    : place.adopt !== false && open.length === 1
+      ? open[0]
+      : undefined;
+  if (want) {
     try {
-      const replay = await invoke<string>("pty_attach", { session: open[0].session });
+      const replay = await invoke<string>("pty_attach", { session: want.session });
       if (replay) term.write(decode(replay));
-      return open[0];
+      return want;
     } catch {
       // It ended between the two calls. Opening one is what the pane was there to do anyway.
     }
   }
-  return await invoke<PtySessionDto>("pty_open", { cwd: null, cols: term.cols, rows: term.rows });
+  return await invoke<PtySessionDto>("pty_open", {
+    cwd: place.cwd ?? null,
+    cols: term.cols,
+    rows: term.rows,
+  });
 }
 
 /**
@@ -159,13 +181,18 @@ async function draw(term: Terminal): Promise<PtySessionDto> {
  * full-screen interface reflows to.
  *
  * `on` is how the window is told what happened here — the session running in the pane, what the agent
- * said about it, and the name the pane's frame should carry.
+ * said about it, and the name the pane's frame should carry. `place` is the other direction: which
+ * terminal this slot is to draw, which only the window holding the arrangement knows.
  *
  * What comes back takes the pane away and **leaves the terminal running** for whatever draws it next.
  * There is no other way to end a pane, because there is no way yet to end a terminal: nothing in the
  * interface says "close this", and a pane going away is always the pane moving (`AMB-T-3632`).
  */
-export async function mountTerminal(host: HTMLElement, on: PaneEvents): Promise<() => void> {
+export async function mountTerminal(
+  host: HTMLElement,
+  on: PaneEvents,
+  place: Place = {},
+): Promise<() => void> {
   const term = new Terminal({
     fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--font-mono").trim() ||
       "ui-monospace, monospace",
@@ -234,7 +261,7 @@ export async function mountTerminal(host: HTMLElement, on: PaneEvents): Promise<
     else if (payload.session === session) take(payload);
   });
 
-  const running = await draw(term);
+  const running = await draw(term, place);
   session = running.session;
   // The host's own answer for when it began, not the moment this pane went up: a session that moved
   // windows started when it started, and a pane that said otherwise would have the window telling the

@@ -44,8 +44,16 @@ export type Plate = {
  * `lang` is asked each time rather than taken once: the board knows the reader's language from the
  * snapshot, and the split-out window learns it from a question it asks as it comes up, so neither can
  * hand over a settled answer at the moment the pane is built.
+ *
+ * `frame` is which of the arrangement's places this pane is in (`./layout`), because the name on the
+ * row belongs to the place rather than to the session (`./frames`). The split-out window is one pane
+ * and has only ever had one frame, so it takes the default.
  */
-export function mountPlate(host: HTMLElement, lang: () => Lang = currentLang): Plate {
+export function mountPlate(
+  host: HTMLElement,
+  lang: () => Lang = currentLang,
+  frame: string = ONLY_FRAME,
+): Plate {
   const draw = mountNameplate(host);
 
   // What the pane's session has said, and what the ledger says it is holding. Both are gone when the
@@ -65,7 +73,7 @@ export function mountPlate(host: HTMLElement, lang: () => Lang = currentLang): P
     changeover = next;
     draw(
       {
-        name: names.get(ONLY_FRAME) ?? null,
+        name: names.get(frame) ?? null,
         now,
         say: sayOf(held, running === null ? undefined : sessions.get(running)),
       },

@@ -66,9 +66,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .shell__header { grid-area: header; min-width: 0; }
 
 /* ---------- the terminal face ---------- */
-/* The terminal as the board's window draws it: a bar with the way out to a window of its own, and
-   under it the pane. The talk window draws the same two the other way round (styles/talk.css) — the
-   control there is the way back. */
+/* The terminal as the board's window draws it: a bar with the way out to a window of its own and the
+   controls for what is on screen, then the rail of panes and the page of slots beside it
+   (../talk/layout.ts). The window a terminal is split out into is one pane and draws neither
+   (styles/talk.css) — the control there is the way back. */
 .shell__terminal { min-height: 0; }
 .termface {
   height: 100%; min-height: 0;
@@ -104,6 +105,118 @@ button { font: inherit; color: inherit; cursor: pointer; }
   font-family: var(--font-mono);
   font-size: var(--fs-sm);
   white-space: pre-wrap;
+}
+
+/* The controls that pick what is on screen: how many panes, and which page. Both are rows of every
+   choice with the one in force marked, rather than a control that says the next step — which of them
+   is on is the thing being chosen between, and a reader should not have to press to find out.
+   They are drawn as two different kinds of control on purpose: side by side they are two rows of
+   digits, and a reader who cannot tell which row is which presses one to find out. The count is one
+   joined control — the choices are exclusive steps of the same thing — and the pages are separate
+   places to go. */
+.termface__counts {
+  display: flex; margin-left: var(--s-2);
+  border: 1px solid var(--c-border); border-radius: var(--r-md); overflow: hidden;
+}
+.termface__count {
+  min-width: 28px;
+  background: var(--c-surface-sunken); border: 0; border-left: 1px solid var(--c-border);
+  padding: var(--s-1) var(--s-2);
+  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1.6;
+}
+.termface__count:first-child { border-left: 0; }
+.termface__count--on { background: var(--c-accent); color: #fff; }
+
+.termface__pages {
+  display: flex; gap: var(--s-1);
+  padding-left: var(--s-3); border-left: 1px solid var(--c-border);
+}
+.termface__page {
+  min-width: 26px; height: 26px;
+  background: transparent; border: 1px solid var(--c-border); border-radius: 50%;
+  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
+}
+.termface__page--on { background: var(--c-accent); border-color: var(--c-accent); color: #fff; }
+
+/* The rail and the panes, side by side. The rail keeps its width and the panes take what is left:
+   the panes are what the face is for, and a list of them that grew with their names would take the
+   room from the thing it is a list of. */
+.termface__body { flex: 1; min-height: 0; display: flex; gap: var(--s-2); }
+
+/* The page: the slots of it, laid out as one row, two across, or four in a square. The grid is
+   written per count rather than flowing, because a slot is a fixed place — panes that reflowed as
+   one closed would move the pane a reader was watching. */
+.termface__page-grid {
+  flex: 1; min-width: 0; min-height: 0;
+  display: grid; gap: var(--s-2);
+}
+.termface__page-grid--1 { grid-template: 1fr / 1fr; }
+.termface__page-grid--2 { grid-template: 1fr / 1fr 1fr; }
+.termface__page-grid--4 { grid-template: 1fr 1fr / 1fr 1fr; }
+
+/* One slot. It holds the label row and the pane under it, and it is a box whether or not there is a
+   terminal in it: an empty slot is a place on this page, not a gap. */
+.slot { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+.slot--focused .termface__pane { border-color: var(--c-accent); }
+/* A slot with nothing started in it. It fills its place and says what pressing it does — the whole
+   of what an empty frame has to offer (`AMB-T-3607` gives it back what it was). */
+.slot--empty, .slot__open {
+  flex: 1; min-height: 0;
+  border: 1px dashed var(--c-border); border-radius: var(--r-md);
+  background: transparent; color: var(--c-text-muted); font-size: var(--fs-sm);
+}
+.slot--empty:hover, .slot__open:hover { color: var(--c-text); border-color: var(--c-text-muted); }
+
+/* The list of panes beside them. Rows are grouped by the page they are on, because picking one moves
+   the screen to that page and a reader has to see that coming. */
+.rail {
+  flex: 0 0 auto; width: 160px; min-height: 0;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--s-2);
+  padding-right: var(--s-2);
+  border-right: 1px solid var(--c-border);
+}
+.rail__page { display: flex; flex-direction: column; gap: 2px; }
+.rail__pagename {
+  color: var(--c-text-muted); font-size: var(--fs-xs); text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.rail__row {
+  display: flex; align-items: center; gap: var(--s-1);
+  padding: var(--s-1) var(--s-2); border-radius: var(--r-md);
+  background: transparent; border: 1px solid transparent;
+  color: var(--c-text); font-size: var(--fs-sm); text-align: left;
+}
+.rail__row:hover { background: var(--c-surface-sunken); }
+/* The pane being worked in. A bar down its edge rather than a box round it: a full border on a row
+   this size reads as a field waiting to be typed into, which is what the row *becomes* on a
+   double-click and must not look like before one. */
+.rail__row--focused {
+  background: var(--c-surface-sunken);
+  border-left-color: var(--c-accent); border-left-width: 3px;
+  padding-left: calc(var(--s-2) - 2px);
+}
+.rail__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A frame with nothing running in it. A dot and not a word: the row is a place, and that it is empty
+   is a smaller thing than what it is called. */
+.rail__idle { color: var(--c-text-muted); }
+.rail__slot { height: var(--s-4); }
+.rail__rename {
+  padding: var(--s-1) var(--s-2); border-radius: var(--r-md);
+  border: 1px solid var(--c-accent); background: var(--c-surface);
+  color: var(--c-text); font-size: var(--fs-sm); width: 100%;
+}
+
+/* One pane, or a window too narrow for three things across it: the rail stops being a column and
+   becomes something opened when it is wanted. It sits over the panes rather than beside them,
+   because the reason it is a drawer is that there is no room beside them. */
+.termface--drawers .termface__body { position: relative; }
+.termface__drawer {
+  position: absolute; inset: 0 auto 0 0; z-index: 2;
+  display: flex;
+  background: var(--c-surface); border-radius: var(--r-md);
+  box-shadow: var(--shadow-md);
+  padding: var(--s-2);
 }
 
 /* ---------- the band across the top of the app ---------- */

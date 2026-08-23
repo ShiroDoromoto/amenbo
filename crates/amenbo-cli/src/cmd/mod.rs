@@ -19,6 +19,7 @@ pub(crate) mod place;
 pub(crate) mod plugin;
 pub(crate) mod premise;
 pub(crate) mod project;
+pub(crate) mod session;
 pub(crate) mod setup;
 pub(crate) mod status;
 pub(crate) mod task;

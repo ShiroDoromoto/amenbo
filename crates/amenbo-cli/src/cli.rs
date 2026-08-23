@@ -336,6 +336,24 @@ pub enum Command {
         stdin: bool,
     },
 
+    /// The **surface layer**: what you say about the session you are running in, inside the talk window's
+    /// terminal (`AMB-D-749`). It moves the pane on the person's screen and writes to no store — nothing
+    /// said here outlives the window, and every verb of it **fails outside one**, loudly, rather than
+    /// answering "ok" where nothing was shown.
+    ///
+    /// Hidden because it is not a command for every place `amenbo` runs: `--help` is read in terminals
+    /// this vocabulary does not exist in, and `agent --json` is read in all of them. The canon that
+    /// teaches it is `session --json`, which is inside the window, where it can be used.
+    ///
+    /// It declares no `--actor`: the facet says who is writing to the store, and this writes to none.
+    #[command(hide = true)]
+    Session {
+        /// A verb of the layer. With none, the canon is printed — the vocabulary and what is owed
+        /// (`--json` for the machine-readable shape).
+        #[command(subcommand)]
+        sub: Option<SessionCmd>,
+    },
+
     /// The entry point Amenbo's own `pre-commit` hook calls — it lints the staged diff, the same as a bare
     /// `lint`. Hidden because it exists for the hook, not the hand: the managed block names this fixed line so
     /// the hook's behaviour can grow in later versions without every installed hook being rewritten.
@@ -958,6 +976,40 @@ pub enum HardEraseCmd {
         /// read the replacement body from this file instead of --body / stdin
         #[arg(long, conflicts_with = "body")]
         body_file: Option<String>,
+    },
+}
+
+/// The verbs of the surface layer (`session`). Two are owed — `waiting` and `finished` say the things
+/// nothing outside the pane can find out (`AMB-D-748`) — and the rest are offered.
+#[derive(Subcommand, Debug)]
+pub enum SessionCmd {
+    /// Name this pane. The name sticks to the frame rather than to what runs in it
+    Name {
+        /// the name to show on the pane
+        text: String,
+    },
+    /// A line about what you are doing now, shown on the pane's label
+    Note {
+        /// the line to show
+        text: String,
+    },
+    /// A person's turn has come. Say why in the same breath — the reason is what they read
+    Waiting {
+        /// why their turn has come
+        text: String,
+    },
+    /// The work is done. Say what came of it
+    Finished {
+        /// what came of it
+        text: String,
+    },
+    /// Point at something worth opening — a file, a task, a decision, a URL — and say why
+    Point {
+        /// what to point at (a path, an `AMB-` ref, or a URL)
+        target: String,
+        /// why it is worth opening
+        #[arg(long)]
+        why: String,
     },
 }
 

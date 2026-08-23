@@ -71,6 +71,10 @@ pub enum CliErrorCode {
     SyncGap,
     /// A road out of this store could not be walked — the snapshot could not be streamed.
     SyncError,
+    /// A verb of the surface layer was typed outside the talk window's terminal, where the session it
+    /// speaks about does not exist (`AMB-D-749`). It is a code of its own, and non-zero, because the
+    /// alternative — a quiet success — would leave the caller believing it had spoken.
+    SessionOutsideSurface,
 }
 
 impl CliErrorCode {
@@ -91,6 +95,7 @@ impl CliErrorCode {
             CliErrorCode::AiGuardrail => "ai_guardrail",
             CliErrorCode::SyncGap => "sync_gap",
             CliErrorCode::SyncError => "sync_error",
+            CliErrorCode::SessionOutsideSurface => "session_outside_surface",
         }
     }
 
@@ -112,6 +117,7 @@ impl CliErrorCode {
         CliErrorCode::AiGuardrail,
         CliErrorCode::SyncGap,
         CliErrorCode::SyncError,
+        CliErrorCode::SessionOutsideSurface,
     ];
 }
 
@@ -335,6 +341,31 @@ impl CliError {
             } else {
                 format!("Pass a folder outside that tree, or bind this subdirectory on purpose with `{cmd} bind --project <name or id> --dir <path> --force`.")
             }),
+            exit: 1,
+        }
+    }
+
+    /// The surface layer, typed where it does not exist: no talk-window terminal handed this process a
+    /// session ([`amenbo_core::session::SESSION_VAR`]) and a place to leave statements in
+    /// ([`amenbo_core::session::DIR_VAR`]), so there is no pane for one to reach.
+    ///
+    /// Refusing is the whole point rather than a limitation (`AMB-D-749`). Every other answer available
+    /// here is a lie: accepting the statement and dropping it would tell the caller it had spoken, and it
+    /// would stop trying while the person's screen never changed. So the failure is loud, carries a code
+    /// of its own, and exits non-zero.
+    ///
+    /// The hint names no way in, because there is none to name: a session is the terminal it runs in, and
+    /// the way to have one is for a person to open a pane.
+    pub fn session_outside_surface() -> CliError {
+        CliError {
+            code: CliErrorCode::SessionOutsideSurface.as_str(),
+            message: format!(
+                "`{} session` speaks about the terminal it is running in, and this is not one of Amenbo's: no session was named to this process. Nothing was recorded.",
+                Paths::command_name()
+            ),
+            hint: Some(
+                "These verbs exist inside a pane of Amenbo's talk window and nowhere else — there is no pane here for one to reach, and no flag that makes one. What is true beyond this terminal goes in the store instead: a task's status, a comment, a decision.".to_string()
+            ),
             exit: 1,
         }
     }
@@ -766,6 +797,7 @@ mod tests {
             "ai_guardrail",
             "sync_gap",
             "sync_error",
+            "session_outside_surface",
         ]);
         let actual = set(CliErrorCode::ALL.iter().map(|c| c.as_str()));
         assert_eq!(actual, expected, "the full set of CLI error codes does not match the contract");

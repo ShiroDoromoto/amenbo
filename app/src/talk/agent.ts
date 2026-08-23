@@ -185,6 +185,10 @@ export async function mountAgentFrame(
             return;
           }
           folder = chosen;
+          // Said now rather than when a terminal starts: the two can be a long way apart — a machine
+          // with nothing startable never gets there at all — and the page's folder is what keeps the
+          // other slots on this screen from asking the same question again (`./layout`).
+          on.chose(chosen);
           return look();
         })
         .catch((e: unknown) => invite(errText(e, lang)));

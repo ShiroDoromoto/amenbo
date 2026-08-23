@@ -52,6 +52,10 @@ export type PaneEvents = {
   said(statement: SessionSaidDto): void;
   /** The program in the terminal has exited. Nothing running is kept. */
   closed(session: string): void;
+  /** This frame has settled where it works, before anything is running there — the person chose a
+   *  folder (`./agent`). It is said of the choice and not of the terminal because the two can be a
+   *  long way apart, and a page that waited for a started terminal would ask its other slots again. */
+  chose(folder: string): void;
   /** Something has named this pane's frame. Whether the name takes is the store's to say — a person's
    *  name for a frame is not taken back off it by the agent (`./frames`). */
   name(name: string, by: NamedBy): void;

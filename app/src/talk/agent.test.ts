@@ -84,10 +84,13 @@ function wake(over: Partial<WakeDto> = {}): WakeDto {
 }
 
 /** What the window is told by the panes under it, counted rather than kept. */
-const heard = { opened: 0, said: 0, closed: 0, named: 0 };
+const heard = { opened: 0, chose: [] as string[], said: 0, closed: 0, named: 0 };
 const events: PaneEvents = {
   opened: () => {
     heard.opened += 1;
+  },
+  chose: (folder) => {
+    heard.chose.push(folder);
   },
   said: () => {
     heard.said += 1;
@@ -139,6 +142,7 @@ beforeEach(() => {
   hoisted.refuse = null;
   hoisted.chose = 0;
   heard.opened = heard.said = heard.closed = heard.named = 0;
+  heard.chose = [];
 });
 
 describe("a frame with no folder asks for one, and asks for nothing else", () => {
@@ -157,6 +161,9 @@ describe("a frame with no folder asks for one, and asks for nothing else", () =>
     await chooseFolder(root);
 
     expect(hoisted.chose, "the person was taken to the dialog more than once").toBe(1);
+    // Said as soon as it is answered, not when a terminal comes up: the slots beside this one open in
+    // the same folder, and on a machine with nothing startable no terminal ever follows.
+    expect(heard.chose, "the window was not told where this frame settled").toEqual(["/work/here"]);
     expect(hoisted.sent).toContainEqual(["wake_probe", { folder: "/work/here" }]);
     expect(hoisted.panes).toEqual([{ adopt: false, cwd: "/work/here", agent: "claude-code" }]);
   });

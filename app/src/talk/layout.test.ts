@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   closedIn, EMPTY_LAYOUT, focusOn, folderOfPage, frameFor, goPage, MAX_PAGES, movedTo, openedIn,
-  pageCount, pageOfFrame, setCount, sidesAreDrawers, slotsOf, type Layout,
+  pageCount, pageOfFrame, setCount, settledIn, sidesAreDrawers, slotsOf, type Layout,
 } from "./layout";
 
 /** A layout with `n` frames materialised at the given count, the way pressing through slots leaves one. */
@@ -75,6 +75,18 @@ describe("one page, one project", () => {
   it("records where a pane is for a session that was adopted rather than started", () => {
     const adopted = openedIn(withFrames(2), "1", "s1", null);
     expect(folderOfPage(movedTo(adopted, "s1", "/said"), 1)).toBe("/said");
+  });
+
+  it("takes the page's folder from the choice, without waiting for a terminal to start in it", () => {
+    // The state a machine with nothing startable is left in: a folder was answered and no terminal
+    // followed. The slot beside it must still open there rather than ask the same question again.
+    const chosen = settledIn(withFrames(2), "1", "/repo");
+    expect(folderOfPage(chosen, 1)).toBe("/repo");
+  });
+
+  it("keeps the folder a frame already had — a second answer would change the page's project", () => {
+    const chosen = settledIn(withFrames(2), "1", "/repo");
+    expect(folderOfPage(settledIn(chosen, "1", "/elsewhere"), 1)).toBe("/repo");
   });
 });
 

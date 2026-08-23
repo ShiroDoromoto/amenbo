@@ -141,6 +141,9 @@ if (root) {
         opened: (session, startedAt) => {
           plate?.opened(session, startedAt);
         },
+        // This window draws one pane and holds no arrangement, so where its frame settled is nobody's
+        // to be told: what puts a page in a project is the board's (`./talk/layout`).
+        chose: () => {},
         said: (statement) => {
           plate?.said(statement);
         },

@@ -23,7 +23,7 @@ import { currentLang, t } from "../core/i18n";
  */
 export function TerminalPane({
   frame, names, start, autoStart, focused,
-  onOpened, onSaid, onClosed, onName, onFocus, onWaiting,
+  onOpened, onChose, onSaid, onClosed, onName, onFocus, onWaiting,
 }: {
   /** Which of the arrangement's places this is (`../talk/layout`). */
   frame: string;
@@ -36,6 +36,9 @@ export function TerminalPane({
   autoStart: boolean;
   focused: boolean;
   onOpened: (frame: string, session: string, folder: string | null) => void;
+  /** The frame settled where it works — the person chose a folder, whether or not a terminal came up
+   *  in it. It is what puts a page in a project (`../talk/layout`). */
+  onChose: (frame: string, folder: string) => void;
   onSaid: (statement: SessionSaidDto) => void;
   onClosed: (session: string) => void;
   onName: (frame: string, name: string, by: NamedBy) => void;
@@ -57,8 +60,8 @@ export function TerminalPane({
   // What the face wants done with what happens here, read at the moment it happens. The pane is put up
   // once and lives longer than any one render, so the effect below must not be re-run to see a newer
   // callback — that would take the terminal down to learn something it could have been told.
-  const on = useRef({ onOpened, onSaid, onClosed, onName, onWaiting });
-  on.current = { onOpened, onSaid, onClosed, onName, onWaiting };
+  const on = useRef({ onOpened, onChose, onSaid, onClosed, onName, onWaiting });
+  on.current = { onOpened, onChose, onSaid, onClosed, onName, onWaiting };
 
   useEffect(() => {
     if (!running) return;
@@ -85,6 +88,7 @@ export function TerminalPane({
         // settles the page (`../talk/layout`).
         on.current.onOpened(frame, session, where ?? start.cwd ?? null);
       },
+      chose: (chosen) => on.current.onChose(frame, chosen),
       said: (statement) => {
         plate.said(statement);
         on.current.onSaid(statement);

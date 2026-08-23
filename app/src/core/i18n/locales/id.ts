@@ -612,6 +612,8 @@ export const id: Translation = {
       "Mendaftarkan {url} berarti mempercayai kunci penanda tangannya ({serving}). Periksa sidik jarinya sebelum tersemat.",
     plugin_catalog_key_changed:
       "{url} kini menyajikan {serving}, bukan {agreed} yang ditunjukkan kepada Anda. Daftarkan lagi dan periksa sidik jari yang baru.",
+    pty_failed: "Terminal tidak dapat dijalankan: {reason}",
+    pty_gone: "Terminal itu sudah tidak terbuka.",
 
     already_reserved:
       "{ref} tidak berstatus “Akan dikerjakan”, jadi tidak bisa diambil — mungkin sesi lain sudah memegangnya.",

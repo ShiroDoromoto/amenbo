@@ -47,6 +47,21 @@ tracing-appender = "0.2"
 # similarly named `notify-rust` (OS notifications), which is a different crate.
 notify = "8"
 
+# The pseudo-terminal a pane of the talk window is filled with: what runs in one draws full-screen,
+# so the pane is a real terminal rather than a rendering of one. wezterm's implementation, chosen
+# because it is Rust the whole way down — no build.rs, no C toolchain, no sidecar binary to ship —
+# and because its Windows half is ConPTY direct, with no `winpty-agent.exe` to bundle beside the app.
+portable-pty = "0.9"
+# What a chunk of terminal output travels to the webview as. The bytes a PTY hands back are not
+# text — an escape sequence is split wherever the read happened to end, and a multi-byte character
+# with it — so they are carried whole and decoded on the far side by the terminal that understands
+# them. Same crate core already reads and writes with.
+base64 = "0.23"
+# Draws the session ids the terminals are named by. Sixteen bytes of the operating system's own
+# randomness, which is what keeps a name from repeating across restarts of the app. Same crate core
+# draws its blob nonces with.
+getrandom = "0.4"
+
 # GUI self-update: check the Tauri updater manifest (`latest-tauri.json`, its own endpoint separate from
 # wharfy's `latest.json`) and, when it names a newer signed build, download + minisign-verify (mandatory,
 # cannot be disabled) + install it in place. The apply is a user action from the update banner — there is

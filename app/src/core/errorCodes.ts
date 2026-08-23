@@ -189,7 +189,9 @@ export const CORE_ERROR_CODES = [
  * the store (`migrate::gate()` — mid-migration the format is half-moved, and after a failure it is still old);
  * and the consent guard in `plugin_catalog_add_source`, where registering a catalog crosses a process
  * boundary between showing a fingerprint and agreeing to it, so the pin that is written has to be the one
- * that was on screen (`AMB-D-389`). */
+ * that was on screen (`AMB-D-389`); and the two the terminal in a pane answers with, which are the
+ * operating system refusing to open one (`pty_failed`) and a session whose terminal has already
+ * closed (`pty_gone`). */
 export const TAURI_ERROR_CODES = [
   "init_ambiguous_owners",
   "init_pointer_exists",
@@ -198,6 +200,8 @@ export const TAURI_ERROR_CODES = [
   "migration_running",
   "plugin_catalog_consent_required",
   "plugin_catalog_key_changed",
+  "pty_failed",
+  "pty_gone",
 ] as const;
 
 /** Every code a webview can receive — the contract that i18n and code-based branching may refer to. */

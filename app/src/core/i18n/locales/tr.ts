@@ -610,6 +610,8 @@ export const tr: Translation = {
       "{url} adresini kaydetmek, imzalama anahtarına ({serving}) güvenmek demektir. Sabitlenmeden önce parmak izini karşılaştırın.",
     plugin_catalog_key_changed:
       "{url} artık size gösterilen {agreed} yerine {serving} sunuyor. Yeniden kaydedin ve yeni parmak izini karşılaştırın.",
+    pty_failed: "Terminal başlatılamadı: {reason}",
+    pty_gone: "O terminal artık açık değil.",
 
     already_reserved:
       "{ref} “Yapılacak” durumunda değil, bu yüzden üstlenilemez — başka bir oturum onu çoktan almış olabilir.",

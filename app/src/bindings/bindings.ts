@@ -1592,6 +1592,25 @@ export type ProjectRefDto = { id: number, name: string, };
 export type ProjectSettingsDto = { id: number, name: string, notes: string, color: string, view: "list" | "board" | "calendar" | "timeline", archived: boolean, };
 
 /**
+ * One chunk of a terminal's output, on its way to the pane drawing it (the payload of the talk
+ * window's `pty://output` event).
+ *
+ * The bytes travel base64-encoded because they are not text: an escape sequence is split wherever
+ * the read ended, and a multi-byte character with it, and only the emulator that reassembles them
+ * may decode. Anything that turned them into a string here would corrupt exactly the chunks that
+ * crossed a boundary.
+ */
+export type PtyChunkDto = { 
+/**
+ * The session whose terminal this came out of.
+ */
+session: string, 
+/**
+ * The chunk, base64-encoded.
+ */
+base64: string, };
+
+/**
  * What a reference in a body resolves to (`kind` — task or decision — and the entity's id). The GUI
  * branches on it to decide which detail pane a body link opens.
  */

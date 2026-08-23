@@ -608,6 +608,8 @@ export const ko: Translation = {
       "{url}을(를) 등록한다는 것은 그 서명 열쇠({serving})를 믿는다는 뜻입니다. 고정하기 전에 지문을 확인하세요.",
     plugin_catalog_key_changed:
       "{url}이(가) 이제 보여 준 {agreed}가 아니라 {serving}을(를) 내놓습니다. 다시 등록하고 새 지문을 확인하세요.",
+    pty_failed: "터미널을 시작할 수 없습니다: {reason}",
+    pty_gone: "해당 터미널은 더 이상 열려 있지 않습니다.",
 
     already_reserved: "{ref}은(는) ‘할 일’이 아니어서 맡을 수 없습니다. 다른 세션이 이미 진행 중일 수 있습니다.",
     not_ready: "{ref}은(는) 아직 맡을 수 없습니다: {reasons}",

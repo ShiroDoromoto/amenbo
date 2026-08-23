@@ -679,6 +679,8 @@ const err: Partial<Record<ErrorCode, string>> = {
     "Registering {url} means trusting its signing key ({serving}). Check the fingerprint before it is pinned.",
   plugin_catalog_key_changed:
     "{url} now publishes {serving}, not the {agreed} you were shown. Register it again and check the new fingerprint.",
+  pty_failed: "The terminal could not be started: {reason}",
+  pty_gone: "That terminal is no longer open.",
 
   // The sentences the GUI shows a person, named one at a time (`AMB-D-413`). Which refusals get a code of
   // their own was settled by measuring what the front end actually surfaces: a form the screen already

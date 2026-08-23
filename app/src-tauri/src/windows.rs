@@ -23,5 +23,4 @@
 pub const BOARD: &str = "main";
 
 /// The window the agents run in.
-#[allow(dead_code)] // Named for the same reason BOARD is; the code that raises this one is still to come.
 pub const TALK: &str = "talk";

@@ -610,6 +610,8 @@ export const nl: Translation = {
       "{url} registreren betekent haar ondertekensleutel ({serving}) vertrouwen. Controleer de vingerafdruk voordat hij wordt vastgezet.",
     plugin_catalog_key_changed:
       "{url} publiceert nu {serving}, niet de {agreed} die je te zien kreeg. Registreer haar opnieuw en controleer de nieuwe vingerafdruk.",
+    pty_failed: "De terminal kon niet worden gestart: {reason}",
+    pty_gone: "Die terminal is niet meer open.",
 
     already_reserved:
       "{ref} staat niet op “Te doen” en kan dus niet worden opgepakt — een andere sessie heeft hem misschien al.",

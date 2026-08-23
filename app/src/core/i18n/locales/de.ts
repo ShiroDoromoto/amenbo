@@ -623,6 +623,8 @@ export const de: Translation = {
       "{url} einzutragen heißt, seinem Signaturschlüssel ({serving}) zu vertrauen. Prüfe den Fingerabdruck, bevor er festgelegt wird.",
     plugin_catalog_key_changed:
       "{url} veröffentlicht jetzt {serving} statt des gezeigten {agreed}. Trage es erneut ein und prüfe den neuen Fingerabdruck.",
+    pty_failed: "Das Terminal konnte nicht gestartet werden: {reason}",
+    pty_gone: "Dieses Terminal ist nicht mehr geöffnet.",
 
     already_reserved:
       "{ref} ist nicht „Offen“ und lässt sich deshalb nicht übernehmen — vielleicht hat eine andere Sitzung sie schon.",

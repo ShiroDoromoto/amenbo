@@ -638,6 +638,8 @@ export const fr: Translation = {
       "Enregistrer {url}, c'est faire confiance à sa clé de signature ({serving}). Vérifiez l'empreinte avant qu'elle soit épinglée.",
     plugin_catalog_key_changed:
       "{url} publie désormais {serving}, et non la {agreed} qui vous a été montrée. Enregistrez-le à nouveau et vérifiez la nouvelle empreinte.",
+    pty_failed: "Le terminal n'a pas pu être démarré : {reason}",
+    pty_gone: "Ce terminal n'est plus ouvert.",
 
     already_reserved:
       "{ref} n'est pas « À faire », donc impossible de la réserver — une autre session la tient peut-être déjà.",

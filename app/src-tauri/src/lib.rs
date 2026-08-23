@@ -26,6 +26,9 @@ mod perf;
 /// mutating command, over the store's own cursor (`AMB-D-380`), and the one this app makes as it comes up
 /// for what a previous run left half delivered (`AMB-D-399`).
 mod plugin_dispatch;
+/// The pseudo-terminal a pane of the talk window is filled with: opening one, carrying its bytes
+/// both ways, and telling it how large the pane on screen is (`AMB-D-747`).
+mod pty;
 /// One process per store: what turns a second launch into the window that is already open, coming to
 /// the front. Desktop-only, because the claim it holds is an OS primitive with no shape elsewhere.
 #[cfg(desktop)]
@@ -161,6 +164,10 @@ pub fn run() {
     builder = builder.plugin(single_instance::init(&context.config().identifier));
   }
   builder
+    // The open terminals, held for the life of the app rather than of any command that touches one:
+    // what a pane types into and what drains its output both reach for the same session, from
+    // different threads and long after the call that opened it returned (`pty`).
+    .manage(pty::Terminals::default())
     .menu(menu::build)
     .on_menu_event(|app, event| {
       if event.id() == menu::CHECK_UPDATES_ID {
@@ -397,6 +404,10 @@ pub fn run() {
       commands::plugin_updates,
       commands::plugin_update_apply,
       commands::plugin_update_apply_all,
+      pty::pty_open,
+      pty::pty_write,
+      pty::pty_resize,
+      pty::pty_close,
     ])
     .run(context)
     .expect("error while running tauri application");

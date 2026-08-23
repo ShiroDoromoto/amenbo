@@ -514,6 +514,7 @@ export const ptBR: Translation = {
     "face.terminal": "Terminal",
     "face.splitOut": "Abrir em uma janela separada",
     "face.merge": "Voltar para uma única janela",
+    "face.end": "Encerrar o terminal deste painel",
     "face.ended": "O programa deste terminal foi encerrado.",
     "face.rail": "Painéis",
     "face.paneCount": "Painéis na tela",

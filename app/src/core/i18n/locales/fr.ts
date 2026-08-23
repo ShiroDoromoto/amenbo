@@ -513,6 +513,7 @@ export const fr: Translation = {
     "face.terminal": "Terminal",
     "face.splitOut": "Ouvrir dans une fenêtre séparée",
     "face.merge": "Revenir à une seule fenêtre",
+    "face.end": "Terminer le terminal de ce volet",
     "face.ended": "Le programme de ce terminal s'est arrêté.",
     "face.rail": "Volets",
     "face.paneCount": "Volets à l'écran",

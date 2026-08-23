@@ -538,6 +538,7 @@ const ui = {
   "face.terminal": "Terminal",
   "face.splitOut": "Open in a separate window",
   "face.merge": "Back to one window",
+  "face.end": "End the terminal in this pane",
   "face.ended": "The program in this terminal has exited.",
   "face.rail": "Panes",
   "face.paneCount": "Panes on screen",

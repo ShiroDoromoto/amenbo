@@ -492,6 +492,7 @@ export const hi: Translation = {
     "face.terminal": "टर्मिनल",
     "face.splitOut": "अलग विंडो में खोलें",
     "face.merge": "एक ही विंडो में लौटें",
+    "face.end": "इस पैन का टर्मिनल समाप्त करें",
     "face.ended": "इस टर्मिनल का प्रोग्राम समाप्त हो गया।",
     "face.rail": "पैन",
     "face.paneCount": "स्क्रीन पर पैन",

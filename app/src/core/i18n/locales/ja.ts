@@ -504,6 +504,7 @@ export const ja: Translation = {
     "face.terminal": "ターミナル",
     "face.splitOut": "別ウィンドウで開く",
     "face.merge": "1つの窓に戻す",
+    "face.end": "このペインの端末を終わらせる",
     "face.ended": "この端末のプログラムは終了しました。",
     "face.rail": "ペイン",
     "face.paneCount": "画面に出す枚数",

@@ -518,6 +518,7 @@ export const pl: Translation = {
     "face.terminal": "Terminal",
     "face.splitOut": "Otwórz w osobnym oknie",
     "face.merge": "Wróć do jednego okna",
+    "face.end": "Zakończ terminal w tym panelu",
     "face.ended": "Program w tym terminalu zakończył działanie.",
     "face.rail": "Panele",
     "face.paneCount": "Panele na ekranie",

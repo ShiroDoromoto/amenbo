@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { mountAgentFrame } from "../talk/agent";
+import { endTerminal } from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
 import type { FrameNames, NamedBy } from "../talk/frames";
 import type { PaneStart } from "../talk/terminal";
@@ -56,6 +57,9 @@ export function TerminalPane({
   // The fact of the program having exited, which the screen cannot show on its own — what a finished
   // shell leaves behind looks exactly like one waiting to be typed at.
   const [ended, setEnded] = useState(false);
+  // The session running here, while one is. It is what the way out names, and it is null at exactly
+  // the two moments there is nothing to end: before a terminal has opened, and after one has closed.
+  const [live, setLive] = useState<string | null>(null);
 
   // What the face wants done with what happens here, read at the moment it happens. The pane is put up
   // once and lives longer than any one render, so the effect below must not be re-run to see a newer
@@ -83,6 +87,7 @@ export function TerminalPane({
     void mountAgentFrame(host, currentLang(), {
       opened: (session, startedAt, where) => {
         plate.opened(session, startedAt);
+        setLive(session);
         // Where the terminal actually runs, which is not always the folder this slot was handed: the
         // first frame on a page has none until somebody chooses one, and what they chose is what
         // settles the page (`../talk/layout`).
@@ -99,6 +104,7 @@ export function TerminalPane({
       closed: (session) => {
         plate.closed(session);
         setEnded(true);
+        setLive(null);
         on.current.onClosed(session);
       },
       // The window's own title is not the pane's to say — this window is the board. The name goes to
@@ -140,7 +146,24 @@ export function TerminalPane({
       {running
         ? (
           <>
-            <div ref={labelRef} />
+            {/* The label, and the one control a running pane has. They share the row because the row
+                is what is said about this terminal, and ending it is the last thing there is to say. */}
+            <div className="slot__bar">
+              <div className="slot__plate" ref={labelRef} />
+              {/* Only while something is running. Nothing asks first: what is pressed here is one
+                  press for one thing, and what it ends is a process this person started, with its
+                  output still on the screen afterwards. */}
+              {live !== null && (
+                <button
+                  className="slot__end"
+                  title={t("face.end")}
+                  aria-label={t("face.end")}
+                  onClick={() => { void endTerminal(live).catch(() => {}); }}
+                >
+                  ×
+                </button>
+              )}
+            </div>
             {ended && <span className="termface__note">{t("face.ended")}</span>}
             <div className="termface__face" ref={paneRef} />
           </>

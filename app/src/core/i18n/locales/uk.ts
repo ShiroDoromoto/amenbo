@@ -518,6 +518,7 @@ export const uk: Translation = {
     "face.terminal": "Термінал",
     "face.splitOut": "Відкрити в окремому вікні",
     "face.merge": "Повернути в одне вікно",
+    "face.end": "Завершити термінал у цій панелі",
     "face.ended": "Програму в цьому терміналі завершено.",
     "face.rail": "Панелі",
     "face.paneCount": "Панелей на екрані",

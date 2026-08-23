@@ -1283,6 +1283,9 @@ impl Instructor {
                     other => return Err(format!("action `say` does not know the verb `{other}`")),
                 }
             }
+            (Domain::Terminal, "end-pane") =>
+                "On the pane that has a terminal running in it, press the control that ends it. What is on the screen stays as it is — that is what a terminal ends with — and nothing is running in the pane any more."
+                    .to_string(),
             // Pointing, which is the same seam as `say` and the same one door — but what it leaves is
             // read on the file face rather than on the pane's label, so the road goes on somewhere else.
             (Domain::Terminal, "point") => format!(
@@ -2328,9 +2331,9 @@ fn note(with: &Args) -> Result<&'static str, String> {
         Some("unreadable") => Ok("that the file could not be read"),
         Some("partial") => Ok("that some of the folder is not being watched"),
         Some("nothing-pointed") => Ok("that nothing has been pointed at yet"),
-        // Said only once the pane has ended, which is the one state no road reaches yet: nothing in
-        // the interface ends a terminal at all. The row is here so that the road which walks it, once
-        // there is a way, is a line of YAML rather than a change to a driver.
+        // Said only once the pane has ended. While one runs, what is left unopened is a count and
+        // nothing more — there is still time; once the session is over there is not, and the whole map
+        // goes with it, so this is the one moment a reader can be told what they never got to.
         Some("unopened") => Ok("that some of what was pointed at was never opened"),
         Some("nothing-changed") => Ok("that nothing has changed yet"),
         Some("no-folder") => Ok("that this project has no folder yet"),

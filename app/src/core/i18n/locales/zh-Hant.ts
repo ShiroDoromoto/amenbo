@@ -492,6 +492,7 @@ export const zhHant: Translation = {
     "face.terminal": "終端機",
     "face.splitOut": "在另一個視窗開啟",
     "face.merge": "合併回單一視窗",
+    "face.end": "結束這個窗格裡的終端機",
     "face.ended": "此終端機中的程式已結束。",
     "face.rail": "窗格",
     "face.paneCount": "畫面上的窗格數",

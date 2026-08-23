@@ -160,6 +160,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* One slot. It holds the label row and the pane under it, and it is a box whether or not there is a
    terminal in it: an empty slot is a place on this page, not a gap. */
 .slot { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+/* What is said about this terminal, and the one control a running pane has. One row, because ending
+   it is the last thing there is to say about it. */
+.slot__bar { display: flex; align-items: center; gap: var(--s-2); }
+.slot__plate { flex: 1; min-width: 0; }
+/* The way out. It is drawn quietly and sits at the end of the row: nothing else on this face ends
+   anything, so a control that looked urgent would be pressed by mistake more often than on purpose. */
+.slot__end {
+  flex: 0 0 auto;
+  padding: 0 var(--s-1);
+  border: 0; background: transparent;
+  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
+}
+.slot__end:hover { color: var(--c-text); }
 .slot--focused .termface__pane { border-color: var(--c-accent); }
 /* A slot with nothing started in it. It fills its place and says what pressing it does — the whole
    of what an empty frame has to offer (`AMB-T-3607` gives it back what it was). */

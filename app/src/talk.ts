@@ -17,9 +17,10 @@
 // The language is asked of core directly instead of through the snapshot: the store is what a startup
 // migration holds shut, and a window with nothing in it has no reason to be the one waiting on it.
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { normalizeLang, t } from "./core/i18n";
+import { type Lang, normalizeLang, t } from "./core/i18n";
 import { invoke } from "./core/ipc";
 import { initTheme } from "./core/theme";
+import { elevationBand } from "./talk/elevation";
 import { frameNames, nameFrame, ONLY_FRAME, type FrameNames, type NamedBy } from "./talk/frames";
 import { closed, NO_SESSIONS, opened, said, type Sessions } from "./talk/sessions";
 import { mountTerminal } from "./talk/terminal";
@@ -49,12 +50,19 @@ function retitle(): void {
     .catch(() => {});
 }
 
-void invoke<string | null>("ui_language")
-  .then((code) => {
-    title = t("app.talkWindow", normalizeLang(code));
-    retitle();
-  })
-  .catch(() => {});
+// The language this page is written in. The title is not the only thing that waits on it — a band may
+// have to be worded too — so the answer is held as something the rest of the page can wait on rather
+// than being spent where it lands.
+const language: Promise<Lang> = invoke<string | null>("ui_language")
+  .then((code) => normalizeLang(code))
+  // Outside Tauri (`npm run dev` in a browser) nothing answers, and English is where every lookup
+  // lands anyway when a language has no dictionary.
+  .catch(() => normalizeLang(null));
+
+void language.then((lang) => {
+  title = t("app.talkWindow", lang);
+  retitle();
+});
 
 void frameNames()
   .then((known) => {
@@ -98,4 +106,16 @@ if (root) {
     pane.className = "talk__failed";
     pane.textContent = e instanceof Error ? e.message : String(e);
   });
+
+  // The band above the pane, and only when there is something to say. It is asked for after the
+  // terminal is mounted rather than before it: the pane is what the window is for, and a question
+  // about this process's own token has no business delaying it. It goes in *above* the pane in the
+  // page, which is why it is inserted at the top rather than appended.
+  void Promise.all([invoke<boolean>("elevated"), language])
+    .then(([elevated, lang]) => {
+      if (elevated) root.prepend(elevationBand(lang));
+    })
+    // Nothing answered, so there is nothing established to warn about. A band raised on a failed
+    // question would be shown to every browser this page is opened in.
+    .catch(() => {});
 }

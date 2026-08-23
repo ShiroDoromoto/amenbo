@@ -284,8 +284,10 @@ by a human from the evidence, not by the exit code.
 
 **Name what to press rather than aim at it.** `swift scripts/screen.swift find <pid>` lists every
 element on screen with the name it answers to and where it stands, and `click-named <pid> <name>`
-clicks the one of that name. The screen is a webview, so both read it through the accessibility tree
-the app serves once asked. A part of a name will do — the name an element answers to is not the label
+clicks the one of that name — bringing that pid's app to the front first, since a press lands on
+whatever is frontmost where it is aimed and anything that took the front would swallow it silently.
+The screen is a webview, so both read it through the accessibility tree the app serves once asked.
+A part of a name will do — the name an element answers to is not the label
 on the screen (an emoji in front of the words belongs to it, and a card folds its lines into one
 string), so a whole one is rarely knowable in advance. When several names hold what was asked for,
 the tool prints them and presses nothing.

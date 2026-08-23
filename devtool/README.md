@@ -69,7 +69,9 @@ permanent place a grown setup (plugins, catalog, projects) lives.
 Each build runs under an executable name of its own — production keeps
 `amenbo-app` — so a name reaches one app and not another: `pgrep -x
 amenbo-app-dev-<id>` finds that one instance, and `System Events` lists it under
-the same name. A *click*, though, still lands on whichever window is in front.
+the same name. A *click* aimed at a point still lands on whichever window is in
+front; `click-named <pid> <name>` fronts the pid it was given before pressing,
+so that one reaches the instance named and not whatever was there.
 The badge is how you tell them apart *inside* the window: it sits in the header,
 so it survives a cropped screenshot, and production carries none at all. To
 reach one without a click, ask for its pid (`devgui pid` below) and drive that

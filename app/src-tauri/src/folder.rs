@@ -168,7 +168,7 @@ pub fn folder_recent(project_id: i64, root: String) -> Result<Vec<FolderChangedD
         }
     }
 
-    found.sort_by(|a, b| b.0.cmp(&a.0));
+    found.sort_by_key(|(modified, _)| std::cmp::Reverse(*modified));
     Ok(found
         .into_iter()
         .take(RECENT)

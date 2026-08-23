@@ -499,6 +499,10 @@ export const pl: Translation = {
     "act.nameless": "(usunięte)",
     "app.loadError": "Nie udało się wczytać danych.", "app.loading": "Wczytywanie…",
     "app.talkWindow": "Amenbo — Rozmowa",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "W rozmowie", "talk.holding": "zadania: {n}",
+    "talk.finished": "ukończone: {n}", "talk.premiseBroken": "Założenie przestało obowiązywać",
     "hooks.title": "Trzymać oznaczenia Amenbo z dala od Twoich commitów?",
     "hooks.why": "Oznaczenie w rodzaju AMB-T-… nic nie znaczy poza danymi, które je wydały. Hook gita zatrzyma je, zanim trafi do commita.",
     "hooks.scope": "Pytamy raz. Twoja odpowiedź obejmuje repozytoria, w których pracuje Amenbo — te teraz i te, które dodasz później.",

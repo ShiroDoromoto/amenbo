@@ -499,6 +499,10 @@ export const uk: Translation = {
     "act.nameless": "(видалене)",
     "app.loadError": "Не вдалося завантажити дані.", "app.loading": "Завантаження…",
     "app.talkWindow": "Amenbo — Діалог",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "Обговорення", "talk.holding": "завдань: {n}",
+    "talk.finished": "готово: {n}", "talk.premiseBroken": "Передумова перестала виконуватися",
     "hooks.title": "Тримати позначки Amenbo подалі від ваших комітів?",
     "hooks.why": "Позначка на кшталт AMB-T-… нічого не означає поза даними, які її видали. Гачок git спиняє її, перш ніж вона потрапить у коміт.",
     "hooks.scope": "Питаємо один раз. Ваша відповідь стосується репозиторіїв, у яких працює Amenbo — і нинішніх, і тих, які ви додасте потім.",

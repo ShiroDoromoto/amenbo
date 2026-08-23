@@ -473,6 +473,10 @@ export const nl: Translation = {
     "act.nameless": "(verwijderd)",
     "app.loadError": "Gegevens laden is mislukt.", "app.loading": "Bezig met laden…",
     "app.talkWindow": "Amenbo — Gesprek",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "In gesprek", "talk.holding": "{n} taken",
+    "talk.finished": "{n} klaar", "talk.premiseBroken": "Een aanname klopt niet meer",
     "hooks.title": "Amenbo-verwijzingen uit je commits houden?",
     "hooks.why": "Een verwijzing als AMB-T-… betekent niets buiten de gegevens die haar hebben uitgegeven. Een git-hook houdt er een tegen voordat hij in een commit belandt.",
     "hooks.scope": "Wordt één keer gevraagd. Je antwoord geldt voor de repositories waarin Amenbo werkt, nu en die je later toevoegt.",

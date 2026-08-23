@@ -494,6 +494,10 @@ export const it: Translation = {
     "act.nameless": "(eliminato)",
     "app.loadError": "Non è stato possibile caricare i dati.", "app.loading": "Caricamento…",
     "app.talkWindow": "Amenbo — Conversazione",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "In conversazione", "talk.holding": "{n} attività",
+    "talk.finished": "{n} completate", "talk.premiseBroken": "Una premessa non regge più",
     "hooks.title": "Tenere i riferimenti di Amenbo fuori dai tuoi commit?",
     "hooks.why": "Un riferimento come AMB-T-… non significa nulla fuori dai dati che l'hanno emesso. Un hook di git lo ferma prima che arrivi in un commit.",
     "hooks.scope": "Chiesto una volta. La tua risposta copre i repository su cui Amenbo lavora, quelli di adesso e quelli che aggiungerai.",

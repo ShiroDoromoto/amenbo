@@ -473,6 +473,10 @@ export const zhHans: Translation = {
     "act.nameless": "（已删除）",
     "app.loadError": "数据加载失败。", "app.loading": "加载中…",
     "app.talkWindow": "Amenbo — 对话",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "商议中", "talk.holding": "{n} 项",
+    "talk.finished": "已完成 {n} 项", "talk.premiseBroken": "有一个前提不成立了",
     "hooks.title": "要把 Amenbo 的引用挡在提交之外吗？",
     "hooks.why": "像 AMB-T-… 这样的引用，出了签发它的这份数据就什么都不指。git 钩子能在它进入提交之前拦下来。",
     "hooks.scope": "只问一次。你的答复覆盖 Amenbo 所处理的仓库，现在的和之后添加的都算。",

@@ -483,6 +483,10 @@ export const de: Translation = {
     "act.nameless": "(gelöscht)",
     "app.loadError": "Die Daten ließen sich nicht laden.", "app.loading": "Wird geladen…",
     "app.talkWindow": "Amenbo — Dialog",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "Im Gespräch", "talk.holding": "{n} Aufgaben",
+    "talk.finished": "{n} erledigt", "talk.premiseBroken": "Eine Voraussetzung ist weggefallen",
     "hooks.title": "Amenbos Referenzen aus deinen Commits heraushalten?",
     "hooks.why": "Eine Referenz wie AMB-T-… bedeutet außerhalb der Daten, die sie vergeben haben, nichts. Ein git-Hook hält sie auf, bevor sie in einen Commit gelangt.",
     "hooks.scope": "Wird einmal gefragt. Deine Antwort gilt für die Repositorys, mit denen Amenbo arbeitet — die jetzigen und die, die du später hinzufügst.",

@@ -1796,6 +1796,26 @@ target?: string,
 why?: string, };
 
 /**
+ * What the ledger says the session in one pane has been doing — the reservations it is on, and how
+ * many it has ended ([`amenbo_core::session_work`]).
+ *
+ * The tasks come back as ids rather than rows: the pane draws one of them at most, and the same
+ * [`crate::commands::tasks_by_ids`] every other screen hydrates with can say the rest. What is being
+ * answered here is *whose* they are, which nothing but the ledger knows.
+ */
+export type SessionWorkDto = { 
+/**
+ * Reserved and not ended, newest reservation first. One it has stopped on (`blocked`) is still
+ * among them — the reservation stands.
+ */
+holding: Array<number>, 
+/**
+ * How many it has ended, carried out or decided against. A count, because that is the whole of
+ * what the label says about them.
+ */
+finished: number, };
+
+/**
  * The slug in `.amenbo` disagrees with what the store actually holds
  * ([`amenbo_core::binding::SlugMismatch`]). The CLI prints an English warning in its location
  * header; the GUI hands over the raw material only and lets i18n compose the wording (same verdict,

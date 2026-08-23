@@ -476,6 +476,10 @@ export const id: Translation = {
     "act.nameless": "(dihapus)",
     "app.loadError": "Gagal memuat data.", "app.loading": "Memuat…",
     "app.talkWindow": "Amenbo — Percakapan",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "Sedang berdiskusi", "talk.holding": "{n} tugas",
+    "talk.finished": "{n} selesai", "talk.premiseBroken": "Sebuah prasyarat sudah tidak berlaku",
     "hooks.title": "Jauhkan rujukan Amenbo dari commit Anda?",
     "hooks.why": "Rujukan seperti AMB-T-… tidak berarti apa-apa di luar data yang menerbitkannya. Sebuah git hook menghentikannya sebelum ia sampai ke commit.",
     "hooks.scope": "Ditanyakan sekali. Jawaban Anda berlaku untuk repositori tempat Amenbo bekerja, yang sekarang maupun yang Anda tambahkan nanti.",

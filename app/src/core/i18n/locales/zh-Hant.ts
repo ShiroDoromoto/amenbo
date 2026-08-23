@@ -473,6 +473,10 @@ export const zhHant: Translation = {
     "act.nameless": "（已刪除）",
     "app.loadError": "資料載入失敗。", "app.loading": "載入中…",
     "app.talkWindow": "Amenbo — 對話",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "商議中", "talk.holding": "{n} 項",
+    "talk.finished": "已完成 {n} 項", "talk.premiseBroken": "有一個前提不成立了",
     "hooks.title": "要把 Amenbo 的參照擋在提交之外嗎？",
     "hooks.why": "像 AMB-T-… 這樣的參照，出了簽發它的這份資料就什麼都不指。git 掛鉤能在它進入提交之前攔下來。",
     "hooks.scope": "只問一次。你的答覆涵蓋 Amenbo 所處理的儲存庫，現在的和之後新增的都算。",

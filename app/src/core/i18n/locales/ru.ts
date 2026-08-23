@@ -502,6 +502,10 @@ export const ru: Translation = {
     "act.nameless": "(удалено)",
     "app.loadError": "Не удалось загрузить данные.", "app.loading": "Загрузка…",
     "app.talkWindow": "Amenbo — Диалог",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "Обсуждение", "talk.holding": "задач: {n}",
+    "talk.finished": "готово: {n}", "talk.premiseBroken": "Предпосылка перестала выполняться",
     "hooks.title": "Не пускать ссылки Amenbo в ваши коммиты?",
     "hooks.why": "Ссылка вида AMB-T-… ничего не значит за пределами тех данных, что её выдали. Хук git останавливает её до того, как она попадёт в коммит.",
     "hooks.scope": "Спрашивается один раз. Ваш ответ распространяется на репозитории, с которыми работает Amenbo, — и на нынешние, и на те, что вы добавите позже.",

@@ -1,7 +1,13 @@
-/* The talk window's own page. One pane fills it: the frame that will hold several, and the rail and
-   the bands around them, are not here yet, so what the window shows is the terminal and its margin. */
+/* The talk window's own page: a label and the pane under it. The frame that will hold several panes,
+   and the rail and the bands around them, are not here yet.
+
+   A column rather than a stack of heights, because the label's own height is not something this side
+   knows — it is one line of the reader's own text at the reader's own size. Given a height to fill,
+   the pane would take the window's and push itself down by however tall the label turned out. */
 .talk {
   height: 100%;
+  display: flex;
+  flex-direction: column;
   padding: var(--s-3);
   background: var(--c-bg);
 }
@@ -9,7 +15,8 @@
 /* The terminal's box. xterm.js measures the element it was opened in, so this is what decides how
    many columns and rows the program inside is told it has. */
 .talk__pane {
-  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
   padding: var(--s-3);
   border: 1px solid var(--c-border);
   border-radius: var(--r-md);
@@ -25,4 +32,56 @@
   font-family: var(--font-mono);
   font-size: var(--fs-sm);
   white-space: pre-wrap;
+}
+
+/* The one line above a pane: what it is called, what its session is on, and the one thing worth saying
+   about it. One line and no more — a row that can grow is a row that pushes the terminal about every
+   time an agent says something long. */
+.plate {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  padding: 0 var(--s-2) var(--s-2);
+  font-size: var(--fs-sm);
+  color: var(--c-text-muted);
+  white-space: nowrap;
+}
+
+/* The pane's name. It belongs to the frame, so it is the one part of the row that does not move when
+   the process in it does. */
+.plate__name {
+  font-weight: 600;
+  color: var(--c-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* What the session is on. It takes the room that is left, and gives it up to what is said on the right
+   rather than pushing that off the end. */
+.plate__now {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The one thing said, on the right. It is the agent's own words, so it is bounded by the room it has
+   and not by trusting the sentence to be short. */
+.plate__say {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ⏸ / ⚠ / ⏹ — each sits in front of the part it belongs to, and an empty one takes no room. */
+.plate__mark:empty {
+  display: none;
+}
+
+/* A person's turn has come. Nothing else on the row is asking for anything, so nothing else is drawn
+   to be noticed (`AMB-D-748`). */
+.plate[data-say="waiting"] .plate__say,
+.plate[data-say="premise"] .plate__say {
+  color: var(--c-text);
 }

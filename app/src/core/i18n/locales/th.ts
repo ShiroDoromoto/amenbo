@@ -476,6 +476,10 @@ export const th: Translation = {
     "act.nameless": "(ถูกลบไปแล้ว)",
     "app.loadError": "โหลดข้อมูลไม่สำเร็จ", "app.loading": "กำลังโหลด…",
     "app.talkWindow": "Amenbo — บทสนทนา",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "กำลังปรึกษากันอยู่", "talk.holding": "{n} งาน",
+    "talk.finished": "เสร็จ {n}", "talk.premiseBroken": "เงื่อนไขตั้งต้นไม่เป็นจริงแล้ว",
     "hooks.title": "กันรหัสอ้างอิงของ Amenbo ออกจากคอมมิตของคุณไหม",
     "hooks.why": "รหัสอย่าง AMB-T-… ไม่มีความหมายเลยนอกข้อมูลที่ออกมันมา git hook จะหยุดมันไว้ก่อนไปถึงคอมมิต",
     "hooks.scope": "ถามครั้งเดียว คำตอบของคุณครอบคลุมรีโปที่ Amenbo ทำงานด้วย ทั้งตอนนี้และที่คุณเพิ่มทีหลัง",

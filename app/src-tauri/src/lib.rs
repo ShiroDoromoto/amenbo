@@ -428,6 +428,7 @@ pub fn run() {
       commands::plugin_updates,
       commands::plugin_update_apply,
       commands::plugin_update_apply_all,
+      commands::session_work,
       commands::frame_names,
       commands::name_frame,
       pty::pty_open,

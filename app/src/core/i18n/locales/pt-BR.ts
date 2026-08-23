@@ -495,6 +495,10 @@ export const ptBR: Translation = {
     "act.nameless": "(excluído)",
     "app.loadError": "Não foi possível carregar os dados.", "app.loading": "Carregando…",
     "app.talkWindow": "Amenbo — Conversa",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "Em conversa", "talk.holding": "{n} tarefas",
+    "talk.finished": "{n} concluídas", "talk.premiseBroken": "Uma premissa deixou de valer",
     "hooks.title": "Manter as referências do Amenbo fora dos seus commits?",
     "hooks.why": "Uma referência como AMB-T-… não significa nada fora dos dados que a emitiram. Um hook do git a segura antes de ela chegar a um commit.",
     "hooks.scope": "Perguntado uma vez. Sua resposta cobre os repositórios com que o Amenbo trabalha, agora e os que você adicionar depois.",

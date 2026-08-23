@@ -473,6 +473,10 @@ export const tr: Translation = {
     "act.nameless": "(silinmiş)",
     "app.loadError": "Veriler yüklenemedi.", "app.loading": "Yükleniyor…",
     "app.talkWindow": "Amenbo — Sohbet",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "Konuşuluyor", "talk.holding": "{n} görev",
+    "talk.finished": "{n} tamamlandı", "talk.premiseBroken": "Bir ön koşul artık geçerli değil",
     "hooks.title": "Amenbo'nun kayıt numaraları commit'lerinizin dışında kalsın mı?",
     "hooks.why": "AMB-T-… gibi bir numara, onu veren verinin dışında hiçbir şey ifade etmez. Bir git hook onu commit'e ulaşmadan durdurur.",
     "hooks.scope": "Bir kez sorulur. Yanıtınız Amenbo'nun çalıştığı depoları kapsar; şimdikileri de sonra ekleyeceklerinizi de.",

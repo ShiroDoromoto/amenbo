@@ -19,11 +19,12 @@ import {
   NO_CHANGEOVER,
   nowOf,
   sayOf,
+  standsAsTurn,
   type Changeover,
   type Held,
 } from "./nameplate";
 import { movingAt, STILL_AFTER_MS } from "./moving";
-import { anyWaiting, closed, NO_SESSIONS, opened, said, type Sessions } from "./sessions";
+import { closed, NO_SESSIONS, opened, said, type Sessions } from "./sessions";
 
 /** A pane's label, and the pane's way of telling it what happened. */
 export type Plate = {
@@ -53,12 +54,19 @@ export type Plate = {
  * row belongs to the place rather than to the session (`./frames`). The split-out window is one pane
  * and has only ever had one frame, so it takes the default.
  *
- * `onWaiting` is told whenever the answer to "is a turn standing in this pane" changes. It is said
- * from here because the session map is here, and the one caller who wants it is the board: with the
- * terminal behind the other face, this label cannot be seen at all, so the shell puts a badge on the
- * face switch instead (`../shell/terminalBadge`). The split-out window passes nothing — its label is
- * on screen already. The change is what is reported, not the statement: an agent at work says a great
- * deal and almost none of it moves the answer.
+ * `onWaiting` is told whenever the answer to "is a turn standing in this pane" changes. **A turn
+ * stands for two reasons and neither of them is silence** (`AMB-D-748`, `AMB-T-3610`): the agent said
+ * so (`waiting`), or the ledger says something this session is holding is no longer ready — a
+ * blocker opened, a premise came unsettled. Both are also what the row itself leads with
+ * (`./nameplate`), so the badge and the label say the same thing about the same pane. What an agent
+ * has *not* said is not one of them: a pane that has gone quiet is a pane that has gone quiet.
+ *
+ * It is said from here because the session map and what the ledger answered are both here, and the
+ * callers who want it are the shell's: with the terminal behind the other face neither this label nor
+ * the dot on its page can be seen at all, so the badge on the face switch and the dots on the pages
+ * are drawn from this instead (`../shell/terminalBadge`, `../shell/TerminalFace`). The split-out
+ * window passes nothing — its label is on screen already. The change is what is reported, not the
+ * statement: an agent at work says a great deal and almost none of it moves the answer.
  */
 export function mountPlate(
   host: HTMLElement,
@@ -113,7 +121,8 @@ export function mountPlate(
 
   /** Say whether a turn is standing here, where that is not what was said last. */
   function tellWaiting(): void {
-    const now = live && anyWaiting(sessions);
+    // The same question the row leads with, asked once: declared, or derived (`./nameplate`).
+    const now = live && standsAsTurn(sayOf(held, running === null ? undefined : sessions.get(running)));
     if (now === waiting) return;
     waiting = now;
     onWaiting(now);
@@ -159,6 +168,9 @@ export function mountPlate(
         if (!live || running !== session) return;
         held = tasks;
         finished = work.finished;
+        // What came back can be the whole of the change: a blocker opened on a task this pane is
+        // holding while its agent said nothing at all.
+        tellWaiting();
         redraw();
       })
       .catch(() => {});

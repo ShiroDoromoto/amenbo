@@ -549,6 +549,7 @@ const ui = {
   "face.open": "Open a terminal here",
   "face.rename": "Rename this pane",
   "face.needsYou": "waiting on you",
+  "face.nothingNeedsYou": "As far as the ledger knows, nothing needs you.",
   // The file face beside the terminal's pane: what changed in the project's folder lately, and
   // the folder itself, folded. What a file turns out not to be is said in its own words — a
   // binary is not a failure, it is simply not something a panel can show.

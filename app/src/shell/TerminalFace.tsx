@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AdriftSlot } from "./AdriftSlot";
 import { TerminalPane } from "./TerminalPane";
 import { PaneRail } from "./PaneRail";
@@ -7,7 +7,8 @@ import {
 } from "../talk/frames";
 import {
   closedIn, COUNTS, EMPTY_LAYOUT, focusOn, folderOfPage, frameFor, goPage, laidOut, MAX_PAGES,
-  movedTo, openedIn, pageCount, restored, setCount, settledIn, sidesAreDrawers, slotsOf,
+  movedTo, openedIn, pageCount, pageOfFrame, restored, setCount, settledIn, sidesAreDrawers,
+  slotsOf,
   type Count, type Layout,
 } from "../talk/layout";
 import { FilesPanel } from "../files/FilesPanel";
@@ -96,22 +97,51 @@ export function TerminalFace({
   // offers the way to open one again instead of quietly starting a second shell.
   const startNow = useRef(new Set<string>([layout.frames[0]!.id]));
 
-  // Which panes are waiting on a person. Held as the set rather than a count: a pane that goes away
-  // has to take its own answer with it, and the shell is told the one fact it draws — that somebody's
-  // turn has come somewhere behind this face.
-  const waiting = useRef(new Set<string>());
+  // Which panes have a turn standing in them — the agent said so, or the ledger says a task the pane
+  // is holding is no longer ready (`../talk/plate`). It is state rather than a ref because it is
+  // drawn: the page a pane is on wears a dot for it, which is how a turn on a page nobody is looking
+  // at is knocked about at all (`AMB-T-3610`). The shell above is told the one fact it draws — that
+  // somebody's turn has come somewhere behind this face — and the set is what says which pane.
+  const [needy, setNeedy] = useState<ReadonlySet<string>>(new Set());
   // Read through a ref for the same reason the panes' callbacks are: the face is mounted once and
   // must not come down to be handed a fresh one.
   const tell = useRef(onWaiting);
   tell.current = onWaiting;
 
   const paneWaiting = useCallback((frame: string, is: boolean) => {
-    const was = waiting.current.size > 0;
-    if (is) waiting.current.add(frame);
-    else waiting.current.delete(frame);
-    const now = waiting.current.size > 0;
-    if (now !== was) tell.current(now);
+    setNeedy((was) => {
+      if (was.has(frame) === is) return was;
+      const next = new Set(was);
+      if (is) next.add(frame);
+      else next.delete(frame);
+      // The shell is told the answer for the face as a whole, and only when it turns over: a second
+      // pane joining the first does not knock again.
+      if ((next.size > 0) !== (was.size > 0)) tell.current(next.size > 0);
+      return next;
+    });
   }, []);
+
+  /**
+   * The pages a turn is standing on, minus the one being shown.
+   *
+   * The page in front of the reader needs no dot: the panes on it are drawn, and each says for
+   * itself whose turn it is (`../talk/nameplate`). A dot there would be the face telling somebody
+   * about what they are looking at.
+   */
+  const needyPages = useMemo(() => {
+    const pages = new Set<number>();
+    for (const frame of needy) {
+      const page = pageOfFrame(layout, frame);
+      if (page !== null && page !== layout.page) pages.add(page);
+    }
+    return pages;
+  }, [needy, layout]);
+
+  /** The pane to go to when a person asks for the one that needs them. */
+  const needsYou = useMemo(
+    () => layout.frames.find((frame) => needy.has(frame.id))?.id ?? null,
+    [needy, layout],
+  );
 
   useEffect(() => {
     let alive = true;
@@ -186,19 +216,31 @@ export function TerminalFace({
   // terminal is given every keystroke that is a character, and a page is reached with the ones that
   // are not. The face is kept mounted while the ledger is up (see above), so a face nobody is looking
   // at must not answer: `hidden` on a container above is what says so.
+  // What ⌘J says when it was pressed and there was nowhere to go. It is put up by the press and taken
+  // down by the next one, because it is an answer to a question rather than a state of the face.
+  const [nothingNeedsYou, setNothingNeedsYou] = useState(false);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (!e.metaKey && !e.ctrlKey) return;
       if (e.altKey || e.shiftKey) return;
+      if (rootRef.current?.closest("[hidden]")) return;
+      // ⌘J goes to the pane whose turn is standing. **It moves and sends nothing** — the pane is
+      // somebody's terminal, and typing into it on their behalf is not what being told means.
+      if (e.key === "j" || e.key === "J") {
+        e.preventDefault();
+        setNothingNeedsYou(needsYou === null);
+        if (needsYou !== null) setLayout((was) => focusOn(was, needsYou));
+        return;
+      }
       const digit = Number(e.key);
       if (!Number.isInteger(digit) || digit < 1 || digit > MAX_PAGES) return;
-      if (rootRef.current?.closest("[hidden]")) return;
       e.preventDefault();
       setLayout((was) => goPage(was, digit));
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  }, [needsYou]);
 
   const rail = (
     <PaneRail
@@ -248,17 +290,24 @@ export function TerminalFace({
           {Array.from({ length: pages }, (_, i) => i + 1).map((page) => (
             <button
               key={page}
-              className={`termface__page${layout.page === page ? " termface__page--on" : ""}`}
+              className={`termface__page${layout.page === page ? " termface__page--on" : ""}${
+                needyPages.has(page) ? " termface__page--needs" : ""}`}
               // Going to a page, not turning something on: the one showing is the current page.
               aria-current={layout.page === page ? "page" : undefined}
-              title={tf("face.page", { n: page })}
+              title={needyPages.has(page) ? t("face.needsYou") : tf("face.page", { n: page })}
               onClick={() => setLayout((was) => goPage(was, page))}
             >
               {page}
+              {/* One dot, and only for a turn that is standing. A pane that finished wears nothing:
+                  what is over is not something a person is needed for (`AMB-T-3610`). */}
+              {needyPages.has(page) && <span className="termface__needs" aria-hidden="true" />}
             </button>
           ))}
         </nav>
         {note !== null && <span className="termface__note">{note}</span>}
+        {/* Said only when it was asked for. "As far as the ledger knows" is the whole of the claim:
+            a pane nobody has heard from is not a pane where all is well (`AMB-D-748`). */}
+        {nothingNeedsYou && <span className="termface__note">{t("face.nothingNeedsYou")}</span>}
       </div>
       <div className="termface__body">
         {drawers
@@ -292,6 +341,9 @@ export function TerminalFace({
                   onClosed={(session) => {
                     setLayout((was) => closedIn(was, session));
                     setEnded((was) => new Set(was).add(session));
+                    // A session that has ended is not a turn anybody can take: what is over is not
+                    // something a person is needed for (`AMB-T-3610`).
+                    paneWaiting(frame.id, false);
                   }}
                   onName={named}
                   onFocus={(id) => setLayout((was) => focusOn(was, id))}

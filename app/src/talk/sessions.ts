@@ -114,14 +114,6 @@ export function said(sessions: Sessions, statement: SessionSaidDto): Sessions {
   }
 }
 
-/** Whether any session is waiting on a person. It is the pane's whole answer to "is a turn standing
- *  here", and the terminal segment's badge is drawn from it (`../shell/terminalBadge`) — `waiting`
- *  and nothing else, so output flowing past never counts as a turn. */
-export function anyWaiting(sessions: Sessions): boolean {
-  for (const entry of sessions.values()) if (entry.waiting !== null) return true;
-  return false;
-}
-
 /** Record that a person has looked at this pane. */
 export function seen(sessions: Sessions, session: string, at: string): Sessions {
   const known = sessions.get(session);

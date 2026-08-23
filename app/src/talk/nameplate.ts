@@ -140,6 +140,19 @@ export function sayOf(held: readonly Held[], session: Session | undefined): Say 
 }
 
 /**
+ * Whether what the row leads with is a person's turn standing.
+ *
+ * The two that are: the agent handing one over, and the ledger saying something the pane is holding
+ * is no longer ready. The two that are not: what the agent last said it was doing, and silence —
+ * which is not a claim about anything (`AMB-D-748`). It is one line and it is here rather than at
+ * the two places that draw it, so the dot on a page and the badge on the face switch cannot come to
+ * mean something the row does not (`AMB-T-3610`).
+ */
+export function standsAsTurn(say: Say): boolean {
+  return say.kind === "waiting" || say.kind === "premise";
+}
+
+/**
  * The words the middle is drawn with, the mark in front of them, and what a reader gets on asking.
  *
  * The mark for a stopped task is not the ⏸: it says the task has stopped, which the ledger holds, and

@@ -503,6 +503,7 @@ export const vi: Translation = {
     "face.open": "Mở terminal ở đây",
     "face.rename": "Đổi tên khung này",
     "face.needsYou": "đang chờ bạn",
+    "face.nothingNeedsYou": "Theo những gì sổ ghi biết, chưa có gì cần đến bạn.",
     "files.pointed": "Được chỉ tới",
     "files.nothingPointed": "Chưa có gì được chỉ tới.",
     "files.unopened": "{n} trong số này chưa từng được mở.",

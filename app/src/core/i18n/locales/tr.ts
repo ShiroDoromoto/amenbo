@@ -500,6 +500,7 @@ export const tr: Translation = {
     "face.open": "Burada bir terminal aç",
     "face.rename": "Bu bölmeyi yeniden adlandır",
     "face.needsYou": "sizi bekliyor",
+    "face.nothingNeedsYou": "Kayıtların bildiği kadarıyla sana ihtiyaç duyan bir şey yok.",
     "files.pointed": "İşaret edilenler",
     "files.nothingPointed": "Henüz hiçbir şey işaret edilmedi.",
     "files.unopened": "Bunlardan {n} tanesi hiç açılmadı.",

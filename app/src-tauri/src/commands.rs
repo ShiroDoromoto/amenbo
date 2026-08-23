@@ -36,7 +36,7 @@ fn open_store() -> Result<Store, CmdError> {
 /// engine's back-projection instead of paying for a full hydrate (`Store::open_read_at`).
 /// **Read commands only** — never call a write on the `Store` it hands back. Falls back to a full
 /// open internally if the engine has not been primed yet.
-fn open_store_read() -> Result<Store, CmdError> {
+pub(crate) fn open_store_read() -> Result<Store, CmdError> {
     ensure_migrated()?;
     Store::open_read_at(amenbo_core::config::Paths::resolve()?).map_err(CmdError::from)
 }

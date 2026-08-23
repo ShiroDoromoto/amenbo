@@ -453,7 +453,12 @@ export function AppShell() {
           agent running in the pane would have nowhere to come back to (`AMB-D-753`). */}
       {hostsTerminal && (
         <div className="shell__terminal" hidden={face !== "terminal"}>
-          <TerminalFace onSplitOut={splitOutTerminal} note={windowError} />
+          <TerminalFace
+            onSplitOut={splitOutTerminal}
+            note={windowError}
+            projectId={nav.type === "project" ? Number(nav.id) : (dataAdapter.listProjects()[0]?.id ?? null)}
+            onOpenLedger={() => setFace("tasks")}
+          />
         </div>
       )}
       <div

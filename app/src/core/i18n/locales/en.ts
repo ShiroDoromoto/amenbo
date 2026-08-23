@@ -525,6 +525,17 @@ const ui = {
   "face.splitOut": "Open in a separate window",
   "face.merge": "Back to one window",
   "face.ended": "The program in this terminal has exited.",
+  // The file face beside the terminal's pane: what changed in the project's folder lately, and
+  // the folder itself, folded. What a file turns out not to be is said in its own words — a
+  // binary is not a failure, it is simply not something a panel can show.
+  "files.changed": "Changed lately",
+  "files.tree": "The folder",
+  "files.nothingChanged": "Nothing has changed yet.",
+  "files.noFolder": "This project has no folder yet.",
+  "files.back": "Back to the list",
+  "files.notText": "This is not text, so it cannot be shown here.",
+  "files.cut": "Only the beginning is shown.",
+  "files.unreadable": "This file could not be read.",
   // The talk window's standing band, shown only while Amenbo itself holds an administrator's token
   // on Windows. What it warns about is not a right the user lacks but one they have too much of:
   // the terminal opens, and the tools behind scoop's links are unreachable from inside it

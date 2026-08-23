@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { mountTerminal } from "../talk/terminal";
 import { nameFrame, ONLY_FRAME } from "../talk/frames";
 import { mountPlate } from "../talk/plate";
+import { FilesPanel } from "../files/FilesPanel";
 import { t } from "../core/i18n";
 
 /**
@@ -19,8 +20,18 @@ import { t } from "../core/i18n";
  *
  * `note` is what the shell has to say about this face that the pane cannot — a window that could not
  * be split out, which is the press of the button here having come to nothing.
+ *
+ * Beside the pane is the file face (`app/src/files/FilesPanel.tsx`), which is rooted at the
+ * project's folder rather than at this pane's session — so it does not move when the pane does
+ * (`AMB-T-3602`). It is why this component is told which project the window is on, and how to leave
+ * this face for the ledger, neither of which the terminal itself has any use for.
  */
-export function TerminalFace({ onSplitOut, note }: { onSplitOut: () => void; note: string | null }) {
+export function TerminalFace({ onSplitOut, note, projectId, onOpenLedger }: {
+  onSplitOut: () => void;
+  note: string | null;
+  projectId?: number | null;
+  onOpenLedger?: () => void;
+}) {
   const paneRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
   // What the pane has to say for itself when it is not simply a terminal: the host's refusal if one
@@ -78,9 +89,12 @@ export function TerminalFace({ onSplitOut, note }: { onSplitOut: () => void; not
         {note !== null && <span className="termface__note">{note}</span>}
       </div>
       <div ref={labelRef} />
-      {failed === null
-        ? <div className="termface__pane" ref={paneRef} />
-        : <div className="termface__failed">{failed}</div>}
+      <div className="termface__split">
+        {failed === null
+          ? <div className="termface__pane" ref={paneRef} />
+          : <div className="termface__failed">{failed}</div>}
+        <FilesPanel projectId={projectId ?? null} onOpenLedger={onOpenLedger} />
+      </div>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-// The frame around a pane: which agent it opens with, and the row that offers to open it again.
+// Which agent a pane opens with, and the row a frame offers once the program in it has ended.
 //
 // A pane is a terminal with a program in it, and the program is the agent the person works with in
 // this folder. Working that out is the host's (`crate::wake`) — the folder's trace times what this
@@ -10,25 +10,31 @@
 // | several | the offer, once; the pick is kept and never asked again |
 // | none startable | what was looked for, and a way to look again |
 //
-// **The switch sits on the closed frame's row, and only there.** A pane that is running holds a live
-// process, and there is nothing a change of agent could mean for it short of killing what the person
-// is in the middle of — so while it runs there is no control to press. What ending a program leaves
-// is the frame with its last output still in it, and *that* is where the row appears: the agent to
-// use, and `open`.
+// **The switch sits on the row of a frame that has closed, and only there.** A pane that is running
+// holds a live process, and there is nothing a change of agent could mean for it short of killing
+// what the person is in the middle of — so while it runs there is no control to press. What ending a
+// program leaves is the frame with its last output still in it, and *that* is where the row appears:
+// the agent to use, and open.
+//
+// Naming is not this module's (`./frames`): a frame is called what a person or the agent called it,
+// and which agent it opens with is a different question about the same frame.
 import type { WakeCandidateDto, WakeDto } from "../bindings/bindings";
 import { errText, type Lang, t, tf } from "../core/i18n";
 import { invoke } from "../core/ipc";
-import { mountTerminal } from "./terminal";
+import { mountTerminal, type PaneEvents } from "./terminal";
 
-/** Fill `root` with the frame, and keep it filled for as long as the window is open. */
-export async function mountFrame(root: HTMLElement, lang: Lang): Promise<void> {
+/**
+ * Fill `host` with the frame, and keep it filled for as long as the window is open. `on` is passed
+ * straight through to whatever pane is running — this module decides what opens, not what is heard.
+ */
+export async function mountAgentFrame(host: HTMLElement, lang: Lang, on: PaneEvents): Promise<void> {
   const frame = document.createElement("div");
   frame.className = "talk__frame";
-  root.append(frame);
+  host.append(frame);
 
-  // The pane's teardown, while one is mounted. A frame holds at most one terminal at a time, and
-  // opening the next one is what takes the last one away — its final output stays on screen until
-  // then, which is the whole reason a closed frame is still a frame.
+  // The running pane's teardown, while there is one. A frame holds at most one terminal at a time,
+  // and opening the next one is what takes the last one away — its final output stays on screen
+  // until then, which is the whole reason a closed frame is still a frame.
   let close: (() => void) | null = null;
   let wake: WakeDto | null = null;
   // Which pane the frame is on. A terminal takes a round trip to mount, and the frame can be cleared
@@ -66,13 +72,14 @@ export async function mountFrame(root: HTMLElement, lang: Lang): Promise<void> {
     const pane = document.createElement("div");
     pane.className = "talk__pane";
     frame.append(pane);
-    void mountTerminal(pane, {
-      cwd: folder,
-      agent,
-      onClosed: () => {
+    const events: PaneEvents = {
+      ...on,
+      closed: (session) => {
+        on.closed(session);
         if (mine === showing) frame.append(row(agent));
       },
-    })
+    };
+    void mountTerminal(pane, events, { cwd: folder, agent })
       .then((dispose) => {
         if (mine === showing) close = dispose;
         else dispose();
@@ -130,7 +137,7 @@ export async function mountFrame(root: HTMLElement, lang: Lang): Promise<void> {
   };
 
   /**
-   * The closed frame's row: which agent the next pane opens with, and `open`.
+   * The closed frame's row: which agent the next pane opens with, and open.
    *
    * The list is only drawn where there is more than one to choose between — a row offering a choice
    * of one is a control that cannot do anything.

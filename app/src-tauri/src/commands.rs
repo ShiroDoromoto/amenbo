@@ -3666,6 +3666,47 @@ pub fn tick_banner_later() -> Result<(), CmdError> {
     Ok(())
 }
 
+/// What this device calls the talk window's frames — the whole of it, since the window draws every
+/// frame it has at once (`AMB-D-749` puts the running state in memory; this is the part that is kept).
+#[tauri::command]
+pub fn frame_names() -> Result<Vec<FrameNameDto>, CmdError> {
+    Ok(named(open_store()?.frame_names()?))
+}
+
+/// Name one frame, and answer with the names as they now stand.
+///
+/// The answer is the whole set rather than an acknowledgement, because a naming can be refused: a
+/// person's name for a frame outranks the agent's and stays put (`amenbo_core::frames`). A caller that
+/// drew what it asked for would show a name that is not the frame's.
+#[tauri::command]
+pub fn name_frame(
+    frame: String,
+    name: String,
+    by: amenbo_core::frames::NamedBy,
+) -> Result<Vec<FrameNameDto>, CmdError> {
+    Ok(named(open_store()?.name_frame(&frame, &name, by)?))
+}
+
+/// The frame names in the shape the webview reads them: a list, in frame order, rather than a map —
+/// the window draws them in a row, and a map's order is the caller's to rebuild.
+fn named(
+    names: std::collections::BTreeMap<String, amenbo_core::frames::FrameName>,
+) -> Vec<FrameNameDto> {
+    use amenbo_core::frames::NamedBy;
+    names
+        .into_iter()
+        .map(|(frame, named)| FrameNameDto {
+            frame,
+            name: named.name,
+            by: match named.by {
+                NamedBy::Typed => "typed",
+                NamedBy::Session => "session",
+                NamedBy::Person => "person",
+            },
+        })
+        .collect()
+}
+
 /// The row for one catalog entry.
 fn agent_hook_tool(harness: &amenbo_core::harness::Harness, cmd: &str) -> AgentHookToolDto {
     AgentHookToolDto {

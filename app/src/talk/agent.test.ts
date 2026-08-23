@@ -5,13 +5,14 @@
 // branching, the remembering, and the row on a closed pane all run for real.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WakeDto } from "../bindings/bindings";
+import type { PaneEvents } from "./terminal";
 
 const hoisted = vi.hoisted(() => ({
   /** What `wake_probe` answers with, in order — the last one is repeated. */
   answers: [] as WakeDto[],
   /** Every command that crossed, as `[name, args]`. */
   sent: [] as [string, Record<string, unknown> | undefined][],
-  /** The options the pane was mounted with, most recent last. */
+  /** Where each pane was started, most recent last. */
   panes: [] as { cwd?: string | null; agent?: string | null }[],
   /** Ends the pane most recently mounted, the way the host's `pty://closed` does. */
   end: null as (() => void) | null,
@@ -27,15 +28,21 @@ vi.mock("../core/ipc", () => ({
   }),
 }));
 vi.mock("./terminal", () => ({
-  mountTerminal: vi.fn(async (host: HTMLElement, opts: { onClosed?: () => void }) => {
-    hoisted.panes.push(opts as { cwd?: string | null; agent?: string | null });
-    hoisted.end = () => opts.onClosed?.();
-    host.textContent = "(a terminal)";
-    return () => {};
-  }),
+  mountTerminal: vi.fn(
+    async (
+      host: HTMLElement,
+      on: PaneEvents,
+      start: { cwd?: string | null; agent?: string | null },
+    ) => {
+      hoisted.panes.push(start);
+      hoisted.end = () => on.closed("session-1");
+      host.textContent = "(a terminal)";
+      return () => {};
+    },
+  ),
 }));
 
-import { mountFrame } from "./frame";
+import { mountAgentFrame } from "./agent";
 
 /** A host answer, with the parts a test does not care about filled in. */
 function wake(over: Partial<WakeDto> = {}): WakeDto {
@@ -50,12 +57,29 @@ function wake(over: Partial<WakeDto> = {}): WakeDto {
   };
 }
 
+/** What the window is told by the panes under it, counted rather than kept. */
+const heard = { opened: 0, said: 0, closed: 0, named: 0 };
+const events: PaneEvents = {
+  opened: () => {
+    heard.opened += 1;
+  },
+  said: () => {
+    heard.said += 1;
+  },
+  closed: () => {
+    heard.closed += 1;
+  },
+  name: () => {
+    heard.named += 1;
+  },
+};
+
 /** Draw the frame into a fresh page and hand back its root. */
 async function draw(answer: WakeDto): Promise<HTMLElement> {
   hoisted.answers = [answer];
   const root = document.createElement("div");
   document.body.replaceChildren(root);
-  await mountFrame(root, "en");
+  await mountAgentFrame(root, "en", events);
   return root;
 }
 
@@ -68,15 +92,14 @@ beforeEach(() => {
   hoisted.sent = [];
   hoisted.panes = [];
   hoisted.end = null;
+  heard.opened = heard.said = heard.closed = heard.named = 0;
 });
 
 describe("the frame draws what the host settled", () => {
   it("opens the pane without asking when one agent answers", async () => {
     const root = await draw(wake({ offered: ["claude-code"], settled: "claude-code" }));
 
-    expect(hoisted.panes).toEqual([
-      expect.objectContaining({ cwd: "/work/here", agent: "claude-code" }),
-    ]);
+    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "claude-code" }]);
     expect(buttons(root)).toEqual([]);
     expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_remember");
   });
@@ -94,7 +117,7 @@ describe("the frame draws what the host settled", () => {
       "wake_remember",
       { folder: "/work/here", agent: "codex-cli" },
     ]);
-    expect(hoisted.panes).toEqual([expect.objectContaining({ agent: "codex-cli" })]);
+    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "codex-cli" }]);
   });
 
   it("says what it looked for, and looks again on request, when nothing is startable", async () => {
@@ -109,7 +132,7 @@ describe("the frame draws what the host settled", () => {
     again?.click();
     await new Promise((r) => setTimeout(r, 0));
 
-    expect(hoisted.panes).toEqual([expect.objectContaining({ agent: "claude-code" })]);
+    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "claude-code" }]);
   });
 });
 
@@ -125,6 +148,7 @@ describe("the agent can be changed only on a frame that has closed", () => {
     expect(root.querySelector("select")).toBeNull();
 
     hoisted.end?.();
+    expect(heard.closed, "the window was not told the pane closed").toBe(1);
     const choose = root.querySelector("select");
     expect(choose, "the closed frame had no way to change the agent").toBeTruthy();
     expect(choose?.value).toBe("claude-code");
@@ -141,7 +165,10 @@ describe("the agent can be changed only on a frame that has closed", () => {
       "wake_remember",
       { folder: "/work/here", agent: "codex-cli" },
     ]);
-    expect(hoisted.panes[hoisted.panes.length - 1]).toEqual(expect.objectContaining({ agent: "codex-cli" }));
+    expect(hoisted.panes[hoisted.panes.length - 1]).toEqual({
+      cwd: "/work/here",
+      agent: "codex-cli",
+    });
   });
 
   it("does not write the answer down again when the same agent is opened", async () => {

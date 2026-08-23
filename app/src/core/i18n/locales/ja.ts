@@ -493,6 +493,9 @@ export const ja: Translation = {
     "talk.open": "開く",
     "talk.agent": "エージェント",
     "talk.ended": "この端末は終了しました。",
+    "talk.elevated.title": "Amenbo を管理者として実行しています",
+    "talk.elevated.body": "ここで開いた端末にも管理者の権限が引き継がれます。管理者の権限では scoop がパッケージを置くリンクをたどれないので、この窓からはその道具に届きません。入っていても、Amenbo は「入っていない」と答えます。",
+    "talk.elevated.fix": "Amenbo を終了し、「管理者として実行」を使わずに開き直すと、道具は戻ります。",
     // lint hook consent: the question Amenbo asks before writing into .git/hooks
     "hooks.title": "コミットに Amenbo の参照が混ざらないようにしますか？",
     "hooks.why": "AMB-T-… のような参照は、それを発行したストアの外では何も意味しません。git のフックを置いて、コミットに混ざる前に止めます。",

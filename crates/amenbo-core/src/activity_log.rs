@@ -127,6 +127,16 @@ pub mod event {
         json!({ "kind": "project.deleted", "name": name, "tasks": tasks, "decisions": decisions })
     }
 
+    /// A decision was put up for discussion — the moment `proposed` began.
+    ///
+    /// The column says a decision *is* proposed; it cannot say who put it up or which pane they were
+    /// in, and `status_changed_at` is overwritten by the verdict. That is the gap this line fills:
+    /// a proposal nobody ever settled is only findable if something recorded that it was made
+    /// (`AMB-T-3600`, `AMB-T-3639`).
+    pub fn decision_proposed(title: &str) -> Value {
+        json!({ "kind": "decision.proposed", "title": title })
+    }
+
     /// A decision is gone.
     pub fn decision_deleted(title: Option<&str>) -> Value {
         json!({ "kind": "decision.deleted", "title": title })

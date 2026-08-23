@@ -491,6 +491,7 @@ export const pl: Translation = {
     "act.assigned": "Przypisano „{title}”", "act.assignedAi": "Przekazano „{title}” SI",
     "act.unassigned": "Zdjęto przypisanie z „{title}”",
     "act.moved": "Przeniesiono „{title}”", "act.unblocked": "„{title}” nie jest już zablokowane (gotowe)",
+    "act.proposed": "Zaproponowano „{title}”",
     "act.deleted": "Usunięto „{title}”",
     "act.deletedWith": "Usunięto „{title}” ({tasks}, {decisions})",
     "act.updated": "Zaktualizowano „{title}”",

@@ -465,6 +465,7 @@ export const ko: Translation = {
     "act.assigned": "“{title}”의 담당을 정했습니다", "act.assignedAi": "“{title}”을(를) AI에게 맡겼습니다",
     "act.unassigned": "“{title}”의 담당을 해제했습니다",
     "act.moved": "“{title}”을(를) 옮겼습니다", "act.unblocked": "“{title}”이(가) 이제 막혀 있지 않습니다(시작할 수 있습니다)",
+    "act.proposed": "「{title}」을 제안",
     "act.deleted": "“{title}”을(를) 삭제했습니다",
     "act.deletedWith": "“{title}”을(를) 삭제했습니다({tasks}, {decisions})",
     "act.updated": "“{title}”을(를) 갱신했습니다",

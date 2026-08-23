@@ -465,6 +465,7 @@ export const nl: Translation = {
     "act.assigned": "“{title}” toegewezen", "act.assignedAi": "“{title}” aan de AI overgedragen",
     "act.unassigned": "Toewijzing van “{title}” opgeheven",
     "act.moved": "“{title}” verplaatst", "act.unblocked": "“{title}” is niet langer geblokkeerd (klaar om te starten)",
+    "act.proposed": "“{title}” voorgesteld",
     "act.deleted": "“{title}” verwijderd",
     "act.deletedWith": "“{title}” verwijderd ({tasks}, {decisions})",
     "act.updated": "“{title}” bijgewerkt",

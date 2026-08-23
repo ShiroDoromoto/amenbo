@@ -468,6 +468,7 @@ export const id: Translation = {
     "act.assigned": "Menugaskan “{title}”", "act.assignedAi": "Menyerahkan “{title}” ke AI",
     "act.unassigned": "Melepaskan penanggung jawab “{title}”",
     "act.moved": "Memindahkan “{title}”", "act.unblocked": "“{title}” kini tidak terhambat (siap)",
+    "act.proposed": "Mengusulkan “{title}”",
     "act.deleted": "Menghapus “{title}”",
     "act.deletedWith": "Menghapus “{title}” ({tasks}, {decisions})",
     "act.updated": "Memperbarui “{title}”",

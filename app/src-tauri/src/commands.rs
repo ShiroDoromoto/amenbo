@@ -2042,6 +2042,13 @@ pub fn decision_add(project_id: i64, title: String, body: Option<String>) -> Res
         let d = store.add_decision(amenbo_core::ops::decision::NewDecision {
             title, body: body.unwrap_or_default(), project_id,
         })?;
+        // The proposal is a moment, and the column cannot hold it (`AMB-T-3639`). A line that could
+        // not be written is not a decision that was not made: the ledger is not the record.
+        let _ = store.add_decision_system_event(
+            ActorKind::Human,
+            d.id,
+            amenbo_core::activity_log::event::decision_proposed(&d.title),
+        );
         Ok(d.id)
     })?;
     Ok(WriteAck::new(&["decisions"]).decision(id))
@@ -2166,6 +2173,11 @@ pub fn decision_promote(comment_id: i64, title: String) -> Result<WriteAck, CmdE
             title, body, project_id,
         })?;
         let did = d.id;
+        let _ = store.add_decision_system_event(
+            ActorKind::Human,
+            did,
+            amenbo_core::activity_log::event::decision_proposed(&d.title),
+        );
         store.link_decision(did, task_id)?;
         Ok((did, task_id))
     })?;

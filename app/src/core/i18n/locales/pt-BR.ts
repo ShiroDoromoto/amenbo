@@ -487,6 +487,7 @@ export const ptBR: Translation = {
     "act.assigned": "Definiu o responsável de “{title}”", "act.assignedAi": "Delegou “{title}” à IA",
     "act.unassigned": "Tirou o responsável de “{title}”",
     "act.moved": "Moveu “{title}”", "act.unblocked": "“{title}” não está mais bloqueada (pronta)",
+    "act.proposed": "Propôs “{title}”",
     "act.deleted": "Excluiu “{title}”",
     "act.deletedWith": "Excluiu “{title}” ({tasks}, {decisions})",
     "act.updated": "Atualizou “{title}”",

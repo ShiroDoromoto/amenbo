@@ -494,6 +494,7 @@ export const ru: Translation = {
     "act.assigned": "Назначил ответственного за «{title}»", "act.assignedAi": "Передал «{title}» ИИ",
     "act.unassigned": "Снял ответственного с «{title}»",
     "act.moved": "Переместил «{title}»", "act.unblocked": "«{title}» больше не заблокирована (готова)",
+    "act.proposed": "Предложено «{title}»",
     "act.deleted": "Удалил «{title}»",
     "act.deletedWith": "Удалил «{title}» ({tasks}, {decisions})",
     "act.updated": "Обновил «{title}»",

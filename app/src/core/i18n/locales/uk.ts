@@ -491,6 +491,7 @@ export const uk: Translation = {
     "act.assigned": "Призначено «{title}»", "act.assignedAi": "«{title}» передано ШІ",
     "act.unassigned": "Знято відповідального з «{title}»",
     "act.moved": "Переміщено «{title}»", "act.unblocked": "«{title}» більше не заблоковано (готове)",
+    "act.proposed": "Запропоновано «{title}»",
     "act.deleted": "Видалено «{title}»",
     "act.deletedWith": "Видалено «{title}» ({tasks}, {decisions})",
     "act.updated": "Оновлено «{title}»",

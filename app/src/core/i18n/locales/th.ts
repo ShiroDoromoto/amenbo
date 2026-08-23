@@ -468,6 +468,7 @@ export const th: Translation = {
     "act.assigned": "มอบหมาย “{title}”", "act.assignedAi": "มอบ “{title}” ให้ AI",
     "act.unassigned": "ปลดผู้รับผิดชอบของ “{title}”",
     "act.moved": "ย้าย “{title}”", "act.unblocked": "“{title}” ไม่ติดขัดแล้ว (พร้อมทำ)",
+    "act.proposed": "เสนอ “{title}”",
     "act.deleted": "ลบ “{title}”",
     "act.deletedWith": "ลบ “{title}” ({tasks}, {decisions})",
     "act.updated": "แก้ไข “{title}”",

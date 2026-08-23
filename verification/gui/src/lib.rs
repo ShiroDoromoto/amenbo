@@ -866,6 +866,22 @@ impl Instructor {
                     ),
                 }
             }
+            // The value taken out of that same manager. A required category asks where the tasks
+            // classified as it are to go before it lets one go, so the line says that too where a road
+            // names somewhere — and it is named as an answer the screen asks for, not as a second move
+            // the reader has to think of.
+            (Domain::Dimension, "value-rm") => {
+                let dimension = req(with, "dimension")?;
+                let value = req(with, "value")?;
+                match arg_str(with, "to") {
+                    Some(to) => format!(
+                        "Above the board, open the way into managing the project's categories, take the way that removes the value \"{value}\" from \"{dimension}\", answer that the tasks classified as it move to \"{to}\", and confirm.",
+                    ),
+                    None => format!(
+                        "Above the board, open the way into managing the project's categories, take the way that removes the value \"{value}\" from \"{dimension}\", and confirm.",
+                    ),
+                }
+            }
             // The key a category or one of its values answers to, renamed where a reader renames it. The
             // field sits beside the name in the same manager the box above is in, so the line walks in
             // the same way — and it says the key is typed rather than chosen, since what a reader is

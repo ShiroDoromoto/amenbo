@@ -703,7 +703,7 @@ impl Instructor {
             // drawing that session and on no other screen — which is what lets the absent half be
             // read as well: with the ledger up, the pane is hidden, and words that are hidden are
             // words that are not on the shot.
-            (Domain::Terminal, "pane") => {
+            (Domain::Terminal, "pane") | (Domain::Terminal, "label") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
             _ => None,
@@ -1221,6 +1221,31 @@ impl Instructor {
             (Domain::Terminal, "fold-back") =>
                 "Press the control that puts the terminal back into one window. This window closes and the terminal returns to the other one."
                     .to_string(),
+            // The surface layer, said from inside the pane it is about. The command is written out in
+            // full rather than described, because it is the one instruction on these roads that is
+            // literally what an agent types — and because the layer refuses to be said anywhere else,
+            // so an operator improvising it from a description would be turned away.
+            //
+            // `point` is not here. It carries a target and a reason rather than one line, so it is a
+            // shape of its own; the road that walks it brings it. An unknown word is refused loudly.
+            (Domain::Terminal, "say") => {
+                let text = req(with, "text")?;
+                match req(with, "verb")? {
+                    "name" => format!(
+                        "In the terminal pane, run: amenbo session name \"{text}\" — this is the agent naming the pane it is running in."
+                    ),
+                    "note" => format!(
+                        "In the terminal pane, run: amenbo session note \"{text}\" — this is the agent saying what it is doing now."
+                    ),
+                    "waiting" => format!(
+                        "In the terminal pane, run: amenbo session waiting \"{text}\" — this is the agent handing the turn over, and saying why."
+                    ),
+                    "finished" => format!(
+                        "In the terminal pane, run: amenbo session finished \"{text}\" — this is the agent saying what came of the work."
+                    ),
+                    other => return Err(format!("action `say` does not know the verb `{other}`")),
+                }
+            }
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -1954,6 +1979,19 @@ impl Instructor {
             // What the pane is showing. The words are the road's own, typed into that terminal by an
             // earlier step, so a reading that finds them found the pane drawing that session — and
             // the absent half is read with the ledger up, where the pane is hidden rather than gone.
+            // What the pane's label carries. It is the row above the pane rather than the pane itself:
+            // the words got there because the app read them out of the drop box the agent wrote to,
+            // never because they were printed in the terminal.
+            (Domain::Terminal, "label") => match present(with) {
+                true => format!(
+                    "On the row above the terminal pane, confirm the label carries \"{}\" — said in the pane, read off the screen.",
+                    req(with, "shows")?
+                ),
+                false => format!(
+                    "On the row above the terminal pane, confirm the label carries nothing saying \"{}\".",
+                    req(with, "shows")?
+                ),
+            },
             (Domain::Terminal, "pane") => match present(with) {
                 true => format!(
                     "Confirm the terminal pane still shows the line \"{}\" — the same terminal, drawn here.",

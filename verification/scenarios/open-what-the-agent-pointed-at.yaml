@@ -1,0 +1,137 @@
+# The agent saying "look at this", and the person looking.
+#
+# An agent working in a pane produces things worth reading, and the pane is the worst place to read
+# them: a file's contents scrolled past in a terminal is gone the moment the next command runs. So the
+# surface layer has a word for it — the agent says what is worth opening and why — and the file face
+# beside the pane is where that lands, as rows a person presses when they are ready.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road here and no gap in one. The layer exists only inside a pane — said anywhere
+# else it is refused, deliberately — and what it leaves is drawn on a screen. A terminal driver has
+# nowhere to say it and nothing to read it off.
+#
+# ── Why a hand types it ──────────────────────────────────────────────────────────────────────────
+# The words are only accepted from inside the pane that is running, which does not exist until the app
+# does, so the operator types what an agent types. That is not a shortcut around the seam — it is the
+# seam, walked by the only door there is.
+#
+# ── The target that is not opened, and why it is the point ───────────────────────────────────────
+# An agent may point at anything, including something outside the folder the project answers for. The
+# face draws that row — it is what the agent said, and hiding it would be the app editing the agent —
+# but it does **not** make it something to press: what is reachable is fenced by the folder, and a
+# button that opened it would be a fence with a door in it. So the road points at two things and
+# reads that one of them is a row and the other is a row that opens.
+#
+# ── What is not kept ─────────────────────────────────────────────────────────────────────────────
+# None of this outlives the window. What an agent pointed at belongs to the session it was said in and
+# is gone with it, which is why the road reads it while the pane is still running rather than proving
+# anything about coming back to it.
+id: open-what-the-agent-pointed-at
+title: An agent points at a file from inside its pane, and the person opens it from the column beside
+description: >
+  Open the terminal face on a project whose folder holds a file, and let the thing running in the pane
+  point at it — the agent's own word for "this is worth opening", said with the CLI from inside the
+  terminal. The row arrives in the column beside the pane, and pressing it opens the file. Point at
+  something outside the folder as well: the row is drawn, because it is what the agent said, and it is
+  not something to press, because what is reachable is fenced by the folder.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: notes/watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The pane has to be running before anything can be said in it: the layer is refused everywhere else.
+  - type: action
+    domain: terminal
+    op: open-folder
+    with:
+      dir: greenhouse
+
+  # Nothing has been said yet, and the column says so rather than drawing an empty space that could be
+  # read as a section that failed to load.
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: nothing-pointed
+
+  - type: action
+    domain: terminal
+    op: point
+    with:
+      target: notes/watering.md
+      why: SCENARIO this is the schedule the whole plan turns on
+
+  # Said in the pane, read in the column. The reason travels with it: a thing to open with no reason
+  # to open it is a row a person has to go and find out about.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: notes/watering.md
+      section: pointed
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: notes/watering.md
+      section: pointed
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the seedlings are watered every second morning
+
+  - type: action
+    domain: files
+    op: back
+
+  # And something outside the folder. What the agent said is drawn — the app does not edit it — and
+  # what the folder fences is not opened.
+  - type: action
+    domain: terminal
+    op: point
+    with:
+      target: ../elsewhere/ledger.md
+      why: SCENARIO this one is outside what the project answers for
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: ../elsewhere/ledger.md
+      section: pointed
+
+  - type: assert
+    domain: files
+    op: openable
+    with:
+      name: ../elsewhere/ledger.md
+      present: false

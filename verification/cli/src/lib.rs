@@ -502,6 +502,9 @@ impl<'a> Driver<'a> {
             // is refused by name rather than left to a wildcard so that an op added here later
             // stops the compiler instead of reading as deliberately unwalked.
             Domain::Terminal => Err(unmapped(domain, op)),
+            // The file face is a screen too. Reading a file at a shell is `cat`, which is not Amenbo
+            // doing anything, so there is nothing here to walk and no gap in the road.
+            Domain::Files => Err(unmapped(domain, op)),
         }
     }
 
@@ -529,6 +532,7 @@ impl<'a> Driver<'a> {
             Domain::Tick => self.tick_assert(op, with),
             // The screen's alone, the same way its actions are.
             Domain::Terminal => Err(unmapped(domain, op)),
+            Domain::Files => Err(unmapped(domain, op)),
         }
     }
 

@@ -45,6 +45,8 @@ const (
 	// vmScreenPath is where the compiled screen tool is put in the guest. Fixed, so a caller
 	// that sent it and a caller that uses it need not agree on anything but this.
 	vmScreenPath = "/Users/" + vmUser + "/screen"
+	// vmGuestHome is the guest account's home, and the one place anything is put in there.
+	vmGuestHome = "/Users/" + vmUser
 )
 
 // vmCmd dispatches the `vm` subcommands: the two that raise the clone and throw it away, the two
@@ -110,6 +112,8 @@ func vmCmd(args []string) {
 		fs.Parse(args[1:])
 		noArgs(fs)
 		fail(vmSendScreen())
+	case "verify":
+		vmVerifyCmd(args[1:])
 	case "golden":
 		fs := flag.NewFlagSet("vm golden", flag.ExitOnError)
 		refresh := fs.Bool("refresh", false, "pull the base image and cut the golden from it again")
@@ -195,28 +199,25 @@ func requireTart() error {
 // ---------------------------------------------------------------------------
 
 // vmUp raises the clone and prints its IP on stdout, so the address can be handed straight to
-// whatever is about to talk to it.
+// whatever is about to talk to it. Already running, it is used as it stands — that is the whole
+// contract: a test does not raise a second VM, and it does not throw away the one a session has
+// been working in.
+//
+// The clone is cut from the golden on the way if there is none (0.03s, no disk of its own until it
+// is written to), and the wait runs to a GUI session rather than to a ping: `/dev/console` owned by
+// the account is what says a screen exists to draw on, and everything here is for drawing on it.
 func vmUp() error {
 	ip, err := vmEnsureUp()
 	if err != nil {
 		return err
 	}
+	logf("  vm      : %s ready at %s — `devtool vm rm` throws it away", vmCloneName, ip)
 	fmt.Printf("%s\n", ip)
 	return nil
 }
 
-// vmEnsureUp raises the clone if it is not running and answers with its address. Already running,
-// it is used as it stands — that is the whole contract: a caller that needs the guest does not
-// raise a second VM, and it does not throw away the one a session has been working in. That is why
-// a command with work to do in there (putting a dev GUI in it) calls this rather than refusing:
-// what a person decides is when the clone is thrown away, never when it is raised.
-//
-// The clone is cut from the golden on the way if there is none (0.03s, no disk of its own until it
-// is written to), and the wait runs to a GUI session rather than to a ping: `/dev/console` owned by
-// the account is what says a screen exists to draw on, and everything here is for drawing on it.
-//
-// It answers on stderr and never on stdout: a caller printing an address (or a path) of its own
-// keeps that channel to itself.
+// vmEnsureUp is that same raise, answering with the address instead of printing it — what the
+// commands built on top of the VM start with, none of which want an address on their stdout.
 func vmEnsureUp() (string, error) {
 	if err := requireTart(); err != nil {
 		return "", err
@@ -252,7 +253,6 @@ func vmEnsureUp() (string, error) {
 		return "", err
 	}
 	reportVersionDrift(ip)
-	logf("  vm      : %s ready at %s — `devtool vm rm` throws it away", vmCloneName, ip)
 	return ip, nil
 }
 

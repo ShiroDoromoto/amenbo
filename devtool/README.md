@@ -7,8 +7,9 @@ On macOS it gives a task its own throwaway **dev GUI** — bundle, app-data and
 all — so several implementation sessions can run in parallel without installing
 over each other, and it stands up a **fake outside world** the dev GUI can be
 verified against — including the failures the real one will not produce on
-demand. It also raises the throwaway **macOS VM** that GUI is driven in, so
-verification takes a screen that is not the one being worked on.
+demand. It also raises the throwaway **macOS VM** that GUI is driven in — and
+walks a pre-distribution screen road inside it — so verification takes a screen
+that is not the one being worked on.
 
 ## Build
 
@@ -562,6 +563,68 @@ Only the way the golden is made would change to move off it.
 - **Enrolling the key is left to a person, and named rather than done.** It takes
   the image's password, which is a credential to type. `--refresh` prints the
   `ssh-copy-id` line to run and says to stop the golden again afterwards.
+
+### `devtool vm verify install | run | step | log | pull`
+
+Walks a **pre-distribution screen road** (`verification/scenarios/`) inside that VM.
+
+```sh
+devtool vm verify install ~/dist/amenbo-darwin-arm64.pkg     # or --from-run <run id>
+devtool vm verify run verification/scenarios/link-a-folder.yaml
+# … drive the screen in the guest, then:
+devtool vm verify step --note 'pressed Link a folder'
+devtool vm verify pull --out ./evidence
+```
+
+**The harness is not changed, and nothing here repeats what it does.** `verify-gui` still launches
+the shipped bundle, holds the pid that launch answered with, stands up the world the scenario
+declares and shoots one screen per step. That is the reason the harness *moves into* the guest
+rather than being driven from outside: a pid held on this side would name a process on that one.
+
+What is added is the four things a run in there needs and a run here does not.
+
+**`install`** sends and installs the shipped build, the harness, the scenarios, the fixtures and the
+screen tool.
+
+- **The build is a path, or `--from-run <run id>`** — the mac artifact of a CI run, never the
+  release's download URL: a release download is counted, and a development one cannot be subtracted
+  afterwards. Holding the bytes against what the release published is the release procedure's own
+  step, upstream of this, which is what handing this command a path keeps room for.
+- **A build for the other architecture is refused by name.** It installs cleanly and then will not
+  start, which is a failure several steps away from its cause.
+- **Nothing is built for the guest.** Host and guest are the same architecture, so the harness
+  compiled here runs there, and the guest needs neither Rust nor node.
+- The first `swift <source>` on a machine builds a module cache and takes some twenty seconds; every
+  one after it is under a second. That is paid here, rather than inside the harness's own window for
+  the app to draw a window — which that first call would otherwise run out.
+
+**`run`** starts one road and comes back when the harness has handed over its first step. It does
+not wait for the run: a road is walked by somebody, and that somebody is whoever calls `step`
+between one hand-over and the next.
+
+- **`--screen` is passed explicitly.** The harness resolves the tool relative to its own executable,
+  which in the guest is a path on this side of the machine — a run without it fails a minute in,
+  having launched an app and photographed nothing.
+- A previous run's app is taken down first. The harness takes its own down when it ends, and the one
+  case it cannot is the one that matters: a run somebody stopped part-way leaves a window that the
+  next run's shots would have in front of them.
+
+**`step`** sends one line and waits for the harness to say something next. **The steps come from a
+file that is appended to, not from a pipe somebody holds** — the harness's stdin is `tail -n 0 -f`
+over that file, so nothing has to stay alive between two commands, what was sent stays on disk to be
+counted, and a run that has ended takes the tail down with it. `log` re-reads the same tail without
+advancing.
+
+**`pull`** brings the shots and the manifest out. They are what a `Review` step is closed from and
+what a red one is read by, and they are of no use inside a machine that is thrown away.
+
+The road itself is still walked by whoever is driving. In the guest that is the screen tool:
+
+```sh
+devtool vm exec -- 'PID=$(pgrep -f "Amenbo.app/Contents/MacOS/amenbo-app" | head -1);
+  swift /Users/admin/screen.swift find $PID'
+devtool vm exec -- '… swift /Users/admin/screen.swift click-named $PID "Link a folder"'
+```
 
 ### Host and guest drifting apart
 

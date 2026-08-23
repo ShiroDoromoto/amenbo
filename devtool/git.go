@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 )
@@ -37,4 +38,26 @@ func worktreeCheckouts(root string) ([]string, error) {
 		}
 	}
 	return paths, nil
+}
+
+// originRepo names the GitHub repository `origin` points at, as `owner/name`. It is read from git
+// rather than written down because devtool is dropped into a tree, not built for one, and the one
+// thing that already knows which project this checkout belongs to is the remote it pushes to.
+//
+// Both URL forms git writes are taken (ssh and https), and a `.git` suffix is dropped. Anything else
+// is refused rather than half-parsed: a wrong repository here would download somebody else's build.
+func originRepo(dir string) (string, error) {
+	url, err := run(dir, "git", "remote", "get-url", "origin")
+	if err != nil {
+		return "", err
+	}
+	s := strings.TrimSuffix(strings.TrimSpace(url), ".git")
+	for _, prefix := range []string{"git@github.com:", "https://github.com/", "ssh://git@github.com/"} {
+		if rest, ok := strings.CutPrefix(s, prefix); ok {
+			if owner, name, found := strings.Cut(rest, "/"); found && owner != "" && name != "" {
+				return owner + "/" + name, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("origin %q is not a GitHub repository this can name as owner/name", s)
 }

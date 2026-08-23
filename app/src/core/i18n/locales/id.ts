@@ -483,7 +483,12 @@ export const id: Translation = {
     "talk.retry": "Cari lagi",
     "talk.open": "Buka",
     "talk.agent": "Agen",
-    "talk.ended": "Terminal ini telah berakhir.",
+    "face.switch": "Yang ditampilkan jendela ini",
+    "face.tasks": "Tugas",
+    "face.terminal": "Terminal",
+    "face.splitOut": "Buka di jendela terpisah",
+    "face.merge": "Kembali ke satu jendela",
+    "face.ended": "Program di terminal ini telah berhenti.",
     "talk.elevated.title": "Amenbo berjalan sebagai administrator",
     "talk.elevated.body": "Terminal yang dibuka di sini mewarisi hak itu, dan administrator tidak mengikuti tautan tempat scoop memasang paketnya. Alat-alat itu tidak dapat dijangkau dari jendela ini — Amenbo akan melaporkannya tidak terpasang, padahal terpasang.",
     "talk.elevated.fix": "Tutup Amenbo lalu buka lagi tanpa “Run as administrator”, dan alat-alat itu kembali.",
@@ -629,6 +634,7 @@ export const id: Translation = {
     wake_no_folder: "Folder itu tidak bisa dibaca: {reason}",
     wake_no_config: "Amenbo tidak menemukan berkasnya sendiri.",
     wake_not_kept: "Pilihan tidak bisa disimpan.",
+    window_failed: "Jendela itu tidak dapat dibuka: {reason}",
 
     already_reserved:
       "{ref} tidak berstatus “Akan dikerjakan”, jadi tidak bisa diambil — mungkin sesi lain sudah memegangnya.",

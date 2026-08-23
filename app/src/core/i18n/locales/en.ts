@@ -523,7 +523,13 @@ const ui = {
   "talk.retry": "Search again",
   "talk.open": "Open",
   "talk.agent": "Agent",
-  "talk.ended": "This terminal has ended.",
+  // The two faces of the one window, and the moves between one window and two (`AMB-D-753`).
+  "face.switch": "Tasks or terminal",
+  "face.tasks": "Tasks",
+  "face.terminal": "Terminal",
+  "face.splitOut": "Open in a separate window",
+  "face.merge": "Back to one window",
+  "face.ended": "The program in this terminal has exited.",
   // The talk window's standing band, shown only while Amenbo itself holds an administrator's token
   // on Windows. What it warns about is not a right the user lacks but one they have too much of:
   // the terminal opens, and the tools behind scoop's links are unreachable from inside it
@@ -703,6 +709,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   wake_no_folder: "That folder could not be read: {reason}",
   wake_no_config: "Amenbo could not find its own files.",
   wake_not_kept: "The choice could not be saved.",
+  window_failed: "That window could not be opened: {reason}",
 
   // The sentences the GUI shows a person, named one at a time (`AMB-D-413`). Which refusals get a code of
   // their own was settled by measuring what the front end actually surfaces: a form the screen already

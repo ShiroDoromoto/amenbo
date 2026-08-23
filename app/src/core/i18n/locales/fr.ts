@@ -501,7 +501,12 @@ export const fr: Translation = {
     "talk.retry": "Rechercher à nouveau",
     "talk.open": "Ouvrir",
     "talk.agent": "Agent",
-    "talk.ended": "Ce terminal s'est terminé.",
+    "face.switch": "Ce que montre cette fenêtre",
+    "face.tasks": "Tâches",
+    "face.terminal": "Terminal",
+    "face.splitOut": "Ouvrir dans une fenêtre séparée",
+    "face.merge": "Revenir à une seule fenêtre",
+    "face.ended": "Le programme de ce terminal s'est arrêté.",
     "talk.elevated.title": "Amenbo s'exécute en tant qu'administrateur",
     "talk.elevated.body": "Un terminal ouvert ici en hérite, et un administrateur ne suit pas les liens derrière lesquels scoop installe ses paquets. Ces outils sont inaccessibles depuis cette fenêtre : Amenbo les signalera comme non installés, alors qu'ils le sont.",
     "talk.elevated.fix": "Quittez Amenbo et rouvrez-le sans « Exécuter en tant qu'administrateur » : ils reviennent.",
@@ -655,6 +660,7 @@ export const fr: Translation = {
     wake_no_folder: "Ce dossier n'a pas pu être lu : {reason}",
     wake_no_config: "Amenbo n'a pas pu trouver ses propres fichiers.",
     wake_not_kept: "Le choix n'a pas pu être enregistré.",
+    window_failed: "Cette fenêtre n'a pas pu être ouverte : {reason}",
 
     already_reserved:
       "{ref} n'est pas « À faire », donc impossible de la réserver — une autre session la tient peut-être déjà.",

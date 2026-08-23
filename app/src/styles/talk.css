@@ -1,7 +1,7 @@
-/* The talk window's own page. One frame fills whatever the bands above it leave: the rail, and
-   several frames beside each other, are not here yet — so what the window shows is one terminal, its
-   margin, anything standing that has to be said about it, and, once the program in it has ended, the
-   row that opens the next one. */
+/* The talk window's own page — the window the terminal is split out into (`AMB-D-753`). A bar with
+   the way back to one window, then anything standing that has to be said about the terminal, and the
+   pane filling what they leave: the frame that will hold several panes, and the rail beside them, are
+   not here yet. */
 .talk {
   display: flex;
   flex-direction: column;
@@ -11,16 +11,25 @@
   background: var(--c-bg);
 }
 
-/* The frame: the pane, and whatever the frame has to say beneath it. It is a column so that a
-   closed pane keeps its last output at full height while the row sits under it, and it takes the room
-   the bands above it leave rather than a height of its own. */
-.talk__frame {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: var(--s-2);
-  min-height: 0;
+/* The bar above the pane. It holds one control and is sized by it, so the pane keeps the rest. */
+.talk__bar { display: flex; align-items: center; justify-content: flex-end; }
+.talk__action {
+  background: var(--c-surface-sunken); border: 1px solid var(--c-border);
+  border-radius: var(--r-md); padding: var(--s-1) var(--s-3);
+  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1.6;
 }
+.talk__action:hover { color: var(--c-text); }
+
+/* The program in the terminal having exited. What is on the screen above stays as it was — that is
+   what a terminal ends with — and this is the part of it the screen cannot show for itself. */
+.talk__note {
+  padding: var(--s-2) var(--s-3);
+  color: var(--c-text-muted); font-size: var(--fs-sm);
+}
+
+/* What the window holds below the bar: the frame the agent question is put in, and the pane once one
+   is running (`app/src/talk/agent.ts`). */
+.talk__face { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; }
 
 /* The terminal's box. xterm.js measures the element it was opened in, so this is what decides how
    many columns and rows the program inside is told it has — which is why it takes the room that is
@@ -74,79 +83,4 @@
   font-family: var(--font-mono);
   font-size: var(--fs-sm);
   white-space: pre-wrap;
-}
-
-/* What the frame says while it is working out what this folder opens with. */
-.talk__looking {
-  padding: var(--s-4);
-  color: var(--c-text-muted);
-  font-size: var(--fs-sm);
-}
-
-/* The offer and the notice share a box: both are a sentence and then something to press. */
-.talk__ask {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--s-2);
-  padding: var(--s-4);
-  border: 1px solid var(--c-border);
-  border-radius: var(--r-md);
-  background: var(--c-surface);
-}
-
-.talk__askTitle {
-  font-size: var(--fs-md);
-  font-weight: 600;
-}
-
-/* What was looked for, and what to do about it. Prose rather than monospace: the command names sit
-   inside a sentence, and a whole sentence set in the terminal's face reads as output. */
-.talk__hint {
-  max-width: 60ch;
-  color: var(--c-text-muted);
-  font-size: var(--fs-sm);
-  line-height: 1.6;
-}
-
-.talk__choice {
-  padding: var(--s-2) var(--s-3);
-  border: 1px solid var(--c-border);
-  border-radius: var(--r-sm);
-  background: var(--c-surface);
-  color: var(--c-text);
-  cursor: pointer;
-  font: inherit;
-}
-
-.talk__choice:hover {
-  border-color: var(--c-accent);
-}
-
-/* The closed frame's row. It exists only once the program has ended — while one is running there is
-   nothing here to press, which is what "the agent cannot be changed mid-run" looks like on screen. */
-.talk__row {
-  display: flex;
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s-2);
-  padding: var(--s-2) var(--s-3);
-  border: 1px solid var(--c-border);
-  border-radius: var(--r-md);
-  background: var(--c-surface);
-}
-
-.talk__ended {
-  flex: 1;
-  color: var(--c-text-muted);
-  font-size: var(--fs-sm);
-}
-
-.talk__pick {
-  display: flex;
-  align-items: center;
-  gap: var(--s-1);
-  font-size: var(--fs-sm);
 }

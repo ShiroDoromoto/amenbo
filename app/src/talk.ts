@@ -1,10 +1,16 @@
-// The talk window's entry — the second window of the one app (`AMB-T-3588`). The board (`main.tsx`)
-// is "what has happened"; this one is "what is happening now", and what is happening now is a
-// terminal: one pane, filling the window, with this folder's agent running in it.
+// The talk window's entry — the window someone splits the terminal out into, so the two faces can sit
+// on two displays (`AMB-D-753`). It is not opened at launch and is not declared in `tauri.conf.json`:
+// the app comes up as one window showing the board, and this one is built when it is asked for
+// (`crate::windows`). What is in it is a terminal: one pane, filling the window, with this folder's
+// agent running in it.
 //
 // **What goes in the pane is not decided here.** The frame around it asks the host which agent this
-// folder opens with, and draws the offer or the install notice where that has no single answer
+// folder starts with, and draws the offer or the install notice where that has no single answer
 // (`./talk/agent`).
+//
+// The terminal it draws is the one that was already running in the board, and folding the app back
+// hands it over the same way. Neither end restarts anything — a pane is a drawing of a session, not
+// the session (`./talk/terminal`).
 //
 // **What is happening now is held here and nowhere else.** The window keeps what it knows about the
 // sessions running in its panes (`./talk/sessions`) for as long as they run, because a session has no
@@ -68,6 +74,24 @@ void language.then((lang) => {
   retitle();
 });
 
+// The way back to a single window. The board is told nothing here — this window going is what says
+// it, whether it went from this button or from the title bar, and the board watches for the window
+// rather than for the press (`crate::windows`). Worded in English until the language answers, the way
+// the title is: a bar that waited would be a window with no way out of it for as long as the wait.
+function mergeButton(): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "talk__bar";
+  const merge = document.createElement("button");
+  merge.className = "talk__action";
+  merge.textContent = t("face.merge", "en");
+  merge.addEventListener("click", () => void invoke("talk_close").catch(() => {}));
+  void language.then((lang) => {
+    merge.textContent = t("face.merge", lang);
+  });
+  row.append(merge);
+  return row;
+}
+
 void frameNames()
   .then((known) => {
     names = known;
@@ -93,19 +117,34 @@ function name(text: string, by: NamedBy): void {
 const root = document.getElementById("root");
 if (root) {
   root.className = "talk";
+  const face = document.createElement("div");
+  face.className = "talk__face";
+  root.append(mergeButton(), face);
   void language.then((lang) =>
-    mountAgentFrame(root, lang, {
-      opened: (session, startedAt) => {
-        sessions = opened(sessions, { session, startedAt });
+    mountAgentFrame(
+      face,
+      lang,
+      {
+        opened: (session, startedAt) => {
+          sessions = opened(sessions, { session, startedAt });
+        },
+        said: (statement) => {
+          sessions = said(sessions, statement);
+        },
+        closed: (session) => {
+          sessions = closed(sessions, session);
+          // What is on the screen stays as it was — that is what a terminal ends with — and this is
+          // the part of it the screen cannot show for itself: a finished shell looks exactly like one
+          // waiting to be typed at.
+          const note = document.createElement("div");
+          note.className = "talk__note";
+          note.textContent = t("face.ended", lang);
+          face.after(note);
+        },
+        name,
       },
-      said: (statement) => {
-        sessions = said(sessions, statement);
-      },
-      closed: (session) => {
-        sessions = closed(sessions, session);
-      },
-      name,
-    }),
+      "talk__pane",
+    ),
   );
 
   // The band above the pane, and only when there is something to say. It is asked for after the

@@ -4,7 +4,7 @@
 // Only the two boundaries are stubbed — what the host answers, and the terminal itself — so the
 // branching, the remembering, and the row on a closed pane all run for real.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { WakeDto } from "../bindings/bindings";
+import type { PtySessionDto, WakeDto } from "../bindings/bindings";
 import type { PaneEvents } from "./terminal";
 
 const hoisted = vi.hoisted(() => ({
@@ -16,11 +16,14 @@ const hoisted = vi.hoisted(() => ({
   panes: [] as { cwd?: string | null; agent?: string | null }[],
   /** Ends the pane most recently mounted, the way the host's `pty://closed` does. */
   end: null as (() => void) | null,
+  /** What `pty_sessions` answers with — a terminal already running is one nothing is asked about. */
+  running: [] as PtySessionDto[],
 }));
 
 vi.mock("../core/ipc", () => ({
   invoke: vi.fn(async (name: string, args?: Record<string, unknown>) => {
     hoisted.sent.push([name, args]);
+    if (name === "pty_sessions") return hoisted.running;
     if (name === "wake_probe") {
       return hoisted.answers.length > 1 ? hoisted.answers.shift() : hoisted.answers[0];
     }
@@ -79,7 +82,7 @@ async function draw(answer: WakeDto): Promise<HTMLElement> {
   hoisted.answers = [answer];
   const root = document.createElement("div");
   document.body.replaceChildren(root);
-  await mountAgentFrame(root, "en", events);
+  await mountAgentFrame(root, "en", events, "pane");
   return root;
 }
 
@@ -92,6 +95,7 @@ beforeEach(() => {
   hoisted.sent = [];
   hoisted.panes = [];
   hoisted.end = null;
+  hoisted.running = [];
   heard.opened = heard.said = heard.closed = heard.named = 0;
 });
 
@@ -152,7 +156,6 @@ describe("the agent can be changed only on a frame that has closed", () => {
     const choose = root.querySelector("select");
     expect(choose, "the closed frame had no way to change the agent").toBeTruthy();
     expect(choose?.value).toBe("claude-code");
-    expect(root.textContent).toContain("(a terminal)");
 
     if (choose) {
       choose.value = "codex-cli";

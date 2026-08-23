@@ -32,22 +32,24 @@
 //! is only the terminal itself.
 
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use base64::Engine as _;
-use portable_pty::{native_pty_system, ChildKiller, MasterPty, PtySize};
+use portable_pty::{native_pty_system, MasterPty, PtySize};
 use tauri::{Emitter, Manager};
 
-use crate::dto::{PtyChunkDto, SessionSaidDto};
+use crate::dto::{PtyChunkDto, PtySessionDto, SessionSaidDto};
 use crate::error::CmdError;
 use crate::launch;
 
 /// The event each chunk of a terminal's output arrives on. The payload is a `PtyChunkDto`, and it
-/// goes to the talk window alone: the board has no terminal in it, so a listener there would be
-/// woken thousands of times for something it cannot draw.
+/// goes to the one window drawing that session rather than to every window open: the other one has
+/// no pane for it, and would be woken thousands of times for something it cannot draw. Which window
+/// that is is the session's own ([`Pane::target`]), because the pane moves — the board draws the
+/// terminal while the app is one window, the talk window once it has been split out.
 const OUTPUT_EVENT: &str = "pty://output";
 
 /// The event a terminal's end arrives on, once, when the program in it exits. The payload is the
@@ -89,6 +91,15 @@ const LISTEN_EVERY: std::time::Duration = std::time::Duration::from_millis(200);
 /// slow command does not wait for a buffer to fill.
 const CHUNK: usize = 8 * 1024;
 
+/// How much of a terminal's output is kept for a pane that adopts the session later.
+///
+/// A terminal's scrollback lives in the emulator, and the emulator goes with the webview it was
+/// drawn in. Without a tail kept here, a session that changed windows would come up blank and stay
+/// blank until the program inside it next wrote something — at a shell sitting on its prompt, that
+/// is never. Several screens of a wide terminal fit in this; past it the oldest bytes are dropped
+/// rather than the buffer growing without bound under a program that never stops writing.
+const RECENT: usize = 256 * 1024;
+
 /// The terminal being asked where its cursor is, and the answer.
 ///
 /// ConPTY asks this of the terminal as it starts, and **holds the program it was given until an
@@ -101,10 +112,69 @@ const CHUNK: usize = 8 * 1024;
 const CURSOR_QUERY: &[u8] = b"\x1b[6n";
 const CURSOR_ANSWER: &[u8] = b"\x1b[1;1R";
 
-/// The terminals this process has open, by session id. Managed state, one for the whole app: the
-/// talk window is one window, and a terminal outlives any single command that touches it.
+/// The terminals this process has open, by session id. Managed state, one for the whole app: a
+/// terminal outlives any single command that touches it, and outlives the window it is drawn in.
 #[derive(Default)]
 pub struct Terminals(Mutex<HashMap<String, Terminal>>);
+
+/// Where a session's output is going, and what it has said lately.
+///
+/// Both are held apart from [`Terminal`] because the thread draining the terminal reaches for them
+/// on every chunk, and the registry's lock is the one thing that thread must not take that often:
+/// `pty_write` is a key press, and a key press waiting behind a `cat` of a large file is the pane
+/// going numb under the user's hands.
+struct Pane {
+    /// The label of the window drawing this session. It moves when the pane does, and the chunks
+    /// follow it — which is what lets a terminal change windows without being restarted.
+    target: Mutex<String>,
+    /// The tail of what the terminal has written, for whatever pane draws it next ([`RECENT`]).
+    recent: Mutex<VecDeque<u8>>,
+}
+
+impl Pane {
+    fn new(target: &str) -> Self {
+        Self {
+            target: Mutex::new(target.to_owned()),
+            recent: Mutex::new(VecDeque::new()),
+        }
+    }
+
+    /// The window the chunks are going to right now.
+    fn target(&self) -> String {
+        self.target.lock().expect("pane target lock").clone()
+    }
+
+    /// Send what follows to this window instead.
+    fn point_at(&self, label: &str) {
+        *self.target.lock().expect("pane target lock") = label.to_owned();
+    }
+
+    /// Add a chunk to the tail, dropping the oldest bytes once it is over the cap, and answer where
+    /// it is to be drawn.
+    ///
+    /// Keeping and routing are one step because [`Pane::adopt`] is the other half of it. A pane
+    /// arriving between the two would be handed the chunk in what it is given to draw *and* sent it
+    /// as an event, and would draw it twice; taking the same two locks in the same order in both
+    /// places is what leaves the chunk on exactly one side of the handover.
+    fn keep(&self, bytes: &[u8]) -> String {
+        let mut recent = self.recent.lock().expect("pane recent lock");
+        recent.extend(bytes);
+        let over = recent.len().saturating_sub(RECENT);
+        recent.drain(..over);
+        self.target()
+    }
+
+    /// Send what follows to this window, and answer with the tail as it stood at that moment.
+    ///
+    /// After an overflow the tail begins wherever the cap fell, which can be part-way through an
+    /// escape sequence — so a pane adopting a long-running session can open with a few characters
+    /// of noise at the very top. The alternative is holding every byte a terminal ever wrote.
+    fn adopt(&self, label: &str) -> Vec<u8> {
+        let recent = self.recent.lock().expect("pane recent lock");
+        self.point_at(label);
+        recent.iter().copied().collect()
+    }
+}
 
 /// One open pseudo-terminal — the three handles onto it that outlive the call that opened it.
 ///
@@ -121,9 +191,13 @@ pub struct Terminal {
     master: Box<dyn MasterPty + Send>,
     /// The keystrokes side. Writing to the master is what a key press is.
     writer: Box<dyn Write + Send>,
-    /// Ends the program in the terminal. Held apart from the child itself, which the thread waiting
-    /// on it owns, so closing a pane does not have to reach across to that thread.
-    killer: Box<dyn ChildKiller + Send + Sync>,
+    /// Which window is drawing this session, and what it has written lately. Shared with the thread
+    /// draining it, and the one part of a terminal a pane may move.
+    pane: Arc<Pane>,
+    /// When the terminal was started (RFC3339 UTC). Kept here because the pane cannot keep it: a pane
+    /// is drawn and thrown away as the session moves windows, and only what outlives the window can
+    /// still say when the work began.
+    started_at: String,
 }
 
 /// A session id: sixteen bytes of the operating system's randomness, in hex.
@@ -179,7 +253,7 @@ fn gone(session: &str) -> CmdError {
     )
 }
 
-/// Open a terminal, start the user's login shell in it, and return the id of the session it is.
+/// Open a terminal, start the user's login shell in it, and answer with the session it is.
 ///
 /// `cwd` is the folder the shell starts in; with none given it starts in the user's home. It is
 /// resolved on the filesystem before anything is started, both because a folder that is not there is
@@ -194,13 +268,15 @@ fn gone(session: &str) -> CmdError {
 #[tauri::command]
 pub fn pty_open(
     app: tauri::AppHandle,
+    window: tauri::Window,
     terminals: tauri::State<'_, Terminals>,
     cwd: Option<String>,
     agent: Option<String>,
     cols: u16,
     rows: u16,
-) -> Result<String, CmdError> {
+) -> Result<PtySessionDto, CmdError> {
     let session = new_session();
+    let started_at = amenbo_core::time::Timestamp::now().to_rfc3339_z();
     let size = PtySize {
         rows,
         cols,
@@ -235,7 +311,10 @@ pub fn pty_open(
 
     let reader = pair.master.try_clone_reader().map_err(failed)?;
     let writer = pair.master.take_writer().map_err(failed)?;
-    let killer = child.clone_killer();
+    // The chunks go to whichever window asked for the terminal. Nothing here decides which that is:
+    // the pane that called is the pane that draws, and if the user later moves it to the other
+    // window, `pty_attach` moves this along with it.
+    let pane = Arc::new(Pane::new(window.label()));
 
     terminals.0.lock().expect("terminals lock").insert(
         session.clone(),
@@ -243,7 +322,8 @@ pub fn pty_open(
             folder,
             master: pair.master,
             writer,
-            killer,
+            pane: Arc::clone(&pane),
+            started_at: started_at.clone(),
         },
     );
 
@@ -251,7 +331,7 @@ pub fn pty_open(
 
     let id = session.clone();
     std::thread::spawn(move || {
-        drain(&app, &id, reader);
+        drain(&app, &id, &pane, reader);
         // Reap the program before the pane is told, so nothing is left behind for the length of a
         // round trip to the webview. Its exit status says nothing a person needs: what a terminal
         // ends with is what is on the screen, which the pane already has.
@@ -261,10 +341,10 @@ pub fn pty_open(
             .lock()
             .expect("terminals lock")
             .remove(&id);
-        let _ = app.emit_to(crate::windows::TALK, CLOSED_EVENT, &id);
+        let _ = app.emit_to(pane.target().as_str(), CLOSED_EVENT, &id);
     });
 
-    Ok(session)
+    Ok(PtySessionDto { session, started_at })
 }
 
 /// Read one terminal to its end, sending each chunk on to the pane drawing it.
@@ -272,7 +352,7 @@ pub fn pty_open(
 /// A read that fails is an end like any other here. The master reports the far side closing as
 /// end-of-file already, so what is left is the fd itself failing — and there is no reading on from
 /// that, only the same tidying up.
-fn drain(app: &tauri::AppHandle, session: &str, mut reader: Box<dyn Read + Send>) {
+fn drain(app: &tauri::AppHandle, session: &str, pane: &Pane, mut reader: Box<dyn Read + Send>) {
     let mut buf = vec![0u8; CHUNK];
     let mut cursor = CursorQuery::new();
     loop {
@@ -285,11 +365,12 @@ fn drain(app: &tauri::AppHandle, session: &str, mut reader: Box<dyn Read + Send>
         if bytes.is_empty() {
             continue;
         }
+        let target = pane.keep(&bytes);
         let chunk = PtyChunkDto {
             session: session.to_string(),
             base64: base64::engine::general_purpose::STANDARD.encode(&bytes),
         };
-        if app.emit_to(crate::windows::TALK, OUTPUT_EVENT, chunk).is_err() {
+        if app.emit_to(target.as_str(), OUTPUT_EVENT, chunk).is_err() {
             return;
         }
     }
@@ -482,6 +563,49 @@ impl CursorQuery {
     }
 }
 
+/// The sessions this process has open, in no particular order — each with when it began.
+///
+/// A pane asks this on the way up, to find out whether the terminal it is there to draw is already
+/// running — which it is every time the pane has moved rather than been made: split out into its own
+/// window, folded back into the board, or rebuilt in place because the interface around it was
+/// (`app/src/shell/TerminalFace.tsx`). The registry is the only thing that knows, because it is the
+/// only part of a terminal that outlives the window: a webview that went away took its emulator with
+/// it and could tell nothing to whatever draws next.
+#[tauri::command]
+pub fn pty_sessions(terminals: tauri::State<'_, Terminals>) -> Vec<PtySessionDto> {
+    terminals
+        .0
+        .lock()
+        .expect("terminals lock")
+        .iter()
+        .map(|(session, terminal)| PtySessionDto {
+            session: session.clone(),
+            started_at: terminal.started_at.clone(),
+        })
+        .collect()
+}
+
+/// Draw an already-open terminal in the pane that is asking, and hand back what it has said lately.
+///
+/// This is what a pane calls in place of [`pty_open`] when it is taking over a session that is
+/// already running: the same terminal shown in the other window after the user split the app in two
+/// or folded it back, and the same terminal after a language change rebuilt the interface around it.
+/// Nothing about the terminal moves — the program inside it is never told that the window it is
+/// drawn in changed, and never stops running for it.
+///
+/// What comes back is base64, the way a chunk is, and for the same reason: these are bytes rather
+/// than text. See [`Pane::adopt`] for what the oldest of them can look like.
+#[tauri::command]
+pub fn pty_attach(
+    window: tauri::Window,
+    terminals: tauri::State<'_, Terminals>,
+    session: String,
+) -> Result<String, CmdError> {
+    let open = terminals.0.lock().expect("terminals lock");
+    let terminal = open.get(&session).ok_or_else(|| gone(&session))?;
+    Ok(base64::engine::general_purpose::STANDARD.encode(terminal.pane.adopt(window.label())))
+}
+
 /// The folder a session was opened in, if it is still open and was given one.
 ///
 /// This is what [`crate::fileproto`] fences a request with, and the answer being `None` is the whole
@@ -541,30 +665,45 @@ pub fn pty_resize(
         .map_err(failed)
 }
 
-/// End the program in a terminal and forget the session.
-///
-/// The registry entry goes here rather than being left for the drain to clear, so a second close
-/// says the terminal is gone instead of trying to kill it twice. The drain ends on its own once the
-/// program does, and emits the close the pane listens for.
-#[tauri::command]
-pub fn pty_close(
-    terminals: tauri::State<'_, Terminals>,
-    session: String,
-) -> Result<(), CmdError> {
-    let mut terminal = terminals
-        .0
-        .lock()
-        .expect("terminals lock")
-        .remove(&session)
-        .ok_or_else(|| gone(&session))?;
-    terminal.killer.kill().map_err(failed)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     use portable_pty::CommandBuilder;
+
+    /// The tail a pane adopting a session is given never outgrows its cap, however much the
+    /// program in the terminal writes — a `yes` left running is the case, and a buffer that grew
+    /// with it would be this process's memory going with it.
+    #[test]
+    fn what_is_kept_for_the_next_pane_stops_at_the_cap() {
+        let pane = Pane::new("main");
+        for _ in 0..8 {
+            pane.keep(&vec![b'x'; RECENT / 2]);
+        }
+        assert_eq!(pane.adopt("main").len(), RECENT);
+    }
+
+    /// And what it keeps is the *end* of the output, not the start: what a pane has to draw is
+    /// where the terminal is now, and the prompt it is sitting on is the last thing written.
+    #[test]
+    fn what_is_kept_is_the_end_of_the_output() {
+        let pane = Pane::new("main");
+        pane.keep(&vec![b'o'; RECENT]);
+        pane.keep(b"$ ");
+        let replay = pane.adopt("main");
+        assert_eq!(replay.len(), RECENT);
+        assert_eq!(&replay[replay.len() - 2..], b"$ ");
+    }
+
+    /// The window a session's chunks go to is the pane's to move, which is the whole of how a
+    /// terminal changes windows without being restarted.
+    #[test]
+    fn adopting_a_session_sends_what_follows_to_the_new_window() {
+        let pane = Pane::new(crate::windows::BOARD);
+        assert_eq!(pane.keep(b"before"), crate::windows::BOARD);
+        assert_eq!(pane.adopt(crate::windows::TALK), b"before");
+        assert_eq!(pane.keep(b"after"), crate::windows::TALK);
+    }
 
     /// A filter that answers, whichever operating system the test is running on. What Windows does
     /// is what is being asserted, and it has to be assertable from the machine the code is written

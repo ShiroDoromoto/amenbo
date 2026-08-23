@@ -480,7 +480,12 @@ export const tr: Translation = {
     "talk.retry": "Yeniden ara",
     "talk.open": "Aç",
     "talk.agent": "Ajan",
-    "talk.ended": "Bu terminal sona erdi.",
+    "face.switch": "Bu pencerenin gösterdiği",
+    "face.tasks": "Görevler",
+    "face.terminal": "Terminal",
+    "face.splitOut": "Ayrı pencerede aç",
+    "face.merge": "Tek pencereye dön",
+    "face.ended": "Bu terminaldeki program sona erdi.",
     "talk.elevated.title": "Amenbo yönetici olarak çalışıyor",
     "talk.elevated.body": "Burada açılan bir terminal bunu devralır ve bir yönetici, scoop'un paketlerini arkasına kurduğu bağlantıları izlemez. Bu araçlara bu pencereden ulaşılamaz — kurulu olsalar da Amenbo kurulu değil diyecektir.",
     "talk.elevated.fix": "Amenbo'dan çıkın ve “Yönetici olarak çalıştır” demeden yeniden açın; araçlar geri gelir.",
@@ -627,6 +632,7 @@ export const tr: Translation = {
     wake_no_folder: "O klasör okunamadı: {reason}",
     wake_no_config: "Amenbo kendi dosyalarını bulamadı.",
     wake_not_kept: "Seçim kaydedilemedi.",
+    window_failed: "O pencere açılamadı: {reason}",
 
     already_reserved:
       "{ref} “Yapılacak” durumunda değil, bu yüzden üstlenilemez — başka bir oturum onu çoktan almış olabilir.",

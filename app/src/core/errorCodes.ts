@@ -191,10 +191,12 @@ export const CORE_ERROR_CODES = [
  * boundary between showing a fingerprint and agreeing to it, so the pin that is written has to be the one
  * that was on screen (`AMB-D-389`); and the two the terminal in a pane answers with, which are the
  * operating system refusing to open one (`pty_failed`) and a session whose terminal has already
- * closed (`pty_gone`); and the ones settling which agent a folder opens with (`crate::wake`) — a
- * folder that cannot be read (`wake_no_folder`), an install that cannot find its own config
- * (`wake_no_config`), a choice that could not be written down (`wake_not_kept`), and an agent id
- * the catalog does not list (`wake_unknown_agent`), refused the same way wherever it arrives. */
+ * closed (`pty_gone`); the one a window refuses with, which is the terminal being split out into a
+ * window of its own and the platform not building it (`window_failed`); and the ones settling which
+ * agent a folder opens with (`crate::wake`) — a folder that cannot be read (`wake_no_folder`), an
+ * install that cannot find its own config (`wake_no_config`), a choice that could not be written down
+ * (`wake_not_kept`), and an agent id the catalog does not list (`wake_unknown_agent`), refused the
+ * same way wherever it arrives. */
 export const TAURI_ERROR_CODES = [
   "init_ambiguous_owners",
   "init_pointer_exists",
@@ -209,6 +211,7 @@ export const TAURI_ERROR_CODES = [
   "wake_no_folder",
   "wake_not_kept",
   "wake_unknown_agent",
+  "window_failed",
 ] as const;
 
 /** Every code a webview can receive — the contract that i18n and code-based branching may refer to. */

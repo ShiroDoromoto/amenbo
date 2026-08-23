@@ -480,7 +480,12 @@ export const nl: Translation = {
     "talk.retry": "Opnieuw zoeken",
     "talk.open": "Openen",
     "talk.agent": "Agent",
-    "talk.ended": "Deze terminal is beëindigd.",
+    "face.switch": "Wat dit venster toont",
+    "face.tasks": "Taken",
+    "face.terminal": "Terminal",
+    "face.splitOut": "In een apart venster openen",
+    "face.merge": "Terug naar één venster",
+    "face.ended": "Het programma in deze terminal is gestopt.",
     "talk.elevated.title": "Amenbo draait als administrator",
     "talk.elevated.body": "Een terminal die hier opent, erft dat, en een administrator volgt de koppelingen niet waarachter scoop zijn pakketten installeert. Die tools zijn vanuit dit venster onbereikbaar — Amenbo meldt ze als niet geïnstalleerd, terwijl ze dat wel zijn.",
     "talk.elevated.fix": "Sluit Amenbo af en open het opnieuw zonder “Als administrator uitvoeren”, dan zijn ze er weer.",
@@ -627,6 +632,7 @@ export const nl: Translation = {
     wake_no_folder: "Die map kon niet gelezen worden: {reason}",
     wake_no_config: "Amenbo kon zijn eigen bestanden niet vinden.",
     wake_not_kept: "De keuze kon niet opgeslagen worden.",
+    window_failed: "Dat venster kon niet worden geopend: {reason}",
 
     already_reserved:
       "{ref} staat niet op “Te doen” en kan dus niet worden opgepakt — een andere sessie heeft hem misschien al.",

@@ -501,7 +501,12 @@ export const es: Translation = {
     "talk.retry": "Buscar de nuevo",
     "talk.open": "Abrir",
     "talk.agent": "Agente",
-    "talk.ended": "Esta terminal ha terminado.",
+    "face.switch": "Qué muestra esta ventana",
+    "face.tasks": "Tareas",
+    "face.terminal": "Terminal",
+    "face.splitOut": "Abrir en una ventana aparte",
+    "face.merge": "Volver a una sola ventana",
+    "face.ended": "El programa de esta terminal ha terminado.",
     "talk.elevated.title": "Amenbo se está ejecutando como administrador",
     "talk.elevated.body": "Una terminal abierta aquí lo hereda, y un administrador no sigue los enlaces tras los que scoop instala sus paquetes. Esas herramientas no se pueden alcanzar desde esta ventana: Amenbo dirá que no están instaladas, aunque lo estén.",
     "talk.elevated.fix": "Cierra Amenbo y ábrelo de nuevo sin «Ejecutar como administrador», y volverán.",
@@ -655,6 +660,7 @@ export const es: Translation = {
     wake_no_folder: "No se pudo leer esa carpeta: {reason}",
     wake_no_config: "Amenbo no pudo encontrar sus propios archivos.",
     wake_not_kept: "No se pudo guardar la elección.",
+    window_failed: "No se pudo abrir esa ventana: {reason}",
 
     already_reserved:
       "{ref} no está en “Pendiente”, así que no se puede reservar: puede que otra sesión ya la tenga.",

@@ -446,6 +446,8 @@ pub fn run() {
       commands::tasks_adrift,
       commands::frame_names,
       commands::name_frame,
+      commands::talk_layout,
+      commands::save_talk_layout,
       launch::elevated,
       windows::show_ref,
       folder::folder_entries,

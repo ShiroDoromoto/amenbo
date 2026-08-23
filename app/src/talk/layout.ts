@@ -38,6 +38,13 @@ export const MAX_PAGES = 9;
 /** The width below which the columns beside the panes stop being columns (see `sidesAreDrawers`). */
 export const NARROW_PX = 900;
 
+/** The arrangement as the store keeps it — the wire shape of `TalkLayoutDto`. */
+export type SavedLayout = {
+  count: number;
+  nextId: number;
+  frames: { id: string; folder?: string }[];
+};
+
 /** One place a terminal is drawn, whether or not one is running in it. */
 export type Frame = {
   /** Handed out once and never reused — the id `./frames` keeps this frame's name against. */
@@ -208,6 +215,52 @@ export function setCount(layout: Layout, count: Count): Layout {
   const next: Layout = { ...layout, count };
   const page = next.focus === null ? null : pageOfFrame(next, next.focus);
   return { ...next, page: Math.min(page ?? layout.page, pageCount(next)) };
+}
+
+/**
+ * The arrangement as it is kept between runs, and as it comes back (`AMB-T-3607`).
+ *
+ * **What is kept is the shape**: how many panes to a page, the frames in slot order, and the folder
+ * each was working in. What was running is not — a session died with the last run, and a pane drawn
+ * as though it were still there would be the window saying something untrue. So a restored frame
+ * comes back as a place to open a terminal in, and nothing is started until somebody presses.
+ */
+export function laidOut(layout: Layout): SavedLayout {
+  return {
+    count: layout.count,
+    nextId: layout.nextId,
+    frames: layout.frames.map((frame) => ({
+      id: frame.id,
+      ...(frame.folder === null ? {} : { folder: frame.folder }),
+    })),
+  };
+}
+
+/**
+ * The layout a kept arrangement comes back as, or nothing where it says nothing.
+ *
+ * An arrangement with no frames in it is nothing to come back to: what would be restored is the
+ * empty face the window makes for itself anyway. The focus lands on the first frame, because a face
+ * has to be working somewhere and the first place is where a fresh one starts too.
+ */
+export function restored(saved: SavedLayout): Layout | null {
+  const count = COUNTS.find((one) => one === saved.count) ?? DEFAULT_COUNT;
+  const frames = saved.frames.map((frame) => ({
+    id: frame.id,
+    session: null,
+    folder: frame.folder ?? null,
+  }));
+  if (frames.length === 0) return null;
+  return {
+    frames,
+    // Ids are never reused, so the next one has to clear every frame that came back — a kept
+    // arrangement written by a newer build, or an id list nobody can vouch for, must not hand a
+    // fresh frame the name of an old one.
+    nextId: Math.max(saved.nextId, ...frames.map((frame) => Number(frame.id) + 1 || 0)),
+    count,
+    page: 1,
+    focus: frames[0]!.id,
+  };
 }
 
 /**

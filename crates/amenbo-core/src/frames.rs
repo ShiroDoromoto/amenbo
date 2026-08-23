@@ -9,6 +9,14 @@
 //! own. They live in one `store_meta` scalar rather than a table of their own, because what is kept is
 //! a handful of short strings and the window reads all of them at once or none.
 //!
+//! **The arrangement is kept beside the names** ([`SavedLayout`]), and for the same reason: the frames
+//! a person laid out are their work, and a window that came back with one empty pane would have
+//! thrown it away (`AMB-D-434`). What is kept is the shape only — how many panes, in what order, and
+//! which folder each was working in. **What was running is not kept**: a session died with the last
+//! run, and a pane drawn as though it were still there would be the window telling the reader
+//! something untrue. The frames come back as places to open a terminal, and nothing is started until
+//! somebody asks (`AMB-T-3607`).
+//!
 //! **Three things name a frame, and they are ranked** ([`NamedBy`]). The first line a person types into
 //! a new pane names it, so a pane is not called "3" until somebody gets round to it; `session name`
 //! from the agent running in it improves on that; and a person renaming it outranks both, for good —
@@ -23,6 +31,9 @@ use crate::store_engine::StoreEngine;
 
 /// The `store_meta` key the frame names live under, as one JSON object keyed by frame.
 const FRAME_NAMES_META: &str = "talk.frame_names";
+
+/// The `store_meta` key the arrangement lives under, as one JSON object.
+const LAYOUT_META: &str = "talk.layout";
 
 /// Who named a frame. The order of the variants is the order of their authority: a naming may replace
 /// one of its own rank or lower, never a higher one.
@@ -99,6 +110,51 @@ pub fn name_frame(
     Ok(names)
 }
 
+/// The talk window's arrangement, as one machine left it.
+///
+/// The frames are in the order they sit in, and `count` is what that order is read against: how many
+/// panes to a page. Neither is worth anything without the other, so they are kept and answered
+/// together. `next_id` travels because ids are never reused — a frame that comes back keeps the name
+/// the person gave it, and a fresh frame must not be handed an id that already has one.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedLayout {
+    /// How many panes to a page.
+    pub count: u32,
+    /// The next frame id to hand out.
+    pub next_id: u32,
+    /// The frames, in slot order.
+    pub frames: Vec<SavedFrame>,
+}
+
+/// One frame, as far as it survives a run: where it was, and what it was working on.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedFrame {
+    /// The id the name is kept against ([`frame_names`]).
+    pub id: String,
+    /// The folder its terminal was working in, where it had one.
+    pub folder: Option<String>,
+}
+
+/// The arrangement this device left behind, or nothing where it left none.
+///
+/// A scalar that will not parse reads as nothing, for the same reason the names do: it is one
+/// machine's screen, and a window that meets a broken one can be laid out again — refusing to open
+/// over it would cost far more than the answer is worth.
+pub fn saved_layout(engine: &StoreEngine) -> Result<Option<SavedLayout>> {
+    Ok(engine
+        .get_meta(LAYOUT_META)?
+        .and_then(|json| serde_json::from_str(&json).ok()))
+}
+
+/// Keep the arrangement. It is written as the window is changed rather than as it closes: a window
+/// that is killed, or a machine that loses power, is exactly the case a person wants their panes back
+/// after.
+pub fn save_layout(engine: &StoreEngine, layout: &SavedLayout) -> Result<()> {
+    Ok(engine.set_meta(LAYOUT_META, Some(&serde_json::to_string(layout)?))?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -136,6 +192,37 @@ mod tests {
 
         name_frame(&engine, "1", "  ", Person).unwrap();
         assert!(!frame_names(&engine).unwrap().contains_key("1"), "a blank name un-names the frame");
+    }
+
+    /// The shape survives the run and what was running does not: the frames come back as places, and
+    /// the names they were given come back on them.
+    #[test]
+    fn the_arrangement_comes_back_and_the_sessions_do_not() {
+        let engine = StoreEngine::open_in_memory().unwrap();
+        assert_eq!(saved_layout(&engine).unwrap(), None, "nothing has been laid out yet");
+
+        let laid = SavedLayout {
+            count: 4,
+            next_id: 3,
+            frames: vec![
+                SavedFrame { id: "1".into(), folder: Some("/work/repo".into()) },
+                SavedFrame { id: "2".into(), folder: None },
+            ],
+        };
+        save_layout(&engine, &laid).unwrap();
+        name_frame(&engine, "1", "the migration", Person).unwrap();
+
+        let back = saved_layout(&engine).unwrap().expect("the arrangement");
+        assert_eq!(back, laid);
+        assert_eq!(frame_names(&engine).unwrap()["1"].name, "the migration");
+    }
+
+    /// A scalar nobody can read is no arrangement, not a failure to open the window over.
+    #[test]
+    fn an_unreadable_arrangement_is_no_arrangement() {
+        let engine = StoreEngine::open_in_memory().unwrap();
+        engine.set_meta(LAYOUT_META, Some("{ not json")).unwrap();
+        assert_eq!(saved_layout(&engine).unwrap(), None);
     }
 
     #[test]

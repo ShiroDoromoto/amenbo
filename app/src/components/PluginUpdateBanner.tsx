@@ -10,7 +10,7 @@ import {
   subscribeDismissedPluginUpdates,
   usePluginUpdates,
 } from "../core/pluginUpdates";
-import { pluginDesc } from "../core/pluginText";
+import { pluginDesc, pluginTitle } from "../core/pluginText";
 import { subscribeOutsideStore } from "../core/snapshot";
 import { DismissButton } from "./DismissButton";
 import { Icon } from "./Icon";
@@ -102,8 +102,8 @@ export function PluginUpdateBanner({ onOpenInstalled }: {
         {pending.length > 0 && (
           <div className="healthbanner__hint">
             {pending.length === 1 && pending[0]
-              ? `${pending[0].name} — ${pluginDesc(pending[0])}`
-              : pending.map((u) => u.name).join(", ")}
+              ? `${pluginTitle(pending[0])} — ${pluginDesc(pending[0])}`
+              : pending.map(pluginTitle).join(", ")}
           </div>
         )}
         {/* Only what needs a decision is spelled out, and only then is a screen offered. */}

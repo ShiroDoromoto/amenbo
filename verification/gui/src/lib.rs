@@ -698,6 +698,14 @@ impl Instructor {
             (Domain::Dimension, "key") => {
                 Some(Expectation { text: arg_str(with, "equals")?.to_string(), present: true })
             }
+            // The line a road typed into a terminal, followed from one window to the other. It is the
+            // reader's own words and no part of the interface, so a reading finds it on the pane
+            // drawing that session and on no other screen — which is what lets the absent half be
+            // read as well: with the ledger up, the pane is hidden, and words that are hidden are
+            // words that are not on the shot.
+            (Domain::Terminal, "pane") => {
+                Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
+            }
             _ => None,
         }
     }
@@ -1183,6 +1191,36 @@ impl Instructor {
                     return Err(format!("action `set` does not know the position `{other}`"))
                 }
             },
+            // ── the terminal face ─────────────────────────────────────────────────────────────
+            // Which face the one window is showing. The segments are named by what each shows rather
+            // than by the word drawn on them, since those words are the interface's own and the run's
+            // language is whatever the machine is set to.
+            (Domain::Terminal, "show-face") => match req(with, "face")? {
+                "tasks" => "In the pair of segments at the top of the window, press the one that shows the ledger — the tasks, the projects and the board."
+                    .to_string(),
+                "terminal" => "In the pair of segments at the top of the window, press the one that shows the terminal — the pane an agent runs in."
+                    .to_string(),
+                other => {
+                    return Err(format!("action `show-face` does not know the face `{other}`"))
+                }
+            },
+            // A line typed into the pane and sent. It is typed rather than pasted because what is
+            // under test is a terminal: keys are what a terminal is driven by, and a line that
+            // arrived some other way would be evidence of a path nobody walks.
+            (Domain::Terminal, "type-line") => format!(
+                "Click into the terminal pane, type \"{}\" and press return. The shell will not know the command — what the line is for is being on the screen, and being the name the pane takes.",
+                req(with, "text")?
+            ),
+            // The two moves between one window and two. Named by what each does rather than by the
+            // words on them, and each said with where it is: the way out is on the face, the way back
+            // is in the window it made, and a road that pressed the wrong one would be in the wrong
+            // window for every step after it.
+            (Domain::Terminal, "split-out") =>
+                "On the terminal face, press the control that opens the terminal in a separate window. A second window appears, offset from this one."
+                    .to_string(),
+            (Domain::Terminal, "fold-back") =>
+                "Press the control that puts the terminal back into one window. This window closes and the terminal returns to the other one."
+                    .to_string(),
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -1913,6 +1951,19 @@ impl Instructor {
                     ),
                 }
             }
+            // What the pane is showing. The words are the road's own, typed into that terminal by an
+            // earlier step, so a reading that finds them found the pane drawing that session — and
+            // the absent half is read with the ledger up, where the pane is hidden rather than gone.
+            (Domain::Terminal, "pane") => match present(with) {
+                true => format!(
+                    "Confirm the terminal pane still shows the line \"{}\" — the same terminal, drawn here.",
+                    req(with, "shows")?
+                ),
+                false => format!(
+                    "Confirm the line \"{}\" is nowhere on the screen — the terminal is not the face being shown.",
+                    req(with, "shows")?
+                ),
+            },
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -2300,6 +2351,7 @@ fn domain_str(d: Domain) -> &'static str {
         Domain::Plugin => "plugin",
         Domain::Mcp => "mcp",
         Domain::Tick => "tick",
+        Domain::Terminal => "terminal",
     }
 }
 

@@ -465,6 +465,10 @@ impl<'a> Driver<'a> {
             // `domain::tick`. The one action the wake-up carries is a premise's reach into the
             // run's own store, and nothing further.
             Domain::Tick => self.tick_action(op, with),
+            // Where a terminal is drawn is a question about a screen, and this driver has none. It
+            // is refused by name rather than left to a wildcard so that an op added here later
+            // stops the compiler instead of reading as deliberately unwalked.
+            Domain::Terminal => Err(unmapped(domain, op)),
         }
     }
 
@@ -490,6 +494,8 @@ impl<'a> Driver<'a> {
             Domain::Plugin => self.plugin_assert(op, with),
             Domain::Mcp => self.mcp_assert(op, with),
             Domain::Tick => self.tick_assert(op, with),
+            // The screen's alone, the same way its actions are.
+            Domain::Terminal => Err(unmapped(domain, op)),
         }
     }
 

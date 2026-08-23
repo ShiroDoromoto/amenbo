@@ -405,6 +405,16 @@ impl Store {
         crate::frames::name_frame(&self.engine, frame, name, by)
     }
 
+    /// What is written on this project's draft page ([`crate::memo`]).
+    pub fn memo(&self, project_id: i64) -> Result<String> {
+        crate::memo::memo(&self.engine, project_id)
+    }
+
+    /// Write this project's draft page. Blank erases it.
+    pub fn set_memo(&self, project_id: i64, text: &str) -> Result<()> {
+        crate::memo::set_memo(&self.engine, project_id, text)
+    }
+
     /// The arrangement of the talk window this device left behind ([`crate::frames`]).
     pub fn saved_layout(&self) -> Result<Option<crate::frames::SavedLayout>> {
         crate::frames::saved_layout(&self.engine)

@@ -29,6 +29,7 @@ import {
   folderEntries, folderOpenFile, folderRead, folderRevealFile, folderUnwatch, folderWatch,
   onFolderChanged,
 } from "./folder";
+import { MemoPage } from "./MemoPage";
 import { fileUnder, isRef, isUrl, unread, type Pointed } from "./pointed";
 
 /** The names a file's text is drawn as Markdown under. The one thing here the name decides. */
@@ -68,6 +69,9 @@ export function FilesPanel({ projectId, onOpenLedger, pointed, show }: {
   // per row: only one can be open, and a row that held its own would keep it after the list moved
   // under it (`AMB-T-3605`).
   const [menu, setMenu] = useState<{ path: string[]; x: number; y: number } | null>(null);
+  // Which of the two the panel is showing. The files are what it opens on: the page is where a
+  // person goes to write, and going there is a thing they do (`AMB-T-3608`).
+  const [tab, setTab] = useState<"files" | "memo">("files");
 
   // A path clicked in a pane. It opens only where it lands inside the folder this face is rooted at
   // — the same rule a pointed-at file is held to, and the same fence the host applies. One that
@@ -76,7 +80,11 @@ export function FilesPanel({ projectId, onOpenLedger, pointed, show }: {
   useEffect(() => {
     if (show === undefined || show === null || root === null) return;
     const path = fileUnder(root, show.cwd, show.target);
-    if (path) setReading(path);
+    // A file asked for is a file to be looked at: the panel comes back off the page to show it.
+    if (path) {
+      setReading(path);
+      setTab("files");
+    }
     // `nth` is what makes the same file asked for twice two answers.
   }, [show?.nth, root]);
 
@@ -116,8 +124,34 @@ export function FilesPanel({ projectId, onOpenLedger, pointed, show }: {
     );
   }
 
+  const tabs = (
+    <div className="files__tabs" role="tablist">
+      {(["files", "memo"] as const).map((one) => (
+        <button
+          key={one}
+          className={`files__tab${tab === one ? " files__tab--on" : ""}`}
+          role="tab"
+          aria-selected={tab === one}
+          onClick={() => setTab(one)}
+        >
+          {t(one === "files" ? "files.tab" : "files.memo")}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (tab === "memo") {
+    return (
+      <div className="files">
+        {tabs}
+        <MemoPage projectId={projectId} />
+      </div>
+    );
+  }
+
   return (
     <div className="files">
+      {tabs}
       {pointed !== undefined && (
         <PointedRow
           root={root}

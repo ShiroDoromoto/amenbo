@@ -28,6 +28,7 @@ pub mod frames;
 pub mod harness;
 pub mod idref;
 pub mod lint;
+pub mod memo;
 pub mod mcp;
 pub mod mcp_apps;
 pub mod mcp_bundle;

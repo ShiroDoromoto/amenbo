@@ -465,6 +465,7 @@ export const tr: Translation = {
     "act.assigned": "“{title}” birine verildi", "act.assignedAi": "“{title}” yapay zekâya devredildi",
     "act.unassigned": "“{title}” sorumlusuz bırakıldı",
     "act.moved": "“{title}” taşındı", "act.unblocked": "“{title}” artık engelli değil (hazır)",
+    "act.proposed": "“{title}” önerildi",
     "act.deleted": "“{title}” silindi",
     "act.deletedWith": "“{title}” silindi ({tasks}, {decisions})",
     "act.updated": "“{title}” güncellendi",

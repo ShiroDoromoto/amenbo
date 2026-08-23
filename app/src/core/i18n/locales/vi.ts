@@ -468,6 +468,7 @@ export const vi: Translation = {
     "act.assigned": "Đã giao “{title}”", "act.assignedAi": "Đã giao “{title}” cho AI",
     "act.unassigned": "Đã bỏ người phụ trách của “{title}”",
     "act.moved": "Đã chuyển “{title}”", "act.unblocked": "“{title}” đã hết bị chặn (sẵn sàng)",
+    "act.proposed": "Đã đề xuất “{title}”",
     "act.deleted": "Đã xoá “{title}”",
     "act.deletedWith": "Đã xoá “{title}” ({tasks}, {decisions})",
     "act.updated": "Đã cập nhật “{title}”",

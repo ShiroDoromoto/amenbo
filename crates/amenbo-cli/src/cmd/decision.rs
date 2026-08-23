@@ -5,13 +5,14 @@ use serde_json::json;
 
 use amenbo_core::config::Paths;
 use amenbo_core::model::{AttachmentTarget, TaskStatus};
-use amenbo_core::{ops, query, Store};
+use amenbo_core::{activity_log, ops, query, Store};
 
 use crate::cli::*;
 use crate::cmd::arg::{body_arg, body_arg_opt};
 use crate::cmd::attach::attach_add;
 use crate::cmd::comment::{comment_line, comment_not_found, comment_section, resolve_live_decision_comment};
 use crate::cmd::labels::{decision_comment_label, decision_label, task_comment_label, task_label};
+use crate::cmd::outbox::emit_decision_event;
 use crate::cmd::place::project_or_bound;
 use crate::cmd::premise::{attach_revisit, note_revisit, standing_on, warn_if_premise_added_to_reserved, warn_if_unsettled_under_reserved};
 use crate::cmd::task::resolve_task;
@@ -39,6 +40,9 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
             let d = store.add_decision(ops::decision::NewDecision {
                 title, body, project_id,
             }).map_err(CliError::from)?;
+            // The proposal is a moment, and the column cannot hold it: `status` says a decision is
+            // proposed and `status_changed_at` is overwritten by the verdict (`AMB-T-3639`).
+            emit_decision_event(store, flags, d.id, activity_log::event::decision_proposed(&d.title));
             let detail = store.decision_detail(d.id).map_err(CliError::from)?;
             warn_body(&detail.body); // non-blocking readability hint on write (stderr)
             write_envelope(flags, "decision.add", "decision", serde_json::to_value(&detail).unwrap(), None, false, format!("✓ Recorded decision: {} ({})", d.title, decision_label(d.id)));
@@ -309,6 +313,10 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
                 (None, Some(cid)) => (promote_decision_comment(store, cid, title, project)?, decision_comment_label(cid)),
                 (None, None) => return Err(comment_not_found(&comment)),
             };
+            // Promoted or filed outright, a decision is proposed the moment it exists — the line is
+            // written where the two roads meet rather than on each of them (`AMB-T-3639`).
+            let title = store.decision_detail(did).map_err(CliError::from)?.title;
+            emit_decision_event(store, flags, did, activity_log::event::decision_proposed(&title));
             let detail = store.decision_detail(did).map_err(CliError::from)?;
             write_envelope(flags, "decision.promote", "decision", serde_json::to_value(&detail).unwrap(), None, false, format!("✓ Promoted {source} to decision: {} ({})", detail.title, decision_label(did)));
         }

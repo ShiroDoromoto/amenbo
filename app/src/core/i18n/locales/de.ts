@@ -475,6 +475,7 @@ export const de: Translation = {
     "act.assigned": "Hat „{title}“ zugewiesen", "act.assignedAi": "Hat „{title}“ an die KI übergeben",
     "act.unassigned": "Hat die Zuständigkeit für „{title}“ aufgehoben",
     "act.moved": "Hat „{title}“ verschoben", "act.unblocked": "„{title}“ ist nicht mehr blockiert (bereit)",
+    "act.proposed": "„{title}“ vorgeschlagen",
     "act.deleted": "Hat „{title}“ gelöscht",
     "act.deletedWith": "Hat „{title}“ gelöscht ({tasks}, {decisions})",
     "act.updated": "Hat „{title}“ aktualisiert",

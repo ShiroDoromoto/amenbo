@@ -466,6 +466,7 @@ export const zhHans: Translation = {
     "act.assigned": "分配了“{title}”", "act.assignedAi": "把“{title}”委派给了 AI",
     "act.unassigned": "取消了“{title}”的分配",
     "act.moved": "移动了“{title}”", "act.unblocked": "“{title}”不再受阻（可以开始了）",
+    "act.proposed": "提出了“{title}”",
     "act.deleted": "删除了“{title}”",
     "act.deletedWith": "删除了“{title}”（{tasks}、{decisions}）",
     "act.updated": "更新了“{title}”",

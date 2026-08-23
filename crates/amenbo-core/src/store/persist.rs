@@ -1022,6 +1022,35 @@ impl Store {
         Ok(entry)
     }
 
+    /// Write one system event about a **decision** — the same path as [`Self::add_system_event`], with
+    /// the decision as the line's subject rather than a task.
+    ///
+    /// It exists because the ledger's subject keys are flat, one per entity kind
+    /// ([`crate::activity_log::Entry`]): a line about a decision carries `decision` and no `task`, and
+    /// a reader filtering on one key would otherwise never see it.
+    pub fn add_decision_system_event(
+        &mut self,
+        author_kind: crate::model::ActorKind,
+        decision_id: i64,
+        event: serde_json::Value,
+    ) -> Result<crate::activity_log::Entry> {
+        let entry = self.write_one(&[WriteTarget::Decision(decision_id)], |tx| {
+            Ok(crate::activity_log::Entry {
+                id: mint_activity_id(tx)?,
+                at: crate::time::Timestamp::now(),
+                actor: Some(author_kind),
+                session: crate::session::id(),
+                // A ledger line carries its own project — a file cannot be joined against the DB.
+                project: crate::store_engine::read::decision_project_id(tx.conn(), decision_id)?,
+                task: None,
+                decision: Some(decision_id),
+                event,
+            })
+        })?;
+        crate::activity_log::append(&self.paths.activity_file, &entry);
+        Ok(entry)
+    }
+
     /// Add a comment to a task (one operation = one transaction).
     pub fn add_task_comment(
         &mut self,

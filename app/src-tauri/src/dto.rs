@@ -24,6 +24,13 @@ pub struct ActorDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) avatar: Option<String>,
+    /// The talk window session this write came from, when the row records one. Set only where an
+    /// ActorDto is an activity row's **author**; a roster entry or an assignee names a facet, not an
+    /// act, and leaves it unset. Two AI sessions share one facet, so this is the only thing that tells
+    /// them apart — and it is read, never inferred: absent means unknown (`AMB-T-3549`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) session: Option<String>,
 }
 
 /// One value of a dimension (a choice on the axis). Ordered dimensions arrive in `order_key` order.

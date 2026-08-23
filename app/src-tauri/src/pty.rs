@@ -48,8 +48,10 @@ const OUTPUT_EVENT: &str = "pty://output";
 const CLOSED_EVENT: &str = "pty://closed";
 
 /// The variable a session's id is carried in, into the terminal and everything started inside it.
-/// A process that writes to the store while this is set can say which session it wrote from, which
-/// is the one thing no amount of watching from outside can establish.
+/// A process that writes to the store while this is set says which session it wrote from
+/// ([`amenbo_core::session::id`], stamped on the ledger line), which is the one thing no amount of
+/// watching from outside can establish — folder and clock were measured and separate nothing
+/// (`AMB-T-3549`).
 ///
 /// The name is core's ([`amenbo_core::session::SESSION_VAR`]) rather than one of ours: the surface
 /// layer's verbs read it back out of the environment to decide whether they are inside a pane at all

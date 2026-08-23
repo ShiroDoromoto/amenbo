@@ -152,7 +152,7 @@ fn facet_actor(config: &amenbo_core::config::Config, kind: Option<ActorKind>) ->
         ActorKind::Ai => config.ai_display_name(),
         ActorKind::Human => config.human_display_name(),
     };
-    ActorDto { name, kind: kind.as_str(), avatar: None }
+    ActorDto { name, kind: kind.as_str(), avatar: None, session: None }
 }
 
 fn date_iso(d: NaiveDate) -> String {
@@ -471,6 +471,8 @@ fn build_snapshot() -> Result<Snapshot, CmdError> {
                 name,
                 kind: kind.as_str(),
                 avatar: config.avatar_for(kind),
+                // The roster names the two facets, not an act: no session wrote it.
+                session: None,
             })
             .collect(),
         projects: acc.projects,
@@ -868,12 +870,14 @@ fn activity_dto(it: amenbo_core::activity::Item, config: &amenbo_core::config::C
     // Read before `it` is taken apart below: the sequence is derived from the whole row.
     let seq = it.seq().rank();
     let event = it.event.as_ref().map(event_dto);
+    // The session rides on the author, where the facet it cannot separate already is.
+    let author = ActorDto { session: it.author_session, ..facet_actor(config, it.author_kind) };
     ActivityItemDto {
         id: it.id,
         seq,
         at: it.at.to_rfc3339_z(),
         kind: it.kind.as_str().to_string(),
-        author: facet_actor(config, it.author_kind),
+        author,
         target: ActivityTargetDto {
             target_type: it.target_type.as_str().to_string(),
             id: it.target_id,
@@ -5147,6 +5151,7 @@ mod tests {
             at: Timestamp::now(),
             kind: amenbo_core::activity::Kind::System,
             author_kind: Some(ActorKind::Ai),
+            author_session: None,
             target_type: amenbo_core::activity::TargetType::Task,
             target_id: 42,
             title: title.to_string(),

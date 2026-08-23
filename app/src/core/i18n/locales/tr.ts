@@ -502,6 +502,7 @@ export const tr: Translation = {
     "files.changed": "Son değişenler",
     "files.tree": "Klasör",
     "files.nothingChanged": "Henüz hiçbir şey değişmedi.",
+    "files.partial": "Bu klasörün bir kısmı izlenmiyor.",
     "files.noFolder": "Bu projenin henüz bir klasörü yok.",
     "files.back": "Listeye dön",
     "files.notText": "Bu metin değil, burada gösterilemez.",

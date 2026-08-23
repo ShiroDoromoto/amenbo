@@ -505,6 +505,7 @@ export const vi: Translation = {
     "files.changed": "Vừa thay đổi",
     "files.tree": "Thư mục",
     "files.nothingChanged": "Chưa có gì thay đổi.",
+    "files.partial": "Một phần thư mục này không được theo dõi.",
     "files.noFolder": "Dự án này chưa có thư mục.",
     "files.back": "Quay lại danh sách",
     "files.notText": "Đây không phải văn bản nên không hiển thị được ở đây.",

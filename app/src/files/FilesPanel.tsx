@@ -6,22 +6,23 @@
 // question whichever terminal is in front of it. The row that does follow the pane is the one above
 // these two ("what was pointed at"), and it is `AMB-T-3603`'s to add.
 //
-// **What changed lately is asked, not watched.** This walks the folder when it goes up and again
-// when the window is focused, which is what a person coming back from the editor wants and costs a
-// walk. Being told as it happens is a watch, with a walk of its own to reconcile against, and that
-// is `AMB-T-3604`'s.
+// **What changed lately is watched, not asked for.** The host lays a watch over the folder and
+// says what is in it as it moves (`crate::folder_watch`), so the row is right while a person is
+// looking at it rather than as of whenever this side last thought to ask. What it cannot watch —
+// a folder too large to walk, a watch the kernel refused — is drawn as the row saying so, because
+// an unwatched half looks exactly like a half where nothing happened (`AMB-T-3604`).
 //
 // **What a file is, is the host's answer, not this side's guess.** A NUL in the head makes it
 // binary and the first bytes make it a picture (`crate::folder`); the name decides only whether
 // text is drawn as Markdown, which is a question about rendering rather than about what the file
 // is.
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { FolderChangedDto } from "../bindings/bindings";
+import { useEffect, useMemo, useState } from "react";
+import type { FolderChangesDto } from "../bindings/bindings";
 import { Markdown } from "../components/Markdown";
 import { useBoundFolders } from "../core/boundFolders";
 import { t, whenLabel } from "../core/i18n";
 import { RefNavProvider, useRefNav } from "../core/refNav";
-import { folderEntries, folderRead, folderRecent } from "./folder";
+import { folderEntries, folderRead, folderUnwatch, folderWatch, onFolderChanged } from "./folder";
 
 /** The names a file's text is drawn as Markdown under. The one thing here the name decides. */
 const MARKDOWN = [".md", ".markdown"];
@@ -36,22 +37,25 @@ export function FilesPanel({ projectId, onOpenLedger }: {
   // project on it draws the invitation, the same as one whose project has no folder.
   const folders = useBoundFolders(projectId ?? 0);
   const root = folders.live[0]?.path ?? null;
-  const [changed, setChanged] = useState<FolderChangedDto[]>([]);
+  const [changes, setChanges] = useState<FolderChangesDto>({ changed: [], partial: false });
   const [treeOpen, setTreeOpen] = useState(false);
   const [reading, setReading] = useState<string[] | null>(null);
 
-  const refresh = useCallback(() => {
-    if (projectId === null || root === null) return;
-    void folderRecent(projectId, root).then(setChanged).catch(() => setChanged([]));
-  }, [projectId, root]);
-
   useEffect(() => {
-    refresh();
-    // Coming back to the window is the moment the list is most likely to be stale: the walk happens
-    // while the person was away in something else.
-    window.addEventListener("focus", refresh);
-    return () => window.removeEventListener("focus", refresh);
-  }, [refresh]);
+    if (projectId === null || root === null) return;
+    let alive = true;
+    // Subscribed before the watch is asked for: the first thing the folder does could happen while
+    // the host is still walking it, and a listener set up afterwards would miss exactly that.
+    const listening = onFolderChanged((fresh) => { if (alive) setChanges(fresh); });
+    void folderWatch(projectId, root)
+      .then((now) => { if (alive) setChanges(now); })
+      .catch(() => { if (alive) setChanges({ changed: [], partial: false }); });
+    return () => {
+      alive = false;
+      void listening.then((stop) => stop());
+      void folderUnwatch();
+    };
+  }, [projectId, root]);
 
   if (projectId === null || root === null) {
     // A read that has not come back draws nothing at all: a flash of "no folder" on a project that
@@ -77,11 +81,11 @@ export function FilesPanel({ projectId, onOpenLedger }: {
     <div className="files">
       <section className="files__row">
         <h3 className="files__head">{t("files.changed")}</h3>
-        {changed.length === 0
+        {changes.changed.length === 0
           ? <p className="files__none">{t("files.nothingChanged")}</p>
           : (
             <ul className="files__list">
-              {changed.map((one) => (
+              {changes.changed.map((one) => (
                 <li key={one.path.join("/")}>
                   <button className="files__file" onClick={() => setReading(one.path)}>
                     <span className="files__name">{one.path[one.path.length - 1]}</span>
@@ -92,6 +96,9 @@ export function FilesPanel({ projectId, onOpenLedger }: {
               ))}
             </ul>
           )}
+        {/* Said out loud rather than left to be assumed: a folder only half watched goes on looking
+            like one where nothing is happening. */}
+        {changes.partial && <p className="files__none">{t("files.partial")}</p>}
       </section>
       <section className="files__row">
         <button

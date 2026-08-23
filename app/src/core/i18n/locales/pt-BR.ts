@@ -524,6 +524,7 @@ export const ptBR: Translation = {
     "files.changed": "Alterados recentemente",
     "files.tree": "A pasta",
     "files.nothingChanged": "Nada mudou ainda.",
+    "files.partial": "Parte desta pasta não está sendo observada.",
     "files.noFolder": "Este projeto ainda não tem pasta.",
     "files.back": "Voltar para a lista",
     "files.notText": "Isto não é texto, então não dá para mostrar aqui.",

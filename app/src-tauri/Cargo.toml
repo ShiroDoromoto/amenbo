@@ -47,6 +47,13 @@ tracing-appender = "0.2"
 # similarly named `notify-rust` (OS notifications), which is a different crate.
 notify = "8"
 
+# What a folder holds, pruned the way the folder itself says (`crate::folder`). ripgrep's walker,
+# taken for its answer rather than its speed: it reads `.gitignore`, the global one and the parents'
+# the way git does, which is how a build directory this project happens to call `.next` drops out of
+# the file face without anybody listing it in our own code. A folder that is no repository loses
+# nothing — there is simply nothing to read.
+ignore = "0.4"
+
 # The pseudo-terminal a pane of the talk window is filled with: what runs in one draws full-screen,
 # so the pane is a real terminal rather than a rendering of one. wezterm's implementation, chosen
 # because it is Rust the whole way down — no build.rs, no C toolchain, no sidecar binary to ship —

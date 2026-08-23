@@ -501,6 +501,7 @@ export const ko: Translation = {
     "files.changed": "최근에 바뀐 것",
     "files.tree": "폴더",
     "files.nothingChanged": "아직 바뀐 것이 없습니다.",
+    "files.partial": "이 폴더의 일부는 지켜보지 못하고 있습니다.",
     "files.noFolder": "이 프로젝트에는 아직 폴더가 없습니다.",
     "files.back": "목록으로 돌아가기",
     "files.notText": "텍스트가 아니라서 여기에서는 볼 수 없습니다.",

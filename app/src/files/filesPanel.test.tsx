@@ -10,7 +10,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { FolderChangedDto, FolderEntryDto, FolderFileDto } from "../bindings/bindings";
+import type { FolderChangedDto, FolderChangesDto, FolderEntryDto, FolderFileDto } from "../bindings/bindings";
 
 const ROOT = "/work/repo";
 
@@ -18,12 +18,20 @@ const hoisted = vi.hoisted(() => ({
   asked: [] as string[],
   entries: {} as Record<string, { name: string; isDir: boolean }[]>,
   file: { truncated: false } as { text?: string; truncated: boolean; image?: { mime: string; base64: string } },
+  /** The host's side of the watch: what it answers with, and the way to push a later list. */
+  tell: null as null | ((changes: FolderChangesDto) => void),
+  watching: { changed: [] as FolderChangedDto[], partial: false } as FolderChangesDto,
 }));
 
 vi.mock("./folder", () => ({
-  folderRecent: async (projectId: number, root: string): Promise<FolderChangedDto[]> => {
-    hoisted.asked.push(`recent:${projectId}:${root}`);
-    return [{ path: ["notes", "a.md"], modified: new Date().toISOString() }];
+  folderWatch: async (projectId: number, root: string): Promise<FolderChangesDto> => {
+    hoisted.asked.push(`watch:${projectId}:${root}`);
+    return hoisted.watching;
+  },
+  folderUnwatch: async () => { hoisted.asked.push("unwatch"); },
+  onFolderChanged: async (take: (changes: FolderChangesDto) => void) => {
+    hoisted.tell = take;
+    return () => { hoisted.tell = null; hoisted.asked.push("unlisten"); };
   },
   folderEntries: async (_projectId: number, root: string, path: string[]): Promise<FolderEntryDto[]> => {
     hoisted.asked.push(`entries:${root}:${path.join("/")}`);
@@ -85,6 +93,11 @@ beforeEach(() => {
   hoisted.asked = [];
   hoisted.entries = {};
   hoisted.file = { truncated: false };
+  hoisted.tell = null;
+  hoisted.watching = {
+    changed: [{ path: ["notes", "a.md"], modified: new Date().toISOString() }],
+    partial: false,
+  };
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -96,13 +109,48 @@ afterEach(() => {
 });
 
 describe("the file face", () => {
-  it("asks about the project's folder, not about a pane", async () => {
+  it("watches the project's folder, not a pane's", async () => {
     await draw();
-    expect(hoisted.asked).toContain(`recent:1:${ROOT}`);
+    expect(hoisted.asked).toContain(`watch:1:${ROOT}`);
     expect(container.textContent).toContain("a.md");
     // The folder the file is in is shown beside it: two files called the same thing are told apart
     // by where they are, and the row shows the name because that is what is read.
     expect(container.textContent).toContain("notes");
+  });
+
+  it("redraws the row when the host says the folder moved", async () => {
+    await draw();
+    expect(container.textContent).toContain("a.md");
+    await act(async () => {
+      hoisted.tell?.({
+        changed: [{ path: ["src", "main.rs"], modified: new Date().toISOString() }],
+        partial: false,
+      });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    // The list is the host's, whole: what it says now is what is drawn, with nothing merged in.
+    expect(container.textContent).toContain("main.rs");
+    expect(container.textContent).not.toContain("a.md");
+  });
+
+  it("says out loud when only part of the folder is watched", async () => {
+    hoisted.watching = { changed: [], partial: true };
+    await draw();
+    // An unwatched half looks exactly like a half where nothing happened, so it is said rather
+    // than left to be assumed (`AMB-T-3604`).
+    expect(container.textContent).toContain(t("files.partial"));
+  });
+
+  it("takes its watch down when the face goes away", async () => {
+    await draw();
+    await act(async () => { root.unmount(); });
+    expect(hoisted.asked).toContain("unwatch");
+    expect(hoisted.asked).toContain("unlisten");
+    // Re-created so afterEach's unmount has something to work on.
+    container.remove();
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
   });
 
   it("says a project with no folder has none, rather than drawing empty rows", async () => {

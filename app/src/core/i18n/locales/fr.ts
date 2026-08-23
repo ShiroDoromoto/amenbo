@@ -523,6 +523,7 @@ export const fr: Translation = {
     "files.changed": "Modifié récemment",
     "files.tree": "Le dossier",
     "files.nothingChanged": "Rien n'a encore changé.",
+    "files.partial": "Une partie de ce dossier n'est pas surveillée.",
     "files.noFolder": "Ce projet n'a pas encore de dossier.",
     "files.back": "Retour à la liste",
     "files.notText": "Ce n'est pas du texte : impossible de l'afficher ici.",

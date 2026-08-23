@@ -502,6 +502,7 @@ export const zhHans: Translation = {
     "files.changed": "最近改动",
     "files.tree": "文件夹",
     "files.nothingChanged": "还没有任何改动。",
+    "files.partial": "这个文件夹有一部分没有被监看。",
     "files.noFolder": "这个项目还没有文件夹。",
     "files.back": "返回列表",
     "files.notText": "这不是文本，无法在这里显示。",

@@ -1,15 +1,19 @@
-// The seam to what a folder holds (`crate::folder`).
+// The seam to what a folder holds (`crate::folder`, `crate::folder_watch`).
 //
-// Three questions, one fence behind them: the names inside one folder, the files written to most
-// recently, and what one file has to show. The root every one of them is rooted at is a folder the
-// project is bound to — the host checks that against the store rather than taking this side's word
-// for it, so nothing here has to be careful about which path it passes.
+// The names inside one folder and what one file has to show are asked for; what changed lately is
+// **watched** — the host installs a watch over the folder and says so as it happens, rather than
+// this side guessing when to go and look (`AMB-T-3604`). The root all of them are rooted at is a
+// folder the project is bound to, and the host checks that against the store rather than taking
+// this side's word for it, so nothing here has to be careful about which path it passes.
 //
 // Outside Tauri (`npm run dev` in a browser) there is no filesystem to ask, and the face draws its
 // empty state rather than an error: a folder with nothing in it is what the browser fallback is.
-import type { FolderChangedDto, FolderEntryDto, FolderFileDto } from "../bindings/bindings";
+import type { FolderChangesDto, FolderEntryDto, FolderFileDto } from "../bindings/bindings";
 import { invoke } from "../core/ipc";
 import { inTauri } from "../core/snapshot";
+
+/** The host's word that the folder moved. It carries the whole list, not what moved in it. */
+const CHANGED_EVENT = "folder://changed";
 
 /** The names directly inside one folder, folders first. `path` is the segments from the root. */
 export async function folderEntries(
@@ -21,10 +25,36 @@ export async function folderEntries(
   return await invoke<FolderEntryDto[]>("folder_entries", { projectId, root, path });
 }
 
-/** The files written to most recently, newest first. A walk, asked again rather than watched. */
-export async function folderRecent(projectId: number, root: string): Promise<FolderChangedDto[]> {
-  if (!inTauri()) return [];
-  return await invoke<FolderChangedDto[]>("folder_recent", { projectId, root });
+/**
+ * Start watching a project's folder, and take what is in it now.
+ *
+ * Asking again replaces whatever was being watched, so a face that remounts leaves no watch behind
+ * it — and the one call is both the subscription and the first answer, which is what keeps the
+ * panel from drawing an empty list for the length of a walk.
+ */
+export async function folderWatch(projectId: number, root: string): Promise<FolderChangesDto> {
+  if (!inTauri()) return { changed: [], partial: false };
+  return await invoke<FolderChangesDto>("folder_watch", { projectId, root });
+}
+
+/** Stop watching. Called when the face goes away; nothing else has to. */
+export async function folderUnwatch(): Promise<void> {
+  if (!inTauri()) return;
+  await invoke<void>("folder_unwatch", {});
+}
+
+/**
+ * Be told when the folder moves, until the returned function is called.
+ *
+ * The payload is the whole list rather than a delta: the face draws a list, and a delta it had to
+ * apply would be a second copy of the truth to keep in step with the host's.
+ */
+export async function onFolderChanged(
+  take: (changes: FolderChangesDto) => void,
+): Promise<() => void> {
+  if (!inTauri()) return () => {};
+  const { listen } = await import("@tauri-apps/api/event");
+  return await listen<FolderChangesDto>(CHANGED_EVENT, ({ payload }) => take(payload));
 }
 
 /** What one file has to show: its text, or its picture, or neither. */

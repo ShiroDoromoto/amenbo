@@ -25,10 +25,14 @@ use base64::Engine as _;
 use crate::dto::{FolderChangedDto, FolderEntryDto, FolderFileDto, FolderImageDto};
 use crate::error::CmdError;
 
-/// The folders whose contents are the machine's rather than the person's. A tree that lists them
-/// buries what somebody wrote under what a build wrote, and the walk behind "what changed lately"
-/// would return almost nothing else — a build touches thousands of files in seconds
-/// (`AMB-T-3566`).
+/// The floor of the pruning: folders whose contents are the machine's rather than the person's,
+/// pruned whether or not anything says to. A tree that lists them buries what somebody wrote under
+/// what a build wrote, and the walk behind "what changed lately" would return almost nothing else —
+/// a build touches thousands of files in seconds (`AMB-T-3566`).
+///
+/// Above this floor the folder speaks for itself: what its `.gitignore` calls noise is noise here
+/// too ([`walker`]). A floor is still needed under that, because `.git` is not in anybody's ignore
+/// file, and a folder that is not a repository has no ignore file at all.
 const PRUNED: [&str; 4] = [".git", "node_modules", "target", "dist"];
 
 /// How much of a file is read to decide whether it is text (`AMB-T-3547`).
@@ -82,7 +86,7 @@ pub fn under(root: &Path, segments: impl IntoIterator<Item = impl AsRef<str>>) -
 ///
 /// The caller names a root, and a webview is not trusted to name one: the registry is asked whether
 /// this project claims that folder. Everything else in this module resolves under what comes back.
-fn root_of(project_id: i64, root: &str) -> Result<PathBuf, CmdError> {
+pub fn root_of(project_id: i64, root: &str) -> Result<PathBuf, CmdError> {
     let asked = Path::new(root).canonicalize().map_err(|_| gone())?;
     let store = crate::commands::open_store_read()?;
     let bound = store
@@ -102,6 +106,92 @@ fn gone() -> CmdError {
     ))
 }
 
+/// The walk both doors take, pruned the one way (`AMB-T-3604`).
+///
+/// **What a folder holds is what somebody wrote in it.** The floor above is pruned outright, and
+/// over it the repository's own answer is taken: `.gitignore`, the global one and the parents' are
+/// all read, so a build directory this project happens to call `.next` or `__pycache__` drops out
+/// without anybody listing it here. A folder that is no repository loses nothing — there is simply
+/// nothing to read, and the floor is all that applies.
+///
+/// Hidden files are **not** skipped, which is where this parts company with the ignore crate's
+/// default: a dotfile is a file somebody wrote, and `.amenbo` and `.env` are exactly the ones a
+/// reader goes looking for after an agent has been at work.
+fn walker(root: &Path) -> ignore::WalkBuilder {
+    let mut builder = ignore::WalkBuilder::new(root);
+    builder
+        .hidden(false)
+        .git_ignore(true)
+        .git_global(true)
+        .git_exclude(true)
+        .parents(true)
+        .require_git(false)
+        .filter_entry(|entry| {
+            !PRUNED.contains(&entry.file_name().to_string_lossy().as_ref())
+        });
+    builder
+}
+
+/// Everything under `root` that a reader would call theirs: the files with when they were last
+/// written, and the folders they are in — which is also the list a watch is installed over
+/// (`crate::folder_watch`).
+///
+/// The walk is capped rather than trusted to end: a folder somebody points the app at can be
+/// anything, and neither a list of the thirty newest files nor a set of watches is worth an
+/// unbounded one. `capped` is true when the cap is what stopped it, which is the one thing the
+/// caller cannot work out from the answer.
+pub struct Scan {
+    /// Every file, most recently written first, as segments from the root.
+    pub files: Vec<(std::time::SystemTime, Vec<String>)>,
+    /// Every folder walked, `root` included — one watch each.
+    pub dirs: Vec<PathBuf>,
+    /// Whether the walk stopped at the cap rather than at the end of the tree.
+    pub capped: bool,
+}
+
+pub fn scan(root: &Path) -> Scan {
+    let mut files = Vec::new();
+    let mut dirs = Vec::new();
+    let mut visited = 0usize;
+    let mut capped = false;
+
+    for entry in walker(root).build() {
+        let Ok(entry) = entry else { continue };
+        visited += 1;
+        if visited > VISIT_CAP {
+            capped = true;
+            break;
+        }
+        let path = entry.path();
+        if entry.file_type().is_some_and(|t| t.is_dir()) {
+            dirs.push(path.to_path_buf());
+            continue;
+        }
+        let Ok(segments) = path.strip_prefix(root) else { continue };
+        let Ok(meta) = entry.metadata() else { continue };
+        let Ok(modified) = meta.modified() else { continue };
+        files.push((
+            modified,
+            segments.iter().map(|s| s.to_string_lossy().into_owned()).collect(),
+        ));
+    }
+
+    files.sort_by_key(|(modified, _)| std::cmp::Reverse(*modified));
+    Scan { files, dirs, capped }
+}
+
+/// The rows "what changed lately" is drawn from: the newest of a scan, in the shape the panel reads.
+pub fn recent(scan: &Scan) -> Vec<FolderChangedDto> {
+    scan.files
+        .iter()
+        .take(RECENT)
+        .map(|(modified, path)| FolderChangedDto {
+            path: path.clone(),
+            modified: chrono::DateTime::<chrono::Utc>::from(*modified).to_rfc3339(),
+        })
+        .collect()
+}
+
 /// The names directly inside one folder — folders first, then files, each run in the order a person
 /// reads them. Nothing recurses: a folded tree opens one level at a time (`AMB-T-3602`).
 #[tauri::command]
@@ -111,18 +201,21 @@ pub fn folder_entries(
     path: Vec<String>,
 ) -> Result<Vec<FolderEntryDto>, CmdError> {
     let dir = under(&root_of(project_id, &root)?, &path).ok_or_else(gone)?;
-    let mut rows: Vec<FolderEntryDto> = std::fs::read_dir(&dir)
-        .map_err(|_| gone())?
+    if !dir.is_dir() {
+        return Err(gone());
+    }
+    // One level of the shared walk. Going through it rather than reading the directory outright is
+    // what keeps the tree and the changed list saying the same thing about what is in this folder:
+    // a name the repository ignores is absent from both, not from one of them.
+    let mut rows: Vec<FolderEntryDto> = walker(&dir)
+        .max_depth(Some(1))
+        .build()
         .filter_map(Result::ok)
-        .filter_map(|entry| {
-            let name = entry.file_name().to_string_lossy().into_owned();
-            // The machine's folders are not shown. They are the ones a person never means when they
-            // say "what is in here", and the ones that make a tree unusable when they are.
-            if PRUNED.contains(&name.as_str()) {
-                return None;
-            }
-            let is_dir = entry.metadata().ok()?.is_dir();
-            Some(FolderEntryDto { name, is_dir })
+        // The first entry of a walk is the folder it started in.
+        .filter(|entry| entry.depth() > 0)
+        .map(|entry| FolderEntryDto {
+            name: entry.file_name().to_string_lossy().into_owned(),
+            is_dir: entry.file_type().is_some_and(|t| t.is_dir()),
         })
         .collect();
     rows.sort_by(|a, b| {
@@ -131,52 +224,6 @@ pub fn folder_entries(
             .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
     });
     Ok(rows)
-}
-
-/// The files written to most recently, newest first.
-///
-/// It is a walk, not a watch: what it answers is true of the moment it was asked, and a face that
-/// wants to be told as it happens is `AMB-T-3604`'s. The walk is pruned and capped, so the cost of
-/// asking is bounded by the shape of the folder rather than by its size.
-#[tauri::command]
-pub fn folder_recent(project_id: i64, root: String) -> Result<Vec<FolderChangedDto>, CmdError> {
-    let root = root_of(project_id, &root)?;
-    let mut found: Vec<(std::time::SystemTime, Vec<String>)> = Vec::new();
-    let mut queue: Vec<Vec<String>> = vec![Vec::new()];
-    let mut visited = 0usize;
-
-    while let Some(here) = queue.pop() {
-        let Some(dir) = under(&root, &here) else { continue };
-        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
-        for entry in entries.filter_map(Result::ok) {
-            if visited >= VISIT_CAP {
-                break;
-            }
-            visited += 1;
-            let name = entry.file_name().to_string_lossy().into_owned();
-            if PRUNED.contains(&name.as_str()) {
-                continue;
-            }
-            let Ok(meta) = entry.metadata() else { continue };
-            let mut path = here.clone();
-            path.push(name);
-            if meta.is_dir() {
-                queue.push(path);
-            } else if let Ok(modified) = meta.modified() {
-                found.push((modified, path));
-            }
-        }
-    }
-
-    found.sort_by_key(|(modified, _)| std::cmp::Reverse(*modified));
-    Ok(found
-        .into_iter()
-        .take(RECENT)
-        .map(|(modified, path)| FolderChangedDto {
-            path,
-            modified: chrono::DateTime::<chrono::Utc>::from(modified).to_rfc3339(),
-        })
-        .collect())
 }
 
 /// What one file has to show: its text, or its picture, or neither.
@@ -346,6 +393,51 @@ mod tests {
         assert_eq!(picture(b"RIFF\0\0\0\0WEBPVP8 "), Some("image/webp"));
         assert_eq!(picture(b"RIFF\0\0\0\0WAVEfmt "), None);
         assert_eq!(picture(b"# a heading"), None);
+    }
+
+    /// The floor is pruned whether or not anything says so, and what the folder's own ignore file
+    /// calls noise is noise here too — the point of taking ripgrep's walker rather than reading the
+    /// directory (`AMB-T-3604`). A dotfile is not noise: it is a file somebody wrote.
+    #[test]
+    fn the_folder_says_what_of_it_is_the_machines() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("node_modules")).expect("the machine's folder");
+        std::fs::create_dir_all(root.join("build")).expect("this project's own");
+        std::fs::write(root.join(".gitignore"), "build/\n*.log\n").expect("the ignore file");
+        std::fs::write(root.join("node_modules/x.js"), b"built").expect("a file");
+        std::fs::write(root.join("build/out.js"), b"built").expect("a file");
+        std::fs::write(root.join("run.log"), b"noise").expect("a file");
+        std::fs::write(root.join(".amenbo"), b"pointer").expect("a file");
+        std::fs::write(root.join("notes.md"), b"mine").expect("a file");
+
+        let found = scan(root);
+        let names: Vec<String> = found.files.iter().map(|(_, p)| p.join("/")).collect();
+        assert!(names.contains(&"notes.md".to_string()));
+        assert!(names.contains(&".amenbo".to_string()), "a dotfile is somebody's: {names:?}");
+        assert!(names.contains(&".gitignore".to_string()));
+        for gone in ["node_modules/x.js", "build/out.js", "run.log"] {
+            assert!(!names.contains(&gone.to_string()), "{gone} is the machine's: {names:?}");
+        }
+        // Every folder the walk kept is one the watch is laid over, the root included.
+        assert!(found.dirs.contains(&root.to_path_buf()));
+        assert!(!found.dirs.iter().any(|d| d.ends_with("node_modules")));
+    }
+
+    /// Newest first, because that is the whole of what the row says: what was written last.
+    #[test]
+    fn the_newest_file_is_named_first() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let root = dir.path();
+        std::fs::write(root.join("older.txt"), b"a").expect("a file");
+        // Written one after the other, and the clock has to have moved between them for the order
+        // to mean anything.
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(root.join("newer.txt"), b"b").expect("a file");
+
+        let rows = recent(&scan(root));
+        let names: Vec<&str> = rows.iter().map(|r| r.path[0].as_str()).collect();
+        assert_eq!(names, ["newer.txt", "older.txt"]);
     }
 
     /// The cap is what a panel is handed, not what the file is: the size travels whole, and the cut

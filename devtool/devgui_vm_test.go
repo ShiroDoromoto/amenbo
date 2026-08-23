@@ -70,3 +70,57 @@ func TestShqSurvivesTheNamesABundleCarries(t *testing.T) {
 		t.Errorf("shq(apostrophe) = %s, want %s", got, want)
 	}
 }
+
+// TestInstancesFromReadsListingsAlone holds the reading the guest sweep depends on: what is there
+// comes from the two listings and nothing else. Nothing in the guest can be stat'ed from here, so a
+// scan that reached for the disk would have no answer to give on that machine at all.
+func TestInstancesFromReadsListingsAlone(t *testing.T) {
+	got := instancesFrom(
+		[]string{"amenbo (dev 2131).app", "amenbo (dev 2140).app", "Amenbo.app", "amenbo (dev wip).app"},
+		[]string{"work.amenbo.amenbo-dev-2131", "work.amenbo.amenbo-dev-2135", "work.amenbo.amenbo-dev"},
+		"/Users/admin", macAppsDir, []string{"2135"})
+
+	want := []struct {
+		id    string
+		live  bool
+		paths []string
+	}{
+		// Both halves there.
+		{"2131", false, []string{"/Applications/amenbo (dev 2131).app", "/Users/admin/Library/Application Support/work.amenbo.amenbo-dev-2131"}},
+		// A store whose bundle was already taken is still an instance to reclaim.
+		{"2135", true, []string{"/Users/admin/Library/Application Support/work.amenbo.amenbo-dev-2135"}},
+		// A bundle whose store was removed by hand, likewise.
+		{"2140", false, []string{"/Applications/amenbo (dev 2140).app"}},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("scanned %+v, want %d instances", got, len(want))
+	}
+	for i := range want {
+		if got[i].id != want[i].id || got[i].live != want[i].live {
+			t.Errorf("instance %d = %s live=%v, want %s live=%v", i, got[i].id, got[i].live, want[i].id, want[i].live)
+		}
+		if len(got[i].paths) != len(want[i].paths) {
+			t.Fatalf("instance %s paths = %v, want %v", got[i].id, got[i].paths, want[i].paths)
+		}
+		for j := range want[i].paths {
+			if got[i].paths[j] != want[i].paths[j] {
+				t.Errorf("instance %s path %d = %q, want %q", got[i].id, j, got[i].paths[j], want[i].paths[j])
+			}
+		}
+	}
+}
+
+// TestVMTaskDevGUIPathsTakeBothHalvesInOrder pins the guest teardown to the same two halves, in the
+// same order, the host teardown takes: the bundle first, the store second.
+func TestVMTaskDevGUIPathsTakeBothHalvesInOrder(t *testing.T) {
+	got := vmTaskDevGUIPaths("2131")
+	want := taskDevGUIPaths(vmGuestHome, macAppsDir, "2131")
+	if len(got) != len(want) {
+		t.Fatalf("guest paths = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("guest path %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}

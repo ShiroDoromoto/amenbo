@@ -70,8 +70,9 @@ permanent place a grown setup (plugins, catalog, projects) lives.
 
 The right-hand column is where it lands on **this machine**. The same instance goes
 into the throwaway VM instead with `make install-gui-dev-vm AMB-T-ID=<id>` — same
-names, same layout, another machine — and is thrown away with the VM rather than
-by `devgui rm`. See [`devgui install`](#devtool-devgui-install-id---vm).
+names, same layout, another machine — and every command that addresses it answers
+for that machine with `--vm`. See [`devgui install`](#devtool-devgui-install-id---vm)
+and [the destination flag](#which-machine-a-command-is-about----vm).
 
 Each build runs under an executable name of its own — production keeps
 `amenbo-app` — so a name reaches one app and not another: `pgrep -x
@@ -152,6 +153,29 @@ instance the ordinary way never types it. Details:
 - The bundle itself is not built here; that is the Makefile's, and only the
   tasks that look at a GUI pay for one.
 
+### Which machine a command is about — `--vm`
+
+Every command that addresses an instance reads **this machine** by default, and
+answers for the guest with `--vm`:
+
+```sh
+devtool devgui pid   696 --vm --front     # the pid in there
+devtool devgui shot  696 --vm             # shot in there, png brought back here
+devtool devgui cli   696 --vm -- …        # writes the store in there
+devtool devgui rm    696 --vm             # reclaims it in there
+devtool devgui sweep --vm                 # what is in there, and what is orphaned
+```
+
+**The default does not move.** A clone or a fork with one Mac has no VM, so the
+host route has to keep working unchanged; `--vm` is a second destination.
+
+Only the machine asked changes. The guest layout mirrors this one, so the same
+names, the same paths and the same pid lookup do the work — a listing becomes an
+`ls` over ssh, a removal an `rm -rf`, and the screen tool driven is the copy
+`devtool vm screen` put in there. Two of them cannot be typed in the guest at
+all: the sweep needs `git worktree list`, which only this machine can answer, and
+`cli` runs a build of this checkout.
+
 ### `devtool devgui install <id> --vm`
 
 Puts the task's own dev GUI **in the throwaway VM** instead of on this machine —
@@ -202,7 +226,7 @@ Opening it is one line — `devtool vm exec -- open -a '/Applications/amenbo (de
 696).app'` — and the printed path is that argument. macOS only, and it needs
 `tart` the way everything under `vm` does.
 
-### `devtool devgui cli <id> [--no-build] -- <amenbo args…>`
+### `devtool devgui cli <id> [--no-build] [--vm] -- <amenbo args…>`
 
 Runs an Amenbo command against **the store the task's own dev GUI reads**, so a
 screen can be given something to show. A dev GUI shows what is in its store: a
@@ -241,9 +265,15 @@ Details worth knowing:
   task's own GUI is built from the same tree and would carry it forward the
   moment it opened.
 
+`--vm` writes the store of the instance in the guest instead. The same build is
+sent across — the guest holds no toolchain, and the two machines are the same
+arch — and run in there, pointed at that store the same way. It is sent on every
+run, because the reason the CLI is rebuilt first is that the tree it seeds a
+store for keeps moving.
+
 macOS only, like everything else about the per-task instance.
 
-### `devtool devgui pid [<id>] [--front]`
+### `devtool devgui pid [<id>] [--front] [--vm]`
 
 Prints on **stdout** the pid of a running dev GUI, so it can be handed straight
 to the tools that take one:
@@ -268,8 +298,12 @@ is in front, in practice the **production** one.
   over it.
 - Nothing running is a **non-zero exit** with the build command named, not an
   empty answer that reads as a pid of zero.
+- `--vm` answers for the instance in the guest, and the pid is a pid **in
+  there** — what takes it is the screen tool in the guest, or `devtool vm exec`.
+  There is no shared dev app to fall back on in the VM, so with no `<id>` it is
+  the checkout's own task or nothing.
 
-### `devtool devgui shot [<id>] [--no-front]`
+### `devtool devgui shot [<id>] [--no-front] [--vm]`
 
 Captures the instance's **own window** and prints its png's path on stdout:
 
@@ -293,8 +327,12 @@ tool's.
   `--no-front` is for capturing a state that fronting would disturb.
 - Screen recording has to be granted to the terminal running this, or nothing is
   written — which comes back as a non-zero exit saying so, not as an empty png.
+- `--vm` shoots the window in the guest with the screen tool in there and brings
+  the png **back out**, so the path printed is one on this machine — the thing
+  that looks at a shot is here. Nothing has to be granted on this side for it:
+  the recording is the guest's.
 
-### `devtool devgui rm <id>`
+### `devtool devgui rm <id> [--vm]`
 
 Deletes one task's instance: the `/Applications` bundle **and** its app-data,
 naming each path it removed. Both live outside the checkout, so removing the
@@ -307,7 +345,11 @@ remove it — the instance writes its store back on the way out, and the removal
 that reported it reclaimed reads as green while the leftover returns minutes
 later.
 
-### `devtool devgui sweep [--yes]`
+`--vm` takes the instance in the guest, the same two halves the same way.
+Throwing the VM away (`devtool vm rm`) takes every instance in there at once, so
+this is for reclaiming one while the clone goes on being used.
+
+### `devtool devgui sweep [--yes] [--vm]`
 
 Lists every per-task dev GUI on this machine and says which ones no worktree
 claims any more. An instance outlives the checkout it belongs to, so a session
@@ -327,6 +369,11 @@ a store behind under a number nobody will type again.
 
 Only the digits form an instance: a hand-made `amenbo (dev wip).app` is
 somebody's own, and the shared `amenbo (dev)` app is permanent.
+
+`--vm` sweeps the guest instead, and **it can only be asked from here**: what
+makes an instance live is a checkout, and the checkouts are on this machine.
+Asked inside the guest, git has nothing to answer with — and a sweep that cannot
+tell live from orphan refuses rather than guess, so it would simply never run.
 
 ### `devtool fixtures refresh [--catalog <url|path|repo dir>] [--amenbo <bin>] [--repo owner/name]`
 

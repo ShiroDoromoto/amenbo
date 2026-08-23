@@ -147,48 +147,75 @@ type taskDevGUIInstance struct {
 }
 
 // scanTaskDevGUIs finds every per-task instance present under `appsDir` and `home` and marks the
-// ones `liveIDs` still claims. It reports what is actually on disk — an instance whose bundle was
-// built but whose app-data was removed by hand is still an instance, and still worth reclaiming —
-// so `paths` holds only the halves that exist.
+// ones `liveIDs` still claims.
 //
 // The two roots and the live set are arguments so the whole scan can be pointed at a temp dir; the
 // caller is what binds it to /Applications and to `git worktree list`.
 func scanTaskDevGUIs(home, appsDir string, liveIDs []string) []taskDevGUIInstance {
+	return instancesFrom(dirNames(appsDir), dirNames(appSupportDir(home)), home, appsDir, liveIDs)
+}
+
+// dirNames lists what is in dir, and nothing at all when it cannot be read: nothing readable there
+// is nothing to reclaim from there.
+func dirNames(dir string) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	return names
+}
+
+// instancesFrom reads the instances out of two directory listings — what is in the applications
+// folder, and what is in Application Support. It reports what is there rather than what a pair
+// should be: an instance whose bundle was built and whose app-data was removed by hand is still an
+// instance, and still worth reclaiming, so `paths` holds only the halves the listings name.
+//
+// Presence comes from the listings and nothing else. That is what lets the same reading run over a
+// machine this process cannot stat — the guest's — where the listing is one `ls` over ssh.
+func instancesFrom(bundleNames, storeNames []string, home, appsDir string, liveIDs []string) []taskDevGUIInstance {
 	live := make(map[string]bool, len(liveIDs))
 	for _, id := range liveIDs {
 		live[id] = true
 	}
-	found := map[string]bool{}
+	hasBundle, hasStore := map[string]bool{}, map[string]bool{}
 	for _, half := range []struct {
-		dir  string
-		idOf func(string) string
+		names []string
+		idOf  func(string) string
+		into  map[string]bool
 	}{
-		{appsDir, taskIDFromBundleName},
-		{appSupportDir(home), taskIDFromAppDataName},
+		{bundleNames, taskIDFromBundleName, hasBundle},
+		{storeNames, taskIDFromAppDataName, hasStore},
 	} {
-		entries, err := os.ReadDir(half.dir)
-		if err != nil {
-			continue // nothing readable there is nothing to reclaim from there
-		}
-		for _, e := range entries {
-			if id := half.idOf(e.Name()); id != "" {
-				found[id] = true
+		for _, name := range half.names {
+			if id := half.idOf(name); id != "" {
+				half.into[id] = true
 			}
 		}
 	}
-	ids := make([]string, 0, len(found))
-	for id := range found {
+	ids := make([]string, 0, len(hasBundle)+len(hasStore))
+	for id := range hasBundle {
 		ids = append(ids, id)
+	}
+	for id := range hasStore {
+		if !hasBundle[id] {
+			ids = append(ids, id)
+		}
 	}
 	sort.Strings(ids)
 
 	instances := make([]taskDevGUIInstance, 0, len(ids))
 	for _, id := range ids {
 		inst := taskDevGUIInstance{id: id, live: live[id]}
-		for _, p := range taskDevGUIPaths(home, appsDir, id) {
-			if _, err := os.Lstat(p); err == nil {
-				inst.paths = append(inst.paths, p)
-			}
+		both := taskDevGUIPaths(home, appsDir, id)
+		if hasBundle[id] {
+			inst.paths = append(inst.paths, both[0])
+		}
+		if hasStore[id] {
+			inst.paths = append(inst.paths, both[1])
 		}
 		instances = append(instances, inst)
 	}

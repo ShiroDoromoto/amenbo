@@ -534,6 +534,8 @@ export const ptBR: Translation = {
     "files.partial": "Parte desta pasta não está sendo observada.",
     "files.noFolder": "Este projeto ainda não tem pasta.",
     "files.back": "Voltar para a lista",
+    "files.openWith": "Abrir com o aplicativo de sempre",
+    "files.reveal": "Mostrar no gerenciador de arquivos",
     "files.notText": "Isto não é texto, então não dá para mostrar aqui.",
     "files.cut": "Só o começo está sendo mostrado.",
     "files.unreadable": "Não foi possível ler este arquivo.",

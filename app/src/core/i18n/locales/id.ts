@@ -515,6 +515,8 @@ export const id: Translation = {
     "files.partial": "Sebagian folder ini tidak sedang dipantau.",
     "files.noFolder": "Proyek ini belum punya folder.",
     "files.back": "Kembali ke daftar",
+    "files.openWith": "Buka dengan aplikasi biasa",
+    "files.reveal": "Tampilkan di pengelola berkas",
     "files.notText": "Ini bukan teks, jadi tidak bisa ditampilkan di sini.",
     "files.cut": "Hanya bagian awal yang ditampilkan.",
     "files.unreadable": "Berkas ini tidak bisa dibaca.",

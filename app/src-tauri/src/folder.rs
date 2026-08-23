@@ -226,6 +226,30 @@ pub fn folder_entries(
     Ok(rows)
 }
 
+/// Open one file the way the machine would open it — the reader's own applications, not ours.
+///
+/// The face reads; it does not edit (`AMB-T-3602`). What it can do is hand the file to whatever the
+/// person already opens that kind of file with, which is the whole of this: the OS decides what that
+/// is, and Amenbo does not keep an opinion about it.
+#[tauri::command]
+pub fn folder_open_file(project_id: i64, root: String, path: Vec<String>) -> Result<(), CmdError> {
+    let file = under(&root_of(project_id, &root)?, &path).ok_or_else(gone)?;
+    tauri_plugin_opener::open_path(&file, None::<&str>)
+        .map_err(|e| CmdError::coded("folder.open", e.to_string(), serde_json::Value::Null))
+}
+
+/// Show one file where it lives, in the machine's file manager.
+///
+/// It is the other half of opening: what a person wants of a file is as often "where is this" as
+/// "what is in it", and a panel that could only read would leave them hunting for a path they can
+/// already see.
+#[tauri::command]
+pub fn folder_reveal_file(project_id: i64, root: String, path: Vec<String>) -> Result<(), CmdError> {
+    let file = under(&root_of(project_id, &root)?, &path).ok_or_else(gone)?;
+    tauri_plugin_opener::reveal_item_in_dir(&file)
+        .map_err(|e| CmdError::coded("folder.reveal", e.to_string(), serde_json::Value::Null))
+}
+
 /// What one file has to show: its text, or its picture, or neither.
 ///
 /// The head is read once and answers both questions — whether there is a NUL in it, and what the

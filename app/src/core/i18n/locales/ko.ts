@@ -511,6 +511,8 @@ export const ko: Translation = {
     "files.partial": "이 폴더의 일부는 지켜보지 못하고 있습니다.",
     "files.noFolder": "이 프로젝트에는 아직 폴더가 없습니다.",
     "files.back": "목록으로 돌아가기",
+    "files.openWith": "늘 쓰는 앱으로 열기",
+    "files.reveal": "파일 관리자에서 보기",
     "files.notText": "텍스트가 아니라서 여기에서는 볼 수 없습니다.",
     "files.cut": "앞부분만 보여 줍니다.",
     "files.unreadable": "이 파일은 읽지 못했습니다.",

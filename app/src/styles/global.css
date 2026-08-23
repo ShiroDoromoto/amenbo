@@ -319,6 +319,22 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .files__body { min-height: 0; overflow-y: auto; }
 .files__text { margin: 0; font-family: var(--font-mono); font-size: var(--fs-xs); white-space: pre-wrap; word-break: break-word; }
 .files__image { max-width: 100%; height: auto; }
+/* What can be done with a file that is not reading it here. Placed where the pointer was, and above
+   everything, because it is about the row it was opened on and nothing else. */
+.files__menu {
+  position: fixed; z-index: 20;
+  display: flex; flex-direction: column;
+  padding: var(--s-1) 0;
+  background: var(--c-surface); border: 1px solid var(--c-border);
+  border-radius: var(--r-md); box-shadow: var(--shadow-md);
+}
+.files__menuitem {
+  padding: var(--s-1) var(--s-3);
+  background: none; border: 0;
+  color: var(--c-text); font-size: var(--fs-sm); text-align: left; white-space: nowrap;
+  cursor: pointer;
+}
+.files__menuitem:hover { background: var(--c-surface-sunken); }
 
 /* ---------- the band across the top of the app ---------- */
 /* One band, the app's news drawn in it — the integrity check, an update waiting, a folder that has

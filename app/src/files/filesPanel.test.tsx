@@ -41,6 +41,12 @@ vi.mock("./folder", () => ({
     hoisted.asked.push(`read:${root}:${path.join("/")}`);
     return hoisted.file;
   },
+  folderOpenFile: async (_projectId: number, root: string, path: string[]) => {
+    hoisted.asked.push(`open:${root}:${path.join("/")}`);
+  },
+  folderRevealFile: async (_projectId: number, root: string, path: string[]) => {
+    hoisted.asked.push(`reveal:${root}:${path.join("/")}`);
+  },
 }));
 
 // The folder the project is bound to, answered without a store.
@@ -210,6 +216,36 @@ describe("the file face", () => {
 
     await draw({ pointed: { ...running, ended: true } });
     expect(container.textContent).toContain(tf("files.unopened", { n: 2 }));
+  });
+
+  it("hands a file to the machine rather than trying to be one", async () => {
+    await draw();
+    const row = button("a.md")!;
+    await act(async () => {
+      row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 20 }));
+    });
+    // The face reads and does not edit: what it offers is the reader's own applications.
+    await click(button(t("files.openWith")));
+    expect(hoisted.asked).toContain(`open:${ROOT}:notes/a.md`);
+
+    await act(async () => {
+      button("a.md")!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+    });
+    await click(button(t("files.reveal")));
+    expect(hoisted.asked).toContain(`reveal:${ROOT}:notes/a.md`);
+  });
+
+  it("closes the menu on the next thing the person does", async () => {
+    await draw();
+    await act(async () => {
+      button("a.md")!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+    });
+    expect(button(t("files.openWith"))).toBeDefined();
+    // A menu that outlived the next click would sit over rows it is no longer about.
+    await act(async () => {
+      document.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    });
+    expect(button(t("files.openWith"))).toBeUndefined();
   });
 
   it("says a project with no folder has none, rather than drawing empty rows", async () => {

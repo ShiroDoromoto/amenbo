@@ -512,6 +512,8 @@ export const zhHans: Translation = {
     "files.partial": "这个文件夹有一部分没有被监看。",
     "files.noFolder": "这个项目还没有文件夹。",
     "files.back": "返回列表",
+    "files.openWith": "用常用的应用打开",
+    "files.reveal": "在文件管理器中显示",
     "files.notText": "这不是文本，无法在这里显示。",
     "files.cut": "只显示了开头部分。",
     "files.unreadable": "无法读取这个文件。",

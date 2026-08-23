@@ -66,3 +66,28 @@ export async function folderRead(
   if (!inTauri()) return { truncated: false };
   return await invoke<FolderFileDto>("folder_read", { projectId, root, path });
 }
+
+/**
+ * Open one file the way the machine opens that kind of file.
+ *
+ * The face reads and does not edit (`AMB-T-3602`), so what it can offer is the reader's own
+ * applications — which one that is belongs to the OS, and Amenbo keeps no opinion about it.
+ */
+export async function folderOpenFile(
+  projectId: number,
+  root: string,
+  path: string[],
+): Promise<void> {
+  if (!inTauri()) return;
+  await invoke<void>("folder_open_file", { projectId, root, path });
+}
+
+/** Show one file where it lives, in the machine's file manager. */
+export async function folderRevealFile(
+  projectId: number,
+  root: string,
+  path: string[],
+): Promise<void> {
+  if (!inTauri()) return;
+  await invoke<void>("folder_reveal_file", { projectId, root, path });
+}

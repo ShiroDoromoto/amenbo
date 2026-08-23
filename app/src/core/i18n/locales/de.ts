@@ -522,6 +522,8 @@ export const de: Translation = {
     "files.partial": "Ein Teil dieses Ordners wird nicht überwacht.",
     "files.noFolder": "Dieses Projekt hat noch keinen Ordner.",
     "files.back": "Zurück zur Liste",
+    "files.openWith": "Mit der üblichen App öffnen",
+    "files.reveal": "Im Dateimanager zeigen",
     "files.notText": "Das ist kein Text und lässt sich hier nicht anzeigen.",
     "files.cut": "Es wird nur der Anfang angezeigt.",
     "files.unreadable": "Diese Datei konnte nicht gelesen werden.",

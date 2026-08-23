@@ -512,6 +512,8 @@ export const tr: Translation = {
     "files.partial": "Bu klasörün bir kısmı izlenmiyor.",
     "files.noFolder": "Bu projenin henüz bir klasörü yok.",
     "files.back": "Listeye dön",
+    "files.openWith": "Her zamanki uygulamayla aç",
+    "files.reveal": "Dosya yöneticisinde göster",
     "files.notText": "Bu metin değil, burada gösterilemez.",
     "files.cut": "Yalnızca başı gösteriliyor.",
     "files.unreadable": "Bu dosya okunamadı.",

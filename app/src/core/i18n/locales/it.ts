@@ -533,6 +533,8 @@ export const it: Translation = {
     "files.partial": "Una parte di questa cartella non è sorvegliata.",
     "files.noFolder": "Questo progetto non ha ancora una cartella.",
     "files.back": "Torna all'elenco",
+    "files.openWith": "Apri con l'applicazione solita",
+    "files.reveal": "Mostra nel gestore file",
     "files.notText": "Non è testo, quindi non può essere mostrato qui.",
     "files.cut": "Viene mostrato solo l'inizio.",
     "files.unreadable": "Non è stato possibile leggere questo file.",

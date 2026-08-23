@@ -665,6 +665,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--c-text-muted);
   white-space: nowrap;
 }
+/* Spelled out for the same reason the two faces are (see the top of this file): `display: flex` above
+   is an author rule and beats the user agent's `[hidden]`, so a row with nothing to say would be
+   hidden in the markup and drawn on the screen. It showed as an empty line until the mark went in
+   front of the words, and then as a dot on a pane that had not started. */
+.plate[hidden] { display: none; }
 
 /* The mark the pane is known by, and the one thing it can say about itself without being told
    (see ../talk/moving.ts).

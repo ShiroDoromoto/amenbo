@@ -476,6 +476,17 @@ export const id: Translation = {
     "act.nameless": "(dihapus)",
     "app.loadError": "Gagal memuat data.", "app.loading": "Memuat…",
     "app.talkWindow": "Amenbo — Percakapan",
+    "talk.searching": "Mencari agen yang ada di mesin ini…",
+    "talk.ask": "Anda bekerja dengan agen yang mana di folder ini?",
+    "talk.none": "Tidak ditemukan agen yang bisa dijalankan Amenbo di mesin ini.",
+    "talk.noneHint": "Amenbo mencari perintah ini di PATH shell Anda: {commands}. Pasang salah satunya, lalu cari lagi.",
+    "talk.retry": "Cari lagi",
+    "talk.open": "Buka",
+    "talk.agent": "Agen",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "Sedang berdiskusi", "talk.holding": "{n} tugas",
+    "talk.finished": "{n} selesai", "talk.premiseBroken": "Sebuah prasyarat sudah tidak berlaku",
     "face.switch": "Yang ditampilkan jendela ini",
     "face.tasks": "Tugas",
     "face.terminal": "Terminal",
@@ -624,6 +635,10 @@ export const id: Translation = {
       "{url} kini menyajikan {serving}, bukan {agreed} yang ditunjukkan kepada Anda. Daftarkan lagi dan periksa sidik jari yang baru.",
     pty_failed: "Terminal tidak dapat dijalankan: {reason}",
     pty_gone: "Terminal itu sudah tidak terbuka.",
+    wake_unknown_agent: "Amenbo tidak tahu cara menjalankan {agent}.",
+    wake_no_folder: "Folder itu tidak bisa dibaca: {reason}",
+    wake_no_config: "Amenbo tidak menemukan berkasnya sendiri.",
+    wake_not_kept: "Pilihan tidak bisa disimpan.",
     window_failed: "Jendela itu tidak dapat dibuka: {reason}",
 
     already_reserved:

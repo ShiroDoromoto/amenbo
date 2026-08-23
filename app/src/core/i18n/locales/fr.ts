@@ -494,6 +494,17 @@ export const fr: Translation = {
     "act.nameless": "(supprimé)",
     "app.loadError": "Le chargement des données a échoué.", "app.loading": "Chargement…",
     "app.talkWindow": "Amenbo — Conversation",
+    "talk.searching": "Recherche des agents présents sur cette machine…",
+    "talk.ask": "Avec quel agent travailles-tu dans ce dossier ?",
+    "talk.none": "Aucun agent qu'Amenbo puisse lancer n'a été trouvé sur cette machine.",
+    "talk.noneHint": "Amenbo a cherché ces commandes dans le PATH de ton shell : {commands}. Installes-en une, puis relance la recherche.",
+    "talk.retry": "Rechercher à nouveau",
+    "talk.open": "Ouvrir",
+    "talk.agent": "Agent",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "En conversation", "talk.holding": "{n} tâches",
+    "talk.finished": "{n} terminées", "talk.premiseBroken": "Une prémisse ne tient plus",
     "face.switch": "Ce que montre cette fenêtre",
     "face.tasks": "Tâches",
     "face.terminal": "Terminal",
@@ -650,6 +661,10 @@ export const fr: Translation = {
       "{url} publie désormais {serving}, et non la {agreed} qui vous a été montrée. Enregistrez-le à nouveau et vérifiez la nouvelle empreinte.",
     pty_failed: "Le terminal n'a pas pu être démarré : {reason}",
     pty_gone: "Ce terminal n'est plus ouvert.",
+    wake_unknown_agent: "Amenbo ne sait pas comment lancer {agent}.",
+    wake_no_folder: "Ce dossier n'a pas pu être lu : {reason}",
+    wake_no_config: "Amenbo n'a pas pu trouver ses propres fichiers.",
+    wake_not_kept: "Le choix n'a pas pu être enregistré.",
     window_failed: "Cette fenêtre n'a pas pu être ouverte : {reason}",
 
     already_reserved:

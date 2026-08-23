@@ -494,6 +494,17 @@ export const it: Translation = {
     "act.nameless": "(eliminato)",
     "app.loadError": "Non è stato possibile caricare i dati.", "app.loading": "Caricamento…",
     "app.talkWindow": "Amenbo — Conversazione",
+    "talk.searching": "Ricerca degli agenti presenti su questa macchina…",
+    "talk.ask": "Con quale agente lavori in questa cartella?",
+    "talk.none": "Su questa macchina non è stato trovato nessun agente che Amenbo possa avviare.",
+    "talk.noneHint": "Amenbo ha cercato questi comandi nel PATH della tua shell: {commands}. Installane uno, poi cerca di nuovo.",
+    "talk.retry": "Cerca di nuovo",
+    "talk.open": "Apri",
+    "talk.agent": "Agente",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "In conversazione", "talk.holding": "{n} attività",
+    "talk.finished": "{n} completate", "talk.premiseBroken": "Una premessa non regge più",
     "face.switch": "Che cosa mostra questa finestra",
     "face.tasks": "Attività",
     "face.terminal": "Terminale",
@@ -650,6 +661,10 @@ export const it: Translation = {
       "{url} ora pubblica {serving}, non la {agreed} che ti era stata mostrata. Registralo di nuovo e controlla la nuova impronta.",
     pty_failed: "Non è stato possibile avviare il terminale: {reason}",
     pty_gone: "Quel terminale non è più aperto.",
+    wake_unknown_agent: "Amenbo non sa come avviare {agent}.",
+    wake_no_folder: "Non è stato possibile leggere quella cartella: {reason}",
+    wake_no_config: "Amenbo non ha trovato i propri file.",
+    wake_not_kept: "Non è stato possibile salvare la scelta.",
     window_failed: "Non è stato possibile aprire quella finestra: {reason}",
 
     already_reserved:

@@ -56,6 +56,25 @@ export type PaneEvents = {
   name(name: string, by: NamedBy): void;
 };
 
+/**
+ * Where a pane's terminal is started, and with what running in it (`./agent`).
+ *
+ * It is only ever read when a terminal is **started**. A pane that adopts one already running takes it
+ * as it is — the folder it is standing in and the program in it were settled when it started, and a
+ * pane moving between windows does not restart anything (`AMB-D-753`).
+ */
+export type PaneStart = {
+  /** The folder the shell starts in — canonical, as `wake_probe` answered with it. With none, the
+   *  shell starts where a shell handed no directory lands, which is the person's home. */
+  cwd?: string | null;
+  /**
+   * The catalogued id of the agent to start (`crate::wake`). A pane with none is a bare prompt.
+   * What crosses is the id and never a command line: the catalog on the host side turns it into one,
+   * so nothing here can name a program.
+   */
+  agent?: string | null;
+};
+
 // The terminal's own colours, taken from the same tokens the rest of the interface is drawn from so
 // a pane does not sit on the page as a black rectangle. Only the chrome follows the theme: the
 // program inside cannot be told the colours changed (xterm.js does not implement the sequence that
@@ -133,7 +152,7 @@ function refit(fit: FitAddon, host: HTMLElement): boolean {
  * only thing that can: a webview that went away took its emulator with it and left nothing behind to
  * be asked.
  */
-async function draw(term: Terminal): Promise<PtySessionDto> {
+async function draw(term: Terminal, start: PaneStart): Promise<PtySessionDto> {
   const open = await invoke<PtySessionDto[]>("pty_sessions").catch(() => [] as PtySessionDto[]);
   // One open session is the only count that names one without guessing. There is a single terminal in
   // the app today; when there are several, which pane draws which is the slots' to say and not this
@@ -147,7 +166,12 @@ async function draw(term: Terminal): Promise<PtySessionDto> {
       // It ended between the two calls. Opening one is what the pane was there to do anyway.
     }
   }
-  return await invoke<PtySessionDto>("pty_open", { cwd: null, cols: term.cols, rows: term.rows });
+  return await invoke<PtySessionDto>("pty_open", {
+    cwd: start.cwd ?? null,
+    agent: start.agent ?? null,
+    cols: term.cols,
+    rows: term.rows,
+  });
 }
 
 /**
@@ -159,13 +183,19 @@ async function draw(term: Terminal): Promise<PtySessionDto> {
  * full-screen interface reflows to.
  *
  * `on` is how the window is told what happened here — the session running in the pane, what the agent
- * said about it, and the name the pane's frame should carry.
+ * said about it, and the name the pane's frame should carry. `start` is where a terminal would open
+ * and what would run in it, which the frame around the pane has already settled (`./agent`) — and
+ * which is read only when there is nothing to adopt.
  *
  * What comes back takes the pane away and **leaves the terminal running** for whatever draws it next.
  * There is no other way to end a pane, because there is no way yet to end a terminal: nothing in the
  * interface says "close this", and a pane going away is always the pane moving (`AMB-T-3632`).
  */
-export async function mountTerminal(host: HTMLElement, on: PaneEvents): Promise<() => void> {
+export async function mountTerminal(
+  host: HTMLElement,
+  on: PaneEvents,
+  start: PaneStart = {},
+): Promise<() => void> {
   const term = new Terminal({
     fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--font-mono").trim() ||
       "ui-monospace, monospace",
@@ -234,7 +264,7 @@ export async function mountTerminal(host: HTMLElement, on: PaneEvents): Promise<
     else if (payload.session === session) take(payload);
   });
 
-  const running = await draw(term);
+  const running = await draw(term, start);
   session = running.session;
   // The host's own answer for when it began, not the moment this pane went up: a session that moved
   // windows started when it started, and a pane that said otherwise would have the window telling the

@@ -7,6 +7,8 @@
   flex-direction: column;
   gap: var(--s-3);
   height: 100%;
+  display: flex;
+  flex-direction: column;
   padding: var(--s-3);
   background: var(--c-bg);
 }
@@ -26,6 +28,10 @@
   padding: var(--s-2) var(--s-3);
   color: var(--c-text-muted); font-size: var(--fs-sm);
 }
+
+/* What the window holds below the bar: the frame the agent question is put in, and the pane once one
+   is running (`app/src/talk/agent.ts`). */
+.talk__face { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; }
 
 /* The terminal's box. xterm.js measures the element it was opened in, so this is what decides how
    many columns and rows the program inside is told it has — which is why it takes the room that is
@@ -69,14 +75,4 @@
 /* The way out, set a step back from what it is a way out of. */
 .talk__elevated-fix {
   opacity: 0.85;
-}
-
-/* What is shown instead when the terminal could not be started. It says what the host said, because
-   there is nothing this side knows to add to it. */
-.talk__failed {
-  padding: var(--s-4);
-  color: var(--c-text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--fs-sm);
-  white-space: pre-wrap;
 }

@@ -483,6 +483,17 @@ export const de: Translation = {
     "act.nameless": "(gelöscht)",
     "app.loadError": "Die Daten ließen sich nicht laden.", "app.loading": "Wird geladen…",
     "app.talkWindow": "Amenbo — Dialog",
+    "talk.searching": "Suche nach den Agenten auf diesem Rechner …",
+    "talk.ask": "Mit welchem Agenten arbeitest du in diesem Ordner?",
+    "talk.none": "Auf diesem Rechner wurde kein Agent gefunden, den Amenbo starten kann.",
+    "talk.noneHint": "Amenbo hat im PATH deiner Shell nach diesen Befehlen gesucht: {commands}. Installiere einen davon und suche dann erneut.",
+    "talk.retry": "Erneut suchen",
+    "talk.open": "Öffnen",
+    "talk.agent": "Agent",
+    // The one line above a pane of the talk window: what its session is on, and the one thing
+    // worth saying about it. "{n}" is a count of tasks.
+    "talk.idle": "Im Gespräch", "talk.holding": "{n} Aufgaben",
+    "talk.finished": "{n} erledigt", "talk.premiseBroken": "Eine Voraussetzung ist weggefallen",
     "face.switch": "Was dieses Fenster zeigt",
     "face.tasks": "Aufgaben",
     "face.terminal": "Terminal",
@@ -635,6 +646,10 @@ export const de: Translation = {
       "{url} veröffentlicht jetzt {serving} statt des gezeigten {agreed}. Trage es erneut ein und prüfe den neuen Fingerabdruck.",
     pty_failed: "Das Terminal konnte nicht gestartet werden: {reason}",
     pty_gone: "Dieses Terminal ist nicht mehr geöffnet.",
+    wake_unknown_agent: "Amenbo weiß nicht, wie {agent} gestartet wird.",
+    wake_no_folder: "Dieser Ordner ließ sich nicht lesen: {reason}",
+    wake_no_config: "Amenbo konnte seine eigenen Dateien nicht finden.",
+    wake_not_kept: "Die Auswahl ließ sich nicht speichern.",
     window_failed: "Dieses Fenster konnte nicht geöffnet werden: {reason}",
 
     already_reserved:

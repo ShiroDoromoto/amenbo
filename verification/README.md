@@ -438,7 +438,7 @@ the roads start from), and an ordered list of steps
 under `steps_cli` and/or `steps_gui`. Each step is an `action` (changes state) or an
 `assert` (an expected result), names the `domain` it touches (`task` / `decision` /
 `comment` / `project` / `dimension` / `attachment` / `store` / `folder` / `repo` / `plugin` /
-`mcp` / `tick`) and an
+`mcp` / `tick` / `terminal`) and an
 `op`, and carries named args under `with`. An action may bind its result with `as:`, and a later step
 refers back to it with `target:` — an op that joins two objects names the second under its own key
 (`decision link`'s `task:`), and every such key is checked back to an earlier binding, not just
@@ -528,6 +528,25 @@ stays on the answer's side of the line `holds` draws: the answer having landed, 
 registration as an absolute. The last piece is a premise rather than a road: `deferred` stands up
 the day the band was last put off, because "later"'s whole meaning — quiet today, back tomorrow —
 spans two launches, and no single run holds both.
+
+And the last one is about no record at all. **`terminal`** is the face an agent is run in: whether
+the app is showing the ledger or the pane (`show-face`), what a reader typed into that pane
+(`type-line`), and whether the pane is a face of the one window or a window of its own (`split-out`
+/ `fold-back`), with `pane` reading the line back. It is a domain of its own because a session is a
+process — what is under test is *where it is drawn*, which is this machine's arrangement of one
+screen and nothing the store holds. Screen roads alone, and for a reason no other domain has: the
+terminal is the surface a reader is already typing in, so the question does not arise for somebody
+at a shell.
+
+What a `pane` assert reads is deliberately the reader's own words rather than the interface's. Every
+other word on that face belongs to Amenbo, so a reading of one would hold the gate to whichever
+language the run's machine is set to — and, more to the point, a pane showing a fresh prompt looks
+exactly like a pane still drawing the session that was running until a line the road put there is on
+it. That line is also what names the pane's frame, and a named frame is what its window's title bar
+carries: it is how `window:` names a window by a word the road chose instead of one the interface
+wrote. `put-the-terminal-on-its-own-screen` is the road, and it folds the window back before it ends
+— the shape a machine was last used in belongs to the webview rather than to the throwaway store, so
+a run that walked away split would hand the next person two windows they never asked for.
 
 A few ops exist to put something **wrong**, because a repair cannot be shown working over a store
 where there is nothing to repair — and a sweep that sweeps nothing looks exactly like one that works.

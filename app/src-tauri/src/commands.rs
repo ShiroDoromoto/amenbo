@@ -3666,6 +3666,23 @@ pub fn tick_banner_later() -> Result<(), CmdError> {
     Ok(())
 }
 
+/// What the ledger says the session in one pane has been doing.
+///
+/// **Read, never inferred.** A write made inside a pane carries the session's id, so which pane holds a
+/// task is a column rather than a guess — and a task whose newest move was made somewhere else is not
+/// this pane's, however it started here (`amenbo_core::session_work`).
+#[tauri::command]
+pub fn session_work(session: String) -> Result<SessionWorkDto, CmdError> {
+    let _perf = amenbo_core::perf::Timer::start("session_work");
+    let mut out = SessionWorkDto { holding: Vec::new(), finished: 0 };
+    with_store_read(|store| {
+        let work = amenbo_core::session_work::work(&store.paths.activity_file, &session);
+        out = SessionWorkDto { holding: work.holding, finished: work.finished.len() };
+        Ok(())
+    })?;
+    Ok(out)
+}
+
 /// What this device calls the talk window's frames — the whole of it, since the window draws every
 /// frame it has at once (`AMB-D-749` puts the running state in memory; this is the part that is kept).
 #[tauri::command]

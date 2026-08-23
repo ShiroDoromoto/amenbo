@@ -80,6 +80,7 @@ pub mod read_receipts;
 pub mod refscan;
 pub mod self_update;
 pub mod session;
+pub mod session_work;
 pub mod slug;
 pub mod store;
 pub mod swap_lock;
@@ -90,6 +91,7 @@ pub mod tmpdir;
 pub mod update_check;
 pub mod validate;
 pub mod view;
+pub mod wake;
 pub mod worktree;
 
 pub use error::{Error, ErrorCode, Fields, Msg, Result};

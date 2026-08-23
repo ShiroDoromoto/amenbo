@@ -36,6 +36,27 @@ impl Driver<'_> {
                     named_key(with)
                 )))
             }
+            // The value gone again, with the tasks that answered with it either going with it or going
+            // somewhere `to` names. `--yes` rides along because the command asks before it deletes and a
+            // driver has nobody to answer with — and it asks *before* the guards, so a refusal walked
+            // without it would come back as the unanswered question rather than as the guard the road is
+            // about.
+            "value-rm" => {
+                let dimension = req_str(with, "dimension")?;
+                let value = req_str(with, "value")?;
+                let mut args = vec!["dimension", "value-rm", dimension, value];
+                if let Some(to) = destination(with) {
+                    args.extend_from_slice(&["--reassign-to", to]);
+                }
+                args.extend_from_slice(&["--yes", "--json"]);
+                self.run_json(&args)?;
+                Ok(Outcome::action(match destination(with) {
+                    Some(to) => format!(
+                        "removed `{value}` from `{dimension}`, carrying the tasks on it over to `{to}`"
+                    ),
+                    None => format!("removed `{value}` from `{dimension}`"),
+                }))
+            }
             // Renaming the key afterwards, on the axis or on one of its values. Two commands behind one
             // op because the two rows are the same thing to a reader — what a key is for is being typed
             // outside Amenbo, and neither an axis nor a value is more outside than the other.
@@ -190,6 +211,13 @@ impl Driver<'_> {
 /// one takes the key its id gives it, which is what the door does when the flag is left off.
 fn slug(with: &Args) -> Option<&str> {
     with.get("slug").and_then(|v| v.as_str())
+}
+
+/// Where a removal sends the tasks that answered with the value going away, where a step named
+/// somewhere. Absent is the value's classifications going with it, which is what an axis that demands
+/// nothing does — and what a required axis refuses to do.
+fn destination(with: &Args) -> Option<&str> {
+    with.get("to").and_then(|v| v.as_str())
 }
 
 /// The tail an action's note carries when the step named a key, so the run's log says which of the

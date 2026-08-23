@@ -68,6 +68,27 @@ pub fn render(kind: RefKind, id: i64) -> String {
     format!("{NAMESPACE}-{}-{id}", kind.code())
 }
 
+/// The scheme a ref is addressed by when it is a place to go rather than a name to read. It is Amenbo's
+/// own, and only Amenbo answers it — nothing outside the app has a handler for it, which is why the one
+/// surface that emits these ([`crate::session`]'s pane) is also the only one that can act on them.
+pub const URL_SCHEME: &str = "amenbo";
+
+/// Where a ref leads, for the surfaces that can take a reader there: `amenbo://task/<n>`,
+/// `amenbo://decision/<n>`.
+///
+/// `None` for every other kind, and that is the whole of the rule: a task and a decision are the two
+/// things the board opens on their own, while a comment, an axis, a value and an attachment are read
+/// inside the record that holds them and have no destination to name. A kind with nowhere to lead is left
+/// as plain text rather than dressed as a link that would go nowhere.
+pub fn url(kind: RefKind, id: i64) -> Option<String> {
+    let what = match kind {
+        RefKind::Task => "task",
+        RefKind::Decision => "decision",
+        _ => return None,
+    };
+    Some(format!("{URL_SCHEME}://{what}/{id}"))
+}
+
 /// A task's ref: `AMB-T-<n>`.
 pub fn task(id: i64) -> String {
     render(RefKind::Task, id)
@@ -158,6 +179,25 @@ mod tests {
         let unique = codes.len();
         codes.dedup();
         assert_eq!(codes.len(), unique, "two kinds share a code");
+    }
+
+    /// A ref leads somewhere only when there is somewhere to lead: the two records the board opens by
+    /// themselves. Everything else is read inside the record that holds it, so it names no destination and
+    /// is left as text.
+    #[test]
+    fn only_the_two_records_the_board_opens_name_a_destination() {
+        assert_eq!(url(RefKind::Task, 3595).as_deref(), Some("amenbo://task/3595"));
+        assert_eq!(url(RefKind::Decision, 749).as_deref(), Some("amenbo://decision/749"));
+        for nowhere in [
+            RefKind::Project,
+            RefKind::TaskComment,
+            RefKind::DecisionComment,
+            RefKind::Dimension,
+            RefKind::DimensionValue,
+            RefKind::Attachment,
+        ] {
+            assert_eq!(url(nowhere, 1), None, "{nowhere:?} is read inside what holds it");
+        }
     }
 
     /// The point of the namespace: a foreign tracker's `T-123` never looks like ours, whatever its number.

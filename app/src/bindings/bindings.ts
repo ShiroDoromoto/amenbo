@@ -35,7 +35,14 @@ export type ActorDto = { name: string, kind: "human" | "ai",
  * ActorDto uses (assignee, author) leave it unset. Omitted when unset, and the front end draws
  * an identicon instead.
  */
-avatar?: string, };
+avatar?: string, 
+/**
+ * The talk window session this write came from, when the row records one. Set only where an
+ * ActorDto is an activity row's **author**; a roster entry or an assignee names a facet, not an
+ * act, and leaves it unset. Two AI sessions share one facet, so this is the only thing that tells
+ * them apart — and it is read, never inferred: absent means unknown (`AMB-T-3549`).
+ */
+session?: string, };
 
 /**
  * The whole catalog and this project's folders — what the settings screen's "take the request" face is

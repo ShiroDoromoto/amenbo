@@ -473,6 +473,13 @@ export const hi: Translation = {
     "act.nameless": "(मिटाया हुआ)",
     "app.loadError": "डेटा लोड नहीं हो सका।", "app.loading": "लोड हो रहा है…",
     "app.talkWindow": "Amenbo — संवाद",
+    "talk.searching": "इस मशीन पर एजेंट खोजे जा रहे हैं…",
+    "talk.ask": "इस फ़ोल्डर में आप किस एजेंट के साथ काम करते हैं?",
+    "talk.none": "इस मशीन पर ऐसा कोई एजेंट नहीं मिला जिसे Amenbo शुरू कर सके।",
+    "talk.noneHint": "Amenbo ने आपके शेल के PATH में ये कमांड खोजीं: {commands}। इनमें से एक इंस्टॉल करें, फिर दोबारा खोजें।",
+    "talk.retry": "फिर से खोजें",
+    "talk.open": "खोलें",
+    "talk.agent": "एजेंट",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "बातचीत जारी", "talk.holding": "{n} कार्य",
@@ -483,6 +490,7 @@ export const hi: Translation = {
     "face.splitOut": "अलग विंडो में खोलें",
     "face.merge": "एक ही विंडो में लौटें",
     "face.ended": "इस टर्मिनल का प्रोग्राम समाप्त हो गया।",
+    "face.needsYou": "आपकी प्रतीक्षा में",
     "files.changed": "हाल में बदली फ़ाइलें",
     "files.tree": "फ़ोल्डर",
     "files.nothingChanged": "अभी तक कुछ नहीं बदला।",
@@ -633,6 +641,10 @@ export const hi: Translation = {
       "{url} अब {serving} प्रकाशित करता है, वह {agreed} नहीं जो आपको दिखाया गया था। उसे दोबारा दर्ज करें और नई फ़िंगरप्रिंट मिला लें।",
     pty_failed: "टर्मिनल शुरू नहीं किया जा सका: {reason}",
     pty_gone: "वह टर्मिनल अब खुला नहीं है।",
+    wake_unknown_agent: "Amenbo को नहीं पता कि {agent} को कैसे शुरू करें।",
+    wake_no_folder: "वह फ़ोल्डर पढ़ा नहीं जा सका: {reason}",
+    wake_no_config: "Amenbo को अपनी ही फ़ाइलें नहीं मिलीं।",
+    wake_not_kept: "चुनाव सहेजा नहीं जा सका।",
     window_failed: "वह विंडो नहीं खोली जा सकी: {reason}",
 
     already_reserved:

@@ -33,6 +33,7 @@ import { TaskComposePane } from "../screens/TaskComposePane";
 import { dataAdapter } from "../mock/adapter";
 import { checkForUpdatesFresh, inTauri, subscribe } from "../core/snapshot";
 import { type Face, getWindowShape, setWindowShape, type WindowShape } from "../core/windowShape";
+import { badgeUp, looked, NO_ATTENTION, turnCame } from "./terminalBadge";
 import { invoke } from "../core/ipc";
 import { confirmDialog } from "../core/dialog";
 import { clampRightpaneWidth, getRightpaneWidth, setRightpaneWidth } from "../core/rightpaneWidth";
@@ -216,6 +217,28 @@ export function AppShell() {
     setFace("tasks");
     setShape("two");
   }, [setShape]);
+
+  // A turn standing in the terminal while the ledger is the face that is up (`./terminalBadge`). In
+  // two windows there is no badge and nothing to feed it: the terminal is on screen already, with its
+  // own nameplates, and this window stops hosting the pane that would speak.
+  const [attention, setAttention] = useState(NO_ATTENTION);
+  // The face as the pane finds it, not as the render that made the callback saw it: `noteWaiting` is
+  // handed to a component that puts its terminal up once, so it has to keep the same identity for the
+  // life of the pane — reading the face through a ref is what buys that.
+  const facing = useRef(face);
+  facing.current = face;
+  const noteWaiting = useCallback((waiting: boolean) => {
+    setAttention((a) => turnCame(a, waiting, facing.current === "terminal"));
+  }, []);
+  // Every way onto the terminal face is being shown what is standing there — the segment, the other
+  // window closing, a window that could not be built — so the badge is spent here rather than at each
+  // of them.
+  useEffect(() => {
+    if (face === "terminal") setAttention(looked);
+  }, [face]);
+  useEffect(() => {
+    if (!hostsTerminal) setAttention(NO_ATTENTION);
+  }, [hostsTerminal]);
 
   const rightpaneRef = useRef<HTMLDivElement>(null);
   // The right pane's width (a device-local, persisted UI setting). Dragging the left-edge handle widens it, up to
@@ -433,6 +456,7 @@ export function AppShell() {
         onToggleSidebar={toggleSidebar}
         face={face}
         onSelectFace={selectFace}
+        terminalBadge={badgeUp(attention)}
       />
       {/* Every band the app can raise, stacked in one place. They share a row of the shell rather than
           claiming one each: the grid needs a definite row per child, and news does not arrive one item
@@ -456,6 +480,7 @@ export function AppShell() {
           <TerminalFace
             onSplitOut={splitOutTerminal}
             note={windowError}
+            onWaiting={noteWaiting}
             projectId={nav.type === "project" ? Number(nav.id) : (dataAdapter.listProjects()[0]?.id ?? null)}
             onOpenLedger={() => setFace("tasks")}
           />

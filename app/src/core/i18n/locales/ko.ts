@@ -472,6 +472,13 @@ export const ko: Translation = {
     "act.nameless": "(삭제됨)",
     "app.loadError": "데이터를 불러오지 못했습니다.", "app.loading": "불러오는 중…",
     "app.talkWindow": "Amenbo — 대화",
+    "talk.searching": "이 컴퓨터에 있는 에이전트를 찾고 있습니다…",
+    "talk.ask": "이 폴더에서는 어떤 에이전트를 사용하시나요?",
+    "talk.none": "이 컴퓨터에서 Amenbo가 실행할 수 있는 에이전트를 찾지 못했습니다.",
+    "talk.noneHint": "Amenbo가 셸의 PATH에서 다음 명령을 찾았습니다: {commands}. 하나를 설치한 뒤 다시 찾아보세요.",
+    "talk.retry": "다시 찾기",
+    "talk.open": "열기",
+    "talk.agent": "에이전트",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "상의 중", "talk.holding": "{n}건",
@@ -482,6 +489,7 @@ export const ko: Translation = {
     "face.splitOut": "별도 창으로 열기",
     "face.merge": "하나의 창으로 되돌리기",
     "face.ended": "이 터미널의 프로그램이 종료되었습니다.",
+    "face.needsYou": "사용자를 기다리는 중",
     "files.changed": "최근에 바뀐 것",
     "files.tree": "폴더",
     "files.nothingChanged": "아직 바뀐 것이 없습니다.",
@@ -631,6 +639,10 @@ export const ko: Translation = {
       "{url}이(가) 이제 보여 준 {agreed}가 아니라 {serving}을(를) 내놓습니다. 다시 등록하고 새 지문을 확인하세요.",
     pty_failed: "터미널을 시작할 수 없습니다: {reason}",
     pty_gone: "해당 터미널은 더 이상 열려 있지 않습니다.",
+    wake_unknown_agent: "Amenbo는 {agent}을(를) 실행하는 방법을 모릅니다.",
+    wake_no_folder: "그 폴더를 읽을 수 없었습니다: {reason}",
+    wake_no_config: "Amenbo가 자신의 파일을 찾지 못했습니다.",
+    wake_not_kept: "선택한 내용을 저장하지 못했습니다.",
     window_failed: "그 창을 열 수 없습니다: {reason}",
 
     already_reserved: "{ref}은(는) ‘할 일’이 아니어서 맡을 수 없습니다. 다른 세션이 이미 진행 중일 수 있습니다.",

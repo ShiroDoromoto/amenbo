@@ -473,6 +473,13 @@ export const tr: Translation = {
     "act.nameless": "(silinmiş)",
     "app.loadError": "Veriler yüklenemedi.", "app.loading": "Yükleniyor…",
     "app.talkWindow": "Amenbo — Sohbet",
+    "talk.searching": "Bu makinedeki ajanlar aranıyor…",
+    "talk.ask": "Bu klasörde hangi ajanla çalışıyorsun?",
+    "talk.none": "Bu makinede Amenbo'nun başlatabileceği bir ajan bulunamadı.",
+    "talk.noneHint": "Amenbo kabuğunuzun PATH'inde şu komutları aradı: {commands}. Birini kurun, sonra yeniden arayın.",
+    "talk.retry": "Yeniden ara",
+    "talk.open": "Aç",
+    "talk.agent": "Ajan",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "Konuşuluyor", "talk.holding": "{n} görev",
@@ -483,6 +490,7 @@ export const tr: Translation = {
     "face.splitOut": "Ayrı pencerede aç",
     "face.merge": "Tek pencereye dön",
     "face.ended": "Bu terminaldeki program sona erdi.",
+    "face.needsYou": "sizi bekliyor",
     "files.changed": "Son değişenler",
     "files.tree": "Klasör",
     "files.nothingChanged": "Henüz hiçbir şey değişmedi.",
@@ -633,6 +641,10 @@ export const tr: Translation = {
       "{url} artık size gösterilen {agreed} yerine {serving} sunuyor. Yeniden kaydedin ve yeni parmak izini karşılaştırın.",
     pty_failed: "Terminal başlatılamadı: {reason}",
     pty_gone: "O terminal artık açık değil.",
+    wake_unknown_agent: "Amenbo {agent} uygulamasını nasıl başlatacağını bilmiyor.",
+    wake_no_folder: "O klasör okunamadı: {reason}",
+    wake_no_config: "Amenbo kendi dosyalarını bulamadı.",
+    wake_not_kept: "Seçim kaydedilemedi.",
     window_failed: "O pencere açılamadı: {reason}",
 
     already_reserved:

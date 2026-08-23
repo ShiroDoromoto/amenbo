@@ -2175,3 +2175,53 @@ updateAvailable: boolean,
  * The version being offered (for display; the first one found). `None` means no update.
  */
 newerVersion: string | null, };
+
+/**
+ * One agent a folder's pane could be opened with, and what the folder and this machine say about
+ * it (`crate::wake`).
+ */
+export type WakeCandidateDto = { 
+/**
+ * The catalogued id, which is what a face hands back when the reader picks this one.
+ */
+id: string, 
+/**
+ * The product's own name for itself.
+ */
+label: string, 
+/**
+ * What it is started as — shown where it is missing, because that is the word to install.
+ */
+command: string, 
+/**
+ * Whether this folder shows a trace of the provider being used here.
+ */
+traced: boolean, 
+/**
+ * Whether this machine can start it. Never more than that: see `amenbo_core::wake`.
+ */
+installed: boolean, };
+
+/**
+ * Which agent a folder's pane opens with, and what to put to the reader when that is not settled.
+ */
+export type WakeDto = { 
+/**
+ * The folder this answers for, canonical — what the face opens the pane in, so that the pane
+ * and the answer are about the same folder.
+ */
+folder: string, 
+/**
+ * Every catalogued agent, in catalog order. The install notice is drawn from this, which is why
+ * the ones this machine does not have are here too.
+ */
+candidates: Array<WakeCandidateDto>, 
+/**
+ * The ids worth offering, in catalog order. Empty means nothing on this machine can be started.
+ */
+offered: Array<string>, 
+/**
+ * The id to open with, when nothing needs asking. `None` with a non-empty `offered` is the
+ * question; `None` with an empty one is the notice.
+ */
+settled?: string, };

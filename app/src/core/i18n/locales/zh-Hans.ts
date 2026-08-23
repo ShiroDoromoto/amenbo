@@ -473,6 +473,13 @@ export const zhHans: Translation = {
     "act.nameless": "（已删除）",
     "app.loadError": "数据加载失败。", "app.loading": "加载中…",
     "app.talkWindow": "Amenbo — 对话",
+    "talk.searching": "正在查找这台机器上的智能体…",
+    "talk.ask": "在这个文件夹里你使用哪个智能体？",
+    "talk.none": "这台机器上没有找到 Amenbo 能启动的智能体。",
+    "talk.noneHint": "Amenbo 在你 shell 的 PATH 里查找了这些命令：{commands}。装上其中一个，然后再找一次。",
+    "talk.retry": "再找一次",
+    "talk.open": "打开",
+    "talk.agent": "智能体",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "商议中", "talk.holding": "{n} 项",
@@ -483,6 +490,7 @@ export const zhHans: Translation = {
     "face.splitOut": "在单独窗口中打开",
     "face.merge": "合并回一个窗口",
     "face.ended": "此终端中的程序已退出。",
+    "face.needsYou": "在等你",
     "files.changed": "最近改动",
     "files.tree": "文件夹",
     "files.nothingChanged": "还没有任何改动。",
@@ -632,6 +640,10 @@ export const zhHans: Translation = {
       "{url} 现在公布的是 {serving}，而不是给你看过的 {agreed}。请重新登记，并核对新的指纹。",
     pty_failed: "无法启动终端：{reason}",
     pty_gone: "该终端已经关闭。",
+    wake_unknown_agent: "Amenbo 不知道如何启动 {agent}。",
+    wake_no_folder: "读不到那个文件夹：{reason}",
+    wake_no_config: "Amenbo 找不到自己的文件。",
+    wake_not_kept: "没能保存这个选择。",
     window_failed: "无法打开该窗口：{reason}",
 
     already_reserved: "{ref} 不是“待办”，无法认领；可能已有另一个会话在处理。",

@@ -201,9 +201,13 @@ function doctorTemplate(kind: DoctorIssueKind, lang: Lang): DoctorTemplate {
  * Turns an invoke rejection into one human-readable line: a structured `CmdError` is localized by
  * code, a bare string or Error passes through. Every catch site must go through this — `String(e)`
  * would render a CmdError as "[object Object]".
+ *
+ * `lang` is named where the caller is not drawing from the snapshot: the talk window resolves its own
+ * language and never loads one, so leaving this to `currentLang()` there would answer in the default
+ * while every other sentence on the page is in the reader's.
  */
-export function errText(e: unknown): string {
-  if (isCmdError(e)) return errLabel(e);
+export function errText(e: unknown, lang: Lang = currentLang()): string {
+  if (isCmdError(e)) return errLabel(e, lang);
   if (typeof e === "string") return e;
   if (e instanceof Error) return e.message;
   return String(e);

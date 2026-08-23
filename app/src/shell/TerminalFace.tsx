@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { mountTerminal } from "../talk/terminal";
+import { mountAgentFrame } from "../talk/agent";
 import { nameFrame, ONLY_FRAME } from "../talk/frames";
 import { mountPlate } from "../talk/plate";
 import { FilesPanel } from "../files/FilesPanel";
-import { t } from "../core/i18n";
+import { currentLang, t } from "../core/i18n";
 
 /**
  * The terminal, drawn inside the board's window — the second face of the one window (`AMB-D-753`).
@@ -18,27 +18,46 @@ import { t } from "../core/i18n";
  * rebuilds the interface — this does come down, and the session does not: the pane detaches, and
  * whatever draws next adopts what is still running (`app/src/talk/terminal.ts`).
  *
+ * What runs in the pane is not settled here. The frame put up inside it asks the host which agent this
+ * folder starts with, and draws the offer or the install notice where that has no single answer
+ * (`app/src/talk/agent.ts`) — which is also where a refusal to start one is shown, so nothing here
+ * holds a failure of its own.
+ *
  * `note` is what the shell has to say about this face that the pane cannot — a window that could not
  * be split out, which is the press of the button here having come to nothing.
+ *
+ * `onWaiting` is the one thing this face says back to the shell: whether the pane in it is waiting on
+ * a person. Behind the other face the label above the pane cannot be seen at all, so the shell puts a
+ * badge on the face switch instead (`./terminalBadge`) — and it is told the fact, not what to do
+ * about it. The answer is the plate's, which is what holds the session (`../talk/plate`).
  *
  * Beside the pane is the file face (`app/src/files/FilesPanel.tsx`), which is rooted at the
  * project's folder rather than at this pane's session — so it does not move when the pane does
  * (`AMB-T-3602`). It is why this component is told which project the window is on, and how to leave
  * this face for the ledger, neither of which the terminal itself has any use for.
  */
-export function TerminalFace({ onSplitOut, note, projectId, onOpenLedger }: {
+export function TerminalFace({
+  onSplitOut,
+  note,
+  onWaiting,
+  projectId,
+  onOpenLedger,
+}: {
   onSplitOut: () => void;
   note: string | null;
+  onWaiting: (waiting: boolean) => void;
   projectId?: number | null;
   onOpenLedger?: () => void;
 }) {
   const paneRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
-  // What the pane has to say for itself when it is not simply a terminal: the host's refusal if one
-  // could not be started, and the fact of the program having exited, which the screen cannot show on
-  // its own — what a finished shell leaves behind looks exactly like one waiting to be typed at.
-  const [failed, setFailed] = useState<string | null>(null);
+  // The fact of the program having exited, which the screen cannot show on its own — what a finished
+  // shell leaves behind looks exactly like one waiting to be typed at.
   const [ended, setEnded] = useState(false);
+  // Held in a ref because the pane is put up once, in an effect that runs once: reading the prop
+  // through this is what lets the shell pass a fresh callback without the terminal coming down.
+  const tell = useRef(onWaiting);
+  tell.current = onWaiting;
 
   useEffect(() => {
     const host = paneRef.current;
@@ -49,8 +68,8 @@ export function TerminalFace({ onSplitOut, note, projectId, onOpenLedger }: {
     setEnded(false);
     // The line above the pane. It holds what is known about the session running there for as long as
     // it runs, which is the same line the split-out window draws (`app/src/talk/plate.ts`).
-    const plate = mountPlate(label);
-    void mountTerminal(host, {
+    const plate = mountPlate(label, currentLang, (waiting) => tell.current(waiting));
+    void mountAgentFrame(host, currentLang(), {
       opened: (session, startedAt) => {
         plate.opened(session, startedAt);
       },
@@ -66,14 +85,14 @@ export function TerminalFace({ onSplitOut, note, projectId, onOpenLedger }: {
       name: (text, by) => {
         void nameFrame(ONLY_FRAME, text, by).then(plate.named).catch(() => {});
       },
-    })
+    }, "termface__pane")
       .then((take) => {
         // Taken away while the host was still answering. Detaching leaves the terminal running for
         // whatever draws it next, which is exactly what a pane that never got shown should do.
         if (taken) take();
         else detach = take;
       })
-      .catch((e: unknown) => setFailed(e instanceof Error ? e.message : String(e)));
+      .catch(() => {});
     return () => {
       taken = true;
       detach?.();
@@ -90,9 +109,7 @@ export function TerminalFace({ onSplitOut, note, projectId, onOpenLedger }: {
       </div>
       <div ref={labelRef} />
       <div className="termface__split">
-        {failed === null
-          ? <div className="termface__pane" ref={paneRef} />
-          : <div className="termface__failed">{failed}</div>}
+        <div className="termface__face" ref={paneRef} />
         <FilesPanel projectId={projectId ?? null} onOpenLedger={onOpenLedger} />
       </div>
     </div>

@@ -1244,6 +1244,13 @@ pub struct DoctorFixDto {
 pub struct PluginEntryDto {
     /// The plugin's name, which is its identity in the catalog.
     pub(crate) name: String,
+    /// What to call it on screen, when the catalog published one (`AMB-D-739`). It rides **beside**
+    /// `name` rather than replacing it, the same way `descI18n` rides beside `desc`: which of the two a
+    /// row draws is the front end's, and absent — a plugin whose author wrote none — is the ordinary
+    /// case, where the name is what a reader has always seen.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) title: Option<String>,
     pub(crate) desc: String,
     /// The same line in the reader's language, when the catalog published one for this plugin
     /// (`AMB-D-622`). It rides **beside** the base line rather than replacing it: choosing between the
@@ -1650,6 +1657,13 @@ pub struct PluginDeviceRowDto {
 pub struct PluginInstallDto {
     /// The plugin's name — the key the market joins this row onto a catalog entry by.
     pub(crate) name: String,
+    /// What to call it on screen (`AMB-D-739`), read off the manifest kept beside the binary rather than
+    /// the catalog — so an installed plugin has a name to draw with no catalog fetch and none reachable.
+    /// This row is the one place the name is all there is: the installed list draws no description under
+    /// it. Absent is a plugin whose author wrote none, and the name stands as it always did.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) title: Option<String>,
     /// Every "project × plugin" intersection this plugin has a row at (`AMB-D-447`) — the projects holding
     /// its gate open, and the projects holding a value while it is off. Empty means nowhere, which is an
     /// answer; a truth value read from one project is not, because it hides the projects it is still
@@ -1905,6 +1919,12 @@ pub struct PluginRemovedDto {
 pub struct PluginUpdateDto {
     /// The plugin's name — how the face names it and how an apply asks for it.
     pub(crate) name: String,
+    /// What the **offered** build calls itself on screen (`AMB-D-739`), when it carries one. It comes off
+    /// the same documents the offer was read from, like the line below it, so the row names the build
+    /// being offered rather than the one installed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) title: Option<String>,
     /// What the **new** build says it is, for a line the user can recognise it by.
     pub(crate) desc: String,
     /// That line in the reader's language, when the offered build carries one (`AMB-D-622`) — beside the

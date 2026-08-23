@@ -4146,6 +4146,7 @@ pub async fn plugin_catalog_browse(lang: String) -> Result<PluginCatalogDto, Cmd
                 .map(|e| PluginEntryDto {
                     desc_i18n: lines.get(&e.entry.name).and_then(|o| o.desc.clone()),
                     name: e.entry.name,
+                    title: e.entry.title,
                     desc: e.entry.desc,
                     author: e.entry.author,
                     repo: e.entry.repo,
@@ -4590,6 +4591,7 @@ fn install_row(
     };
     Ok(PluginInstallDto {
         name: plugin.name.clone(),
+        title: plugin.manifest.title.clone(),
         projects,
         device,
         scope: plugin.manifest.scope,
@@ -5020,6 +5022,7 @@ pub async fn plugin_updates(
                 Ok(PluginUpdateDto {
                     desc_i18n: u.available_i18n.get(&lang).and_then(|o| o.desc.clone()),
                     name: u.name,
+                    title: u.available.title,
                     available_detail_sum: u.available.detail_sum,
                     desc: u.available.desc,
                     hold,

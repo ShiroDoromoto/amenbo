@@ -255,6 +255,7 @@ mod tests {
     fn manifest(events: &[&str], config: Vec<ConfigField>) -> Manifest {
         Manifest {
             name: "unused".into(),
+            title: None,
             desc: String::new(),
             about: None,
             author: String::new(),

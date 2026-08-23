@@ -400,6 +400,17 @@ pub struct Manifest {
     /// The plugin's name — its identity in the catalog and its directory under `plugins/`. Must not be
     /// the reserved `registry` (the validator enforces this; see the module docs).
     pub name: String,
+    /// **What to call the plugin on screen** (`AMB-D-739`) — the product name its author writes it under,
+    /// where [`name`](Manifest::name) is the identity everything else is keyed by: the directory under
+    /// `plugins/`, the executable, the config keys, the word typed at `plugin run`, and the catalog's
+    /// file names. Those cannot read as "Amenbo Viewer", and renaming is not a road that exists, so the
+    /// display name is a field of its own rather than a loosening of the id's grammar.
+    ///
+    /// Absent is the ordinary case, and means a reader sees `name` exactly as they always did. It is not
+    /// translated (`AMB-D-739`): a product name is not the kind of text a language has another word for,
+    /// so no overlay carries it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     /// A one-line description, for the list view.
     pub desc: String,
     /// **What the plugin is, in the author's own words** (`AMB-D-638`) — the Markdown a detail view

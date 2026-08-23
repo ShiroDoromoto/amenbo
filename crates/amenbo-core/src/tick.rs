@@ -670,6 +670,7 @@ mod tests {
             program: std::path::PathBuf::from(format!("/plugins/{name}")),
             manifest: Manifest {
                 name: name.into(),
+                title: None,
                 desc: String::new(),
                 about: None,
                 author: String::new(),

@@ -128,6 +128,34 @@ pub fn no_color() -> Option<String> {
     var("NO_COLOR")
 }
 
+/// `SHELL` — the shell of whoever's session this process was started from. Amenbo reads it for one
+/// purpose: as the fallback when the account database cannot say what this user's login shell is, so
+/// a terminal opened in the GUI still starts the shell they actually use (`app/src-tauri/launch.rs`).
+///
+/// It is a fallback and not the answer, because what it describes is the session rather than the
+/// user: a process several launches deep can be carrying one that was inherited from something else.
+pub fn shell() -> Option<OsString> {
+    var_os("SHELL")
+}
+
+/// `TERM` — the OS's own name for what kind of terminal a program is running in, and hence which
+/// escape sequences it may use. Amenbo reads it to see whether the launch it is passing on already
+/// carries one, because a desktop launch carries none and a program that finds none assumes a
+/// terminal that can do nothing (`app/src-tauri/launch.rs`).
+pub fn term() -> Option<OsString> {
+    var_os("TERM")
+}
+
+/// The locale this process was launched with, in the precedence the C library reads them in:
+/// `LC_ALL` overrules `LANG`, so a session that set the first has answered whatever is asked of the
+/// second. Amenbo reads it for the same reason as [`term`] — to leave a launch that already carries
+/// an answer alone, and to name a UTF-8 one for a desktop launch that carries none.
+///
+/// The value is not parsed and not judged: presence is the whole of the question.
+pub fn locale() -> Option<OsString> {
+    var_os("LC_ALL").or_else(|| var_os("LANG"))
+}
+
 /// `AMENBO_UPDATE_CHECK` — the environment override for the update check (the update endpoint
 /// query). `0` / `off` / `false` / `no` **disable** it, overriding `config.update_check`: a hard kill
 /// switch for CI, for privacy, and for tests that must guarantee nothing ever leaves the machine.

@@ -494,6 +494,7 @@ export const th: Translation = {
     "face.terminal": "เทอร์มินัล",
     "face.splitOut": "เปิดในหน้าต่างแยก",
     "face.merge": "กลับไปเป็นหน้าต่างเดียว",
+    "face.end": "จบเทอร์มินัลในแผงนี้",
     "face.ended": "โปรแกรมในเทอร์มินัลนี้จบการทำงานแล้ว",
     "face.rail": "บานหน้าต่าง",
     "face.paneCount": "จำนวนบานหน้าต่างบนหน้าจอ",

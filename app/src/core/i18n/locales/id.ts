@@ -494,6 +494,7 @@ export const id: Translation = {
     "face.terminal": "Terminal",
     "face.splitOut": "Buka di jendela terpisah",
     "face.merge": "Kembali ke satu jendela",
+    "face.end": "Akhiri terminal di panel ini",
     "face.ended": "Program di terminal ini telah berhenti.",
     "face.rail": "Panel",
     "face.paneCount": "Panel di layar",

@@ -456,6 +456,7 @@ pub fn run() {
       folder_watch::folder_unwatch,
       pty::pty_open,
       pty::pty_sessions,
+      pty::pty_close,
       pty::pty_attach,
       pty::pty_write,
       pty::pty_resize,

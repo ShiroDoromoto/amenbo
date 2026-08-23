@@ -38,7 +38,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use base64::Engine as _;
-use portable_pty::{native_pty_system, MasterPty, PtySize};
+use portable_pty::{native_pty_system, ChildKiller, MasterPty, PtySize};
 use tauri::{Emitter, Manager};
 
 use crate::dto::{PtyChunkDto, PtySessionDto, SessionSaidDto};
@@ -191,6 +191,13 @@ pub struct Terminal {
     master: Box<dyn MasterPty + Send>,
     /// The keystrokes side. Writing to the master is what a key press is.
     writer: Box<dyn Write + Send>,
+    /// The way to end the program, kept apart from the child itself: the child belongs to the thread
+    /// draining the terminal, which waits on it and must not be reached for from anywhere else.
+    ///
+    /// It exists because nothing else can end a terminal. A pane going away never does — that is a
+    /// pane moving, and the session outlives it (`AMB-D-753`) — so without this the only way out is
+    /// the program deciding to stop, which is exactly what a runaway does not do.
+    killer: Box<dyn ChildKiller + Send + Sync>,
     /// Which window is drawing this session, and what it has written lately. Shared with the thread
     /// draining it, and the one part of a terminal a pane may move.
     pane: Arc<Pane>,
@@ -321,6 +328,7 @@ pub fn pty_open(
     }
 
     let mut child = pair.slave.spawn_command(cmd).map_err(failed)?;
+    let killer = child.clone_killer();
     // Let go of the slave now the child holds its own. While this process keeps it open the master
     // never reaches end-of-file, so the drain below would sit there for good after the program
     // exited and the pane would never be told it had closed.
@@ -341,6 +349,7 @@ pub fn pty_open(
             folder,
             master: pair.master,
             writer,
+            killer,
             pane: Arc::clone(&pane),
             started_at: started_at.clone(),
         },
@@ -648,6 +657,27 @@ pub fn folder(app: &tauri::AppHandle, session: &str) -> Option<PathBuf> {
         .get(session)?
         .folder
         .clone()
+}
+
+/// End the program in a terminal, and forget the session.
+///
+/// **It is the only way out.** A pane going away leaves the terminal running — that is a pane moving
+/// between windows or pages, and the session is not the pane (`AMB-D-753`) — so short of this, a
+/// terminal ends when the program in it decides to, which is the one thing a runaway will not do.
+///
+/// The registry entry is dropped here rather than left for the drain to clear, so a second close says
+/// the terminal is gone instead of trying to kill it twice. The drain ends on its own once the program
+/// does, and emits the close the pane listens for: what is on the screen stays as it is, which is what
+/// a terminal ends with.
+#[tauri::command]
+pub fn pty_close(terminals: tauri::State<'_, Terminals>, session: String) -> Result<(), CmdError> {
+    let mut terminal = terminals
+        .0
+        .lock()
+        .expect("terminals lock")
+        .remove(&session)
+        .ok_or_else(|| gone(&session))?;
+    terminal.killer.kill().map_err(failed)
 }
 
 /// The sessions this process has open, as a set of ids.

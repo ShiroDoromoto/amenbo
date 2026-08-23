@@ -1844,6 +1844,10 @@ const REGISTRY: &[OpSpec] = &[
     // offer: the screen does not know the work stopped, only that nothing it opened is at it, so the
     // press opens the task where a person answers rather than answering for them. It leaves this face.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-adrift", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    // Ending the terminal in the pane. It is the only way out — a pane going away is a pane moving,
+    // and the session outlives it — so it is also the only way a road reaches the state that follows
+    // one: what a pane says once nothing is running in it any more.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "end-pane", required: &[], refs: &[], strings: &[], binds: false },
     // Something the agent in the pane said about its own session — the surface layer, said with the
     // CLI from inside the terminal it is about. `verb` is which of the layer's words was used and
     // `text` is what was said in it; both travel as values because the layer is one seam with several

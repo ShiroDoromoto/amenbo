@@ -520,6 +520,7 @@ export const ru: Translation = {
     "face.terminal": "Терминал",
     "face.splitOut": "Открыть в отдельном окне",
     "face.merge": "Вернуть в одно окно",
+    "face.end": "Завершить терминал в этой панели",
     "face.ended": "Программа в этом терминале завершилась.",
     "face.rail": "Панели",
     "face.paneCount": "Панелей на экране",

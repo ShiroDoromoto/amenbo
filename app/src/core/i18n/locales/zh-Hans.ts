@@ -491,6 +491,7 @@ export const zhHans: Translation = {
     "face.terminal": "终端",
     "face.splitOut": "在单独窗口中打开",
     "face.merge": "合并回一个窗口",
+    "face.end": "结束这个窗格里的终端",
     "face.ended": "此终端中的程序已退出。",
     "face.rail": "窗格",
     "face.paneCount": "屏幕上的窗格数",

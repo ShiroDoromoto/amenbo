@@ -135,3 +135,17 @@ steps_gui:
     with:
       name: ../elsewhere/ledger.md
       present: false
+
+  # And the end of it. While the pane runs, what is left unopened is a count and nothing more — there
+  # is still time. Once the session is over there is not, so the column says it in words: this is the
+  # one moment the reader can be told what they never got to, and after it the whole map is gone with
+  # the session.
+  - type: action
+    domain: terminal
+    op: end-pane
+
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: unopened

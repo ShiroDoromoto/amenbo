@@ -491,6 +491,7 @@ export const tr: Translation = {
     "face.terminal": "Terminal",
     "face.splitOut": "Ayrı pencerede aç",
     "face.merge": "Tek pencereye dön",
+    "face.end": "Bu bölmedeki terminali sonlandır",
     "face.ended": "Bu terminaldeki program sona erdi.",
     "face.rail": "Bölmeler",
     "face.paneCount": "Ekrandaki bölme sayısı",

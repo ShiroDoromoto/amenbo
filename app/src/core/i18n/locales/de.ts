@@ -501,6 +501,7 @@ export const de: Translation = {
     "face.terminal": "Terminal",
     "face.splitOut": "In einem eigenen Fenster öffnen",
     "face.merge": "Zurück zu einem Fenster",
+    "face.end": "Das Terminal in diesem Bereich beenden",
     "face.ended": "Das Programm in diesem Terminal wurde beendet.",
     "face.rail": "Bereiche",
     "face.paneCount": "Bereiche auf dem Bildschirm",

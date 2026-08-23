@@ -514,6 +514,13 @@ const ui = {
   // The talk window names itself from here — `tauri.conf.json` can hold only one fixed string,
   // and two windows both called "Amenbo" cannot be told apart in a window list (`AMB-T-3588`).
   "app.talkWindow": "Amenbo — Talk",
+  // The two faces of the one window, and the moves between one window and two (`AMB-D-753`).
+  "face.switch": "Tasks or terminal",
+  "face.tasks": "Tasks",
+  "face.terminal": "Terminal",
+  "face.splitOut": "Open in a separate window",
+  "face.merge": "Back to one window",
+  "face.ended": "The program in this terminal has exited.",
   // The talk window's standing band, shown only while Amenbo itself holds an administrator's token
   // on Windows. What it warns about is not a right the user lacks but one they have too much of:
   // the terminal opens, and the tools behind scoop's links are unreachable from inside it
@@ -689,6 +696,7 @@ const err: Partial<Record<ErrorCode, string>> = {
     "{url} now publishes {serving}, not the {agreed} you were shown. Register it again and check the new fingerprint.",
   pty_failed: "The terminal could not be started: {reason}",
   pty_gone: "That terminal is no longer open.",
+  window_failed: "That window could not be opened: {reason}",
 
   // The sentences the GUI shows a person, named one at a time (`AMB-D-413`). Which refusals get a code of
   // their own was settled by measuring what the front end actually surfaces: a form the screen already

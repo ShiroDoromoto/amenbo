@@ -1628,6 +1628,24 @@ session: string,
 base64: string, };
 
 /**
+ * A terminal this process has open, as a pane putting itself up is told about it.
+ *
+ * It answers both of the pane's ways in: the terminal it just started, and the one it found already
+ * running and adopted (`crate::pty::pty_sessions`). `started_at` is here because a pane cannot work
+ * it out — a session that changed windows started when it started, and the moment the pane went up
+ * says nothing about it.
+ */
+export type PtySessionDto = { 
+/**
+ * The id the terminal was opened under.
+ */
+session: string, 
+/**
+ * When the terminal was started (RFC3339 UTC).
+ */
+startedAt: string, };
+
+/**
  * What a reference resolves to (`kind` — task or decision — and the entity's id). The GUI branches
  * on it to decide which detail pane a link opens.
  *

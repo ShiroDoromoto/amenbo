@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "talk",
-  "description": "what the talk window may do — kept apart from the board's so the theme stays removable (delete the window and its permissions leave with this file)",
+  "description": "what the talk window may do — the window the terminal is split out into, built on request rather than declared in tauri.conf.json, so it matches by label at runtime. Kept apart from the board's so the theme stays removable (delete the window and its permissions leave with this file)",
   "windows": [
     "talk"
   ],

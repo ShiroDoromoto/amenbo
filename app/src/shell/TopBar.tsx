@@ -3,6 +3,7 @@ import { BrandMark } from "../components/BrandMark";
 import { reconcile, subscribeStoreChangeReflected } from "../core/snapshot";
 import { fetchDevBadge, openExternalUrl } from "../core/mutations";
 import { t } from "../core/i18n";
+import type { Face } from "../core/windowShape";
 import { Icon } from "../components/Icon";
 
 /** The product page, opened in the default browser by clicking "amenbo" in the TopBar. */
@@ -18,6 +19,8 @@ export function TopBar({
   canForward,
   sidebarCollapsed,
   onToggleSidebar,
+  face,
+  onSelectFace,
 }: {
   onBack: () => void;
   onForward: () => void;
@@ -25,6 +28,8 @@ export function TopBar({
   canForward: boolean;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
+  face: Face;
+  onSelectFace: (face: Face) => void;
 }) {
   const [reflecting, setReflecting] = useState(false);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -96,6 +101,8 @@ export function TopBar({
         <Icon name="refresh" />
       </button>
       <div className="topbar__spacer" />
+      <FaceSwitch face={face} onSelect={onSelectFace} />
+      <div className="topbar__spacer" />
       {devBadge && <span className="topbar__envbadge">{devBadge}</span>}
       <span className="topbar__brand" title="amenbo"><BrandMark /></span>
       <span
@@ -113,6 +120,38 @@ export function TopBar({
       >
         amenbo
       </span>
+    </div>
+  );
+}
+
+/**
+ * The two faces of the window, and which one is up (`AMB-D-753`).
+ *
+ * It stays here once the terminal has been split out into a window of its own, where pressing
+ * "terminal" raises that window instead of changing this one — so the control says the same thing
+ * in both shapes, and there is one place to look for the terminal however the app is arranged.
+ * Which is why the terminal segment is not marked as the current one there: the face this window is
+ * showing is the ledger, and it does not stop being so because the other window came forward.
+ */
+function FaceSwitch({ face, onSelect }: { face: Face; onSelect: (face: Face) => void }) {
+  return (
+    <div className="topbar__faces" role="tablist" aria-label={t("face.switch")}>
+      <button
+        className={`topbar__face${face === "tasks" ? " topbar__face--on" : ""}`}
+        role="tab"
+        aria-selected={face === "tasks"}
+        onClick={() => onSelect("tasks")}
+      >
+        {t("face.tasks")}
+      </button>
+      <button
+        className={`topbar__face${face === "terminal" ? " topbar__face--on" : ""}`}
+        role="tab"
+        aria-selected={face === "terminal"}
+        onClick={() => onSelect("terminal")}
+      >
+        {t("face.terminal")}
+      </button>
     </div>
   );
 }

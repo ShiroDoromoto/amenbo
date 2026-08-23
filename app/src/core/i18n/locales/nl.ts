@@ -473,6 +473,12 @@ export const nl: Translation = {
     "act.nameless": "(verwijderd)",
     "app.loadError": "Gegevens laden is mislukt.", "app.loading": "Bezig met laden…",
     "app.talkWindow": "Amenbo — Gesprek",
+    "face.switch": "Wat dit venster toont",
+    "face.tasks": "Taken",
+    "face.terminal": "Terminal",
+    "face.splitOut": "In een apart venster openen",
+    "face.merge": "Terug naar één venster",
+    "face.ended": "Het programma in deze terminal is gestopt.",
     "talk.elevated.title": "Amenbo draait als administrator",
     "talk.elevated.body": "Een terminal die hier opent, erft dat, en een administrator volgt de koppelingen niet waarachter scoop zijn pakketten installeert. Die tools zijn vanuit dit venster onbereikbaar — Amenbo meldt ze als niet geïnstalleerd, terwijl ze dat wel zijn.",
     "talk.elevated.fix": "Sluit Amenbo af en open het opnieuw zonder “Als administrator uitvoeren”, dan zijn ze er weer.",
@@ -615,6 +621,7 @@ export const nl: Translation = {
       "{url} publiceert nu {serving}, niet de {agreed} die je te zien kreeg. Registreer haar opnieuw en controleer de nieuwe vingerafdruk.",
     pty_failed: "De terminal kon niet worden gestart: {reason}",
     pty_gone: "Die terminal is niet meer open.",
+    window_failed: "Dat venster kon niet worden geopend: {reason}",
 
     already_reserved:
       "{ref} staat niet op “Te doen” en kan dus niet worden opgepakt — een andere sessie heeft hem misschien al.",

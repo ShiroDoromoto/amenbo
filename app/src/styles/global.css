@@ -28,6 +28,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .shell > .topbar { grid-row: 1; }
 .shell > .shell__banners { grid-row: 2; }
 .shell > .shell__body { grid-row: 3; }
+/* The terminal face shares the body's row: the two are the same window showing one thing or the
+   other (`AMB-D-753`). `hidden` is spelled out because `display: grid` / `display: flex` below is an
+   author rule and would otherwise beat the user agent's `[hidden]`, leaving both faces drawn on top
+   of each other. Hiding — rather than not rendering — is the whole of "the switch does not kill the
+   terminal": the emulator stays, and the PTY keeps flowing behind it. */
+.shell > .shell__terminal { grid-row: 3; }
+.shell__body[hidden], .shell__terminal[hidden] { display: none; }
 /* One band under the last, in the order they are written. */
 .shell__banners { display: flex; flex-direction: column; min-width: 0; }
 /* 2 rows x 3 columns. The header row (the project header) spans the full width of main
@@ -57,6 +64,47 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .shell__body--sidebar-collapsed .sidebar-wrap { display: none; }
 /* The project header (the board's toolbar) is portalled in here; BoardScreen renders it. */
 .shell__header { grid-area: header; min-width: 0; }
+
+/* ---------- the terminal face ---------- */
+/* The terminal as the board's window draws it: a bar with the way out to a window of its own, and
+   under it the pane. The talk window draws the same two the other way round (styles/talk.css) — the
+   control there is the way back. */
+.shell__terminal { min-height: 0; }
+.termface {
+  height: 100%; min-height: 0;
+  padding: var(--s-3);
+  display: flex; flex-direction: column; gap: var(--s-2);
+}
+.termface__bar { display: flex; align-items: center; gap: var(--s-3); }
+.termface__action {
+  background: var(--c-surface-sunken); border: 1px solid var(--c-border);
+  border-radius: var(--r-md); padding: var(--s-1) var(--s-3);
+  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1.6;
+}
+.termface__action:hover { color: var(--c-text); }
+/* The program in the terminal having exited. What is on the screen stays as it was — that is what a
+   terminal ends with — and this is the part of it the screen cannot show for itself. */
+.termface__note { color: var(--c-text-muted); font-size: var(--fs-sm); }
+/* The terminal's box. xterm.js measures the element it was opened in, so this is what decides how
+   many columns and rows the program inside is told it has. */
+.termface__pane {
+  flex: 1; min-height: 0;
+  padding: var(--s-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-md);
+  background: var(--c-surface);
+  overflow: hidden;
+}
+/* What is shown instead when the terminal could not be started: what the host said, because there is
+   nothing this side knows to add to it. */
+.termface__failed {
+  flex: 1;
+  padding: var(--s-4);
+  color: var(--c-text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  white-space: pre-wrap;
+}
 
 /* ---------- the band across the top of the app ---------- */
 /* One band, the app's news drawn in it — the integrity check, an update waiting, a folder that has
@@ -204,6 +252,23 @@ button { font: inherit; color: inherit; cursor: pointer; }
   white-space: nowrap;
 }
 .topbar__spacer { flex: 1; }
+/* The two faces of the window, as one segmented control in the middle of the bar (`AMB-D-753`). It
+   is the same control in both shapes — with the terminal split out, its segment raises that window
+   rather than switching this one — so there is one place to look for the terminal however the app is
+   arranged. */
+.topbar__faces {
+  display: inline-flex;
+  background: var(--c-surface-sunken);
+  border: 1px solid var(--c-border); border-radius: var(--r-md);
+  padding: 2px;
+}
+.topbar__face {
+  background: none; border: 0; border-radius: calc(var(--r-md) - 2px);
+  padding: var(--s-1) var(--s-3);
+  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1.6;
+}
+.topbar__face:hover { color: var(--c-text); }
+.topbar__face--on { background: var(--c-surface); color: var(--c-text); font-weight: var(--fw-bold); }
 .topbar__refresh {
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--c-surface-sunken); border: 1px solid var(--c-border);

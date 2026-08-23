@@ -473,6 +473,12 @@ export const tr: Translation = {
     "act.nameless": "(silinmiş)",
     "app.loadError": "Veriler yüklenemedi.", "app.loading": "Yükleniyor…",
     "app.talkWindow": "Amenbo — Sohbet",
+    "face.switch": "Bu pencerenin gösterdiği",
+    "face.tasks": "Görevler",
+    "face.terminal": "Terminal",
+    "face.splitOut": "Ayrı pencerede aç",
+    "face.merge": "Tek pencereye dön",
+    "face.ended": "Bu terminaldeki program sona erdi.",
     "talk.elevated.title": "Amenbo yönetici olarak çalışıyor",
     "talk.elevated.body": "Burada açılan bir terminal bunu devralır ve bir yönetici, scoop'un paketlerini arkasına kurduğu bağlantıları izlemez. Bu araçlara bu pencereden ulaşılamaz — kurulu olsalar da Amenbo kurulu değil diyecektir.",
     "talk.elevated.fix": "Amenbo'dan çıkın ve “Yönetici olarak çalıştır” demeden yeniden açın; araçlar geri gelir.",
@@ -615,6 +621,7 @@ export const tr: Translation = {
       "{url} artık size gösterilen {agreed} yerine {serving} sunuyor. Yeniden kaydedin ve yeni parmak izini karşılaştırın.",
     pty_failed: "Terminal başlatılamadı: {reason}",
     pty_gone: "O terminal artık açık değil.",
+    window_failed: "O pencere açılamadı: {reason}",
 
     already_reserved:
       "{ref} “Yapılacak” durumunda değil, bu yüzden üstlenilemez — başka bir oturum onu çoktan almış olabilir.",

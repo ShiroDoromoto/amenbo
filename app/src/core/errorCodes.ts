@@ -191,7 +191,8 @@ export const CORE_ERROR_CODES = [
  * boundary between showing a fingerprint and agreeing to it, so the pin that is written has to be the one
  * that was on screen (`AMB-D-389`); and the two the terminal in a pane answers with, which are the
  * operating system refusing to open one (`pty_failed`) and a session whose terminal has already
- * closed (`pty_gone`). */
+ * closed (`pty_gone`); and the one a window refuses with, which is the terminal being split out into
+ * a window of its own and the platform not building it (`window_failed`). */
 export const TAURI_ERROR_CODES = [
   "init_ambiguous_owners",
   "init_pointer_exists",
@@ -202,6 +203,7 @@ export const TAURI_ERROR_CODES = [
   "plugin_catalog_key_changed",
   "pty_failed",
   "pty_gone",
+  "window_failed",
 ] as const;
 
 /** Every code a webview can receive — the contract that i18n and code-based branching may refer to. */

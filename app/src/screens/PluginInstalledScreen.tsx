@@ -17,7 +17,7 @@ import {
   usePluginUpdates,
   type PluginUpdate,
 } from "../core/pluginUpdates";
-import { pluginDesc } from "../core/pluginText";
+import { pluginDesc, pluginTitle } from "../core/pluginText";
 import { getSnapshot, subscribe } from "../core/snapshot";
 import { Icon } from "../components/Icon";
 
@@ -206,7 +206,7 @@ function InstalledRow({ install, update, projects, onRemoved }: {
     <div className="feed__item">
       <div className="feed__body" style={{ minWidth: 0 }}>
         <div className="feed__line">
-          <strong>{install.name}</strong>
+          <strong>{pluginTitle(install)}</strong>
           {!install.compatible ? (
             <>
               {" "}

@@ -954,9 +954,14 @@ impl Store {
     }
 
     /// Delete a dimension value — a hard delete (one operation = one transaction). The task
-    /// assignments to that value go with it.
-    pub fn dimension_value_delete(&mut self, value_id: i64) -> Result<()> {
-        self.write_one(&[WriteTarget::DimensionValue(value_id)], |tx| crate::ops::dimension::value_delete(tx, value_id))
+    /// assignments to that value go with it, unless `reassign_to` names another value of the same axis
+    /// for them to move to — which a required axis demands whenever there are any.
+    pub fn dimension_value_delete(&mut self, value_id: i64, reassign_to: Option<i64>) -> Result<()> {
+        let mut targets = vec![WriteTarget::DimensionValue(value_id)];
+        // The destination is written to as well (the assignments land on it), so it is declared for the
+        // reach guard alongside the value being removed.
+        targets.extend(reassign_to.map(WriteTarget::DimensionValue));
+        self.write_one(&targets, |tx| crate::ops::dimension::value_delete(tx, value_id, reassign_to))
     }
 
     /// Assign a dimension value to a task (one operation = one transaction). Deleting the old row

@@ -7,7 +7,9 @@ On macOS it gives a task its own throwaway **dev GUI** — bundle, app-data and
 all — so several implementation sessions can run in parallel without installing
 over each other, and it stands up a **fake outside world** the dev GUI can be
 verified against — including the failures the real one will not produce on
-demand.
+demand. It also raises the throwaway **macOS VM** that GUI is driven in — and
+walks a pre-distribution screen road inside it — so verification takes a screen
+that is not the one being worked on.
 
 ## Build
 
@@ -16,9 +18,16 @@ without Go, and nothing outside this directory depends on it. Build it only if
 you want it.
 
 ```sh
-make devtool        # builds to ~/.cargo/bin/devtool
+make devtool        # installs to ~/.cargo/bin/devtool, to type by hand
 # or: cd devtool && go build -o ~/.cargo/bin/devtool .
 ```
+
+That copy is **for a person to type**, and it is one file for the whole machine.
+The root makefile's own targets do not call it: they build `devtool/.bin/devtool`
+from the checkout they are running in and call that, so what a build runs is the
+tree in front of it rather than whoever installed last. Two checkouts each
+installing their own is otherwise how a target comes to ask for a subcommand the
+installed copy has not got — after the minutes it spent building.
 
 ## Model
 
@@ -66,10 +75,18 @@ permanent place a grown setup (plugins, catalog, projects) lives.
 | built by | `make install-gui-dev` | `make install-gui-dev AMB-T-ID=<id>` |
 | deleted by | nothing — it is permanent | `devtool devgui rm <id>` |
 
+The right-hand column is where it lands on **this machine**. The same instance goes
+into the throwaway VM instead with `make install-gui-dev-vm AMB-T-ID=<id>` — same
+names, same layout, another machine — and every command that addresses it answers
+for that machine with `--vm`. See [`devgui install`](#devtool-devgui-install-id---vm)
+and [the destination flag](#which-machine-a-command-is-about----vm).
+
 Each build runs under an executable name of its own — production keeps
 `amenbo-app` — so a name reaches one app and not another: `pgrep -x
 amenbo-app-dev-<id>` finds that one instance, and `System Events` lists it under
-the same name. A *click*, though, still lands on whichever window is in front.
+the same name. A *click* aimed at a point still lands on whichever window is in
+front; `click-named <pid> <name>` fronts the pid it was given before pressing,
+so that one reaches the instance named and not whatever was there.
 The badge is how you tell them apart *inside* the window: it sits in the header,
 so it survives a cropped screenshot, and production carries none at all. To
 reach one without a click, ask for its pid (`devgui pid` below) and drive that
@@ -143,7 +160,80 @@ instance the ordinary way never types it. Details:
 - The bundle itself is not built here; that is the Makefile's, and only the
   tasks that look at a GUI pay for one.
 
-### `devtool devgui cli <id> [--no-build] -- <amenbo args…>`
+### Which machine a command is about — `--vm`
+
+Every command that addresses an instance reads **this machine** by default, and
+answers for the guest with `--vm`:
+
+```sh
+devtool devgui pid   696 --vm --front     # the pid in there
+devtool devgui shot  696 --vm             # shot in there, png brought back here
+devtool devgui cli   696 --vm -- …        # writes the store in there
+devtool devgui rm    696 --vm             # reclaims it in there
+devtool devgui sweep --vm                 # what is in there, and what is orphaned
+```
+
+**The default does not move.** A clone or a fork with one Mac has no VM, so the
+host route has to keep working unchanged; `--vm` is a second destination.
+
+Only the machine asked changes. The guest layout mirrors this one, so the same
+names, the same paths and the same pid lookup do the work — a listing becomes an
+`ls` over ssh, a removal an `rm -rf`, and the screen tool driven is the copy
+`devtool vm screen` put in there. Two of them cannot be typed in the guest at
+all: the sweep needs `git worktree list`, which only this machine can answer, and
+`cli` runs a build of this checkout.
+
+### `devtool devgui install <id> --vm`
+
+Puts the task's own dev GUI **in the throwaway VM** instead of on this machine —
+the screen it is driven on, so a verification run does not take this Mac's
+keyboard and mouse:
+
+```sh
+make install-gui-dev-vm AMB-T-ID=696     # build it here, put it in there
+devtool devgui install 696 --vm          # put the built bundle in there again
+# /Applications/amenbo (dev 696).app
+```
+
+**The build stays on the host.** Only the placing moves, so the guest needs
+neither Rust nor node, and the `.app` baked here runs in there unchanged — same
+arch, same OS generation (43MB across in 0.96s, measured).
+
+**This machine stays the default destination**, and that route is the Makefile's
+own (`make install-gui-dev AMB-T-ID=<id>`): a clone or a fork with one Mac has no
+VM, and a default that needed one would leave it unable to verify anything.
+So `--vm` is not optional here — it is the whole reason the
+command exists, and without it you are asking for the route that has one already.
+
+- **It raises the VM if none is running.** When a clone is thrown away is a
+  person's call (`devtool vm rm`); when one is raised is not.
+- **The instance is quit in the guest first**, by executable name
+  (`amenbo-app-dev-<id>`). An app replaced under itself writes its store back on
+  the way out, over the bundle just sent. One that will not quit is a non-zero
+  exit, not a half-replaced bundle.
+- **What is sent is staged and moved into place**, never copied over what is
+  there: `scp -r` onto an existing directory merges into it, and a bundle
+  carrying files from an older build looks exactly like an implementation that
+  does not work.
+- **The store is this machine's shared dev store, sent across** — the same setup
+  (plugins, catalog, projects) a host instance is seeded from. The guest has no
+  shared dev app of its own and never will: it is a clone thrown away at the end
+  of a session. A store already in there is left alone, and everything past that
+  reports and carries on — an instance that opens empty is a poorer screen, not
+  a reason to fail the placing that asked.
+- **The guest layout mirrors this machine's exactly** (`/Applications` bundle,
+  `~/Library/Application Support` store), so what addresses an instance by path
+  reads the same on both sides and only the machine it is asked of changes.
+- **Nothing lands on this machine.** The bundle is read out of the build
+  directory, so the host `/Applications` and the host app-data are untouched —
+  and `devgui rm` reclaims neither of the guest's halves. Throwing the VM away is
+  what reclaims those, all at once.
+
+Opening it is one line — `devtool vm exec -- open -a '/Applications/amenbo (dev
+696).app'` — and the printed path is that argument. macOS only, and it needs
+`tart` the way everything under `vm` does.
+
+### `devtool devgui cli <id> [--no-build] [--vm] -- <amenbo args…>`
 
 Runs an Amenbo command against **the store the task's own dev GUI reads**, so a
 screen can be given something to show. A dev GUI shows what is in its store: a
@@ -182,9 +272,15 @@ Details worth knowing:
   task's own GUI is built from the same tree and would carry it forward the
   moment it opened.
 
+`--vm` writes the store of the instance in the guest instead. The same build is
+sent across — the guest holds no toolchain, and the two machines are the same
+arch — and run in there, pointed at that store the same way. It is sent on every
+run, because the reason the CLI is rebuilt first is that the tree it seeds a
+store for keeps moving.
+
 macOS only, like everything else about the per-task instance.
 
-### `devtool devgui pid [<id>] [--front]`
+### `devtool devgui pid [<id>] [--front] [--vm]`
 
 Prints on **stdout** the pid of a running dev GUI, so it can be handed straight
 to the tools that take one:
@@ -209,8 +305,12 @@ is in front, in practice the **production** one.
   over it.
 - Nothing running is a **non-zero exit** with the build command named, not an
   empty answer that reads as a pid of zero.
+- `--vm` answers for the instance in the guest, and the pid is a pid **in
+  there** — what takes it is the screen tool in the guest, or `devtool vm exec`.
+  There is no shared dev app to fall back on in the VM, so with no `<id>` it is
+  the checkout's own task or nothing.
 
-### `devtool devgui shot [<id>] [--no-front]`
+### `devtool devgui shot [<id>] [--no-front] [--vm]`
 
 Captures the instance's **own window** and prints its png's path on stdout:
 
@@ -234,8 +334,12 @@ tool's.
   `--no-front` is for capturing a state that fronting would disturb.
 - Screen recording has to be granted to the terminal running this, or nothing is
   written — which comes back as a non-zero exit saying so, not as an empty png.
+- `--vm` shoots the window in the guest with the screen tool in there and brings
+  the png **back out**, so the path printed is one on this machine — the thing
+  that looks at a shot is here. Nothing has to be granted on this side for it:
+  the recording is the guest's.
 
-### `devtool devgui rm <id>`
+### `devtool devgui rm <id> [--vm]`
 
 Deletes one task's instance: the `/Applications` bundle **and** its app-data,
 naming each path it removed. Both live outside the checkout, so removing the
@@ -248,7 +352,11 @@ remove it — the instance writes its store back on the way out, and the removal
 that reported it reclaimed reads as green while the leftover returns minutes
 later.
 
-### `devtool devgui sweep [--yes]`
+`--vm` takes the instance in the guest, the same two halves the same way.
+Throwing the VM away (`devtool vm rm`) takes every instance in there at once, so
+this is for reclaiming one while the clone goes on being used.
+
+### `devtool devgui sweep [--yes] [--vm]`
 
 Lists every per-task dev GUI on this machine and says which ones no worktree
 claims any more. An instance outlives the checkout it belongs to, so a session
@@ -268,6 +376,11 @@ a store behind under a number nobody will type again.
 
 Only the digits form an instance: a hand-made `amenbo (dev wip).app` is
 somebody's own, and the shared `amenbo (dev)` app is permanent.
+
+`--vm` sweeps the guest instead, and **it can only be asked from here**: what
+makes an instance live is a checkout, and the checkouts are on this machine.
+Asked inside the guest, git has nothing to answer with — and a sweep that cannot
+tell live from orphan refuses rather than guess, so it would simply never run.
 
 ### `devtool fixtures refresh [--catalog <url|path|repo dir>] [--amenbo <bin>] [--repo owner/name]`
 
@@ -418,6 +531,195 @@ checkout to look at afterwards — is the plugin author's, who is the only one w
 knows what "it worked" means. The queues are emptied with `amenbo plugin flush`,
 asked again while any queue is still held by a runner a write started, and a
 window that closes with something still waiting is reported as that.
+
+### `devtool vm up | rm | status`
+
+Raises the throwaway macOS VM the GUI is verified in, and throws it away.
+
+```sh
+devtool vm up          # prints the address on stdout
+# 192.168.64.4
+```
+
+Driving a screen means posting `CGEvent`s to `cghidEventTap`, which takes the
+keyboard and the mouse of whatever Mac it runs on for as long as it runs. The way
+out is a second screen, and a guest of the same arch and OS generation is one the
+existing tools work inside unchanged.
+
+- **The golden image is never started.** `up` cuts a clone from it (0.03s, no
+  disk of its own until it is written to) and starts that. A golden that has been
+  booted has picked up state and stopped being a known ground.
+- **A clone already running is used as it stands.** A test does not raise a second
+  VM, and it does not throw away the one a session has been working in.
+- **`rm` is the only thing that throws it away**, and nothing here decides on its
+  own that a session is over.
+- The VM is started `--no-graphics`: no window on the host, and a virtual display
+  in the guest all the same. `system_profiler SPDisplaysDataType` answers empty in
+  there and the display is nonetheless real — do not read that answer as "no
+  screen".
+- **`up` waits for a GUI session, not for a ping.** `/dev/console` owned by the
+  account is what says there is a screen to draw on; without one the screen tools
+  fail in the shape that is hardest to read — exit 0, nothing delivered. Measured:
+  address at ~7s, ssh at ~10s, console at ~11s.
+- **`up` also settles what that screen is** — see below. A screen nobody set is
+  not a screen anything can be asserted against twice.
+- `tart run` is detached into its own process group, so a Ctrl-C on devtool does
+  not take the VM with it. Its output goes to
+  `$TMPDIR/amenbo-vm-amenbo-vm.log`, which is where a VM that failed to boot says
+  so.
+- `status` reports the golden, the clone, its address and the mode its screen is on.
+
+#### The screen the guest comes up on
+
+Two things have to be said for the guest to have a screen worth shooting, and
+`up` says both:
+
+1. **How big the panel is.** `up` sets it on the clone before starting it
+   (`tart set --display 1920x1200`), rather than inheriting whatever the golden
+   carried — a shot is only comparable against a shot taken on the same screen,
+   and `vm golden --refresh` would otherwise move it. The size is read as
+   **points**, so the panel behind it is 3840x2400 pixels. Asking in pixels
+   instead (`1920x1200px`) builds a 1x panel, and text read off a 1x shot comes
+   back wrong often enough to fail asserts that are sound (`Inbox ame`,
+   `♥ Installed`).
+2. **Which mode the desktop takes on it.** macOS does not take the panel's own:
+   measured on a clone freshly cut from the golden with the panel set to
+   1920x1200pt, the desktop comes up **1024x768pt stretched across it** — too
+   narrow for the layouts that only appear on a wide window (the horizontal
+   rail), and stretched under every shot. The mode is in the guest's own list
+   the whole time; it has to be asked for, which `up` does for the session
+   (nothing is written into the clone's preferences — the clone is thrown away,
+   and `up` asks again every time).
+
+The asking is a second small Swift tool, carried inside devtool and compiled and
+sent the way the screen tool is. It is not a verb on `scripts/screen.swift`
+because that one runs on a developer's own Mac as well, and something that
+reconfigures a display does not belong next to click and type there.
+
+### `devtool vm exec -- <command…>` / `devtool vm push <local…> <remote>`
+
+Reach into the running clone. `exec` runs a command in there with this process's
+own stdio and **ends the way it ended**, so a step that failed in the guest does
+not read as green out here; `push` sends files, recursively, since what is
+usually sent is a `.app`.
+
+```sh
+devtool vm exec -- 'stat -f %Su /dev/console'
+devtool vm push "/Applications/amenbo (dev 3578).app" /Users/admin/
+```
+
+Arguments to `exec` go after `--`, and quoting is the caller's the same way it is
+with `ssh` — what follows is joined and handed to the guest's shell.
+
+The host key is deliberately **neither checked nor remembered**: a clone is cut
+fresh from the golden and carries a new one each time, so a pinned entry would
+refuse the next clone rather than catch anything. What is reached is a VM on this
+machine's own private network, raised from an image on this machine's own disk.
+
+### `devtool vm screen`
+
+Compiles this checkout's `scripts/screen.swift` on the host, puts the binary in
+the guest at `/Users/admin/screen`, and prints that path on stdout.
+
+Compiled and sent rather than baked into the golden: the golden then holds no copy
+of a tool this tree keeps changing (12s to build cold, 0.09s to send — measured),
+the guest needs no Swift toolchain, and the golden can be replaced without
+anything having to be re-baked into it.
+
+**`click`/`click-named` in there still want a `front` first.** The tool does not
+call it, and a VM's bare desktop has a Terminal on it that a click is otherwise
+taken by — exit 0, nothing delivered.
+
+### `devtool vm golden [--refresh]`
+
+Reports on the image clones are cut from — is the base pulled, is the golden
+there, is the key where it is looked for — and with `--refresh` takes the base
+again (`tart pull`) and cuts the golden from it anew.
+
+The base is a third party's (`ghcr.io/cirruslabs/macos-tahoe-base`): SIP disabled,
+TCC granted to `/usr/libexec/sshd-keygen-wrapper`, Gatekeeper off — none of which
+we set, and all of which the screen tools need. Its contents are not inspected.
+Only the way the golden is made would change to move off it.
+
+- **The clone is checked before the pull.** The pull is the expensive half, and
+  refusing afterwards would have spent it for nothing.
+- **Enrolling the key is left to a person, and named rather than done.** It takes
+  the image's password, which is a credential to type. `--refresh` prints the
+  `ssh-copy-id` line to run and says to stop the golden again afterwards.
+
+### `devtool vm verify install | run | step | log | pull`
+
+Walks a **pre-distribution screen road** (`verification/scenarios/`) inside that VM.
+
+```sh
+devtool vm verify install ~/dist/amenbo-darwin-arm64.pkg     # or --from-run <run id>
+devtool vm verify run verification/scenarios/link-a-folder.yaml
+# … drive the screen in the guest, then:
+devtool vm verify step --note 'pressed Link a folder'
+devtool vm verify pull --out ./evidence
+```
+
+**The harness is not changed, and nothing here repeats what it does.** `verify-gui` still launches
+the shipped bundle, holds the pid that launch answered with, stands up the world the scenario
+declares and shoots one screen per step. That is the reason the harness *moves into* the guest
+rather than being driven from outside: a pid held on this side would name a process on that one.
+
+What is added is the four things a run in there needs and a run here does not.
+
+**`install`** sends and installs the shipped build, the harness, the scenarios, the fixtures and the
+screen tool.
+
+- **The build is a path, or `--from-run <run id>`** — the mac artifact of a CI run, never the
+  release's download URL: a release download is counted, and a development one cannot be subtracted
+  afterwards. Holding the bytes against what the release published is the release procedure's own
+  step, upstream of this, which is what handing this command a path keeps room for.
+- **A build for the other architecture is refused by name.** It installs cleanly and then will not
+  start, which is a failure several steps away from its cause.
+- **Nothing is built for the guest.** Host and guest are the same architecture, so the harness
+  compiled here runs there, and the guest needs neither Rust nor node.
+- The first `swift <source>` on a machine builds a module cache and takes some twenty seconds; every
+  one after it is under a second. That is paid here, rather than inside the harness's own window for
+  the app to draw a window — which that first call would otherwise run out.
+
+**`run`** starts one road and comes back when the harness has handed over its first step. It does
+not wait for the run: a road is walked by somebody, and that somebody is whoever calls `step`
+between one hand-over and the next.
+
+- **`--screen` is passed explicitly.** The harness resolves the tool relative to its own executable,
+  which in the guest is a path on this side of the machine — a run without it fails a minute in,
+  having launched an app and photographed nothing.
+- A previous run's app is taken down first. The harness takes its own down when it ends, and the one
+  case it cannot is the one that matters: a run somebody stopped part-way leaves a window that the
+  next run's shots would have in front of them.
+
+**`step`** sends one line and waits for the harness to say something next. **The steps come from a
+file that is appended to, not from a pipe somebody holds** — the harness's stdin is `tail -n 0 -f`
+over that file, so nothing has to stay alive between two commands, what was sent stays on disk to be
+counted, and a run that has ended takes the tail down with it. `log` re-reads the same tail without
+advancing.
+
+**`pull`** brings the shots and the manifest out. They are what a `Review` step is closed from and
+what a red one is read by, and they are of no use inside a machine that is thrown away.
+
+The road itself is still walked by whoever is driving. In the guest that is the screen tool:
+
+```sh
+devtool vm exec -- 'PID=$(pgrep -f "Amenbo.app/Contents/MacOS/amenbo-app" | head -1);
+  swift /Users/admin/screen.swift find $PID'
+devtool vm exec -- '… swift /Users/admin/screen.swift click-named $PID "Link a folder"'
+```
+
+### Host and guest drifting apart
+
+Every command that reaches the clone compares `sw_vers -productVersion` on both
+sides and says when they have drifted, on major and minor. **Nothing is stopped
+over it**: what the guest is for is standing in for this machine,
+and a guest several releases away stops standing in for it — but what it costs to
+be wrong about that is a rebuilt golden.
+
+The patch is left out on purpose. A guest one security update behind is the
+ordinary state of an image republished weekly, and reporting it every single run
+is how a warning stops being read.
 
 ## Env
 

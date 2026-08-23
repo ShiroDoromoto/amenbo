@@ -51,6 +51,16 @@ use crate::plugin_manifest::{
 pub struct ListEntry {
     /// The plugin's name — its identity, and the key the detail document is fetched by.
     pub name: String,
+    /// **What to call the plugin on screen** (`AMB-D-739`), when its author wrote one. It rides in the
+    /// list rather than the detail because the list is what draws a name — on a browse row, and on the
+    /// row of a plugin already installed, neither of which fetches a detail. Putting it in the detail
+    /// would also change `detail_sum` (`AMB-D-386`) for every plugin the day it was added, which is an
+    /// update offered to everyone for a field nobody's build changed.
+    ///
+    /// Absent means the list draws `name`, which is what every entry published before this did. It is
+    /// not translated (`AMB-D-739`), so [`ListEntryOverlay`] carries no counterpart.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
     /// The one-line description the list shows.
     pub desc: String,
     /// Who wrote the plugin, as display text.
@@ -224,6 +234,7 @@ pub fn split(
 ) -> (ListEntry, BTreeMap<String, ListEntryOverlay>, Detail) {
     let entry = ListEntry {
         name: manifest.name.clone(),
+        title: manifest.title.clone(),
         desc: manifest.desc.clone(),
         author: manifest.author.clone(),
         repo: manifest.repo.clone(),
@@ -308,6 +319,7 @@ pub fn join(
     }
     let manifest = Manifest {
         name: entry.name.clone(),
+        title: entry.title.clone(),
         desc: entry.desc.clone(),
         about: detail.about.clone(),
         author: entry.author.clone(),
@@ -342,6 +354,7 @@ mod tests {
     fn full() -> Manifest {
         serde_json::from_value(serde_json::json!({
             "name": "worktree",
+            "title": "Amenbo Worktree",
             "desc": "Isolate each task in its own git worktree",
             "about": "Cuts a worktree per task, and folds it once the work is merged.",
             "author": "amenbo",
@@ -512,6 +525,11 @@ mod tests {
         let (entry, _, detail) = split(&full(), &Translations::new());
 
         assert_eq!(entry.name, "worktree");
+        assert_eq!(
+            entry.title.as_deref(),
+            Some("Amenbo Worktree"),
+            "the name a row draws rides where the row is drawn, never behind a detail fetch",
+        );
         assert_eq!(entry.desc, "Isolate each task in its own git worktree");
         assert_eq!(entry.os, vec![Os::Macos, Os::Linux]);
         assert!(entry.official, "the badge rides in the list, where the badge is drawn");

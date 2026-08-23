@@ -5,7 +5,8 @@
 id: check-a-manifest-before-proposing-it
 title: A manifest passes the catalog rules, and a broken one is turned down by the rule it broke
 description: >
-  Write a manifest the way an author would — the layer the plugin lives at, the settings it offers, the
+  Write a manifest the way an author would — the layer the plugin lives at, the name it is drawn under,
+  the settings it offers, the
   parts its form draws between them, the calls its settings form raises and the words it will say for
   itself at the AI's entry point included —
   hold it up to the rules, and have it pass. Then break one rule at a time — an asset URL that is not
@@ -28,6 +29,7 @@ steps_cli:
       path: manifest.yaml
       content: |
         name: scenario-plugin
+        title: SCENARIO — Scenario Plugin
         desc: SCENARIO — a manifest an author self-checks before proposing it
         author: amenbo
         repo: ShiroDoromoto/amenbo-plugin-worktree

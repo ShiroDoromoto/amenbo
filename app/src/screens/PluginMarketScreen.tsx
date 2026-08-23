@@ -7,7 +7,7 @@ import {
   type PluginCatalog, type PluginCatalogProbe, type PluginEntry, type PluginLayer, type PluginSort,
 } from "../core/pluginCatalog";
 import { firesAnywhere, installOf, usePluginInstalls, type PluginInstall } from "../core/pluginInstalls";
-import { pluginDesc } from "../core/pluginText";
+import { pluginDesc, pluginTitle } from "../core/pluginText";
 import { refreshPluginUpdates } from "../core/pluginUpdates";
 import { PluginDetail } from "./PluginDetail";
 import { asTyped } from "../core/keys";
@@ -413,7 +413,7 @@ function PluginCard({ entry, install, onOpen }: {
     >
       <div className="feed__body" style={{ minWidth: 0 }}>
         <div className="feed__line">
-          <strong>{entry.name}</strong>{" "}
+          <strong>{pluginTitle(entry)}</strong>{" "}
           <span className={`chip ${layer === "official" ? "chip--official" : ""}`}>
             {pluginLayerLabel(entry)}
           </span>

@@ -747,6 +747,7 @@ mod tests {
     fn manifest(name: &str, checksum: &str) -> Manifest {
         published(Manifest {
             name: name.to_string(),
+            title: None,
             desc: "a test plugin".to_string(),
             about: None,
             author: "amenbo".to_string(),

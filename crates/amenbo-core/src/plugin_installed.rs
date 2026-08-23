@@ -321,6 +321,7 @@ mod tests {
     fn manifest(name: &str) -> Manifest {
         Manifest {
             name: name.to_string(),
+            title: None,
             desc: "a test plugin".to_string(),
             about: None,
             author: "amenbo".to_string(),

@@ -195,20 +195,35 @@ func requireTart() error {
 // ---------------------------------------------------------------------------
 
 // vmUp raises the clone and prints its IP on stdout, so the address can be handed straight to
-// whatever is about to talk to it. Already running, it is used as it stands — that is the whole
-// contract: a test does not raise a second VM, and it does not throw away the one a session has
-// been working in.
+// whatever is about to talk to it.
+func vmUp() error {
+	ip, err := vmEnsureUp()
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%s\n", ip)
+	return nil
+}
+
+// vmEnsureUp raises the clone if it is not running and answers with its address. Already running,
+// it is used as it stands — that is the whole contract: a caller that needs the guest does not
+// raise a second VM, and it does not throw away the one a session has been working in. That is why
+// a command with work to do in there (putting a dev GUI in it) calls this rather than refusing:
+// what a person decides is when the clone is thrown away, never when it is raised.
 //
 // The clone is cut from the golden on the way if there is none (0.03s, no disk of its own until it
 // is written to), and the wait runs to a GUI session rather than to a ping: `/dev/console` owned by
 // the account is what says a screen exists to draw on, and everything here is for drawing on it.
-func vmUp() error {
+//
+// It answers on stderr and never on stdout: a caller printing an address (or a path) of its own
+// keeps that channel to itself.
+func vmEnsureUp() (string, error) {
 	if err := requireTart(); err != nil {
-		return err
+		return "", err
 	}
 	vms, err := tartVMs()
 	if err != nil {
-		return err
+		return "", err
 	}
 	clone, ok := findVM(vms, vmCloneName)
 	switch {
@@ -217,29 +232,28 @@ func vmUp() error {
 	case ok:
 		logf("  vm      : %s is there but stopped — starting it", vmCloneName)
 		if err := tartRun(); err != nil {
-			return err
+			return "", err
 		}
 	default:
 		if _, ok := findVM(vms, vmGoldenName); !ok {
-			return fmt.Errorf("no golden image %q — `devtool vm golden --refresh` cuts one from %s", vmGoldenName, vmBase)
+			return "", fmt.Errorf("no golden image %q — `devtool vm golden --refresh` cuts one from %s", vmGoldenName, vmBase)
 		}
 		logf("  vm      : cloning %s → %s", vmGoldenName, vmCloneName)
 		if _, err := run("", "tart", "clone", vmGoldenName, vmCloneName); err != nil {
-			return err
+			return "", err
 		}
 		if err := tartRun(); err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	ip, err := vmWaitReady()
 	if err != nil {
-		return err
+		return "", err
 	}
 	reportVersionDrift(ip)
 	logf("  vm      : %s ready at %s — `devtool vm rm` throws it away", vmCloneName, ip)
-	fmt.Printf("%s\n", ip)
-	return nil
+	return ip, nil
 }
 
 // tartRun starts the clone without a window of its own (`--no-graphics`), which is the point of the

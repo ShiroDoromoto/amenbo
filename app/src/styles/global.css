@@ -349,6 +349,36 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .files__menuitem:hover { background: var(--c-surface-sunken); }
 
+/* ---------- the two halves of the panel ---------- */
+/* Files, and the page written on. The tabs are the panel's own, drawn small: they are a way between
+   two things rather than the panel's subject. */
+.files__tabs { display: flex; gap: var(--s-2); border-bottom: 1px solid var(--c-border); }
+.files__tab {
+  padding: var(--s-1) 0; border: 0; background: none;
+  color: var(--c-text-muted); font-size: var(--fs-sm); cursor: pointer;
+}
+.files__tab--on { color: var(--c-text); box-shadow: inset 0 -2px 0 var(--c-accent); }
+
+/* The draft page. It takes the room the panel has, because writing is what it is for
+   (`app/src/files/MemoPage.tsx`). */
+.memo { flex: 1; min-height: 0; }
+.memo__bar { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-2); }
+.memo__field {
+  flex: 1; min-height: 0; width: 100%; resize: none;
+  padding: var(--s-2);
+  background: var(--c-surface-sunken); border: 1px solid var(--c-border); border-radius: var(--r-md);
+  color: var(--c-text); font-family: var(--font-mono); font-size: var(--fs-sm); line-height: 1.6;
+}
+/* Written wide: the same text in the middle of the window, stopped at a width a paragraph is read
+   at rather than the width of the screen. */
+.memo__page {
+  display: flex; flex-direction: column; gap: var(--s-2);
+  width: min(48rem, 100%); height: min(36rem, 100%);
+  padding: var(--s-4);
+  background: var(--c-surface); border-radius: var(--r-lg); box-shadow: var(--shadow-md);
+}
+.memo__field--wide { font-size: var(--fs-md); }
+
 /* ---------- the band across the top of the app ---------- */
 /* One band, the app's news drawn in it — the integrity check, an update waiting, a folder that has
    lost its pointer. What varies between them is the step the news takes (`AMB-T-3209`), and the band

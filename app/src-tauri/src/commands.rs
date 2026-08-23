@@ -3840,6 +3840,25 @@ pub fn name_frame(
     Ok(named(open_store()?.name_frame(&frame, &name, by)?))
 }
 
+/// What is written on this project's draft page ([`amenbo_core::memo`]).
+///
+/// It is the one place in Amenbo that is not a record: where a long request is put together before
+/// it is sent. It stays and it does not grow — what is worth keeping moves to a task or a decision.
+#[tauri::command]
+pub fn project_memo(project_id: i64) -> Result<String, CmdError> {
+    Ok(open_store_read()?.memo(project_id)?)
+}
+
+/// Write this project's draft page. Blank erases it — a page nobody wrote on is not a page.
+///
+/// No `WriteAck`: nothing reads the page but the panel it is typed in, so there is no view to
+/// invalidate and no other screen to catch up.
+#[tauri::command]
+pub fn set_project_memo(project_id: i64, text: String) -> Result<(), CmdError> {
+    open_store()?.set_memo(project_id, &text)?;
+    Ok(())
+}
+
 /// The arrangement of the talk window this device left behind, or nothing where it left none.
 ///
 /// It is answered as the window comes up and is what the face is laid out from. Nothing in it is

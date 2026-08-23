@@ -495,6 +495,8 @@ export const ptBR: Translation = {
     "act.nameless": "(excluído)",
     "app.loadError": "Não foi possível carregar os dados.", "app.loading": "Carregando…",
     "app.talkWindow": "Amenbo — Conversa",
+    "talk.folder": "Escolha a pasta que você mostra à IA. Ela só vê o que você colocar ali.",
+    "talk.chooseFolder": "Escolher pasta",
     "talk.searching": "Procurando os agentes desta máquina…",
     "talk.ask": "Com qual agente você trabalha nesta pasta?",
     "talk.none": "Nenhum agente que o Amenbo possa iniciar foi encontrado nesta máquina.",

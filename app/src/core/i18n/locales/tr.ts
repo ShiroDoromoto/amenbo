@@ -473,6 +473,8 @@ export const tr: Translation = {
     "act.nameless": "(silinmiş)",
     "app.loadError": "Veriler yüklenemedi.", "app.loading": "Yükleniyor…",
     "app.talkWindow": "Amenbo — Sohbet",
+    "talk.folder": "Yapay zekâya gösterdiğiniz klasörü seçin. Yalnızca oraya koyduklarınızı görebilir.",
+    "talk.chooseFolder": "Klasör seç",
     "talk.searching": "Bu makinedeki ajanlar aranıyor…",
     "talk.ask": "Bu klasörde hangi ajanla çalışıyorsun?",
     "talk.none": "Bu makinede Amenbo'nun başlatabileceği bir ajan bulunamadı.",

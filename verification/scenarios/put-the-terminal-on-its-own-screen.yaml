@@ -35,15 +35,18 @@
 # the road's own tidying as much as they are the half of the decision they prove.
 #
 # The world is empty on purpose. A terminal is not a record and needs none: what the pane runs is the
-# reader's own shell, and standing up tasks would be furnishing a board this road never looks at.
+# reader's own shell, and standing up tasks would be furnishing a board this road never looks at. The
+# folder the road chooses is not furniture either: choosing one is what raises the project it belongs
+# to, so the road makes the world it needs by walking in.
 id: put-the-terminal-on-its-own-screen
 title: The terminal moves to a screen of its own and back, and the session in it never restarts
 description: >
-  Open the terminal face of the one window and type a line into the pane. Switch to the ledger and
-  back: the line is still there, because hiding a terminal must not end it. Then open the terminal in
-  a separate window — the line is on the pane there, the same session drawn in the new window — and
-  fold it back, where it is on the pane in the one window again. What is under test is the process
-  surviving all three moves: what a reader has running in the pane is theirs until they end it.
+  Open the terminal face of the one window, choose the folder it runs in, and type a line into the
+  pane. Switch to the ledger and back: the line is still there, because hiding a terminal must not end
+  it. Then open the terminal in a separate window — the line is on the pane there, the same session
+  drawn in the new window — and fold it back, where it is on the pane in the one window again. What is
+  under test is the process surviving all three moves: what a reader has running in the pane is theirs
+  until they end it.
 
 steps_gui:
   - type: action
@@ -51,6 +54,15 @@ steps_gui:
     op: show-face
     with:
       face: terminal
+
+  # The face opens with no pane on it, because a terminal has to be started somewhere and only the
+  # reader knows where. Choosing a folder is the whole of the way in — one press and a folder, with
+  # nothing to name and nothing to submit — and the pane every step below is about is what it leaves.
+  - type: action
+    domain: terminal
+    op: open-folder
+    with:
+      dir: workshop
 
   - type: action
     domain: terminal

@@ -473,6 +473,8 @@ export const nl: Translation = {
     "act.nameless": "(verwijderd)",
     "app.loadError": "Gegevens laden is mislukt.", "app.loading": "Bezig met laden…",
     "app.talkWindow": "Amenbo — Gesprek",
+    "talk.folder": "Kies de map die je de AI laat zien. Alleen wat daarin staat, kan de AI zien.",
+    "talk.chooseFolder": "Map kiezen",
     "talk.searching": "Bezig met zoeken naar de agents op deze machine…",
     "talk.ask": "Met welke agent werk je in deze map?",
     "talk.none": "Op deze machine is geen agent gevonden die Amenbo kan starten.",

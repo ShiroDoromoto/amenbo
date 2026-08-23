@@ -476,6 +476,8 @@ export const vi: Translation = {
     "act.nameless": "(đã xoá)",
     "app.loadError": "Không tải được dữ liệu.", "app.loading": "Đang tải…",
     "app.talkWindow": "Amenbo — Hội thoại",
+    "talk.folder": "Chọn thư mục bạn cho AI xem. AI chỉ thấy những gì bạn đặt trong đó.",
+    "talk.chooseFolder": "Chọn thư mục",
     "talk.searching": "Đang tìm các tác nhân trên máy này…",
     "talk.ask": "Bạn làm việc với tác nhân nào trong thư mục này?",
     "talk.none": "Không tìm thấy tác nhân nào mà Amenbo có thể khởi chạy trên máy này.",

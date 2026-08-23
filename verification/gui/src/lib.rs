@@ -1204,6 +1204,15 @@ impl Instructor {
                     return Err(format!("action `show-face` does not know the face `{other}`"))
                 }
             },
+            // The way in, and the one control a face with no folder yet has on it. The step says what
+            // choosing does rather than what the button reads, for the reason `show-face`'s does: the
+            // words are the interface's own and the run's language is whatever the machine is set to.
+            // What is worth confirming while walking it is that nothing else is asked — no name, no
+            // submit — since the whole of this road is one press and a folder.
+            (Domain::Terminal, "open-folder") => format!(
+                "On the terminal face, press the one control it offers — the way to choose a folder — and in the picker that opens choose a folder the road calls \"{}\". The pane opens in it as soon as the picker closes: nothing is named and nothing is submitted.",
+                req(with, "dir")?
+            ),
             // A line typed into the pane and sent. It is typed rather than pasted because what is
             // under test is a terminal: keys are what a terminal is driven by, and a line that
             // arrived some other way would be evidence of a path nobody walks.

@@ -10,10 +10,18 @@
 // | several | the offer, once; the pick is kept and never asked again |
 // | none startable | what was looked for, and a way to look again |
 //
+// **Before any of that there is the folder**, because a terminal has to be started somewhere and only
+// the person knows where. Choosing one is the whole of the first run: it is the folder the AI is shown,
+// it is what makes the folder a project's, and it is what opens the terminal — one press, three
+// meanings, and no word the reader has to be taught first (`AMB-T-3606`). A frame with no folder puts
+// the invitation and nothing else, and it is asked for once per page rather than once per pane: the
+// second frame on a screen opens in the folder the first settled (`./layout`).
+//
 // **Nothing is asked about a terminal that is already running.** A pane adopts one rather than
 // starting it (`./terminal`), and what is running was settled when it started — asking again would be
 // asking about a decision that has already been carried out. So the question is put exactly where a
-// terminal would be started, and nowhere else.
+// terminal would be started, and nowhere else. That holds for the folder too: a session says where it
+// runs, so taking one up answers the question rather than raising it.
 //
 // **The switch sits on the row of a frame that has closed, and only there.** A pane that is running
 // holds a live process, and there is nothing a change of agent could mean for it short of killing
@@ -25,6 +33,7 @@
 import type { PtySessionDto, WakeCandidateDto, WakeDto } from "../bindings/bindings";
 import { errText, type Lang, t, tf } from "../core/i18n";
 import { invoke } from "../core/ipc";
+import { chooseWorkFolder } from "../core/mutations";
 import { mountTerminal, type PaneEvents, type PaneStart } from "./terminal";
 
 /**
@@ -55,6 +64,11 @@ export async function mountAgentFrame(
   // until then, which is the whole reason a closed frame is still a frame.
   let close: (() => void) | null = null;
   let wake: WakeDto | null = null;
+  // Where this frame's terminals are started. It begins as the page's — every pane on one screen opens
+  // in one folder (`./layout`) — and is null only where nothing has been started on that page yet. That
+  // is the frame with the invitation on it; once a folder is answered, by the person choosing one or by
+  // a terminal this frame took up saying where it runs, it is not asked for again.
+  let folder: string | null = start.cwd ?? null;
   // Which pane the frame is on. A terminal takes a round trip to mount, and the frame can be cleared
   // while one is in flight — so what comes back is checked against this and thrown away if the frame
   // has moved on. Without it a pane nobody can see keeps its PTY open for the life of the window.
@@ -68,7 +82,8 @@ export async function mountAgentFrame(
   };
 
   /** Ask the host what this folder opens with — unless there is a terminal to adopt, which is an
-   *  answer already carried out. The button on the notice comes back through here too. */
+   *  answer already carried out, or no folder has been chosen yet, which is a question that comes
+   *  first. The buttons on the notice and the invitation both come back through here. */
   const look = async () => {
     clear();
     const running = await invoke<PtySessionDto[]>("pty_sessions").catch(() => [] as PtySessionDto[]);
@@ -79,9 +94,12 @@ export async function mountAgentFrame(
       ? running.some((one) => one.session === start.session)
       : start.adopt !== false && running.length === 1;
     if (mine) return open(null, start);
+    // Nothing to take up, and nowhere to start: the folder is what this frame is short of, and asking
+    // for it is the whole of what it can do until it has one.
+    if (folder === null) return invite(null);
     frame.append(said("agent__looking", t("talk.searching", lang)));
     try {
-      wake = await invoke<WakeDto>("wake_probe", { folder: start.cwd ?? null });
+      wake = await invoke<WakeDto>("wake_probe", { folder });
     } catch (e: unknown) {
       frame.replaceChildren(said("agent__failed", errText(e, lang)));
       return;
@@ -94,7 +112,10 @@ export async function mountAgentFrame(
   /** Put up a pane, replacing whatever the frame held. `agent` is what a started terminal runs; a
    *  pane that adopts one is given none, and the running program is whatever it already was. */
   const open = (agent: string | null, take: PaneStart = { adopt: false }) => {
-    const folder = wake?.folder ?? start.cwd ?? null;
+    // The host's spelling of the folder where there is one, because a probe canonicalises what it was
+    // given and a terminal started under the other spelling is a terminal in a folder nothing else
+    // names. A pane that takes one up was never probed, and starts nothing anyway.
+    const cwd = wake?.folder ?? folder;
     clear();
     const mine = showing;
     const pane = document.createElement("div");
@@ -102,12 +123,18 @@ export async function mountAgentFrame(
     frame.append(pane);
     const events: PaneEvents = {
       ...on,
+      opened: (session, startedAt, where) => {
+        // What is running here settles the frame's folder — which for a terminal this pane took up is
+        // the answer the invitation would otherwise have asked for a second time.
+        folder = where ?? folder;
+        on.opened(session, startedAt, where);
+      },
       closed: (session) => {
         on.closed(session);
         if (mine === showing) frame.append(row(agent));
       },
     };
-    void mountTerminal(pane, events, { ...take, cwd: folder, agent })
+    void mountTerminal(pane, events, { ...take, cwd, agent })
       .then((dispose) => {
         if (mine === showing) close = dispose;
         else dispose();
@@ -122,8 +149,53 @@ export async function mountAgentFrame(
 
   /** Keep this folder's answer, then open on it. A refusal to keep it is not a reason not to open. */
   const pick = (agent: string) => {
-    void invoke("wake_remember", { folder: wake?.folder ?? null, agent }).catch(() => {});
+    void invoke("wake_remember", { folder: wake?.folder ?? folder, agent }).catch(() => {});
     open(agent);
+  };
+
+  /**
+   * The first run: one line about what choosing a folder means, and the one button that does it.
+   *
+   * The line says what the folder *is* rather than what the AI will do with it — an agent's own
+   * behaviour is not Amenbo's to promise (`AMB-D-749`), and a sentence about a confirmation that some
+   * tools do not ask for would be a lie on the first screen a reader ever sees. What is true of every
+   * one of them is where they can look.
+   *
+   * `note` is a refusal from the last attempt, kept under the invitation rather than in place of it:
+   * a folder that could not be bound leaves the reader exactly where they were, which is with a folder
+   * still to choose.
+   */
+  const invite = (note: string | null) => {
+    clear();
+    const box = document.createElement("div");
+    box.className = "agent__ask";
+    box.append(said("agent__askTitle", t("talk.folder", lang)));
+    const choose = document.createElement("button");
+    choose.type = "button";
+    choose.className = "agent__choice";
+    choose.textContent = t("talk.chooseFolder", lang);
+    choose.addEventListener("click", () => {
+      choose.disabled = true;
+      void chooseWorkFolder()
+        .then((chosen) => {
+          // Cancelling is not a refusal and not an answer: the invitation stands, ready to be pressed
+          // again.
+          if (chosen === null) {
+            choose.disabled = false;
+            return;
+          }
+          folder = chosen;
+          // Said now rather than when a terminal starts: the two can be a long way apart — a machine
+          // with nothing startable never gets there at all — and the page's folder is what keeps the
+          // other slots on this screen from asking the same question again (`./layout`).
+          on.chose(chosen);
+          return look();
+        })
+        .catch((e: unknown) => invite(errText(e, lang)));
+    });
+    box.append(choose);
+    if (note !== null) box.append(said("agent__failed", note));
+    frame.append(box);
   };
 
   /** The offer, put once: several agents are startable here and only the person knows which. */

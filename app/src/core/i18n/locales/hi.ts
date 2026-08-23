@@ -473,6 +473,8 @@ export const hi: Translation = {
     "act.nameless": "(मिटाया हुआ)",
     "app.loadError": "डेटा लोड नहीं हो सका।", "app.loading": "लोड हो रहा है…",
     "app.talkWindow": "Amenbo — संवाद",
+    "talk.folder": "वह फ़ोल्डर चुनें जो आप AI को दिखाते हैं। उसमें रखी चीज़ें ही AI को दिखेंगी।",
+    "talk.chooseFolder": "फ़ोल्डर चुनें",
     "talk.searching": "इस मशीन पर एजेंट खोजे जा रहे हैं…",
     "talk.ask": "इस फ़ोल्डर में आप किस एजेंट के साथ काम करते हैं?",
     "talk.none": "इस मशीन पर ऐसा कोई एजेंट नहीं मिला जिसे Amenbo शुरू कर सके।",

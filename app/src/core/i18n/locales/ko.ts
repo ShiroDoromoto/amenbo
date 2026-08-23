@@ -472,6 +472,8 @@ export const ko: Translation = {
     "act.nameless": "(삭제됨)",
     "app.loadError": "데이터를 불러오지 못했습니다.", "app.loading": "불러오는 중…",
     "app.talkWindow": "Amenbo — 대화",
+    "talk.folder": "AI에게 보여 줄 폴더를 고릅니다. 여기에 둔 것만 AI가 볼 수 있습니다.",
+    "talk.chooseFolder": "폴더 고르기",
     "talk.searching": "이 컴퓨터에 있는 에이전트를 찾고 있습니다…",
     "talk.ask": "이 폴더에서는 어떤 에이전트를 사용하시나요?",
     "talk.none": "이 컴퓨터에서 Amenbo가 실행할 수 있는 에이전트를 찾지 못했습니다.",

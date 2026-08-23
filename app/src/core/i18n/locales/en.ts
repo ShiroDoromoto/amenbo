@@ -514,8 +514,12 @@ const ui = {
   // The talk window names itself from here — `tauri.conf.json` can hold only one fixed string,
   // and two windows both called "Amenbo" cannot be told apart in a window list (`AMB-T-3588`).
   "app.talkWindow": "Amenbo — Talk",
-  // talk window: which agent a folder's pane opens with, and the row a closed frame offers
-  // (`AMB-T-3591`). `{commands}` is the list of program names that were looked for on the PATH.
+  // talk window: the folder a pane opens in (`AMB-T-3606`), which agent it opens with, and the row a
+  // closed frame offers (`AMB-T-3591`). `{commands}` is the list of program names that were looked for
+  // on the PATH. `talk.folder` says what the folder is rather than what the agent will do in it: what
+  // a given tool asks before it acts is not Amenbo's to promise (`AMB-D-749`).
+  "talk.folder": "Choose the folder you show the AI. What you put there is all it can see.",
+  "talk.chooseFolder": "Choose a folder",
   "talk.searching": "Looking for the agents on this machine…",
   "talk.ask": "Which agent do you work with in this folder?",
   "talk.none": "No agent Amenbo can start was found on this machine.",

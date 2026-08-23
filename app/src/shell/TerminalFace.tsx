@@ -4,7 +4,7 @@ import { PaneRail } from "./PaneRail";
 import { frameNames, nameFrame, type FrameNames, type NamedBy } from "../talk/frames";
 import {
   closedIn, COUNTS, EMPTY_LAYOUT, focusOn, folderOfPage, frameFor, goPage, MAX_PAGES, movedTo,
-  openedIn, pageCount, setCount, sidesAreDrawers, slotsOf, type Count, type Layout,
+  openedIn, pageCount, setCount, settledIn, sidesAreDrawers, slotsOf, type Count, type Layout,
 } from "../talk/layout";
 import { FilesPanel } from "../files/FilesPanel";
 import { t, tf } from "../core/i18n";
@@ -122,6 +122,14 @@ export function TerminalFace({
     setLayout((was) => openedIn(was, frame, session, folder));
   }, []);
 
+  // A folder chosen in a slot puts the page in a project straight away, so the slots beside it open
+  // there rather than asking again (`../talk/layout`). It is separate from `opened` because a folder
+  // is answered before a terminal is started, and on a machine with nothing to start it is answered
+  // and no terminal follows.
+  const chose = useCallback((frame: string, folder: string) => {
+    setLayout((was) => settledIn(was, frame, folder));
+  }, []);
+
   const pages = pageCount(layout);
   const drawers = sidesAreDrawers(layout.count, width);
 
@@ -225,6 +233,7 @@ export function TerminalFace({
                   autoStart={frame.session !== null || startNow.current.has(frame.id)}
                   focused={layout.focus === frame.id}
                   onOpened={opened}
+                  onChose={chose}
                   onSaid={(statement) => {
                     if (statement.cwd) {
                       setLayout((was) => movedTo(was, statement.session, statement.cwd!));

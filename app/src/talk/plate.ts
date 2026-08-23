@@ -72,6 +72,11 @@ export function mountPlate(
   let finished = 0;
   let changeover: Changeover = NO_CHANGEOVER;
   let running: string | null = null;
+  // Whether a terminal has ever run in this pane. It is not `running !== null` — a pane whose program
+  // has exited still has a row, because what it just finished is the one thing worth saying at that
+  // moment. What has no row is a pane that has never had a session: the face there is the invitation
+  // to choose a folder (`./agent`), and a label about the session would be about nothing.
+  let ran = false;
   let expiry: ReturnType<typeof setTimeout> | undefined;
   let live = true;
   // What `onWaiting` was last told, so it hears the changes and not every statement.
@@ -89,12 +94,17 @@ export function mountPlate(
     if (!live) return;
     const { now, changeover: next } = nowOf(held, finished, changeover, Date.now());
     changeover = next;
+    const name = names.get(frame) ?? null;
+    // A frame that was named keeps its row whether or not anything has run in it: the name is the
+    // person's, and it outlives every session the frame holds (`./frames`).
     draw(
-      {
-        name: names.get(frame) ?? null,
-        now,
-        say: sayOf(held, running === null ? undefined : sessions.get(running)),
-      },
+      ran || name !== null
+        ? {
+            name,
+            now,
+            say: sayOf(held, running === null ? undefined : sessions.get(running)),
+          }
+        : null,
       lang(),
     );
     // "Just finished" comes down on its own, so something has to come back for it. Nothing else on the
@@ -147,6 +157,7 @@ export function mountPlate(
     opened: (session, startedAt) => {
       sessions = opened(sessions, { session, startedAt });
       running = session;
+      ran = true;
       tellWaiting();
       readWork();
     },

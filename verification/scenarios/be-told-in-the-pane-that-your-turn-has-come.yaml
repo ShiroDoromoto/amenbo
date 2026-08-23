@@ -31,11 +31,14 @@
 #
 # The world is empty on purpose. What the label says here is the session's, not the ledger's: a
 # pane holding no task is exactly the state this road is about, and standing tasks up would put words
-# on the row that came from somewhere else.
+# on the row that came from somewhere else. The folder the road chooses is not furniture either:
+# choosing one is what raises the project it belongs to, so the road makes the world it needs by
+# walking in.
 id: be-told-in-the-pane-that-your-turn-has-come
 title: An agent hands the turn over from inside its pane, and the person reads it on the label
 description: >
-  Open the terminal face and let the thing running in the pane speak for itself: name the pane, then
+  Open the terminal face, choose the folder the pane runs in, and let the thing running there speak for
+  itself: name the pane, then
   hand the turn over with the reason in the same breath. Both arrive on the label above the pane, in
   the agent's own words. What is under test is the whole seam — a word said with the CLI inside a
   terminal, read out of the drop box by the app, and drawn where somebody looking at the screen will
@@ -47,6 +50,15 @@ steps_gui:
     op: show-face
     with:
       face: terminal
+
+  # The pane this road is about does not exist until somebody says where it runs. Choosing a folder is
+  # the whole of that — one press, and the terminal opens in what was chosen — and it is the step every
+  # word below is typed into.
+  - type: action
+    domain: terminal
+    op: open-folder
+    with:
+      dir: workshop
 
   # Named first, and by the agent rather than by the hand: a name typed as a line would name the frame
   # too, but this road is about the layer, so the name comes through the layer.

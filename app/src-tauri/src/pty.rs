@@ -227,20 +227,35 @@ fn failed(e: impl std::fmt::Display) -> CmdError {
     )
 }
 
-/// The command a catalogued agent id is started as, or the refusal for an id nothing lists.
+/// The catalog row a webview's agent id names, or the refusal for an id nothing lists.
 ///
 /// The lookup is what keeps the pane's command line out of the webview's hands: an id that is not in
 /// the catalog is turned away here rather than handed to a shell. It is refused under `crate::wake`'s
 /// code, because what it names is that rule and not this door — the same id is turned away the same
 /// way where a folder's answer is written down.
-fn started_as(agent: &str) -> Result<&'static str, CmdError> {
-    amenbo_core::wake::started_as(agent).map(|h| h.command).ok_or_else(|| {
+fn started_as(agent: &str) -> Result<&'static amenbo_core::harness::Harness, CmdError> {
+    amenbo_core::wake::started_as(agent).ok_or_else(|| {
         CmdError::coded(
             "wake_unknown_agent",
             "That is not an agent Amenbo knows how to start.",
             serde_json::json!({ "agent": agent }),
         )
     })
+}
+
+/// The command line one catalogued agent is started as: the program, with the launch instruction
+/// handed to it as its opening prompt (`AMB-T-3596`).
+///
+/// **Every terminal this window opens gets it, and it is never put to the person first.** It is
+/// plumbing — the sentence that points an agent at `agent --json` — and a pane that asked before
+/// sending it would be asking whether the person wants their AI to know where it is working.
+///
+/// The instruction names the binary this build is ([`amenbo_core::config::Paths::command_name`]), so
+/// a dev-channel window starts agents on the dev channel's own command rather than on the production
+/// one the reader may not have installed.
+fn opening_line(harness: &amenbo_core::harness::Harness) -> String {
+    let cmd = amenbo_core::config::Paths::command_name();
+    launch::command_line(harness.command, &amenbo_core::harness::opening(harness, cmd))
 }
 
 /// The refusal for a session id that names no open terminal — closed while the pane still had it,
@@ -264,7 +279,9 @@ fn gone(session: &str) -> CmdError {
 /// What is started is the user's own shell, reached for the way [`crate::launch`] reaches for it on
 /// this operating system. `agent` is the catalogued id of the AI to start inside that shell
 /// ([`crate::wake`]); with none given the pane is a bare prompt. **The id is turned into a command
-/// here**, out of the catalog — what the webview names is a row, never a command line.
+/// here**, out of the catalog — what the webview names is a row, never a command line — and the
+/// launch instruction rides in on that command line as the agent's opening prompt
+/// ([`opening_line`]).
 #[tauri::command]
 pub fn pty_open(
     app: tauri::AppHandle,
@@ -289,8 +306,8 @@ pub fn pty_open(
         .map(|dir| std::fs::canonicalize(dir).map_err(failed))
         .transpose()?;
 
-    let run = agent.as_deref().map(started_as).transpose()?;
-    let mut cmd = launch::command(folder.clone(), run);
+    let run = agent.as_deref().map(started_as).transpose()?.map(opening_line);
+    let mut cmd = launch::command(folder.clone(), run.as_deref());
     cmd.env(SESSION_ENV, &session);
     // The drop box is made here rather than left for the first statement to make, so that a pane which
     // cannot be spoken to is one the surface layer refuses in from the start: with no directory named,

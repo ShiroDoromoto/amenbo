@@ -26,6 +26,12 @@
 //! output of `agent --json`, which is 40 KB an agent holding the instruction fetches for itself. The
 //! block stays where it is: a wired folder is not a reason to strip it, and the hook adds reach over the
 //! block, not content.
+//!
+//! **The same instruction travels a second way, as the opening prompt.** A terminal Amenbo opens itself
+//! starts the agent with [`opening`] — the instruction handed over as an argument, read before the
+//! program has drawn anything, rather than printed by a hook the folder may never have been wired for.
+//! Which flag the argument goes behind is the one thing the five providers spell differently, so it is
+//! a column ([`Harness::prompt_flag`]) and not a branch, like everything else in this table.
 
 use std::path::{Path, PathBuf};
 
@@ -72,6 +78,13 @@ pub struct Harness {
     pub paste_into: &'static str,
     /// The configuration, with `{instruction}` standing in for the launch instruction.
     pub template: &'static str,
+    /// The flag this provider takes an opening prompt behind, or `None` where the prompt is simply its
+    /// first argument — the one spelling the five differ on ([`opening`]).
+    ///
+    /// What is named here is always the **interactive** one. Three of these also take a prompt behind
+    /// `-p`, which runs it and exits: a pane started that way holds a program that is already gone by
+    /// the time the person looks at it.
+    pub prompt_flag: Option<&'static str>,
     /// How many JSON strings the `{instruction}` placeholder sits inside — 1 where the command is
     /// `echo '<instruction>'`, 2 where the command echoes a JSON document that carries it. The
     /// instruction is escaped that many times before it is substituted, so a provider that needs the
@@ -107,6 +120,8 @@ pub static HARNESSES: &[Harness] = &[
     ]
   }
 }"#,
+        // The prompt is this one's first argument; `-p` is the form that prints and exits.
+        prompt_flag: None,
         json_layers: 1,
     },
     Harness {
@@ -128,6 +143,8 @@ pub static HARNESSES: &[Harness] = &[
     ]
   }
 }"#,
+        // `-p` runs a prompt and exits here, so the interactive one is spelled separately.
+        prompt_flag: Some("-i"),
         json_layers: 2,
     },
     Harness {
@@ -148,6 +165,7 @@ pub static HARNESSES: &[Harness] = &[
     ]
   }
 }"#,
+        prompt_flag: None,
         json_layers: 2,
     },
     Harness {
@@ -174,6 +192,7 @@ pub static HARNESSES: &[Harness] = &[
     ]
   }
 }"#,
+        prompt_flag: None,
         json_layers: 2,
     },
     Harness {
@@ -198,6 +217,9 @@ pub static HARNESSES: &[Harness] = &[
     ]
   }
 }"#,
+        // A bare query is interactive by default, but the default is a setting: the flag that says
+        // "run this and stay" is not.
+        prompt_flag: Some("-i"),
         json_layers: 2,
     },
 ];
@@ -218,6 +240,27 @@ pub fn find(id: &str) -> Option<&'static Harness> {
 pub fn configuration(harness: &Harness, cmd: &str) -> String {
     let instruction = json_escaped(&crate::agents::launch_instruction(cmd), harness.json_layers);
     harness.template.replace("{instruction}", &instruction)
+}
+
+/// What `harness` is started with so that the launch instruction is the first thing said to it: the
+/// arguments that follow the program ([`Harness::command`]), in the order they are written.
+///
+/// **An argument rather than something typed at the program**, because a terminal cannot know when the
+/// agent in it is ready to be typed at — and what is typed at one that is not ready is simply lost. It
+/// is also the one route a trust prompt cannot eat: the agent is handed this before it starts, and works
+/// through it in its own order once it has.
+///
+/// `cmd` is the launch command name ([`crate::config::Paths::command_name`]), so a dev-channel build
+/// tells the agent to run the binary the person is actually running — the same text, and the same
+/// reason, as [`configuration`].
+///
+/// **Nothing here is quoted or escaped.** What comes back is an argument list, and the shell it will be
+/// written into belongs to the caller (`app/src-tauri/src/launch.rs`): a quoting rule chosen in core
+/// would be one written for a shell core cannot see.
+pub fn opening(harness: &Harness, cmd: &str) -> Vec<String> {
+    let mut args: Vec<String> = harness.prompt_flag.map(str::to_string).into_iter().collect();
+    args.push(crate::agents::launch_instruction(cmd));
+    args
 }
 
 /// What a face hands the reader for one harness: a request addressed to the AI they work with, carrying
@@ -616,6 +659,41 @@ mod tests {
         }
         let ids: std::collections::BTreeSet<_> = HARNESSES.iter().map(|h| h.id).collect();
         assert_eq!(ids.len(), HARNESSES.len(), "two rows answer to one id");
+    }
+
+    /// The opening prompt, row by row: the instruction is what is said, it is said last, and a row that
+    /// spells a flag puts that in front of it. This is the shape a new row has to hold to as much as the
+    /// template is — a row that opened on nothing would start an agent that was never told where it is
+    /// working, and nothing on the screen would look wrong.
+    #[test]
+    fn every_row_opens_by_saying_the_launch_instruction() {
+        let instruction = crate::agents::launch_instruction("amenbo");
+        for harness in HARNESSES {
+            let args = opening(harness, "amenbo");
+            assert_eq!(
+                args.last().map(String::as_str),
+                Some(instruction.as_str()),
+                "{} says something else first",
+                harness.id
+            );
+            match harness.prompt_flag {
+                None => assert_eq!(args.len(), 1, "{} passes an argument it never declared", harness.id),
+                Some(flag) => {
+                    assert!(flag.starts_with('-'), "{}: {flag} is not a flag", harness.id);
+                    assert_eq!(args, vec![flag.to_string(), instruction.clone()], "{}", harness.id);
+                }
+            }
+        }
+    }
+
+    /// The opening prompt points the agent at the binary the user is running, for the reason the
+    /// configuration does: a dev-channel window telling an agent to run `amenbo` names a command the
+    /// reader may not have.
+    #[test]
+    fn the_opening_prompt_names_the_running_command() {
+        let said = opening(find("claude-code").unwrap(), "amenbo-dev").pop().unwrap();
+        assert!(said.contains("amenbo-dev agent --json"), "{said}");
+        assert!(!said.contains("`amenbo agent"), "{said}");
     }
 
     /// The two signs that an AI is worked with in a folder, each enough on its own (`AMB-D-680`) — and a

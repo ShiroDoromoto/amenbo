@@ -205,6 +205,9 @@ pub fn run() {
         .map(|p| amenbo_core::config::Config::load(&p.config_file))
         .unwrap_or_default();
       perf::install(&config);
+      // What an earlier run left in the temporary directory when it ended without closing its terminals.
+      // Off the launch path: it is a scan of a directory, and nothing here waits on it.
+      std::thread::spawn(pty::sweep);
       // The diagnostic log (`AMB-D-382`), in every build — see the `diag` module for what it may hold and why
       // its size is bounded. A logger that cannot start is not a reason to refuse to start the app, so
       // the error is dropped rather than raised: there is nowhere left to report it to anyway.
@@ -425,6 +428,8 @@ pub fn run() {
       commands::plugin_updates,
       commands::plugin_update_apply,
       commands::plugin_update_apply_all,
+      commands::frame_names,
+      commands::name_frame,
       launch::elevated,
       pty::pty_open,
       pty::pty_write,

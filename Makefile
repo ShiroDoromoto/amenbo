@@ -10,6 +10,13 @@
 # theme's preview (`work.amenbo.amenbo-dev-<slug>`). See GUI_DEV_*.
 
 CARGO_BIN := $(HOME)/.cargo/bin
+# The devtool this makefile calls is the one built from THIS checkout. `make devtool` installs a copy
+# for a person to type, and that copy is one file for the whole machine — so a second checkout that
+# installs its own decides what this build runs, and a target that asks for a subcommand the other
+# copy has not got fails after the minutes it spent building (observed 2026-08-23, two sessions each
+# adding one). Everything else here resolves against the checkout (scripts/, app/); this was the one
+# place that did not. The dot keeps Go itself from walking into it, and .gitignore keeps it out.
+DEVTOOL_BIN := devtool/.bin/devtool
 APPS_DIR  := /Applications
 BUNDLE_DIR := app/src-tauri/target/release/bundle/macos
 # What tauri names the prod bundle and every artifact derived from it — `productName` in
@@ -63,8 +70,8 @@ ifneq (,$(filter install-gui-dev-vm,$(MAKECMDGOALS)))
 ifeq ($(strip $(AMB-T-ID)),)
 $(error install-gui-dev-vm puts one task's own instance in the VM — pass AMB-T-ID=<id>)
 endif
-ifneq (,$(shell command -v devtool >/dev/null 2>&1 || echo missing))
-$(error install-gui-dev-vm needs devtool, which reaches the VM — `make devtool` builds it)
+ifneq (,$(shell command -v go >/dev/null 2>&1 || echo missing))
+$(error install-gui-dev-vm needs devtool to reach the VM, which is built here from devtool/ — so Go has to be on PATH)
 endif
 endif
 
@@ -111,8 +118,8 @@ endif
 ifeq ($(strip $(AMB-T-ID)),)
 SEED_GUI_DEV_DATA := :
 else
-SEED_GUI_DEV_DATA := command -v devtool >/dev/null 2>&1 && devtool devgui seed $(AMB-T-ID) \
-	|| echo "  dev GUI : devtool is not installed (make devtool) — this instance opens on whatever app-data it already has"
+SEED_GUI_DEV_DATA := { command -v go >/dev/null 2>&1 && $(MAKE) --no-print-directory devtool-bin >/dev/null && $(DEVTOOL_BIN) devgui seed $(AMB-T-ID); } \
+	|| echo "  dev GUI : devtool could not be built here (Go is optional) — this instance opens on whatever app-data it already has"
 endif
 GUI_APP_DEV := $(BUNDLE_DIR)/$(GUI_DEV_NAME).app
 
@@ -235,7 +242,7 @@ LINUX_CLI_IMAGE   := amenbo-linux-cli:$(LINUX_CLI_ARCH)
 # so it does not appear here = shell-gate's actionlint sees that.
 SHELL_SOURCES := $(shell git ls-files '*.sh' '.githooks/*')
 
-.PHONY: help install install-dev gui gui-dev gui-dev-names gui-dev-linux install-gui install-gui-dev install-gui-dev-vm dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate product-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate gui-inputs-gate ci-aggregate-gate workflow-run-gate brand sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux dist-cli-dev-linux verify-existing-store release codesign-cert devtool
+.PHONY: help install install-dev gui gui-dev gui-dev-names gui-dev-linux install-gui install-gui-dev install-gui-dev-vm dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate product-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate gui-inputs-gate ci-aggregate-gate workflow-run-gate brand sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux dist-cli-dev-linux verify-existing-store release codesign-cert devtool devtool-bin
 
 help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
@@ -947,8 +954,8 @@ install-gui-dev: gui-dev
 ## The host target above is untouched and stays the default — a clone or a fork with one Mac has no
 ## VM, and this is a second destination rather than a replacement.
 ## AMB-T-ID=<id> is required (see the guard above); devtool raises the VM if none is running.
-install-gui-dev-vm: gui-dev
-	devtool devgui install $(AMB-T-ID) --vm
+install-gui-dev-vm: devtool-bin gui-dev
+	$(DEVTOOL_BIN) devgui install $(AMB-T-ID) --vm
 
 ## The names a theme's dev build is split by, as `key=value` lines — the one way anything outside
 ## make reads them. The preview workflow's Windows leg builds the installer without make (the
@@ -998,10 +1005,16 @@ gui-dev-linux:
 ## measures what a diff does to the `amenbo agent --json` entry (devtool/README.md).
 ## It is **optional**. amenbo builds, tests and ships without it, so Go is not a dependency of the
 ## tree — it is asked for here and nowhere else, and whoever never runs this target never needs it.
-devtool:
-	@command -v go >/dev/null 2>&1 || { echo "✗ Go is required for devtool (it is optional; nothing else in this tree needs it)"; exit 1; }
-	cd devtool && go build -o "$(CARGO_BIN)/devtool" .
+devtool: devtool-bin
+	@install -m 0755 "$(DEVTOOL_BIN)" "$(CARGO_BIN)/devtool"
 	@echo "→ devtool (parallel development; $(CARGO_BIN)/devtool)"
+
+## The copy this checkout's own targets call, built beside its source rather than installed. Go
+## caches, so re-running it when nothing changed costs about nothing — which is what lets every
+## caller depend on it instead of hoping the right one is installed.
+devtool-bin:
+	@command -v go >/dev/null 2>&1 || { echo "✗ Go is required for devtool (it is optional; nothing else in this tree needs it)"; exit 1; }
+	@cd devtool && go build -o .bin/devtool .
 
 ## Re-bake the brand images from the origins in assets/brand/: the app icon on its tile for both
 ## channels, the mark alone at the sizes a page reaches for, and the bundle's own copy of the icon

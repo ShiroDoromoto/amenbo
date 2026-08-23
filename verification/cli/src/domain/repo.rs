@@ -32,9 +32,14 @@ impl Driver<'_> {
                 std::fs::write(&full, content).map_err(|e| format!("could not write {path}: {e}"))?;
                 Ok(Outcome::action(format!("wrote {} ({} bytes)", full.display(), content.len())))
             }
-            // The same, for text a scenario cannot hold itself. A file under `fixtures/` is where the
-            // reference form lives: this tree's prose rule keeps a bare ref out of every `.yaml`, and
-            // the lint has nothing to find unless something really carries one.
+            // The same, for bytes a scenario cannot hold itself. A file under `fixtures/` is where
+            // they live: this tree's prose rule keeps a bare ref out of every `.yaml`, so the lint has
+            // nothing to find unless something really carries one — and a file that is deliberately
+            // not text cannot be spelt out in YAML at all.
+            //
+            // `dir` says where it lands, the way `write-file`'s does and for the same reason: what a
+            // face reads off a folder is read off that folder, so a file that has to be in one can
+            // only be put there.
             "copy-fixture" => {
                 let from = req_str(with, "from")?;
                 let path = req_str(with, "path")?;
@@ -44,7 +49,13 @@ impl Driver<'_> {
                     return Err(format!("`from: {from}` must name a file under fixtures/"));
                 }
                 let src = fixtures_dir().join(from);
-                let full = self.in_session(path)?;
+                let full = match with.get("dir") {
+                    Some(_) => self.folder(with)?.join(self.inside(path)?),
+                    None => self.in_session(path)?,
+                };
+                if let Some(dir) = full.parent() {
+                    std::fs::create_dir_all(dir).map_err(|e| format!("could not make {}: {e}", dir.display()))?;
+                }
                 let bytes = std::fs::read(&src)
                     .map_err(|e| format!("could not read the fixture {}: {e}", src.display()))?;
                 std::fs::write(&full, &bytes).map_err(|e| format!("could not write {path}: {e}"))?;

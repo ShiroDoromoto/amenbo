@@ -1,0 +1,124 @@
+# The folder a project answers for, read from inside Amenbo — and the one file it will not show.
+#
+# The folder is what an AI can reach, and that is the whole reason it is worth drawing: a person who
+# has handed a folder over is entitled to see what is in it without leaving the app to look. This road
+# walks from the folder folded shut down to the words inside one file, and then to a file whose bytes
+# are not words at all.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road here and no gap in one. Reading a file at a shell is `cat`, and Amenbo is
+# the subject of none of it.
+#
+# ── Why two files and not one ────────────────────────────────────────────────────────────────────
+# One file proves the bytes reach the screen. The second proves the **host decides from the bytes**,
+# and it is the half that can quietly rot: the verdict is taken from what is in the file and never
+# from its name, so a build that started trusting the name would draw a picture's bytes as text and
+# nothing on the happy path would notice. The road gives the second file a `.md` name — the one name
+# the face does treat specially, choosing between rendered Markdown and plain text with it — and puts
+# bytes in it that are not text. What has to come back is the refusal, not a rendering.
+#
+# ── Where the column is rooted ───────────────────────────────────────────────────────────────────
+# The two sections above the folder belong to the **project**, not to the pane beside them, and which
+# project is the one the ledger is on. The world stands up exactly one, so there is nothing to be on
+# but it.
+id: read-a-file-in-the-folder-the-ai-can-see
+title: The folder a project answers for is read from inside Amenbo, down to the words in a file — and a file that is not words says so
+description: >
+  Open the terminal face on a project whose folder already holds a small tree, unfold the folder's
+  section and open it one level at a time, then press a file and read the words that are in it. Come
+  back out and press a second file, named as Markdown but holding bytes that are not text: what comes
+  back is the line saying it cannot be shown, because the verdict is taken from the bytes and never
+  from the name.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # A small tree in it: one folder with one readable file inside, and one file whose bytes are not
+  # text sitting beside it under a name that says they are.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: notes/watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+  - type: action
+    domain: repo
+    op: copy-fixture
+    with:
+      from: not-text.bin
+      path: notes/almanac.md
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The folder's own section starts folded: what a person opens the face for is the pane, and a tree
+  # unfolded over it would be the column deciding what they came for.
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: enter
+    with:
+      name: notes
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.md
+      section: tree
+
+  # The bytes reached the screen. This is the goal the road is named for.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the seedlings are watered every second morning
+
+  - type: action
+    domain: files
+    op: back
+
+  # The second file. Its name says Markdown and its bytes say otherwise, and the bytes are what is
+  # answered — a face that read the name would be drawing a file it cannot read.
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: almanac.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: not-text

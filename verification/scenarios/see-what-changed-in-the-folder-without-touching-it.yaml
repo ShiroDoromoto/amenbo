@@ -1,0 +1,133 @@
+# The folder moving under the app, and the app noticing on its own.
+#
+# A person working with an AI in a folder is not the only one writing in it — the agent is, and so is
+# whatever it runs. What the file face is for at that moment is the one question a tree cannot answer:
+# what moved. So the section is a watch and not a listing, and this road is the difference: the screen
+# changes with **nothing on it pressed**.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road here and no gap in one. A terminal watching a folder is `ls` run twice, and
+# Amenbo is the subject of neither.
+#
+# ── Why the file is written from outside ─────────────────────────────────────────────────────────
+# Every other road on the screen presses something and reads what the press did. This one presses
+# nothing: the operator is sent out of the app to write a file, and what is under test is the app
+# having moved by the time they look back. A step that wrote the file through Amenbo would be proving
+# that Amenbo can redraw what Amenbo just did, which nobody doubted.
+#
+# ── The ignored file, and why it is the half worth defending ─────────────────────────────────────
+# The section is laid over the same pruned walk the tree is, and the pruning follows the folder's own
+# `.gitignore`. That is not tidiness: a build directory rewrites thousands of files a second, and a
+# section that showed them would be a section nobody could read, in exactly the folders people work
+# in. So the road writes a second file that the folder has said to ignore, and reads that the section
+# did **not** move for it.
+#
+# The world writes the `.gitignore` before anything else, because what is pruned is decided as the
+# walk runs and a rule that arrived later would be a rule for the next walk.
+id: see-what-changed-in-the-folder-without-touching-it
+title: A file written outside Amenbo shows up in what changed lately, and one the folder ignores does not
+description: >
+  Open the terminal face on a project whose folder is being watched, then leave Amenbo and put a file
+  in that folder from outside. Come back to a screen nothing was pressed on: the file is in the
+  section for what changed lately. Write a second file the folder's own ignore rules cover, and that
+  section does not move — the watch is laid over the same pruned walk the tree is, so what a build
+  directory does every second never reaches it.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # Written first: what is pruned is decided as the walk runs, so a rule that arrived after one would
+  # be a rule for the next.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: .gitignore
+      content: compost/
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: notes/watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # What the folder already held. The section is what changed lately, so the file the world put there
+  # is on it before anything is written — which is what makes the next step's arrival readable as an
+  # arrival rather than as the first thing anybody looked at.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: changed
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: notes/pruning.md
+      content: SCENARIO cut back the old wood before the sap rises
+
+  # Nothing was pressed. The screen moved because the folder did.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: pruning.md
+      section: changed
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: compost/heap.md
+      content: SCENARIO turned twice a week
+
+  # And this one the folder said to ignore, so the watch never saw it. The half the section's whole
+  # usefulness rests on: a folder that is really worked in rewrites more than a person can read.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: heap.md
+      section: changed
+      present: false
+
+  # The pruning reaches the tree by the same walk, so the ignored file is not down there either.
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: compost
+      section: tree
+      present: false

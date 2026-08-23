@@ -714,6 +714,15 @@ impl Instructor {
             (Domain::Terminal, "adrift") => {
                 Some(Expectation { text: self.target_label(with), present: present(with) })
             }
+            // A row on the file face, and the words an opened file draws. Both are read off the shot
+            // as the road wrote them: a file's name is a name the road gave it, and what is inside is
+            // what the road put there.
+            (Domain::Files, "listed") => {
+                Some(Expectation { text: arg_str(with, "name")?.to_string(), present: present(with) })
+            }
+            (Domain::Files, "reading") => {
+                Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
+            }
             _ => None,
         }
     }
@@ -1254,8 +1263,8 @@ impl Instructor {
             // literally what an agent types — and because the layer refuses to be said anywhere else,
             // so an operator improvising it from a description would be turned away.
             //
-            // `point` is not here. It carries a target and a reason rather than one line, so it is a
-            // shape of its own; the road that walks it brings it. An unknown word is refused loudly.
+            // `point` is not among the verbs here: it carries a thing and a reason rather than one
+            // line, so it has an op of its own below. An unknown word is refused loudly.
             (Domain::Terminal, "say") => {
                 let text = req(with, "text")?;
                 match req(with, "verb")? {
@@ -1274,6 +1283,43 @@ impl Instructor {
                     other => return Err(format!("action `say` does not know the verb `{other}`")),
                 }
             }
+            // Pointing, which is the same seam as `say` and the same one door — but what it leaves is
+            // read on the file face rather than on the pane's label, so the road goes on somewhere else.
+            (Domain::Terminal, "point") => format!(
+                "In the pane that has a terminal running in it, run: amenbo session point \"{}\" --why \"{}\" — this is the agent pointing at something worth opening, and saying why.",
+                req(with, "target")?,
+                req(with, "why")?
+            ),
+            // A file put in the folder from outside Amenbo, while the app is up. It is written as an
+            // instruction and not left to the premise because *when* it happens is the whole of what
+            // is under test: what the face draws has to move without anybody touching the app, so the
+            // operator is told plainly to leave it alone.
+            (Domain::Repo, "write-file") => format!(
+                "Outside Amenbo — in a file manager or another terminal — make the file \"{}\" inside the folder the road calls \"{}\", with \"{}\" in it, making any folder on the way that is not there. Do not touch Amenbo while you do.",
+                req(with, "path")?,
+                req(with, "dir")?,
+                req(with, "content")?
+            ),
+            // ── the file face ─────────────────────────────────────────────────────────────────
+            // The column beside the panes. Its sections are named by what each is about rather than
+            // by their headings, for the reason the segments are: the headings are the interface's
+            // own words and the run's language is whatever the machine is set to.
+            (Domain::Files, "tree") => match flag(with, "open")? {
+                true => "In the column beside the panes, unfold the section that draws the folder itself.".to_string(),
+                false => "Fold that section back up.".to_string(),
+            },
+            (Domain::Files, "enter") => format!(
+                "In the folder's section, open the folder \"{}\" one level.",
+                req(with, "name")?
+            ),
+            (Domain::Files, "open") => format!(
+                "In {}, press \"{}\". The column is replaced by what is in that file.",
+                section(with)?,
+                req(with, "name")?
+            ),
+            (Domain::Files, "back") =>
+                "Press the way back out of the file. The column returns to its three sections."
+                    .to_string(),
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -2044,6 +2090,43 @@ impl Instructor {
                     self.target_label(with)
                 ),
             },
+            // ── the file face ─────────────────────────────────────────────────────────────────
+            (Domain::Files, "listed") => match present(with) {
+                true => format!(
+                    "In {}, confirm \"{}\" is one of the rows.",
+                    section(with)?,
+                    req(with, "name")?
+                ),
+                false => format!(
+                    "In {}, confirm \"{}\" is not among the rows — the section is drawn, and this is not on it.",
+                    section(with)?,
+                    req(with, "name")?
+                ),
+            },
+            (Domain::Files, "reading") => match present(with) {
+                true => format!(
+                    "Confirm the opened file shows \"{}\" — the words that are in it.",
+                    req(with, "shows")?
+                ),
+                false => format!(
+                    "Confirm \"{}\" is nowhere on the screen — what is in the file did not reach it.",
+                    req(with, "shows")?
+                ),
+            },
+            (Domain::Files, "says") => match present(with) {
+                true => format!("Confirm the column says {}.", note(with)?),
+                false => format!("Confirm the column does not say {}.", note(with)?),
+            },
+            (Domain::Files, "openable") => match present(with) {
+                true => format!(
+                    "Confirm the row \"{}\" is something to press — it takes the pointer and opens.",
+                    req(with, "name")?
+                ),
+                false => format!(
+                    "Confirm the row \"{}\" is drawn and is not something to press: it does not take the pointer, and nothing opens. It is outside the folder the project answers for, and the row says what the agent said all the same.",
+                    req(with, "name")?
+                ),
+            },
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -2213,6 +2296,47 @@ fn official(with: &Args) -> bool {
 /// always said out loud, so an unsaid one is a step asking that something is there.
 fn present(with: &Args) -> bool {
     with.get("present").and_then(|v| v.as_bool()).unwrap_or(true)
+}
+
+/// A required yes-or-no argument. It is not `present`'s neighbour: that one has a default because most
+/// asserts want one, and a value the op requires has none to fall back to.
+fn flag(with: &Args, key: &str) -> Result<bool, String> {
+    with.get(key)
+        .and_then(|v| v.as_bool())
+        .ok_or_else(|| format!("arg `{key}` must be true or false"))
+}
+
+/// Which of the file face's three sections a row is being looked for in, as a phrase an instruction
+/// can be built around. They are named by what each is about because their headings are the
+/// interface's own words, and the run's language is whatever the machine is set to.
+fn section(with: &Args) -> Result<&'static str, String> {
+    match with.get("section").and_then(|v| v.as_str()) {
+        Some("pointed") => Ok("the section for what an agent pointed at"),
+        Some("changed") => Ok("the section for what has changed lately"),
+        Some("tree") => Ok("the folder's own section"),
+        Some(other) => Err(format!("`section` does not know `{other}` — it is pointed, changed or tree")),
+        None => Err("arg `section` must say which of the three sections".to_string()),
+    }
+}
+
+/// One of the file face's standing lines, named by what it says. The wording is the interface's, so an
+/// instruction describes the line rather than quoting it.
+fn note(with: &Args) -> Result<&'static str, String> {
+    match with.get("note").and_then(|v| v.as_str()) {
+        Some("not-text") => Ok("that this is not text and cannot be shown here"),
+        Some("cut") => Ok("that only the beginning of the file is shown"),
+        Some("unreadable") => Ok("that the file could not be read"),
+        Some("partial") => Ok("that some of the folder is not being watched"),
+        Some("nothing-pointed") => Ok("that nothing has been pointed at yet"),
+        // Said only once the pane has ended, which is the one state no road reaches yet: nothing in
+        // the interface ends a terminal at all. The row is here so that the road which walks it, once
+        // there is a way, is a line of YAML rather than a change to a driver.
+        Some("unopened") => Ok("that some of what was pointed at was never opened"),
+        Some("nothing-changed") => Ok("that nothing has changed yet"),
+        Some("no-folder") => Ok("that this project has no folder yet"),
+        Some(other) => Err(format!("`note` does not know `{other}`")),
+        None => Err("arg `note` must say which of the face's lines".to_string()),
+    }
 }
 
 /// Whether a step says the app it names already reaches this project. The op requires the key, so the
@@ -2432,6 +2556,7 @@ fn domain_str(d: Domain) -> &'static str {
         Domain::Mcp => "mcp",
         Domain::Tick => "tick",
         Domain::Terminal => "terminal",
+        Domain::Files => "files",
     }
 }
 

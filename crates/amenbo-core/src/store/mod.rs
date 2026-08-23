@@ -389,6 +389,22 @@ impl Store {
         crate::nudge::mark_put(&self.engine, nudge_id)
     }
 
+    /// The names this device has given the talk window's frames ([`crate::frames`]).
+    pub fn frame_names(&self) -> Result<std::collections::BTreeMap<String, crate::frames::FrameName>> {
+        crate::frames::frame_names(&self.engine)
+    }
+
+    /// Name one frame, if whoever is naming it outranks whoever named it last, and answer with the
+    /// names as they now stand.
+    pub fn name_frame(
+        &self,
+        frame: &str,
+        name: &str,
+        by: crate::frames::NamedBy,
+    ) -> Result<std::collections::BTreeMap<String, crate::frames::FrameName>> {
+        crate::frames::name_frame(&self.engine, frame, name, by)
+    }
+
     /// Count one launch of the app on this device (the tally two of the metrics are read from).
     pub fn record_launch(&self) -> Result<()> {
         crate::nudge::record_launch(&self.engine)

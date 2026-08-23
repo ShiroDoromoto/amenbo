@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { mountTerminal } from "../talk/terminal";
+import { nameFrame, ONLY_FRAME } from "../talk/frames";
+import { closed, NO_SESSIONS, opened, said, type Sessions } from "../talk/sessions";
 import { t } from "../core/i18n";
 
 /**
@@ -20,9 +22,13 @@ import { t } from "../core/i18n";
  */
 export function TerminalFace({ onSplitOut, note }: { onSplitOut: () => void; note: string | null }) {
   const paneRef = useRef<HTMLDivElement>(null);
+  // What is running in the pane. It is held for as long as the pane is, the way the talk window holds
+  // its own (`app/src/talk/sessions.ts`) — a session has no existence outside the terminal it runs in,
+  // so what knows about one is whatever is drawing it.
+  const sessions = useRef<Sessions>(NO_SESSIONS);
   // What the pane has to say for itself when it is not simply a terminal: the host's refusal if one
-  // could not be started, and the fact of the program having exited, which the screen cannot show
-  // on its own — what a finished shell leaves behind looks exactly like one waiting to be typed at.
+  // could not be started, and the fact of the program having exited, which the screen cannot show on
+  // its own — what a finished shell leaves behind looks exactly like one waiting to be typed at.
   const [failed, setFailed] = useState<string | null>(null);
   const [ended, setEnded] = useState(false);
 
@@ -30,19 +36,36 @@ export function TerminalFace({ onSplitOut, note }: { onSplitOut: () => void; not
     const host = paneRef.current;
     if (!host) return;
     let taken = false;
-    let pane: { detach: () => void } | null = null;
+    let detach: (() => void) | null = null;
     setEnded(false);
-    void mountTerminal(host, () => setEnded(true))
-      .then((mounted) => {
+    void mountTerminal(host, {
+      opened: (session, startedAt) => {
+        sessions.current = opened(sessions.current, { session, startedAt });
+      },
+      said: (statement) => {
+        sessions.current = said(sessions.current, statement);
+      },
+      closed: (session) => {
+        sessions.current = closed(sessions.current, session);
+        setEnded(true);
+      },
+      // The name is offered to the store and nothing here draws it: this window is the board, and
+      // what it is called is not the pane's to say. What does draw it is the pane's own frame, once
+      // there are frames to draw (`AMB-T-3607`).
+      name: (text, by) => {
+        void nameFrame(ONLY_FRAME, text, by).catch(() => {});
+      },
+    })
+      .then((take) => {
         // Taken away while the host was still answering. Detaching leaves the terminal running for
         // whatever draws it next, which is exactly what a pane that never got shown should do.
-        if (taken) mounted.detach();
-        else pane = mounted;
+        if (taken) take();
+        else detach = take;
       })
       .catch((e: unknown) => setFailed(e instanceof Error ? e.message : String(e)));
     return () => {
       taken = true;
-      pane?.detach();
+      detach?.();
     };
   }, []);
 

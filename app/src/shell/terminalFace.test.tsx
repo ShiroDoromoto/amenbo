@@ -20,13 +20,10 @@ const hoisted = vi.hoisted(() => ({ mounted: 0, detached: 0 }));
 // The pane, stood in for: putting one up is a host round trip, and what is being counted here is how
 // many times the component asks for one — not what a terminal does once it has one.
 vi.mock("../talk/terminal", () => ({
-  mountTerminal: (_host: HTMLElement, _onEnded: () => void) => {
+  mountTerminal: () => {
     hoisted.mounted++;
-    return Promise.resolve({
-      session: "s1",
-      detach: () => {
-        hoisted.detached++;
-      },
+    return Promise.resolve(() => {
+      hoisted.detached++;
     });
   },
 }));

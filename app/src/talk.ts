@@ -1,26 +1,33 @@
-// The talk window's entry — the window someone splits the terminal out into, so the two faces can
-// sit on two displays (`AMB-D-753`). It is not opened at launch and is not declared in
-// `tauri.conf.json`: the app comes up as one window, and this one is built when it is asked for
-// (`crate::windows`). What is in it is a terminal: one pane, filling the window, running the shell
-// the user signed in with.
+// The talk window's entry — the window someone splits the terminal out into, so the two faces can sit
+// on two displays (`AMB-D-753`). It is not opened at launch and is not declared in `tauri.conf.json`:
+// the app comes up as one window showing the board, and this one is built when it is asked for
+// (`crate::windows`). What is in it is a terminal: one pane, filling the window, with the user's
+// shell running in it.
 //
 // The terminal it draws is the one that was already running in the board, and folding the app back
 // hands it over the same way. Neither end restarts anything — a pane is a drawing of a session, not
 // the session (`./talk/terminal`).
 //
-// What it does own from the start is its own name. Two windows both titled "Amenbo" are
-// indistinguishable in the window list, the taskbar and the switcher, and the words that tell them
-// apart live in the webview's dictionary rather than in Rust (`AMB-D-396`) — so the title is set
-// here rather than in the window's definition, which can only hold one fixed string. The configured
-// title is the product name, which is what shows for the moment before this runs.
+// **What is happening now is held here and nowhere else.** The window keeps what it knows about the
+// sessions running in its panes (`./talk/sessions`) for as long as they run, because a session has no
+// existence outside the terminal it runs in (`AMB-D-749`). What is kept between runs is what the panes
+// are called (`./talk/frames`), which belongs to the frame rather than to the process in it.
 //
-// The language is asked of core directly instead of through the snapshot: the store is what a
-// startup migration holds shut, and a window with nothing in it has no reason to be the one waiting
-// on it.
+// What it owns from the start is its own name. Two windows both titled "Amenbo" are indistinguishable
+// in the window list, the taskbar and the switcher, and the words that tell them apart live in the
+// webview's dictionary rather than in Rust (`AMB-D-396`) — so the title is set here rather than in
+// `tauri.conf.json`, which can only hold one fixed string. The configured title is the product name,
+// which is what shows for the moment before this runs. Once the pane's frame has a name, that is the
+// title: it is the pane's own name, and it is what tells one window from another in a list of them.
+//
+// The language is asked of core directly instead of through the snapshot: the store is what a startup
+// migration holds shut, and a window with nothing in it has no reason to be the one waiting on it.
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { type Lang, normalizeLang, t } from "./core/i18n";
+import { normalizeLang, t, type Lang } from "./core/i18n";
 import { invoke } from "./core/ipc";
 import { initTheme } from "./core/theme";
+import { frameNames, nameFrame, ONLY_FRAME, type FrameNames, type NamedBy } from "./talk/frames";
+import { closed, NO_SESSIONS, opened, said, type Sessions } from "./talk/sessions";
 import { mountTerminal } from "./talk/terminal";
 import "./styles/tokens.css";
 import "./styles/global.css";
@@ -28,53 +35,96 @@ import "./styles/talk.css";
 
 initTheme();
 
-// The bar above the pane, and the one thing on it: the way back to a single window. The board is
-// told nothing here — closing this window is what says it, whether it was closed from this button or
-// from the title bar, and the board watches for the window going rather than for the button being
-// pressed (`crate::windows::TALK_CLOSED_EVENT`).
-function bar(lang: Lang): HTMLElement {
-  const row = document.createElement("div");
-  row.className = "talk__bar";
-  const merge = document.createElement("button");
-  merge.className = "talk__action";
-  merge.textContent = t("face.merge", lang);
-  merge.addEventListener("click", () => void invoke("talk_close").catch(() => {}));
-  row.append(merge);
-  return row;
+// The sessions running in this window's panes. Nothing here is written down: it is gone when the
+// window is, which is exactly as long as the processes it describes.
+let sessions: Sessions = NO_SESSIONS;
+
+// What the panes are called, as this device has them. Read once at the start, and again from whatever
+// a naming answers with — the answer is the whole set, because a naming can be refused.
+let names: FrameNames = new Map();
+
+// The reader's language, until the host says which it is. Everything drawn here is drawn before that
+// answer lands — a window that waited for it would come up blank — and written again when it does.
+let lang: Lang = "en";
+let title = t("app.talkWindow", lang);
+
+/** Name the window after the pane's frame, falling back to what the window is when it has no name. */
+function retitle(): void {
+  const named = names.get(ONLY_FRAME);
+  void getCurrentWindow()
+    .setTitle(named ?? title)
+    // Outside Tauri (`npm run dev` in a browser) there is no window to name, and a title that could
+    // not be set is not worth failing an otherwise-working window over.
+    .catch(() => {});
+}
+
+// The way back to a single window, and the only thing on the bar above the pane. The board is told
+// nothing here — this window going is what says it, whether it went from this button or from the
+// title bar, and the board watches for the window rather than for the press (`crate::windows`).
+const merge = document.createElement("button");
+merge.className = "talk__action";
+merge.textContent = t("face.merge", lang);
+merge.addEventListener("click", () => void invoke("talk_close").catch(() => {}));
+
+void invoke<string | null>("ui_language")
+  .then((code) => {
+    lang = normalizeLang(code);
+    title = t("app.talkWindow", lang);
+    merge.textContent = t("face.merge", lang);
+    retitle();
+  })
+  .catch(() => {});
+
+void frameNames()
+  .then((known) => {
+    names = known;
+    retitle();
+  })
+  .catch(() => {});
+
+/** Offer a name for the pane's frame. Whether it takes is the store's ranking to decide, so what comes
+ *  back is drawn rather than what was asked for. */
+function name(text: string, by: NamedBy): void {
+  void nameFrame(ONLY_FRAME, text, by)
+    .then((known) => {
+      names = known;
+      retitle();
+    })
+    .catch(() => {});
 }
 
 // The pane. A terminal is a live process, so a failure to start one is not a thing to swallow — the
 // window would come up empty and say nothing about why. What the host refused with goes on the page
 // instead, in the only place there is to put it.
-function pane(lang: Lang): HTMLElement {
-  const box = document.createElement("div");
-  box.className = "talk__pane";
-  const ended = () => {
-    const note = document.createElement("div");
-    note.className = "talk__note";
-    note.textContent = t("face.ended", lang);
-    box.after(note);
-  };
-  void mountTerminal(box, ended).catch((e: unknown) => {
-    box.className = "talk__failed";
-    box.textContent = e instanceof Error ? e.message : String(e);
+const root = document.getElementById("root");
+if (root) {
+  root.className = "talk";
+  const bar = document.createElement("div");
+  bar.className = "talk__bar";
+  bar.append(merge);
+  const pane = document.createElement("div");
+  pane.className = "talk__pane";
+  root.append(bar, pane);
+  void mountTerminal(pane, {
+    opened: (session, startedAt) => {
+      sessions = opened(sessions, { session, startedAt });
+    },
+    said: (statement) => {
+      sessions = said(sessions, statement);
+    },
+    closed: (session) => {
+      sessions = closed(sessions, session);
+      // What is on the screen stays as it was — that is what a terminal ends with — and this is the
+      // part of it the screen cannot show for itself: a finished shell looks exactly like one waiting
+      // to be typed at.
+      const note = document.createElement("div");
+      note.className = "talk__note";
+      note.textContent = t("face.ended", lang);
+      pane.after(note);
+    },
+    name,
+  }).catch((e: unknown) => {
+    pane.className = "talk__failed";
+    pane.textContent = e instanceof Error ? e.message : String(e);
   });
-  return box;
 }
-
-// Both the title and the words on the page want the reader's language, so the window is drawn once
-// the answer is in. Outside Tauri (`npm run dev` in a browser) there is neither a window to name nor
-// a host to ask, and the page is drawn in English rather than not at all.
-void invoke<string | null>("ui_language")
-  .then((code) => {
-    const lang = normalizeLang(code);
-    getCurrentWindow().setTitle(t("app.talkWindow", lang));
-    return lang;
-  })
-  .catch(() => normalizeLang(null))
-  .then((lang) => {
-    const root = document.getElementById("root");
-    if (!root) return;
-    root.className = "talk";
-    root.append(bar(lang), pane(lang));
-  });

@@ -395,6 +395,16 @@ recorded: string,
 running: string, };
 
 /**
+ * What one frame of the talk window is called, and who called it that — which is what says whether
+ * the next naming may replace it ([`amenbo_core::frames`]).
+ */
+export type FrameNameDto = { 
+/**
+ * The frame it is the name of. Names belong to frames, never to the session running in one.
+ */
+frame: string, name: string, by: "typed" | "session" | "person", };
+
+/**
  * One bound repository the banner has something to say about — the raw material for its wording, never
  * the sentence, as with [`HookOfferDto`].
  *
@@ -1618,6 +1628,24 @@ session: string,
 base64: string, };
 
 /**
+ * A terminal this process has open, as a pane putting itself up is told about it.
+ *
+ * It answers both of the pane's ways in: the terminal it just started, and the one it found already
+ * running and adopted (`crate::pty::pty_sessions`). `started_at` is here because a pane cannot work
+ * it out — a session that changed windows started when it started, and the moment the pane went up
+ * says nothing about it.
+ */
+export type PtySessionDto = { 
+/**
+ * The id the terminal was opened under.
+ */
+session: string, 
+/**
+ * When the terminal was started (RFC3339 UTC).
+ */
+startedAt: string, };
+
+/**
  * What a reference in a body resolves to (`kind` — task or decision — and the entity's id). The GUI
  * branches on it to decide which detail pane a body link opens.
  */
@@ -1750,6 +1778,40 @@ priority?: string,
  * Tasks only, in axis order — empty for a task placed on no axis.
  */
 labels: Array<SearchLabelDto>, };
+
+/**
+ * One thing an AI said about the session it is running in, on its way to the pane drawing it.
+ *
+ * It is the surface layer's record ([`amenbo_core::session::Said`]) in the shape the webview reads.
+ * The verbs each carry their own body, so the fields below are one verb's or another's: `text` is
+ * every verb but `point`, and `target` with `why` is `point` alone.
+ */
+export type SessionSaidDto = { 
+/**
+ * The pane it was said in — the same id the terminal was opened under.
+ */
+session: string, verb: "name" | "note" | "waiting" | "finished" | "point", 
+/**
+ * When it was said (RFC3339 UTC).
+ */
+at: string, 
+/**
+ * The folder the agent was in when it said it. It starts as the one the terminal was opened in
+ * and moves with every `cd`, so it is the agent's own rather than the pane's.
+ */
+cwd?: string, 
+/**
+ * The line said. Absent on `point`.
+ */
+text?: string, 
+/**
+ * What `point` pointed at. Absent on every other verb.
+ */
+target?: string, 
+/**
+ * Why it is worth opening. Absent on every other verb.
+ */
+why?: string, };
 
 /**
  * The slug in `.amenbo` disagrees with what the store actually holds

@@ -82,6 +82,9 @@ export function TerminalPane({
         plate.opened(session, startedAt);
         on.current.onOpened(frame, session, start.cwd ?? null);
       },
+      // Straight through and nowhere else: the row above the pane is the only thing that reads it, and
+      // what it reads is the time (`../talk/moving`).
+      output: () => plate.output(),
       said: (statement) => {
         plate.said(statement);
         on.current.onSaid(statement);

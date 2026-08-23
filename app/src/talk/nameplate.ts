@@ -5,6 +5,11 @@
 // rank a reader cannot predict what they are looking at — which of four notices won today's draw — and
 // a label nobody can predict is one nobody reads.
 //
+// In front of the three is the mark the pane is known by (`./moving`). It is not a fourth place and
+// takes no words: its colour says which pane this is, and its opacity says whether output is arriving.
+// Both are read at a glance and neither can push the other off the row, which is why they can share a
+// mark this small when three sentences cannot share a line.
+//
 // **What is shown is derived or declared, never guessed** (`AMB-D-748`). The reservations come off the
 // ledger, where every write from inside a pane carries its session's id; a broken premise is
 // `in_progress` and not ready, which means the same thing whoever is running the project; and the rest
@@ -18,6 +23,7 @@
 
 import type { TaskCardDto } from "../bindings/bindings";
 import { statusLabel, t, tf, type Lang } from "../core/i18n";
+import { hueOf, phaseDelay, PULSE_MS } from "./moving";
 import type { Session } from "./sessions";
 
 /** A task the session is holding, as much of it as the label needs. */
@@ -45,11 +51,20 @@ export type Say =
   /** Nothing to say. Not "nothing is happening" — only that nothing was said. */
   | { readonly kind: "silent" };
 
+/** The mark in front of the name: which pane this is, and whether it is moving (`./moving`). */
+export type Dot = {
+  /** The frame the row belongs to. Its hue is what tells one pane from another. */
+  readonly frame: string;
+  /** Whether output is arriving. Nothing is read into its being false (`AMB-D-748`). */
+  readonly moving: boolean;
+};
+
 /** The whole row. */
 export type Plate = {
   readonly name: string | null;
   readonly now: Now;
   readonly say: Say;
+  readonly dot: Dot;
 };
 
 /**
@@ -187,6 +202,13 @@ export function mountNameplate(host: HTMLElement): (plate: Plate, lang: Lang) =>
     row.append(el);
     return el;
   };
+  // The dot goes in first, so it is to the left of the name: it is what the row belongs to, and the
+  // row reads from what it is towards what is happening in it.
+  const dot = part("dot");
+  dot.setAttribute("aria-hidden", "true");
+  // The turn's length, handed to the stylesheet rather than written there: it is what the phase is
+  // measured against, and the two have to be the same number or the panes beat out of step.
+  dot.style.setProperty("--pulse", `${PULSE_MS}ms`);
   const name = part("name");
   const nowMark = part("mark");
   const now = part("now");
@@ -194,7 +216,18 @@ export function mountNameplate(host: HTMLElement): (plate: Plate, lang: Lang) =>
   const say = part("say");
   host.append(row);
 
+  // What the dot was doing last time. Setting the delay again on a dot that is already pulsing would
+  // start the turn over, which is the one thing the shared phase exists to prevent — so it is written
+  // only where the answer has changed, which is also the only moment it can be out of step.
+  let moving: boolean | null = null;
+
   return (plate: Plate, lang: Lang) => {
+    dot.style.setProperty("--dot-hue", String(hueOf(plate.dot.frame)));
+    if (plate.dot.moving !== moving) {
+      moving = plate.dot.moving;
+      dot.dataset.moving = moving ? "yes" : "no";
+      if (moving) dot.style.animationDelay = phaseDelay(Date.now());
+    }
     name.textContent = plate.name ?? "";
     const middle = nowText(plate.now, lang);
     nowMark.textContent = middle.mark;

@@ -48,6 +48,11 @@ export type PaneEvents = {
    *  terminal this pane adopted as much as of one it started: what the window holds is what is
    *  running in it, and a session that moved windows is running in the one it moved to. */
   opened(session: string, startedAt: string): void;
+  /** A chunk has crossed and been drawn. Said per chunk and carrying nothing: what is read off it is
+   *  the time it happened, which is the one thing about a stream that means the same for every program
+   *  in a pane (`./moving`). The tail a pane is handed on picking a terminal up is not one of these —
+   *  it is output being drawn again, not output arriving. */
+  output(): void;
   /** The agent said something about its session. */
   said(statement: SessionSaidDto): void;
   /** The program in the terminal has exited. Nothing running is kept. */
@@ -267,7 +272,10 @@ export async function mountTerminal(
   const { listen } = await import("@tauri-apps/api/event");
   const unlistenOutput = await listen<PtyChunkDto>(OUTPUT_EVENT, ({ payload }) => {
     if (session === null) held.push(payload);
-    else if (payload.session === session) term.write(decode(payload.base64));
+    else if (payload.session === session) {
+      term.write(decode(payload.base64));
+      on.output();
+    }
   });
   const unlistenClosed = await listen<string>(CLOSED_EVENT, ({ payload }) => {
     if (payload === session) on.closed(payload);
@@ -292,7 +300,11 @@ export async function mountTerminal(
   // reader the wrong thing about how long their work has been running.
   on.opened(running.session, running.startedAt);
   for (const chunk of held.splice(0)) {
-    if (chunk.session === session) term.write(decode(chunk.base64));
+    if (chunk.session !== session) continue;
+    term.write(decode(chunk.base64));
+    // Held rather than replayed: these arrived while the pane was still being told what it was
+    // drawing, moments ago, so they are output arriving like any other.
+    on.output();
   }
   for (const statement of saidBeforeKnown.splice(0)) {
     if (statement.session === session) take(statement);

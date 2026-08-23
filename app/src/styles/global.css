@@ -606,6 +606,49 @@ button { font: inherit; color: inherit; cursor: pointer; }
   white-space: nowrap;
 }
 
+/* The mark the pane is known by, and the one thing it can say about itself without being told
+   (see ../talk/moving.ts).
+
+   **Hue says which pane; opacity says whether it is moving.** Two readings on one mark only work while
+   they cannot be mistaken for each other, so the colour never changes with what is happening and the
+   brightness never changes with which pane it is.
+
+   **Stopping is going still, not going away.** A pane that has quietened keeps its dot at the resting
+   step: it is still that pane, and a mark that vanished would read as the pane having gone. */
+.plate__dot {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: hsl(var(--dot-hue, 199) 55% var(--dot-light, 42%));
+  opacity: 0.3;
+}
+/* Lifted off a dark ground: the same hue at the light side's lightness reads as a smudge on it, and
+   the resting step is the dimmest thing on the row to begin with. */
+[data-theme="dark"] .plate__dot { --dot-light: 62%; }
+/* The turn is timed from one place — `PULSE_MS`, which is also what the phase is read against
+   (../talk/moving.ts). Written here as well, the two would drift and the panes would fall out of step
+   with nothing to show for it. */
+.plate__dot[data-moving="yes"] {
+  animation: plate-pulse var(--pulse) ease-in-out infinite;
+}
+/* Opacity alone. Anything that moved the dot would push the words beside it about, and anything that
+   turned would be claiming progress rather than reporting a stream. */
+@keyframes plate-pulse {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.95; }
+}
+/* The pane being worked in does not pulse. A reader looking straight at the terminal can see it
+   moving; the mark is for the panes they are not looking at. */
+.slot--focused .plate__dot { animation: none; }
+
+/* Motion turned down: the same two steps, held still. What the pulse carried was the difference
+   between them, and the difference survives without the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .plate__dot { animation: none; opacity: 0.25; }
+  .plate__dot[data-moving="yes"] { animation: none; opacity: 0.95; }
+}
+
 /* The pane's name. It belongs to the frame, so it is the one part of the row that does not move when
    the process in it does. */
 .plate__name {

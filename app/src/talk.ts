@@ -141,6 +141,9 @@ if (root) {
         opened: (session, startedAt) => {
           plate?.opened(session, startedAt);
         },
+        output: () => {
+          plate?.output();
+        },
         said: (statement) => {
           plate?.said(statement);
         },

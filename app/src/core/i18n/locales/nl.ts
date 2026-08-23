@@ -498,6 +498,7 @@ export const nl: Translation = {
     "face.page": "Pagina {n}",
     "face.adrift": "In dit project staat iets nog gereserveerd waar niemand aan werkt. Wil je ermee verdergaan?",
     "face.open": "Hier een terminal openen",
+    "face.openHere": "Nog een terminal op deze pagina openen",
     "face.rename": "Dit deelvenster hernoemen",
     "face.needsYou": "wacht op je",
     "face.nothingNeedsYou": "Voor zover het register weet, is er niets dat u nodig heeft.",

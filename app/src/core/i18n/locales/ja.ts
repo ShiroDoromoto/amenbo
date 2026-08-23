@@ -510,6 +510,7 @@ export const ja: Translation = {
     "face.page": "{n} ページ目",
     "face.adrift": "このプロジェクトに、進行中のまま止まっているタスクがあります。続けますか？",
     "face.open": "ここで端末を開く",
+    "face.openHere": "このページにもう1枚ひらく",
     "face.rename": "このペインの名前を変える",
     "face.needsYou": "手が要ります",
     "face.nothingNeedsYou": "台帳の上では、手が要るものはありません。",

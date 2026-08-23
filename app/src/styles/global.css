@@ -208,10 +208,23 @@ button { font: inherit; color: inherit; cursor: pointer; }
   border-right: 1px solid var(--c-border);
 }
 .rail__page { display: flex; flex-direction: column; gap: 2px; }
+/* A page's own line: what it is called, and the way to put another pane on it. They share a row
+   because they are about the same page — and because the way in belongs where the page is named
+   rather than at the end of its rows, where it would read as one more pane. */
+.rail__pagerow { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-2); }
 .rail__pagename {
   color: var(--c-text-muted); font-size: var(--fs-xs); text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+/* One press, and a pane is open in this page's project. It is drawn quietly: the rows below it are
+   what a person came to the rail for, and this is what they reach for once. */
+.rail__open {
+  flex: 0 0 auto;
+  padding: 0 var(--s-1);
+  border: 0; background: transparent;
+  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
+}
+.rail__open:hover { color: var(--c-text); }
 .rail__row {
   display: flex; align-items: center; gap: var(--s-1);
   padding: var(--s-1) var(--s-2); border-radius: var(--r-md);

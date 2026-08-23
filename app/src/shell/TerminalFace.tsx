@@ -6,9 +6,9 @@ import {
   frameNames, keepLayout, nameFrame, savedLayout, type FrameNames, type NamedBy,
 } from "../talk/frames";
 import {
-  closedIn, COUNTS, EMPTY_LAYOUT, focusOn, folderOfPage, frameFor, goPage, laidOut, MAX_PAGES,
-  movedTo, openedIn, pageCount, pageOfFrame, restored, setCount, settledIn, sidesAreDrawers,
-  slotsOf,
+  closedIn, COUNTS, EMPTY_LAYOUT, focusOn, folderOfPage, frameFor, freeSlot, goPage, laidOut,
+  MAX_PAGES, movedTo, openedIn, pageCount, pageOfFrame, restored, setCount, settledIn,
+  sidesAreDrawers, slotsOf,
   type Count, type Layout,
 } from "../talk/layout";
 import { FilesPanel } from "../files/FilesPanel";
@@ -251,6 +251,21 @@ export function TerminalFace({
         setRailOpen(false);
       }}
       onRename={(frame, name) => named(frame, name, "person")}
+      onOpen={(page) => {
+        setLayout((was) => {
+          // A page with no free slot does not offer the way in, so this is reached with one to find;
+          // a race that lost it leaves the arrangement alone rather than putting a pane somewhere
+          // nobody pressed.
+          const free = freeSlot(was, page);
+          if (free === null) return was;
+          const made = frameFor(was, page, free);
+          startNow.current.add(made.frame.id);
+          // Opening a pane is going to it, and going to it moves the screen to its page. That is the
+          // same move picking a row makes, and it is why the rail's rows are grouped by page at all.
+          return focusOn(made.layout, made.frame.id);
+        });
+        setRailOpen(false);
+      }}
     />
   );
 

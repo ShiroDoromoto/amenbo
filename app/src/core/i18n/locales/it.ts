@@ -519,6 +519,7 @@ export const it: Translation = {
     "face.page": "Pagina {n}",
     "face.adrift": "In questo progetto qualcosa è ancora prenotato e nessuno ci sta lavorando. Vuoi riprenderlo?",
     "face.open": "Apri un terminale qui",
+    "face.openHere": "Apri un altro terminale in questa pagina",
     "face.rename": "Rinomina questo riquadro",
     "face.needsYou": "ti sta aspettando",
     "face.nothingNeedsYou": "Per quel che risulta al registro, nulla ha bisogno di te.",

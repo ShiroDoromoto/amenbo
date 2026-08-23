@@ -498,6 +498,7 @@ export const zhHant: Translation = {
     "face.page": "第 {n} 頁",
     "face.adrift": "這個專案裡有任務還停在進行中，沒有人在做。要繼續嗎？",
     "face.open": "在此開啟終端機",
+    "face.openHere": "在這一頁再開一個終端機",
     "face.rename": "重新命名此窗格",
     "face.needsYou": "在等你",
     "face.nothingNeedsYou": "就帳本所知，沒有需要你的地方。",

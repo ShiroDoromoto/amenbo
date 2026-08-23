@@ -1,8 +1,8 @@
 // What the arrangement has to keep true, none of which is visible in the arithmetic that does it.
 import { describe, expect, it } from "vitest";
 import {
-  closedIn, EMPTY_LAYOUT, focusOn, folderOfPage, frameFor, goPage, laidOut, MAX_PAGES, movedTo,
-  openedIn, pageCount, pageOfFrame, restored, setCount, settledIn, sidesAreDrawers, slotsOf,
+  closedIn, EMPTY_LAYOUT, focusOn, folderOfPage, frameFor, freeSlot, goPage, laidOut, MAX_PAGES,
+  movedTo, openedIn, pageCount, pageOfFrame, restored, setCount, settledIn, sidesAreDrawers, slotsOf,
   type Layout,
 } from "./layout";
 
@@ -57,6 +57,21 @@ describe("a frame is a place, not a process", () => {
     const four = withFrames(4);
     const ended = closedIn(openedIn(four, "1", "s1", null), "s1");
     expect(frameFor(ended, 3, 0).frame.id).toBe("5");
+  });
+});
+
+describe("where another pane goes", () => {
+  it("is the first slot on the page asked about, whichever page is showing", () => {
+    // Two pages of two, with the first slot of page 2 taken: what page 2 has room for is its second.
+    let layout = frameFor(frameFor(frameFor(EMPTY_LAYOUT, 1, 0).layout, 1, 1).layout, 2, 0).layout;
+    layout = goPage(layout, 1);
+    expect(freeSlot(layout, 2)).toBe(1);
+    expect(freeSlot(layout, 1), "a full page has nowhere to put one").toBeNull();
+  });
+
+  it("always leaves one page with room, so there is always somewhere to start", () => {
+    const layout = withFrames(5);
+    expect(freeSlot(layout, pageCount(layout))).not.toBeNull();
   });
 });
 

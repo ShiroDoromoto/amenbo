@@ -22,12 +22,16 @@ import {
   type Changeover,
   type Held,
 } from "./nameplate";
+import { movingAt, STILL_AFTER_MS } from "./moving";
 import { anyWaiting, closed, NO_SESSIONS, opened, said, type Sessions } from "./sessions";
 
 /** A pane's label, and the pane's way of telling it what happened. */
 export type Plate = {
   /** A terminal has started in the pane, under this session id. */
   opened(session: string, startedAt: string): void;
+  /** Something came out of the terminal. Said per chunk and read as a time, never as a quantity: what
+   *  it turns into is a fixed rhythm rather than a meter (`./moving`). */
+  output(): void;
   /** The agent said something about its session. */
   said(statement: SessionSaidDto): void;
   /** The program in the terminal has exited. */
@@ -81,6 +85,31 @@ export function mountPlate(
   let live = true;
   // What `onWaiting` was last told, so it hears the changes and not every statement.
   let waiting = false;
+  // When something last came out of the terminal, and whether that still counts as moving. The time is
+  // written on every chunk and the row is only redrawn when the answer turns over: a busy build prints
+  // hundreds of times a second, and a row redrawn with each of them would spend the pane's frames on a
+  // mark that had not changed.
+  let lastOutput: number | null = null;
+  let moving = false;
+  let settling: ReturnType<typeof setTimeout> | undefined;
+
+  /** Take in a chunk having crossed, and draw the change where there is one. */
+  function tookOutput(): void {
+    if (!live) return;
+    lastOutput = Date.now();
+    clearTimeout(settling);
+    // Coming back for the answer once the window has passed. Nothing else says a pane has stopped —
+    // stopping is the absence of an event, so the clock is the only thing that can notice it.
+    settling = setTimeout(() => {
+      if (moving && !movingAt(lastOutput, Date.now())) {
+        moving = false;
+        redraw();
+      }
+    }, STILL_AFTER_MS);
+    if (moving) return;
+    moving = true;
+    redraw();
+  }
 
   /** Say whether a turn is standing here, where that is not what was said last. */
   function tellWaiting(): void {
@@ -103,6 +132,7 @@ export function mountPlate(
             name,
             now,
             say: sayOf(held, running === null ? undefined : sessions.get(running)),
+            dot: { frame, moving },
           }
         : null,
       lang(),
@@ -161,12 +191,18 @@ export function mountPlate(
       tellWaiting();
       readWork();
     },
+    output: tookOutput,
     said: (statement) => {
       sessions = said(sessions, statement);
       tellWaiting();
       redraw();
     },
     closed: (session) => {
+      // A pane whose program has exited is not moving, whatever the last chunk's clock still says: the
+      // stream did not go quiet, it ended.
+      clearTimeout(settling);
+      moving = false;
+      lastOutput = null;
       sessions = closed(sessions, session);
       if (running === session) running = null;
       held = [];
@@ -183,6 +219,7 @@ export function mountPlate(
       // badge is the shell's and outlives this, so it has to be told on the way out.
       tellWaiting();
       clearTimeout(expiry);
+      clearTimeout(settling);
       unlisten?.();
       host.replaceChildren();
     },

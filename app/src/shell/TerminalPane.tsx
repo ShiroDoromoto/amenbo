@@ -88,6 +88,9 @@ export function TerminalPane({
         // settles the page (`../talk/layout`).
         on.current.onOpened(frame, session, where ?? start.cwd ?? null);
       },
+      // Straight through and nowhere else: the row above the pane is the only thing that reads it, and
+      // what it reads is the time (`../talk/moving`).
+      output: () => plate.output(),
       chose: (chosen) => on.current.onChose(frame, chosen),
       said: (statement) => {
         plate.said(statement);

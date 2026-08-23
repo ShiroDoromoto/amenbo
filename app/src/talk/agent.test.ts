@@ -84,10 +84,13 @@ function wake(over: Partial<WakeDto> = {}): WakeDto {
 }
 
 /** What the window is told by the panes under it, counted rather than kept. */
-const heard = { opened: 0, chose: [] as string[], said: 0, closed: 0, named: 0 };
+const heard = { opened: 0, output: 0, chose: [] as string[], said: 0, closed: 0, named: 0 };
 const events: PaneEvents = {
   opened: () => {
     heard.opened += 1;
+  },
+  output: () => {
+    heard.output += 1;
   },
   chose: (folder) => {
     heard.chose.push(folder);

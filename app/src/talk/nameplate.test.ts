@@ -8,6 +8,7 @@ import {
   nowText,
   sayOf,
   sayText,
+  type Dot,
   type Held,
 } from "./nameplate";
 import { NO_SESSIONS, opened, said, type Sessions } from "./sessions";
@@ -115,12 +116,16 @@ describe("the one thing said on the right", () => {
   });
 });
 
+/** The mark in front of the name, at rest. These cases are about the words on the row; what the dot
+ *  does has its own (`./moving`). */
+const STILL: Dot = { frame: "1", moving: false };
+
 describe("the row on the page", () => {
   it("is one line, and redraws in place", () => {
     const host = document.createElement("div");
     const draw = mountNameplate(host);
 
-    draw({ name: "the migration", now: { kind: "idle" }, say: { kind: "silent" } }, EN);
+    draw({ name: "the migration", now: { kind: "idle" }, say: { kind: "silent" }, dot: STILL }, EN);
     expect(host.querySelector(".plate__name")?.textContent).toBe("the migration");
     expect(host.querySelector(".plate__now")?.textContent).toBe("Talking it over");
 
@@ -129,7 +134,7 @@ describe("the row on the page", () => {
       {
         name: "the migration",
         now: { kind: "one", ref: "#3598", title: "the nameplate", stopped: false },
-        say: { kind: "waiting", text: "which of the two" },
+        dot: STILL, say: { kind: "waiting", text: "which of the two" },
       },
       EN,
     );
@@ -150,7 +155,7 @@ describe("the row on the page", () => {
     expect(row, "the row was removed rather than hidden").toBeTruthy();
     expect((row as HTMLElement).hidden, "a pane with no session was labelled anyway").toBe(true);
 
-    draw({ name: null, now: { kind: "idle" }, say: { kind: "silent" } }, EN);
+    draw({ name: null, now: { kind: "idle" }, say: { kind: "silent" }, dot: STILL }, EN);
     expect(host.querySelector(".plate")).toBe(row);
     expect((row as HTMLElement).hidden).toBe(false);
   });

@@ -41,7 +41,12 @@ const CLOSED_EVENT: &str = "pty://closed";
 /// The variable a session's id is carried in, into the terminal and everything started inside it.
 /// A process that writes to the store while this is set can say which session it wrote from, which
 /// is the one thing no amount of watching from outside can establish.
-const SESSION_ENV: &str = "AMENBO_SESSION";
+///
+/// The name is core's ([`amenbo_core::session::SESSION_VAR`]) rather than one of ours: the surface
+/// layer's verbs read it back out of the environment to decide whether they are inside a pane at all
+/// (`AMB-D-749`), so a name spelled twice is a name that can drift into a vocabulary that refuses
+/// everywhere.
+const SESSION_ENV: &str = amenbo_core::session::SESSION_VAR;
 
 /// How much of a terminal's output is carried in one chunk. Large enough that a full repaint of a
 /// TUI crosses in a handful of events rather than hundreds, small enough that the first line of a

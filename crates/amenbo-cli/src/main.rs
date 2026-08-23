@@ -447,7 +447,10 @@ fn uses_facet(cmd: &Option<Command>) -> bool {
         | Command::PluginRunner { .. }
         // `validate` reads a manifest file the author names and touches no store at all — unlike the rest
         // of the group, which moves this machine's plugin state and the plugin's own per-project rows.
-        | Command::Plugin { sub: PluginCmd::Validate { .. } } => false,
+        | Command::Plugin { sub: PluginCmd::Validate { .. } }
+        // The surface layer speaks to the pane on screen and writes to no store (`AMB-D-749`), so there
+        // is no author to stamp and no reach to draw — which is why it takes no `--actor` at all.
+        | Command::Session { .. } => false,
         // Everything else — every write, and every read that surfaces store content.
         _ => true,
     }
@@ -502,6 +505,9 @@ fn stamps_facet(cmd: &Option<Command>) -> bool {
         // author to stamp and no activity behind it.
         | Command::AgentHook { .. }
         | Command::Config { .. } // settings live in the user layer and leave no activity behind
+        // The surface layer: what it writes is a statement to the running window, not a record in the
+        // store, so there is nothing for a facet to be stamped onto.
+        | Command::Session { .. }
         | Command::Bind { .. } => false, // only writes the `.amenbo` pointer (no facet recorded)
         // Sub-command groups that are reads.
         Command::Doctor { fix } => *fix, // only --fix writes
@@ -638,6 +644,10 @@ fn requires_pointer(cmd: &Option<Command>) -> bool {
             // leave to raise a store, `run` looks for the device's store and, finding none, does nothing at
             // all. Its siblings are not here — a person typing `tick install` stands somewhere on purpose.
             | Some(Command::Tick { sub: TickCmd::Run })
+            // The surface layer opens no store: a statement goes to the pane that is on screen now, and
+            // the folder a terminal happens to stand in decides nothing about it. Requiring a pointer
+            // would silence the vocabulary in exactly the checkouts an agent is put to work in.
+            | Some(Command::Session { .. })
     )
 }
 
@@ -672,6 +682,10 @@ fn nested_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBuf> {
         // the folder its launcher happened to stand in decides nothing about it. Refusing it would stall a
         // delivery over where a scheduler was configured.
         | Some(Command::Tick { sub: TickCmd::Run })
+        // The surface layer, for the reason it needs no pointer: it reaches the pane it was launched in
+        // and no store at all, so a checkout that is no place to drive the backlog is still a place to
+        // say what is happening in it — which is where an agent works.
+        | Some(Command::Session { .. })
         | Some(Command::Unbind { .. }) => None,
         Some(Command::Bind { dir: Some(d), .. })
         | Some(Command::Project { sub: ProjectCmd::Add { dir: d, .. } }) => {
@@ -752,6 +766,7 @@ fn pointer_store_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBu
             | Some(Command::Plugin { sub: PluginCmd::Validate { .. } })
             | Some(Command::Mcp { .. })
             | Some(Command::Tick { sub: TickCmd::Run })
+            | Some(Command::Session { .. })
             | Some(Command::Unbind { .. })
             | Some(Command::Bind { .. })
             | Some(Command::Init { .. })
@@ -843,6 +858,11 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         // nothing to guard. That is not a concession: CI is exactly where this must run, and there is no
         // `.amenbo` there to find.
         Some(Command::Lint { paths, stdin }) => return lint_cmd(flags, paths.clone(), *stdin),
+        // The surface layer (`AMB-D-749`), on the same store-free footing as `lint` and ahead of the exec
+        // guard for a sharper reason: it must answer the same in a bound folder, a worktree and a bare
+        // directory, because the pane it speaks to is the same pane in all three. Opening a store to say
+        // something about a terminal would be work for an answer that does not depend on it.
+        Some(Command::Session { sub }) => return cmd::session::session_cmd(flags, sub.as_ref()),
         // The hook's own entry points, same store-free footing as `lint`: `pre-commit` lints the staged
         // diff (no paths), `commit-msg` lints the message file git hands over.
         Some(Command::GithookPreCommit) => return lint_cmd(flags, Vec::new(), false),
@@ -1247,6 +1267,9 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
         Command::Lint { .. } => {
             unreachable!("handled before open")
         }
+        Command::Session { .. } => {
+            unreachable!("handled before open")
+        }
         Command::GithookPreCommit | Command::GithookCommitMsg { .. } => {
             unreachable!("handled before open")
         }
@@ -1518,6 +1541,25 @@ mod tests {
             ])),
             None,
             "a --dir that names no directory is `project add`'s to report, not this guard's",
+        );
+    }
+
+    /// The surface layer decides nothing by the folder it was typed in: it reaches the pane that named it
+    /// in the environment, and no store. So it declares no facet, stamps none, and is outside both guards
+    /// that ask what this directory is — including the nested-worktree one, since a throwaway checkout is
+    /// exactly where an agent works and saying what it is doing there is not driving a backlog with it.
+    #[test]
+    fn the_surface_layer_is_judged_by_the_pane_that_named_it_and_not_by_this_folder() {
+        let session = Some(Command::Session { sub: None });
+        assert!(!uses_facet(&session), "there is no store content to draw a reach over");
+        assert!(!stamps_facet(&session), "and no record for an author to be stamped onto");
+        assert!(
+            nested_guard_target(&session).is_none(),
+            "a worktree is a place to say what is happening in it",
+        );
+        assert!(
+            pointer_store_guard_target(&session).is_none(),
+            "and whose pointer sits above it decides nothing about the pane",
         );
     }
 
@@ -1831,6 +1873,9 @@ mod tests {
         assert!(!requires_pointer(&Some(Command::Bind { project: None, dir: None, force: false, rebind: None })));
         assert!(!requires_pointer(&Some(Command::Version)));
         assert!(!requires_pointer(&Some(Command::Update { print: true, apply: false, rollback: false })));
+        // And the surface layer, which opens no store at all: it speaks to the pane it was launched in,
+        // and an agent is put to work in checkouts nobody bound (`AMB-D-749`).
+        assert!(!requires_pointer(&Some(Command::Session { sub: None })));
         // Everything else opens the store and therefore needs a pointer. `agent` is the AI's entry point, so
         // it gets no exemption.
         assert!(requires_pointer(&None)); // discover

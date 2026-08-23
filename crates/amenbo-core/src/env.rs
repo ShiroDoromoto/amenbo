@@ -90,6 +90,20 @@ pub fn project_dir() -> Option<OsString> {
     var_os("AMENBO_PROJECT_DIR")
 }
 
+/// `AMENBO_SESSION` — the id of the talk window's terminal this process was started inside
+/// ([`crate::session::SESSION_VAR`]). Set by the window on the terminal it opens, and inherited by
+/// everything started in it, which is the only way a process several levels deep can say which pane it
+/// belongs to. Unset everywhere else, and that is what tells the surface layer it is outside the window.
+pub fn session() -> Option<String> {
+    var(crate::session::SESSION_VAR)
+}
+
+/// `AMENBO_SESSION_DIR` — the throwaway directory the talk window reads this run's statements out of
+/// ([`crate::session::DIR_VAR`]). Set beside [`session`], on the same terminals, and gone with the run.
+pub fn session_dir() -> Option<OsString> {
+    var_os(crate::session::DIR_VAR)
+}
+
 /// `AMENBO_HW_ID` — override the machine UUID, to pose as a different machine during development.
 pub fn hw_id() -> Option<OsString> {
     var_os("AMENBO_HW_ID")

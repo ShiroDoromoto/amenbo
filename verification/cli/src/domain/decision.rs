@@ -24,6 +24,25 @@ impl Driver<'_> {
                 }
                 Ok(Outcome::action(format!("created decision {id} `{title}`")))
             }
+            "adrift" => {
+                let title = req_str(with, "title")?;
+                let pid = match with.get("project") {
+                    Some(_) => self.resolve_key(with, "project")?.to_string(),
+                    None => self.project_id.to_string(),
+                };
+                // Put up the way a pane puts one up — the id goes in the environment, which is the one
+                // input a session id travels by. The name is the driver's own and is never run: what
+                // makes the proposal adrift is that nothing is at it, and nothing here has a pane.
+                let v = self.run_json_as(
+                    "verify-pane-that-has-gone",
+                    &["decision", "add", "--title", title, "--project", &pid, "--json"],
+                )?;
+                let id = v["decision"]["id"].as_i64().ok_or("decision add did not report an id")?;
+                if let Some(name) = bind {
+                    self.bindings.insert(name.to_string(), id);
+                }
+                Ok(Outcome::action(format!("put decision {id} `{title}` up in a pane that is not running")))
+            }
             "edit" => {
                 let target = self.resolve(with)?;
                 let body = req_str(with, "body")?;

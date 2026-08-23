@@ -508,7 +508,7 @@ export const de: Translation = {
     "face.paneCount": "Bereiche auf dem Bildschirm",
     "face.pages": "Seiten",
     "face.page": "Seite {n}",
-    "face.adrift": "In diesem Projekt ist etwas noch reserviert, und niemand arbeitet daran. Möchten Sie weitermachen?",
+    "face.adrift": "In diesem Projekt ist etwas mittendrin liegen geblieben, und niemand ist daran. Möchten Sie weitermachen?",
     "face.open": "Hier ein Terminal öffnen",
     "face.openHere": "Ein weiteres Terminal auf dieser Seite öffnen",
     "face.rename": "Diesen Bereich umbenennen",

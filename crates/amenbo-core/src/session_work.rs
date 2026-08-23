@@ -119,6 +119,47 @@ pub fn adrift(path: &Path, reserved: &[i64], live: &HashSet<String>) -> Vec<i64>
     reserved.iter().copied().filter(|task| gone.contains(task)).collect()
 }
 
+/// Which of `proposed` were put up by a session that is gone.
+///
+/// The decision half of [`adrift`], and it reads the same way: the ledger says who put a decision up
+/// and which pane they were in ([`crate::activity_log::event::decision_proposed`]), and this process
+/// says which of its sessions are still running. A proposal is adrift when the pane that made it has
+/// gone and nobody has settled it since.
+///
+/// `proposed` is what the store says is still proposed *now*; the walk only answers who put it there.
+/// The status is a column and the author is a line, and neither can be read off the other.
+///
+/// **A proposal made outside a pane is never among them**, for the same reason a reservation made at
+/// somebody's own terminal is not: the line carries no session, and Amenbo cannot see that terminal.
+///
+/// A decision that was accepted and later reopened keeps its one line, because a reopen is not a
+/// decision being put up — it is one coming back. So a reopened proposal is asked about under its
+/// author's pane, which is what it is: a proposal that is open, put up by a pane that has gone.
+pub fn adrift_decisions(path: &Path, proposed: &[i64], live: &HashSet<String>) -> Vec<i64> {
+    let want: HashSet<i64> = proposed.iter().copied().collect();
+    let mut seen: HashSet<i64> = HashSet::new();
+    let mut gone: HashSet<i64> = HashSet::new();
+    let mut lines = activity_log::rev_lines(path);
+    while let Some(line) = lines.next() {
+        if lines.read_bytes() > SCAN_BUDGET || seen.len() == want.len() {
+            break;
+        }
+        if line.event["kind"] != "decision.proposed" {
+            continue;
+        }
+        let Some(decision) = line.decision else { continue };
+        if !want.contains(&decision) || !seen.insert(decision) {
+            continue;
+        }
+        if let Some(session) = line.session.as_deref() {
+            if !live.contains(session) {
+                gone.insert(decision);
+            }
+        }
+    }
+    proposed.iter().copied().filter(|id| gone.contains(id)).collect()
+}
+
 /// The status a line moved a task to, or `None` where the line did not move one.
 fn moved_to(line: &Line) -> Option<&str> {
     if line.event["kind"] != "task.status_changed" {
@@ -134,6 +175,20 @@ mod tests {
     use crate::activity_log::{append, event, Entry};
     use crate::model::ActorKind;
     use crate::time::Timestamp;
+
+    /// One decision put up, as the ledger holds it.
+    fn proposed(id: i64, decision: i64, session: Option<&str>) -> Entry {
+        Entry {
+            id,
+            at: Timestamp::now(),
+            actor: Some(ActorKind::Ai),
+            session: session.map(str::to_string),
+            project: None,
+            task: None,
+            decision: Some(decision),
+            event: event::decision_proposed("a decision"),
+        }
+    }
 
     /// One status move, as the ledger holds it.
     fn moved(id: i64, task: i64, session: Option<&str>, old: &str, new: &str) -> Entry {
@@ -216,6 +271,37 @@ mod tests {
 
         let live: HashSet<String> = ["pane-live".to_string()].into_iter().collect();
         assert!(adrift(&ledger, &[11], &live).is_empty());
+    }
+
+    #[test]
+    fn a_proposal_whose_session_is_gone_is_adrift_and_one_nobody_named_is_not() {
+        let dir = amenbo_scratch::scratch("session-work-adrift-decisions");
+        let ledger = dir.join("activity.jsonl");
+        for entry in [
+            proposed(1, 21, Some("pane-gone")),
+            proposed(2, 22, Some("pane-live")),
+            // Put up at somebody's own terminal: Amenbo cannot see whether that terminal is open.
+            proposed(3, 23, None),
+        ] {
+            append(&ledger, &entry);
+        }
+
+        let live: HashSet<String> = ["pane-live".to_string()].into_iter().collect();
+        assert_eq!(adrift_decisions(&ledger, &[21, 22, 23], &live), vec![21]);
+    }
+
+    #[test]
+    fn a_reservation_and_a_proposal_do_not_answer_for_each_other() {
+        let dir = amenbo_scratch::scratch("session-work-adrift-kinds");
+        let ledger = dir.join("activity.jsonl");
+        // The same number on both sides: task 11 and decision 11 are different records, and a walk
+        // that read the id without the kind would answer for the wrong one.
+        append(&ledger, &moved(1, 11, Some("pane-gone"), "todo", "in_progress"));
+        append(&ledger, &proposed(2, 11, Some("pane-live")));
+
+        let live: HashSet<String> = ["pane-live".to_string()].into_iter().collect();
+        assert_eq!(adrift(&ledger, &[11], &live), vec![11], "the reservation is the gone pane's");
+        assert!(adrift_decisions(&ledger, &[11], &live).is_empty(), "the proposal is not");
     }
 
     #[test]

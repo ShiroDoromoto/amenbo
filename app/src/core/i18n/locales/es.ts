@@ -519,7 +519,7 @@ export const es: Translation = {
     "face.paneCount": "Paneles en pantalla",
     "face.pages": "Páginas",
     "face.page": "Página {n}",
-    "face.adrift": "En este proyecto hay algo aún reservado en lo que nadie está trabajando. ¿Quieres continuarlo?",
+    "face.adrift": "En este proyecto quedó algo a medias y nadie se ocupa de ello. ¿Quieres continuarlo?",
     "face.open": "Abrir una terminal aquí",
     "face.openHere": "Abrir otra terminal en esta página",
     "face.rename": "Cambiar el nombre de este panel",

@@ -420,6 +420,15 @@ const REGISTRY: &[OpSpec] = &[
     // `project` names the shelf it is filed on, for a scenario about where a record ends up; left
     // out, it is the run's own project like everything else.
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "create", required: &["title"], refs: &["project"], strings: &["title"], binds: true },
+    // The same, put up **in a pane that is no longer running** — a proposal nobody will bring to a
+    // close, which is the decision twin of `task adrift`.
+    //
+    // It creates rather than transforming one that is already there, because a decision is born
+    // proposed and that birth is the only moment the ledger records who put it up: nothing said later
+    // can put a session on it. As with the task, no driver has a pane, so it is adrift from the first
+    // moment anything looks — and a road that wants a proposal Amenbo may **not** speak for uses
+    // `create`, which leaves no session on the line at all.
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "adrift", required: &["title"], refs: &["project"], strings: &["title"], binds: true },
     // A decision's own life: the body is edited while it is still proposed, accepting freezes it,
     // and the link is what makes it a task's premise.
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "edit", required: &["target", "body"], refs: &["target"], strings: &["body"], binds: false },
@@ -1950,6 +1959,7 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // project has to have a decision standing in another to leave out, and which project a decision
     // was filed under is nothing such a road proves — recording one is a road of its own.
     (Domain::Decision, "create"),
+    (Domain::Decision, "adrift"),
     // A device that has been used for a while. It is the one premise no amount of doing reaches: what
     // it stands up is the passage of time itself — launches tallied across days written on — which a
     // road can only be given, never earn.

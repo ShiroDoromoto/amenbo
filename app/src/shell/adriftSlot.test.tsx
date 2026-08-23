@@ -7,7 +7,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TaskCardDto } from "../bindings/bindings";
+import type { AdriftDto, AdriftRowDto } from "../bindings/bindings";
 import { RefNavProvider } from "../core/refNav";
 import { AdriftSlot } from "./AdriftSlot";
 
@@ -15,29 +15,34 @@ import { AdriftSlot } from "./AdriftSlot";
 
 const hoisted = vi.hoisted(() => ({
   /** What the host answers with, and which folders it was asked about. */
-  adrift: [] as unknown[],
+  adrift: { tasks: [], decisions: [] } as unknown,
   asked: [] as string[],
 }));
 
 vi.mock("../core/mutations", () => ({
-  fetchAdriftTasks: vi.fn(async (folder: string) => {
+  fetchAdrift: vi.fn(async (folder: string) => {
     hoisted.asked.push(folder);
     return hoisted.adrift;
   }),
 }));
 
-/** A card, with only the fields this slot draws filled in. */
-function card(id: number, title: string): TaskCardDto {
-  return { id, ref: `#${id}`, title } as unknown as TaskCardDto;
+/** A row, as the host hands one over. */
+function row(ref: string, id: number, title: string): AdriftRowDto {
+  return { id, ref, title };
+}
+
+/** What the host answers with, with the half a test does not care about empty. */
+function left(over: Partial<AdriftDto>): AdriftDto {
+  return { tasks: [], decisions: [], ...over };
 }
 
 let container: HTMLDivElement;
 let root: Root;
-const opened: number[] = [];
+const opened: string[] = [];
 const ledger: number[] = [];
 
 beforeEach(() => {
-  hoisted.adrift = [];
+  hoisted.adrift = left({});
   hoisted.asked = [];
   opened.length = 0;
   ledger.length = 0;
@@ -58,7 +63,10 @@ async function draw(folder: string | null): Promise<void> {
       createElement(
         RefNavProvider,
         {
-          value: { selectTask: (id: number) => { opened.push(id); } },
+          value: {
+            selectTask: (id: number) => { opened.push(`task ${id}`); },
+            selectDecision: (id: number | null) => { opened.push(`decision ${id}`); },
+          },
           children: createElement(AdriftSlot, {
             folder,
             onOpen: () => {},
@@ -90,30 +98,52 @@ describe("an empty slot with nothing to ask about", () => {
   });
 });
 
-describe("an empty slot with work nothing is doing any more", () => {
-  it("puts the question and the tasks, and keeps the way to open a terminal", async () => {
-    hoisted.adrift = [card(11, "the migration"), card(12, "the sender")];
+describe("an empty slot with something left in the middle", () => {
+  it("puts one question over both kinds, and keeps the way to open a terminal", async () => {
+    hoisted.adrift = left({
+      tasks: [row("AMB-T-11", 11, "the migration")],
+      decisions: [row("AMB-D-21", 21, "which of the two roads")],
+    });
     await draw("/work/here");
 
     expect(hoisted.asked).toEqual(["/work/here"]);
+    // One sentence, not one per kind: it is one question, and the ref on each row says which kind it
+    // is and so what pressing it opens.
+    expect(container.querySelectorAll(".adrift__ask")).toHaveLength(1);
     expect(container.textContent).toContain("Carry on with it?");
     expect(container.textContent).toContain("the migration");
+    expect(container.textContent).toContain("which of the two roads");
     // The way in is still there: an empty slot is somewhere to start a terminal whether or not there
     // is anything to be asked about.
     expect(buttons().some((b) => b.textContent === "Open a terminal here")).toBe(true);
   });
 
-  it("opens the task on the other face rather than moving it", async () => {
-    hoisted.adrift = [card(11, "the migration")];
+  it("opens a task on the task face and a decision on the decision face, and moves neither", async () => {
+    hoisted.adrift = left({
+      tasks: [row("AMB-T-11", 11, "the migration")],
+      decisions: [row("AMB-D-21", 21, "which of the two roads")],
+    });
     await draw("/work/here");
 
-    const task = buttons().find((b) => b.textContent?.includes("the migration"));
-    expect(task, "the task was not pressable").toBeTruthy();
-    await act(async () => { task?.click(); });
+    const press = async (words: string) => {
+      const one = buttons().find((b) => b.textContent?.includes(words));
+      expect(one, `"${words}" was not pressable`).toBeTruthy();
+      await act(async () => { one?.click(); });
+    };
+    await press("the migration");
+    await press("which of the two roads");
 
-    // The ledger first, then the task on it — a click that selected without switching would land on a
-    // face the reader cannot see.
-    expect(ledger, "the ledger was not brought up").toEqual([1]);
-    expect(opened).toEqual([11]);
+    // The ledger first each time — a press that selected without switching would land on a face the
+    // reader cannot see — and each kind on the face that reads it.
+    expect(ledger, "the ledger was not brought up").toEqual([1, 1]);
+    expect(opened).toEqual(["task 11", "decision 21"]);
+  });
+
+  it("asks about a decision alone, where that is all there is", async () => {
+    hoisted.adrift = left({ decisions: [row("AMB-D-21", 21, "which of the two roads")] });
+    await draw("/work/here");
+
+    expect(container.querySelector(".slot--adrift"), "the plain slot was drawn").toBeTruthy();
+    expect(container.textContent).toContain("which of the two roads");
   });
 });

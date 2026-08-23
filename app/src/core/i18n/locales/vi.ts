@@ -501,7 +501,7 @@ export const vi: Translation = {
     "face.paneCount": "Số khung trên màn hình",
     "face.pages": "Trang",
     "face.page": "Trang {n}",
-    "face.adrift": "Trong dự án này có việc vẫn đang được giữ mà không ai làm. Bạn có muốn tiếp tục không?",
+    "face.adrift": "Trong dự án này có việc còn dang dở mà không ai làm. Bạn có muốn tiếp tục không?",
     "face.open": "Mở terminal ở đây",
     "face.openHere": "Mở thêm một terminal ở trang này",
     "face.rename": "Đổi tên khung này",

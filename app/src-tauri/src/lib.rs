@@ -443,7 +443,7 @@ pub fn run() {
       wake::wake_probe,
       wake::wake_remember,
       commands::session_work,
-      commands::tasks_adrift,
+      commands::adrift,
       commands::frame_names,
       commands::name_frame,
       commands::talk_layout,

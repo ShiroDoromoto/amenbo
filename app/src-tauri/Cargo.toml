@@ -121,5 +121,12 @@ directories = "6"
 # in transitively (4.18), so it costs no extra build. Linux stays on the plugin (D-Bus).
 [target.'cfg(target_os = "windows")'.dependencies]
 notify-rust = "4"
-# Asks whether the drive is remote (a network drive) (`store_watch`). Same version tauri already pulls in.
-windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }
+# Asks whether the drive is remote (a network drive) (`store_watch`), and whether this process holds an
+# administrator's token (`launch`) — elevation is what stops a terminal reaching anything scoop installed.
+# Same version tauri already pulls in.
+windows-sys = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Threading",
+] }

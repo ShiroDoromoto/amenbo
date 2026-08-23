@@ -425,6 +425,7 @@ pub fn run() {
       commands::plugin_updates,
       commands::plugin_update_apply,
       commands::plugin_update_apply_all,
+      launch::elevated,
       pty::pty_open,
       pty::pty_write,
       pty::pty_resize,

@@ -514,6 +514,14 @@ const ui = {
   // The talk window names itself from here — `tauri.conf.json` can hold only one fixed string,
   // and two windows both called "Amenbo" cannot be told apart in a window list (`AMB-T-3588`).
   "app.talkWindow": "Amenbo — Talk",
+  // The talk window's standing band, shown only while Amenbo itself holds an administrator's token
+  // on Windows. What it warns about is not a right the user lacks but one they have too much of:
+  // the terminal opens, and the tools behind scoop's links are unreachable from inside it
+  // (`AMB-T-3565`). Amenbo will say they are not installed, and be wrong in a way only this can
+  // explain.
+  "talk.elevated.title": "Amenbo is running as administrator",
+  "talk.elevated.body": "A terminal opened here inherits that, and an administrator does not follow the links scoop installs its packages behind. Those tools cannot be reached from this window — Amenbo will report them as not installed, though they are.",
+  "talk.elevated.fix": "Quit Amenbo and start it again without “Run as administrator”, and they come back.",
   // lint hook consent: the question Amenbo asks before writing into .git/hooks
   "hooks.title": "Keep Amenbo's refs out of your commits?",
   "hooks.why": "A ref like AMB-T-… means nothing outside the store that issued it. A git hook stops one before it reaches a commit.",

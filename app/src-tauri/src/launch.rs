@@ -24,6 +24,14 @@
 //! tools do not merely lose their `PATH` entry, they cannot be reached at all (`AMB-T-3565`). A
 //! terminal is started with the token this process already has, and never through a mechanism that
 //! asks for another one.
+//!
+//! **What cannot be refused is a token this process was already started with.** Elevation is
+//! inherited, and there is no way to hand it back: an app the user started as administrator starts
+//! its terminals as administrator too. Everything downstream still tells the truth — the probe and
+//! the pane share this one route, so a tool behind a junction is reported missing and is missing —
+//! but "missing" is not what happened, and the person who installed it has no way to tell those two
+//! apart. So the state is reported instead of hidden: `elevated` below is what the surface asks, and
+//! saying it is the whole of the remedy available here.
 
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -72,6 +80,80 @@ pub fn command(cwd: Option<PathBuf>, run: Option<&str>) -> CommandBuilder {
     }
     describe_terminal(&mut cmd);
     cmd
+}
+
+/// Whether this process holds an administrator's token — which on Windows is the same thing as
+/// saying the tools the user installed for themselves are unreachable from every terminal it opens.
+///
+/// The consequence is not a thinner `PATH`, which a person could reason about. scoop keeps each of
+/// its packages behind a junction the standard user created, and an elevated process refuses to
+/// traverse one at all: the entry is on the `PATH`, the folder is there, and opening it fails with
+/// an untrusted mount point (`AMB-T-3565`). The terminal opens, the probe agrees nothing is
+/// installed, and the person who installed it reads a broken Amenbo.
+///
+/// Named for the fact rather than for the consequence, because the fact is the part that is
+/// certain: what is measured is this process's token, not whether any particular tool can be
+/// reached. Drawing the conclusion is the surface's, and so is the way out — there is none from in
+/// here, because a token cannot be given back.
+#[tauri::command]
+pub fn elevated() -> bool {
+    holds_an_administrator_token()
+}
+
+/// The Windows answer: the elevation flag on this process's own access token.
+///
+/// A token is asked rather than a group membership: an administrator who has not been elevated is
+/// still a member of the administrators group, and answering from membership would warn every one
+/// of them about a state they are not in. `TokenElevation` is what UAC actually split.
+///
+/// A token that cannot be opened or read is reported as not elevated. This decides whether a
+/// warning is shown, so the failure that costs least is the silent one: a machine that will not
+/// answer is overwhelmingly a machine running as the ordinary user, and a warning shown to somebody
+/// whose tools work is a warning they learn to dismiss.
+#[cfg(windows)]
+fn holds_an_administrator_token() -> bool {
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows_sys::Win32::Security::{
+        GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY,
+    };
+    use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+    let mut token: HANDLE = std::ptr::null_mut();
+    // SAFETY: the pseudo-handle `GetCurrentProcess` returns needs no closing and is valid for the
+    // call, and `token` is owned here and outlives it. On success it holds a real handle, closed
+    // below on both paths out.
+    if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
+        return false;
+    }
+    let mut elevation = TOKEN_ELEVATION { TokenIsElevated: 0 };
+    let mut written = 0u32;
+    // SAFETY: `token` was opened with `TOKEN_QUERY`, which is the right the class needs, and the
+    // buffer handed over is a `TOKEN_ELEVATION` given with its own size — the class writes exactly
+    // that struct, so the length cannot be short.
+    let read = unsafe {
+        GetTokenInformation(
+            token,
+            TokenElevation,
+            std::ptr::from_mut(&mut elevation).cast(),
+            std::mem::size_of::<TOKEN_ELEVATION>() as u32,
+            &mut written,
+        )
+    };
+    // SAFETY: `token` came from a successful `OpenProcessToken` and is not used again.
+    unsafe { CloseHandle(token) };
+    read != 0 && elevation.TokenIsElevated != 0
+}
+
+/// Every other operating system, where the question does not arise.
+///
+/// What is being reported is not "running with more rights than usual" in general — it is one
+/// Windows behaviour, an elevated process refusing a standard user's junction, and the tool layout
+/// that walks into it. macOS and Linux have no junctions and no scoop, and an app the user launched
+/// from their desktop is running as them. Answering `true` anywhere here would put a warning about
+/// Windows in front of somebody who is not on Windows.
+#[cfg(not(windows))]
+fn holds_an_administrator_token() -> bool {
+    false
 }
 
 /// Tell the program what terminal it is in, without overruling anything already said.
@@ -234,6 +316,26 @@ mod tests {
         match amenbo_core::env::locale() {
             Some(_) => assert_eq!(set("LANG"), None, "the session's locale was overwritten"),
             None => assert_eq!(set("LANG"), Some(LANG.to_string()), "the locale went unsaid"),
+        }
+    }
+
+    /// The question elevation answers is Windows's alone, so everywhere else the answer is the
+    /// constant that keeps a warning about junctions off a screen that has none to warn about.
+    #[cfg(not(windows))]
+    #[test]
+    fn nothing_outside_windows_is_reported_as_elevated() {
+        assert!(!elevated(), "a warning about Windows junctions was raised off Windows");
+    }
+
+    /// On Windows the answer is read from the operating system, so what can be asserted is that
+    /// reading it is repeatable: the token is opened and closed on every call, and an answer that
+    /// changed between two of them would mean the handle path, not the machine, decided it.
+    #[cfg(windows)]
+    #[test]
+    fn the_same_process_gets_the_same_answer_every_time() {
+        let first = elevated();
+        for _ in 0..64 {
+            assert_eq!(elevated(), first, "the answer moved without the process changing");
         }
     }
 

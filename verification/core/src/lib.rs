@@ -214,6 +214,12 @@ pub enum Domain {
     /// what comes of it leaves through the outbox — while the screen's half decides nothing but
     /// whether that wake is registered at all.
     Tick,
+    /// The terminal face: the pane an agent is run in, and whether it is a face of the app's one
+    /// window or a window of its own. A domain of its own because none of it is a record — a session
+    /// is a process, and which window is drawing it is this machine's arrangement of one screen. The
+    /// screen's alone, too: a terminal is what a reader is already typing in, so there is nothing
+    /// here for the CLI driver to walk.
+    Terminal,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1771,6 +1777,32 @@ const REGISTRY: &[OpSpec] = &[
     // running) or `yesterday` (pressed a day ago, the quiet spent); the band returns after one day,
     // so anything further back is the same world as `yesterday`.
     OpSpec { kind: Kind::Action, domain: Domain::Tick, op: "deferred", required: &["when"], refs: &[], strings: &["when"], binds: false },
+    // ── the terminal face ─────────────────────────────────────────────────────────────────────────
+    // Amenbo is one window with two faces and, for whoever wants them side by side, two windows.
+    // Every op below is the screen's: what they are about is where a running terminal
+    // is drawn, and a terminal is the one surface a reader is already typing in — there is nothing
+    // for the CLI driver to walk, and no gap in it.
+    //
+    // Which face the one window is showing. Pressed rather than arrived at: the segments are the only
+    // way between the two, and a road that could not name which it pressed could not say which face
+    // the assert after it read.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "show-face", required: &["face"], refs: &[], strings: &["face"], binds: false },
+    // A line typed into the pane and sent. `text` is the reader's own words rather than the
+    // interface's, which is what makes it worth reading back: it is on the screen because a person
+    // put it there, in whatever language the app is in, so a road can follow it from one window to
+    // the other. It also names the pane's frame — the first line sent into a frame is what it is
+    // called — which is how a road says *which* window it means once there are two.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "type-line", required: &["text"], refs: &[], strings: &["text"], binds: false },
+    // Splitting the terminal out into a window of its own, and folding it back. Two ops rather than
+    // one with a direction, because they are pressed in different windows: the way out is on the
+    // face, and the way back is in the window it made.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "split-out", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "fold-back", required: &[], refs: &[], strings: &[], binds: false },
+    // What the pane is showing. `shows` is words a road put there itself with `type-line`, so the
+    // reading finds them on the pane drawing that session and nowhere else — which is the whole of
+    // how a road tells "the same terminal, moved" from "another terminal, started". The absent half
+    // is what a road reads while the other face is up.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "pane", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
 
 ];
 

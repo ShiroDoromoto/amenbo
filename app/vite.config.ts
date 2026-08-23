@@ -8,4 +8,10 @@ export default defineConfig({
   // Tauri assumes a fixed port (get it wrong and you get a white screen).
   server: { port: 5180, strictPort: true },
   clearScreen: false,
+  build: {
+    // One entry per window (`AMB-T-3588`): the board is the root document, the talk window its own.
+    // Naming them both is what keeps the second one out of the build — Vite takes `index.html` alone
+    // by default, and a window whose page was never emitted opens on a 404.
+    rollupOptions: { input: { main: "index.html", talk: "talk.html" } },
+  },
 });

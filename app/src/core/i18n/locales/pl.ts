@@ -498,6 +498,7 @@ export const pl: Translation = {
     "act.nDecisions.one": "{n} decyzja", "act.nDecisions.few": "{n} decyzje", "act.nDecisions.many": "{n} decyzji", "act.nDecisions.other": "{n} decyzji",
     "act.nameless": "(usunięte)",
     "app.loadError": "Nie udało się wczytać danych.", "app.loading": "Wczytywanie…",
+    "app.talkWindow": "Amenbo — Rozmowa",
     "hooks.title": "Trzymać oznaczenia Amenbo z dala od Twoich commitów?",
     "hooks.why": "Oznaczenie w rodzaju AMB-T-… nic nie znaczy poza danymi, które je wydały. Hook gita zatrzyma je, zanim trafi do commita.",
     "hooks.scope": "Pytamy raz. Twoja odpowiedź obejmuje repozytoria, w których pracuje Amenbo — te teraz i te, które dodasz później.",

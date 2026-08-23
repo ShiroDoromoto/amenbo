@@ -471,6 +471,7 @@ export const ko: Translation = {
     "act.nTasks.other": "작업 {n}건", "act.nDecisions.other": "결정 {n}건",
     "act.nameless": "(삭제됨)",
     "app.loadError": "데이터를 불러오지 못했습니다.", "app.loading": "불러오는 중…",
+    "app.talkWindow": "Amenbo — 대화",
     "hooks.title": "Amenbo의 참조를 커밋에서 막을까요?",
     "hooks.why": "AMB-T-… 같은 참조는 그것을 발급한 데이터 밖에서는 아무것도 가리키지 않습니다. git 훅이 커밋에 닿기 전에 잡아 줍니다.",
     "hooks.scope": "한 번만 묻습니다. 그 답은 Amenbo가 다루는 저장소 전체에 적용됩니다. 지금 것도, 나중에 더할 것도요.",

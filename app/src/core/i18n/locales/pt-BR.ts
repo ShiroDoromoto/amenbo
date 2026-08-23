@@ -494,6 +494,7 @@ export const ptBR: Translation = {
     "act.nDecisions.one": "{n} decisão", "act.nDecisions.many": "{n} decisões", "act.nDecisions.other": "{n} decisões",
     "act.nameless": "(excluído)",
     "app.loadError": "Não foi possível carregar os dados.", "app.loading": "Carregando…",
+    "app.talkWindow": "Amenbo — Conversa",
     "hooks.title": "Manter as referências do Amenbo fora dos seus commits?",
     "hooks.why": "Uma referência como AMB-T-… não significa nada fora dos dados que a emitiram. Um hook do git a segura antes de ela chegar a um commit.",
     "hooks.scope": "Perguntado uma vez. Sua resposta cobre os repositórios com que o Amenbo trabalha, agora e os que você adicionar depois.",

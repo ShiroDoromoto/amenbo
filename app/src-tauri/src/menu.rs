@@ -1,6 +1,7 @@
 //! Native application menu. Application info (About / version) is served through the OS-native app
 //! menu, and Windows gets a menu too — macOS had the default About, Windows had no route at all.
-//! Built once at startup and shared by every window.
+//! Built once at startup and shared by every window — both of them (`crate::windows`): About, the
+//! update check and Quit are the app's, not one face's, so either window is a fair place to reach them.
 //!
 //! On macOS the whole menu is replaced, so the standard app / Edit / Window submenus are rebuilt
 //! here: dropping the Edit submenu would strip the webview of Cmd+C/V/X/A, which the default menu

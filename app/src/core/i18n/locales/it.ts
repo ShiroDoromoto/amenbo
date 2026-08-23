@@ -493,6 +493,7 @@ export const it: Translation = {
     "act.nDecisions.one": "{n} decisione", "act.nDecisions.many": "{n} decisioni", "act.nDecisions.other": "{n} decisioni",
     "act.nameless": "(eliminato)",
     "app.loadError": "Non è stato possibile caricare i dati.", "app.loading": "Caricamento…",
+    "app.talkWindow": "Amenbo — Conversazione",
     "hooks.title": "Tenere i riferimenti di Amenbo fuori dai tuoi commit?",
     "hooks.why": "Un riferimento come AMB-T-… non significa nulla fuori dai dati che l'hanno emesso. Un hook di git lo ferma prima che arrivi in un commit.",
     "hooks.scope": "Chiesto una volta. La tua risposta copre i repository su cui Amenbo lavora, quelli di adesso e quelli che aggiungerai.",

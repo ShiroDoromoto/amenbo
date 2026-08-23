@@ -50,12 +50,12 @@ pub fn send(app: &tauri::AppHandle, title: String, body: String) {
     });
 }
 
-/// What a toast click does: raise the window and ask the frontend to navigate to the inbox — the
+/// What a toast click does: raise the board and ask the frontend to navigate to the inbox — the
 /// same as `macos_notify`. An arrival notification aggregates a count (`notifyArrival(n)`), so no
-/// single task can be identified and the inbox is the right destination.
+/// single task can be identified and the inbox is the right destination (`crate::windows`).
 fn on_activated(app: &tauri::AppHandle) {
     // The OS activates the app itself through the AUMID, but unminimizing and raising is explicit.
-    if let Some(win) = app.get_webview_window("main") {
+    if let Some(win) = app.get_webview_window(crate::windows::BOARD) {
         let _ = win.unminimize();
         let _ = win.show();
         let _ = win.set_focus();

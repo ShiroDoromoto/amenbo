@@ -472,6 +472,7 @@ export const tr: Translation = {
     "act.nDecisions.one": "{n} karar", "act.nDecisions.other": "{n} karar",
     "act.nameless": "(silinmiş)",
     "app.loadError": "Veriler yüklenemedi.", "app.loading": "Yükleniyor…",
+    "app.talkWindow": "Amenbo — Sohbet",
     "hooks.title": "Amenbo'nun kayıt numaraları commit'lerinizin dışında kalsın mı?",
     "hooks.why": "AMB-T-… gibi bir numara, onu veren verinin dışında hiçbir şey ifade etmez. Bir git hook onu commit'e ulaşmadan durdurur.",
     "hooks.scope": "Bir kez sorulur. Yanıtınız Amenbo'nun çalıştığı depoları kapsar; şimdikileri de sonra ekleyeceklerinizi de.",

@@ -472,6 +472,7 @@ export const zhHant: Translation = {
     "act.nTasks.other": "{n} 個任務", "act.nDecisions.other": "{n} 則決策",
     "act.nameless": "（已刪除）",
     "app.loadError": "資料載入失敗。", "app.loading": "載入中…",
+    "app.talkWindow": "Amenbo — 對話",
     "hooks.title": "要把 Amenbo 的參照擋在提交之外嗎？",
     "hooks.why": "像 AMB-T-… 這樣的參照，出了簽發它的這份資料就什麼都不指。git 掛鉤能在它進入提交之前攔下來。",
     "hooks.scope": "只問一次。你的答覆涵蓋 Amenbo 所處理的儲存庫，現在的和之後新增的都算。",

@@ -498,6 +498,7 @@ export const uk: Translation = {
     "act.nDecisions.one": "{n} рішення", "act.nDecisions.few": "{n} рішення", "act.nDecisions.many": "{n} рішень", "act.nDecisions.other": "{n} рішення",
     "act.nameless": "(видалене)",
     "app.loadError": "Не вдалося завантажити дані.", "app.loading": "Завантаження…",
+    "app.talkWindow": "Amenbo — Діалог",
     "hooks.title": "Тримати позначки Amenbo подалі від ваших комітів?",
     "hooks.why": "Позначка на кшталт AMB-T-… нічого не означає поза даними, які її видали. Гачок git спиняє її, перш ніж вона потрапить у коміт.",
     "hooks.scope": "Питаємо один раз. Ваша відповідь стосується репозиторіїв, у яких працює Amenbo — і нинішніх, і тих, які ви додасте потім.",

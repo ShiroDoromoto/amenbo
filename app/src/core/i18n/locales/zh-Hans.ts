@@ -472,6 +472,7 @@ export const zhHans: Translation = {
     "act.nTasks.other": "{n} 个任务", "act.nDecisions.other": "{n} 条决策",
     "act.nameless": "（已删除）",
     "app.loadError": "数据加载失败。", "app.loading": "加载中…",
+    "app.talkWindow": "Amenbo — 对话",
     "hooks.title": "要把 Amenbo 的引用挡在提交之外吗？",
     "hooks.why": "像 AMB-T-… 这样的引用，出了签发它的这份数据就什么都不指。git 钩子能在它进入提交之前拦下来。",
     "hooks.scope": "只问一次。你的答复覆盖 Amenbo 所处理的仓库，现在的和之后添加的都算。",

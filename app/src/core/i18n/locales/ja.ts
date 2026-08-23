@@ -485,6 +485,8 @@ export const ja: Translation = {
     "act.nameless": "（削除済み）",
     "app.loadError": "データを読み込めませんでした。", "app.loading": "読み込み中…",
     "app.talkWindow": "Amenbo — 対話",
+    "talk.folder": "AI に見せるフォルダを選びます。ここに置いたものだけが AI に見えます。",
+    "talk.chooseFolder": "フォルダを選ぶ",
     "talk.searching": "この機械にあるエージェントをさがしています…",
     "talk.ask": "このフォルダではどのエージェントを使いますか？",
     "talk.none": "この機械には、Amenbo が起こせるエージェントが見つかりませんでした。",

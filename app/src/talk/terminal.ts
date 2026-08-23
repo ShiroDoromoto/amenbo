@@ -64,8 +64,10 @@ export type PaneEvents = {
  * pane moving between windows does not restart anything (`AMB-D-753`).
  */
 export type PaneStart = {
-  /** The folder the shell starts in — canonical, as `wake_probe` answered with it. With none, the
-   *  shell starts where a shell handed no directory lands, which is the person's home. */
+  /** The folder the shell starts in — canonical, as `wake_probe` answered with it. A frame that is
+   *  starting a terminal always has one, because choosing a folder is what a face with no pane offers
+   *  and the pane is what choosing leaves (`./agent`); none is the pane that adopts a running terminal,
+   *  which starts nothing and reads this at all. */
   cwd?: string | null;
   /**
    * The catalogued id of the agent to start (`crate::wake`). A pane with none is a bare prompt.

@@ -1643,7 +1643,17 @@ session: string,
 /**
  * When the terminal was started (RFC3339 UTC).
  */
-startedAt: string, };
+startedAt: string, 
+/**
+ * The folder the terminal is running in, as the filesystem spells it — `None` for one opened
+ * without any.
+ *
+ * It is here for the pane that **adopts** this session: where a terminal runs was settled when it
+ * started, and a frame that took one over rather than starting it has no other way to learn it. A
+ * frame that does not know would have to ask the person for the folder again the next time it has
+ * a terminal to start, which is the one flow the face has asked for twice.
+ */
+folder: string | null, };
 
 /**
  * What a reference resolves to (`kind` — task or decision — and the entity's id). The GUI branches

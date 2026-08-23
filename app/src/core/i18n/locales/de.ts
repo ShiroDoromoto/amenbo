@@ -483,6 +483,8 @@ export const de: Translation = {
     "act.nameless": "(gelöscht)",
     "app.loadError": "Die Daten ließen sich nicht laden.", "app.loading": "Wird geladen…",
     "app.talkWindow": "Amenbo — Dialog",
+    "talk.folder": "Wählen Sie den Ordner, den Sie der KI zeigen. Nur was darin liegt, kann sie sehen.",
+    "talk.chooseFolder": "Ordner wählen",
     "talk.searching": "Suche nach den Agenten auf diesem Rechner …",
     "talk.ask": "Mit welchem Agenten arbeitest du in diesem Ordner?",
     "talk.none": "Auf diesem Rechner wurde kein Agent gefunden, den Amenbo starten kann.",

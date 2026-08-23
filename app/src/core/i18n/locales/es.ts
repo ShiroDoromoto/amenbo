@@ -494,6 +494,8 @@ export const es: Translation = {
     "act.nameless": "(eliminado)",
     "app.loadError": "No se pudieron cargar los datos.", "app.loading": "Cargando…",
     "app.talkWindow": "Amenbo — Conversación",
+    "talk.folder": "Elige la carpeta que le muestras a la IA. Solo verá lo que pongas ahí.",
+    "talk.chooseFolder": "Elegir carpeta",
     "talk.searching": "Buscando los agentes de esta máquina…",
     "talk.ask": "¿Con qué agente trabajas en esta carpeta?",
     "talk.none": "No se encontró ningún agente que Amenbo pueda iniciar en esta máquina.",

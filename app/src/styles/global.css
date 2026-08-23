@@ -409,7 +409,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   font-size: var(--fs-sm);
 }
 
-/* The offer and the install notice share a box: both are a sentence and then something to press. */
+/* The invitation to choose a folder, the offer of an agent and the install notice share a box: each is
+   a sentence and then something to press. */
 .agent__ask {
   display: flex;
   flex: 1;
@@ -444,6 +445,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 .agent__choice:hover { border-color: var(--c-accent); }
+
+/* A refusal kept under the invitation rather than drawn in place of it — the folder could not be
+   bound, and the reader is left where they were, which is with a folder still to choose. Inside the
+   box it is one more thing said, so it takes the room of a line instead of the room of a face. */
+.agent__ask .agent__failed { flex: 0 0 auto; padding: 0; }
 
 /* The closed frame's row. It exists only once the program has ended — while one is running there is
    nothing here to press, which is what "the agent cannot be changed mid-run" looks like on screen. */

@@ -140,4 +140,18 @@ describe("the row on the page", () => {
     expect(host.querySelector(".plate__say")?.textContent).toBe("which of the two");
     expect(row?.getAttribute("data-say")).toBe("waiting");
   });
+
+  it("comes down when there is nothing to label, and comes back with the same row", () => {
+    const host = document.createElement("div");
+    const draw = mountNameplate(host);
+
+    draw(null, EN);
+    const row = host.querySelector(".plate");
+    expect(row, "the row was removed rather than hidden").toBeTruthy();
+    expect((row as HTMLElement).hidden, "a pane with no session was labelled anyway").toBe(true);
+
+    draw({ name: null, now: { kind: "idle" }, say: { kind: "silent" } }, EN);
+    expect(host.querySelector(".plate")).toBe(row);
+    expect((row as HTMLElement).hidden).toBe(false);
+  });
 });

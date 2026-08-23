@@ -392,6 +392,7 @@ pub fn run() {
       commands::project_bound_folders,
       commands::project_bind_folder,
       commands::project_unbind_folder,
+      commands::folder_open,
       commands::stale_managed_blocks,
       commands::resync_managed_blocks,
       commands::orphan_bindings,

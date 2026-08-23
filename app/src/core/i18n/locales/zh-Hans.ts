@@ -473,6 +473,8 @@ export const zhHans: Translation = {
     "act.nameless": "（已删除）",
     "app.loadError": "数据加载失败。", "app.loading": "加载中…",
     "app.talkWindow": "Amenbo — 对话",
+    "talk.folder": "选择你要给智能体看的文件夹。只有放在里面的东西它才看得到。",
+    "talk.chooseFolder": "选择文件夹",
     "talk.searching": "正在查找这台机器上的智能体…",
     "talk.ask": "在这个文件夹里你使用哪个智能体？",
     "talk.none": "这台机器上没有找到 Amenbo 能启动的智能体。",

@@ -28,10 +28,11 @@ use crate::error::CmdError;
 
 /// What a folder says, what this machine says, and the answer the two come to.
 ///
-/// `folder` is where the pane would open — the user's home with none named, which is where a shell
-/// started with no folder lands ([`crate::launch::command`]).
+/// `folder` is where the pane would open, and it is asked for rather than defaulted: a pane is opened
+/// in the folder the person chose (`app/src/talk/agent.ts`), so there is no such thing here as a probe
+/// about nowhere in particular.
 #[tauri::command]
-pub fn wake_probe(folder: Option<String>) -> Result<WakeDto, CmdError> {
+pub fn wake_probe(folder: String) -> Result<WakeDto, CmdError> {
     let folder = resolve(folder)?;
     let found = amenbo_core::harness::probe(&folder, amenbo_core::config::Paths::command_name());
     let commands: Vec<&str> = amenbo_core::harness::HARNESSES
@@ -68,7 +69,7 @@ pub fn wake_probe(folder: Option<String>) -> Result<WakeDto, CmdError> {
 /// round — it loses nothing and happens every time a window opens — so [`wake_probe`] takes the
 /// cheap road, the same one `ui_language` takes.
 #[tauri::command]
-pub fn wake_remember(folder: Option<String>, agent: String) -> Result<(), CmdError> {
+pub fn wake_remember(folder: String, agent: String) -> Result<(), CmdError> {
     if wake::started_as(&agent).is_none() {
         return Err(CmdError::coded(
             "wake_unknown_agent",
@@ -103,27 +104,16 @@ fn row(one: &wake::Candidate) -> WakeCandidateDto {
     }
 }
 
-/// The folder a probe is about, canonical: the one named, or the user's home.
+/// The folder a probe is about, canonical.
 ///
-/// Home is the fallback because it is where a pane with no folder actually starts — a shell handed
-/// no directory lands there ([`crate::launch::command`]) — so probing anywhere else would answer for
-/// a folder the terminal is not in. It is the **account's** home and not
-/// [`amenbo_core::env::home`], which is Amenbo's own root and names a different thing entirely
-/// ([`amenbo_core::env::home_dir`] says which is which).
+/// There is no fallback. A pane opens where the person said it should, and the folder is theirs from
+/// the moment they chose it (`app/src/talk/agent.ts`) — so anything this could put in place of a
+/// missing one would be a probe of a folder the terminal is not in.
 ///
 /// A folder that is not there is refused rather than answered about — the answer would be "nothing
 /// is traced here", which reads as a folder with no agent rather than as a folder that is gone.
-fn resolve(folder: Option<String>) -> Result<PathBuf, CmdError> {
-    let named = folder.map(PathBuf::from).or_else(amenbo_core::env::home_dir);
-    let Some(named) = named else {
-        // The refusal carries a reason like the other arm's, because the template is one sentence
-        // for both and a reader shown a colon with nothing after it learns less than nothing.
-        return Err(CmdError::coded(
-            "wake_no_folder",
-            "this machine did not name a home folder",
-            serde_json::json!({ "reason": "this machine did not name a home folder" }),
-        ));
-    };
+fn resolve(folder: String) -> Result<PathBuf, CmdError> {
+    let named = PathBuf::from(folder);
     std::fs::canonicalize(&named).map_err(|e| unreachable_folder(&named, &e))
 }
 

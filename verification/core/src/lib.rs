@@ -1787,6 +1787,13 @@ const REGISTRY: &[OpSpec] = &[
     // way between the two, and a road that could not name which it pressed could not say which face
     // the assert after it read.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "show-face", required: &["face"], refs: &[], strings: &["face"], binds: false },
+    // The way in. A face with no folder yet has one control on it, and pressing it is the whole of the
+    // first run: the folder chosen is the one the AI is shown, it becomes a project's, and the pane
+    // opens in it. It is an action rather than a premise because it is the road every other terminal
+    // step stands on — a pane exists because somebody chose where it runs. `dir` is a name and not a
+    // path, the way `folder bind`'s is: which folder the run works in is the run's to decide, and what
+    // a road writes down is what to call the one it picked.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-folder", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
     // A line typed into the pane and sent. `text` is the reader's own words rather than the
     // interface's, which is what makes it worth reading back: it is on the screen because a person
     // put it there, in whatever language the app is in, so a road can follow it from one window to

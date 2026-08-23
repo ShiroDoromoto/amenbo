@@ -2402,6 +2402,31 @@ pub fn project_add_folder(dir: String, name: Option<String>) -> Result<WriteAck,
     Ok(WriteAck::new(&["tasks"]))
 }
 
+/// **Make the chosen folder one a pane can be opened in** — the terminal face's single way in.
+///
+/// Choosing a folder there is three things at once: the folder becomes a project's, the project comes
+/// into being, and the terminal opens in it. The first two are here; where a pane opens is the face's
+/// (`app/src/talk/agent.ts`).
+///
+/// **A folder that is already spoken for is not bound again, and is not refused either.** That is the
+/// whole difference from [`project_add_folder`], which refuses one because a second pointer beneath an
+/// existing one would shadow the binding above it. Here the answer to "something already owns this" is
+/// that there is nothing left to do — the pane opens in the folder, under the project that owns it —
+/// and a refusal would be a wall across the one flow the face has. The empty ack says as much: nothing
+/// was written, so there is nothing to invalidate.
+///
+/// Nothing asks for a name, because the flow is a folder and nothing else: the project a new binding
+/// raises is named after the folder ([`project_add_folder`] falls back to the basename when the name is
+/// left out). Everything else a bound folder can be — a lost pointer to recover, several projects
+/// claiming it — is that command's to answer, and is answered there.
+#[tauri::command]
+pub fn folder_open(dir: String) -> Result<WriteAck, CmdError> {
+    if amenbo_core::binding::find_upward(std::path::Path::new(&dir)).is_some() {
+        return Ok(WriteAck::default());
+    }
+    project_add_folder(dir, None)
+}
+
 /// When the `.amenbo` is gone but the bindings registry's reverse lookup names **exactly one living
 /// project** as this folder's owner, **recover** the pointer rather than quietly creating a new
 /// project — the same shape as the CLI `init` helper of the same name, equivalent to

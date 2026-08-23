@@ -473,6 +473,8 @@ export const zhHant: Translation = {
     "act.nameless": "（已刪除）",
     "app.loadError": "資料載入失敗。", "app.loading": "載入中…",
     "app.talkWindow": "Amenbo — 對話",
+    "talk.folder": "選擇你要給智慧代理看的資料夾。只有放在裡面的東西它才看得到。",
+    "talk.chooseFolder": "選擇資料夾",
     "talk.searching": "正在尋找這台機器上的智慧代理…",
     "talk.ask": "在這個資料夾裡你使用哪個代理？",
     "talk.none": "這台機器上找不到 Amenbo 能啟動的代理。",

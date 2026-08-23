@@ -2156,6 +2156,14 @@ pub struct PtySessionDto {
     pub(crate) session: String,
     /// When the terminal was started (RFC3339 UTC).
     pub(crate) started_at: String,
+    /// The folder the terminal is running in, as the filesystem spells it — `None` for one opened
+    /// without any.
+    ///
+    /// It is here for the pane that **adopts** this session: where a terminal runs was settled when it
+    /// started, and a frame that took one over rather than starting it has no other way to learn it. A
+    /// frame that does not know would have to ask the person for the folder again the next time it has
+    /// a terminal to start, which is the one flow the face has asked for twice.
+    pub(crate) folder: Option<String>,
 }
 
 /// One chunk of a terminal's output, on its way to the pane drawing it (the payload of the talk

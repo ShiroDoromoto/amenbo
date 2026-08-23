@@ -476,6 +476,8 @@ export const id: Translation = {
     "act.nameless": "(dihapus)",
     "app.loadError": "Gagal memuat data.", "app.loading": "Memuat…",
     "app.talkWindow": "Amenbo — Percakapan",
+    "talk.folder": "Pilih folder yang Anda tunjukkan kepada AI. Hanya yang Anda taruh di sana yang bisa dilihatnya.",
+    "talk.chooseFolder": "Pilih folder",
     "talk.searching": "Mencari agen yang ada di mesin ini…",
     "talk.ask": "Anda bekerja dengan agen yang mana di folder ini?",
     "talk.none": "Tidak ditemukan agen yang bisa dijalankan Amenbo di mesin ini.",

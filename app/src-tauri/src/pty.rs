@@ -316,6 +316,8 @@ pub fn pty_open(
     // window, `pty_attach` moves this along with it.
     let pane = Arc::new(Pane::new(window.label()));
 
+    let opened_in = folder.as_ref().map(|f| f.to_string_lossy().into_owned());
+
     terminals.0.lock().expect("terminals lock").insert(
         session.clone(),
         Terminal {
@@ -344,7 +346,11 @@ pub fn pty_open(
         let _ = app.emit_to(pane.target().as_str(), CLOSED_EVENT, &id);
     });
 
-    Ok(PtySessionDto { session, started_at })
+    Ok(PtySessionDto {
+        session,
+        started_at,
+        folder: opened_in,
+    })
 }
 
 /// Read one terminal to its end, sending each chunk on to the pane drawing it.
@@ -581,6 +587,7 @@ pub fn pty_sessions(terminals: tauri::State<'_, Terminals>) -> Vec<PtySessionDto
         .map(|(session, terminal)| PtySessionDto {
             session: session.clone(),
             started_at: terminal.started_at.clone(),
+            folder: terminal.folder.as_ref().map(|f| f.to_string_lossy().into_owned()),
         })
         .collect()
 }

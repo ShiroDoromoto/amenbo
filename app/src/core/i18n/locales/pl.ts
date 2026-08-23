@@ -499,6 +499,8 @@ export const pl: Translation = {
     "act.nameless": "(usunięte)",
     "app.loadError": "Nie udało się wczytać danych.", "app.loading": "Wczytywanie…",
     "app.talkWindow": "Amenbo — Rozmowa",
+    "talk.folder": "Wybierz folder, który pokazujesz SI. Widzi tylko to, co w nim umieścisz.",
+    "talk.chooseFolder": "Wybierz folder",
     "talk.searching": "Szukanie agentów na tym komputerze…",
     "talk.ask": "Z którym agentem pracujesz w tym folderze?",
     "talk.none": "Na tym komputerze nie znaleziono agenta, którego Amenbo mogłoby uruchomić.",

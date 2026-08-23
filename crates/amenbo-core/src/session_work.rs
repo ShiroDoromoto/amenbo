@@ -15,6 +15,10 @@
 //! **Only the newest move of a task counts, whoever made it.** A task somebody else has since reserved
 //! is theirs, however it started here, so the walk records the first move it meets for each task and
 //! ignores everything older about it.
+//!
+//! The same walk answers the question from the other end ([`adrift`]): which reservations are held by a
+//! session that is gone. A pane can only be asked about the work it is doing; a window can be asked
+//! about work nothing is doing any more.
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -70,6 +74,49 @@ pub fn work(path: &Path, session: &str) -> Work {
         }
     }
     work
+}
+
+/// Which of `reserved` are held by a session that is gone.
+///
+/// A task is adrift when the newest thing that moved it was moved by a session this app started, and
+/// that session is no longer among `live`. Nothing else counts as adrift, and the two exclusions are
+/// the whole of what keeps this honest:
+///
+/// - **A line with no session belongs to nobody.** A reservation made at somebody's own terminal has
+///   no session id on it ([`crate::activity_log::Line::session`]), and Amenbo cannot see whether that
+///   terminal is still open. Calling it adrift would be telling a person their own work had stopped.
+/// - **The newest move is the one that counts.** A task somebody else has since taken is theirs,
+///   however it started here — the same rule [`work`] walks by.
+///
+/// `reserved` is what the store says is reserved *now*; this only answers who is holding it. The two
+/// are read apart on purpose: the status is a column and the holder is a line, and a walk that decided
+/// both would be re-deriving what the store already knows.
+///
+/// The answer keeps `reserved`'s order — the caller's, which is the store's — because the order tasks
+/// are shown in is not this walk's to choose.
+pub fn adrift(path: &Path, reserved: &[i64], live: &HashSet<String>) -> Vec<i64> {
+    let want: HashSet<i64> = reserved.iter().copied().collect();
+    let mut seen: HashSet<i64> = HashSet::new();
+    let mut gone: HashSet<i64> = HashSet::new();
+    let mut lines = activity_log::rev_lines(path);
+    while let Some(line) = lines.next() {
+        // Bounded by the file for the same reason `work` is, and stopping early for a better one: once
+        // every reserved task has had its newest move read, there is nothing older that can change an
+        // answer.
+        if lines.read_bytes() > SCAN_BUDGET || seen.len() == want.len() {
+            break;
+        }
+        let (Some(task), Some(_)) = (line.task, moved_to(&line)) else { continue };
+        if !want.contains(&task) || !seen.insert(task) {
+            continue;
+        }
+        if let Some(session) = line.session.as_deref() {
+            if !live.contains(session) {
+                gone.insert(task);
+            }
+        }
+    }
+    reserved.iter().copied().filter(|task| gone.contains(task)).collect()
 }
 
 /// The status a line moved a task to, or `None` where the line did not move one.
@@ -135,6 +182,51 @@ mod tests {
 
         let work = work(&ledger, "pane-1");
         assert_eq!(work.holding, vec![13], "a line with no session belongs to nobody: {work:?}");
+    }
+
+    #[test]
+    fn a_reservation_whose_session_is_gone_is_adrift_and_one_nobody_named_is_not() {
+        let dir = amenbo_scratch::scratch("session-work-adrift");
+        let ledger = dir.join("activity.jsonl");
+        for entry in [
+            moved(1, 11, Some("pane-gone"), "todo", "in_progress"),
+            moved(2, 12, Some("pane-live"), "todo", "in_progress"),
+            // Reserved at somebody's own terminal: Amenbo cannot see whether that terminal is open.
+            moved(3, 13, None, "todo", "in_progress"),
+        ] {
+            append(&ledger, &entry);
+        }
+
+        let live: HashSet<String> = ["pane-live".to_string()].into_iter().collect();
+        assert_eq!(adrift(&ledger, &[11, 12, 13], &live), vec![11]);
+    }
+
+    #[test]
+    fn a_reservation_somebody_still_here_has_taken_over_is_not_adrift() {
+        let dir = amenbo_scratch::scratch("session-work-adrift-taken");
+        let ledger = dir.join("activity.jsonl");
+        for entry in [
+            moved(1, 11, Some("pane-gone"), "todo", "in_progress"),
+            // Handed back and taken again by a pane that is still here. The newest move is what counts.
+            moved(2, 11, Some("pane-gone"), "in_progress", "todo"),
+            moved(3, 11, Some("pane-live"), "todo", "in_progress"),
+        ] {
+            append(&ledger, &entry);
+        }
+
+        let live: HashSet<String> = ["pane-live".to_string()].into_iter().collect();
+        assert!(adrift(&ledger, &[11], &live).is_empty());
+    }
+
+    #[test]
+    fn a_task_the_ledger_says_nothing_about_is_not_adrift() {
+        let dir = amenbo_scratch::scratch("session-work-adrift-silent");
+        let ledger = dir.join("activity.jsonl");
+        append(&ledger, &moved(1, 11, Some("pane-gone"), "todo", "in_progress"));
+
+        // 12 was never moved through a pane — reserved before the ledger carried sessions, say. Silence
+        // is not evidence that nothing is holding it.
+        assert_eq!(adrift(&ledger, &[11, 12], &HashSet::new()), vec![11]);
     }
 
     /// A task taken over by somebody else is theirs, however it started here — the newest move is what

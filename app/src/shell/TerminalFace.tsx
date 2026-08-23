@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AdriftSlot } from "./AdriftSlot";
 import { TerminalPane } from "./TerminalPane";
 import { PaneRail } from "./PaneRail";
 import { frameNames, nameFrame, type FrameNames, type NamedBy } from "../talk/frames";
@@ -260,17 +261,18 @@ export function TerminalFace({
                 />
               )
               : (
-                <button
+                // An empty slot is a place, and a place with room to say something: where this
+                // project has work nothing is doing any more, this is where it is put (`./AdriftSlot`).
+                <AdriftSlot
                   key={`${layout.page}.${slot}`}
-                  className="slot slot--empty"
-                  onClick={() => setLayout((was) => {
+                  folder={folderOfPage(layout, layout.page)}
+                  onOpenLedger={onOpenLedger}
+                  onOpen={() => setLayout((was) => {
                     const made = frameFor(was, was.page, slot);
                     startNow.current.add(made.frame.id);
                     return focusOn(made.layout, made.frame.id);
                   })}
-                >
-                  {t("face.open")}
-                </button>
+                />
               ))}
         </div>
         <FilesPanel

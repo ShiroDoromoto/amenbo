@@ -32,7 +32,7 @@
 //! is only the terminal itself.
 
 use std::borrow::Cow;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -648,6 +648,25 @@ pub fn folder(app: &tauri::AppHandle, session: &str) -> Option<PathBuf> {
         .get(session)?
         .folder
         .clone()
+}
+
+/// The sessions this process has open, as a set of ids.
+///
+/// It is what says a session is **still there**, and it is the only thing that can: a terminal lives
+/// inside this process, so the registry is the whole of the answer and a session missing from it has
+/// ended. That is what lets work nothing is doing any more be told from work somebody is still at
+/// ([`amenbo_core::session_work::adrift`]).
+///
+/// It says nothing about a terminal somebody has open outside Amenbo. No Amenbo can see one, which is
+/// why a reservation made without a session id is never read as abandoned.
+pub fn live(app: &tauri::AppHandle) -> HashSet<String> {
+    app.state::<Terminals>()
+        .0
+        .lock()
+        .expect("terminals lock")
+        .keys()
+        .cloned()
+        .collect()
 }
 
 /// Send what was typed into the pane to the terminal. `data` is the text the emulator produced for

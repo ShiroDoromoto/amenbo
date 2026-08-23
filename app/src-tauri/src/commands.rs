@@ -3708,6 +3708,70 @@ pub fn session_work(session: String) -> Result<SessionWorkDto, CmdError> {
     Ok(out)
 }
 
+/// The reservations in this folder's project that nothing is working on any more.
+///
+/// A process can die and the ledger not hear about it, so a task can sit reserved with nobody at it. It
+/// is out of everybody's mailbox while it does, which is the whole of why it goes unnoticed. What makes
+/// it noticeable is that a reservation made inside a pane carries the session that made it, and this
+/// process knows which sessions are still running (`crate::pty::live`). A reservation whose session has
+/// gone is a fact, not a guess.
+///
+/// **Nothing here decides anything.** The answer is what to put to a person, and moving a task is
+/// theirs or their AI's (`AMB-D-748`). Two kinds of reservation are deliberately left out of it:
+///
+/// - one made at somebody's own terminal, which carries no session id — Amenbo cannot see whether that
+///   terminal is still open, and saying the work had stopped would be saying something it does not know;
+/// - one held by a session that is running, which is work in hand.
+///
+/// `folder` is which project is being asked about: a screen of panes is one project (`../talk/layout`),
+/// and the question belongs to the screen it is asked on. A folder that is nobody's answers with
+/// nothing rather than with the whole device.
+///
+/// The cards come back rather than the ids, unlike `session_work`, because the whole of what is drawn
+/// is the cards — a second round trip per screen for the same answer is what the perf budget is for.
+#[tauri::command]
+pub fn tasks_adrift(app: tauri::AppHandle, folder: String) -> Result<Vec<TaskCardDto>, CmdError> {
+    use amenbo_core::store_engine::{self, TaskQuery};
+
+    let _perf = amenbo_core::perf::Timer::start("tasks_adrift");
+    let Some((_, binding)) = amenbo_core::binding::find_upward(std::path::Path::new(&folder)) else {
+        return Ok(Vec::new());
+    };
+    let Some(project_id) = binding.project_id else {
+        return Ok(Vec::new());
+    };
+
+    let live = crate::pty::live(&app);
+    let store = open_store_read()?;
+    let today = amenbo_core::time::today();
+    let read_model = store.read_model();
+
+    let mut reserved = query::Filter::parse("status:in_progress", today)?;
+    reserved.resolve(read_model.conn())?;
+    let page = store_engine::list_task_ids(
+        read_model.conn(),
+        &TaskQuery {
+            reach: store.reach(),
+            project_id: Some(project_id),
+            filter: &reserved,
+            sort: "order",
+            today,
+            limit: None,
+            offset: None,
+        },
+    )?;
+
+    let adrift =
+        amenbo_core::session_work::adrift(&store.paths.activity_file, &page.ids, &live);
+    let mut out = Vec::with_capacity(adrift.len());
+    for id in adrift {
+        if let Some(row) = amenbo_core::store_engine::read::task_card_row(read_model.conn(), id)? {
+            out.push(task_card_from_row(&store, row));
+        }
+    }
+    Ok(out)
+}
+
 /// What this device calls the talk window's frames — the whole of it, since the window draws every
 /// frame it has at once (`AMB-D-749` puts the running state in memory; this is the part that is kept).
 #[tauri::command]

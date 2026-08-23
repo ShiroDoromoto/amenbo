@@ -496,6 +496,7 @@ export const hi: Translation = {
     "face.paneCount": "स्क्रीन पर पैन",
     "face.pages": "पृष्ठ",
     "face.page": "पृष्ठ {n}",
+    "face.adrift": "इस प्रोजेक्ट में कुछ अब भी आरक्षित है और उस पर कोई काम नहीं कर रहा। क्या आप इसे जारी रखेंगे?",
     "face.open": "यहाँ टर्मिनल खोलें",
     "face.rename": "इस पैन का नाम बदलें",
     "face.needsYou": "आपकी प्रतीक्षा में",

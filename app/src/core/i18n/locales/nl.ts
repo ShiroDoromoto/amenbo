@@ -496,6 +496,7 @@ export const nl: Translation = {
     "face.paneCount": "Deelvensters op het scherm",
     "face.pages": "Pagina's",
     "face.page": "Pagina {n}",
+    "face.adrift": "In dit project staat iets nog gereserveerd waar niemand aan werkt. Wil je ermee verdergaan?",
     "face.open": "Hier een terminal openen",
     "face.rename": "Dit deelvenster hernoemen",
     "face.needsYou": "wacht op je",

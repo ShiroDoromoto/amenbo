@@ -485,6 +485,12 @@ export const ja: Translation = {
     "act.nameless": "（削除済み）",
     "app.loadError": "データを読み込めませんでした。", "app.loading": "読み込み中…",
     "app.talkWindow": "Amenbo — 対話",
+    "face.switch": "この窓が出す面",
+    "face.tasks": "タスク",
+    "face.terminal": "ターミナル",
+    "face.splitOut": "別ウィンドウで開く",
+    "face.merge": "1つの窓に戻す",
+    "face.ended": "この端末のプログラムは終了しました。",
     // lint hook consent: the question Amenbo asks before writing into .git/hooks
     "hooks.title": "コミットに Amenbo の参照が混ざらないようにしますか？",
     "hooks.why": "AMB-T-… のような参照は、それを発行したストアの外では何も意味しません。git のフックを置いて、コミットに混ざる前に止めます。",
@@ -634,6 +640,7 @@ export const ja: Translation = {
       "{url} の鍵が、確認した指紋（{agreed}）から {serving} に変わりました。登録し直して、新しい指紋を確かめてください。",
     pty_failed: "端末を起動できませんでした: {reason}",
     pty_gone: "この端末はもう開いていません。",
+    window_failed: "その窓を開けませんでした: {reason}",
 
     already_reserved: "{ref} は「未着手」ではないため予約できません。別のセッションが着手済みかもしれません。",
     not_ready: "{ref} はまだ予約できません: {reasons}",

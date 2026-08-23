@@ -473,6 +473,12 @@ export const tr: Translation = {
     "act.nameless": "(silinmiş)",
     "app.loadError": "Veriler yüklenemedi.", "app.loading": "Yükleniyor…",
     "app.talkWindow": "Amenbo — Sohbet",
+    "face.switch": "Bu pencerenin gösterdiği",
+    "face.tasks": "Görevler",
+    "face.terminal": "Terminal",
+    "face.splitOut": "Ayrı pencerede aç",
+    "face.merge": "Tek pencereye dön",
+    "face.ended": "Bu terminaldeki program sona erdi.",
     "hooks.title": "Amenbo'nun kayıt numaraları commit'lerinizin dışında kalsın mı?",
     "hooks.why": "AMB-T-… gibi bir numara, onu veren verinin dışında hiçbir şey ifade etmez. Bir git hook onu commit'e ulaşmadan durdurur.",
     "hooks.scope": "Bir kez sorulur. Yanıtınız Amenbo'nun çalıştığı depoları kapsar; şimdikileri de sonra ekleyeceklerinizi de.",
@@ -612,6 +618,7 @@ export const tr: Translation = {
       "{url} artık size gösterilen {agreed} yerine {serving} sunuyor. Yeniden kaydedin ve yeni parmak izini karşılaştırın.",
     pty_failed: "Terminal başlatılamadı: {reason}",
     pty_gone: "O terminal artık açık değil.",
+    window_failed: "O pencere açılamadı: {reason}",
 
     already_reserved:
       "{ref} “Yapılacak” durumunda değil, bu yüzden üstlenilemez — başka bir oturum onu çoktan almış olabilir.",

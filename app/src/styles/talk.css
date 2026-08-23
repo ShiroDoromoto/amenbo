@@ -1,15 +1,35 @@
-/* The talk window's own page. One pane fills it: the frame that will hold several, and the rail and
-   the bands around them, are not here yet, so what the window shows is the terminal and its margin. */
+/* The talk window's own page — the window the terminal is split out into (`AMB-D-753`). A bar with
+   the way back to one window, and under it the pane: the frame that will hold several, and the rail
+   and the bands around them, are not here yet. */
 .talk {
   height: 100%;
   padding: var(--s-3);
   background: var(--c-bg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+/* The bar above the pane. It holds one control and is sized by it, so the pane keeps the rest. */
+.talk__bar { display: flex; align-items: center; justify-content: flex-end; }
+.talk__action {
+  background: var(--c-surface-sunken); border: 1px solid var(--c-border);
+  border-radius: var(--r-md); padding: var(--s-1) var(--s-3);
+  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1.6;
+}
+.talk__action:hover { color: var(--c-text); }
+
+/* The program in the terminal having exited. What is on the screen above stays as it was — that is
+   what a terminal ends with — and this is the part of it the screen cannot show for itself. */
+.talk__note {
+  padding: var(--s-2) var(--s-3);
+  color: var(--c-text-muted); font-size: var(--fs-sm);
 }
 
 /* The terminal's box. xterm.js measures the element it was opened in, so this is what decides how
    many columns and rows the program inside is told it has. */
 .talk__pane {
-  height: 100%;
+  flex: 1; min-height: 0;
   padding: var(--s-3);
   border: 1px solid var(--c-border);
   border-radius: var(--r-md);

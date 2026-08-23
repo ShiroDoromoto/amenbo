@@ -494,6 +494,12 @@ export const es: Translation = {
     "act.nameless": "(eliminado)",
     "app.loadError": "No se pudieron cargar los datos.", "app.loading": "Cargando…",
     "app.talkWindow": "Amenbo — Conversación",
+    "face.switch": "Qué muestra esta ventana",
+    "face.tasks": "Tareas",
+    "face.terminal": "Terminal",
+    "face.splitOut": "Abrir en una ventana aparte",
+    "face.merge": "Volver a una sola ventana",
+    "face.ended": "El programa de esta terminal ha terminado.",
     "hooks.title": "¿Mantener las referencias de Amenbo fuera de tus commits?",
     "hooks.why": "Una referencia como AMB-T-… no significa nada fuera de los datos que la emitieron. Un hook de git la detiene antes de que llegue a un commit.",
     "hooks.scope": "Se pregunta una vez. Tu respuesta cubre los repositorios con los que trabaja Amenbo, ahora y los que añadas después.",
@@ -640,6 +646,7 @@ export const es: Translation = {
       "{url} publica ahora {serving}, no la {agreed} que se te mostró. Regístralo otra vez y comprueba la huella nueva.",
     pty_failed: "No se pudo iniciar la terminal: {reason}",
     pty_gone: "Esa terminal ya no está abierta.",
+    window_failed: "No se pudo abrir esa ventana: {reason}",
 
     already_reserved:
       "{ref} no está en “Pendiente”, así que no se puede reservar: puede que otra sesión ya la tenga.",

@@ -44,8 +44,9 @@ pub mod store_watch;
 /// The hourly tick's startup pass: what this device answered about being woken, settled against what
 /// its scheduler holds (`AMB-D-707`).
 mod tick;
-/// The labels of the two windows this app opens (board and talk), and which of them anything that
-/// raises a window from outside the webview means.
+/// The labels of the windows this app can open (the board, and the talk window someone splits the
+/// terminal out into), which of them anything raising a window from outside the webview means, and
+/// the door that second window is opened and closed through (`AMB-D-753`).
 mod windows;
 #[cfg(target_os = "windows")]
 mod windows_notify;
@@ -409,9 +410,12 @@ pub fn run() {
       commands::plugin_update_apply,
       commands::plugin_update_apply_all,
       pty::pty_open,
+      pty::pty_sessions,
+      pty::pty_attach,
       pty::pty_write,
       pty::pty_resize,
-      pty::pty_close,
+      windows::talk_open,
+      windows::talk_close,
     ])
     .run(context)
     .expect("error while running tauri application");

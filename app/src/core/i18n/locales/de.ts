@@ -483,6 +483,12 @@ export const de: Translation = {
     "act.nameless": "(gelöscht)",
     "app.loadError": "Die Daten ließen sich nicht laden.", "app.loading": "Wird geladen…",
     "app.talkWindow": "Amenbo — Dialog",
+    "face.switch": "Was dieses Fenster zeigt",
+    "face.tasks": "Aufgaben",
+    "face.terminal": "Terminal",
+    "face.splitOut": "In einem eigenen Fenster öffnen",
+    "face.merge": "Zurück zu einem Fenster",
+    "face.ended": "Das Programm in diesem Terminal wurde beendet.",
     "hooks.title": "Amenbos Referenzen aus deinen Commits heraushalten?",
     "hooks.why": "Eine Referenz wie AMB-T-… bedeutet außerhalb der Daten, die sie vergeben haben, nichts. Ein git-Hook hält sie auf, bevor sie in einen Commit gelangt.",
     "hooks.scope": "Wird einmal gefragt. Deine Antwort gilt für die Repositorys, mit denen Amenbo arbeitet — die jetzigen und die, die du später hinzufügst.",
@@ -625,6 +631,7 @@ export const de: Translation = {
       "{url} veröffentlicht jetzt {serving} statt des gezeigten {agreed}. Trage es erneut ein und prüfe den neuen Fingerabdruck.",
     pty_failed: "Das Terminal konnte nicht gestartet werden: {reason}",
     pty_gone: "Dieses Terminal ist nicht mehr geöffnet.",
+    window_failed: "Dieses Fenster konnte nicht geöffnet werden: {reason}",
 
     already_reserved:
       "{ref} ist nicht „Offen“ und lässt sich deshalb nicht übernehmen — vielleicht hat eine andere Sitzung sie schon.",

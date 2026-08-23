@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { TopBar } from "./TopBar";
+import { TerminalFace } from "./TerminalFace";
 import { useNavHistory, NO_SELECTION } from "./navHistory";
 import { isBlankSpaceClose } from "./outsideClose";
 import { Sidebar } from "./Sidebar";
@@ -30,12 +31,14 @@ import { DecisionDetailPane } from "../screens/DecisionDetailPane";
 import { TaskComposePane } from "../screens/TaskComposePane";
 import { dataAdapter } from "../mock/adapter";
 import { checkForUpdatesFresh, inTauri, subscribe } from "../core/snapshot";
+import { type Face, getWindowShape, setWindowShape, type WindowShape } from "../core/windowShape";
+import { invoke } from "../core/ipc";
 import { confirmDialog } from "../core/dialog";
 import { clampRightpaneWidth, getRightpaneWidth, setRightpaneWidth } from "../core/rightpaneWidth";
 import { clampSidebarWidth, getSidebarWidth, setSidebarWidth } from "../core/sidebarWidth";
 import { getSidebarCollapsed, setSidebarCollapsed } from "../core/sidebarCollapsed";
 import { RefNavProvider } from "../core/refNav";
-import { currentLang, t } from "../core/i18n";
+import { currentLang, errLabel, t, type CmdError } from "../core/i18n";
 import { Icon } from "../components/Icon";
 
 /**
@@ -131,6 +134,87 @@ export function AppShell() {
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsedState((c) => setSidebarCollapsed(!c));
   }, []);
+
+  // Which face this window is showing, and whether the terminal has a window of its own
+  // (`AMB-D-753`). A launch shows the ledger; the shape is what the machine was last used in.
+  const [face, setFace] = useState<Face>("tasks");
+  const [shape, setShapeState] = useState<WindowShape>(() => getWindowShape());
+  // Has the terminal been asked for in this window at all? Until it has, there is no pane and no
+  // shell — a launch that never leaves the ledger starts no process it was not asked to. Once asked
+  // it stays true, because the face is hidden rather than taken down (`TerminalFace`).
+  const [terminalAsked, setTerminalAsked] = useState(false);
+  const hostsTerminal = shape === "one" && terminalAsked;
+  // Splitting out and folding back are the same move seen from either end, and both go through the
+  // shape: the window is opened and closed by the effect below, so every way into two windows — the
+  // button, and a launch that remembers being two — arrives at the same place.
+  const setShape = useCallback((next: WindowShape) => setShapeState(setWindowShape(next)), []);
+  // The platform refusing to build the window. It is the one failure here a person has to be told
+  // about, because they asked for the window and would otherwise watch the button do nothing.
+  const [windowError, setWindowError] = useState<string | null>(null);
+  // Whether the window the shape is about to open was asked for by a press, and so comes to the
+  // front. A launch restoring the shape was not asking for anything, and the window the user is
+  // looking at is this one — "nothing comes forward but what somebody pressed" (`AMB-D-753`).
+  const raiseTalk = useRef(false);
+  useEffect(() => {
+    if (!inTauri()) return;
+    if (shape !== "two") {
+      void invoke("talk_close").catch(() => {});
+      return;
+    }
+    const raise = raiseTalk.current;
+    raiseTalk.current = false;
+    void invoke("talk_open", { raise }).catch((e: unknown) => {
+      // Back to one window, where the terminal still is: what was split out is put back rather than
+      // left pointing at a window that was never built.
+      setWindowError(errLabel(e as CmdError));
+      setShapeState(setWindowShape("one"));
+      setFace("terminal");
+    });
+  }, [shape]);
+  // The talk window going away, however it went: the button that folds the app back, and the title
+  // bar's close, which is the one an app that only watched its own button would miss. Either way the
+  // terminal is still running and is now nobody's to draw, so this window takes it and shows it —
+  // landing where the user was looking when they closed the other window.
+  useEffect(() => {
+    if (!inTauri()) return;
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen("talk://closed", () => {
+          setShape("one");
+          setTerminalAsked(true);
+          setFace("terminal");
+        }),
+      )
+      .then((un) => {
+        if (disposed) un();
+        else unlisten = un;
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [setShape]);
+  // Pressing a segment. With the terminal in a window of its own there is nothing to switch to here,
+  // so the press raises that window instead — and never opens a second one (`windows::talk_open`).
+  const selectFace = useCallback((next: Face) => {
+    if (next === "terminal" && shape === "two") {
+      void invoke("talk_open", { raise: true }).catch(() => {});
+      return;
+    }
+    if (next === "terminal") setTerminalAsked(true);
+    setFace(next);
+  }, [shape]);
+  // "Open in a separate window". The pane comes down as the shape changes, leaving the terminal
+  // running for the window that is about to draw it, and this window goes back to the ledger — the
+  // face it is now the only one of.
+  const splitOutTerminal = useCallback(() => {
+    setWindowError(null);
+    raiseTalk.current = true;
+    setFace("tasks");
+    setShape("two");
+  }, [setShape]);
 
   const rightpaneRef = useRef<HTMLDivElement>(null);
   // The right pane's width (a device-local, persisted UI setting). Dragging the left-edge handle widens it, up to
@@ -322,6 +406,8 @@ export function AppShell() {
         canForward={canForward}
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={toggleSidebar}
+        face={face}
+        onSelectFace={selectFace}
       />
       {/* Every band the app can raise, stacked in one place. They share a row of the shell rather than
           claiming one each: the grid needs a definite row per child, and news does not arrive one item
@@ -337,8 +423,17 @@ export function AppShell() {
         <HookSetupBanner asked={hooksAsked} />
         <TickBanner />
       </div>
+      {/* The terminal face, kept up from the moment it is first asked for. `hidden` is what the
+          other face being up means here: taking this down would take the emulator with it, and the
+          agent running in the pane would have nowhere to come back to (`AMB-D-753`). */}
+      {hostsTerminal && (
+        <div className="shell__terminal" hidden={face !== "terminal"}>
+          <TerminalFace onSplitOut={splitOutTerminal} note={windowError} />
+        </div>
+      )}
       <div
         className={`shell__body ${showRight ? "" : "shell__body--no-right"}${sidebarCollapsed ? " shell__body--sidebar-collapsed" : ""}`}
+        hidden={face === "terminal"}
         style={{ "--rightpane-w": `${rightWidth}px`, "--sidebar-w": `${sidebarWidth}px` } as CSSProperties}
       >
         <div className="sidebar-wrap">

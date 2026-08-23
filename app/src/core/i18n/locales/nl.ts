@@ -473,6 +473,12 @@ export const nl: Translation = {
     "act.nameless": "(verwijderd)",
     "app.loadError": "Gegevens laden is mislukt.", "app.loading": "Bezig met laden…",
     "app.talkWindow": "Amenbo — Gesprek",
+    "face.switch": "Wat dit venster toont",
+    "face.tasks": "Taken",
+    "face.terminal": "Terminal",
+    "face.splitOut": "In een apart venster openen",
+    "face.merge": "Terug naar één venster",
+    "face.ended": "Het programma in deze terminal is gestopt.",
     "hooks.title": "Amenbo-verwijzingen uit je commits houden?",
     "hooks.why": "Een verwijzing als AMB-T-… betekent niets buiten de gegevens die haar hebben uitgegeven. Een git-hook houdt er een tegen voordat hij in een commit belandt.",
     "hooks.scope": "Wordt één keer gevraagd. Je antwoord geldt voor de repositories waarin Amenbo werkt, nu en die je later toevoegt.",
@@ -612,6 +618,7 @@ export const nl: Translation = {
       "{url} publiceert nu {serving}, niet de {agreed} die je te zien kreeg. Registreer haar opnieuw en controleer de nieuwe vingerafdruk.",
     pty_failed: "De terminal kon niet worden gestart: {reason}",
     pty_gone: "Die terminal is niet meer open.",
+    window_failed: "Dat venster kon niet worden geopend: {reason}",
 
     already_reserved:
       "{ref} staat niet op “Te doen” en kan dus niet worden opgepakt — een andere sessie heeft hem misschien al.",

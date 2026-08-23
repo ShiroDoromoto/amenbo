@@ -499,6 +499,12 @@ export const pl: Translation = {
     "act.nameless": "(usunięte)",
     "app.loadError": "Nie udało się wczytać danych.", "app.loading": "Wczytywanie…",
     "app.talkWindow": "Amenbo — Rozmowa",
+    "face.switch": "Co pokazuje to okno",
+    "face.tasks": "Zadania",
+    "face.terminal": "Terminal",
+    "face.splitOut": "Otwórz w osobnym oknie",
+    "face.merge": "Wróć do jednego okna",
+    "face.ended": "Program w tym terminalu zakończył działanie.",
     "hooks.title": "Trzymać oznaczenia Amenbo z dala od Twoich commitów?",
     "hooks.why": "Oznaczenie w rodzaju AMB-T-… nic nie znaczy poza danymi, które je wydały. Hook gita zatrzyma je, zanim trafi do commita.",
     "hooks.scope": "Pytamy raz. Twoja odpowiedź obejmuje repozytoria, w których pracuje Amenbo — te teraz i te, które dodasz później.",
@@ -649,6 +655,7 @@ export const pl: Translation = {
       "{url} wydaje teraz {serving}, a nie pokazany Ci wcześniej {agreed}. Zarejestruj go ponownie i sprawdź nowy odcisk.",
     pty_failed: "Nie udało się uruchomić terminala: {reason}",
     pty_gone: "Ten terminal nie jest już otwarty.",
+    window_failed: "Nie udało się otworzyć tego okna: {reason}",
 
     already_reserved:
       "{ref} nie ma statusu „Do zrobienia”, więc nie można go zarezerwować — być może trzyma go już inna sesja.",

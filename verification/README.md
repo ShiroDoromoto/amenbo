@@ -173,8 +173,18 @@ that has one — it refuses the rest by name instead of shooting a road written 
 bakes in no command line and no pixel: each step becomes a plain-language instruction of what to do
 or confirm on screen, and the shooting is the screen tool's (`scripts/screen.swift`) — the harness
 names the app by pid and receives one file per step in an evidence directory (plus a
-`manifest.json` pairing each instruction, verdict and shot). Which window was shot, and the id it
-was shot by, stay inside the tool: a format nobody is handed is a format nobody parses.
+`manifest.json` pairing each instruction, verdict and shot). The id it was shot by stays inside the
+tool: a format nobody is handed is a format nobody parses.
+
+**A step says which window it happens in, once the app draws more than one.** `window: <title>` on a
+`steps_gui` step names the window by the title drawn in its bar — a whole title first, then any that
+holds it, the same way a name reaches an element — and it reaches the sentence the operator is
+handed, the shot the tool takes and the line the manifest keeps. Said nowhere, a step means the app's
+one window; against an app with two the tool refuses and lists the titles rather than shooting
+whichever was in front, because a shot of the wrong window is a picture of a screen nobody stood at
+and it reads on the manifest exactly like a picture of the right one. It is the screen road's alone:
+on `given` it names a window nothing has drawn yet, and on `steps_cli` one that never exists, and the
+loader turns both away.
 
 **The run owns the app it shoots.** It launches the `.app` bundle named by `--app`, with
 `AMENBO_HOME` pointed at a throwaway store of its own, holds the pid that launch answered with, and
@@ -287,6 +297,9 @@ element on screen with the name it answers to and where it stands, and `click-na
 clicks the one of that name — bringing that pid's app to the front first, since a press lands on
 whatever is frontmost where it is aimed and anything that took the front would swallow it silently.
 The screen is a webview, so both read it through the accessibility tree the app serves once asked.
+Both read one window and not the app, and take the same `--window <title>` a road's step does — an
+app drawing two draws two screens, and a name reached on the wrong one is a check that passed without
+looking at the screen it was written for.
 A part of a name will do — the name an element answers to is not the label
 on the screen (an emoji in front of the words belongs to it, and a card folds its lines into one
 string), so a whole one is rarely knowable in advance. When several names hold what was asked for,
@@ -750,6 +763,32 @@ A screen has no exit status to compare, so on a `steps_gui` road the word change
 tells the operator that being turned away is the step going right rather than their own hand going wrong,
 and the shot they leave is the screen carrying the refusal. Which guard refused is then read by the assert
 after it — a screen offers a sentence, never a code.
+
+### `window:` — which screen a step is walked on
+
+A step on a `steps_gui` road may name the window it happens in, by the title drawn in that window's
+bar:
+
+```yaml
+steps_gui:
+  - { type: assert, domain: task, op: carded, with: { target: seed, present: true }, window: "Amenbo — Talk" }
+```
+
+A whole title wins first, and any title holding what was written answers when none does — the same
+rule a name reaches an element by, and needed for the same reason: one window's title is often the
+start of another's, so `"Amenbo"` has to be able to mean the shorter of `"Amenbo"` and
+`"Amenbo — Talk"`.
+
+**Say nothing and the step means the app's one window.** That is the honest default while an app
+draws one, and it stops being one the moment it draws two: the tool then refuses the step and lists
+the titles that are up, rather than shooting whichever window was in front. The refusal is the point.
+A shot of the wrong window is a picture of a screen nobody stood at, and on the manifest it reads
+exactly like a picture of the right one — red for a reason nobody can see, or green off a name both
+windows happened to carry.
+
+Where the word is written down is where it belongs: on `given` it would name a window nothing has
+drawn yet, and on `steps_cli` one that never exists, so the lint turns both away rather than reading
+past a road filed under the wrong key.
 
 ### `steps_cli` / `steps_gui` — one goal, a road apiece
 

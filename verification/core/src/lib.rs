@@ -108,6 +108,10 @@ pub enum Step {
         /// wrong reason is not the guard under test.
         #[serde(default)]
         with: Args,
+        /// Which of the app's windows this step is carried out in, named by the title drawn in its
+        /// bar. See [`Step::window`].
+        #[serde(default)]
+        window: Option<String>,
         /// Optional binding name so later steps can refer to what this produced.
         #[serde(default, rename = "as")]
         bind: Option<String>,
@@ -118,6 +122,9 @@ pub enum Step {
         op: String,
         #[serde(default)]
         with: Args,
+        /// Which of the app's windows this step is read against. See [`Step::window`].
+        #[serde(default)]
+        window: Option<String>,
     },
 }
 
@@ -141,6 +148,23 @@ impl Step {
     fn with(&self) -> &Args {
         match self {
             Step::Action { with, .. } | Step::Assert { with, .. } => with,
+        }
+    }
+
+    /// Which of the app's windows this step happens in, named by the title drawn in its bar — or
+    /// `None` for the app's one window, which is what a road says by saying nothing.
+    ///
+    /// A screen driver's business alone: the CLI has no windows, and a road written for it carries
+    /// none. It sits beside `with` rather than inside it because it is not an argument of the op —
+    /// the same op, in either window, is the same operation on the same store; what differs is which
+    /// screen it is done on, and which screen the answer is read off.
+    ///
+    /// Saying nothing is the honest default while an app draws one window, and it stops being a
+    /// default the moment it draws two: the tool behind a screen driver refuses to guess, so a road
+    /// that has not said which window fails loudly rather than reading whichever one was in front.
+    pub fn window(&self) -> Option<&str> {
+        match self {
+            Step::Action { window, .. } | Step::Assert { window, .. } => window.as_deref(),
         }
     }
 }
@@ -2162,6 +2186,23 @@ impl Scenario {
                 ));
                 continue;
             }
+            // Which window a step happens in is a screen's question. On the premise it names a
+            // window nothing has drawn yet, and on the CLI's road it names one that never exists —
+            // both read as a road written for the screen and filed under the wrong key, which is
+            // exactly the mistake a silently ignored field would leave standing.
+            if let Some(window) = step.window() {
+                if driver != Some(Driver::Gui) {
+                    let where_ = match driver {
+                        None => "a premise stands a world up before any window is drawn",
+                        _ => "the CLI has no windows",
+                    };
+                    errs.push(at(i, format!(
+                        "`window: {window}` says which screen this happens on, and {where_} — it belongs on `steps_gui`"
+                    )));
+                } else if window.trim().is_empty() {
+                    errs.push(at(i, "`window` names a window by the title drawn in its bar, so it cannot be empty".to_string()));
+                }
+            }
             let spec = match lookup(step.kind(), step.domain(), step.op()) {
                 Some(s) => s,
                 None => {
@@ -2320,6 +2361,60 @@ steps_cli:
         let s = load_str(GOOD).expect("parses");
         s.validate().expect("valid");
         assert_eq!(s.steps(Driver::Cli).len(), 3);
+    }
+
+    /// A road that says which window it is walked in — the one thing a screen driver needs once an
+    /// app draws more than one, and the one thing the other drivers have no use for.
+    #[test]
+    fn a_screen_road_may_say_which_window_a_step_is_walked_in() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: task
+    op: narrowing-shut
+    window: "Amenbo — Talk"
+"#;
+        let s = load_str(yaml).expect("parses");
+        s.validate().expect("valid");
+        assert_eq!(s.steps(Driver::Gui)[0].window(), Some("Amenbo — Talk"));
+    }
+
+    /// Written on the wrong road it is a road filed under the wrong key, and the loader says so
+    /// rather than reading past it: a terminal has no windows to stand in front of, and a premise
+    /// stands its world up before anything is drawn at all.
+    #[test]
+    fn a_window_off_the_screen_road_is_rejected() {
+        for (key, step) in [
+            ("steps_cli", "  - type: assert\n    domain: task\n    op: narrowing-shut\n    window: \"Amenbo\"\n"),
+            ("given", "  - type: action\n    domain: project\n    op: create\n    with: { name: P }\n    window: \"Amenbo\"\n"),
+        ] {
+            let yaml = format!("id: x\ntitle: y\nsteps_gui:\n  - type: assert\n    domain: task\n    op: narrowing-shut\n{key}:\n{step}");
+            let s = load_str(&yaml).expect("parses");
+            let errs = s.validate().expect_err("the window is refused");
+            assert!(
+                errs.iter().any(|e| e.message.contains("belongs on `steps_gui`")),
+                "{key}: {errs:?}"
+            );
+        }
+    }
+
+    /// A window is named by the title drawn in its bar, and no window is called nothing.
+    #[test]
+    fn an_empty_window_name_is_rejected() {
+        let yaml = r#"
+id: x
+title: y
+steps_gui:
+  - type: assert
+    domain: task
+    op: narrowing-shut
+    window: "  "
+"#;
+        let s = load_str(yaml).expect("parses");
+        let errs = s.validate().expect_err("an empty title is refused");
+        assert!(errs.iter().any(|e| e.message.contains("cannot be empty")), "{errs:?}");
     }
 
     #[test]

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { refFromUrl, refsOnRow, type Cell, type Rows } from "./refLinks";
+import { pathsOnRow, refFromUrl, refsOnRow, type Cell, type Rows } from "./refLinks";
 
 /**
  * A buffer written the way a terminal draws one: each row is given as text, and a row prefixed with
@@ -107,5 +107,50 @@ describe("refFromUrl", () => {
     ]) {
       expect(refFromUrl(url), url).toBeNull();
     }
+  });
+});
+
+describe("pathsOnRow", () => {
+  const textsOn = (rows: Rows, y: number) => pathsOnRow(rows, y).map((one) => one.text);
+
+  it("finds a path an agent mentioned, and says where it sits", () => {
+    const rows = buffer(40, "wrote src/main.rs just now");
+    const [hit, ...rest] = pathsOnRow(rows, 0);
+    expect(rest).toEqual([]);
+    expect(hit.text).toBe("src/main.rs");
+    // 1-based, both ends inclusive: `s` is the 7th column, the last `s` the 17th.
+    expect(hit.range).toEqual({ start: { x: 7, y: 1 }, end: { x: 17, y: 1 } });
+  });
+
+  it("takes a run with a separator and leaves a word alone", () => {
+    expect(textsOn(buffer(40, "read README and notes/a.md"), 0)).toEqual(["notes/a.md"]);
+    expect(textsOn(buffer(40, "/work/repo is where it runs"), 0)).toEqual(["/work/repo"]);
+    expect(textsOn(buffer(40, "cd ../sibling"), 0)).toEqual(["../sibling"]);
+    expect(textsOn(buffer(40, "wrote C:\\work\\a.md"), 0)).toEqual(["C:\\work\\a.md"]);
+  });
+
+  it("drops what a sentence left on the end, and the line number after a colon", () => {
+    expect(textsOn(buffer(40, "failed at src/main.rs:12"), 0)).toEqual(["src/main.rs"]);
+    expect(textsOn(buffer(40, "see notes/a.md."), 0)).toEqual(["notes/a.md"]);
+    expect(textsOn(buffer(40, "(in notes/a.md)"), 0)).toEqual(["notes/a.md"]);
+  });
+
+  it("does not offer the tail of a URL as a file on this machine", () => {
+    expect(textsOn(buffer(60, "docs at https://example.com/guide/x.md"), 0)).toEqual([]);
+  });
+
+  it("follows a path across the fold, the way a ref is followed", () => {
+    // 20 columns: the path is drawn across two rows, and is on both of them.
+    const rows = buffer(20, "wrote notes/deep/ano", ">ther/file.md now");
+    expect(textsOn(rows, 0)).toEqual(["notes/deep/another/file.md"]);
+    expect(textsOn(rows, 1)).toEqual(["notes/deep/another/file.md"]);
+  });
+
+  it("counts columns as a terminal does, not as characters", () => {
+    // The Japanese takes two columns each, which is what the position is written in.
+    const rows = buffer(40, "書いた notes/a.md");
+    const [hit] = pathsOnRow(rows, 0);
+    expect(hit.text).toBe("notes/a.md");
+    expect(hit.range.start.x).toBe(8);
   });
 });

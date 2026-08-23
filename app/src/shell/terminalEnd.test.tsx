@@ -67,6 +67,7 @@ async function pane(): Promise<void> {
       onOpened: () => {},
       onChose: () => {},
       onSaid: () => {},
+      onPath: () => {},
       onClosed: () => {},
       onName: () => {},
       onFocus: () => {},

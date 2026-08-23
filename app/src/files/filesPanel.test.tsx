@@ -248,6 +248,31 @@ describe("the file face", () => {
     expect(button(t("files.openWith"))).toBeUndefined();
   });
 
+  it("opens a path clicked in a pane, read against that pane's folder", async () => {
+    hoisted.file = { text: "# from the pane", truncated: false };
+    await draw({ show: { target: "notes/a.md", cwd: ROOT, nth: 1 } });
+    expect(hoisted.asked).toContain(`read:${ROOT}:notes/a.md`);
+    expect(container.querySelector("h1")?.textContent).toBe("from the pane");
+  });
+
+  it("opens nothing for a path that lands outside the folder this face is rooted at", async () => {
+    await draw({ show: { target: "/etc/passwd", cwd: ROOT, nth: 1 } });
+    // The pane keeps the characters it drew; no reader is shown a file this face cannot answer for.
+    expect(hoisted.asked.some((one) => one.startsWith("read:"))).toBe(false);
+  });
+
+  it("opens the same file again when it is clicked again", async () => {
+    hoisted.file = { text: "# again", truncated: false };
+    await draw({ show: { target: "notes/a.md", cwd: ROOT, nth: 1 } });
+    await click(button(t("files.back")));
+    await settle();
+    expect(container.textContent).toContain(t("files.changed"));
+
+    // The same file asked for a second time is a reader saying "open it" again.
+    await draw({ show: { target: "notes/a.md", cwd: ROOT, nth: 2 } });
+    expect(container.querySelector("h1")?.textContent).toBe("again");
+  });
+
   it("says a project with no folder has none, rather than drawing empty rows", async () => {
     await draw({ projectId: null });
     expect(container.textContent).toBe(t("files.noFolder"));

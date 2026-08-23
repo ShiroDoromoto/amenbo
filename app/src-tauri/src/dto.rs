@@ -2129,6 +2129,39 @@ pub struct SessionWorkDto {
     pub(crate) finished: usize,
 }
 
+/// One record an empty slot asks about: what to call it, and what it is called.
+///
+/// It carries what the row draws and nothing else. A card would carry a body and a status the row
+/// never shows, and this is read once per screen — the answer is what to put in front of a person, not
+/// the record itself, which is a press away on the face that owns it.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AdriftRowDto {
+    /// The primary key, which is what a press hands to the face that opens it.
+    #[ts(type = "number")]
+    pub(crate) id: i64,
+    /// The name it goes by on screen (`AMB-T-<n>` / `AMB-D-<n>`), which is also what says which of the
+    /// two kinds a row is — the refs are two numbering spaces and a reader knows them apart.
+    pub(crate) r#ref: String,
+    pub(crate) title: String,
+}
+
+/// What in a project was left in the middle by a pane that has gone.
+///
+/// Two kinds, kept apart because opening one is not opening the other: a task opens on the ledger's
+/// task face and a decision on its decision face. What they have in common is the question — nothing is
+/// at either, and Amenbo is asking rather than deciding (`AMB-D-748`).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AdriftDto {
+    /// Reservations nothing is working on any more.
+    pub(crate) tasks: Vec<AdriftRowDto>,
+    /// Proposals nobody settled.
+    pub(crate) decisions: Vec<AdriftRowDto>,
+}
+
 /// What one frame of the talk window is called, and who called it that — which is what says whether
 /// the next naming may replace it ([`amenbo_core::frames`]).
 #[derive(Serialize, TS)]

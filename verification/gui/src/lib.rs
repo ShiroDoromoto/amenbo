@@ -1230,11 +1230,12 @@ impl Instructor {
                 "On the terminal face, press the one control it offers — the way to choose a folder — and in the picker that opens choose a folder the road calls \"{}\". The pane opens in it as soon as the picker closes: nothing is named and nothing is submitted.",
                 req(with, "dir")?
             ),
-            // Pressing one of the tasks the empty slot asks about. What it does is open that task on
-            // the ledger's face — the screen is left, deliberately, because a press that selected
-            // without switching would land on a face the reader cannot see.
+            // Pressing one of the records the empty slot asks about. What it does is open that record
+            // on the ledger — the screen is left, deliberately, because a press that selected without
+            // switching would land on a face the reader cannot see — and on the face that reads that
+            // kind, a task and a decision being read in different places.
             (Domain::Terminal, "open-adrift") => format!(
-                "In the empty slot's question, press \"{}\". The window switches to the ledger with that task open.",
+                "In the empty slot's question, press \"{}\". The window switches to the ledger with that record open, on the face that reads its kind.",
                 self.target_label(with)
             ),
             // A line typed into the pane and sent. It is typed rather than pasted because what is
@@ -1482,6 +1483,14 @@ impl Instructor {
             }
             (Domain::Task, "field") => format!(
                 "Confirm the task \"{}\" shows {} = {}.",
+                self.target_label(with),
+                req(with, "field")?,
+                show(with.get("equals").ok_or("assert `field` needs `equals`")?)
+            ),
+            // The same reading for a decision, off the face that reads decisions. It is the one thing a
+            // road can say about a proposal after asking about it: that asking did not settle it.
+            (Domain::Decision, "field") => format!(
+                "Confirm the decision \"{}\" shows {} = {}.",
                 self.target_label(with),
                 req(with, "field")?,
                 show(with.get("equals").ok_or("assert `field` needs `equals`")?)
@@ -2085,7 +2094,7 @@ impl Instructor {
             // an operator reading it knows a screen with nothing on it at all would be a fail.
             (Domain::Terminal, "adrift") => match present(with) {
                 true => format!(
-                    "In the empty slot on the terminal face, confirm the question about work nothing is doing any more names \"{}\".",
+                    "In the empty slot on the terminal face, confirm the question about what was left in the middle names \"{}\".",
                     self.target_label(with)
                 ),
                 false => format!(

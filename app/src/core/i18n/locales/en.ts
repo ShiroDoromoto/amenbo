@@ -544,10 +544,12 @@ const ui = {
   "face.paneCount": "Panes on screen",
   "face.pages": "Pages",
   "face.page": "Page {n}",
-  // The empty slot's question: work in this project that was reserved in a pane that has since gone
-  // (`AMB-T-3600`). It asks rather than tells — Amenbo cannot see somebody's own terminal, so it does
-  // not know the work stopped, only that nothing it opened is at it (`AMB-D-748`).
-  "face.adrift": "Something in this project is still reserved, and nothing is working on it. Carry on with it?",
+  // The empty slot's question: what this project was left in the middle of by a pane that has since
+  // gone — a task reserved, or a decision put up and never settled. One sentence over both, because it
+  // is one question; which kind a row is, and so what pressing it opens, is said by the ref it carries.
+  // It asks rather than tells — Amenbo cannot see somebody's own terminal, so it does not know the work
+  // stopped, only that nothing it opened is at it (`AMB-D-748`).
+  "face.adrift": "Something in this project was left in the middle, and nothing is at it. Carry on with it?",
   "face.open": "Open a terminal here",
   "face.openHere": "Open another terminal on this page",
   "face.rename": "Rename this pane",

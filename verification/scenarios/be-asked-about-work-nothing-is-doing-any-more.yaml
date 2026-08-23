@@ -20,6 +20,13 @@
 #    about, and the road reads its absence in the same slot as the other one's presence — one screen,
 #    both halves, so a build that started guessing would fail here rather than quietly widening.
 #
+# ── And the other kind, which is the same rule ───────────────────────────────────────────────────
+# A decision put up for discussion and never settled is left in the middle exactly as a reservation is,
+# and it is found the same way: the ledger says which pane put it up, the store says it is still
+# proposed. So the world stands up two of those as well, one in a pane and one not, and the slot is
+# read for both. The question is one sentence over the two kinds — it is one question — and which kind
+# a row is, and so what pressing it opens, is said by the ref it carries.
+#
 # ── Why the question is where it is ──────────────────────────────────────────────────────────────
 # An empty slot is the one place on the face with room for it and the one place a reader is already
 # looking for something to start. So the road opens the face, gives the page a folder — which is what
@@ -32,13 +39,14 @@
 # so it may not move a task back on its own. The road ends on the task's own face, which is where a
 # person decides.
 id: be-asked-about-work-nothing-is-doing-any-more
-title: A reservation whose pane has gone is put back in front of a person, and one Amenbo cannot speak for is not
+title: What a pane that has gone left in the middle is put back in front of a person, and what Amenbo cannot speak for is not
 description: >
-  Stand up two reservations in one project — one made in a pane that is no longer running, one made
-  the way somebody's own terminal makes them — then open the terminal face and give its page that
-  project's folder. The empty slot beside the pane asks about the first and says nothing about the
-  second. Pressing the one it asks about opens that task on the ledger's face, which is where the
-  answer is given: nothing on this screen moves it.
+  Stand up four things left open in one project — a reservation and a proposal made in a pane that is
+  no longer running, and one of each made the way somebody's own terminal makes them — then open the
+  terminal face and give its page that project's folder. The empty slot beside the pane asks about the
+  two the pane left and says nothing about the other two. Pressing one opens that record on the
+  ledger's face, each kind on the face that reads it, which is where the answer is given: nothing on
+  this screen moves anything.
 
 given:
   - type: action
@@ -110,6 +118,24 @@ given:
       target: elsewhere
       status: in_progress
 
+  # The other kind, both halves of it. A decision is born proposed, so putting one up in a pane is the
+  # only moment its author can be recorded — there is nothing to say later.
+  - type: action
+    domain: decision
+    op: adrift
+    with:
+      title: SCENARIO which way the store format should move
+      project: greenhouse
+    as: unsettled
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO what to call the second window
+      project: greenhouse
+    as: theirs
+
 steps_gui:
   - type: action
     domain: terminal
@@ -131,13 +157,26 @@ steps_gui:
     with:
       target: abandoned
 
-  # The half the whole rule rests on, read on the same screen: a reservation Amenbo cannot speak for
-  # is one it says nothing about.
+  # The half the whole rule rests on, read on the same screen: what Amenbo cannot speak for is what it
+  # says nothing about — and it holds for both kinds, on the one screen, under the one question.
   - type: assert
     domain: terminal
     op: adrift
     with:
       target: elsewhere
+      present: false
+
+  - type: assert
+    domain: terminal
+    op: adrift
+    with:
+      target: unsettled
+
+  - type: assert
+    domain: terminal
+    op: adrift
+    with:
+      target: theirs
       present: false
 
   # Pressing it opens the task, and opening is all it does.
@@ -163,3 +202,27 @@ steps_gui:
       target: abandoned
       field: status
       equals: in_progress
+
+  # And the same for the other kind, which lands on the other face. Back to the terminal first: the
+  # press above left it, which is what a press that opens a record is for.
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # A proposal that was asked about is a proposal still open: the screen put it in front of somebody,
+  # and settling it is theirs.
+  - type: action
+    domain: terminal
+    op: open-adrift
+    with:
+      target: unsettled
+
+  - type: assert
+    domain: decision
+    op: field
+    with:
+      target: unsettled
+      field: status
+      equals: proposed

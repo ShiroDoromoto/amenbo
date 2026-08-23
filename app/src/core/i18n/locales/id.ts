@@ -501,7 +501,7 @@ export const id: Translation = {
     "face.paneCount": "Panel di layar",
     "face.pages": "Halaman",
     "face.page": "Halaman {n}",
-    "face.adrift": "Ada yang masih dipesan di proyek ini dan tidak ada yang mengerjakannya. Lanjutkan?",
+    "face.adrift": "Ada yang tertinggal separuh jalan di proyek ini dan tidak ada yang mengerjakannya. Lanjutkan?",
     "face.open": "Buka terminal di sini",
     "face.openHere": "Buka terminal lain di halaman ini",
     "face.rename": "Ganti nama panel ini",

@@ -519,7 +519,7 @@ export const fr: Translation = {
     "face.paneCount": "Volets à l'écran",
     "face.pages": "Pages",
     "face.page": "Page {n}",
-    "face.adrift": "Dans ce projet, quelque chose est toujours réservé et personne n’y travaille. Voulez-vous le reprendre ?",
+    "face.adrift": "Dans ce projet, quelque chose est resté en plan et personne ne s’en occupe. Voulez-vous le reprendre ?",
     "face.open": "Ouvrir un terminal ici",
     "face.openHere": "Ouvrir un autre terminal sur cette page",
     "face.rename": "Renommer ce volet",

@@ -520,7 +520,7 @@ export const ptBR: Translation = {
     "face.paneCount": "Painéis na tela",
     "face.pages": "Páginas",
     "face.page": "Página {n}",
-    "face.adrift": "Neste projeto há algo ainda reservado e ninguém está trabalhando nisso. Quer continuar?",
+    "face.adrift": "Neste projeto ficou algo pela metade e ninguém está cuidando disso. Quer continuar?",
     "face.open": "Abrir um terminal aqui",
     "face.openHere": "Abrir outro terminal nesta página",
     "face.rename": "Renomear este painel",

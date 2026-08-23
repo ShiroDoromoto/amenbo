@@ -452,6 +452,8 @@ pub fn run() {
       windows::show_ref,
       folder::folder_entries,
       folder::folder_read,
+      folder::folder_open_file,
+      folder::folder_reveal_file,
       folder_watch::folder_watch,
       folder_watch::folder_unwatch,
       pty::pty_open,

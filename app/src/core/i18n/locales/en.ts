@@ -565,6 +565,8 @@ const ui = {
   "files.partial": "Some of this folder is not being watched.",
   "files.noFolder": "This project has no folder yet.",
   "files.back": "Back to the list",
+  "files.openWith": "Open with the usual application",
+  "files.reveal": "Show in the file manager",
   "files.notText": "This is not text, so it cannot be shown here.",
   "files.cut": "Only the beginning is shown.",
   "files.unreadable": "This file could not be read.",

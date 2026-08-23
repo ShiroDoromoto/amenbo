@@ -513,6 +513,8 @@ export const nl: Translation = {
     "files.partial": "Een deel van deze map wordt niet in de gaten gehouden.",
     "files.noFolder": "Dit project heeft nog geen map.",
     "files.back": "Terug naar de lijst",
+    "files.openWith": "Openen met de gebruikelijke app",
+    "files.reveal": "Tonen in de bestandsbeheerder",
     "files.notText": "Dit is geen tekst en kan hier niet worden getoond.",
     "files.cut": "Alleen het begin wordt getoond.",
     "files.unreadable": "Dit bestand kon niet worden gelezen.",

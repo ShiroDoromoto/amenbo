@@ -25,7 +25,10 @@ import { t, tf, whenLabel } from "../core/i18n";
 import { openExternalUrl } from "../core/mutations";
 import { resolveRef } from "../core/reads";
 import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
-import { folderEntries, folderRead, folderUnwatch, folderWatch, onFolderChanged } from "./folder";
+import {
+  folderEntries, folderOpenFile, folderRead, folderRevealFile, folderUnwatch, folderWatch,
+  onFolderChanged,
+} from "./folder";
 import { fileUnder, isRef, isUrl, unread, type Pointed } from "./pointed";
 
 /** The names a file's text is drawn as Markdown under. The one thing here the name decides. */
@@ -55,6 +58,10 @@ export function FilesPanel({ projectId, onOpenLedger, pointed }: {
   const [changes, setChanges] = useState<FolderChangesDto>({ changed: [], partial: false });
   const [treeOpen, setTreeOpen] = useState(false);
   const [reading, setReading] = useState<string[] | null>(null);
+  // The file a right-click was on, and where the pointer was. One menu for the face rather than one
+  // per row: only one can be open, and a row that held its own would keep it after the list moved
+  // under it (`AMB-T-3605`).
+  const [menu, setMenu] = useState<{ path: string[]; x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (projectId === null || root === null) return;
@@ -111,7 +118,14 @@ export function FilesPanel({ projectId, onOpenLedger, pointed }: {
             <ul className="files__list">
               {changes.changed.map((one) => (
                 <li key={one.path.join("/")}>
-                  <button className="files__file" onClick={() => setReading(one.path)}>
+                  <button
+                    className="files__file"
+                    onClick={() => setReading(one.path)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setMenu({ path: one.path, x: e.clientX, y: e.clientY });
+                    }}
+                  >
                     <span className="files__name">{one.path[one.path.length - 1]}</span>
                     <span className="files__when">{whenLabel(one.modified)}</span>
                   </button>
@@ -136,9 +150,81 @@ export function FilesPanel({ projectId, onOpenLedger, pointed }: {
             not the point of this face, and an unfolded one would read the whole repository to draw
             a panel nobody was looking at. */}
         {treeOpen && (
-          <Level projectId={projectId} root={root} path={[]} onRead={setReading} />
+          <Level
+            projectId={projectId}
+            root={root}
+            path={[]}
+            onRead={setReading}
+            onMenu={(path, x, y) => setMenu({ path, x, y })}
+          />
         )}
       </section>
+      {menu !== null && (
+        <FileMenu
+          projectId={projectId}
+          root={root}
+          path={menu.path}
+          at={{ x: menu.x, y: menu.y }}
+          onClose={() => setMenu(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * What can be done with a file that is not reading it here: hand it to the machine.
+ *
+ * Both roads out are the OS's own — the application the reader already opens that kind of file
+ * with, and the file manager they already keep their folders in. Neither is a choice Amenbo makes
+ * or remembers (`AMB-T-3605`).
+ *
+ * A failure is not drawn. What could go wrong is the file having gone since the row was drawn, and
+ * the row itself is about to say so: the folder is watched, and a file that is not there stops being
+ * listed. A line about it would be a second, slower account of the same fact.
+ */
+function FileMenu({ projectId, root, path, at, onClose }: {
+  projectId: number;
+  root: string;
+  path: string[];
+  at: { x: number; y: number };
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const close = () => onClose();
+    // Anything else the person does closes it. A menu that outlived the next click would sit over
+    // rows it is no longer about.
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", close);
+    window.addEventListener("blur", close);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", close);
+      window.removeEventListener("blur", close);
+    };
+  }, [onClose]);
+
+  const act = (go: () => Promise<void>) => {
+    onClose();
+    void go().catch(() => {});
+  };
+
+  return (
+    <div className="files__menu" style={{ left: at.x, top: at.y }} role="menu">
+      <button
+        className="files__menuitem"
+        role="menuitem"
+        onClick={() => act(() => folderOpenFile(projectId, root, path))}
+      >
+        {t("files.openWith")}
+      </button>
+      <button
+        className="files__menuitem"
+        role="menuitem"
+        onClick={() => act(() => folderRevealFile(projectId, root, path))}
+      >
+        {t("files.reveal")}
+      </button>
     </div>
   );
 }
@@ -236,11 +322,12 @@ function useLedgerNav(onOpenLedger?: () => void): RefNav {
 }
 
 /** One folder's worth of names, and whatever of it has been opened. */
-function Level({ projectId, root, path, onRead }: {
+function Level({ projectId, root, path, onRead, onMenu }: {
   projectId: number;
   root: string;
   path: string[];
   onRead: (path: string[]) => void;
+  onMenu: (path: string[], x: number, y: number) => void;
 }) {
   const [names, setNames] = useState<{ name: string; isDir: boolean }[]>([]);
   const [open, setOpen] = useState<string[]>([]);
@@ -271,12 +358,25 @@ function Level({ projectId, root, path, onRead }: {
                   {one.name}
                 </button>
                 {open.includes(one.name) && (
-                  <Level projectId={projectId} root={root} path={[...path, one.name]} onRead={onRead} />
+                  <Level
+                    projectId={projectId}
+                    root={root}
+                    path={[...path, one.name]}
+                    onRead={onRead}
+                    onMenu={onMenu}
+                  />
                 )}
               </>
             )
             : (
-              <button className="files__file" onClick={() => onRead([...path, one.name])}>
+              <button
+                className="files__file"
+                onClick={() => onRead([...path, one.name])}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  onMenu([...path, one.name], e.clientX, e.clientY);
+                }}
+              >
                 <span className="files__name">{one.name}</span>
               </button>
             )}

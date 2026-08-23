@@ -539,6 +539,8 @@ export const pl: Translation = {
     "files.partial": "Część tego folderu nie jest obserwowana.",
     "files.noFolder": "Ten projekt nie ma jeszcze folderu.",
     "files.back": "Powrót do listy",
+    "files.openWith": "Otwórz w zwykłej aplikacji",
+    "files.reveal": "Pokaż w menedżerze plików",
     "files.notText": "To nie jest tekst, więc nie da się go tu pokazać.",
     "files.cut": "Pokazany jest tylko początek.",
     "files.unreadable": "Nie udało się odczytać tego pliku.",

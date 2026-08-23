@@ -525,6 +525,8 @@ export const ja: Translation = {
     "files.partial": "このフォルダは、一部を見張れていません。",
     "files.noFolder": "このプロジェクトにはフォルダがありません。",
     "files.back": "一覧へ戻る",
+    "files.openWith": "いつものアプリで開く",
+    "files.reveal": "フォルダで表示",
     "files.notText": "テキストではないので、ここには出せません。",
     "files.cut": "先頭だけを出しています。",
     "files.unreadable": "このファイルは読めませんでした。",

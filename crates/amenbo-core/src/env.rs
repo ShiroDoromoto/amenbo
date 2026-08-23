@@ -27,6 +27,19 @@ pub fn home() -> Option<OsString> {
     var_os(HOME_VAR)
 }
 
+/// **The account's home directory** — not [`home`], which is Amenbo's own root.
+///
+/// The two sit together on purpose. `AMENBO_HOME` is a root a reader points at to isolate Amenbo's
+/// files, and this is where the operating system says the person lives; a caller reaching for one
+/// and getting the other is a bug that shows up as Amenbo reading somebody else's folder, so the
+/// names are kept apart and the difference is written here rather than left to be inferred.
+///
+/// It is what a shell handed no directory starts in, which is what makes it the folder a terminal
+/// opened with nothing named is actually standing in.
+pub fn home_dir() -> Option<std::path::PathBuf> {
+    directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf())
+}
+
 /// The name of [`plugin_reach`], for the runner that sets it on a plugin's process
 /// ([`crate::plugin_callback`]).
 pub const PLUGIN_REACH_VAR: &str = "AMENBO_PLUGIN_REACH";

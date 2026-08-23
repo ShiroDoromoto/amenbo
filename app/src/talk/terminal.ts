@@ -41,6 +41,23 @@ function decode(base64: string): Uint8Array {
   return bytes;
 }
 
+/** What a pane is opened as: where, with which agent in it, and who to tell when it ends. */
+export type PaneOpts = {
+  /** The folder the shell starts in — canonical, as `wake_probe` answered with it. */
+  cwd?: string | null;
+  /**
+   * The catalogued id of the agent to start (`crate::wake`). A pane with none is a bare prompt.
+   * What crosses is the id and never a command line: the catalog on the host side turns it into
+   * one, so nothing here can name a program.
+   */
+  agent?: string | null;
+  /**
+   * The program in the terminal has exited. It arrives once, and what it means is that this pane
+   * is finished — the frame around it is what offers to open another (`AMB-T-3591`).
+   */
+  onClosed?: () => void;
+};
+
 /**
  * Fill `host` with a terminal, start a session in it, and return the way to take it away again.
  *
@@ -48,7 +65,7 @@ function decode(base64: string): Uint8Array {
  * what the program inside reads as the terminal's width is the pane's actual width — that is what a
  * full-screen interface reflows to.
  */
-export async function mountTerminal(host: HTMLElement): Promise<() => void> {
+export async function mountTerminal(host: HTMLElement, opts: PaneOpts = {}): Promise<() => void> {
   const term = new Terminal({
     fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--font-mono").trim() ||
       "ui-monospace, monospace",
@@ -74,10 +91,17 @@ export async function mountTerminal(host: HTMLElement): Promise<() => void> {
     else if (payload.session === session) term.write(decode(payload.base64));
   });
   const unlistenClosed = await listen<string>(CLOSED_EVENT, ({ payload }) => {
-    if (payload === session) closed = true;
+    if (payload !== session) return;
+    closed = true;
+    opts.onClosed?.();
   });
 
-  session = await invoke<string>("pty_open", { cwd: null, cols: term.cols, rows: term.rows });
+  session = await invoke<string>("pty_open", {
+    cwd: opts.cwd ?? null,
+    agent: opts.agent ?? null,
+    cols: term.cols,
+    rows: term.rows,
+  });
   for (const chunk of held.splice(0)) {
     if (chunk.session === session) term.write(decode(chunk.base64));
   }

@@ -129,6 +129,22 @@ fn failed(e: impl std::fmt::Display) -> CmdError {
     )
 }
 
+/// The command a catalogued agent id is started as, or the refusal for an id nothing lists.
+///
+/// The lookup is what keeps the pane's command line out of the webview's hands: an id that is not in
+/// the catalog is turned away here rather than handed to a shell. It is refused under `crate::wake`'s
+/// code, because what it names is that rule and not this door — the same id is turned away the same
+/// way where a folder's answer is written down.
+fn started_as(agent: &str) -> Result<&'static str, CmdError> {
+    amenbo_core::wake::started_as(agent).map(|h| h.command).ok_or_else(|| {
+        CmdError::coded(
+            "wake_unknown_agent",
+            "That is not an agent Amenbo knows how to start.",
+            serde_json::json!({ "agent": agent }),
+        )
+    })
+}
+
 /// The refusal for a session id that names no open terminal — closed while the pane still had it,
 /// or never opened at all.
 fn gone(session: &str) -> CmdError {
@@ -148,12 +164,15 @@ fn gone(session: &str) -> CmdError {
 /// which the emulator on the far side measures from the space it has.
 ///
 /// What is started is the user's own shell, reached for the way [`crate::launch`] reaches for it on
-/// this operating system. Which agent to start inside it is settled on top of this rather than here.
+/// this operating system. `agent` is the catalogued id of the AI to start inside that shell
+/// ([`crate::wake`]); with none given the pane is a bare prompt. **The id is turned into a command
+/// here**, out of the catalog — what the webview names is a row, never a command line.
 #[tauri::command]
 pub fn pty_open(
     app: tauri::AppHandle,
     terminals: tauri::State<'_, Terminals>,
     cwd: Option<String>,
+    agent: Option<String>,
     cols: u16,
     rows: u16,
 ) -> Result<String, CmdError> {
@@ -170,7 +189,8 @@ pub fn pty_open(
         .map(|dir| std::fs::canonicalize(dir).map_err(failed))
         .transpose()?;
 
-    let mut cmd = launch::command(folder.clone(), None);
+    let run = agent.as_deref().map(started_as).transpose()?;
+    let mut cmd = launch::command(folder.clone(), run);
     cmd.env(SESSION_ENV, &session);
 
     let mut child = pair.slave.spawn_command(cmd).map_err(failed)?;

@@ -646,6 +646,19 @@ pub struct Config {
     /// unanswered after the user has removed the registration themselves (`AMB-D-718`).
     #[serde(default)]
     pub tick_consent: Option<crate::tick::TickConsent>,
+    /// **Which agent a folder's panes are opened with**, by absolute folder path
+    /// ([`crate::wake`]). Written only where the person was actually asked — a folder with one
+    /// startable agent settles itself and leaves no row, so this holds answers, never guesses.
+    ///
+    /// It is the device's, not the project's: what can be started is what is installed on this
+    /// machine, and the same folder on a second machine may have nothing of the sort on it. **Never
+    /// synced**, for the same reason.
+    ///
+    /// A row whose agent has since gone is left alone rather than pruned. It costs a line, and the
+    /// day the tool comes back is the day the folder's answer is right again — [`crate::wake::settle`]
+    /// already ignores one that does not hold.
+    #[serde(default)]
+    pub folder_agent: std::collections::BTreeMap<String, String>,
 }
 
 /// Cap on the size of an avatar data URL, in bytes. A loose limit to stop breakage and runaways —
@@ -699,6 +712,7 @@ impl Default for Config {
             ai_avatar: None,
             hook_consent: None,
             tick_consent: None,
+            folder_agent: Default::default(),
         }
     }
 }
@@ -859,6 +873,20 @@ impl Config {
             (ActorKind::Human, self.human_display_name()),
             (ActorKind::Ai, self.ai_display_name()),
         ]
+    }
+
+    /// Which agent this folder's panes are opened with, if the person has been asked
+    /// ([`Config::folder_agent`]). The path is used as the key exactly as given, so a caller hands
+    /// over the canonical form — the same folder reached by two paths is one folder, and two rows
+    /// would be two answers to one question.
+    pub fn agent_for(&self, folder: &std::path::Path) -> Option<&str> {
+        self.folder_agent.get(&folder.to_string_lossy().into_owned()).map(String::as_str)
+    }
+
+    /// Keep this folder's answer, replacing any earlier one — what a person picking from the offer
+    /// leaves behind ([`crate::wake`]).
+    pub fn remember_agent(&mut self, folder: &std::path::Path, id: &str) {
+        self.folder_agent.insert(folder.to_string_lossy().into_owned(), id.to_string());
     }
 
     /// Read the config file, falling back to the defaults when it is absent — for the cases that

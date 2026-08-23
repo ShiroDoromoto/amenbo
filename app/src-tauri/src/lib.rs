@@ -40,6 +40,9 @@ mod pty;
 /// the front. Desktop-only, because the claim it holds is an OS primitive with no shape elsewhere.
 #[cfg(desktop)]
 mod single_instance;
+/// Which agent a folder's pane is opened with: the folder's trace times what this machine can
+/// start (`AMB-T-3591`).
+mod wake;
 /// OS-specific file watching — the half that wakes `commands::watch_store`. It does not depend on
 /// tauri, so the integration test (`tests/store_watch.rs`) can drive the real behaviour on all three
 /// operating systems.
@@ -425,6 +428,8 @@ pub fn run() {
       commands::plugin_updates,
       commands::plugin_update_apply,
       commands::plugin_update_apply_all,
+      wake::wake_probe,
+      wake::wake_remember,
       pty::pty_open,
       pty::pty_write,
       pty::pty_resize,

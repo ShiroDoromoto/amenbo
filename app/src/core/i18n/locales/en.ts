@@ -514,6 +514,16 @@ const ui = {
   // The talk window names itself from here — `tauri.conf.json` can hold only one fixed string,
   // and two windows both called "Amenbo" cannot be told apart in a window list (`AMB-T-3588`).
   "app.talkWindow": "Amenbo — Talk",
+  // talk window: which agent a folder's pane opens with, and the row a closed frame offers
+  // (`AMB-T-3591`). `{commands}` is the list of program names that were looked for on the PATH.
+  "talk.searching": "Looking for the agents on this machine…",
+  "talk.ask": "Which agent do you work with in this folder?",
+  "talk.none": "No agent Amenbo can start was found on this machine.",
+  "talk.noneHint": "Amenbo looked for these commands on your shell's PATH: {commands}. Install one, then search again.",
+  "talk.retry": "Search again",
+  "talk.open": "Open",
+  "talk.agent": "Agent",
+  "talk.ended": "This terminal has ended.",
   // lint hook consent: the question Amenbo asks before writing into .git/hooks
   "hooks.title": "Keep Amenbo's refs out of your commits?",
   "hooks.why": "A ref like AMB-T-… means nothing outside the store that issued it. A git hook stops one before it reaches a commit.",
@@ -681,6 +691,10 @@ const err: Partial<Record<ErrorCode, string>> = {
     "{url} now publishes {serving}, not the {agreed} you were shown. Register it again and check the new fingerprint.",
   pty_failed: "The terminal could not be started: {reason}",
   pty_gone: "That terminal is no longer open.",
+  wake_unknown_agent: "Amenbo does not know how to start {agent}.",
+  wake_no_folder: "That folder could not be read: {reason}",
+  wake_no_config: "Amenbo could not find its own files.",
+  wake_not_kept: "The choice could not be saved.",
 
   // The sentences the GUI shows a person, named one at a time (`AMB-D-413`). Which refusals get a code of
   // their own was settled by measuring what the front end actually surfaces: a form the screen already

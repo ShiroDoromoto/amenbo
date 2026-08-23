@@ -44,6 +44,14 @@ pub struct Harness {
     pub id: &'static str,
     /// The product's own name for itself, as it appears in its documentation.
     pub label: &'static str,
+    /// What this provider is started as in a terminal — the program name, resolved against the
+    /// user's own `PATH` rather than a path of Amenbo's ([`crate::wake`]).
+    ///
+    /// It sits beside the settings a probe reads because both answer for the same product, and a row
+    /// that named one without the other would leave a face holding a trace it cannot act on. What it
+    /// is **not** is a second catalog: a provider Amenbo can be wired into is a provider a person
+    /// starts, and the day one of those is untrue is the day it earns its own list.
+    pub command: &'static str,
     /// How this provider spells its session-start event. Matched **case-insensitively**, because that is
     /// the one thing the providers differ on that a probe would otherwise have to know per row
     /// (`SessionStart` here, `sessionStart` there).
@@ -77,6 +85,7 @@ pub static HARNESSES: &[Harness] = &[
     Harness {
         id: "claude-code",
         label: "Claude Code",
+        command: "claude",
         event: "SessionStart",
         // `settings.local.json` is the same folder's settings kept out of the repository, and a user who
         // wired it there has wired it: leaving it out would ask them again forever.
@@ -103,6 +112,7 @@ pub static HARNESSES: &[Harness] = &[
     Harness {
         id: "github-copilot",
         label: "GitHub Copilot CLI",
+        command: "copilot",
         event: "sessionStart",
         places: &[".github/hooks"],
         home: ".github/hooks",
@@ -123,6 +133,7 @@ pub static HARNESSES: &[Harness] = &[
     Harness {
         id: "cursor",
         label: "Cursor",
+        command: "cursor-agent",
         event: "sessionStart",
         places: &[".cursor/hooks.json"],
         home: ".cursor",
@@ -142,6 +153,7 @@ pub static HARNESSES: &[Harness] = &[
     Harness {
         id: "codex-cli",
         label: "Codex CLI",
+        command: "codex",
         event: "SessionStart",
         // Two files, one wiring: this provider reads hooks from its own file or from inline tables in the
         // folder's `config.toml`, and either is where a user may have written it.
@@ -167,6 +179,7 @@ pub static HARNESSES: &[Harness] = &[
     Harness {
         id: "gemini-cli",
         label: "Gemini CLI",
+        command: "gemini",
         event: "SessionStart",
         places: &[".gemini/settings.json"],
         home: ".gemini",

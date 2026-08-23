@@ -99,6 +99,21 @@ describe("offering what is waiting", () => {
     expect(container.textContent).toContain(tf("plugins.updates.applied", { count: 1 }));
   });
 
+  // The hint names the builds waiting, so it calls each one what it calls itself (`AMB-D-739`) — and a
+  // plugin that publishes no display name is still named by the name it is known by. What a hold says is
+  // a sentence taking the name the apply asks for, and it is left alone.
+  it("names a waiting build the way its author publishes it", () => {
+    hoisted.updates = [offer({ name: "viewer", title: "Amenbo Viewer" })];
+    render();
+    expect(container.textContent).toContain("Amenbo Viewer");
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    hoisted.updates = [offer({ name: "viewer", title: "Amenbo Viewer" }), offer({ name: "worktree" })];
+    render();
+    expect(container.textContent).toContain("Amenbo Viewer, worktree");
+  });
+
   it("offers one button for several", async () => {
     hoisted.updates = [offer({ name: "worktree" }), offer({ name: "notify" })];
     render();

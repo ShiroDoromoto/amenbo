@@ -39,3 +39,7 @@ CLAUDE.md
 # The PII denylist plaintext (real names/emails/accounts) is managed outside the repo. Committing it
 # would burn the very thing it protects into the tree = a self-leak.
 .pii-denylist
+
+# devtool: the copy this makefile builds for its own targets (make devtool installs a separate one
+# to PATH for a person to type). A build artifact of an optional tool, not source.
+devtool/.bin/

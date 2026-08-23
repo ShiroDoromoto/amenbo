@@ -253,14 +253,17 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
             let v = store.dimension_value_move(vid, pos).map_err(CliError::from)?;
             write_envelope(flags, "dimension.value-move", "dimension_value", serde_json::to_value(&v).unwrap(), Some(vec!["order_key".to_string()]), false, format!("✓ Moved value: {}", dimension_value_label(v.id)));
         }
-        DimensionCmd::ValueRm { dimension, value } => {
+        DimensionCmd::ValueRm { dimension, value, reassign_to } => {
             let did = store.resolve_dimension(None, &dimension).map_err(CliError::from)?;
             let vid = store.resolve_dimension_value(did, &value).map_err(CliError::from)?;
+            // The destination is named within the same axis, as `value` is — a value of another axis is
+            // not a place this classification could land, and core refuses one.
+            let to = reassign_to.map(|r| store.resolve_dimension_value(did, &r)).transpose().map_err(CliError::from)?;
             if !confirm(flags, "delete dimension value")? {
                 return Ok(0);
             }
-            store.dimension_value_delete(vid).map_err(CliError::from)?;
-            write_envelope(flags, "dimension.value-rm", "dimension_value", json!({ "id": vid, "deleted": true }), None, false, format!("✓ Deleted value: {}", dimension_value_label(vid)));
+            store.dimension_value_delete(vid, to).map_err(CliError::from)?;
+            write_envelope(flags, "dimension.value-rm", "dimension_value", json!({ "id": vid, "deleted": true, "reassigned_to": to }), None, false, format!("✓ Deleted value: {}", dimension_value_label(vid)));
         }
         DimensionCmd::Set { task, dimension, value } => {
             let tid = resolve_task(store, &task).map_err(CliError::from)?;

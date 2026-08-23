@@ -2855,11 +2855,12 @@ pub fn dimension_value_move(value_id: i64, before: Option<i64>, after: Option<i6
 }
 
 /// Delete a dimension value permanently (the delete op takes the task assignments on it first — same
-/// shape as the CLI's `dimension value-rm`).
+/// shape as the CLI's `dimension value-rm`). `reassign_to` names another value of the same axis to move
+/// those assignments to, which a required axis demands whenever there are any.
 #[tauri::command]
-pub fn dimension_value_rm(value_id: i64) -> Result<WriteAck, CmdError> {
+pub fn dimension_value_rm(value_id: i64, reassign_to: Option<i64>) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.dimension_value_delete(value_id)?;
+        store.dimension_value_delete(value_id, reassign_to)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))
@@ -4146,6 +4147,7 @@ pub async fn plugin_catalog_browse(lang: String) -> Result<PluginCatalogDto, Cmd
                 .map(|e| PluginEntryDto {
                     desc_i18n: lines.get(&e.entry.name).and_then(|o| o.desc.clone()),
                     name: e.entry.name,
+                    title: e.entry.title,
                     desc: e.entry.desc,
                     author: e.entry.author,
                     repo: e.entry.repo,
@@ -4590,6 +4592,7 @@ fn install_row(
     };
     Ok(PluginInstallDto {
         name: plugin.name.clone(),
+        title: plugin.manifest.title.clone(),
         projects,
         device,
         scope: plugin.manifest.scope,
@@ -5020,6 +5023,7 @@ pub async fn plugin_updates(
                 Ok(PluginUpdateDto {
                     desc_i18n: u.available_i18n.get(&lang).and_then(|o| o.desc.clone()),
                     name: u.name,
+                    title: u.available.title,
                     available_detail_sum: u.available.detail_sum,
                     desc: u.available.desc,
                     hold,

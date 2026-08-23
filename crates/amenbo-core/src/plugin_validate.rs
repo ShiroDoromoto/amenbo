@@ -48,6 +48,11 @@ pub const NAME_MIN_LEN: usize = 2;
 /// namespace and a config-key prefix, so it is kept short and strict.
 pub const NAME_MAX_LEN: usize = 64;
 
+/// The longest the display name (`title`) may be (characters, `AMB-D-739`). It is drawn where `name`
+/// would be — a row's bold word, beside a badge — so it is held far shorter than the line under it: a
+/// product name that does not fit on one row is not a product name.
+pub const MAX_TITLE_LEN: usize = 60;
+
 /// The longest the one-line `desc` may be (characters). A list-view line, not a body — bounded so a
 /// runaway value cannot break the catalog display.
 pub const MAX_DESC_LEN: usize = 200;
@@ -116,10 +121,13 @@ pub const MAX_PLACEHOLDER_BYTES: usize = 80;
 /// writing is a rule engine, and the way to say something that complicated is a second plugin.
 pub const MAX_WHEN_CLAUSES: usize = 4;
 
-/// The most operations a settings face may offer (`AMB-D-664`). Every one of them is a button on one
-/// form, so the ceiling is what a screen can hold without becoming a menu — and a plugin needing more of
-/// them is a plugin whose work belongs on its command face, where a caller may pass anything.
-pub const MAX_SETTINGS_ACTIONS: usize = 4;
+/// The most operations a settings face may offer (`AMB-D-664`, at ten since `AMB-D-743`). Every one of them
+/// is a button on one form, so what the ceiling bounds is that form, not a count picked in advance: ten
+/// buttons are still a row a user takes in at a glance, and a face wanting more of them is a menu — which is
+/// work belonging on the plugin's command face, where a caller may pass anything. Four was refused for that
+/// same reason: it was a number no screen had asked for, and a plugin ran out of room while the form it drew
+/// was nowhere near full.
+pub const MAX_SETTINGS_ACTIONS: usize = 10;
 /// The most one operation's button label may weigh, **in UTF-8 bytes, per language** (`AMB-D-664`) — the
 /// base label and each translation of it held to the same cap, as the supporting texts are.
 ///
@@ -364,6 +372,9 @@ pub fn validate_manifest(m: &Manifest) -> Vec<Problem> {
     let mut problems = Vec::new();
 
     problems.extend(validate_plugin_id(&m.name));
+    if let Some(title) = &m.title {
+        check_line(&mut problems, "title", title, MAX_TITLE_LEN);
+    }
     check_line(&mut problems, "desc", &m.desc, MAX_DESC_LEN);
     // `desc` is the one line of author prose every plugin puts at the AI's entry point, agent block or no
     // (`crate::plugin_agent`), so it is held to the same no-citing rule the block's own lines are.
@@ -650,6 +661,9 @@ pub fn validate_list_entry(e: &ListEntry) -> Vec<Problem> {
     let mut problems = Vec::new();
 
     problems.extend(validate_plugin_id(&e.name));
+    if let Some(title) = &e.title {
+        check_line(&mut problems, "title", title, MAX_TITLE_LEN);
+    }
     check_line(&mut problems, "desc", &e.desc, MAX_DESC_LEN);
     check_no_record_ref(&mut problems, "desc", &e.desc);
     check_line(&mut problems, "author", &e.author, MAX_AUTHOR_LEN);
@@ -1937,6 +1951,7 @@ mod tests {
     fn valid() -> Manifest {
         Manifest {
             name: "worktree".into(),
+            title: None,
             desc: "Isolate each task in its own git worktree".into(),
             about: None,
             author: "amenbo".into(),
@@ -2145,6 +2160,32 @@ mod tests {
         let mut m = valid();
         m.desc = "x".repeat(MAX_DESC_LEN + 1);
         assert!(codes(&validate_manifest(&m)).contains(&ProblemCode::TooLong));
+    }
+
+    /// **The display name is optional, and held to a line when it is there** (`AMB-D-739`). Absent is the
+    /// ordinary manifest — every plugin published before the field existed — so it must pass untouched;
+    /// present, it is drawn where `name` would be, and a name carrying a newline or a paragraph is the
+    /// same layout accident the line under it is bounded against.
+    #[test]
+    fn a_display_name_is_optional_but_bounded() {
+        let mut m = valid();
+        m.title = None;
+        assert!(validate_manifest(&m).is_empty(), "a manifest that writes none is the ordinary one");
+
+        m.title = Some("Amenbo Viewer".into());
+        assert!(validate_manifest(&m).is_empty(), "a product name passes as written");
+
+        for (bad, code) in [
+            (String::new(), ProblemCode::Empty),
+            ("Amenbo\nViewer".to_string(), ProblemCode::ControlChar),
+            ("あ".repeat(MAX_TITLE_LEN + 1), ProblemCode::TooLong),
+        ] {
+            m.title = Some(bad.clone());
+            assert!(
+                codes(&validate_manifest(&m)).contains(&code),
+                "{bad:?} is refused as {code:?}",
+            );
+        }
     }
 
     #[test]
@@ -2842,11 +2883,17 @@ ConfigEntry::schema(            vec![ConfigField { help: Some("AMB-D-411 makes t
     }
 
     /// Every operation is a button on one form, so the list has a ceiling — a plugin needing more of them
-    /// has a command face where a caller may pass anything.
+    /// has a command face where a caller may pass anything. What the ceiling has to leave room for is a
+    /// form a plugin actually draws (`AMB-D-743`), so a face filled to it passes.
     #[test]
     fn too_many_actions_is_refused() {
-        let actions =
-            (0..MAX_SETTINGS_ACTIONS + 1).map(|i| action(&format!("c{i}"), "Press")).collect();
+        let filled: Vec<_> =
+            (0..MAX_SETTINGS_ACTIONS).map(|i| action(&format!("c{i}"), "Press")).collect();
+        let at_the_ceiling = validate_manifest(&with_settings(None, filled.clone()));
+        assert!(at_the_ceiling.is_empty(), "{at_the_ceiling:?}");
+
+        let mut actions = filled;
+        actions.push(action("one_too_many", "Press"));
         let problems = validate_manifest(&with_settings(None, actions));
         assert!(codes(&problems).contains(&ProblemCode::TooManyFields));
         assert!(problems.iter().any(|p| p.location == "settings.actions"), "{problems:?}");
@@ -3234,6 +3281,18 @@ ConfigEntry::schema(            vec![ConfigField { help: Some("AMB-D-411 makes t
         assert!(validate_list_entry(&entry).is_empty(), "{:?}", validate_list_entry(&entry));
         entry.desc = "Endorsed by AMB-D-411".into();
         assert!(codes(&validate_list_entry(&entry)).contains(&ProblemCode::RecordRef));
+    }
+
+    /// The display name rides in the list half (`AMB-D-739`), so the browse door is where it is bounded:
+    /// a fetched `catalog.json` is untrusted delivery, and the entry is all that door has in hand.
+    #[test]
+    fn an_over_long_display_name_in_a_list_entry_is_refused() {
+        let mut m = valid();
+        m.title = Some("Amenbo Viewer".into());
+        let (mut entry, _, _) = crate::plugin_wire::split(&m, &Translations::new());
+        assert!(validate_list_entry(&entry).is_empty(), "{:?}", validate_list_entry(&entry));
+        entry.title = Some("x".repeat(MAX_TITLE_LEN + 1));
+        assert!(codes(&validate_list_entry(&entry)).contains(&ProblemCode::TooLong));
     }
 
     /// A number that is not a ref is not one here either: the scan the lint owns bounds a ref on both

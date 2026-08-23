@@ -301,6 +301,18 @@ describe("what this machine holds", () => {
     expect(rows()[1].textContent).toContain("alpha");
   });
 
+  // This list draws no description under the name, so what a plugin calls itself is all a reader has to
+  // recognise it by (`AMB-D-739`) — and a plugin that calls itself nothing is drawn by its name, as it
+  // always was.
+  it("calls a plugin what it calls itself, else by the name it is known by", () => {
+    hoisted.projects = [{ id: 1, name: "alpha" }];
+    hoisted.installs = [row({ name: "viewer", title: "Amenbo Viewer" }), row({ name: "worktree" })];
+    render();
+
+    expect(rows()[0].textContent).toContain("Amenbo Viewer");
+    expect(rows()[1].textContent).toContain("worktree");
+  });
+
   // Nothing installed is not an error, and the way out of it is the other tab.
   it("points at the market when there is nothing here", () => {
     render();

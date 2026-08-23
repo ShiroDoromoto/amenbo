@@ -152,7 +152,7 @@ fn facet_actor(config: &amenbo_core::config::Config, kind: Option<ActorKind>) ->
         ActorKind::Ai => config.ai_display_name(),
         ActorKind::Human => config.human_display_name(),
     };
-    ActorDto { name, kind: kind.as_str(), avatar: None }
+    ActorDto { name, kind: kind.as_str(), avatar: None, session: None }
 }
 
 fn date_iso(d: NaiveDate) -> String {
@@ -471,6 +471,8 @@ fn build_snapshot() -> Result<Snapshot, CmdError> {
                 name,
                 kind: kind.as_str(),
                 avatar: config.avatar_for(kind),
+                // The roster names the two facets, not an act: no session wrote it.
+                session: None,
             })
             .collect(),
         projects: acc.projects,
@@ -868,12 +870,14 @@ fn activity_dto(it: amenbo_core::activity::Item, config: &amenbo_core::config::C
     // Read before `it` is taken apart below: the sequence is derived from the whole row.
     let seq = it.seq().rank();
     let event = it.event.as_ref().map(event_dto);
+    // The session rides on the author, where the facet it cannot separate already is.
+    let author = ActorDto { session: it.author_session, ..facet_actor(config, it.author_kind) };
     ActivityItemDto {
         id: it.id,
         seq,
         at: it.at.to_rfc3339_z(),
         kind: it.kind.as_str().to_string(),
-        author: facet_actor(config, it.author_kind),
+        author,
         target: ActivityTargetDto {
             target_type: it.target_type.as_str().to_string(),
             id: it.target_id,
@@ -3662,6 +3666,47 @@ pub fn tick_banner_later() -> Result<(), CmdError> {
     Ok(())
 }
 
+/// What this device calls the talk window's frames — the whole of it, since the window draws every
+/// frame it has at once (`AMB-D-749` puts the running state in memory; this is the part that is kept).
+#[tauri::command]
+pub fn frame_names() -> Result<Vec<FrameNameDto>, CmdError> {
+    Ok(named(open_store()?.frame_names()?))
+}
+
+/// Name one frame, and answer with the names as they now stand.
+///
+/// The answer is the whole set rather than an acknowledgement, because a naming can be refused: a
+/// person's name for a frame outranks the agent's and stays put (`amenbo_core::frames`). A caller that
+/// drew what it asked for would show a name that is not the frame's.
+#[tauri::command]
+pub fn name_frame(
+    frame: String,
+    name: String,
+    by: amenbo_core::frames::NamedBy,
+) -> Result<Vec<FrameNameDto>, CmdError> {
+    Ok(named(open_store()?.name_frame(&frame, &name, by)?))
+}
+
+/// The frame names in the shape the webview reads them: a list, in frame order, rather than a map —
+/// the window draws them in a row, and a map's order is the caller's to rebuild.
+fn named(
+    names: std::collections::BTreeMap<String, amenbo_core::frames::FrameName>,
+) -> Vec<FrameNameDto> {
+    use amenbo_core::frames::NamedBy;
+    names
+        .into_iter()
+        .map(|(frame, named)| FrameNameDto {
+            frame,
+            name: named.name,
+            by: match named.by {
+                NamedBy::Typed => "typed",
+                NamedBy::Session => "session",
+                NamedBy::Person => "person",
+            },
+        })
+        .collect()
+}
+
 /// The row for one catalog entry.
 fn agent_hook_tool(harness: &amenbo_core::harness::Harness, cmd: &str) -> AgentHookToolDto {
     AgentHookToolDto {
@@ -5147,6 +5192,7 @@ mod tests {
             at: Timestamp::now(),
             kind: amenbo_core::activity::Kind::System,
             author_kind: Some(ActorKind::Ai),
+            author_session: None,
             target_type: amenbo_core::activity::TargetType::Task,
             target_id: 42,
             title: title.to_string(),

@@ -20,6 +20,13 @@
 //! then, and what names its session has to survive that distance rather than be guessed at from the
 //! outside.
 //!
+//! **A pane is also handed somewhere to be spoken to.** Beside the session's name goes a throwaway
+//! directory, and what the agent says about its session — `waiting`, `note`, a name for the pane — is
+//! left there as one file per statement (`AMB-D-749`). This module watches that directory and carries
+//! each statement on to the pane, then takes the directory away with the terminal: nothing said about a
+//! session outlives the session. A run that ends without closing its terminals — a quit, a crash — takes
+//! nothing away, so [`crate::pty::sweep`] clears what an earlier run left as this one comes up.
+//!
 //! **What is started, and with what around it, is [`crate::launch`]'s.** Which shell each operating
 //! system has to be asked for, and what a terminal owes the program in it, live there — this module
 //! is only the terminal itself.
@@ -34,7 +41,7 @@ use base64::Engine as _;
 use portable_pty::{native_pty_system, ChildKiller, MasterPty, PtySize};
 use tauri::{Emitter, Manager};
 
-use crate::dto::PtyChunkDto;
+use crate::dto::{PtyChunkDto, SessionSaidDto};
 use crate::error::CmdError;
 use crate::launch;
 
@@ -49,14 +56,33 @@ const OUTPUT_EVENT: &str = "pty://output";
 const CLOSED_EVENT: &str = "pty://closed";
 
 /// The variable a session's id is carried in, into the terminal and everything started inside it.
-/// A process that writes to the store while this is set can say which session it wrote from, which
-/// is the one thing no amount of watching from outside can establish.
+/// A process that writes to the store while this is set says which session it wrote from
+/// ([`amenbo_core::session::id`], stamped on the ledger line), which is the one thing no amount of
+/// watching from outside can establish — folder and clock were measured and separate nothing
+/// (`AMB-T-3549`).
 ///
 /// The name is core's ([`amenbo_core::session::SESSION_VAR`]) rather than one of ours: the surface
 /// layer's verbs read it back out of the environment to decide whether they are inside a pane at all
 /// (`AMB-D-749`), so a name spelled twice is a name that can drift into a vocabulary that refuses
 /// everywhere.
 const SESSION_ENV: &str = amenbo_core::session::SESSION_VAR;
+
+/// The variable naming the throwaway directory this pane's statements are left in, set beside
+/// [`SESSION_ENV`] on every terminal opened. Core's name, for the reason [`SESSION_ENV`] gives.
+///
+/// **A pane with no directory is a pane the surface layer refuses in**, loudly, which is the right
+/// failure: an agent told "ok" for a statement dropped where nothing is watching would believe it had
+/// spoken while the person's screen never changed.
+const DIR_ENV: &str = amenbo_core::session::DIR_VAR;
+
+/// The event each statement an agent makes about its session arrives on. The payload is a
+/// `SessionSaidDto`, and like the output it goes to the talk window alone.
+const SAID_EVENT: &str = "session://said";
+
+/// How often the drop box is looked in. A statement is a person-scale event — an agent says a handful
+/// in a session — so this is slow enough to cost nothing and quick enough that a pane's label does not
+/// visibly lag what the agent just said.
+const LISTEN_EVERY: std::time::Duration = std::time::Duration::from_millis(200);
 
 /// How much of a terminal's output is carried in one chunk. Large enough that a full repaint of a
 /// TUI crosses in a handful of events rather than hundreds, small enough that the first line of a
@@ -170,6 +196,16 @@ pub fn pty_open(
 
     let mut cmd = launch::command(folder.clone(), None);
     cmd.env(SESSION_ENV, &session);
+    // The drop box is made here rather than left for the first statement to make, so that a pane which
+    // cannot be spoken to is one the surface layer refuses in from the start: with no directory named,
+    // every verb fails loudly inside the terminal instead of writing where nothing is watching.
+    let drop_box = std::env::temp_dir().join(format!("{DROP_BOX_PREFIX}{session}"));
+    match std::fs::create_dir_all(&drop_box) {
+        Ok(()) => {
+            cmd.env(DIR_ENV, &drop_box);
+        }
+        Err(e) => log::warn!("no drop box for session {session}: {e}"),
+    }
 
     let mut child = pair.slave.spawn_command(cmd).map_err(failed)?;
     // Let go of the slave now the child holds its own. While this process keeps it open the master
@@ -190,6 +226,8 @@ pub fn pty_open(
             killer,
         },
     );
+
+    listen(app.clone(), session.clone(), drop_box);
 
     let id = session.clone();
     std::thread::spawn(move || {
@@ -255,6 +293,118 @@ fn answer_cursor(app: &tauri::AppHandle, session: &str, times: usize) {
         let _ = terminal.writer.write_all(CURSOR_ANSWER);
     }
     let _ = terminal.writer.flush();
+}
+
+/// How long a drop box nobody has written to is left alone before it is swept. Long enough that it can
+/// only be a directory from a run that is over: a pane speaks the moment a person starts using it, and
+/// one that has been silent for a day has nothing in it worth keeping either way.
+const STALE_AFTER: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
+
+/// What a drop box's name begins with, which is how the sweep tells one from everything else sharing
+/// the temporary directory.
+const DROP_BOX_PREFIX: &str = "amenbo-session-";
+
+/// Clear the drop boxes an earlier run left behind. Call it once, off the launch path.
+///
+/// A terminal that closes takes its own away ([`listen`]), but a run that ends without closing them —
+/// the app quit, the machine restarted — cannot: the thread that would do it goes with the process. So
+/// the tidying is done from the other end, by whoever comes up next.
+///
+/// **A box is judged by when it was last written to, not by whose it is.** Several Amenbos share one
+/// temporary directory — the shipped one, a development build, another checkout's — and none of them
+/// can tell whether another's session is still running. Age settles it without asking: nothing but a
+/// dead run's leavings is a day untouched. And being wrong is cheap, because a box is only ever read
+/// forwards — a statement written after one is swept lands in a directory the writer makes again, and
+/// the pane reading it is none the wiser.
+pub fn sweep() {
+    sweep_in(&std::env::temp_dir(), STALE_AFTER);
+}
+
+/// The sweep itself, over a named directory and against a named age — so it can be asked what it does
+/// somewhere other than the one temporary directory the whole machine shares.
+fn sweep_in(dir: &std::path::Path, older_than: std::time::Duration) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for entry in entries.filter_map(Result::ok) {
+        let path = entry.path();
+        if !path.file_name().is_some_and(|n| n.to_string_lossy().starts_with(DROP_BOX_PREFIX)) {
+            continue;
+        }
+        let stale = entry
+            .metadata()
+            .and_then(|m| m.modified())
+            .and_then(|at| at.elapsed().map_err(std::io::Error::other))
+            .is_ok_and(|since| since > older_than);
+        if stale {
+            let _ = std::fs::remove_dir_all(&path);
+        }
+    }
+}
+
+/// Watch one pane's drop box, carrying each statement on to the pane as it appears, and take the
+/// directory away when the terminal it belonged to is gone.
+///
+/// **Looked in rather than watched for.** A statement is a person-scale event — an agent says a handful
+/// in a whole session — so a poll of a directory holding a handful of small files costs less than the
+/// machinery that would tell us it changed, and it behaves the same on all three operating systems.
+///
+/// The registry is asked *before* each read and the loop ends *after* one, so the statements an agent
+/// makes in its last breath are carried before the box is taken away.
+fn listen(app: tauri::AppHandle, session: String, dir: std::path::PathBuf) {
+    std::thread::spawn(move || {
+        let mut last: Option<String> = None;
+        loop {
+            let open = app
+                .state::<Terminals>()
+                .0
+                .lock()
+                .expect("terminals lock")
+                .contains_key(&session);
+            // A drop box that cannot be read is silence, not an error: it is watched while it is being
+            // written to, and the next look is 200ms away.
+            for said in amenbo_core::session::said_after(&dir, last.as_deref()).unwrap_or_default() {
+                last = Some(said.name.clone());
+                let dto = SessionSaidDto::of(&session, said);
+                if app.emit_to(crate::windows::TALK, SAID_EVENT, dto).is_err() {
+                    return;
+                }
+            }
+            if !open {
+                break;
+            }
+            std::thread::sleep(LISTEN_EVERY);
+        }
+        // Nothing said about a session outlives the session. The window keeps what it needs in memory
+        // (`AMB-D-749`), and what is left here is a directory of files nobody will ever read again.
+        let _ = std::fs::remove_dir_all(&dir);
+    });
+}
+
+impl SessionSaidDto {
+    /// One statement in the shape the webview reads it.
+    ///
+    /// The session is the pane's own rather than the one written in the file: a drop box belongs to one
+    /// terminal, so which pane spoke is already known, and taking the file's word for it would let
+    /// something that wandered into the directory name a pane it is not in.
+    fn of(session: &str, said: amenbo_core::session::Said) -> Self {
+        use amenbo_core::session::Statement;
+        let verb = said.statement.verb();
+        let (text, target, why) = match said.statement {
+            Statement::Name(text)
+            | Statement::Note(text)
+            | Statement::Waiting(text)
+            | Statement::Finished(text) => (Some(text), None, None),
+            Statement::Point { target, why } => (None, Some(target), Some(why)),
+        };
+        SessionSaidDto {
+            session: session.to_string(),
+            verb,
+            at: said.at,
+            cwd: said.cwd,
+            text,
+            target,
+            why,
+        }
+    }
 }
 
 /// Takes the terminal's own cursor queries out of a terminal's output, so they can be answered here.
@@ -505,6 +655,27 @@ mod tests {
             out.contains("[a-session]"),
             "the grandchild did not inherit the session name: {out:?}"
         );
+    }
+
+    /// The sweep takes what a dead run left and nothing else. The temporary directory is shared with
+    /// every other program on the machine, so what it passes over matters as much as what it removes.
+    #[test]
+    fn the_sweep_takes_the_drop_boxes_and_leaves_everything_else() {
+        let dir = amenbo_scratch::scratch("pty-sweep");
+        let box_one = dir.join(format!("{DROP_BOX_PREFIX}aaaa"));
+        let not_ours = dir.join("some-other-programs-work");
+        for made in [&box_one, &not_ours] {
+            std::fs::create_dir_all(made).expect("made");
+        }
+        std::fs::write(box_one.join("a-statement.json"), "{}").expect("written");
+
+        // Nothing is old enough yet: a box in use is a box that stays.
+        sweep_in(&dir, std::time::Duration::from_secs(24 * 60 * 60));
+        assert!(box_one.is_dir(), "a box written to a moment ago is still in use");
+
+        sweep_in(&dir, std::time::Duration::ZERO);
+        assert!(!box_one.exists(), "the drop box and the statements in it are gone");
+        assert!(not_ours.is_dir(), "and what was never ours was not touched");
     }
 
     /// A session id has to be unique across restarts of the app, which is the case a counter gets

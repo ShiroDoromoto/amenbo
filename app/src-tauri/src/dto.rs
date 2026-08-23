@@ -24,6 +24,13 @@ pub struct ActorDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) avatar: Option<String>,
+    /// The talk window session this write came from, when the row records one. Set only where an
+    /// ActorDto is an activity row's **author**; a roster entry or an assignee names a facet, not an
+    /// act, and leaves it unset. Two AI sessions share one facet, so this is the only thing that tells
+    /// them apart — and it is read, never inferred: absent means unknown (`AMB-T-3549`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) session: Option<String>,
 }
 
 /// One value of a dimension (a choice on the axis). Ordered dimensions arrive in `order_key` order.
@@ -2027,6 +2034,54 @@ pub enum PluginUpdateReachDto {
     Incidental,
     /// Somebody asked in so many words. Go to the catalog whatever the cache's age.
     Now,
+}
+
+/// One thing an AI said about the session it is running in, on its way to the pane drawing it.
+///
+/// It is the surface layer's record ([`amenbo_core::session::Said`]) in the shape the webview reads.
+/// The verbs each carry their own body, so the fields below are one verb's or another's: `text` is
+/// every verb but `point`, and `target` with `why` is `point` alone.
+// Clone for the same reason `PtyChunkDto` is: `emit_to` takes its payload by value.
+#[derive(Clone, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct SessionSaidDto {
+    /// The pane it was said in — the same id the terminal was opened under.
+    pub(crate) session: String,
+    #[ts(type = "\"name\" | \"note\" | \"waiting\" | \"finished\" | \"point\"")]
+    pub(crate) verb: &'static str,
+    /// When it was said (RFC3339 UTC).
+    pub(crate) at: String,
+    /// The folder the agent was in when it said it. It starts as the one the terminal was opened in
+    /// and moves with every `cd`, so it is the agent's own rather than the pane's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) cwd: Option<String>,
+    /// The line said. Absent on `point`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) text: Option<String>,
+    /// What `point` pointed at. Absent on every other verb.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) target: Option<String>,
+    /// Why it is worth opening. Absent on every other verb.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) why: Option<String>,
+}
+
+/// What one frame of the talk window is called, and who called it that — which is what says whether
+/// the next naming may replace it ([`amenbo_core::frames`]).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FrameNameDto {
+    /// The frame it is the name of. Names belong to frames, never to the session running in one.
+    pub(crate) frame: String,
+    pub(crate) name: String,
+    #[ts(type = "\"typed\" | \"session\" | \"person\"")]
+    pub(crate) by: &'static str,
 }
 
 /// One chunk of a terminal's output, on its way to the pane drawing it (the payload of the talk

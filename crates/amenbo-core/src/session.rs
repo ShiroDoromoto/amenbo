@@ -68,6 +68,32 @@ pub fn surface() -> Option<Surface> {
     from_parts(crate::env::session(), crate::env::session_dir())
 }
 
+/// The longest session id a write will carry into the ledger. The window mints 32 hex characters
+/// ([`SESSION_VAR`]); the cap is here because the variable is inherited from an environment anything
+/// can set, and a ledger line above its own size limit is dropped rather than written — a stray value
+/// would take the event down with it. A longer id is refused whole rather than cut: a shortened one
+/// names a session that does not exist, and naming the wrong session is worse than naming none.
+pub const MAX_ID_BYTES: usize = 128;
+
+/// The session a write records itself as coming from, or `None` when the process is running outside the
+/// talk window's terminal.
+///
+/// This is not the surface layer ([`surface`]) and asks for less. A statement needs somewhere to be
+/// left, so half an environment is no window at all; a name tag needs nothing but the name — it rides a
+/// write that was going to the ledger regardless, and stamping it costs nothing when nobody reads it.
+///
+/// Blank, whitespace, or past [`MAX_ID_BYTES`]: `None`. An empty author is allowed to mean "unknown";
+/// a guess is not.
+pub fn id() -> Option<String> {
+    id_from(crate::env::session())
+}
+
+/// The rule [`id`] applies, apart from the environment it reads — separate for the reason
+/// [`from_parts`] is: the environment is process-wide and a test suite is not.
+fn id_from(raw: Option<String>) -> Option<String> {
+    raw.filter(|s| !s.trim().is_empty() && s.len() <= MAX_ID_BYTES)
+}
+
 /// The rule [`surface`] applies, apart from the environment it reads: both halves present, and neither
 /// of them blank. It is separate because the environment is process-wide while a test suite is not —
 /// the rule can be asked directly, where setting the variables to ask it could not be undone.
@@ -184,11 +210,67 @@ fn merge(into: &mut Value, from: Value) {
     }
 }
 
-/// Every statement left in a directory, oldest first — the window's half of the drop box, and the only
-/// reader of [`say`]'s format. A file that is not a statement is skipped rather than raised: this
-/// directory is watched while it is being written to, and one unreadable file is no reason to lose the
-/// rest.
-pub fn statements(dir: &Path) -> Result<Vec<Value>> {
+/// A statement as the window reads it back: what was said, by which session, when, and where.
+///
+/// The name it was left under rides along, because that is what orders the drop box and what a reader
+/// remembers to know how far it has got. A statement is read once — re-reading the directory must not
+/// hand the window what it has already been told.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Said {
+    /// The file it was left in, which sorts in the order statements were made.
+    pub name: String,
+    /// The pane it was said in, as the window named it.
+    pub session: String,
+    /// When it was said (RFC3339 UTC).
+    pub at: String,
+    /// The folder the agent was in when it said it, where that could be read.
+    pub cwd: Option<String>,
+    /// What was said.
+    pub statement: Statement,
+}
+
+impl Said {
+    /// Read one statement back out of the record [`say`] wrote, or `None` when this reader cannot make
+    /// sense of it — a shape from a later version, or a file that is not a statement at all.
+    ///
+    /// A window left running across an update is what this is for. It goes on reading the statements it
+    /// knows and passes over the ones it does not, rather than drawing a verb it can mean nothing by.
+    fn read(name: &str, v: &Value) -> Option<Said> {
+        if v["schema"].as_u64()? > u64::from(SCHEMA) {
+            return None;
+        }
+        let text = || v["text"].as_str().map(str::to_string);
+        let statement = match v["verb"].as_str()? {
+            "name" => Statement::Name(text()?),
+            "note" => Statement::Note(text()?),
+            "waiting" => Statement::Waiting(text()?),
+            "finished" => Statement::Finished(text()?),
+            "point" => Statement::Point {
+                target: v["target"].as_str()?.to_string(),
+                why: v["why"].as_str()?.to_string(),
+            },
+            _ => return None,
+        };
+        Some(Said {
+            name: name.to_string(),
+            session: v["session"].as_str()?.to_string(),
+            at: v["at"].as_str()?.to_string(),
+            cwd: v["cwd"].as_str().map(str::to_string),
+            statement,
+        })
+    }
+}
+
+/// Every statement left in `dir` under a name later than `after`, oldest first — the window's half of
+/// the drop box, and the only reader of [`say`]'s format.
+///
+/// `after` is the [`Said::name`] of the last statement the caller was handed; with `None` the whole box
+/// is read. Names sort in the order the statements were made, so "later than" is a string comparison
+/// and there is nothing to remember but the last name.
+///
+/// A file that is not a statement is skipped rather than raised: this directory is watched while it is
+/// being written to, and one unreadable file is no reason to lose the rest.
+pub fn said_after(dir: &Path, after: Option<&str>) -> Result<Vec<Said>> {
     let mut names: Vec<PathBuf> = match fs::read_dir(dir) {
         Ok(entries) => entries
             .filter_map(|e| e.ok())
@@ -202,8 +284,13 @@ pub fn statements(dir: &Path) -> Result<Vec<Value>> {
     names.sort();
     Ok(names
         .iter()
-        .filter_map(|p| fs::read_to_string(p).ok())
-        .filter_map(|text| serde_json::from_str::<Value>(&text).ok())
+        .filter_map(|p| {
+            let name = p.file_name()?.to_str()?.to_string();
+            if after.is_some_and(|last| name.as_str() <= last) {
+                return None;
+            }
+            Said::read(&name, &serde_json::from_str::<Value>(&fs::read_to_string(p).ok()?).ok()?)
+        })
         .collect())
 }
 
@@ -281,6 +368,19 @@ mod tests {
         assert_eq!(v["why"], "the vocabulary lands here");
     }
 
+    /// The text of every statement read back, in the order it came.
+    fn texts(said: &[Said]) -> Vec<String> {
+        said.iter()
+            .map(|s| match &s.statement {
+                Statement::Name(t)
+                | Statement::Note(t)
+                | Statement::Waiting(t)
+                | Statement::Finished(t) => t.clone(),
+                Statement::Point { target, .. } => target.clone(),
+            })
+            .collect()
+    }
+
     #[test]
     fn statements_come_back_in_the_order_they_were_said() {
         let dir = amenbo_scratch::scratch("session-order");
@@ -288,12 +388,55 @@ mod tests {
         for verb in ["one", "two", "three"] {
             say(&s, &Statement::Note(verb.to_string())).expect("written");
         }
-        let said: Vec<String> = statements(&dir)
-            .expect("read back")
-            .iter()
-            .map(|v| v["text"].as_str().unwrap_or_default().to_string())
-            .collect();
-        assert_eq!(said, vec!["one", "two", "three"], "oldest first, even within one millisecond");
+        let said = said_after(&dir, None).expect("read back");
+        assert_eq!(
+            texts(&said),
+            vec!["one", "two", "three"],
+            "oldest first, even within one millisecond",
+        );
+        assert_eq!(said[0].session, "pane-1", "the pane it was said in comes back with it");
+        assert!(said[0].cwd.is_some(), "and the folder it was said in");
+    }
+
+    /// A reader is handed each statement once. Everything the window does with one — a name, a pane's
+    /// label, a person's turn — happens on the way past, so being told twice is being told wrongly.
+    #[test]
+    fn a_reader_is_told_only_what_it_has_not_been_told() {
+        let dir = amenbo_scratch::scratch("session-after");
+        let s = surface_at(&dir);
+        for verb in ["one", "two"] {
+            say(&s, &Statement::Note(verb.to_string())).expect("written");
+        }
+        let first = said_after(&dir, None).expect("read back");
+        assert_eq!(texts(&first), vec!["one", "two"]);
+
+        let last = first.last().expect("two were read").name.clone();
+        assert!(
+            said_after(&dir, Some(&last)).expect("read back").is_empty(),
+            "nothing was said since, so nothing comes back",
+        );
+
+        say(&s, &Statement::Note("three".into())).expect("written");
+        assert_eq!(
+            texts(&said_after(&dir, Some(&last)).expect("read back")),
+            vec!["three"],
+            "and what was said since comes back on its own",
+        );
+    }
+
+    /// Every field of the two-part verb survives the round trip. `point` is the one statement whose body
+    /// is not a single line, so it is the one a reader can drop half of without noticing.
+    #[test]
+    fn a_pointer_comes_back_with_both_halves() {
+        let dir = amenbo_scratch::scratch("session-read-point");
+        let s = surface_at(&dir);
+        say(&s, &Statement::Point { target: "AMB-T-3597".into(), why: "here".into() })
+            .expect("written");
+        let said = said_after(&dir, None).expect("read back");
+        assert_eq!(
+            said[0].statement,
+            Statement::Point { target: "AMB-T-3597".into(), why: "here".into() },
+        );
     }
 
     #[test]
@@ -303,13 +446,33 @@ mod tests {
         say(&s, &Statement::Note("real".into())).expect("written");
         // What a composing writer leaves behind: a dotted, extension-less name a reader must skip.
         fs::write(dir.join(".00000000000000000001-1-0000.json.partial"), "{\"verb\":").unwrap();
-        let said = statements(&dir).expect("read back");
+        let said = said_after(&dir, None).expect("read back");
         assert_eq!(said.len(), 1, "the partial file is not among them: {said:?}");
 
         assert!(
-            statements(&dir.join("never-made")).expect("silence is not a failure").is_empty(),
+            said_after(&dir.join("never-made"), None)
+                .expect("silence is not a failure")
+                .is_empty(),
             "a directory nobody has spoken in reads as empty",
         );
+    }
+
+    /// A window left running across an update meets shapes it was not written for. It passes over them
+    /// and goes on with the rest — drawing a verb it cannot mean anything by is the failure here.
+    #[test]
+    fn a_statement_this_reader_cannot_understand_is_passed_over() {
+        let dir = amenbo_scratch::scratch("session-unknown");
+        let s = surface_at(&dir);
+        say(&s, &Statement::Note("real".into())).expect("written");
+        for (name, body) in [
+            ("00000000000000000001-1-0000.json", json!({ "schema": SCHEMA + 1, "session": "pane-1", "at": "2026-08-24T00:00:00Z", "verb": "note", "text": "from a later version" })),
+            ("00000000000000000002-1-0000.json", json!({ "schema": SCHEMA, "session": "pane-1", "at": "2026-08-24T00:00:00Z", "verb": "shrug", "text": "a verb that is not one" })),
+            ("00000000000000000003-1-0000.json", json!({ "schema": SCHEMA, "session": "pane-1", "at": "2026-08-24T00:00:00Z", "verb": "note" })),
+        ] {
+            fs::write(dir.join(name), body.to_string()).unwrap();
+        }
+        let said = said_after(&dir, None).expect("read back");
+        assert_eq!(texts(&said), vec!["real"], "only the one it understands: {said:?}");
     }
 
     #[test]
@@ -328,6 +491,37 @@ mod tests {
         assert!(
             from_parts(None, Some("/tmp/drop".into())).is_none(),
             "and a directory with no session names nothing the window could file it under",
+        );
+    }
+
+    #[test]
+    fn a_write_carries_the_session_it_was_made_in_and_never_a_guess_at_one() {
+        let stamp = |raw: &str| id_from(Some(raw.to_string()));
+        assert_eq!(stamp("pane-1").as_deref(), Some("pane-1"), "the window named it: the write carries it");
+        assert_eq!(stamp(""), None, "a blank variable names no session");
+        assert_eq!(stamp("  "), None, "and neither does whitespace");
+        assert_eq!(
+            stamp(&"x".repeat(MAX_ID_BYTES + 1)),
+            None,
+            "past the cap the id is dropped whole — a cut one would name a session nobody has",
+        );
+        assert_eq!(
+            stamp(&"x".repeat(MAX_ID_BYTES)).map(|s| s.len()),
+            Some(MAX_ID_BYTES),
+            "the cap itself is inside it",
+        );
+        assert_eq!(id_from(None), None, "outside the window there is nothing to carry");
+    }
+
+    #[test]
+    fn a_name_tag_asks_for_less_than_a_statement_does() {
+        // `surface` needs somewhere to leave a statement; a stamp on a write that was happening anyway
+        // needs nothing but the name, so half an environment still names the session it came from.
+        assert!(from_parts(Some("pane-1".into()), None).is_none(), "no drop box: not the surface layer");
+        assert_eq!(
+            id_from(Some("pane-1".into())).as_deref(),
+            Some("pane-1"),
+            "but the write still knows which pane it was made in",
         );
     }
 

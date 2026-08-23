@@ -35,7 +35,14 @@ export type ActorDto = { name: string, kind: "human" | "ai",
  * ActorDto uses (assignee, author) leave it unset. Omitted when unset, and the front end draws
  * an identicon instead.
  */
-avatar?: string, };
+avatar?: string, 
+/**
+ * The talk window session this write came from, when the row records one. Set only where an
+ * ActorDto is an activity row's **author**; a roster entry or an assignee names a facet, not an
+ * act, and leaves it unset. Two AI sessions share one facet, so this is the only thing that tells
+ * them apart — and it is read, never inferred: absent means unknown (`AMB-T-3549`).
+ */
+session?: string, };
 
 /**
  * The whole catalog and this project's folders — what the settings screen's "take the request" face is
@@ -386,6 +393,16 @@ recorded: string,
  * The store name of the build that is listing it.
  */
 running: string, };
+
+/**
+ * What one frame of the talk window is called, and who called it that — which is what says whether
+ * the next naming may replace it ([`amenbo_core::frames`]).
+ */
+export type FrameNameDto = { 
+/**
+ * The frame it is the name of. Names belong to frames, never to the session running in one.
+ */
+frame: string, name: string, by: "typed" | "session" | "person", };
 
 /**
  * One bound repository the banner has something to say about — the raw material for its wording, never
@@ -1749,6 +1766,40 @@ priority?: string,
  * Tasks only, in axis order — empty for a task placed on no axis.
  */
 labels: Array<SearchLabelDto>, };
+
+/**
+ * One thing an AI said about the session it is running in, on its way to the pane drawing it.
+ *
+ * It is the surface layer's record ([`amenbo_core::session::Said`]) in the shape the webview reads.
+ * The verbs each carry their own body, so the fields below are one verb's or another's: `text` is
+ * every verb but `point`, and `target` with `why` is `point` alone.
+ */
+export type SessionSaidDto = { 
+/**
+ * The pane it was said in — the same id the terminal was opened under.
+ */
+session: string, verb: "name" | "note" | "waiting" | "finished" | "point", 
+/**
+ * When it was said (RFC3339 UTC).
+ */
+at: string, 
+/**
+ * The folder the agent was in when it said it. It starts as the one the terminal was opened in
+ * and moves with every `cd`, so it is the agent's own rather than the pane's.
+ */
+cwd?: string, 
+/**
+ * The line said. Absent on `point`.
+ */
+text?: string, 
+/**
+ * What `point` pointed at. Absent on every other verb.
+ */
+target?: string, 
+/**
+ * Why it is worth opening. Absent on every other verb.
+ */
+why?: string, };
 
 /**
  * The slug in `.amenbo` disagrees with what the store actually holds

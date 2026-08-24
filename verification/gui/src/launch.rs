@@ -38,8 +38,12 @@ const POLL: Duration = Duration::from_millis(500);
 /// premise is stood up in that same store before there is an app to launch at all.
 #[derive(Debug)]
 pub struct Gui<'a> {
-    /// The process id the launch answered with — the app the screen tool is named.
+    /// The process id the launch answered with — the app the screen tool is named. It moves when the
+    /// app is run again ([`Gui::run_again`]), so a caller shooting by pid reads it each time rather
+    /// than keeping a copy: a shot named by the pid of a run that has ended is a shot of nothing.
     pub pid: i64,
+    /// The program inside the bundle, kept so a second run of it needs no bundle to be read again.
+    exe: PathBuf,
     child: Child,
     store: &'a Session,
 }
@@ -61,14 +65,21 @@ pub struct Gui<'a> {
 /// the same switch; this is the app being held to it too.
 pub fn launch<'a>(bundle: &Path, store: &'a Session) -> Result<Gui<'a>, String> {
     let exe = executable(bundle)?;
-    let child = Command::new(&exe)
+    let child = start(&exe, store)?;
+    Ok(Gui { pid: i64::from(child.id()), exe, child, store })
+}
+
+/// One run of the app, started against `store`. Both the first launch and every one after it go
+/// through here, which is what keeps them the same run: an app started again with anything else in
+/// its environment would be a different app to the one the road walked up to that point.
+fn start(exe: &Path, store: &Session) -> Result<Child, String> {
+    Command::new(exe)
         .env("AMENBO_HOME", &store.home)
         .env("AMENBO_UPDATE_CHECK", "0")
         .current_dir(&store.cwd)
         .stdout(Stdio::null())
         .spawn()
-        .map_err(|e| format!("could not launch {}: {e}", exe.display()))?;
-    Ok(Gui { pid: i64::from(child.id()), child, store })
+        .map_err(|e| format!("could not launch {}: {e}", exe.display()))
 }
 
 impl Gui<'_> {
@@ -105,6 +116,28 @@ impl Gui<'_> {
             }
             std::thread::sleep(POLL);
         }
+    }
+
+    /// End this run of the app and start another on the same store, holding until the new one can be
+    /// shot. The store is untouched between the two, so what the second run comes up on is whatever
+    /// the first one left written in it — which is the whole of what a road walking this is about.
+    ///
+    /// **It is the harness that does this and not the operator**, for the reason the first launch is
+    /// the harness's: the app has to come up pointed at the run's throwaway store and be namable by
+    /// a pid, and an app opened from the machine is neither. The pid moves with it, which is why a
+    /// caller shoots by reading [`Gui::pid`] rather than by a copy taken at the start.
+    ///
+    /// The app is killed rather than asked to quit, the way [`Drop`] takes it down: asking goes
+    /// through the app's name, and a name cannot pick out one instance of it. Nothing a graceful
+    /// close would flush is being relied on — what Amenbo keeps of a run it writes as it changes —
+    /// and a build that put that off until the door would be caught here, which is what this step is
+    /// for.
+    pub fn run_again(&mut self, screen: &Path) -> Result<(), String> {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        self.child = start(&self.exe, self.store)?;
+        self.pid = i64::from(self.child.id());
+        self.wait_until_shootable(screen)
     }
 }
 

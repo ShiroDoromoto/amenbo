@@ -196,6 +196,15 @@ would read the same. And a screen road creates projects, tasks and bindings, non
 in the store the operator actually works in; a store the run makes and drops leaves nothing for
 anyone to remember to tidy.
 
+**A road can ask for the app itself to be run again** (`store run-again`), which is the one step of a
+road the harness carries out rather than the operator: this app goes down, another comes up on the
+same store, and the pid moves with it. It is the harness's for the reason the first launch is —
+an app opened from the machine would come up on the operator's own backlog and under no pid the run
+can shoot — and it is where a road reads what Amenbo keeps of a run against what goes out with one.
+The app is killed rather than asked to quit, the way it is taken down at the end: asking goes through
+the app's name, and a name cannot pick out one instance. It happens before that step is handed over,
+so what the operator is asked to confirm is the window already in front of them.
+
 The executable inside the bundle is started directly rather than the bundle being `open`ed, since
 the environment is what carries the store and `open` hands the launch to launchd with an
 environment of its own. `AMENBO_HOME` is the product's own override, so the build under test is not
@@ -570,6 +579,16 @@ single pane walks `set-panes` past the only thing it is dangerous for.
 `go-to-the-panes-of-another-project` is the road for the one that replaces, and it reads the half the
 other cannot: the rail is the division itself rather than a grouping laid over one list, so what a
 project's press leaves on the screen is that project's panes and nothing of any other's.
+
+What none of those moves reaches is the end of the run itself, and the arrangement is two things at
+once: what the reader *set* — the split, the project they were looking at — and what they *opened*,
+the places and the names on them. The line between the two is drawn only when the app goes out, the
+first coming back and the second not, and `open-the-app-again-on-the-split-you-set-and-no-panes` is
+the road that walks it with `store run-again`. What it reads there is a count of boxes and never the words on a pane: what a terminal
+printed goes with the run whether or not its place came back, so a step reading for the line it typed
+would pass on both screens. A page offering one way in and a page with the last run's places standing
+on it are told apart by how many boxes are drawn, and the split by what the page does with a pane
+once there is one on it.
 
 Which folder a pane works in belongs to the same seam, because a pane belongs to a project and can
 work in no folder outside it. So the press that opens one does not open a picker: bound to a single

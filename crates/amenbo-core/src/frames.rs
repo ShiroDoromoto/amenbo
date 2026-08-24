@@ -123,6 +123,14 @@ pub struct SavedLayout {
     pub count: u32,
     /// The next frame id to hand out.
     pub next_id: u32,
+    /// The project whose panes the face was showing.
+    ///
+    /// It is here for the window that has no rail: the terminal split out into one of its own draws
+    /// a single pane and nobody asked it on its way in, so the project it belongs to is the one the
+    /// board was on when it was split out (`app/src/talk/agent.ts`). `None` is an arrangement
+    /// written before that was kept, and a face that has not been told of a project yet.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project: Option<u32>,
     /// The frames, in slot order.
     pub frames: Vec<SavedFrame>,
 }
@@ -210,6 +218,7 @@ mod tests {
         let laid = SavedLayout {
             count: 4,
             next_id: 3,
+            project: Some(1),
             frames: vec![
                 SavedFrame { id: "1".into(), project: Some(1), folder: Some("/work/repo".into()) },
                 SavedFrame { id: "2".into(), project: Some(2), folder: None },
@@ -236,6 +245,7 @@ mod tests {
             )
             .unwrap();
         let back = saved_layout(&engine).unwrap().expect("the arrangement");
+        assert_eq!(back.project, None, "nothing said which project the face was on");
         assert_eq!(back.frames[0].project, None, "nothing said which project it was");
         assert_eq!(back.frames[0].folder.as_deref(), Some("/work/repo"));
     }

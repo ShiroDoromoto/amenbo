@@ -6,7 +6,7 @@
 // the terminal itself — so the branching, the remembering, and the row on a closed pane all run for
 // real.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { PtySessionDto, WakeDto } from "../bindings/bindings";
+import type { BoundFolderDto, PtySessionDto, WakeDto } from "../bindings/bindings";
 import type { PaneEvents } from "./terminal";
 
 const hoisted = vi.hoisted(() => ({
@@ -26,6 +26,12 @@ const hoisted = vi.hoisted(() => ({
   refuse: null as Error | null,
   /** How many times the person was taken to the folder dialog. */
   chose: 0,
+  /** The folders the project this window is on is bound to, as the host answers. */
+  bound: [] as BoundFolderDto[],
+  /** Which projects were asked for their folders, in order. */
+  asked: [] as number[],
+  /** Which project the dialog was told to bind the folder it came back with to. */
+  boundTo: [] as number[],
 }));
 
 vi.mock("../core/ipc", () => ({
@@ -43,6 +49,16 @@ vi.mock("../core/mutations", () => ({
     hoisted.chose += 1;
     if (hoisted.refuse) throw hoisted.refuse;
     return hoisted.chosen;
+  }),
+  chooseFolderFor: vi.fn(async (project: number) => {
+    hoisted.chose += 1;
+    hoisted.boundTo.push(project);
+    if (hoisted.refuse) throw hoisted.refuse;
+    return hoisted.chosen;
+  }),
+  fetchBoundFolders: vi.fn(async (project: number) => {
+    hoisted.asked.push(project);
+    return hoisted.bound;
   }),
 }));
 vi.mock("./terminal", () => ({
@@ -107,13 +123,19 @@ const events: PaneEvents = {
   },
 };
 
-/** Put the frame up in a fresh page, with nothing chosen yet, and hand back its root. */
-async function put(answer: WakeDto): Promise<HTMLElement> {
+/** Put the frame up in a fresh page, with nothing chosen yet, and hand back its root. `project` is the
+ *  one the window is on — null is a machine that has no project for a pane to belong to yet. */
+async function put(answer: WakeDto, project: number | null = null): Promise<HTMLElement> {
   hoisted.answers = [answer];
   const root = document.createElement("div");
   document.body.replaceChildren(root);
-  await mountAgentFrame(root, "en", events, "pane");
+  await mountAgentFrame(root, "en", events, "pane", {}, project);
   return root;
+}
+
+/** A folder this project is bound to, as the host lists it. */
+function folder(path: string, exists = true): BoundFolderDto {
+  return { path, exists, mismatch: null, legacy: false, pointerMissing: false, foreign: null };
 }
 
 /** Press the invitation's button and let what it starts run out. */
@@ -145,6 +167,9 @@ beforeEach(() => {
   hoisted.chosen = null;
   hoisted.refuse = null;
   hoisted.chose = 0;
+  hoisted.bound = [];
+  hoisted.asked = [];
+  hoisted.boundTo = [];
   heard.opened = heard.said = heard.closed = heard.named = 0;
   heard.chose = [];
 });
@@ -213,6 +238,59 @@ describe("a frame with no folder asks for one, and asks for nothing else", () =>
     expect(hoisted.chose, "the folder was asked for a second time").toBe(0);
     expect(hoisted.sent).toContainEqual(["wake_probe", { folder: "/work/adopted" }]);
     expect(hoisted.panes[hoisted.panes.length - 1]).toEqual({ adopt: false, cwd: "/work/here", agent: "claude-code" });
+  });
+});
+
+// The window split out of the board draws one pane and has no rail, so nobody asked it on its way in
+// which project it is drawing. It is told by the arrangement the board left (`../talk.ts`), and from
+// there it keeps the rule that face keeps: a pane works in one of its project's folders and no other.
+describe("a window told which project it is on asks among that project's folders and no others", () => {
+  it("offers the project's folders, and never the machine's", async () => {
+    hoisted.bound = [folder("/work/site"), folder("/work/api")];
+    const root = await put(wake({ settled: "claude-code" }), 7);
+
+    expect(hoisted.asked, "this project's folders were not the ones read").toEqual([7]);
+    expect(root.textContent).toContain("Which folder does this pane work in?");
+    expect(buttons(root).map((b) => b.textContent)).toEqual(["/work/site", "/work/api"]);
+    expect(hoisted.chose, "the OS picker was opened on a project that has folders").toBe(0);
+  });
+
+  it("opens the pane in the folder pressed, with nothing to submit after it", async () => {
+    hoisted.bound = [folder("/work/site"), folder("/work/api")];
+    const root = await put(wake({ offered: ["claude-code"], settled: "claude-code" }), 7);
+    buttons(root).find((b) => b.textContent === "/work/api")?.click();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(heard.chose, "the window was not told where this frame settled").toEqual(["/work/api"]);
+    expect(hoisted.sent).toContainEqual(["wake_probe", { folder: "/work/api" }]);
+    expect(hoisted.panes).toEqual([{ adopt: false, cwd: "/work/here", agent: "claude-code" }]);
+  });
+
+  it("leaves a folder that is not there off the list — nothing can be started in one", async () => {
+    hoisted.bound = [folder("/work/site"), folder("/work/moved", false)];
+    const root = await put(wake({ settled: "claude-code" }), 7);
+
+    expect(buttons(root).map((b) => b.textContent)).not.toContain("/work/moved");
+  });
+
+  it("asks nothing where the project is bound to one folder — the pane opens there", async () => {
+    hoisted.bound = [folder("/work/site")];
+    const root = await put(wake({ offered: ["claude-code"], settled: "claude-code" }), 7);
+
+    expect(root.textContent).not.toContain("Which folder does this pane work in?");
+    expect(heard.chose, "the one folder was not taken as the answer").toEqual(["/work/site"]);
+    expect(hoisted.panes).toEqual([{ adopt: false, cwd: "/work/here", agent: "claude-code" }]);
+  });
+
+  it("binds a project's first folder to that project, not to one the folder's name would raise", async () => {
+    hoisted.chosen = "/work/first";
+    const root = await put(wake({ settled: "claude-code" }), 7);
+
+    expect(root.textContent).toContain("Choose the folder you show the AI");
+    await chooseFolder(root);
+
+    expect(hoisted.boundTo, "the folder was bound somewhere other than this project").toEqual([7]);
+    expect(heard.chose).toEqual(["/work/first"]);
   });
 });
 

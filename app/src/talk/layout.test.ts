@@ -156,6 +156,15 @@ describe("an arrangement kept between runs", () => {
     expect(JSON.stringify(kept)).not.toContain("session-a");
   });
 
+  it("carries the project the face is on, for the window that has no rail to be asked on", () => {
+    // The split-out window draws one pane and nobody chose it on its way in, so what it opens as is
+    // the project the board was showing (`../talk.ts`).
+    expect(laidOut(withPanes(1)).project).toBe(1);
+    // A face that has not been told of a project says so by leaving it out, rather than naming one
+    // no pane is in.
+    expect(laidOut(EMPTY_LAYOUT)).not.toHaveProperty("project");
+  });
+
   it("comes back as places to open a terminal in, each in its own project", () => {
     const back = restored({
       count: 4,

@@ -3881,6 +3881,7 @@ pub fn talk_layout() -> Result<Option<TalkLayoutDto>, CmdError> {
     Ok(open_store_read()?.saved_layout()?.map(|saved| TalkLayoutDto {
         count: saved.count,
         next_id: saved.next_id,
+        project: saved.project,
         frames: saved
             .frames
             .into_iter()
@@ -3902,6 +3903,7 @@ pub fn save_talk_layout(layout: TalkLayoutDto) -> Result<(), CmdError> {
     open_store()?.save_layout(&amenbo_core::frames::SavedLayout {
         count: layout.count,
         next_id: layout.next_id,
+        project: layout.project,
         frames: layout
             .frames
             .into_iter()

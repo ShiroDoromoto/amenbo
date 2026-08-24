@@ -32,7 +32,7 @@ import { invoke } from "./core/ipc";
 import { initTheme } from "./core/theme";
 import { mountAgentFrame } from "./talk/agent";
 import { elevationBand } from "./talk/elevation";
-import { frameNames, nameFrame, ONLY_FRAME, type FrameNames, type NamedBy } from "./talk/frames";
+import { frameNames, nameFrame, savedLayout, ONLY_FRAME, type FrameNames, type NamedBy } from "./talk/frames";
 import { notifyTurn } from "./core/osNotify";
 import { mountPlate } from "./talk/plate";
 import "./styles/tokens.css";
@@ -56,6 +56,22 @@ function retitle(): void {
     // not be set is not worth failing an otherwise-working window over.
     .catch(() => {});
 }
+
+// Which project this window's pane is one of.
+//
+// **A pane belongs to a project, and this window has no rail to have been asked on** — one pane, and
+// nobody chose it on its way in (`AMB-D-753`). So the project is the one the board was showing when
+// the terminal was split out of it, which the board leaves in the arrangement it keeps
+// (`./talk/layout`). It is what the folders this pane may work in are read from: a pane that could
+// be pointed at any folder on the machine would be this window keeping a rule the board does not.
+//
+// Null where nothing has been arranged yet, which is a machine with no project — there the folder
+// chosen is what raises one (`./talk/agent`).
+const project: Promise<number | null> = savedLayout()
+  .then((saved) => saved?.project ?? null)
+  // Nothing answered, and a window that refused to open over an unreadable arrangement would be a
+  // window with no terminal in it. What is left is the road a first run takes.
+  .catch(() => null);
 
 // The language this page is written in. The title is not the only thing that waits on it — a band may
 // have to be worded too — so the answer is held as something the rest of the page can wait on rather
@@ -148,8 +164,9 @@ if (root) {
   // The frame does wait on the language, unlike the label: everything it says before a terminal is
   // running — the offer, the install notice, the row on a closed pane — is a whole sentence, and one
   // drawn in English first would be a flicker of the wrong language rather than a pane arriving
-  // sooner.
-  void language.then((answered) =>
+  // sooner. It waits on the project for the same reason and a stronger one: the folders it may offer
+  // are that project's, and a frame that asked before the answer came would ask the wrong question.
+  void Promise.all([language, project]).then(([answered, onto]) =>
     mountAgentFrame(
       face,
       answered,
@@ -183,6 +200,8 @@ if (root) {
         name,
       },
       "talk__pane",
+      {},
+      onto,
     ),
   );
 

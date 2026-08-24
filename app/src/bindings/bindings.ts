@@ -2160,6 +2160,11 @@ count: number,
  */
 nextId: number, 
 /**
+ * The project whose panes the face was showing. It is what the window with no rail opens as
+ * (`app/src/talk.ts`); absent where nothing has told the face of a project yet.
+ */
+project?: number, 
+/**
  * The frames, in slot order.
  */
 frames: Array<TalkFrameDto>, };

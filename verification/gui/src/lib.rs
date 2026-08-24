@@ -1401,22 +1401,58 @@ impl Instructor {
                 req(with, "target")?,
                 req(with, "why")?
             ),
+            // Moving the whole face to another project. The row is named by the project's own name,
+            // and the step says where the press leaves the screen rather than what the press looks
+            // like: the rail carries two rows for a project — its name and, under the one being
+            // shown, its panes — and an operator who took a pane's row would be going to a pane
+            // instead of to a project, which is a different move with a different screen after it.
+            //
+            // What it says is the state arrived at rather than the change, and deliberately: which
+            // project the face came up on is the run's business, so a road may well press the one
+            // already shown, and a line promising the screen would change would read as a failure on
+            // the one press that is allowed to do nothing.
+            (Domain::Terminal, "go-project") => format!(
+                "In the list beside the panes, press the name of the project \"{}\" — the row the project itself is on, not one of the panes listed under it. The face is that project's from here on: its panes are the ones drawn, on its own first page, and no other project's pane is on the screen.",
+                req(with, "project")?
+            ),
             // Opening a pane where there is not one yet. Both ways in are one press and nothing else
             // — the folder is the project's — so what the step says is which control is pressed and
             // where the screen ends up, since the two differ on exactly that. Neither names a page:
             // where a pane lands is the project's arithmetic and not the road's, and a step that
             // named one would be a road asserting it from the wrong end.
-            (Domain::Terminal, "open-pane") => match req(with, "from")? {
-                "face" => "On a terminal face with nothing open on it, press the way in in the middle — the one control there is. Where the project the rail is on is bound to one folder a pane opens in it and nothing is asked; where it is bound to several, the question of which of them goes up in the middle and no pane is made until it is answered."
-                    .to_string(),
-                "rail" => "In the list beside the panes, press the way in beside the name of the project being shown — the control at the end of its row. Where that project is bound to one folder a pane opens in it and the screen goes to it; where it is bound to several, the question of which of them goes up and no pane is made until it is answered."
-                    .to_string(),
-                other => {
-                    return Err(format!(
-                        "action `open-pane` does not know the way in `{other}` — it is face or rail"
-                    ))
-                }
-            },
+            //
+            // The asking half is where the two ways in stop differing: a project bound to several
+            // folders answers either press with the same question, and nothing opens until it is
+            // answered. So the press is said per control and what follows it is said once.
+            (Domain::Terminal, "open-pane") => {
+                let press = match req(with, "from")? {
+                    "face" => "On a terminal face with nothing open on it, press the way in in the middle — the one control there is.",
+                    "rail" => "In the list beside the panes, press the way in beside the name of the project being shown — the control at the end of its row.",
+                    other => {
+                        return Err(format!(
+                            "action `open-pane` does not know the way in `{other}` — it is face or rail"
+                        ))
+                    }
+                };
+                let lands = match (flagged(with, "asks"), req(with, "from")?) {
+                    (true, _) => "Nothing opens: this project is bound to more than one folder, so what comes up where the pane would have been is the question of which of them it works in.",
+                    (false, "face") => "A pane opens in the project the rail is on, in the folder that project is bound to, and nothing is asked.",
+                    (false, _) => "A pane opens in that project, in the folder it is bound to, and the screen goes to it.",
+                };
+                format!("{press} {lands}")
+            }
+            // Answering that question. The row is found by the folder's name at the end of the path
+            // it draws, since what the face writes on it is where the folder is and the road knows
+            // only what it calls it.
+            //
+            // The list itself is the goal, so the operator is told what may be on it: a pane belongs
+            // to a project and the folders it can work in are that project's, which is the one thing
+            // the rail promises. A question offering a way to anywhere else is this road's failure
+            // even where the press that follows lands correctly.
+            (Domain::Terminal, "pick-folder") => format!(
+                "In the question standing where the pane will be, press the folder the road calls \"{}\" — the row whose path ends in that name. Confirm as you press that what it offers is this project's folders and nothing besides: no picker, and no way out to a folder the project is not bound to. The pane opens in the one pressed.",
+                req(with, "dir")?
+            ),
             // Walking away from the question about where a pane runs. The press is named by what it
             // is *not* — not one of the folders, and not the way in again — because what is under
             // test is the leaving and not the place it was left from. The page digit is offered as
@@ -2262,11 +2298,11 @@ impl Instructor {
             },
             (Domain::Terminal, "pane") => match present(with) {
                 true => format!(
-                    "Confirm the pane running a terminal still shows the line \"{}\" — the same terminal, drawn here.",
+                    "Confirm the line \"{}\" is on the screen, on the pane that printed it — the same pane, drawn here. What is on a pane stays where it was printed, so a pane whose terminal has since ended still carries it.",
                     req(with, "shows")?
                 ),
                 false => format!(
-                    "Confirm the line \"{}\" is nowhere on the screen — the pane drawing it is not being shown, the ledger being up or another page being the one on screen.",
+                    "Confirm the line \"{}\" is nowhere on the screen — the pane drawing it is not being shown, the ledger being up, another page being the one on screen, or the face being on another project's panes.",
                     req(with, "shows")?
                 ),
             },
@@ -5063,6 +5099,81 @@ steps_gui:
             lines[3].contains("project being shown") && lines[3].contains("screen goes to it"),
             "the rail names the project and takes the screen there: {}",
             lines[3]
+        );
+    }
+
+    /// Where the project keeps several folders, both ways in meet the same question and neither opens
+    /// anything — so the press is said per control and what follows it is said once. An operator told
+    /// "nothing is asked" while a question stood in front of them would mark a working face red.
+    #[test]
+    fn a_press_that_meets_the_folder_question_does_not_promise_a_pane() {
+        let open = |from: &str, asks: bool| Step::Action {
+            domain: Domain::Terminal,
+            op: "open-pane".to_string(),
+            with: [
+                ("from".to_string(), serde_yaml::Value::from(from)),
+                ("asks".to_string(), serde_yaml::Value::from(asks)),
+            ]
+            .into_iter()
+            .collect(),
+            bind: None,
+            window: None,
+        };
+
+        for from in ["face", "rail"] {
+            let said = Instructor::new().render(&open(from, true)).unwrap();
+            assert!(said.contains("Nothing opens"), "the press opens no pane: {said}");
+            assert!(said.contains("which of them it works in"), "and what it meets instead: {said}");
+            assert!(!said.contains("nothing is asked"), "a question is standing: {said}");
+        }
+
+        let quiet = Instructor::new().render(&open("face", false)).unwrap();
+        assert!(quiet.contains("nothing is asked"), "one folder is not a question: {quiet}");
+    }
+
+    /// Answering it. The row is found by the folder's name at the end of the path it draws — a road
+    /// knows what it calls a folder and not where the run put it — and the list the answer is picked
+    /// out of is itself what the step is about, so the operator is told what may be on it.
+    #[test]
+    fn the_folder_a_pane_works_in_is_picked_out_of_this_projects_own() {
+        let step = Step::Action {
+            domain: Domain::Terminal,
+            op: "pick-folder".to_string(),
+            with: [("dir".to_string(), serde_yaml::Value::from("greenhouse-benches"))]
+                .into_iter()
+                .collect(),
+            bind: None,
+            window: None,
+        };
+        let said = Instructor::new().render(&step).unwrap();
+        assert!(said.contains("greenhouse-benches"), "got: {said}");
+        assert!(said.contains("path ends in"), "a road names a folder, not a place: {said}");
+        assert!(said.contains("no picker"), "the list is the goal: {said}");
+    }
+
+    /// Going to a project. What the step says is where the screen is afterwards rather than that it
+    /// changed: which project the face came up on is the run's business, so a road may press the one
+    /// already shown, and that press is allowed to do nothing.
+    #[test]
+    fn going_to_a_project_says_where_the_face_lands_rather_than_that_it_moved() {
+        let step = Step::Action {
+            domain: Domain::Terminal,
+            op: "go-project".to_string(),
+            with: [("project".to_string(), serde_yaml::Value::from("Greenhouse"))]
+                .into_iter()
+                .collect(),
+            bind: None,
+            window: None,
+        };
+        let said = Instructor::new().render(&step).unwrap();
+        assert!(said.contains("\"Greenhouse\""), "got: {said}");
+        assert!(
+            said.contains("not one of the panes listed under it"),
+            "a pane's row is a different move: {said}"
+        );
+        assert!(
+            !said.contains("changes") && !said.contains("swaps"),
+            "the press may land where the face already was: {said}"
         );
     }
 

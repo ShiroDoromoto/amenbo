@@ -56,6 +56,15 @@ steps_gui:
     with:
       face: terminal
 
+  # The project this road is about, pressed rather than assumed: which project the face comes up on is
+  # the run's business, and a road that read a screen it had not put itself on would be reading
+  # somebody else's.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Sunroom
+
   - type: assert
     domain: terminal
     op: frames

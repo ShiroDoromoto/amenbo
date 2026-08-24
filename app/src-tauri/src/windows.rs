@@ -22,10 +22,24 @@
 //! A launch at login is the ordinary launch (`autostart`), so it comes up exactly as opening the app
 //! does: the board, in whichever shape this machine was last used in.
 
+use std::sync::Mutex;
+
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
-use crate::dto::RefTargetDto;
+use crate::dto::{RefTargetDto, TalkPaneDto};
 use crate::error::CmdError;
+
+/// The pane the talk window is drawing, as the board handed it over at the split.
+///
+/// **It lives here because what it holds lives as long as this process does.** Which frame the window
+/// draws is kept with the arrangement (`amenbo_core::frames::SavedLayout`), where a place belongs;
+/// the terminal running in that frame is a session, and a session dies with the run that opened it —
+/// written down it would come back on the next launch as an id nothing answers to. So the board says
+/// it as it splits, and the window asks for it as it comes up: one hand-over, inside one run.
+///
+/// Empty until a split happens, and emptied when the two windows fold back into one — a window that
+/// is not there has no pane, and the next split says its own.
+static SPLIT_OUT: Mutex<Option<TalkPaneDto>> = Mutex::new(None);
 
 /// The window the ledger is read in — the app as it was before the second one existed, which is why
 /// its label is still `main`: the label is what `tauri.conf.json` and every `get_webview_window`
@@ -85,8 +99,20 @@ fn failed(e: tauri::Error) -> CmdError {
 /// Raising is spelled out the way a notification click spells it (`crate::macos_notify`) —
 /// unminimize, show, focus — because a window that is merely unfocused and a window that is
 /// minimized both look, to the user, like the terminal not being there.
+///
+/// `pane` is what the board is handing over: the frame the window is to draw, and the terminal
+/// running in it where one is. It is said by the press that splits the terminal out and by nothing
+/// else — a launch coming up in the shape this machine was last used in has no session to hand over,
+/// and the window then reads which frame it draws from the arrangement.
 #[tauri::command]
-pub fn talk_open(app: tauri::AppHandle, raise: bool) -> Result<(), CmdError> {
+pub fn talk_open(
+    app: tauri::AppHandle,
+    raise: bool,
+    pane: Option<TalkPaneDto>,
+) -> Result<(), CmdError> {
+    if let Some(pane) = pane {
+        *SPLIT_OUT.lock().unwrap_or_else(|e| e.into_inner()) = Some(pane);
+    }
     if let Some(win) = app.get_webview_window(TALK) {
         if raise {
             let _ = win.unminimize();
@@ -136,10 +162,20 @@ pub fn talk_open(app: tauri::AppHandle, raise: bool) -> Result<(), CmdError> {
 /// into one window is what the user asked for, and it is already so.
 #[tauri::command]
 pub fn talk_close(app: tauri::AppHandle) -> Result<(), CmdError> {
+    *SPLIT_OUT.lock().unwrap_or_else(|e| e.into_inner()) = None;
     match app.get_webview_window(TALK) {
         Some(win) => win.destroy().map_err(failed),
         None => Ok(()),
     }
+}
+
+/// What the board handed over at the split, for the window that was built by it.
+///
+/// `None` is a talk window nobody split anything into — a launch restoring the shape this machine was
+/// last used in, where nothing is running to be taken up and the frame is the arrangement's to say.
+#[tauri::command]
+pub fn talk_pane() -> Option<TalkPaneDto> {
+    SPLIT_OUT.lock().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
 /// Where to put a window being split out: down and to the right of the board, in logical pixels.

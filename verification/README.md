@@ -618,6 +618,17 @@ is that the pane count is the most a page draws rather than slots waiting to be 
 reads the page still empty, then grows it one frame per pane opened. A face that filled its ceiling
 with boxes would be asking the same question four times over, and nothing else here would say so.
 
+`opens-with` reads the other thing an empty frame carries: the row above its press, which is what a
+pane opened there would start with. It names `shell` and nothing else — which agents are on that row
+is a probe of the run machine's own `PATH`, so a road naming one would run where that tool happens to
+be installed and nowhere else, while the plain shell is on every row by construction. The road is
+`open-a-pane-with-what-you-opened-the-last-one-with`, and what it defends is that a choice made once
+outlives the press that made it: the page is set to one so the frame read at the end is a frame drawn
+again rather than the one left standing, which is the difference between a build that keeps the
+answer and a button that stayed pressed. What the row comes up on *before* anybody has chosen is not
+read at all, and cannot be — nothing on it where several agents were found, that one where a single
+agent was, no row at all where none were, all three correct on the machine they happen to be on.
+
 `dot` is the one reading on these roads that is not text at all. The mark on a pane's label pulses
 while something is coming out of that terminal, and it is the only thing on screen that says a pane
 is *alive* rather than drawn — a terminal that ended leaves its last output where it was, so words on

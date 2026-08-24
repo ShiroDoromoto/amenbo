@@ -2450,6 +2450,23 @@ impl Instructor {
                     gave
                 )
             }
+            // What the empty frame is set to open with, read on the row above its press. The step is
+            // written for both shapes that row can be in, because which of them is on the run machine
+            // is the machine's own business: where agents were found there is a row and the shell is
+            // the one on it, and where none were there is no row at all and the shell is the whole of
+            // what a frame opens with. An operator handed only the first would mark a working face
+            // red on the second.
+            //
+            // The button is read beside it. Nothing on the row being on is the one state that stops
+            // the press, and it is what a build that forgot the choice would fall back to — so a step
+            // that looked only at which name is lit could pass on a frame that opens nothing.
+            (Domain::Terminal, "opens-with") => match req(with, "start")? {
+                "shell" => "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row above the press that opens a pane in it: confirm the plain shell is the one that is on, and that the press is live rather than asking to be told what to open with. Where this machine could start no agent there is no row on the frame at all, and that is the same reading: the plain shell is then the whole of what a frame opens with."
+                    .to_string(),
+                other => return Err(format!(
+                    "assert `opens-with` cannot name `{other}` — the plain shell is the one thing every machine's row has, and which agents are on it is that machine's own"
+                )),
+            },
             // How many panes are standing on the page. Counted rather than read: the boxes carry no
             // words of the road's, and the whole of what this asks is how many of them there are.
             //
@@ -5421,6 +5438,50 @@ steps_gui:
         };
         let err = Instructor::new().render(&step).unwrap_err();
         assert!(err.contains("face or rail"), "got: {err}");
+    }
+
+    /// What the empty frame will open with is read on the frame rather than on the pane it has not
+    /// made yet, and the press is read beside the row: nothing on it being on is the one state that
+    /// stops that press, so a step that only looked at which name is lit could pass on a frame that
+    /// opens nothing.
+    #[test]
+    fn the_empty_frame_is_read_for_what_it_will_open_with_and_for_a_live_press() {
+        let step = Step::Assert {
+            domain: Domain::Terminal,
+            op: "opens-with".to_string(),
+            with: [("start".to_string(), serde_yaml::Value::from("shell"))]
+                .into_iter()
+                .collect(),
+            window: None,
+        };
+        let said = Instructor::new().render(&step).unwrap();
+        assert!(said.contains("plain shell is the one that is on"), "got: {said}");
+        assert!(said.contains("press is live"), "the press is half the reading: {said}");
+        assert!(
+            said.contains("no row on the frame at all"),
+            "a machine that can start nothing draws no row, and the step has to say so: {said}"
+        );
+        assert!(
+            Instructor::new().expectation(&step).is_none(),
+            "the names on the row are the interface's own words, so no reading is expected off the shot"
+        );
+    }
+
+    /// An agent named on that row is refused rather than rendered. Which agents are on it is a probe
+    /// of the run machine's own `PATH`, so a road that named one would be a road that runs where that
+    /// tool happens to be installed and nowhere else.
+    #[test]
+    fn a_start_the_row_cannot_be_named_by_is_refused() {
+        let step = Step::Assert {
+            domain: Domain::Terminal,
+            op: "opens-with".to_string(),
+            with: [("start".to_string(), serde_yaml::Value::from("claude-code"))]
+                .into_iter()
+                .collect(),
+            window: None,
+        };
+        let err = Instructor::new().render(&step).unwrap_err();
+        assert!(err.contains("that machine's own"), "got: {err}");
     }
 
     /// What the lit face of the lamp rests on: a pane set printing carries on putting lines out while

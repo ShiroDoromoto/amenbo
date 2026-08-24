@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { mountNameplate, type Plate } from "./nameplate";
 
-const DOT = { frame: "pane-1", moving: false };
+const DOT = { frame: "pane-1", face: "out" } as const;
 
 /** A row saying whatever is handed in, on a session holding nothing. */
 function plate(say: Plate["say"], now: Plate["now"] = { kind: "idle" }): Plate {

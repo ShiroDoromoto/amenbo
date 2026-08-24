@@ -34,7 +34,7 @@
 //
 // **What the empty frame chose is carried in rather than asked for again.** The face puts the
 // startable agents on the frame itself and opens on one press ({@link PaneStart.agent} ·
-// `../shell/AdriftSlot`), so a pane arriving with a choice has already been through the question
+// `../shell/EmptySlot`), so a pane arriving with a choice has already been through the question
 // this module would put — and putting it a second time would be asking about a decision the person
 // has just made. What such a pane still needs from here is the probe: the folder's canonical form,
 // and the ranks behind it.

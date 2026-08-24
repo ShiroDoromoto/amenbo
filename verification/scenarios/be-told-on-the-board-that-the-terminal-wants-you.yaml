@@ -19,6 +19,13 @@
 # operator starts it in the pane, then presses the other segment before it lands. That is not a trick
 # around the seam — it is the seam, and the only door it has.
 #
+# ── Why the lamp is read on the way through ─────────────────────────────────────────────────────
+# The same turn is said three times, and each time the reader is closer: a mark on the segment from
+# the other face, the lamp on the pane's own label once that face is up, and the session's own words
+# beside it. This road already walked the first and the third, and the lamp is the rung between them
+# — read here rather than on a road of its own because it is the same turn, raised the same way, and
+# a second road would be arming the same word twice to look at the middle of it.
+#
 # ── Why the badge is spent at the end ────────────────────────────────────────────────────────────
 # Being on the terminal face is being told. The last two steps are the other half of the same rule:
 # crossing over takes the mark away, so the reader is never asked twice about one turn, and the
@@ -34,7 +41,9 @@ description: >
   Open the terminal face, choose the folder the pane runs in, and open a plain shell there. Hand the
   turn over from inside the pane and cross to the board before the word lands: the segment for the
   terminal is wearing a mark, which is the whole of what a person reading the board is told. Press it,
-  and the mark is gone — being on that face is being told, and a turn is knocked once.
+  and the lamp on the pane's own label is blinking beside the reason in the session's own words — the
+  same turn, said closer. The mark on the segment is gone: being on that face is being told, and a
+  turn is knocked once.
 
 steps_gui:
   - type: action
@@ -82,6 +91,15 @@ steps_gui:
     op: show-face
     with:
       face: terminal
+
+  # The middle rung. The lamp is the same turn as the mark just left behind, said closer: not a dot on
+  # a control saying somebody is needed somewhere, but a lamp on the row of the pane it is needed in.
+  # It is why the colour is the segment's and not the pane's own — the two are one signal.
+  - type: assert
+    domain: terminal
+    op: dot
+    with:
+      face: calling
 
   - type: assert
     domain: terminal

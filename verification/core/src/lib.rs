@@ -299,6 +299,10 @@ const REGISTRY: &[OpSpec] = &[
     // It is deliberately not the only way to reserve. A road that means to show what is **not** adrift
     // uses `status` and gets a reservation with no session on it, which is what a person's own terminal
     // leaves and what Amenbo must never read as abandoned.
+    //
+    // **No road stands on it at the moment.** The one that did read the question the terminal face drew,
+    // and that question is gone; where the state is put to a person next is the ledger's to answer. The
+    // premise stays because it is the store state itself, not the screen that read it.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "adrift", required: &["target"], refs: &["target"], strings: &[], binds: false },
     // The other terminal. A reason is required by the command, so it is required here: what separates
     // work decided against from work carried out is why, and it is recorded rather than remembered.
@@ -433,7 +437,8 @@ const REGISTRY: &[OpSpec] = &[
     // proposed and that birth is the only moment the ledger records who put it up: nothing said later
     // can put a session on it. As with the task, no driver has a pane, so it is adrift from the first
     // moment anything looks — and a road that wants a proposal Amenbo may **not** speak for uses
-    // `create`, which leaves no session on the line at all.
+    // `create`, which leaves no session on the line at all. No road stands on it at the moment, for the
+    // same reason its task twin does not.
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "adrift", required: &["title"], refs: &["project"], strings: &["title"], binds: true },
     // A decision's own life: the body is edited while it is still proposed, accepting freezes it,
     // and the link is what makes it a task's premise.
@@ -1885,11 +1890,11 @@ const REGISTRY: &[OpSpec] = &[
     // the prompt is back — and this one is walked away from while the output is still arriving,
     // which is the whole of the difference and the whole of what the mark it feeds needs.
     //
-    // It runs out on its own rather than being stopped, and that is the whole of how the still half
-    // of `dot` is reached. Every control a pane has is on the pane — ending it, typing at it — so a
-    // road that cut the output short by hand would be working in the pane it is about, and the pane
-    // being worked in never pulses: what it read afterwards would be a dot holding still because
-    // nothing draws it moving. Left alone, the same pane crosses from moving to still untouched.
+    // It runs out on its own rather than being stopped, and that is the whole of how the `out` face of
+    // `dot` is reached on a pane that was lit a moment before. Every control a pane has is on the pane
+    // — ending it, typing at it — so a road that cut the output short by hand would be pressing on the
+    // very pane it is about, and what it read afterwards would be a lamp gone out because the road put
+    // it out. Left alone, the same pane crosses from lit to out untouched.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "keep-printing", required: &["text"], refs: &[], strings: &["text"], binds: false },
     // Splitting the terminal out into a window of its own, and folding it back. Two ops rather than
     // one with a direction, because they are pressed in different windows: the way out is on the
@@ -1901,18 +1906,6 @@ const REGISTRY: &[OpSpec] = &[
     // how a road tells "the same terminal, moved" from "another terminal, started". The absent half
     // is what a road reads while the other face is up.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "pane", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
-    // What the terminal face asks about: work in the project it is on that nothing is doing any more. The
-    // task is named by reference rather than by words, because what is drawn is the record's own title
-    // and a road that spelt it out would be checking its own typing.
-    //
-    // The absent half is the one that matters most. A reservation with no session on it is one Amenbo
-    // cannot speak for, and the road reads its absence here — a screen that asked about it would be
-    // telling somebody at their own terminal that their work had stopped.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "adrift", required: &["target"], refs: &["target"], strings: &[], binds: false },
-    // Pressing one of them. It is the whole of what the question offers, and the whole of what it may
-    // offer: the screen does not know the work stopped, only that nothing it opened is at it, so the
-    // press opens the task where a person answers rather than answering for them. It leaves this face.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-adrift", required: &["target"], refs: &["target"], strings: &[], binds: false },
     // Ending the terminal in the pane. It is the only way out — a pane going away is a pane moving,
     // and the session outlives it — so it is also the only way a road reaches the state that follows
     // one: what a pane says once nothing is running in it any more.
@@ -2066,21 +2059,20 @@ const REGISTRY: &[OpSpec] = &[
     // stood on the shot before — the two pictures side by side are the reading, which is why this one
     // is left to an eye rather than to a search for words.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "side-width", required: &["side", "wider"], refs: &[], strings: &["side"], binds: false },
-    // Whether the dot on the pane's label is pulsing — something came out of that terminal a moment
-    // ago. It is the one reading that says a pane is *alive* rather than drawn: a terminal that ended
-    // leaves its last output where it was, so words on a pane outlive the process that wrote them and
-    // a road reading only those cannot tell a session that came back from the picture of one. `moving`
-    // says which half is being read. The dot's colour is not this op's and must not be read as its
-    // neighbour: hue says which pane, and the pulse says what is happening in it.
+    // Which face the lamp on a pane's label is showing. It is the one reading that says a pane is
+    // *alive* rather than drawn: a terminal that ended leaves its last output where it was, so words
+    // on a pane outlive the process that wrote them and a road reading only those cannot tell a
+    // session that came back from the picture of one. `face` says which of the three is being read —
+    // `lit` for output arriving, `calling` for a turn standing, `out` for neither. The lamp's hue is
+    // not this op's and must not be read as its neighbour: hue says which pane, and the face says what
+    // is happening in it — except on `calling`, which drops the hue for the warning colour because it
+    // has stopped saying which pane this is and started saying come here.
     //
-    // Two things about the mark decide where a road may put this step, and both are the screen's
-    // rather than this registry's. **The pane being worked in never pulses** — a reader looking
-    // straight at a terminal can see it moving, so the mark is for the panes they are not looking at
-    // — which means the pane a step reads has to be one the road has left. And **the pulse is
-    // movement**, so it is watched rather than shot: at either end of its turn a moving dot rests at
-    // exactly the still one's opacity, and a road that judged it off a picture would go red on the
-    // frame it happened to catch.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "dot", required: &["moving"], refs: &[], strings: &[], binds: false },
+    // **Only the calling face moves**, and that is what decides how a road may read each of them. The
+    // two still ones are a picture and can be shot; `calling` is a blink, so it is watched — at either
+    // end of its turn it rests at a step a shot cannot tell from the others, and a road that judged it
+    // off a picture would go red on the frame it happened to catch.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "dot", required: &["face"], refs: &[], strings: &["face"], binds: false },
 
     // ── the file face ─────────────────────────────────────────────────────────────────────────────
     // The folder a project is bound to, read from inside Amenbo. Three sections in one column: what an

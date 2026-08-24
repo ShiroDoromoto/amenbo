@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hueOf, movingAt, phaseDelay, PULSE_MS, QUIET_AFTER_MS, quietFor, STILL_AFTER_MS } from "./moving";
+import { hueOf, movingAt, phaseDelay, BLINK_MS, QUIET_AFTER_MS, quietFor, STILL_AFTER_MS } from "./moving";
 
 describe("what counts as moving", () => {
   it("is nothing at all before anything has arrived", () => {
@@ -33,14 +33,14 @@ describe("the hue is which pane, not what is happening in it", () => {
 });
 
 describe("the phase", () => {
-  it("puts two dots that started at different moments at the same point in the turn", () => {
+  it("puts two marks that started at different moments at the same point in the turn", () => {
     const early = 5_000_000;
-    const late = early + PULSE_MS * 3;
+    const late = early + BLINK_MS * 3;
     expect(phaseDelay(late)).toBe(phaseDelay(early));
   });
 
-  it("reads off the clock, so a dot joining mid-turn joins where the others are", () => {
-    expect(phaseDelay(PULSE_MS + 250)).toBe("-250ms");
+  it("reads off the clock, so a mark joining mid-turn joins where the others are", () => {
+    expect(phaseDelay(BLINK_MS + 250)).toBe("-250ms");
   });
 });
 

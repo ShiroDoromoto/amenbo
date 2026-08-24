@@ -198,9 +198,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .termface__grip--side { left: -4px; }
 .termface__grip:hover { background: var(--c-border-strong); }
 
-/* The page: the slots of it, laid out as one row, two across, or four in a square. The grid is
-   written per count rather than flowing, because a slot is a fixed place — panes that reflowed as
-   one closed would move the pane a reader was watching. */
+/* The page: the slots of it, laid out one across, two across, or two rows of two, three or four.
+   The grid is written per count rather than flowing, because a slot is a fixed place — panes that
+   reflowed as one closed would move the pane a reader was watching, and a count that laid itself out
+   from however many are open would answer a press with the shape it already had.
+
+   **Never a third row.** A terminal runs out of columns before it runs out of lines, so what a wider
+   screen buys is spent going across (`app/src/talk/layout.ts`, where the same numbers decide how much
+   width the columns beside the panes are measured against). */
 .termface__page-grid {
   flex: 1; min-width: 0; min-height: 0;
   display: grid; gap: var(--s-2);
@@ -223,6 +228,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .termface__page-grid--1 { grid-template: 1fr / 1fr; }
 .termface__page-grid--2 { grid-template: 1fr / 1fr 1fr; }
 .termface__page-grid--4 { grid-template: 1fr 1fr / 1fr 1fr; }
+.termface__page-grid--6 { grid-template: 1fr 1fr / 1fr 1fr 1fr; }
+.termface__page-grid--8 { grid-template: 1fr 1fr / 1fr 1fr 1fr 1fr; }
 
 /* One slot. It holds the label row and the pane under it. There is one per pane and no more — what is
    not open is not a box on the screen (`../talk/layout`). */
@@ -249,7 +256,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .slot__end:hover { color: var(--c-text); }
 .slot--focused .termface__pane { border-color: var(--c-accent); }
 /* The empty frame: the dashed place a terminal is opened in, holding what it will be opened with
-   and the one press that does it (`../shell/AdriftSlot`). The box is the frame; the row and the
+   and the one press that does it (`../shell/EmptySlot`). The box is the frame; the row and the
    button inside it are what is said in the room. */
 .slot--empty {
   flex: 1; min-height: 0;
@@ -270,12 +277,25 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .slot__open:hover { filter: brightness(1.08); }
 /* The same press before anybody has chosen, which is the first run and only it. It steps back to an
    outline so the row above is the one lit thing in the frame — what the reader has to do is choose,
-   and the button says so in words rather than waiting to refuse a press (`../shell/AdriftSlot`). */
+   and the button says so in words rather than waiting to refuse a press (`../shell/EmptySlot`). */
 .slot__open:disabled {
   background: transparent; border-color: var(--c-border); color: var(--c-text-faint);
   cursor: default;
 }
 .slot__open:disabled:hover { filter: none; }
+
+/* The question and the row under it, kept together: the words are what say the pills are an offer, so
+   they sit closer to the row than the row sits to the press that acts on it. */
+.slot__pick {
+  flex: 0 0 auto;
+  display: flex; flex-direction: column; align-items: center; gap: var(--s-2);
+}
+/* The words over the row. Quiet and small — it is a question about the pills, not a heading over the
+   frame, and one that shouts would take the eye before the thing it is asking about. */
+.slot__ask {
+  margin: 0;
+  color: var(--c-text-muted); font-size: var(--fs-sm); text-align: center;
+}
 
 /* What the terminal is opened with: one pill each, and the one in force filled with the accent. They
    are pressable and a reader has to see that they are — words alone read as a caption, and a caption
@@ -294,37 +314,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .slot__start--on {
   background: var(--c-accent-weak); border-color: var(--c-accent);
   color: var(--c-accent-text); font-weight: 600;
-}
-
-/* The same way in with something to say: work in this project that nothing is doing any more
-   (`../shell/AdriftSlot`). It is drawn as the same dashed place, because that is what it still is —
-   the question is what has been put in the room, not a different kind of box. */
-.slot--adrift {
-  flex: 1; min-height: 0;
-  gap: var(--s-2);
-  padding: var(--s-3);
-  border: 1.5px dashed var(--c-border-strong); border-radius: var(--r-lg);
-  overflow-y: auto;
-}
-.adrift__ask { color: var(--c-text); font-size: var(--fs-sm); line-height: 1.6; }
-.adrift__list { display: flex; flex-direction: column; gap: var(--s-1); margin: 0; padding: 0; list-style: none; }
-/* One task, pressable across its whole width: what it opens is the task's own face, and a target the
-   width of the words is one a reader has to aim at. */
-.adrift__task {
-  display: flex; gap: var(--s-2); align-items: baseline;
-  width: 100%; padding: var(--s-1) var(--s-2);
-  border: 1px solid var(--c-border); border-radius: var(--r-sm);
-  background: var(--c-surface); color: var(--c-text);
-  font-size: var(--fs-sm); text-align: left;
-}
-.adrift__task:hover { border-color: var(--c-accent); }
-.adrift__ref { color: var(--c-text-muted); font-family: var(--font-mono); font-size: var(--fs-sm); }
-.adrift__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The way in is still here, under the question rather than instead of it: the face is somewhere to
-   start a terminal whether or not there is anything to be asked about. */
-.adrift__open {
-  flex: 0 0 auto;
-  display: flex; flex-direction: column; align-items: center; gap: var(--s-2);
 }
 
 /* Where the pane being opened will work, asked in the place the pane is about to take (`./FolderChoice`).
@@ -533,9 +522,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .files__menuitem:hover { background: var(--c-surface-sunken); }
 
 /* ---------- the two halves of the panel ---------- */
-/* Files, and the page written on. The tabs are the panel's own, drawn small: they are a way between
-   two things rather than the panel's subject. */
-.files__tabs { display: flex; gap: var(--s-2); border-bottom: 1px solid var(--c-border); }
+/* The row above whichever half is up. It holds the way out and nothing else: the switch between
+   files and the page written on is the terminal face's top row, which is where it can be reached
+   from whether the panel is open or closed (`app/src/files/FilesPanel.tsx`). */
+.files__top { display: flex; }
 /* The panel's way out, at the end of whichever row it has. Quiet, like the control that ends a pane:
    what stops it being pressed by mistake is that nothing is lost when it is — the top row opens the
    panel again, on the half it was showing. */
@@ -547,12 +537,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
 }
 .files__close:hover { color: var(--c-text); }
-.files__tab {
-  display: inline-flex; align-items: center; gap: var(--s-1);
-  padding: var(--s-1) 0; border: 0; background: none;
-  color: var(--c-text-muted); font-size: var(--fs-sm); cursor: pointer;
-}
-.files__tab--on { color: var(--c-text); box-shadow: inset 0 -2px 0 var(--c-accent); }
 
 /* The draft page. It takes the room the panel has, because writing is what it is for
    (`app/src/files/MemoPage.tsx`). */
@@ -573,6 +557,50 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--c-surface); border-radius: var(--r-lg); box-shadow: var(--shadow-md);
 }
 .memo__field--wide { font-size: var(--fs-md); }
+
+/* Nothing is pressed to keep what is written here, so the page shows the keeping instead of saying
+   it in words (`AMB-T-3684`). The ring is the settle drawn at its own length — it fills while the
+   typing is in hand and closes on the write — and the word beside it carries the state the ring has
+   stopped moving to say. Neither is taken away once written: the quiet after typing is exactly when
+   a person looks to see whether anything was kept. */
+.memo__keep {
+  display: inline-flex; align-items: center; gap: var(--s-1);
+  margin-left: auto;
+  opacity: 0; transition: opacity 450ms ease;
+}
+.memo__keep--on { opacity: 1; }
+.memo__word { color: var(--c-text-muted); font-size: var(--fs-xs); white-space: nowrap; }
+.memo__keep--kept .memo__word { color: var(--c-accent); }
+/* The middle is cut out of the disc rather than painted over it: the two faces sit on different
+   grounds, and a middle painted in one of them would read as a spot on the other. */
+.memo__ring {
+  flex: 0 0 auto; width: 0.75rem; height: 0.75rem; border-radius: 50%;
+  background: conic-gradient(var(--c-accent) 0turn, transparent 0turn);
+  -webkit-mask: radial-gradient(closest-side, transparent 58%, #000 59%);
+  mask: radial-gradient(closest-side, transparent 58%, #000 59%);
+}
+.memo__keep--typing .memo__ring { animation: memo-fill var(--memo-settle, 600ms) linear forwards; }
+.memo__keep--kept .memo__ring {
+  background: conic-gradient(var(--c-accent) 1turn, transparent 1turn);
+  animation: memo-close 500ms ease forwards;
+}
+/* Only the turn moves between the two ends. Both stops are the same colour at both ends, which is
+   what lets the gradient be interpolated at all rather than swapped at the halfway point. */
+@keyframes memo-fill {
+  from { background: conic-gradient(var(--c-accent) 0turn, transparent 0turn); }
+  to { background: conic-gradient(var(--c-accent) 1turn, transparent 1turn); }
+}
+@keyframes memo-close {
+  0% { opacity: 1; transform: scale(1.18); }
+  60% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0.55; transform: scale(1); }
+}
+/* Motion turned down: the ring keeps its two ends and drops the travel between them. Empty against
+   full still tells the states apart, and the word says which in either case. */
+@media (prefers-reduced-motion: reduce) {
+  .memo__keep--typing .memo__ring,
+  .memo__keep--kept .memo__ring { animation: none; }
+}
 
 /* ---------- the band across the top of the app ---------- */
 /* One band, the app's news drawn in it — the integrity check, an update waiting, a folder that has
@@ -979,47 +1007,89 @@ button { font: inherit; color: inherit; cursor: pointer; }
    front of the words, and then as a dot on a pane that had not started. */
 .plate[hidden] { display: none; }
 
-/* The mark the pane is known by, and the one thing it can say about itself without being told
-   (see ../talk/moving.ts).
+/* The lamp the pane is known by, on one of three faces (see ../talk/nameplate.ts).
 
-   **Hue says which pane; opacity says whether it is moving.** Two readings on one mark only work while
-   they cannot be mistaken for each other, so the colour never changes with what is happening and the
-   brightness never changes with which pane it is.
+   **Hue says which pane; the face says what is happening in it.** Two readings on one mark only work
+   while they cannot be mistaken for each other, so the colour never changes with what is happening —
+   with the one exception that proves it, the calling face, which drops the pane's hue for the warning
+   colour precisely because it has stopped saying which pane this is and started saying come here.
 
-   **Stopping is going still, not going away.** A pane that has quietened keeps its dot at the resting
-   step: it is still that pane, and a mark that vanished would read as the pane having gone. */
+   **Out is not away.** A pane that has quietened keeps its lamp at the resting step: it is still that
+   pane, and a mark that vanished would read as the pane having gone.
+
+   The lamp is built of two layers, and the glow goes **over** the core rather than behind it: put
+   behind, it is covered by the parent's ground and nothing is seen at all. */
 .plate__dot {
+  position: relative;
   flex: 0 0 auto;
   align-self: center;
   width: 8px; height: 8px;
+  color: hsl(var(--dot-hue, 199) 55% var(--dot-light, 42%));
+}
+/* The core. */
+.plate__dot::before {
+  content: "";
+  position: absolute; inset: 0;
   border-radius: 50%;
-  background: hsl(var(--dot-hue, 199) 55% var(--dot-light, 42%));
-  opacity: 0.3;
+  background: currentColor;
+}
+/* The glow, laid over the core: the same colour blurred out past the edge, which brightens the middle
+   and reads as light coming off it. Off on every face but the two that are lit. */
+.plate__dot::after {
+  content: "";
+  position: absolute; inset: -4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0;
+  filter: blur(3px);
+  pointer-events: none;
 }
 /* Lifted off a dark ground: the same hue at the light side's lightness reads as a smudge on it, and
    the resting step is the dimmest thing on the row to begin with. */
 [data-theme="dark"] .plate__dot { --dot-light: 62%; }
-/* The turn is timed from one place — `PULSE_MS`, which is also what the phase is read against
-   (../talk/moving.ts). Written here as well, the two would drift and the panes would fall out of step
-   with nothing to show for it. */
-.plate__dot[data-moving="yes"] {
-  animation: plate-pulse var(--pulse) ease-in-out infinite;
-}
-/* Opacity alone. Anything that moved the dot would push the words beside it about, and anything that
-   turned would be claiming progress rather than reporting a stream. */
-@keyframes plate-pulse {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 0.95; }
-}
-/* The pane being worked in does not pulse. A reader looking straight at the terminal can see it
-   moving; the mark is for the panes they are not looking at. */
-.slot--focused .plate__dot { animation: none; }
 
-/* Motion turned down: the same two steps, held still. What the pulse carried was the difference
-   between them, and the difference survives without the movement. */
+/* Lit — output is arriving. The glow is simply on, and stays on: what it reports is a state that
+   lasts, and a mark that moved for it would leave every pane on the screen moving all day. */
+.plate__dot[data-face="lit"]::after { opacity: 0.7; }
+
+/* Out — nothing is arriving and nobody is being called. Sunk in place, in the pane's own hue. */
+.plate__dot[data-face="out"] { opacity: 0.3; }
+
+/* Calling — a person's turn is standing here. The one face that moves, because it is the one that is
+   rare and the one that is actually asking for somebody.
+
+   The colour is the warning colour, the same one the page's badge and an off-screen project's dot
+   wear: the same thing is said three times as the reader gets closer, and it is said in one colour.
+
+   **What moves is the opacity and nothing else.** Anything that shifted the lamp would push the words
+   beside it about; and a colour carried across a blur cannot be interpolated, so a fade written as a
+   change of colour comes out as a jump between two of them.
+
+   The beat and the phase are both the row's — `BLINK_MS` and `phaseDelay` (../talk/moving.ts) — so
+   that this and the mark at the other end of the row fall together rather than reading as two things
+   being asked. */
+.plate__dot[data-face="calling"] {
+  color: var(--c-heed);
+  animation: plate-blink var(--blink) infinite;
+  animation-delay: var(--phase, 0s);
+}
+.plate__dot[data-face="calling"]::after {
+  opacity: 0.7;
+  animation: plate-blink-glow var(--blink) infinite;
+  animation-delay: var(--phase, 0s);
+}
+@keyframes plate-blink { 50% { opacity: 0.25; } }
+@keyframes plate-blink-glow { 50% { opacity: 0.12; } }
+
+/* Motion turned down: the calling face held at its brightest. What the blink carried was "come here",
+   and the warning colour on a lamp that is otherwise the pane's own carries it without the movement. */
 @media (prefers-reduced-motion: reduce) {
-  .plate__dot { animation: none; opacity: 0.25; }
-  .plate__dot[data-moving="yes"] { animation: none; opacity: 0.95; }
+  .plate__dot[data-face="calling"],
+  .plate__dot[data-face="calling"]::after,
+  .plate[data-say="waiting"] .plate__mark--say,
+  .plate[data-say="premise"] .plate__mark--say {
+    animation: none;
+  }
 }
 
 /* The pane's name. It belongs to the frame, so it is the one part of the row that does not move when
@@ -1076,6 +1146,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .plate[data-say="premise"] .plate__say {
   color: var(--c-text);
 }
+/* The mark in front of those words blinks, to the same beat and the same faintness as the lamp at the
+   far end of the row — the two are one signal drawn twice, and drawn to two rhythms they would read as
+   two. It is the mark and not the words: where the pane is narrow the words are not drawn at all, and
+   what is left has to go on saying that somebody is needed (`../talk/nameplate.ts`). */
+.plate[data-say="waiting"] .plate__mark--say,
+.plate[data-say="premise"] .plate__mark--say {
+  animation: plate-blink var(--blink) infinite;
+  animation-delay: var(--phase, 0s);
+}
 
 /* A pane too narrow for three things drops them from the right, and the name and the ⏸ are what is
    left (`AMB-T-3673`).
@@ -1086,9 +1165,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
    it to the two that carry on meaning something: which pane this is, and whether a person is needed
    in it. The words that went are one hover away, on the mark that stayed (`../talk/nameplate.ts`).
 
-   The design's three widths are one, two and four panes; the width is what is asked, because two
-   across and four across are the same width in this grid (`.termface__page-grid--*` above) and the
-   split-out window is one pane at whatever size its window is. What a reason has to be short enough
+   The width is what is asked rather than the count, because a count does not name a width: two
+   across and four across are the same width in this grid (`.termface__page-grid--*` above), six and
+   eight are narrower again, and the split-out window is one pane at whatever size its window is. What a reason has to be short enough
    for is settled at the other end — `session waiting` refuses one past the length of a label
    (`amenbo_core::session::WAITING_LIMIT`), so this is the row's last resort rather than its plan. */
 @container (max-width: 360px) {

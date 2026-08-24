@@ -571,12 +571,11 @@ const ui = {
   "face.panes.one": "{n} pane", "face.panes.other": "{n} panes",
   "face.pages": "Pages",
   "face.page": "Page {n}",
-  // What the terminal face asks about: what this project was left in the middle of by a pane that has since
-  // gone — a task reserved, or a decision put up and never settled. One sentence over both, because it
-  // is one question; which kind a row is, and so what pressing it opens, is said by the ref it carries.
-  // It asks rather than tells — Amenbo cannot see somebody's own terminal, so it does not know the work
-  // stopped, only that nothing it opened is at it (`AMB-D-748`).
-  "face.adrift": "Something in this project was left in the middle, and nothing is at it. Carry on with it?",
+  // The line over the row of things a terminal can be opened with (`app/src/shell/EmptySlot.tsx`).
+  // The pills say by their shape that they can be pressed; this says it in words, because a row read
+  // as a caption is not something anybody tries. It does not say "choose an AI" — the plain shell is
+  // on the row and is not one.
+  "face.whichStart": "What does this pane open with?",
   "face.open": "Open a terminal here",
   // The same button before anybody has chosen — the first run, and only it. It says what to do
   // rather than being pressable and doing nothing: what is missing is written on the thing the
@@ -597,7 +596,8 @@ const ui = {
   "files.memo": "The page",
   "files.memoWide": "Write it wide",
   "files.memoNarrow": "Back to the panel",
-  "files.memoPlaceholder": "Put a long request together here.",
+  "files.memoTyping": "Typing",
+  "files.memoKept": "Kept",
   "files.changed": "Changed lately",
   "files.tree": "The folder",
   "files.nothingChanged": "Nothing has changed yet.",

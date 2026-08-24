@@ -62,10 +62,12 @@ export function FilesPanel({ projectId, onOpenLedger, pointed, show, tab, onTab,
   /**
    * Which of the two halves is up, and how to ask for one.
    *
-   * They are the caller's rather than this panel's because the terminal face's top row switches
-   * between them too, and it is the same control as the tabs here: pressing the half already up is
-   * what closes the panel (`../shell/TerminalFace`). A file clicked in a pane asks for the files
-   * half the same way, so a panel that had been closed comes back to show it.
+   * **The switch is the terminal face's top row and nowhere else.** This panel drew tabs of its own
+   * as well, and two controls that do the same thing leave a reader looking for the right one; the
+   * row that stayed is the one that is also there while the panel is closed
+   * (`../shell/TerminalFace`). So which half is up is the caller's answer, and this panel only
+   * reads it — except that a file clicked in a pane asks for the files half, which is how a panel
+   * that had been closed comes back to show it.
    */
   tab: "files" | "memo";
   onTab: (tab: "files" | "memo") => void;
@@ -114,14 +116,27 @@ export function FilesPanel({ projectId, onOpenLedger, pointed, show, tab, onTab,
     };
   }, [projectId, root]);
 
-  // The way to put the panel away. It is drawn on whatever row the panel has, in every state it can
-  // be in: a panel that could only be closed while it happened to be showing its tabs would be one
-  // a reader has to find their way back out of.
+  // The way to put the panel away, and the whole of the row it sits on. It is drawn in every state
+  // the panel can be in — reading a file included — because a panel that could only be closed from
+  // one of its states is one a reader has to find their way back out of.
   const close = (
     <button className="files__close" title={t("pane.close")} onClick={onClose}>
       <Icon name="close" />
     </button>
   );
+
+  // The draft page is the project's, and a project has one whether or not it is bound to a folder
+  // (`./MemoPage`). So the half that is up is answered first, and only the files half goes on to ask
+  // where it is rooted — a reader with nowhere to read files still has somewhere to write
+  // (`AMB-T-3690`).
+  if (projectId !== null && tab === "memo") {
+    return (
+      <div className="files">
+        <div className="files__top">{close}</div>
+        <MemoPage projectId={projectId} />
+      </div>
+    );
+  }
 
   if (projectId === null || root === null) {
     // A read that has not come back draws nothing at all: a flash of "no folder" on a project that
@@ -129,11 +144,11 @@ export function FilesPanel({ projectId, onOpenLedger, pointed, show, tab, onTab,
     return folders.answered
       ? (
         <div className="files files--empty">
-          <div className="files__tabs">{close}</div>
+          <div className="files__top">{close}</div>
           <p className="files__none">{t("files.noFolder")}</p>
         </div>
       )
-      : <div className="files"><div className="files__tabs">{close}</div></div>;
+      : <div className="files"><div className="files__top">{close}</div></div>;
   }
 
   if (reading !== null) {
@@ -149,36 +164,11 @@ export function FilesPanel({ projectId, onOpenLedger, pointed, show, tab, onTab,
     );
   }
 
-  const tabs = (
-    <div className="files__tabs" role="tablist">
-      {(["files", "memo"] as const).map((one) => (
-        <button
-          key={one}
-          className={`files__tab${tab === one ? " files__tab--on" : ""}`}
-          role="tab"
-          aria-selected={tab === one}
-          onClick={() => onTab(one)}
-        >
-          <Icon name={one === "files" ? "folder" : "pencil"} />
-          {t(one === "files" ? "files.tab" : "files.memo")}
-        </button>
-      ))}
-      {close}
-    </div>
-  );
-
-  if (tab === "memo") {
-    return (
-      <div className="files">
-        {tabs}
-        <MemoPage projectId={projectId} />
-      </div>
-    );
-  }
+  const top = <div className="files__top">{close}</div>;
 
   return (
     <div className="files">
-      {tabs}
+      {top}
       {pointed !== undefined && (
         <PointedRow
           root={root}

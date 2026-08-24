@@ -287,7 +287,7 @@ mod tests {
     }
 
     /// Nobody has chosen yet and there is more than one thing to choose between: the person is
-    /// asked, and the row comes up with nothing on it (`app/src/shell/AdriftSlot.tsx`).
+    /// asked, and the row comes up with nothing on it (`app/src/shell/EmptySlot.tsx`).
     #[test]
     fn the_first_run_is_asked_rather_than_guessed_at() {
         assert_eq!(

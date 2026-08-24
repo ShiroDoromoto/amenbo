@@ -1,0 +1,100 @@
+# Runtime image for driving the Linux GUI by hand: the same virtual display the
+# unattended check runs on (Dockerfile.linux-gui-e2e), plus the things it takes to
+# press the app and to see where a press went.
+#
+# It exists because of the roads that leave the app. A right-click menu that opens a
+# file, reveals it in a folder, or offers a list of applications hands the work to
+# something the app does not own, and a screenshot stops at the moment the menu
+# closes. To watch the rest, this container is the desktop the app hands off to:
+# every application on offer is a recorder, and the file manager is a bus service of
+# our own. What opened is then a line in a log rather than a guess about a picture.
+#
+# The other reason is the pointer. macOS has no right-click to give the app
+# (scripts/screen.swift carries no such button), so a menu that only a right-click
+# opens cannot be reached there at all. Here `xdotool click 3` opens it.
+#
+# The base is the Ubuntu 22.04 the AppImage and the CLI are built on, so what starts
+# here starts on the floor the distribution targets.
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Xvfb is the display and imagemagick photographs it; xdotool is the hand that
+# presses. squashfs-tools opens the AppImage without executing it (see
+# gui-drive/unpack-appimage.sh). python3-dbus and gir1.2-gtk-3.0 are what the stand-in
+# file manager is written against: it has to own a name on the session bus and put a
+# window on the display. The webkit/gtk libraries are what the app links against, and
+# the CJK font is what keeps a screenshot readable — the UI ships Japanese by default
+# and renders it as tofu boxes without one.
+#
+# The four packages behind `xdg-open` are together the whole of the "open it with the
+# usual application" road, and each one missing breaks it silently in its own way.
+# xdg-utils is the command itself; libglib2.0-bin is `gio`, which is what it hands the
+# file to once a desktop is named (without it the command falls through to hunting for
+# a web browser and finds none); shared-mime-info and file are how a file's name
+# becomes a type, and no type means no application to look up.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      xvfb x11-utils xdotool imagemagick dbus-x11 squashfs-tools \
+      xdg-utils libglib2.0-bin shared-mime-info file desktop-file-utils \
+      python3-gi python3-dbus gir1.2-gtk-3.0 \
+      libwebkit2gtk-4.1-0 libgtk-3-0 libayatana-appindicator3-1 librsvg2-2 \
+      fonts-dejavu-core fonts-noto-cjk ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY gui-drive /opt/drive
+RUN chmod +x /opt/drive/*.sh /opt/drive/filemanager1.py
+
+# The AppImage is unpacked rather than mounted (a container has no FUSE) and opened
+# by reading its payload, not by running its runtime — an emulated amd64 container on
+# an arm64 host cannot execute that static-pie runtime at all, which is what
+# `--appimage-extract` would ask it to do. AppRun is what sets the unpacked tree's
+# environment up, and it reaches its sibling hook scripts through the directory it
+# was invoked from, so PATH gets a wrapper that execs it in place; a symlink would
+# send it looking beside the link and the GUI would die on the missing hook.
+ARG APPIMAGE=amenbo-app-linux-x86_64.AppImage
+COPY ${APPIMAGE} /tmp/amenbo.AppImage
+RUN /opt/drive/unpack-appimage.sh /tmp/amenbo.AppImage /opt/amenbo-app \
+    && rm -f /tmp/amenbo.AppImage \
+    && printf '#!/bin/sh\nexec /opt/amenbo-app/AppRun "$@"\n' > /usr/local/bin/amenbo-app \
+    && chmod +x /usr/local/bin/amenbo-app
+
+# The AppImage carries the GUI alone, so the CLI arrives as its own binary. Here it is
+# what binds the folder the app opens on, not a writer under test.
+#
+# It keeps the file name it arrived under, and the room calls it by that name. A build
+# off the dev channel answers to its own file name — that is where it reads which
+# app-data tree is its own — so renaming it to `amenbo` would point it at a store the
+# app beside it never opens.
+ARG CLI=amenbo-linux-amd64
+COPY ${CLI} /usr/local/bin/${CLI}
+RUN chmod +x "/usr/local/bin/${CLI}"
+ENV AMENBO_CLI=${CLI}
+
+# The applications on offer, and the default among them. Which one is default is
+# what the "open with the default application" road lands on; the other two are what
+# makes the chooser dialog a choice rather than a formality.
+RUN cp /opt/drive/apps/*.desktop /usr/share/applications/ \
+    && update-desktop-database /usr/share/applications \
+    && mkdir -p /root/.config \
+    && printf '[Default Applications]\ntext/markdown=amenbo-fake-editor.desktop\ntext/plain=amenbo-fake-editor.desktop\n' \
+       > /root/.config/mimeapps.list
+
+# Bus activation, so the file manager is started by the call rather than by us: a
+# call that never left the app then starts nothing, and the log stays empty.
+RUN cp /opt/drive/org.freedesktop.FileManager1.service /usr/share/dbus-1/services/
+
+# `xdg-open` with no desktop declared falls through to hunting for a browser; naming
+# one puts it on the `gio open` road, which is the road a desktop user is on.
+ENV XDG_CURRENT_DESKTOP=GNOME
+ENV DISPLAY=:99
+# A fixed socket, so every `docker exec` joins the bus the app is on.
+ENV DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/amenbo-drive-bus
+ENV AMENBO_HOME=/root/amenbo-home
+ENV AMENBO_UPDATE_CHECK=0
+# No GPU in a container: keep WebKit off the compositing/dmabuf paths it can't take.
+ENV WEBKIT_DISABLE_COMPOSITING_MODE=1
+ENV WEBKIT_DISABLE_DMABUF_RENDERER=1
+
+RUN for n in shot click rclick type key log; do ln -s /opt/drive/helpers.sh "/usr/local/bin/$n"; done
+
+CMD ["/opt/drive/start.sh"]

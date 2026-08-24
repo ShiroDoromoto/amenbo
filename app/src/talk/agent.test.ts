@@ -353,7 +353,7 @@ describe("the frame draws what the host settled", () => {
     hoisted.sent = [];
     hoisted.panes = [];
 
-    // What the empty frame was pressed on rides in on the pane (`../shell/AdriftSlot`).
+    // What the empty frame was pressed on rides in on the pane (`../shell/EmptySlot`).
     const carried = document.createElement("div");
     document.body.append(carried);
     hoisted.answers = [wake()];

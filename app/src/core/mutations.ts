@@ -15,7 +15,7 @@ import { type AttachTargetType } from "./reads";
 import { guessLang, t, tf, type CmdError, type CmdErrorPart, type ViewKind } from "./i18n";
 import { isClosed } from "./status";
 import type { ActivityItem, Facet, Priority, Status, TaskCard } from "../mock/types";
-import type { ActivityTargetDto, AdriftDto, AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, McpRequestDto, McpSetupDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
+import type { ActivityTargetDto, AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, McpRequestDto, McpSetupDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
 import { taskRef } from "./idref";
 import { todayStr } from "./calendar";
 
@@ -1001,25 +1001,6 @@ export async function setAssignee(id: number, kind: Facet | null): Promise<void>
       ...s.activity,
     ],
   }));
-}
-
-
-/**
- * What was left in the middle in this folder's project — what the terminal face puts to a person in an
- * face with nothing open on it (`../shell/AdriftSlot`).
- *
- * A pane can die and the ledger not hear about it, leaving a task reserved with nobody at it and out of
- * everybody's mailbox, or a decision put up that nobody will ever bring to a close. What makes those
- * findable is that both carry the session they were made in, and the host knows which sessions are
- * still running — so this is a fact rather than a guess, and what was begun at somebody's own terminal
- * is never among them (`adrift`).
- *
- * Read-only, so no ack. Outside Tauri (browser iteration) there are no panes and no ledger, so nothing
- * can have been left behind: the answer is empty.
- */
-export async function fetchAdrift(folder: string): Promise<AdriftDto> {
-  if (!inTauri()) return { tasks: [], decisions: [] };
-  return await invoke<AdriftDto>("adrift", { folder });
 }
 
 /**

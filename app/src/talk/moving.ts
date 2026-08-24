@@ -12,8 +12,13 @@
 // thousand.
 //
 // **It is not a spinner either.** Something that turns says progress is being made, which is a claim
-// about the work rather than about the stream. A pulse in the dot the pane is already marked with
-// says the one thing that is true.
+// about the work rather than about the stream. What it turns into is a glow held still in the dot the
+// pane is already marked with, which says the one thing that is true.
+//
+// **Nothing here moves.** The dot has one face that does — the one saying a person is needed — and
+// giving movement to the commonest state instead would leave every pane on the screen in motion all
+// day, which is the whole of what the mark was meant not to do (`../talk/nameplate.ts`). So this
+// contributes a hue and a brightness, and the rhythm below belongs to the turn.
 
 /** How long after the last output a pane still reads as moving.
  *
@@ -22,9 +27,14 @@
  *  reader is still looking at it. */
 export const STILL_AFTER_MS = 1500;
 
-/** One turn of the pulse. Slow enough to read as breathing rather than blinking: what it reports is
- *  a state that lasts, and a fast mark reads as an event that just happened. */
-export const PULSE_MS = 2000;
+/** One turn of the blink — the lamp's calling face, and the mark on the other end of the row that
+ *  says the same thing (`../talk/nameplate.ts`).
+ *
+ *  It is the two together that fix the number: they are one signal drawn twice, so a dot falling to
+ *  one beat while the mark beside it falls to another would read as two things being asked. Fast
+ *  enough to read as a call rather than as breathing — what it reports is a person being needed now,
+ *  which is an event and not a state that lasts. */
+export const BLINK_MS = 900;
 
 /** How many hues there are to tell panes apart with — a screenful, which is the most that are ever
  *  side by side (`./layout`). */
@@ -33,9 +43,12 @@ const HUES = [199, 152, 32, 280];
 /**
  * The hue a frame's dot is drawn in.
  *
- * **Hue says which pane, never what is happening in it** — that is the opacity's, and the two must not
+ * **Hue says which pane, never what is happening in it** — that is the glow's, and the two must not
  * be read for each other. Frames on one page are consecutive, so taking the id in turn gives every
  * pane on a screen a different colour without anything having to know what else is on it.
+ *
+ * The one face that leaves the hue behind is the calling one, which is drawn in the warning colour
+ * because it is no longer saying which pane this is — it is saying come here (`../talk/nameplate.ts`).
  */
 export function hueOf(frame: string): number {
   const n = Number(frame);
@@ -74,14 +87,14 @@ export function movingAt(lastOutput: number | null, at: number): boolean {
 }
 
 /**
- * Where in the turn a dot starting now should begin, as a CSS `animation-delay`.
+ * Where in the turn a mark starting now should begin, as a CSS `animation-delay`.
  *
- * **Four panes pulse together or they do not pulse at all.** Started when each began moving, they
- * would beat at four unrelated phases, and a screen of marks blinking past each other is a screen
- * nobody can look away from. Reading the offset off the clock rather than off the moment the dot
- * started is what puts them in step: every dot on every page is the same distance into the same turn,
- * whenever it joined.
+ * **Panes blink together or they do not blink at all.** Started when each turn was handed over, they
+ * would beat at unrelated phases, and a screen of marks blinking past each other is a screen nobody
+ * can look away from. Reading the offset off the clock rather than off the moment the blink started
+ * is what puts them in step: every mark on every page is the same distance into the same turn,
+ * whenever it joined — the dot and the mark at the other end of its own row included.
  */
-export function phaseDelay(at: number, period: number = PULSE_MS): string {
+export function phaseDelay(at: number, period: number = BLINK_MS): string {
   return `-${at % period}ms`;
 }

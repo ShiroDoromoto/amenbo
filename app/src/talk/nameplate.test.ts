@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import {
+  faceOf,
   FINISHED_HOLD_MS,
   mountNameplate,
   NO_CHANGEOVER,
@@ -128,9 +129,9 @@ describe("the one thing said on the right", () => {
   });
 });
 
-/** The mark in front of the name, at rest. These cases are about the words on the row; what the dot
- *  does has its own (`./moving`). */
-const STILL: Dot = { frame: "1", moving: false };
+/** The lamp in front of the name, at rest. These cases are about the words on the row; what the lamp
+ *  does has its own (`./plateMoving.test`). */
+const STILL: Dot = { frame: "1", face: "out" };
 
 describe("the row on the page", () => {
   it("is one line, and redraws in place", () => {
@@ -186,5 +187,29 @@ describe("what counts as a turn standing", () => {
     // The two that are not. Silence least of all: it is not a claim about anything (`AMB-D-748`).
     expect(standsAsTurn({ kind: "note", text: "running the tests" })).toBe(false);
     expect(standsAsTurn({ kind: "silent" })).toBe(false);
+  });
+});
+
+describe("which face the lamp is on", () => {
+  it("is lit while output is arriving, and out when it is not", () => {
+    expect(faceOf({ kind: "silent" }, true)).toBe("lit");
+    expect(faceOf({ kind: "silent" }, false)).toBe("out");
+  });
+
+  it("does not light for what the agent merely said it was doing", () => {
+    // A note is the session talking about its own work. Nothing is being asked of anybody.
+    expect(faceOf({ kind: "note", text: "running the tests" }, false)).toBe("out");
+    expect(faceOf({ kind: "quiet", minutes: 12 }, false)).toBe("out");
+  });
+
+  it("calls for both of the reasons the row leads with", () => {
+    expect(faceOf({ kind: "waiting", text: "which of the two" }, false)).toBe("calling");
+    expect(faceOf({ kind: "premise" }, false)).toBe("calling");
+  });
+
+  it("puts the turn over the stream, because that is the one to act on", () => {
+    // A blocker opening on a task the pane holds while its build prints away: both are true, and the
+    // lamp says the one a person is meant to do something about.
+    expect(faceOf({ kind: "premise" }, true)).toBe("calling");
   });
 });

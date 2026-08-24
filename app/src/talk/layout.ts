@@ -16,11 +16,12 @@
 // away from is a box nobody can say anything about, so the folder is answered first
 // (`../shell/FolderChoice`) and the frame is made after it.
 //
-// **A page with room draws one empty frame, and never four.** Four boxes all asking the same question
-// is the question asked four times, so there is a single one and it sits at the first gap on the page.
-// It is the page saying it has room rather than a button for opening a terminal, which is why a full
-// page draws none at all — the frames are what is on the screen, and the empty one is a remark about
-// them.
+// **A page with room draws one empty frame, and never one per gap.** A box in every gap is the same
+// question asked as many times as the count allows, so there is a single one and it sits at the first
+// gap on the page. It is the page saying it has room rather than a button for opening a terminal,
+// which is why a full page draws none at all — the frames are what is on the screen, and the empty one
+// is a remark about them. The gaps past it stay blank: a count is the shape that was pressed for, and
+// what is not open there is nothing at all.
 //
 // **Pages are how a project's panes go past a screenful, and nobody makes one.** They are fixed slots
 // in the sense that matters: what is open does not move about on its own. The count is the most that
@@ -28,12 +29,31 @@
 // one holds what is left. No page stands empty: asking for another pane where every page is full is
 // the one thing that brings one into being, and it lasts as long as the asking (`addPane`).
 
-/** Panes on one screen. Three steps and no more: the reason to have several is to watch them, and a
- *  count that keeps going stops being watchable long before it stops fitting. */
-export type Count = 1 | 2 | 4;
+/**
+ * Panes on one screen.
+ *
+ * **Where it stops is settled by columns of text, not by how many a person can watch.** What an
+ * agent's TUI wants is eighty columns, which at the pane's monospace is about 624px and 645px with
+ * the room around it — so eight across two rows is what the widest screen sold still draws readably,
+ * and five across would put a pane under eighty on every screen there is. Watching is not the limit
+ * any more: a pane that wants somebody says so on its own — the plate, the badge on the page and the
+ * lamp all point at it — so eight of them need no watching over (`./plate`).
+ */
+export type Count = 1 | 2 | 4 | 6 | 8;
 
 /** The counts a person can pick, in the order they are offered. */
-export const COUNTS: readonly Count[] = [1, 2, 4];
+export const COUNTS: readonly Count[] = [1, 2, 4, 6, 8];
+
+/**
+ * How many panes a count puts across, which is the whole of how it is laid out: the rows are
+ * whatever is left over, and never more than two. **Width is spent before height** — a terminal runs
+ * short of columns before it runs short of lines, and a third row would take the lines away first.
+ *
+ * It is here rather than in the stylesheet that draws the grid because the width the columns beside
+ * the panes are measured against is this number too (`./columns`), and two places answering it
+ * separately is how a face ends up laying out one shape and reserving room for another.
+ */
+export const ACROSS: Readonly<Record<Count, number>> = { 1: 1, 2: 2, 4: 2, 6: 3, 8: 4 };
 
 /** Two panes to start with: one is what a single terminal already was, and four is a screenful to
  *  arrive at rather than to be given. */

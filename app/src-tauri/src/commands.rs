@@ -3758,6 +3758,11 @@ pub fn session_work(session: String) -> Result<SessionWorkDto, CmdError> {
 ///
 /// The rows come back rather than the ids, unlike `session_work`, because the whole of what is drawn
 /// is the rows — a second round trip per screen for the same answer is what the perf budget is for.
+///
+/// **Nothing on screen reads this at the moment.** The terminal face's empty frame did, and asking there
+/// was wrong: just after the app comes up no session is alive, so every reservation ever made in a pane
+/// came back and the frame opened on a standing inventory instead of on news. The fact is still a fact
+/// — where it is put to a person is the ledger's to answer, and that is not designed yet.
 #[tauri::command]
 pub fn adrift(app: tauri::AppHandle, folder: String) -> Result<AdriftDto, CmdError> {
     use amenbo_core::store_engine::{self, TaskQuery};

@@ -479,9 +479,7 @@ export function TerminalFace({
   // Whether the columns beside the panes are columns at all. It is measured against what the person
   // asked for rather than against what is drawn: a drawer takes no width, so measuring the drawn
   // widths would make every narrow window wide enough for columns again (`../talk/columns`).
-  const drawers = sidesAreDrawers(
-    layout.count, width, railShown ? railWidth : 0, sideShown ? sideWidth : 0,
-  );
+  const drawers = sidesAreDrawers(width, railShown ? railWidth : 0, sideShown ? sideWidth : 0);
 
   // What is on the screen on each side. A column is there because it was asked for; a drawer is
   // there because it was just opened, and both are put away by the same press.

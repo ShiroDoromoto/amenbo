@@ -83,39 +83,27 @@ describe("which half of the file face is up", () => {
 });
 
 describe("the sides", () => {
-  it("stay columns when one pane was asked for on a wide window", () => {
-    // Asking for one pane is not asking for the rail to go away.
-    expect(sidesAreDrawers(1, 2560, RAIL_DEFAULT, SIDE_DEFAULT)).toBe(false);
+  it("stay columns while a pane's worth of floor is left in the middle", () => {
+    const room = PANE_MIN + RAIL_DEFAULT + SIDE_DEFAULT;
+    expect(sidesAreDrawers(room, RAIL_DEFAULT, SIDE_DEFAULT)).toBe(false);
+    expect(sidesAreDrawers(room - 1, RAIL_DEFAULT, SIDE_DEFAULT)).toBe(true);
   });
 
-  it("are drawers where keeping them would take the panes under the least a terminal is worth", () => {
-    expect(sidesAreDrawers(2, 2 * PANE_MIN + 100, RAIL_DEFAULT, SIDE_DEFAULT)).toBe(true);
-    expect(sidesAreDrawers(4, 900, RAIL_DEFAULT, SIDE_DEFAULT)).toBe(true);
-  });
-
-  it("counts four panes as two across, which is what has to fit", () => {
+  it("answer the same on one window whatever count was asked for", () => {
+    // The count is not in it, so nothing about it can flip the answer. A window that suits two
+    // across keeps its columns at eight, where the panes are cramped — that is the choice of
+    // whoever pressed for eight, and taking the rail away would not undo it.
     const room = 2 * PANE_MIN + RAIL_DEFAULT + SIDE_DEFAULT;
-    expect(sidesAreDrawers(4, room, RAIL_DEFAULT, SIDE_DEFAULT)).toBe(false);
-    expect(sidesAreDrawers(2, room, RAIL_DEFAULT, SIDE_DEFAULT)).toBe(false);
-  });
-
-  it("asks for as much width as the count puts across, all the way up", () => {
-    // The two counts that go past a square: six is three across and eight is four, so each wants
-    // that much and no more (`./layout`). A window with room for exactly the wider one keeps its
-    // columns at both.
-    const room = (across: number) => across * PANE_MIN + RAIL_DEFAULT + SIDE_DEFAULT;
-    expect(sidesAreDrawers(6, room(3), RAIL_DEFAULT, SIDE_DEFAULT)).toBe(false);
-    expect(sidesAreDrawers(6, room(3) - 1, RAIL_DEFAULT, SIDE_DEFAULT)).toBe(true);
-    expect(sidesAreDrawers(8, room(4), RAIL_DEFAULT, SIDE_DEFAULT)).toBe(false);
-    expect(sidesAreDrawers(8, room(4) - 1, RAIL_DEFAULT, SIDE_DEFAULT)).toBe(true);
-    // Eight wants more than six does: a window that suits three across is a drawer at four.
-    expect(sidesAreDrawers(8, room(3), RAIL_DEFAULT, SIDE_DEFAULT)).toBe(true);
+    expect(sidesAreDrawers(room, RAIL_DEFAULT, SIDE_DEFAULT)).toBe(false);
+    // And a window with no floor left folds them however few panes were asked for.
+    const tight = PANE_MIN + RAIL_DEFAULT + SIDE_DEFAULT - 1;
+    expect(sidesAreDrawers(tight, RAIL_DEFAULT, SIDE_DEFAULT)).toBe(true);
   });
 
   it("are columns again once a closed one stops taking width", () => {
-    const tight = 2 * PANE_MIN + SIDE_DEFAULT;
-    expect(sidesAreDrawers(2, tight, RAIL_DEFAULT, SIDE_DEFAULT)).toBe(true);
+    const tight = PANE_MIN + SIDE_DEFAULT;
+    expect(sidesAreDrawers(tight, RAIL_DEFAULT, SIDE_DEFAULT)).toBe(true);
     // The rail closed: what it would have taken is room the panes now have.
-    expect(sidesAreDrawers(2, tight, 0, SIDE_DEFAULT)).toBe(false);
+    expect(sidesAreDrawers(tight, 0, SIDE_DEFAULT)).toBe(false);
   });
 });

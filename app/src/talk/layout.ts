@@ -51,9 +51,11 @@ export const COUNTS: readonly Count[] = [1, 2, 4, 6, 8];
  * whatever is left over, and never more than two. **Width is spent before height** — a terminal runs
  * short of columns before it runs short of lines, and a third row would take the lines away first.
  *
- * It is here rather than in the stylesheet that draws the grid because the width the columns beside
- * the panes are measured against is this number too (`./columns`), and two places answering it
- * separately is how a face ends up laying out one shape and reserving room for another.
+ * The grid itself is drawn in the stylesheet (`.termface__page-grid--*`). This is the same shape
+ * said where it can be checked: the rule that no count asks for a third row is a claim about every
+ * count at once, and a stylesheet can only be read one class at a time. Nothing measures room
+ * against it — what the columns beside the panes leave the middle is a pane's worth of floor and
+ * not a count's worth (`./columns`).
  */
 export const ACROSS: Readonly<Record<Count, number>> = { 1: 1, 2: 2, 4: 2, 6: 3, 8: 4 };
 

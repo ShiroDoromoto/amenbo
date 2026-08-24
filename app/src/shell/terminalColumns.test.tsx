@@ -25,7 +25,7 @@ vi.mock("../core/boundFolders", () => ({
 }));
 
 import { TerminalFace } from "./TerminalFace";
-import { RAIL_DEFAULT, SIDE_DEFAULT } from "../talk/columns";
+import { PANE_MIN, RAIL_DEFAULT, SIDE_DEFAULT } from "../talk/columns";
 import { t } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -122,8 +122,12 @@ describe("closing a column, and opening it again", () => {
 });
 
 describe("a window with no room for columns", () => {
+  // Narrow enough that both columns together leave the middle under one pane's worth of floor
+  // (`../talk/columns`) — which is the whole of it: the count that was asked for is not in it.
+  const NO_ROOM = PANE_MIN + RAIL_DEFAULT + SIDE_DEFAULT - 1;
+
   it("draws neither of them over the panes until one is asked for", async () => {
-    window.innerWidth = 900;
+    window.innerWidth = NO_ROOM;
     await mount();
     expect(q(".termface__column--rail")).toBeNull();
     expect(q(".termface__drawer")).toBeNull();
@@ -132,7 +136,7 @@ describe("a window with no room for columns", () => {
   });
 
   it("puts a drawer away again on the press that opened it", async () => {
-    window.innerWidth = 900;
+    window.innerWidth = NO_ROOM;
     await mount();
     await click(bar(t("face.rail")));
     await click(bar(t("face.rail")));

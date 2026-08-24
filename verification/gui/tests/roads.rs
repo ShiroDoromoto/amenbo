@@ -33,15 +33,17 @@ fn every_screen_road_renders_into_instructions() {
     assert!(roads > 0, "expected at least one screen road");
 }
 
-/// A screen road that says "open the project X" is telling an operator to find X in a list, so X has
-/// to be there. Nothing else checks it: the name travels as a word rather than as a binding, and a
-/// step naming a project nobody raised renders, lints and walks — the operator is the one who finds
-/// out, mid-run, hunting a list for a name that was never in it.
+/// The two steps that name a project by word rather than by binding: opening one on the ledger, and
+/// going to one on the terminal face's rail. Both tell an operator to find that name in a list, so it
+/// has to be in one. Nothing else checks it — a step naming a project nobody raised renders, lints and
+/// walks, and the operator is the one who finds out, mid-run, hunting a list for a name that was never
+/// in it.
 ///
 /// What may be named is a project the world stood up, or the one a run finds itself in already
 /// (Amenbo raises a project for the folder the run works in, and calls it after that folder).
 #[test]
 fn every_project_a_screen_road_opens_is_a_project_that_exists() {
+    let by_name = [(Domain::Project, "open"), (Domain::Terminal, "go-project")];
     for f in scenario_files() {
         let scenario = amenbo_scenario::lint_file(&f).expect("lints");
         if !scenario.runs_on(Driver::Gui) {
@@ -50,13 +52,13 @@ fn every_project_a_screen_road_opens_is_a_project_that_exists() {
         let standing = projects_standing(&scenario);
         for step in scenario.steps(Driver::Gui) {
             let Step::Action { domain, op, with, .. } = step else { continue };
-            if (*domain, op.as_str()) != (Domain::Project, "open") {
+            if !by_name.contains(&(*domain, op.as_str())) {
                 continue;
             }
             let named = with.get("project").and_then(|v| v.as_str()).unwrap_or_default();
             assert!(
                 standing.contains(named),
-                "{} opens the project `{named}`, which nothing stands up — the world raises {:?}, \
+                "{} goes to the project `{named}`, which nothing stands up — the world raises {:?}, \
                  and a run is already in `{}`",
                 f.display(),
                 standing,

@@ -1,0 +1,180 @@
+# Where a pane runs is asked only where there is something to ask, and the answers are the project's
+# own folders.
+#
+# A pane belongs to a project, so the folders it can work in are the ones that project is bound to.
+# That is what the rail promises — panes of two projects are never on one screen — and a picker
+# reaching anywhere on the disk would be the one way round it. So the press that opens a pane does not
+# open a picker: where the project keeps several folders it puts up a question whose whole list is
+# those folders, and where it keeps one it asks nothing at all.
+#
+# ── Why the question is where it is, and why it can be walked away from ──────────────────────────
+# It stands where the pane will be, on the page the pane will land on: a question drawn somewhere
+# other than where its answer appears is one the reader has to go and find. And it is answered before
+# the frame is made, so a reader who walks away from it leaves nothing behind — which is the whole
+# reason it is not a half-opened pane asking what it is.
+#
+# ── Why both folders are pressed, and why each pane is read from inside ──────────────────────────
+# One answer would prove the question can be answered. It would not prove the press decides: a face
+# that always opened the same folder, whatever was pressed, would walk a road with a single answer
+# green from end to end. So both are pressed, and each pane is asked where it is standing — a file
+# lying in one folder and not the other, read out in the pane itself. That is the only reading on this
+# face that says *where* a terminal is working: a pane draws no path of its own, and two panes side by
+# side look alike whatever folder each was opened in.
+#
+# The file's words are the road's own, for the reason every line these roads read is: what says which
+# folder a pane is in has to be something the interface would never write by itself.
+#
+# The second pane is opened from the rail rather than from the face, since with a pane already open
+# the face's way in is not there to press — and the same question comes up at it, which is what says
+# the asking follows the project's folders rather than the screen being empty.
+#
+# ── Why the first terminal is ended before the second is opened ──────────────────────────────────
+# A step that spoke into one of two running panes would have to say which of them it meant, and there
+# is no way to say that. So the first is ended once it has been read: what a terminal printed stays
+# where it was printed, so the pane keeps its words and its place, and "the pane with a terminal
+# running in it" means exactly one pane again. Nothing here is about ending a terminal; it is what
+# lets the second pane be spoken to at all.
+#
+# ── The unasked half ─────────────────────────────────────────────────────────────────────────────
+# A project bound to one folder is not a question, and no step here can show that: this project keeps
+# two from the first press onwards. That half is walked wherever a pane is opened in a project with a
+# single folder — `go-to-the-panes-of-another-project` is one — and it is the same rule read from its
+# quiet side.
+id: open-a-pane-where-a-project-keeps-more-than-one-folder
+title: A project bound to more than one folder asks which of them a new pane works in, offers its own folders and no way outside them, and opens the pane in the one pressed
+description: >
+  Raise a project bound to two folders, each carrying a file that says which one it is, and press to
+  open a pane: nothing opens, and the question of which folder it works in stands where the pane would
+  have been, offering those two and nothing else. Press one, and the pane reads out that folder's
+  file. End it, press to open a second, answer with the other folder — and that pane reads out the
+  other file, beside the first, which is still where it was opened.
+
+given:
+  # Creating a project links a folder to it, so this one is the project's first.
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse-beds
+    as: greenhouse
+
+  # And the second, which is what makes the press a question rather than a pane.
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: potting-shed
+      project: greenhouse
+
+  # What each pane is asked to read out. Same name in both folders, different words in each: a pane
+  # that answered with the wrong one would be a pane standing somewhere nobody pressed for.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse-beds
+      path: where.txt
+      content: SCENARIO this terminal is in the beds
+
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: potting-shed
+      path: where.txt
+      content: SCENARIO this terminal is in the potting shed
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Which project the face came up on is the run's business, so the road puts itself on the one it
+  # raised before pressing anything.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  # The face's way in, and this time it opens nothing: the project keeps two folders, so what comes
+  # up where the pane would have been is the question of which of them.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+      asks: true
+
+  - type: action
+    domain: terminal
+    op: pick-folder
+    with:
+      dir: greenhouse-beds
+
+  # Down to a plain shell, which is what a road that speaks in a pane speaks to. An agent's screen is
+  # its own to draw, and a command handed to one is something to answer rather than something carried
+  # out.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: run
+    with:
+      command: cat where.txt
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO this terminal is in the beds
+
+  # Ended, so that the pane opened next is the only one with a terminal in it. The frame stays where
+  # it is, with what it printed still on it.
+  - type: action
+    domain: terminal
+    op: end-pane
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: rail
+      asks: true
+
+  - type: action
+    domain: terminal
+    op: pick-folder
+    with:
+      dir: potting-shed
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: run
+    with:
+      command: cat where.txt
+
+  # The other folder's words, which is the whole of what the second press decided.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO this terminal is in the potting shed
+
+  # And the first pane is still beside it, still saying where it was opened. Two answers, two panes:
+  # the second press opened one of its own rather than taking the first one over, and neither press
+  # stood in for the other.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO this terminal is in the beds

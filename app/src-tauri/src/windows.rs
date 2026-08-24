@@ -94,10 +94,10 @@ fn failed(e: tauri::Error) -> CmdError {
 /// minimized both look, to the user, like the terminal not being there.
 ///
 /// **Nothing is handed over with it.** What the window draws is the whole terminal face, which reads
-/// the arrangement this device keeps (`amenbo_core::frames::SavedLayout`) and takes up the terminals
-/// that are still running — the same two questions it answers when the app folds back into one
-/// window. A split that also passed a pane along would be a second, shorter-lived copy of an answer
-/// the store already holds.
+/// the arrangement this run holds (`crate::frames`) and takes up the terminals that are still
+/// running — the same two questions it answers when the app folds back into one window. A split that
+/// also passed a pane along would be a second, shorter-lived copy of an answer the process already
+/// has.
 #[tauri::command]
 pub fn talk_open(app: tauri::AppHandle, raise: bool) -> Result<(), CmdError> {
     if let Some(win) = app.get_webview_window(TALK) {

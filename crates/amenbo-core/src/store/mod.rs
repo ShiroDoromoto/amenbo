@@ -389,22 +389,6 @@ impl Store {
         crate::nudge::mark_put(&self.engine, nudge_id)
     }
 
-    /// The names this device has given the talk window's frames ([`crate::frames`]).
-    pub fn frame_names(&self) -> Result<std::collections::BTreeMap<String, crate::frames::FrameName>> {
-        crate::frames::frame_names(&self.engine)
-    }
-
-    /// Name one frame, if whoever is naming it outranks whoever named it last, and answer with the
-    /// names as they now stand.
-    pub fn name_frame(
-        &self,
-        frame: &str,
-        name: &str,
-        by: crate::frames::NamedBy,
-    ) -> Result<std::collections::BTreeMap<String, crate::frames::FrameName>> {
-        crate::frames::name_frame(&self.engine, frame, name, by)
-    }
-
     /// What is written on this project's draft page ([`crate::memo`]).
     pub fn memo(&self, project_id: i64) -> Result<String> {
         crate::memo::memo(&self.engine, project_id)
@@ -415,12 +399,12 @@ impl Store {
         crate::memo::set_memo(&self.engine, project_id, text)
     }
 
-    /// The arrangement of the talk window this device left behind ([`crate::frames`]).
+    /// What this device kept of the talk window's arrangement ([`crate::frames`]).
     pub fn saved_layout(&self) -> Result<Option<crate::frames::SavedLayout>> {
         crate::frames::saved_layout(&self.engine)
     }
 
-    /// Keep the arrangement of the talk window, as this device has it now.
+    /// Keep the part of the talk window's arrangement that outlives the run.
     pub fn save_layout(&self, layout: &crate::frames::SavedLayout) -> Result<()> {
         crate::frames::save_layout(&self.engine, layout)
     }

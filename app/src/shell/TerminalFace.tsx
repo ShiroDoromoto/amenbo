@@ -139,10 +139,9 @@ export function TerminalFace({
   // so the face comes up with the way in and no boxes.
   const [layout, setLayout] = useState<Layout>(EMPTY_LAYOUT);
   const [names, setNames] = useState<FrameNames>(new Map());
-  // Whether the arrangement this device left behind has been answered for. Nothing is drawn into the
-  // page before it has: a pane put up first and replaced afterwards would start a terminal in a
-  // frame the restore was about to take away. Outside Tauri nothing is kept, so there is nothing to
-  // wait for.
+  // Whether the arrangement has been answered for. Nothing is drawn into the page before it has: a
+  // pane put up first and replaced afterwards would start a terminal in a frame the answer was about
+  // to take away. Outside Tauri there is no host to read one from, so there is nothing to wait for.
   const [settled, setSettled] = useState(!inTauri());
   // What each pane's agent has pointed at, and which sessions have ended. Both are the window's to
   // hold and nobody else's: a session has no existence outside the rectangle it runs in, so neither
@@ -256,9 +255,13 @@ export function TerminalFace({
   }, [opensOn]);
 
   // The arrangement, read once as the face comes up, and the terminals that are still running taken
-  // up again. What comes back from the store is places and folders and no sessions, so a restored
-  // pane is an offer to open a terminal — the person presses for the ones they want, and a window
-  // that started them all would be starting work nobody asked for.
+  // up again. What comes back is places and folders and no sessions, so a pane that came with it is
+  // an offer to open a terminal — the person presses for the ones they want, and a window that
+  // started them all would be starting work nobody asked for.
+  //
+  // **It comes with places only inside a run** (`AMB-T-3687`): the arrangement is what the two
+  // windows share the face with, so the window this terminal is split out into gets the panes as they
+  // stand, and the first window of a run gets the split and the project alone.
   //
   // **What is running is a different question, and it is answered here.** A session with no pane
   // drawing it is one the other window was drawing a moment ago — the face moving between the two
@@ -288,7 +291,7 @@ export function TerminalFace({
       .then(([saved, running]) => {
         if (!alive) return;
         setLayout((was) => {
-          let next = (saved === null ? null : restored(saved, onto)) ?? was;
+          let next = saved === null ? was : restored(saved, onto);
           // The project the board was on, for the window that has no ledger to have taken one from.
           // It answers only where nothing came back to say it: an arrangement with panes in it names
           // the project of every one of them, and this is the machine that has never had any.
@@ -309,11 +312,11 @@ export function TerminalFace({
             if (!frame) continue;
             next = openedIn(next, frame.id, session.session, session.folder);
           }
-          // And the pane that was being worked in when the arrangement was kept, which is the pane
-          // the person split the terminal out of (`../talk/layout`). It carries the page and the
-          // project with it, so the window comes up where they left rather than on the first place
-          // of the first project. The board never reads it back: which pane is being worked in
-          // *now* is its own state, and an old write must not move a reader's place.
+          // And the pane that was being worked in when the arrangement was last written, which is
+          // the pane the person split the terminal out of (`../talk/layout`). It carries the page
+          // and the project with it, so the window comes up where they left rather than on the first
+          // place of the first project. The board never reads it back: which pane is being worked in
+          // *now* is its own state, and an older write must not move a reader's place.
           if (ownWindow && saved?.splitOut != null) next = focusOn(next, saved.splitOut);
           return next;
         });
@@ -322,12 +325,14 @@ export function TerminalFace({
     return () => { alive = false; };
   }, [layout.project, projects.length, ownWindow]);
 
-  // And kept as it changes. Only the shape is written, so a session opening or closing is not a
-  // write — what is kept is where the panes are, not what is in them.
+  // And written down as it changes, for the other window to read. Only the shape goes, so a session
+  // opening or closing is not a write — what is written is where the panes are, not what is in
+  // them.
   const shape = JSON.stringify(laidOut(layout));
   useEffect(() => {
     // Before the restore has been answered for, what is here is the face's own opening arrangement:
-    // writing that would overwrite the one being read with a blank one.
+    // writing that would overwrite the one being read with a blank one — which, in the window the
+    // terminal was split out into, is the face it was split out of.
     if (!settled || !inTauri()) return;
     void keepLayout(JSON.parse(shape) as ReturnType<typeof laidOut>).catch(() => {});
   }, [settled, shape]);
@@ -375,8 +380,8 @@ export function TerminalFace({
    *
    * `agent` is what the empty frame was set to when it was pressed (`./AdriftSlot`). It rides beside
    * the frame rather than on it: what a pane opens with is that pane's, so it is not part of the
-   * arrangement that comes back on the next run (`../talk/layout`), and the project's own answer is
-   * kept where answers are kept (`../talk/agent`).
+   * arrangement the windows hand between themselves (`../talk/layout`), and the project's own answer
+   * is kept where answers are kept (`../talk/agent`).
    */
   const openPane = useCallback((project: number, folder: string, agent: string | null) => {
     setAsking(null);

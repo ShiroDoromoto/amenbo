@@ -1,21 +1,23 @@
-//! The names the talk window's frames carry, and who gets to set one.
+//! The talk window's frames: what they are called, and the little of their arrangement that outlives
+//! the run.
 //!
 //! A frame is the place a terminal is drawn in; a session is the process running in it. **The name
 //! belongs to the frame.** Tied to the session it would come back as an old name on a new process the
 //! moment anything restarted — a pane called "the migration" running something else entirely.
 //!
-//! Device-local, like the read receipts and the tick's day marks beside it in [`crate::overview`]:
-//! frames are an arrangement of one machine's screen, and a second machine on the same data has its
-//! own. They live in one `store_meta` scalar rather than a table of their own, because what is kept is
-//! a handful of short strings and the window reads all of them at once or none.
+//! **A frame does not outlive the app** (`AMB-T-3687`). What came back before was a place with
+//! nothing in it: the session died with the last run, so a restored frame was an empty box drawn
+//! exactly like the way in beside it, and a *named* one was worse — it said pressing would carry on
+//! where the reader left off, which nothing in the window can do. So the places, their names and
+//! which one was being worked in are this run's, and they live where the running state lives
+//! (`app/src-tauri/src/frames.rs`): in the process, for as long as it is up, shared by the board and
+//! the window a terminal is split out into.
 //!
-//! **The arrangement is kept beside the names** ([`SavedLayout`]), and for the same reason: the frames
-//! a person laid out are their work, and a window that came back with one empty pane would have
-//! thrown it away (`AMB-D-434`). What is kept is the shape only — how many panes, in what order, and
-//! which folder each was working in. **What was running is not kept**: a session died with the last
-//! run, and a pane drawn as though it were still there would be the window telling the reader
-//! something untrue. The frames come back as places to open a terminal, and nothing is started until
-//! somebody asks (`AMB-T-3607`).
+//! **What is kept is what a person set rather than what they opened** ([`SavedLayout`]): how many
+//! panes to a page, and the project they were looking at. Both are one machine's answer — a wider
+//! screen holds more panes — so they sit in the store's device row, like the read receipts and the
+//! tick's day marks in [`crate::overview`], and not in `config.json`, which a restore does not carry
+//! (`AMB-D-434`).
 //!
 //! **Three things name a frame, and they are ranked** ([`NamedBy`]). The first line a person types into
 //! a new pane names it, so a pane is not called "3" until somebody gets round to it; `session name`
@@ -29,11 +31,15 @@ use serde::{Deserialize, Serialize};
 use crate::error::Result;
 use crate::store_engine::StoreEngine;
 
-/// The `store_meta` key the frame names live under, as one JSON object keyed by frame.
-const FRAME_NAMES_META: &str = "talk.frame_names";
-
-/// The `store_meta` key the arrangement lives under, as one JSON object.
+/// The `store_meta` key the kept part of the arrangement lives under, as one JSON object.
 const LAYOUT_META: &str = "talk.layout";
+
+/// The `store_meta` key older builds kept the frame names under.
+///
+/// Nothing writes it any more, and nothing may read it: ids start again at "1" every run, so a name
+/// kept against one would land on a place it was never given to. It is deleted wherever it is met
+/// ([`save_layout`]) rather than left as a row nobody can account for.
+const RETIRED_NAMES_META: &str = "talk.frame_names";
 
 /// How long a frame's name may be, in characters.
 ///
@@ -80,120 +86,81 @@ fn accepts(current: Option<&FrameName>, by: NamedBy) -> bool {
     }
 }
 
-/// Every frame this device has a name for.
+/// What this run calls the talk window's frames.
 ///
-/// A scalar that will not parse reads as no names rather than as a failure: it is one machine's screen
-/// arrangement, and the window that meets it can name its frames again — refusing to open the talk
-/// window over it would be paying far more than the answer is worth.
-pub fn frame_names(engine: &StoreEngine) -> Result<BTreeMap<String, FrameName>> {
-    Ok(engine
-        .get_meta(FRAME_NAMES_META)?
-        .and_then(|json| serde_json::from_str(&json).ok())
-        .unwrap_or_default())
+/// Held in the process and written nowhere: a name is about a place that is gone as soon as the app
+/// is (`AMB-T-3687`). It is one map for the whole app rather than one per window, because the face
+/// moves between the two windows and a name belongs to the place wherever it is being drawn.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FrameNames(BTreeMap<String, FrameName>);
+
+impl FrameNames {
+    /// Every frame that has a name, in frame order.
+    pub fn all(&self) -> &BTreeMap<String, FrameName> {
+        &self.0
+    }
+
+    /// Name `frame`, if `by` outranks whoever named it last, and answer with the names as they now
+    /// stand.
+    ///
+    /// The answer is the whole map rather than what was written, so a caller whose naming was refused
+    /// sees the name that stood instead of assuming its own took. A blank name is a frame being
+    /// un-named, which is the person's to do and follows the same ranking.
+    pub fn name(&mut self, frame: &str, name: &str, by: NamedBy) -> &BTreeMap<String, FrameName> {
+        if !accepts(self.0.get(frame), by) {
+            return &self.0;
+        }
+        match name.trim() {
+            "" => {
+                self.0.remove(frame);
+            }
+            name => {
+                // Cut by characters and not by bytes: a name in Japanese is a third of the characters
+                // a byte count would leave of it, and half a character is not a shorter name.
+                let name: String = name.chars().take(NAME_LIMIT).collect();
+                self.0.insert(frame.to_string(), FrameName { name, by });
+            }
+        }
+        &self.0
+    }
 }
 
-/// Name `frame`, if `by` outranks whoever named it last, and answer with the names as they now stand.
+/// The part of the talk window's arrangement that outlives the run, as one machine left it.
 ///
-/// The answer is the whole map rather than what was written, so a caller whose naming was refused sees
-/// the name that stood instead of assuming its own took. A blank name is a frame being un-named, which
-/// is the person's to do and follows the same ranking.
-pub fn name_frame(
-    engine: &StoreEngine,
-    frame: &str,
-    name: &str,
-    by: NamedBy,
-) -> Result<BTreeMap<String, FrameName>> {
-    let mut names = frame_names(engine)?;
-    if !accepts(names.get(frame), by) {
-        return Ok(names);
-    }
-    match name.trim() {
-        "" => {
-            names.remove(frame);
-        }
-        name => {
-            // Cut by characters and not by bytes: a name in Japanese is a third of the characters a
-            // byte count would leave of it, and half a character is not a shorter name.
-            let name: String = name.chars().take(NAME_LIMIT).collect();
-            names.insert(frame.to_string(), FrameName { name, by });
-        }
-    }
-    engine.set_meta(FRAME_NAMES_META, Some(&serde_json::to_string(&names)?))?;
-    Ok(names)
-}
-
-/// The talk window's arrangement, as one machine left it.
-///
-/// The frames are in the order they were opened, and `count` is what that order is read against: how
-/// many panes a page draws at most. Neither is worth anything without the other, so they are kept and answered
-/// together. `next_id` travels because ids are never reused — a frame that comes back keeps the name
-/// the person gave it, and a fresh frame must not be handed an id that already has one.
+/// **The frames are not in it** — see this module's head. What is here is what a person set rather
+/// than what they opened: the split they chose, and the project they were looking at. Both are worth
+/// coming back to because neither says anything about work that has ended.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedLayout {
     /// How many panes to a page.
     pub count: u32,
-    /// The next frame id to hand out.
-    pub next_id: u32,
-    /// The project whose panes the face was showing.
-    ///
-    /// It is here for the window that has no ledger: the terminal split out into one of its own was
-    /// asked nothing on its way in, so where an arrangement comes back with no panes to name a
-    /// project, what it opens on is the one the board was showing
-    /// (`app/src/shell/TerminalFace.tsx`). `None` is an arrangement written before that was kept,
-    /// and a face that has not been told of a project yet.
+    /// The project whose panes the face was showing. `None` is a machine where the face has not been
+    /// told of one yet.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project: Option<u32>,
-    /// The frames, in slot order.
-    pub frames: Vec<SavedFrame>,
-    /// The pane that was being worked in when the arrangement was last kept.
-    ///
-    /// It is what the window split out of the board comes up on (`AMB-D-753`). That window draws the
-    /// whole face, so every place is reachable in it either way — what this settles is where the
-    /// reader lands, and landing on the first place of the first project would be putting them
-    /// somewhere they did not ask to be. Nothing is handed over at the split, so this is the only
-    /// record of it.
-    ///
-    /// `None` is an arrangement written before that was kept, and a machine where nobody has worked
-    /// in a pane. **What was running in it is not here** — that is a fact about this run and lives
-    /// as long as the process does (`crate::pty`), where a frame is a place and outlives every session
-    /// in it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub split_out: Option<String>,
 }
 
-/// One frame, as far as it survives a run: whose project it was, where it was, and what it was
-/// working on.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SavedFrame {
-    /// The id the name is kept against ([`frame_names`]).
-    pub id: String,
-    /// The project the pane is one of. `None` is an arrangement written before panes belonged to a
-    /// project: what to do with one of those is the window's, since only it knows where the person
-    /// is looking.
-    #[serde(default)]
-    pub project: Option<u32>,
-    /// The folder its terminal was working in, where it had one.
-    pub folder: Option<String>,
-}
-
-/// The arrangement this device left behind, or nothing where it left none.
+/// What this device kept of the arrangement, or nothing where it kept none.
 ///
-/// A scalar that will not parse reads as nothing, for the same reason the names do: it is one
-/// machine's screen, and a window that meets a broken one can be laid out again — refusing to open
-/// over it would cost far more than the answer is worth.
+/// A scalar that will not parse reads as nothing rather than as a failure: it is one machine's screen,
+/// and a window that meets a broken one can be laid out again — refusing to open over it would cost
+/// far more than the answer is worth. Anything in the row beyond these two fields is read straight
+/// past, so a row that carries more than them still answers with what they say.
 pub fn saved_layout(engine: &StoreEngine) -> Result<Option<SavedLayout>> {
     Ok(engine
         .get_meta(LAYOUT_META)?
         .and_then(|json| serde_json::from_str(&json).ok()))
 }
 
-/// Keep the arrangement. It is written as the window is changed rather than as it closes: a window
-/// that is killed, or a machine that loses power, is exactly the case a person wants their panes back
+/// Keep what outlives the run. It is written as the window is changed rather than as it closes: a
+/// window that is killed, or a machine that loses power, is the case a person wants their split back
 /// after.
 pub fn save_layout(engine: &StoreEngine, layout: &SavedLayout) -> Result<()> {
-    Ok(engine.set_meta(LAYOUT_META, Some(&serde_json::to_string(layout)?))?)
+    engine.set_meta(LAYOUT_META, Some(&serde_json::to_string(layout)?))?;
+    // And the names left in RETIRED_NAMES_META go with the write that would otherwise leave them
+    // sitting there for good.
+    Ok(engine.set_meta(RETIRED_NAMES_META, None)?)
 }
 
 #[cfg(test)]
@@ -211,85 +178,86 @@ mod tests {
         assert!(accepts(Some(&typed), Session), "the agent knows better than the first line");
     }
 
-    /// The names survive the run, and the ranking is what the store applies — not what the caller
-    /// hoped. A refused naming answers with the name that stood, so nobody draws the one it wanted.
+    /// The ranking is what the map applies — not what the caller hoped. A refused naming answers with
+    /// the name that stood, so nobody draws the one it wanted.
     #[test]
-    fn a_frame_keeps_its_name_across_the_run_and_a_refused_naming_says_so() {
-        let engine = StoreEngine::open_in_memory().unwrap();
-        assert!(frame_names(&engine).unwrap().is_empty(), "no frame has been named yet");
+    fn a_refused_naming_answers_with_the_name_that_stood() {
+        let mut names = FrameNames::default();
+        assert!(names.all().is_empty(), "no frame has been named yet");
 
-        name_frame(&engine, "1", "make verify", Typed).unwrap();
-        name_frame(&engine, "1", "cargo test", Typed).unwrap();
-        assert_eq!(frame_names(&engine).unwrap()["1"].name, "make verify", "the *first* line");
+        names.name("1", "make verify", Typed);
+        names.name("1", "cargo test", Typed);
+        assert_eq!(names.all()["1"].name, "make verify", "the *first* line");
 
-        name_frame(&engine, "1", "the migration", Session).unwrap();
-        name_frame(&engine, "1", "AMB-T-3597", Person).unwrap();
-        let after = name_frame(&engine, "1", "reading the store", Session).unwrap();
+        names.name("1", "the migration", Session);
+        names.name("1", "AMB-T-3597", Person);
+        let after = names.name("1", "reading the store", Session).clone();
         assert_eq!(after["1"], FrameName { name: "AMB-T-3597".into(), by: Person });
-        assert_eq!(frame_names(&engine).unwrap(), after, "and that is what was kept");
 
-        name_frame(&engine, "2", "the plugins", Session).unwrap();
-        assert_eq!(frame_names(&engine).unwrap().len(), 2, "one name per frame, not one per window");
+        names.name("2", "the plugins", Session);
+        assert_eq!(names.all().len(), 2, "one name per frame, not one per window");
 
-        name_frame(&engine, "1", "  ", Person).unwrap();
-        assert!(!frame_names(&engine).unwrap().contains_key("1"), "a blank name un-names the frame");
+        names.name("1", "  ", Person);
+        assert!(!names.all().contains_key("1"), "a blank name un-names the frame");
     }
 
     /// A name is a label, so a long one is cut to a label's length — in characters, because half a
     /// character is not a shorter name.
     #[test]
     fn a_name_is_cut_to_what_a_row_can_carry() {
-        let engine = StoreEngine::open_in_memory().unwrap();
-        let asked = "の".repeat(NAME_LIMIT * 2);
-        name_frame(&engine, "1", &asked, Session).unwrap();
-        let kept = &frame_names(&engine).unwrap()["1"].name;
+        let mut names = FrameNames::default();
+        names.name("1", &"の".repeat(NAME_LIMIT * 2), Session);
+        let kept = &names.all()["1"].name;
         assert_eq!(kept.chars().count(), NAME_LIMIT, "cut to the label's length");
         assert_eq!(kept, &"の".repeat(NAME_LIMIT), "and cut on a character");
     }
 
-    /// The shape survives the run and what was running does not: the frames come back as places, and
-    /// the names they were given come back on them.
+    /// What a person set comes back, and what they opened does not: the split and the project are
+    /// kept, and there is nowhere in the row for a frame to be kept in.
     #[test]
-    fn the_arrangement_comes_back_and_the_sessions_do_not() {
+    fn the_split_and_the_project_come_back_and_the_frames_do_not() {
         let engine = StoreEngine::open_in_memory().unwrap();
         assert_eq!(saved_layout(&engine).unwrap(), None, "nothing has been laid out yet");
 
-        let laid = SavedLayout {
-            count: 4,
-            next_id: 3,
-            project: Some(1),
-            frames: vec![
-                SavedFrame { id: "1".into(), project: Some(1), folder: Some("/work/repo".into()) },
-                SavedFrame { id: "2".into(), project: Some(2), folder: None },
-            ],
-            split_out: Some("2".into()),
-        };
-        save_layout(&engine, &laid).unwrap();
-        name_frame(&engine, "1", "the migration", Person).unwrap();
+        let kept = SavedLayout { count: 4, project: Some(1) };
+        save_layout(&engine, &kept).unwrap();
 
-        let back = saved_layout(&engine).unwrap().expect("the arrangement");
-        assert_eq!(back, laid);
-        assert_eq!(back.split_out.as_deref(), Some("2"), "which frame the other window draws");
-        assert_eq!(frame_names(&engine).unwrap()["1"].name, "the migration");
+        assert_eq!(saved_layout(&engine).unwrap(), Some(kept));
+        let written = engine.get_meta(LAYOUT_META).unwrap().expect("the arrangement");
+        assert!(!written.contains("frames"), "a place is not kept: {written}");
+        assert!(!written.contains("nextId"), "nor an id to hand out after it: {written}");
+        assert!(!written.contains("splitOut"), "nor which one was being worked in: {written}");
     }
 
-    /// An arrangement written before panes belonged to a project still parses: what to do with a
-    /// pane whose project nothing records is the window's, and refusing to read the row would take
-    /// away the folder it could have answered with.
+    /// An arrangement an older build wrote still reads: the split and the project are where they were,
+    /// and the frames beside them are read past rather than refused.
     #[test]
-    fn a_frame_kept_without_a_project_still_comes_back() {
+    fn an_older_arrangement_gives_up_its_split_and_its_project() {
         let engine = StoreEngine::open_in_memory().unwrap();
         engine
             .set_meta(
                 LAYOUT_META,
-                Some(r#"{"count":2,"nextId":2,"frames":[{"id":"1","folder":"/work/repo"}]}"#),
+                Some(
+                    r#"{"count":4,"nextId":3,"project":2,
+                        "frames":[{"id":"1","project":2,"folder":"/work/repo"}],"splitOut":"1"}"#,
+                ),
             )
             .unwrap();
-        let back = saved_layout(&engine).unwrap().expect("the arrangement");
-        assert_eq!(back.project, None, "nothing said which project the face was on");
-        assert_eq!(back.split_out, None, "nor which frame a second window would draw");
-        assert_eq!(back.frames[0].project, None, "nothing said which project it was");
-        assert_eq!(back.frames[0].folder.as_deref(), Some("/work/repo"));
+        assert_eq!(saved_layout(&engine).unwrap(), Some(SavedLayout { count: 4, project: Some(2) }));
+    }
+
+    /// The names an older build kept are cleared where they are met: ids start again at "1" every
+    /// run, so a kept name would come back on a place nobody gave it to.
+    #[test]
+    fn the_names_an_older_build_kept_are_dropped() {
+        let engine = StoreEngine::open_in_memory().unwrap();
+        engine
+            .set_meta(RETIRED_NAMES_META, Some(r#"{"1":{"name":"the migration","by":"person"}}"#))
+            .unwrap();
+
+        save_layout(&engine, &SavedLayout { count: 2, project: None }).unwrap();
+
+        assert_eq!(engine.get_meta(RETIRED_NAMES_META).unwrap(), None);
     }
 
     /// A scalar nobody can read is no arrangement, not a failure to open the window over.

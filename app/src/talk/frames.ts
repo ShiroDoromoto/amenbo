@@ -4,8 +4,11 @@
 // the process in it comes and goes. Tied to the session, a name would come back on the next process
 // started there — a pane still called "the migration" running something else entirely.
 //
-// So the name is kept, where nothing about a running session is (`./sessions`): it is in the store's
-// device row, because frames are one machine's arrangement of one screen.
+// So the name is held where the frame is, and for as long: in the process, for this run only
+// (`app/src-tauri/src/frames.rs`). Nothing about it is kept — ids start again at "1" on the next run,
+// so a name kept against one would come back on a place nobody gave it to (`AMB-T-3687`). It is the
+// host that holds it rather than the window, because the face moves between the two windows and a
+// name belongs to the place wherever it is being drawn.
 //
 // **Three things name a frame and they are ranked** — the first line the person typed into it, then
 // `session name` from the agent running in it, then the person saying so, which is the last word for
@@ -40,7 +43,7 @@ function named(rows: FrameNameDto[]): FrameNames {
   return new Map(rows.map((row) => [row.frame, row.name]));
 }
 
-/** What this device calls its frames. */
+/** What this run calls its frames. */
 export async function frameNames(): Promise<FrameNames> {
   return named(await invoke<FrameNameDto[]>("frame_names"));
 }
@@ -155,20 +158,21 @@ export function frameLabel(names: FrameNames, frame: string, folder: string | nu
 }
 
 /**
- * The arrangement this device left behind, or nothing where it left none.
+ * The arrangement the face is laid out from, or nothing where there is none to read.
  *
  * Read once, as the face comes up. What comes back is a shape and no sessions, so nothing about it
- * starts anything (`./layout`).
+ * starts anything (`./layout`). In the first window of a run it holds the split and the project and
+ * no frames at all — the places are this run's, and the last one's went with it (`AMB-T-3687`).
  */
 export async function savedLayout(): Promise<SavedLayout | null> {
   return await invoke<TalkLayoutDto | null>("talk_layout", {});
 }
 
 /**
- * Keep the arrangement as it stands.
+ * Write the arrangement down as it stands, for the other window to read.
  *
  * Written as the window is changed rather than as it closes: a window that is killed, or a machine
- * that loses power, is exactly the case a person wants their panes back after.
+ * that loses power, is exactly the case a person wants the split they chose back after.
  */
 export async function keepLayout(layout: SavedLayout): Promise<void> {
   await invoke<void>("save_talk_layout", { layout });

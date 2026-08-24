@@ -13,6 +13,7 @@ import { McpSetup } from "./McpSetup";
 import { PluginCrossingRow } from "../components/PluginCrossingRow";
 import { usePluginInstalls } from "../core/pluginInstalls";
 import { inTauri } from "../core/snapshot";
+import { revealLabelKey } from "../core/platform";
 import { confirmDialog } from "../core/dialog";
 import { errText, t, tf, viewLabel } from "../core/i18n";
 import type { AgentHookRequestsDto, BoundFolderDto, ProjectSettingsDto } from "../bindings/bindings";
@@ -325,7 +326,7 @@ function FoldersSection({ projectId }: { projectId: number }) {
             )}
             <div className="buttonrow">
               {f.exists && <button className="btn" onClick={() => void terminal(f.path)} disabled={busy}><Icon name="keyboard" /> {t("newproj.openTerminal")}</button>}
-              {f.exists && <button className="btn" onClick={() => void reveal(f.path)} disabled={busy}><Icon name="folder" /> {t("newproj.openFinder")}</button>}
+              {f.exists && <button className="btn" onClick={() => void reveal(f.path)} disabled={busy}><Icon name="folder" /> {t(revealLabelKey())}</button>}
               {f.exists && (f.mismatch || f.legacy || f.pointerMissing || f.foreign) && <button className="btn" onClick={() => void relink(f.path)} disabled={busy}><Icon name="link" /> {t("projset.relink")}</button>}
               <button className="btn btn--danger" onClick={() => void unbind(f.path)} disabled={busy}>{t("projset.unbind")}</button>
             </div>

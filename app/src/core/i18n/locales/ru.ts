@@ -34,6 +34,7 @@ export const ru: Translation = {
     "newproj.moreTitle": "Кроме того",
     "newproj.copyStatus": "Скопировать {cmd} status", "newproj.copied": "Скопировано",
     "newproj.openTerminal": "Открыть в терминале", "newproj.openFinder": "Показать в Finder",
+    "newproj.openExplorer": "Показать в Проводнике", "newproj.openFileManager": "Показать в файловом менеджере",
     "newproj.openProject": "Открыть проект",
     "firstloop.title": "Ваш первый круг",
     "firstloop.intro": "Попросите свой ИИ завести первые задачи.",

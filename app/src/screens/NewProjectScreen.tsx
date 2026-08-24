@@ -19,6 +19,7 @@ import { FirstLoop } from "../components/FirstLoop";
 import { Icon } from "../components/Icon";
 import { useCliCommandName } from "../core/cliCommand";
 import { createProject, pickFolder, revealFolder } from "../core/mutations";
+import { revealLabelKey } from "../core/platform";
 import { inTauri } from "../core/snapshot";
 import { errText, t, tf } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
@@ -165,7 +166,7 @@ function DoneStep({ created, onOpenProject, onOpenMcp }: { created: Created; onO
             <div className="newproj__next">
               <span className="fieldlabel">{t("newproj.moreTitle")}</span>
               <div className="buttonrow">
-                <button className="btn" onClick={() => void reveal()}><Icon name="folder" /> {t("newproj.openFinder")}</button>
+                <button className="btn" onClick={() => void reveal()}><Icon name="folder" /> {t(revealLabelKey())}</button>
                 {cli && (
                   <button className="btn" onClick={() => void copyStatus()}>
                     {copied ? <><Icon name="check" /> {t("newproj.copied")}</> : <><Icon name="clipboard" /> {tf("newproj.copyStatus", { cmd: cli })}</>}

@@ -31,6 +31,7 @@ export const tr: Translation = {
     "newproj.moreTitle": "Ayrıca",
     "newproj.copyStatus": "{cmd} status komutunu kopyala", "newproj.copied": "Kopyalandı",
     "newproj.openTerminal": "Terminalde aç", "newproj.openFinder": "Finder'da göster",
+    "newproj.openExplorer": "Dosya Gezgini'nde göster", "newproj.openFileManager": "Dosya yöneticisinde göster",
     "newproj.openProject": "Projeyi aç",
     "firstloop.title": "İlk turunuz",
     "firstloop.intro": "Yapay zekânızdan ilk işleri kaydetmesini isteyin.",

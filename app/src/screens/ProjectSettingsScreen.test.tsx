@@ -89,6 +89,7 @@ vi.mock("../core/mutations", () => {
 
 import { ProjectSettingsScreen } from "./ProjectSettingsScreen";
 import { t, tf } from "../core/i18n";
+import { revealLabelKey } from "../core/platform";
 
 /**
  * A declared form of settings alone (`AMB-D-727`) — every field an entry, in order. The parts a form may
@@ -152,9 +153,10 @@ describe("invariants held by the rows of the linked-folder list", () => {
     expect(r.textContent).toContain(t("projset.aiReady"));
     expect(warnings(r)).toEqual([]);
     expect(button(r, t("projset.relink"))).toBeUndefined();
-    // It exists, so both ways of opening it are offered.
+    // It exists, so both ways of opening it are offered. The second is named for the file manager
+    // this OS opens, so the label is asked for the same way the screen asks.
     expect(button(r, t("newproj.openTerminal"))).toBeDefined();
-    expect(button(r, t("newproj.openFinder"))).toBeDefined();
+    expect(button(r, t(revealLabelKey()))).toBeDefined();
   });
 
   it("a mismatched row states what conflicts with what and does not drop from the list (id is authoritative)", async () => {

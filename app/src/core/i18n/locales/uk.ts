@@ -34,6 +34,7 @@ export const uk: Translation = {
     "newproj.moreTitle": "Крім того",
     "newproj.copyStatus": "Скопіювати {cmd} status", "newproj.copied": "Скопійовано",
     "newproj.openTerminal": "Відкрити в терміналі", "newproj.openFinder": "Показати у Finder",
+    "newproj.openExplorer": "Показати у Провіднику", "newproj.openFileManager": "Показати у файловому менеджері",
     "newproj.openProject": "Відкрити проєкт",
     "firstloop.title": "Ваше перше коло",
     "firstloop.intro": "Попросіть свій ШІ записати перші завдання.",

@@ -5,7 +5,9 @@
 // opens nothing — the thing `AMB-D-747` is about.
 import { describe, expect, it } from "vitest";
 import type { SessionSaidDto } from "../bindings/bindings";
-import { fileUnder, isRef, isUrl, markRead, tookPoint, unread } from "./pointed";
+import {
+  fileUnder, isRef, isUrl, markRead, newestPoint, pointWaits, tookPoint, tookShown, unread,
+} from "./pointed";
 
 const ROOT = "/work/repo";
 
@@ -75,5 +77,54 @@ describe("what a session pointed at", () => {
     expect(unread(held.get("s1")!)).toBe(1);
     // A row that was opened stays on the list: what was pointed at was pointed at.
     expect(held.get("s1")).toHaveLength(2);
+  });
+});
+
+describe("whether the files half has something to call about", () => {
+  const two = () => {
+    let held = tookPoint(new Map(), said({ verb: "point", target: "a.md", at: "1" }));
+    held = tookPoint(held, said({ verb: "point", target: "b.md", at: "2" }));
+    return held.get("s1")!;
+  };
+
+  it("says nothing where the session pointed at nothing", () => {
+    expect(newestPoint([])).toBeNull();
+    expect(pointWaits(new Map(), "s1", null)).toBe(false);
+  });
+
+  it("waits from the first thing pointed at until the half has been seen", () => {
+    const points = two();
+    expect(newestPoint(points)).toBe("2");
+    expect(pointWaits(new Map(), "s1", "2")).toBe(true);
+    const shown = tookShown(new Map(), "s1", "2");
+    expect(pointWaits(shown, "s1", "2")).toBe(false);
+  });
+
+  it("stays quiet once seen, however often the panel is closed and opened", () => {
+    const shown = tookShown(new Map(), "s1", "2");
+    // Nothing has been pointed at since, so nothing calls — the badge answers "something came up
+    // while you were away", not "something is still over there".
+    expect(pointWaits(shown, "s1", "2")).toBe(false);
+    // The same answer taken twice is the same map, so nothing downstream re-renders on it.
+    expect(tookShown(shown, "s1", "2")).toBe(shown);
+  });
+
+  it("calls again the moment something new is pointed at", () => {
+    let held = tookPoint(new Map(), said({ verb: "point", target: "a.md", at: "1" }));
+    const shown = tookShown(new Map(), "s1", newestPoint(held.get("s1")!)!);
+    held = tookPoint(held, said({ verb: "point", target: "b.md", at: "2" }));
+    expect(pointWaits(shown, "s1", newestPoint(held.get("s1")!))).toBe(true);
+  });
+
+  it("is answered per session, so one pane's being read says nothing about another's", () => {
+    const shown = tookShown(new Map(), "s1", "2");
+    expect(pointWaits(shown, "s2", "3")).toBe(true);
+  });
+
+  it("does not count opening a row as having been shown the half", () => {
+    // `read` is one row somebody clicked; this is the person having been on the half at all.
+    let held = tookPoint(new Map(), said({ verb: "point", target: "a.md", at: "1" }));
+    held = markRead(held, "s1", "1");
+    expect(pointWaits(new Map(), "s1", newestPoint(held.get("s1")!))).toBe(true);
   });
 });

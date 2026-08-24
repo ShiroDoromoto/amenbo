@@ -1549,11 +1549,11 @@ impl Instructor {
             // whatever the machine is set to.
             (Domain::Terminal, "hide-side") => match side(with)? {
                 Side::Rail => "At the top of the terminal face, press the control that folds the list of panes away — the small one just after the way out to a separate window. The list goes, and the panes take the width it was using.".to_string(),
-                Side::Files => "On the panel beside the panes — the one showing the folder's files — press the cross at the end of its own top row. The panel goes, and the panes take the width it was using.".to_string(),
+                Side::Files => "On the panel beside the panes — whichever of its two halves is up — press the cross at the end of its own top row. The panel goes, and the panes take the width it was using.".to_string(),
             },
             (Domain::Terminal, "show-side") => match side(with)? {
                 Side::Rail => "At the top of the terminal face, press that same control again. The list of panes comes back where it was.".to_string(),
-                Side::Files => "At the top of the terminal face, at the far end of the row, press the one that shows the folder's files. The panel comes back, showing that half.".to_string(),
+                Side::Files => "At the top of the terminal face, at the far end of the row, press the one that shows the folder's files — the second of the two, the first being the page written on. The panel comes up on that half, whether it was closed or showing the other one.".to_string(),
             },
             // The one gesture on these roads. The screen tool presses and types and has no drag, so
             // this is carried out by hand — and what the operator is told is where the edge is, since
@@ -2822,7 +2822,7 @@ impl Side {
     fn phrase(self) -> &'static str {
         match self {
             Side::Rail => "the list of panes down one side",
-            Side::Files => "the panel showing the folder's files",
+            Side::Files => "the panel beside the panes",
         }
     }
 }

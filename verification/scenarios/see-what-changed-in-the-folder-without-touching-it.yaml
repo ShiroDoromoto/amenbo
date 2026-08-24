@@ -73,6 +73,15 @@ steps_gui:
     with:
       face: terminal
 
+  # The panel beside the panes opens on the page a person writes on rather than on the folder: a
+  # person goes to the files when they want them, and what an agent points at calls from the switch
+  # itself. So the road asks for the half it is about before reading anything in it.
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
   # What the folder already held. The section is what changed lately, so the file the world put there
   # is on it before anything is written — which is what makes the next step's arrival readable as an
   # arrival rather than as the first thing anybody looked at.

@@ -16,6 +16,11 @@
 // **What is kept is the wish, not what is on the screen.** A column can be a column or a drawer, and
 // which of those it is depends on how much room there is; whether the person wants it at all does
 // not. So the flag says whether they asked for it, and `sidesAreDrawers` says how it is drawn.
+//
+// **Which half of the file face is up is kept the same way.** It is a thing about the person rather
+// than about the work — the same reading that put the agent a pane starts with on this device
+// (`AMB-T-3686`) — so the answer they left is the one they come back to, and what the face opens on
+// is only ever the first run's answer.
 import { ACROSS, type Count } from "./layout";
 
 /**
@@ -32,6 +37,7 @@ const RAIL_WIDTH = "amenbo.termface.railWidth";
 const SIDE_WIDTH = "amenbo.termface.sideWidth";
 const RAIL_SHOWN = "amenbo.termface.railShown";
 const SIDE_SHOWN = "amenbo.termface.sideShown";
+const SIDE_TAB = "amenbo.termface.sideTab";
 
 /** The rail's floor and where it starts — the fixed width it shipped with, so nothing moves until
  *  somebody drags it. */
@@ -125,6 +131,36 @@ export function getSideShown(): boolean {
 
 export function setSideShown(want: boolean): boolean {
   return keepShown(SIDE_SHOWN, want);
+}
+
+/** Which half of the file face is up: the memo a person writes on, or the files an agent points at. */
+export type SideTab = "files" | "memo";
+
+/**
+ * The half this device had up, or the one the face opens on where nothing has been kept.
+ *
+ * **It opens on the memo**, and the reason is not which of the two is used more. It is who starts:
+ * the memo is opened by a person who wants it, and nothing is lost by its being closed — it is there
+ * the moment they ask. The files are pointed at by an agent (`../files/pointed`), and a person
+ * cannot be sent there, so what that half needs is a way to call — which is the badge on its own
+ * switch (`../shell/TerminalFace`), not a panel standing open on the chance something arrives. The
+ * memo also has something in it the moment it is opened, where the files half opens saying nothing
+ * has been pointed at yet.
+ *
+ * Anything else kept reads as the memo: the value is one of two words, and a word from an older
+ * build or a hand-edited store is not an answer.
+ */
+export function getSideTab(): SideTab {
+  const kept = typeof localStorage === "undefined" ? null : localStorage.getItem(SIDE_TAB);
+  return kept === "files" ? "files" : "memo";
+}
+
+/** Keep the half that was asked for, and answer with it — a half even where nothing can be kept. */
+export function setSideTab(which: SideTab): SideTab {
+  try {
+    localStorage.setItem(SIDE_TAB, which);
+  } catch { /* take the half even where localStorage is unavailable */ }
+  return which;
 }
 
 /**

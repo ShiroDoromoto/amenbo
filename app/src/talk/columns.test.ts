@@ -3,9 +3,9 @@
 // older build, a wish that is remembered, and the one rule about when a column stops being one.
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  clampRailWidth, clampSideWidth, getRailShown, getRailWidth, getSideShown, getSideWidth, PANE_MIN,
-  RAIL_DEFAULT, RAIL_MIN, setRailShown, setRailWidth, setSideShown, setSideWidth, sidesAreDrawers,
-  SIDE_DEFAULT, SIDE_MIN,
+  clampRailWidth, clampSideWidth, getRailShown, getRailWidth, getSideShown, getSideTab, getSideWidth,
+  PANE_MIN, RAIL_DEFAULT, RAIL_MIN, setRailShown, setRailWidth, setSideShown, setSideTab,
+  setSideWidth, sidesAreDrawers, SIDE_DEFAULT, SIDE_MIN,
 } from "./columns";
 
 beforeEach(() => {
@@ -60,6 +60,25 @@ describe("whether a column was asked for", () => {
     expect(getSideShown()).toBe(false);
     setRailShown(true);
     expect(getRailShown()).toBe(true);
+  });
+});
+
+describe("which half of the file face is up", () => {
+  it("is the memo on a device that has never said otherwise", () => {
+    expect(getSideTab()).toBe("memo");
+  });
+
+  it("comes back as it was left, so the default is only ever the first run's", () => {
+    expect(setSideTab("files")).toBe("files");
+    expect(getSideTab()).toBe("files");
+    setSideTab("memo");
+    expect(getSideTab()).toBe("memo");
+  });
+
+  it("reads as the memo where what was kept is not one of the two", () => {
+    // An older build, or a store edited by hand: a word that is not an answer is not one.
+    localStorage.setItem("amenbo.termface.sideTab", "tree");
+    expect(getSideTab()).toBe("memo");
   });
 });
 

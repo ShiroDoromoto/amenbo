@@ -13,12 +13,16 @@ import {
   slotsOf, type Count, type Layout,
 } from "../talk/layout";
 import {
-  clampRailWidth, clampSideWidth, getRailShown, getRailWidth, getSideShown, getSideWidth,
-  setRailShown, setRailWidth, setSideShown, setSideWidth, sidesAreDrawers,
+  clampRailWidth, clampSideWidth, getRailShown, getRailWidth, getSideShown, getSideTab, getSideWidth,
+  setRailShown, setRailWidth, setSideShown, setSideTab, setSideWidth, sidesAreDrawers,
+  type SideTab,
 } from "../talk/columns";
 import { FilesPanel } from "../files/FilesPanel";
 import { Icon } from "../components/Icon";
-import { markRead, tookPoint, type PointedBySession } from "../files/pointed";
+import {
+  markRead, newestPoint, pointWaits, tookPoint, tookShown,
+  type PointedBySession, type ShownBySession,
+} from "../files/pointed";
 import { useBoundFolders } from "../core/boundFolders";
 import { chooseFolderFor } from "../core/mutations";
 import { dataAdapter } from "../mock/adapter";
@@ -86,8 +90,8 @@ import { errText, t, tf, tn } from "../core/i18n";
  * **Both columns beside the panes can be put away, and each carries the way back.** The rail's is on
  * the top row and the file face's is on the panel itself, opened again from the same row; either can
  * be dragged wider, and where there is no room for columns at all both become drawers over the panes
- * (`../talk/columns`). What is remembered is the wish and the width, not which of the two shapes the
- * window happened to be in.
+ * (`../talk/columns`). What is remembered is the wish, the width and which half of the file face was
+ * up — all three being the person's — and not which of the two shapes the window happened to be in.
  *
  * Beside the page is the file face (`app/src/files/FilesPanel.tsx`), rooted at the project this face
  * is on — the one picked on the rail, not the one selected on the ledger. `projectId` is only where
@@ -147,6 +151,9 @@ export function TerminalFace({
   // hold and nobody else's: a session has no existence outside the rectangle it runs in, so neither
   // has what was said in one (`AMB-D-749`).
   const [pointed, setPointed] = useState<PointedBySession>(new Map());
+  // Which sessions' pointing the person has been shown, which is the badge's half of it
+  // (`../files/pointed`).
+  const [shownPoints, setShownPoints] = useState<ShownBySession>(new Map());
   // The file a path clicked in a pane asked for, and a count that makes asking twice two answers:
   // the same file clicked again is a reader saying "open it" again, not a state that has not moved.
   const [show, setShow] = useState<{ target: string; cwd: string | null; nth: number } | null>(null);
@@ -155,6 +162,8 @@ export function TerminalFace({
   // nothing, which is the empty row rather than the row of whichever pane spoke last.
   const focusedFrame = layout.frames.find((frame) => frame.id === layout.focus) ?? null;
   const focusedSession = focusedFrame?.session ?? null;
+  const focusedPoints = focusedSession === null ? [] : (pointed.get(focusedSession) ?? []);
+  const newestPointed = newestPoint(focusedPoints);
   const [width, setWidth] = useState(() => (typeof window === "undefined" ? 0 : window.innerWidth));
   // The columns beside the panes: whether each was asked for, and how wide the person has made it.
   // Both are this device's and are kept between runs (`../talk/columns`); what is *drawn* from them
@@ -169,8 +178,9 @@ export function TerminalFace({
   const [sideDrawn, setSideDrawn] = useState(false);
   // Which of the file face's two the panel shows. It is held here rather than there because the row
   // that switches between them is here: the panel is only on the screen while it is open, so a
-  // switch living inside it could not be the one that opens it (`../files/FilesPanel`).
-  const [tab, setTab] = useState<"files" | "memo">("files");
+  // switch living inside it could not be the one that opens it (`../files/FilesPanel`). What it
+  // starts as is this device's own answer, kept between runs (`../talk/columns`).
+  const [tab, setTabState] = useState<SideTab>(getSideTab);
   // The question about where the pane being opened works, while it is up. It is not a frame: a place
   // is made by opening one, and one nobody finished opening is a box that says nothing
   // (`../talk/layout`). `note` on it is a binding the host refused.
@@ -477,6 +487,18 @@ export function TerminalFace({
   // there because it was just opened, and both are put away by the same press.
   const railHere = drawers ? railDrawn : railShown;
   const sideHere = drawers ? sideDrawn : sideShown;
+  // Whether the files half is the one on the screen, which is both what its switch says and what
+  // takes its badge down.
+  const filesUp = sideHere && tab === "files";
+  // Whether its switch is wearing one. The badge is for what was *said* and nothing else: a file
+  // changing is what a running agent does all day, and a badge that is always up says nothing.
+  const pointWaiting = !filesUp && focusedSession !== null
+    && pointWaits(shownPoints, focusedSession, newestPointed);
+
+  /** Ask for a half. The answer is kept: which of the two a person is on is theirs, not the run's. */
+  const takeTab = useCallback((which: SideTab) => {
+    setTabState(setSideTab(which));
+  }, []);
 
   /** Ask for a side, or put it away. The wish is kept either way — a person who closes the rail on a
    *  narrow window has closed it, and it must not come back as a column when the window grows. */
@@ -497,13 +519,21 @@ export function TerminalFace({
    * half is up and opens or closes the panel. The panel's own cross closes it too, and that is not
    * a second switch: it ends the panel rather than choosing a half.
    */
-  const showSide = useCallback((which: "files" | "memo") => {
+  const showSide = useCallback((which: SideTab) => {
     if (sideHere && tab === which) wantSide(false);
     else {
-      setTab(which);
+      takeTab(which);
       wantSide(true);
     }
-  }, [sideHere, tab, wantSide]);
+  }, [sideHere, tab, takeTab, wantSide]);
+
+  // Being on the files half is being shown what is on it, so the badge goes down there and does not
+  // come back when the panel is closed — only something pointed at since puts it up again
+  // (`../files/pointed`).
+  useEffect(() => {
+    if (!filesUp || focusedSession === null || newestPointed === null) return;
+    setShownPoints((was) => tookShown(was, focusedSession, newestPointed));
+  }, [filesUp, focusedSession, newestPointed]);
 
   // A window that has just become too narrow for columns does not open two drawers over the panes:
   // what was a column is put away, and the way to open it is the same press it always was.
@@ -718,18 +748,26 @@ export function TerminalFace({
             sit at the far end because they are about the other side of the screen. Pressing the one
             already up puts the panel away, so the row says which half is open as well as opening
             one — and it is the whole of the switch: the panel draws no tabs of its own
-            (`../files/FilesPanel`). */}
+            (`../files/FilesPanel`).
+
+            The memo is first because it is the one the face opens on, and a default drawn second is
+            a small thing out of order (`../talk/columns`). */}
         <div className="termface__sides">
-          {(["files", "memo"] as const).map((which) => (
+          {(["memo", "files"] as const).map((which) => (
             <button
               key={which}
               className={`termface__action${
                 sideHere && tab === which ? " termface__action--on" : ""}`}
               onClick={() => showSide(which)}
               aria-expanded={sideHere && tab === which}
+              title={which === "files" && pointWaiting ? t("files.pointed") : undefined}
             >
               <Icon name={which === "files" ? "folder" : "pencil"} />
               {t(which === "files" ? "files.tab" : "files.memo")}
+              {/* An agent pointed at something while this half was not up. It is the one way this
+                  side of the screen can call — a person can go to the files whenever they like, and
+                  an agent cannot send them (`../files/pointed`). */}
+              {which === "files" && pointWaiting && <span className="termface__pointed" />}
             </button>
           ))}
         </div>
@@ -867,10 +905,10 @@ export function TerminalFace({
               tab={tab}
               // Both halves are reached the same way, and asking for one is asking for the panel:
               // a file clicked in a pane opens the face it is read in.
-              onTab={(which) => { setTab(which); wantSide(true); }}
+              onTab={(which) => { takeTab(which); wantSide(true); }}
               onClose={() => wantSide(false)}
               pointed={{
-                points: focusedSession === null ? [] : (pointed.get(focusedSession) ?? []),
+                points: focusedPoints,
                 // Which pane pointed, called what the rail and its own row call it (`../talk/frames`).
                 name: focusedFrame === null
                   ? null

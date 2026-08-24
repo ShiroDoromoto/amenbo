@@ -2,7 +2,8 @@
 import { describe, expect, it } from "vitest";
 import {
   closedIn, EMPTY_LAYOUT, focusOn, folderOfPage, frameFor, freeSlot, goPage, laidOut, MAX_PAGES,
-  movedTo, openedIn, pageCount, pageOfFrame, restored, setCount, settledIn, sidesAreDrawers, slotsOf,
+  movedTo, openedIn, openedOn, pageCount, pageFor, pageOfFrame, restored, setCount, settledIn,
+  sidesAreDrawers, slotsOf,
   type Layout,
 } from "./layout";
 
@@ -184,5 +185,49 @@ describe("an arrangement kept between runs", () => {
 
   it("is nothing to come back to when it holds no frames", () => {
     expect(restored({ count: 2, nextId: 1, frames: [] })).toBeNull();
+  });
+});
+
+describe("a folder handed in from the ledger", () => {
+  it("lands on the page it is already open on, rather than beside itself", () => {
+    const made = frameFor(EMPTY_LAYOUT, 2, 0);
+    const open = settledIn(made.layout, made.frame.id, "/work/repo");
+    expect(pageFor(open, "/work/repo")).toBe(2);
+  });
+
+  it("takes a page nothing has been started on, which on a fresh face is the one in front of you", () => {
+    expect(pageFor(EMPTY_LAYOUT, "/work/repo")).toBe(1);
+    const first = frameFor(EMPTY_LAYOUT, 1, 0);
+    const busy = settledIn(first.layout, first.frame.id, "/work/other");
+    expect(pageFor(busy, "/work/repo")).toBe(2);
+  });
+
+  it("is nowhere to go when every page is settled somewhere else", () => {
+    let layout: Layout = { ...EMPTY_LAYOUT, count: 1 };
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      const made = frameFor(layout, page, 0);
+      layout = settledIn(made.layout, made.frame.id, `/work/${page}`);
+    }
+    expect(pageFor(layout, "/work/repo")).toBeNull();
+  });
+
+  // The frame is replaced rather than settled into: a pane already on the screen is drawn, and its
+  // invitation would go on standing over a page that now has an answer.
+  it("comes up as a frame of its own, so the pane is put up again", () => {
+    const standing = frameFor(EMPTY_LAYOUT, 1, 0);
+    const opened = openedOn(standing.layout, 1, "/work/repo");
+    expect(opened.frame.id).not.toBe(standing.frame.id);
+    expect(opened.frame.folder).toBe("/work/repo");
+    expect(folderOfPage(opened.layout, 1)).toBe("/work/repo");
+    expect(slotsOf(opened.layout, 1)[0]!.id).toBe(opened.frame.id);
+  });
+
+  it("leaves a slot with a terminal running in it exactly as it is", () => {
+    const standing = frameFor(EMPTY_LAYOUT, 1, 0);
+    const running = openedIn(standing.layout, standing.frame.id, "session-a", null);
+    const opened = openedOn(running, 1, "/work/repo");
+    expect(opened.frame.id).toBe(standing.frame.id);
+    expect(opened.frame.session).toBe("session-a");
+    expect(folderOfPage(opened.layout, 1)).toBeNull();
   });
 });

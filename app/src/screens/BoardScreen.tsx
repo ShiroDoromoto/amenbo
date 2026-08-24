@@ -92,6 +92,7 @@ const DONE_COLUMN_CAP = 20;
  */
 export function BoardScreen({
   projectId, headerSlot, selectedTaskId, onSelectTask, selectedDecisionId, onSelectDecision, onComposeTask, onOpenSettings,
+  onStartTerminal,
 }: {
   projectId: number;
   // Where the project header (toolbar) is drawn. It is portalled into AppShell's full-width header row, so the
@@ -103,6 +104,9 @@ export function BoardScreen({
   onSelectDecision: (id: number | null) => void;
   onComposeTask: (target: ComposeTarget) => void;
   onOpenSettings: () => void;
+  /** Work in this folder in the terminal — the first loop's one move, carried out by the shell
+   *  (`../shell/AppShell`). */
+  onStartTerminal: (dir: string) => void;
 }) {
   const store = useStore();
   const [view, setView] = useState<View>(() => dataAdapter.getProject(projectId)?.view ?? "board");
@@ -324,7 +328,7 @@ export function BoardScreen({
           is one to speak about. */}
       {tab === "tasks" && notice === "firstLoop" && folders.live[0] && (
         <div className="board__firstloop">
-          <FirstLoop dir={folders.live[0].path} />
+          <FirstLoop dir={folders.live[0].path} onStart={onStartTerminal} />
         </div>
       )}
 

@@ -1,27 +1,18 @@
 // @vitest-environment jsdom
-// The part carries `AMB-D-414`'s promise: the user is left with exactly two moves, each of which does
-// what its label says and nothing else, and what the copy hands over is a request that can be pasted
-// as it is. These tests hold it to that — the seams to core (the terminal, and the name of the CLI
-// this build installs) and the clipboard are stubbed, so what runs for real is which button calls what.
+// The part carries `AMB-D-414`'s promise, now that the walk is one press: what the reader is left
+// with is starting in the terminal, and the road out to their own terminal folded beside it. These
+// tests hold it to that — the seam to core (the name of the CLI this build installs) and the
+// clipboard are stubbed, so what runs for real is which control calls what.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const hoisted = vi.hoisted(() => ({
-  /** The folders `openTerminal` was asked for. */
-  opened: [] as string[],
-  /** What `openTerminal` rejects with, when the environment has no terminal to open. */
-  terminalFails: null as { code: string; message_en: string } | null,
   /** The CLI this build installs — what the request has to name; null where it installs none. */
   cli: "amenbo" as string | null,
 }));
 
 vi.mock("../core/mutations", () => ({
-  openTerminal: (path: string) => {
-    if (hoisted.terminalFails) return Promise.reject(hoisted.terminalFails);
-    hoisted.opened.push(path);
-    return Promise.resolve();
-  },
   fetchCliCommandName: () => Promise.resolve(hoisted.cli),
 }));
 
@@ -33,15 +24,16 @@ import { t, tf } from "../core/i18n";
 let container: HTMLDivElement;
 let root: Root;
 let clipboard: string[];
+/** The folders "start in the terminal" was pressed for. */
+let started: string[];
 
 const button = (label: string) =>
   Array.from(container.querySelectorAll("button")).find((b) => (b.textContent ?? "").includes(label));
 
 beforeEach(() => {
-  hoisted.opened = [];
-  hoisted.terminalFails = null;
   hoisted.cli = "amenbo";
   clipboard = [];
+  started = [];
   Object.defineProperty(navigator, "clipboard", {
     configurable: true,
     value: { writeText: (s: string) => { clipboard.push(s); return Promise.resolve(); } },
@@ -59,27 +51,54 @@ afterEach(() => {
 // Awaited, so the build's CLI name — asked for at mount — has landed before anything is read off the
 // screen. Until it does the request stands at the production name, which is the wrong thing to pin.
 const render = (dir = "/w/first") =>
-  act(async () => { root.render(createElement(FirstLoop, { dir })); });
+  act(async () => { root.render(createElement(FirstLoop, { dir, onStart: (at: string) => started.push(at) })); });
+
+/** Open the way out to the reader's own terminal, which is where the request text lives. */
+const openOutside = () => act(async () => { button(t("firstloop.outside"))!.click(); });
 
 /** The request as this build hands it over, with the command name filled in. Only the builds that
  *  have one hand a request over at all, so this is asked for nowhere else. */
 const prompt = (lang?: "en") => tf("firstloop.prompt", { cmd: hoisted.cli ?? "" }, lang);
 
-describe("the two moves the user is left with", () => {
-  it("opens the terminal in the linked folder, and copies nothing on the way", async () => {
+describe("the one move the user is left with", () => {
+  it("starts in the linked folder, and copies nothing on the way", async () => {
     await render("/w/mine");
-    await act(async () => { button(t("firstloop.s1btn"))!.click(); });
+    await act(async () => { button(t("firstloop.start"))!.click(); });
 
-    expect(hoisted.opened).toEqual(["/w/mine"]);
+    expect(started).toEqual(["/w/mine"]);
     expect(clipboard).toEqual([]);
   });
 
-  it("copies the request as it stands, and opens no terminal on the way", async () => {
+  // The request is the second road, not the first one: a reader who presses the one button never
+  // meets it, because their agent is handed the same instruction before it starts.
+  it("keeps the request out of sight until the way out is opened", async () => {
     await render();
-    await act(async () => { button(t("firstloop.s2btn"))!.click(); });
+
+    expect(container.textContent).not.toContain(prompt());
+
+    await openOutside();
+    expect(container.textContent).toContain(prompt());
+  });
+});
+
+describe("the way out to the reader's own terminal", () => {
+  // It is folded, not conditional. A machine with no agent this app can start leaves the outside as
+  // the only road there is, and a control that appears only sometimes is one nobody can be told about.
+  it("is one press away, whatever this build can start", async () => {
+    await render();
+
+    expect(button(t("firstloop.outside"))!.getAttribute("aria-expanded")).toBe("false");
+    await openOutside();
+    expect(button(t("firstloop.outside"))!.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("copies the request as it stands, and starts nothing on the way", async () => {
+    await render();
+    await openOutside();
+    await act(async () => { button(t("firstloop.copy"))!.click(); });
 
     expect(clipboard).toEqual([prompt()]);
-    expect(hoisted.opened).toEqual([]);
+    expect(started).toEqual([]);
     expect(container.textContent).toContain(t("firstloop.copied"));
   });
 });
@@ -90,6 +109,7 @@ describe("what the request text says", () => {
   // (`AMB-D-515`).
   it("shows the very text the copy hands over, and points the AI at the spec", async () => {
     await render();
+    await openOutside();
 
     expect(container.textContent).toContain(prompt());
     expect(prompt()).toContain("agent --json");
@@ -101,9 +121,10 @@ describe("what the request text says", () => {
   it("names the command this build installs, not the production one", async () => {
     hoisted.cli = "amenbo-dev-2627";
     await render();
+    await openOutside();
 
     expect(container.textContent).toContain("amenbo-dev-2627 agent --json");
-    await act(async () => { button(t("firstloop.s2btn"))!.click(); });
+    await act(async () => { button(t("firstloop.copy"))!.click(); });
     expect(clipboard).toEqual([prompt()]);
   });
 
@@ -113,40 +134,10 @@ describe("what the request text says", () => {
   it("hands over no request at all where the build ships no command a reader can run", async () => {
     hoisted.cli = null;
     await render();
+    await openOutside();
 
     expect(container.textContent).toContain(t("cli.none"));
     expect(container.textContent).not.toContain("agent --json");
-    expect(button(t("firstloop.s2btn"))).toBeUndefined();
-  });
-});
-
-describe("when the terminal will not open", () => {
-  it("says so instead of failing silently", async () => {
-    hoisted.terminalFails = { code: "not_found", message_en: "cannot open" };
-    await render();
-    await act(async () => { button(t("firstloop.s1btn"))!.click(); });
-
-    // English by default, and the fixture carries both faces, so this pins which one is shown.
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain("cannot open");
-  });
-
-  // The walk has to keep going: the user opens their own terminal, so what they need is the folder
-  // to cd into — handed over the same way the request is, ready to paste.
-  it("hands over the folder's path to copy, so the loop still closes", async () => {
-    hoisted.terminalFails = { code: "not_found", message_en: "cannot open" };
-    await render("/w/mine");
-    await act(async () => { button(t("firstloop.s1btn"))!.click(); });
-
-    expect(container.textContent).toContain(t("firstloop.s1fallback"));
-    expect(container.textContent).toContain("/w/mine");
-
-    await act(async () => { button(t("firstloop.s1fallbackbtn"))!.click(); });
-    expect(clipboard).toEqual(["/w/mine"]);
-  });
-
-  it("offers nothing to copy while the terminal still opens", async () => {
-    await render();
-
-    expect(button(t("firstloop.s1fallbackbtn"))).toBeUndefined();
+    expect(button(t("firstloop.copy"))).toBeUndefined();
   });
 });

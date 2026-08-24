@@ -28,7 +28,14 @@ import { ErrorNote } from "../components/ErrorNote";
 // The project that was created, handed to the done step: id = where the board opens, name = the heading, dir = the linked folder or null.
 type Created = { id: number; name: string; dir: string | null };
 
-export function NewProjectScreen({ onCreated, onCancel, onOpenMcp }: { onCreated: (nav: Nav) => void; onCancel: () => void; onOpenMcp: (projectId: number) => void }) {
+export function NewProjectScreen({ onCreated, onCancel, onOpenMcp, onStartTerminal }: {
+  onCreated: (nav: Nav) => void;
+  onCancel: () => void;
+  onOpenMcp: (projectId: number) => void;
+  /** Work in this folder in the terminal — the first loop's one move, carried out by the shell
+   *  (`../shell/AppShell`). */
+  onStartTerminal: (dir: string) => void;
+}) {
   const [name, setName] = useState("");
   const [dir, setDir] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -67,6 +74,7 @@ export function NewProjectScreen({ onCreated, onCancel, onOpenMcp }: { onCreated
         created={created}
         onOpenProject={() => onCreated({ type: "project", id: String(created.id) })}
         onOpenMcp={onOpenMcp}
+        onStartTerminal={onStartTerminal}
       />
     );
   }
@@ -125,7 +133,12 @@ export function NewProjectScreen({ onCreated, onCancel, onOpenMcp }: { onCreated
  * a terminal or a file manager would be a no-op there anyway — so the step is the heading and the way
  * on into the project.
  */
-function DoneStep({ created, onOpenProject, onOpenMcp }: { created: Created; onOpenProject: () => void; onOpenMcp: (projectId: number) => void }) {
+function DoneStep({ created, onOpenProject, onOpenMcp, onStartTerminal }: {
+  created: Created;
+  onOpenProject: () => void;
+  onOpenMcp: (projectId: number) => void;
+  onStartTerminal: (dir: string) => void;
+}) {
   const { id, name, dir } = created;
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -161,7 +174,7 @@ function DoneStep({ created, onOpenProject, onOpenMcp }: { created: Created; onO
 
         {inTauri() && dir && (
           <>
-            <FirstLoop dir={dir} />
+            <FirstLoop dir={dir} onStart={onStartTerminal} />
             <div className="newproj__next">
               <span className="fieldlabel">{t("newproj.moreTitle")}</span>
               <div className="buttonrow">

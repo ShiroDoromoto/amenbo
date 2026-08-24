@@ -7,8 +7,8 @@ import {
 } from "../talk/frames";
 import {
   closedIn, COUNTS, EMPTY_LAYOUT, focusOn, folderOfPage, frameFor, freeSlot, goPage, laidOut,
-  MAX_PAGES, movedTo, openedIn, pageCount, pageOfFrame, restored, setCount, settledIn,
-  sidesAreDrawers, slotsOf,
+  MAX_PAGES, movedTo, openedIn, openedOn, pageCount, pageFor, pageOfFrame, restored, setCount,
+  settledIn, sidesAreDrawers, slotsOf,
   type Count, type Layout,
 } from "../talk/layout";
 import { FilesPanel } from "../files/FilesPanel";
@@ -56,6 +56,10 @@ import { t, tf } from "../core/i18n";
  * do about it. Which pane it was is the rail's to show, and a badge that counted would be a number a
  * reader has to go and check.
  *
+ * `openIn` is the ledger asking for a folder to be worked in — the first loop's one button
+ * (`app/src/components/FirstLoop.tsx`). It is where to work and not what to do about it: which page
+ * takes it, and whether a terminal follows, are this face's own (`../talk/layout`).
+ *
  * Beside the page is the file face (`app/src/files/FilesPanel.tsx`), which is rooted at the
  * project's folder rather than at any pane's session — so it does not move when the page or the
  * focused pane does (`AMB-T-3602`). It is why this component is told which project the window is on,
@@ -67,12 +71,19 @@ export function TerminalFace({
   onWaiting,
   projectId,
   onOpenLedger,
+  openIn,
 }: {
   onSplitOut: () => void;
   note: string | null;
   onWaiting: (waiting: boolean) => void;
   projectId?: number | null;
   onOpenLedger?: () => void;
+  /**
+   * A folder the ledger asked this face to work in, and a count of the asking — the same shape the
+   * file face's `show` takes, and for the same reason: pressing the button twice is a reader saying
+   * it again, not a state that has not moved.
+   */
+  openIn?: { dir: string; nth: number } | null;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   // The face comes up with a terminal, the way a single-pane face always did: the first slot of the
@@ -234,6 +245,29 @@ export function TerminalFace({
   const chose = useCallback((frame: string, folder: string) => {
     setLayout((was) => settledIn(was, frame, folder));
   }, []);
+
+  // A folder the ledger handed in. Nothing is done with it before the restore has been answered for:
+  // the arrangement that comes back is what the page is picked out of, and seeding one first would
+  // put a terminal in a frame the restore was about to take away (`AMB-T-3607`).
+  //
+  // The press is honoured once. `nth` is what says a second press is a second answer, so pressing the
+  // button again on a folder already open goes to it rather than opening a second terminal in it.
+  useEffect(() => {
+    if (!settled || !openIn) return;
+    setLayout((was) => {
+      const page = pageFor(was, openIn.dir);
+      // Every page settled in some other folder. The face is still the place the reader was sent, so
+      // it is left as it is rather than turned into a screen holding two projects.
+      if (page === null) return was;
+      if (folderOfPage(was, page) === openIn.dir) return goPage(was, page);
+      const made = openedOn(was, page, openIn.dir);
+      // The same mark the rail's way in leaves: this frame is one a person pressed for, so the pane
+      // opens rather than offering to.
+      startNow.current.add(made.frame.id);
+      return focusOn(made.layout, made.frame.id);
+    });
+    // `nth` is what makes the same folder asked for twice two answers.
+  }, [openIn?.nth, settled]);
 
   const pages = pageCount(layout);
   const drawers = sidesAreDrawers(layout.count, width);

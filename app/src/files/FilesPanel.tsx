@@ -18,6 +18,7 @@
 // text is drawn as Markdown, which is a question about rendering rather than about what the file
 // is.
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import type { FolderAppDto, FolderChangesDto } from "../bindings/bindings";
 import { Markdown } from "../components/Markdown";
 import { useBoundFolders } from "../core/boundFolders";
@@ -35,7 +36,7 @@ import { fileUnder, isRef, isUrl, unread, type Pointed } from "./pointed";
 /** The names a file's text is drawn as Markdown under. The one thing here the name decides. */
 const MARKDOWN = [".md", ".markdown"];
 
-export function FilesPanel({ projectId, onOpenLedger, pointed, show }: {
+export function FilesPanel({ projectId, onOpenLedger, pointed, show, tab, onTab, onClose }: {
   /** The project whose folder the face is rooted at; nothing is drawn without one. */
   projectId: number | null;
   /** Leave the terminal face for the ledger — what a reference or a record means when it is clicked. */
@@ -57,6 +58,18 @@ export function FilesPanel({ projectId, onOpenLedger, pointed, show }: {
     /** Somebody opened one of them. */
     onRead: (at: string) => void;
   };
+  /**
+   * Which of the two halves is up, and how to ask for one.
+   *
+   * They are the caller's rather than this panel's because the terminal face's top row switches
+   * between them too, and it is the same control as the tabs here: pressing the half already up is
+   * what closes the panel (`../shell/TerminalFace`). A file clicked in a pane asks for the files
+   * half the same way, so a panel that had been closed comes back to show it.
+   */
+  tab: "files" | "memo";
+  onTab: (tab: "files" | "memo") => void;
+  /** Put the panel away. What opens it again is the top row, which is where it was opened from. */
+  onClose: () => void;
 }) {
   // `0` names no project, which is what the folder read then answers with: none. A window with no
   // project on it draws the invitation, the same as one whose project has no folder.
@@ -69,10 +82,6 @@ export function FilesPanel({ projectId, onOpenLedger, pointed, show }: {
   // per row: only one can be open, and a row that held its own would keep it after the list moved
   // under it (`AMB-T-3605`).
   const [menu, setMenu] = useState<{ path: string[]; x: number; y: number } | null>(null);
-  // Which of the two the panel is showing. The files are what it opens on: the page is where a
-  // person goes to write, and going there is a thing they do (`AMB-T-3608`).
-  const [tab, setTab] = useState<"files" | "memo">("files");
-
   // A path clicked in a pane. It opens only where it lands inside the folder this face is rooted at
   // — the same rule a pointed-at file is held to, and the same fence the host applies. One that
   // lands outside opens nothing: the pane keeps the characters it drew, and no reader is shown a
@@ -83,7 +92,7 @@ export function FilesPanel({ projectId, onOpenLedger, pointed, show }: {
     // A file asked for is a file to be looked at: the panel comes back off the page to show it.
     if (path) {
       setReading(path);
-      setTab("files");
+      onTab("files");
     }
     // `nth` is what makes the same file asked for twice two answers.
   }, [show?.nth, root]);
@@ -104,12 +113,24 @@ export function FilesPanel({ projectId, onOpenLedger, pointed, show }: {
     };
   }, [projectId, root]);
 
+  // The way to put the panel away. It is drawn on whatever row the panel has, in every state it can
+  // be in: a panel that could only be closed while it happened to be showing its tabs would be one
+  // a reader has to find their way back out of.
+  const close = (
+    <button className="files__close" title={t("pane.close")} onClick={onClose}>×</button>
+  );
+
   if (projectId === null || root === null) {
     // A read that has not come back draws nothing at all: a flash of "no folder" on a project that
     // has one reads as a broken binding (`core/boundFolders`).
     return folders.answered
-      ? <div className="files files--empty">{t("files.noFolder")}</div>
-      : <div className="files" />;
+      ? (
+        <div className="files files--empty">
+          <div className="files__tabs">{close}</div>
+          <p className="files__none">{t("files.noFolder")}</p>
+        </div>
+      )
+      : <div className="files"><div className="files__tabs">{close}</div></div>;
   }
 
   if (reading !== null) {
@@ -120,6 +141,7 @@ export function FilesPanel({ projectId, onOpenLedger, pointed, show }: {
         path={reading}
         onBack={() => setReading(null)}
         onOpenLedger={onOpenLedger}
+        close={close}
       />
     );
   }
@@ -132,11 +154,12 @@ export function FilesPanel({ projectId, onOpenLedger, pointed, show }: {
           className={`files__tab${tab === one ? " files__tab--on" : ""}`}
           role="tab"
           aria-selected={tab === one}
-          onClick={() => setTab(one)}
+          onClick={() => onTab(one)}
         >
           {t(one === "files" ? "files.tab" : "files.memo")}
         </button>
       ))}
+      {close}
     </div>
   );
 
@@ -482,12 +505,15 @@ function Level({ projectId, root, path, onRead, onMenu }: {
 }
 
 /** One file, as far as a panel can show it. */
-function FileReader({ projectId, root, path, onBack, onOpenLedger }: {
+function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
   projectId: number;
   root: string;
   path: string[];
   onBack: () => void;
   onOpenLedger?: () => void;
+  /** The panel's own way out, drawn on this row: reading a file is not a state a reader should have
+   *  to leave before they can close the panel (`./FilesPanel`). */
+  close: ReactNode;
 }) {
   const [file, setFile] = useState<{ text?: string; truncated: boolean; image?: { mime: string; base64: string } } | null>(null);
   const [failed, setFailed] = useState(false);
@@ -512,6 +538,7 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger }: {
       <div className="files__bar">
         <button className="files__back" onClick={onBack}>{t("files.back")}</button>
         <span className="files__name" title={path.join("/")}>{name}</span>
+        {close}
       </div>
       <div className="files__body">
         {failed && <p className="files__none">{t("files.unreadable")}</p>}

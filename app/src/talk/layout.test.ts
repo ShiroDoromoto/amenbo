@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   addPane, closedFrame, closedIn, EMPTY_LAYOUT, focusOn, goPage, goProject, laidOut, movedTo,
   openedFrame, openedIn, pageCount, pageOfFrame, paneIn, panesOf, restored, roomOnPage, setCount,
-  sidesAreDrawers, slotsOf, type Layout,
+  slotsOf, type Layout,
 } from "./layout";
 
 /** A layout with `n` panes opened in one project, the way pressing the way in `n` times leaves one. */
@@ -226,22 +226,6 @@ describe("the count is the most a page draws", () => {
 
   it("refuses a page this project has not got", () => {
     expect(goPage(withPanes(2), 3).page).toBe(1);
-  });
-});
-
-describe("the sides", () => {
-  it("are drawers when one pane was asked for, however wide the window", () => {
-    expect(sidesAreDrawers(1, 2560)).toBe(true);
-  });
-
-  it("are drawers on a narrow window, whatever count was asked for", () => {
-    expect(sidesAreDrawers(4, 700)).toBe(true);
-    expect(sidesAreDrawers(2, 700)).toBe(true);
-  });
-
-  it("are columns otherwise", () => {
-    expect(sidesAreDrawers(2, 1400)).toBe(false);
-    expect(sidesAreDrawers(4, 1400)).toBe(false);
   });
 });
 

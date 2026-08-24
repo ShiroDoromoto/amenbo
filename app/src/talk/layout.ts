@@ -44,9 +44,6 @@ export const DEFAULT_COUNT: Count = 2;
  *  here, because there are only nine digits to press. */
 export const MAX_PAGES = 9;
 
-/** The width below which the columns beside the panes stop being columns (see `sidesAreDrawers`). */
-export const NARROW_PX = 900;
-
 /** The arrangement as the store keeps it — the wire shape of `TalkLayoutDto`. */
 export type SavedLayout = {
   count: number;
@@ -382,16 +379,4 @@ export function restored(saved: SavedLayout, onto: number | null): Layout | null
     focus: first.id,
     adding: false,
   };
-}
-
-/**
- * Whether the columns beside the panes are drawers rather than columns.
- *
- * One pane is a person saying they want the screen for it, and a narrow window has not got the room
- * for three things across whatever anyone asked for. Both answers are the same answer, so both are
- * given here: what changes is whether the rail and what sits on the other side are always there or
- * are opened when they are wanted.
- */
-export function sidesAreDrawers(count: Count, width: number): boolean {
-  return count === 1 || width < NARROW_PX;
 }

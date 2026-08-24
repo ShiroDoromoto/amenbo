@@ -394,6 +394,12 @@ const REGISTRY: &[OpSpec] = &[
     // only where the key itself is what is under test.
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "create", required: &["name"], refs: &[], strings: &["name", "slug"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "value-add", required: &["dimension", "value"], refs: &[], strings: &["dimension", "value", "slug"], binds: false },
+    // The value gone again, and with it the classification of every task that answered with it. `to`
+    // names another value of the same axis for those tasks to land on instead — which a required axis
+    // demands whenever any of them exists, since letting the value go would empty them out behind the
+    // creation premise's back. Left out where the demand is up, and on the last value of such an axis,
+    // the removal is turned away, which is what a road walks it for.
+    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "value-rm", required: &["dimension", "value"], refs: &[], strings: &["dimension", "value", "to"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "set", required: &["target", "dimension", "value"], refs: &["target"], strings: &["dimension", "value"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "unset", required: &["target", "dimension", "value"], refs: &["target"], strings: &["dimension", "value"], binds: false },
     // Whether the axis belongs on the board's task cards. The answer is the axis's own rather than a

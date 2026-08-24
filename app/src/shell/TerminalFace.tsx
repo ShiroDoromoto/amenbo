@@ -4,7 +4,7 @@ import { FolderChoice } from "./FolderChoice";
 import { TerminalPane } from "./TerminalPane";
 import { PaneRail } from "./PaneRail";
 import {
-  frameNames, keepLayout, nameFrame, savedLayout, type FrameNames, type NamedBy,
+  frameLabel, frameNames, keepLayout, nameFrame, savedLayout, type FrameNames, type NamedBy,
 } from "../talk/frames";
 import {
   addPane, closedFrame, closedIn, COUNTS, EMPTY_LAYOUT, focusOn, goPage, goProject, laidOut, MAX_PAGES,
@@ -84,7 +84,11 @@ export function TerminalFace({
   onOpenLedger,
   openIn,
 }: {
-  onSplitOut: () => void;
+  /** Take the terminal into a window of its own. What goes with it is the pane being worked in —
+   *  the frame, so the window names the place it is drawing, and the terminal running there, so it
+   *  takes that one up rather than guessing from a count of what is open (`../talk.ts`). Null where
+   *  this face has no pane to be working in, which is the window with nothing to take up. */
+  onSplitOut: (pane: { frame: string; session?: string } | null) => void;
   note: string | null;
   onWaiting: (waiting: boolean) => void;
   /** The project the face opens on, where the window has one to say. */
@@ -117,8 +121,8 @@ export function TerminalFace({
   const [ended, setEnded] = useState<ReadonlySet<string>>(new Set());
   // The pane the top row of the file face follows. A frame with nothing running in it points at
   // nothing, which is the empty row rather than the row of whichever pane spoke last.
-  const focusedSession =
-    layout.frames.find((frame) => frame.id === layout.focus)?.session ?? null;
+  const focusedFrame = layout.frames.find((frame) => frame.id === layout.focus) ?? null;
+  const focusedSession = focusedFrame?.session ?? null;
   const [width, setWidth] = useState(() => (typeof window === "undefined" ? 0 : window.innerWidth));
   const [railOpen, setRailOpen] = useState(false);
   // The question about where the pane being opened works, while it is up. It is not a frame: a place
@@ -458,7 +462,19 @@ export function TerminalFace({
   return (
     <div className={`termface${drawers ? " termface--drawers" : ""}`} ref={rootRef}>
       <div className="termface__bar">
-        <button className="termface__action" onClick={onSplitOut}>{t("face.splitOut")}</button>
+        <button
+          className="termface__action"
+          onClick={() => onSplitOut(
+            focusedFrame === null
+              ? null
+              : {
+                  frame: focusedFrame.id,
+                  ...(focusedSession === null ? {} : { session: focusedSession }),
+                },
+          )}
+        >
+          {t("face.splitOut")}
+        </button>
         {drawers && (
           <button
             className="termface__action"
@@ -607,7 +623,8 @@ export function TerminalFace({
           show={show}
           pointed={{
             points: focusedSession === null ? [] : (pointed.get(focusedSession) ?? []),
-            name: layout.focus === null ? null : (names.get(layout.focus) ?? null),
+            // Which pane pointed, called what the rail and its own row call it (`../talk/frames`).
+            name: focusedFrame === null ? null : frameLabel(names, focusedFrame.id, focusedFrame.folder),
             ended: focusedSession !== null && ended.has(focusedSession),
             onRead: (at) => {
               if (focusedSession !== null) setPointed((was) => markRead(was, focusedSession, at));

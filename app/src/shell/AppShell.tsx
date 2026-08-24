@@ -158,6 +158,11 @@ export function AppShell() {
   // front. A launch restoring the shape was not asking for anything, and the window the user is
   // looking at is this one — "nothing comes forward but what somebody pressed" (`AMB-D-753`).
   const raiseTalk = useRef(false);
+  // The pane the press is splitting out — the frame it is, and the terminal running in it. It is
+  // handed to the host with the window it opens, because only this side knows which pane the person
+  // was working in and only that window has to be told (`./TerminalFace`, `../talk.ts`). Null on
+  // every other way into two windows: a launch restoring the shape has nothing running to hand over.
+  const talkPane = useRef<{ frame: string; session?: string } | null>(null);
   useEffect(() => {
     if (!inTauri()) return;
     if (shape !== "two") {
@@ -166,7 +171,9 @@ export function AppShell() {
     }
     const raise = raiseTalk.current;
     raiseTalk.current = false;
-    void invoke("talk_open", { raise }).catch((e: unknown) => {
+    const pane = talkPane.current;
+    talkPane.current = null;
+    void invoke("talk_open", { raise, pane }).catch((e: unknown) => {
       // Back to one window, where the terminal still is: what was split out is put back rather than
       // left pointing at a window that was never built.
       setWindowError(errLabel(e as CmdError));
@@ -238,9 +245,10 @@ export function AppShell() {
   // "Open in a separate window". The pane comes down as the shape changes, leaving the terminal
   // running for the window that is about to draw it, and this window goes back to the ledger — the
   // face it is now the only one of.
-  const splitOutTerminal = useCallback(() => {
+  const splitOutTerminal = useCallback((pane: { frame: string; session?: string } | null) => {
     setWindowError(null);
     raiseTalk.current = true;
+    talkPane.current = pane;
     setFace("tasks");
     setShape("two");
   }, [setShape]);

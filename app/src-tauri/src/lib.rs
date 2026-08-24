@@ -475,6 +475,7 @@ pub fn run() {
       pty::pty_resize,
       windows::talk_open,
       windows::talk_close,
+      windows::talk_pane,
     ])
     .run(context)
     .expect("error while running tauri application");

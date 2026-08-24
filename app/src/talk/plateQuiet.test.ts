@@ -35,7 +35,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   host = document.createElement("div");
   plate = mountPlate(host, () => "en");
-  plate.opened("pane-1", AT);
+  plate.opened("pane-1", AT, null);
 });
 
 afterEach(() => {

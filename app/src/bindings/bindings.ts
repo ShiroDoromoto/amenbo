@@ -2167,7 +2167,33 @@ project?: number,
 /**
  * The frames, in slot order.
  */
-frames: Array<TalkFrameDto>, };
+frames: Array<TalkFrameDto>, 
+/**
+ * The frame the window split out of the board draws — the one being worked in when the
+ * arrangement was kept (`amenbo_core::frames::SavedLayout`). Absent where the terminal has never
+ * been split out.
+ */
+splitOut?: string, };
+
+/**
+ * The pane the board is handing to the window it is splitting the terminal out into.
+ *
+ * Two things, and they come from different lifetimes. The **frame** is a place in the arrangement,
+ * and it is what the pane's name belongs to (`FrameNameDto`) — without it the window would name a
+ * frame it is not drawing. The **session** is the terminal running in that frame at the moment of
+ * the split, so the window takes up that one rather than guessing from a count of what is open: with
+ * several panes running, a window that adopted "the only session" would adopt none of them.
+ */
+export type TalkPaneDto = { 
+/**
+ * The frame the window draws.
+ */
+frame: string, 
+/**
+ * The terminal running in it, or `None` for a frame whose program has ended — a place with its
+ * last output on it is still the place being split out.
+ */
+session?: string, };
 
 export type TaskCardDto = { id: number, title: string, 
 /**

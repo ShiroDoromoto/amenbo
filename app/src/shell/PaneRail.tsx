@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { FrameNames } from "../talk/frames";
+import { folderName, type FrameNames } from "../talk/frames";
 import { panesOf, type Frame, type Layout } from "../talk/layout";
 import type { Project } from "../mock/types";
 import { t } from "../core/i18n";
@@ -134,20 +134,33 @@ export function PaneRail({
 /**
  * The panes of one project with what each is called, in name order.
  *
- * A pane nobody has named is called where it is — the page it is on and its place on it, counted the
- * way the pages are. That is a name too as far as the order is concerned: sorting the unnamed ones
- * away from the named would put a reader's own words in one half of the list and the app's in the
+ * A pane nobody has named is called after the folder it works in (`../talk/frames`), and one that has
+ * not been opened in a folder either is called where it is — the page it is on and its place on it,
+ * counted the way the pages are. Both are names as far as the order is concerned: sorting the unnamed
+ * ones away from the named would put a reader's own words in one half of the list and the app's in the
  * other, and the list is one list.
+ *
+ * **Two panes in one folder keep their places beside it.** A folder is not a name anybody chose, so
+ * two panes working in the same one read the same — and a rail is where a person tells panes apart and
+ * goes to one, which two identical rows are no use for. A name that repeats is left alone: two panes a
+ * person called the same thing is a person's own business.
  */
 function inNameOrder(
   panes: readonly Frame[],
   names: FrameNames,
   count: number,
 ): { frame: Frame; label: string }[] {
+  const folders = panes.map((frame) => (names.has(frame.id) ? null : folderName(frame.folder)));
+  const shared = new Set(folders.filter((one, at) => one !== null && folders.indexOf(one) !== at));
   return panes
-    .map((frame, at) => ({
-      frame,
-      label: names.get(frame.id) ?? `${Math.floor(at / count) + 1}.${(at % count) + 1}`,
-    }))
+    .map((frame, at) => {
+      const place = `${Math.floor(at / count) + 1}.${(at % count) + 1}`;
+      const folder = folders[at];
+      return {
+        frame,
+        label: names.get(frame.id)
+          ?? (folder === null ? place : shared.has(folder) ? `${folder} ${place}` : folder),
+      };
+    })
     .sort((a, b) => a.label.localeCompare(b.label));
 }

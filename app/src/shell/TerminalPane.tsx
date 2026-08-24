@@ -105,7 +105,10 @@ export function TerminalPane({
     plateRef.current = plate;
     void mountAgentFrame(host, currentLang(), {
       opened: (session, startedAt, where) => {
-        plate.opened(session, startedAt);
+        // The folder is what the row above the pane calls it until something names the frame
+        // (`../talk/frames`), and it is the one the terminal actually runs in — which is not always
+        // the one this slot was handed.
+        plate.opened(session, startedAt, where ?? start.cwd ?? null);
         setLive(session);
         // Where the terminal actually runs, which is not always the folder this slot was handed: a
         // pane that took one up learns it from the session (`../talk/layout`).

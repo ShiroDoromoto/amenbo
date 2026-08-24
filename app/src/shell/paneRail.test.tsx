@@ -83,13 +83,26 @@ describe("the rail", () => {
     expect(project).toHaveBeenCalledWith(2);
   });
 
-  it("calls a pane by where it is until someone names it, and puts them in name order", async () => {
+  it("calls a pane after its folder until someone names it, and puts them in name order", async () => {
+    // All four are in one folder, so the folder alone would give four identical rows: what tells them
+    // apart is the place, which is the thing a rail is for.
     await draw(twoProjects());
-    expect(names()).toEqual(["1.1", "1.2", "2.1", "2.2"]);
+    expect(names()).toEqual(["repo 1.1", "repo 1.2", "repo 2.1", "repo 2.2"]);
 
     // A named pane sorts by its name, not by when it was opened.
     await draw(twoProjects(), new Map([["3", "a migration"]]));
-    expect(names()).toEqual(["1.1", "1.2", "2.2", "a migration"]);
+    expect(names()).toEqual(["a migration", "repo 1.1", "repo 1.2", "repo 2.2"]);
+  });
+
+  it("calls a pane by its folder alone where no other pane of the project is in it", async () => {
+    let layout: Layout = { ...EMPTY_LAYOUT, project: 1 };
+    layout = openedFrame(layout, 1, "/work/amenbo").layout;
+    layout = openedFrame(layout, 1, "/work/the-site").layout;
+    // A pane that took up a terminal somebody else started has no folder of its own yet, and is
+    // called where it is until it learns one (`../talk/layout`).
+    layout = openedFrame(layout, 1, null).layout;
+    await draw(goProject(layout, 1));
+    expect(names()).toEqual(["2.1", "amenbo", "the-site"]);
   });
 
   it("marks the panes nothing is running in, without spelling it out over the name", async () => {

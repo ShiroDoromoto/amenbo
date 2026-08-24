@@ -874,10 +874,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 /* The pane's name. It belongs to the frame, so it is the one part of the row that does not move when
-   the process in it does. */
+   the process in it does.
+
+   **It is given a share of the row and not the room it asks for.** A name is bounded before it is
+   kept (`amenbo_core::frames`), and a bounded one is still long enough to push what the pane is doing
+   off the end — so what does not fit here is elided rather than taken out of the two places beside
+   it. `min-width: 0` is what lets a flex item shrink below its text at all. */
 .plate__name {
   font-weight: 600;
   color: var(--c-text);
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 12em;
   overflow: hidden;
   text-overflow: ellipsis;
 }

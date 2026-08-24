@@ -27,6 +27,7 @@
 // The language is asked of core directly instead of through the snapshot: the store is what a startup
 // migration holds shut, and a window with nothing in it has no reason to be the one waiting on it.
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { TalkPaneDto } from "./bindings/bindings";
 import { type Lang, normalizeLang, t } from "./core/i18n";
 import { invoke } from "./core/ipc";
 import { initTheme } from "./core/theme";
@@ -47,9 +48,14 @@ let names: FrameNames = new Map();
 
 let title = t("app.talkWindow", "en");
 
+// Which of the arrangement's places this window draws. It is settled the moment the hand-over is read
+// and never after (see `pane`); until then it is the first place, which is what a window drawing an
+// arrangement nobody wrote is left with.
+let frame: string = ONLY_FRAME;
+
 /** Name the window after the pane's frame, falling back to what the window is when it has no name. */
 function retitle(): void {
-  const named = names.get(ONLY_FRAME);
+  const named = names.get(frame);
   void getCurrentWindow()
     .setTitle(named ?? title)
     // Outside Tauri (`npm run dev` in a browser) there is no window to name, and a title that could
@@ -67,11 +73,35 @@ function retitle(): void {
 //
 // Null where nothing has been arranged yet, which is a machine with no project — there the folder
 // chosen is what raises one (`./talk/agent`).
-const project: Promise<number | null> = savedLayout()
-  .then((saved) => saved?.project ?? null)
-  // Nothing answered, and a window that refused to open over an unreadable arrangement would be a
-  // window with no terminal in it. What is left is the road a first run takes.
-  .catch(() => null);
+//
+// The arrangement is read once and answers two questions, this one and which frame this window draws.
+// Nothing answering is not a reason to refuse to open — a window that did would be a window with no
+// terminal in it — so what an unreadable one leaves is the road a first run takes.
+const arrangement = savedLayout().catch(() => null);
+
+const project: Promise<number | null> = arrangement.then((saved) => saved?.project ?? null);
+
+/**
+ * The pane this window draws: which of the board's places it is, and the terminal running in it.
+ *
+ * **The board says it as it splits**, because both halves are things only that side knows — which
+ * pane the person was working in, and what is running there. The frame is what the name belongs to
+ * (`./talk/frames`): a window naming some other place would rename a pane on the board. The session
+ * is what the pane takes up, and it is said rather than guessed — a window that adopted "the one open
+ * session" would adopt none of several, which is a board with more than one pane running.
+ *
+ * A window built by a launch restoring the shape this machine was last used in was not split out of
+ * anything, so nothing was handed over: the frame is the one the arrangement kept, and there is
+ * nothing running to take up. Neither answering leaves the first place, which is the arrangement of a
+ * machine that has never had one.
+ */
+const pane: Promise<{ frame: string; session: string | null }> = Promise.all([
+  invoke<TalkPaneDto | null>("talk_pane").catch(() => null),
+  arrangement,
+]).then(([handed, saved]) => ({
+  frame: handed?.frame ?? saved?.splitOut ?? ONLY_FRAME,
+  session: handed?.session ?? null,
+}));
 
 // The language this page is written in. The title is not the only thing that waits on it — a band may
 // have to be worded too — so the answer is held as something the rest of the page can wait on rather
@@ -116,7 +146,7 @@ void frameNames()
 /** Offer a name for the pane's frame. Whether it takes is the store's ranking to decide, so what comes
  *  back is drawn rather than what was asked for. */
 function name(text: string, by: NamedBy): void {
-  void nameFrame(ONLY_FRAME, text, by)
+  void nameFrame(frame, text, by)
     .then((known) => {
       names = known;
       plate?.named(known);
@@ -151,14 +181,23 @@ if (root) {
   //
   // `onWaiting` is told of changes and not of statements, so a turn knocks once and a working agent
   // saying a great deal knocks not at all (`./talk/plate`).
-  plate = mountPlate(label, () => lang, (waiting) => {
-    if (waiting && !document.hasFocus()) void notifyTurn();
+  //
+  // It waits on the hand-over, because the row above a pane carries that frame's name and a label
+  // built against another place would put a pane of the board's on this window's row. The wait costs
+  // nothing on screen: a row about a session says nothing until there is one (`./talk/plate`).
+  void pane.then((drawn) => {
+    frame = drawn.frame;
+    retitle();
+    plate = mountPlate(label, () => lang, (waiting) => {
+      if (waiting && !document.hasFocus()) void notifyTurn();
+    }, frame);
+    plate.named(names);
+    // This window draws one pane, so the pane being worked in is this one whenever the window has the
+    // keyboard. It is the same question the board answers with its arrangement, asked the only way a
+    // window with one pane can ask it.
+    looking();
   });
-  // This window draws one pane, so the pane being worked in is this one whenever the window has the
-  // keyboard. It is the same question the board answers with its arrangement, asked the only way a
-  // window with one pane can ask it.
   const looking = () => plate?.focused(document.hasFocus());
-  looking();
   window.addEventListener("focus", looking);
   window.addEventListener("blur", looking);
   // The frame does wait on the language, unlike the label: everything it says before a terminal is
@@ -166,13 +205,13 @@ if (root) {
   // drawn in English first would be a flicker of the wrong language rather than a pane arriving
   // sooner. It waits on the project for the same reason and a stronger one: the folders it may offer
   // are that project's, and a frame that asked before the answer came would ask the wrong question.
-  void Promise.all([language, project]).then(([answered, onto]) =>
+  void Promise.all([language, project, pane]).then(([answered, onto, drawn]) =>
     mountAgentFrame(
       face,
       answered,
       {
-        opened: (session, startedAt) => {
-          plate?.opened(session, startedAt);
+        opened: (session, startedAt, where) => {
+          plate?.opened(session, startedAt, where);
         },
         // The window split out of the board draws a pane and nothing beside it (`AMB-D-753`), so a
         // path clicked here has nowhere to open. It stays text rather than becoming a link that
@@ -200,7 +239,11 @@ if (root) {
         name,
       },
       "talk__pane",
-      {},
+      // The terminal this window is drawing, said rather than guessed: it is the one that was running
+      // in the frame the board handed over. Nothing to take up is a window that has to start one, and
+      // it asks where before it does (`./talk/agent`) — which is not the same as taking up whichever
+      // terminal happens to be the only one open, and must not become it.
+      { adopt: false, ...(drawn.session === null ? {} : { session: drawn.session }) },
       onto,
     ),
   );

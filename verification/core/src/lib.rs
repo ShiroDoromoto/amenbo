@@ -1846,7 +1846,12 @@ const REGISTRY: &[OpSpec] = &[
     // put it there, in whatever language the app is in, so a road can follow it from one window to
     // the other. It also names the pane's frame — the first line sent into a frame is what it is
     // called — which is how a road says *which* window it means once there are two.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "type-line", required: &["text"], refs: &[], strings: &["text"], binds: false },
+    //
+    // `shows` is which pane, named the way `remove-pane` names one: by the words a road typed into it
+    // earlier. A pane just opened needs none — it is the only one on the page with nothing on it, and
+    // the step before this one made it — but a road that comes *back* to a pane it left does, because
+    // by then every box on the page has a terminal in it and "the pane" names three of them.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "type-line", required: &["text"], refs: &[], strings: &["text", "shows"], binds: false },
     // A command run in the pane, and waited on until what it printed is drawn. It is not `type-line`
     // with a longer word in it: that step's line is the reader's own and is written to be *left* on
     // the screen — the shell is not meant to know it — and this is a program being asked for output
@@ -1912,6 +1917,16 @@ const REGISTRY: &[OpSpec] = &[
     // and the session outlives it — so it is also the only way a road reaches the state that follows
     // one: what a pane says once nothing is running in it any more.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "end-pane", required: &[], refs: &[], strings: &[], binds: false },
+    // Getting rid of the place itself, which is the other control and the other outcome: the terminal
+    // in it ends, the frame goes, the page closes up behind it, and the next run does not bring it
+    // back. **It is the one move on this face nothing undoes**, which is why it asks before it is
+    // carried out and why a road walks it at all — what a person has to be able to trust is that the
+    // question stands between the press and the loss.
+    //
+    // `shows` names which pane by the words a road typed into it, the way the `pane` assert does. A
+    // page has several and they carry nothing else a road put there, so a step that only said "the
+    // pane" would leave the operator to choose one — and the whole of what follows is which one went.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "remove-pane", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
     // Something the agent in the pane said about its own session — the surface layer, said with the
     // CLI from inside the terminal it is about. `verb` is which of the layer's words was used and
     // `text` is what was said in it; both travel as values because the layer is one seam with several
@@ -2002,6 +2017,12 @@ const REGISTRY: &[OpSpec] = &[
     // part company on exactly the thing worth defending — a face that filled the ceiling with empty
     // boxes would be asking the same question four times over, and a count of the ceiling could never
     // tell that from a face with one pane on it.
+    //
+    // `empty` is how many of the boxes beside them are the way in — 0 or 1, since the page draws one
+    // at its first gap and never a second. Left out, the reading is that there is at most one, which
+    // is all a road needs while the page has room. It is worth saying exactly where the panes fill
+    // the count: room the page has not got must not be offered, and "at most one" cannot tell a full
+    // page from a page still offering.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "frames", required: &["count"], refs: &[], strings: &[], binds: false },
     // How many panes a page draws: 1, 2 or 4, and no other number. It is not a change of look. The
     // frames are one list cut into pages, so a new count re-pages every pane this device has — which

@@ -35,6 +35,15 @@ const FRAME_NAMES_META: &str = "talk.frame_names";
 /// The `store_meta` key the arrangement lives under, as one JSON object.
 const LAYOUT_META: &str = "talk.layout";
 
+/// How long a frame's name may be, in characters.
+///
+/// **A name is a label and not a sentence.** All three of the things that name a frame can run long —
+/// a first line typed at an agent is a request, and `session name` is whatever the agent thought of —
+/// and the row it is drawn on has the rest of what is happening to fit on it beside the name. The
+/// bound is here rather than at the three doors because it is one rule about names, and the window
+/// gives what is left of a long one an ellipsis rather than the room.
+const NAME_LIMIT: usize = 80;
+
 /// Who named a frame. The order of the variants is the order of their authority: a naming may replace
 /// one of its own rank or lower, never a higher one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -103,7 +112,10 @@ pub fn name_frame(
             names.remove(frame);
         }
         name => {
-            names.insert(frame.to_string(), FrameName { name: name.to_string(), by });
+            // Cut by characters and not by bytes: a name in Japanese is a third of the characters a
+            // byte count would leave of it, and half a character is not a shorter name.
+            let name: String = name.chars().take(NAME_LIMIT).collect();
+            names.insert(frame.to_string(), FrameName { name, by });
         }
     }
     engine.set_meta(FRAME_NAMES_META, Some(&serde_json::to_string(&names)?))?;
@@ -133,6 +145,19 @@ pub struct SavedLayout {
     pub project: Option<u32>,
     /// The frames, in slot order.
     pub frames: Vec<SavedFrame>,
+    /// The frame the window split out of the board draws.
+    ///
+    /// That window is one pane and has no rail (`AMB-D-753`), so which of the arrangement's places it
+    /// is showing is not a question it can answer for itself — and it has to be answered, because the
+    /// pane it draws carries a frame's name and takes one. It is the frame that was being worked in
+    /// when the arrangement was last kept, which is the pane a person splits out: the one they are in.
+    ///
+    /// `None` is an arrangement written before that was kept, and a machine that has never split the
+    /// terminal out. **What was running in it is not here** — that is a fact about this run and lives
+    /// as long as the process does (`crate::pty`), where a frame is a place and outlives every session
+    /// in it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub split_out: Option<String>,
 }
 
 /// One frame, as far as it survives a run: whose project it was, where it was, and what it was
@@ -208,6 +233,18 @@ mod tests {
         assert!(!frame_names(&engine).unwrap().contains_key("1"), "a blank name un-names the frame");
     }
 
+    /// A name is a label, so a long one is cut to a label's length — in characters, because half a
+    /// character is not a shorter name.
+    #[test]
+    fn a_name_is_cut_to_what_a_row_can_carry() {
+        let engine = StoreEngine::open_in_memory().unwrap();
+        let asked = "の".repeat(NAME_LIMIT * 2);
+        name_frame(&engine, "1", &asked, Session).unwrap();
+        let kept = &frame_names(&engine).unwrap()["1"].name;
+        assert_eq!(kept.chars().count(), NAME_LIMIT, "cut to the label's length");
+        assert_eq!(kept, &"の".repeat(NAME_LIMIT), "and cut on a character");
+    }
+
     /// The shape survives the run and what was running does not: the frames come back as places, and
     /// the names they were given come back on them.
     #[test]
@@ -223,12 +260,14 @@ mod tests {
                 SavedFrame { id: "1".into(), project: Some(1), folder: Some("/work/repo".into()) },
                 SavedFrame { id: "2".into(), project: Some(2), folder: None },
             ],
+            split_out: Some("2".into()),
         };
         save_layout(&engine, &laid).unwrap();
         name_frame(&engine, "1", "the migration", Person).unwrap();
 
         let back = saved_layout(&engine).unwrap().expect("the arrangement");
         assert_eq!(back, laid);
+        assert_eq!(back.split_out.as_deref(), Some("2"), "which frame the other window draws");
         assert_eq!(frame_names(&engine).unwrap()["1"].name, "the migration");
     }
 
@@ -246,6 +285,7 @@ mod tests {
             .unwrap();
         let back = saved_layout(&engine).unwrap().expect("the arrangement");
         assert_eq!(back.project, None, "nothing said which project the face was on");
+        assert_eq!(back.split_out, None, "nor which frame a second window would draw");
         assert_eq!(back.frames[0].project, None, "nothing said which project it was");
         assert_eq!(back.frames[0].folder.as_deref(), Some("/work/repo"));
     }

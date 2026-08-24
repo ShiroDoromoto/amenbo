@@ -55,6 +55,11 @@ export type SavedLayout = {
    *  on (`../talk.ts`); this face takes its own from the ledger, so nothing here reads it back. */
   project?: number;
   frames: { id: string; project?: number; folder?: string }[];
+  /** The frame the window split out of this face draws — the one being worked in when the
+   *  arrangement was kept, which is the pane a person splits out (`AMB-D-753`). It is read by that
+   *  window and never by this face: which pane is being worked in *now* is this face's own state,
+   *  and reading a kept one back would move the person's place on the strength of an old write. */
+  splitOut?: string;
 };
 
 /** One place a terminal is drawn, whether or not one is running in it. */
@@ -340,6 +345,10 @@ export function laidOut(layout: Layout): SavedLayout {
       project: frame.project,
       ...(frame.folder === null ? {} : { folder: frame.folder }),
     })),
+    // The pane being worked in, written down for the window that has no rail: splitting the terminal
+    // out takes the pane the person is in, and a window built by a launch rather than by that press
+    // has nobody left to ask which one that was.
+    ...(layout.focus === null ? {} : { splitOut: layout.focus }),
   };
 }
 

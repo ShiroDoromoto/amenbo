@@ -438,7 +438,7 @@ the roads start from), and an ordered list of steps
 under `steps_cli` and/or `steps_gui`. Each step is an `action` (changes state) or an
 `assert` (an expected result), names the `domain` it touches (`task` / `decision` /
 `comment` / `project` / `dimension` / `attachment` / `store` / `folder` / `repo` / `plugin` /
-`mcp` / `tick` / `terminal`) and an
+`mcp` / `tick` / `terminal` / `files`) and an
 `op`, and carries named args under `with`. An action may bind its result with `as:`, and a later step
 refers back to it with `target:` — an op that joins two objects names the second under its own key
 (`decision link`'s `task:`), and every such key is checked back to an earlier binding, not just
@@ -591,6 +591,23 @@ being told and crossing over spends the mark. Raising one takes `say` with `away
 these roads said from behind the face that reads it: the layer is spoken inside a pane and the mark
 is drawn on the other side of the switch, so the operator arms the word and crosses over before it
 lands. `be-told-on-the-board-that-the-terminal-wants-you` is the road.
+
+And the last is the column beside those panes. **`files`** is the folder a project answers for, read
+from inside Amenbo: three sections in one column — what an agent pointed at, what has changed lately,
+and the folder itself folded down — so every op takes a `section` saying which of the three a row is
+being looked for in, the same file being able to stand in more than one at once. `tree` unfolds the
+folder's section, `enter` opens one folder a level, `open` presses a file and `back` leaves it;
+`listed`, `reading`, `says` and `openable` read what a row is, what an opened file draws, one of the
+face's standing lines, and whether a row is something to press at all.
+
+The other three are the file going the other way — out of Amenbo, to the machine. `menu` right-clicks
+a row, `hand-over` presses one of the three items on the menu that comes up, and `handed-over` reads
+what the press left. Which item is meant travels as a `door` — `usual` for the application the machine
+already opens that kind of file with, `pick` for one the reader chooses for this file alone, `manager`
+for the file manager — rather than as the item's own words, which are the interface's and are drawn in
+whatever language the run's machine is set to. All three are the screen's alone, and the reading stops
+where Amenbo does: what a hand-over ends in belongs to the machine, so the road goes no further than
+the machine having taken the file. `hand-a-file-to-the-machine` is the road.
 
 A few ops exist to put something **wrong**, because a repair cannot be shown working over a store
 where there is nothing to repair — and a sweep that sweeps nothing looks exactly like one that works.

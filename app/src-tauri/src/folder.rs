@@ -97,10 +97,11 @@ pub fn root_of(project_id: i64, root: &str) -> Result<PathBuf, CmdError> {
     if bound { Ok(asked) } else { Err(gone()) }
 }
 
-/// The one refusal this module makes. Which rule turned a caller away — outside the folder, not
-/// bound, not there at all — is itself an answer about the filesystem, so all of them say the same
-/// thing (the reasoning is [`crate::fileproto`]'s).
-fn gone() -> CmdError {
+/// The one refusal made about a file in this folder. Which rule turned a caller away — outside the
+/// folder, not bound, not there at all — is itself an answer about the filesystem, so all of them
+/// say the same thing (the reasoning is [`crate::fileproto`]'s). [`crate::open_with`] is the third
+/// door onto the same files and makes the same refusal, which is why this is not private to here.
+pub fn gone() -> CmdError {
     CmdError::from(amenbo_core::Error::not_found(
         "no such file in this project's folder",
     ))

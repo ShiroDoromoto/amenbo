@@ -522,6 +522,8 @@ export const zhHans: Translation = {
     "files.noFolder": "这个项目还没有文件夹。",
     "files.back": "返回列表",
     "files.openWith": "用常用的应用打开",
+    "files.chooseApp": "用我选的应用打开",
+    "files.appUsual": "{name}（常用的）",
     "files.reveal": "在文件管理器中显示",
     "files.notText": "这不是文本，无法在这里显示。",
     "files.cut": "只显示了开头部分。",

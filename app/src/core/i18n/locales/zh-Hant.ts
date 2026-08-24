@@ -522,6 +522,8 @@ export const zhHant: Translation = {
     "files.noFolder": "這個專案還沒有資料夾。",
     "files.back": "返回列表",
     "files.openWith": "用常用的應用程式開啟",
+    "files.chooseApp": "用我選的應用程式開啟",
+    "files.appUsual": "{name}（常用的）",
     "files.reveal": "在檔案管理器中顯示",
     "files.notText": "這不是文字，無法在這裡顯示。",
     "files.cut": "只顯示了開頭部分。",

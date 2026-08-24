@@ -525,6 +525,8 @@ export const vi: Translation = {
     "files.noFolder": "Dự án này chưa có thư mục.",
     "files.back": "Quay lại danh sách",
     "files.openWith": "Mở bằng ứng dụng thường dùng",
+    "files.chooseApp": "Mở bằng ứng dụng tôi chọn",
+    "files.appUsual": "{name} (ứng dụng thường dùng)",
     "files.reveal": "Hiện trong trình quản lý tệp",
     "files.notText": "Đây không phải văn bản nên không hiển thị được ở đây.",
     "files.cut": "Chỉ hiển thị phần đầu.",

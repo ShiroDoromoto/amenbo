@@ -87,6 +87,13 @@ tauri-plugin-autostart = "2"
 # mutex — which is why this too is pulled in off mobile targets alone.
 tauri-plugin-single-instance = "2"
 
+# `GtkAppChooserDialog` is the whole of "open with" on this OS, and `gio::AppInfo::launch` is what
+# starts the application it hands back — a desktop entry, which the opener plugin's `with` would try
+# to run as a command name instead (`crate::open_with`). The same GTK the webview is already drawn on,
+# named here only so it can be called directly; `gio` comes with it as `gtk::gio`.
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+
 # The store-watch tests (`tests/store_watch.rs`) dig real directories on a real filesystem.
 [dev-dependencies]
 amenbo-scratch = { path = "../../crates/amenbo-scratch" }
@@ -116,6 +123,11 @@ block2 = "0.6"
 # System Settings > Login Items, where somebody looking for it would find it. Windows and Linux stay on
 # the plugin.
 objc2-service-management = "0.3"
+# Asks Launch Services which applications claim a file, for the chooser macOS makes us draw ourselves
+# (`crate::open_with`) — the one operating system with no "open with" dialog of its own. Only
+# `NSWorkspace` is taken: AppKit's default feature set is the whole framework, and none of the rest of
+# it is wanted in a process whose windows belong to Tauri.
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWorkspace"] }
 # Names the user's home directory, which is where a login registration written by an older version of
 # this app sits. Same crate core resolves the app-data base with.
 directories = "6"
@@ -136,4 +148,9 @@ windows-sys = { version = "0.61", features = [
   "Win32_Security",
   "Win32_Storage_FileSystem",
   "Win32_System_Threading",
+  # `SHOpenWithDialog` is the whole of "open with" on this OS — the shell draws the list, takes the
+  # answer and runs it (`crate::open_with`). It is a COM object, so the thread it is called on has to
+  # be in an apartment first.
+  "Win32_System_Com",
+  "Win32_UI_Shell",
 ] }

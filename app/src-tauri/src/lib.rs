@@ -20,6 +20,10 @@ mod folder;
 /// Being told what changed in that folder instead of going to look: a non-recursive watch per
 /// folder over the pruned tree, and a scan to say what actually moved (`AMB-T-3604`).
 mod folder_watch;
+/// The third door onto a file in that folder: opening it with an application the reader picks. Two
+/// operating systems have a chooser of their own and one has none, so it is three implementations
+/// rather than one behind a `cfg` (`AMB-T-3642`).
+mod open_with;
 /// What a terminal is started as on each operating system — the shell the user signed in with, and
 /// what a terminal owes the program in it. Detecting a tool and starting it go through here
 /// together, so a probe cannot find what the pane could not have started (`AMB-D-747`).
@@ -457,6 +461,8 @@ pub fn run() {
       folder::folder_read,
       folder::folder_open_file,
       folder::folder_reveal_file,
+      open_with::folder_open_with,
+      open_with::folder_open_file_with,
       folder_watch::folder_watch,
       folder_watch::folder_unwatch,
       pty::pty_open,

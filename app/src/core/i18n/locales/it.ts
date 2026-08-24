@@ -543,6 +543,8 @@ export const it: Translation = {
     "files.noFolder": "Questo progetto non ha ancora una cartella.",
     "files.back": "Torna all'elenco",
     "files.openWith": "Apri con l'applicazione solita",
+    "files.chooseApp": "Apri con un'applicazione a scelta",
+    "files.appUsual": "{name} (quella solita)",
     "files.reveal": "Mostra nel gestore file",
     "files.notText": "Non è testo, quindi non può essere mostrato qui.",
     "files.cut": "Viene mostrato solo l'inizio.",

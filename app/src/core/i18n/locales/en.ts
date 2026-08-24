@@ -579,6 +579,8 @@ const ui = {
   "files.noFolder": "This project has no folder yet.",
   "files.back": "Back to the list",
   "files.openWith": "Open with the usual application",
+  "files.chooseApp": "Open with an application I pick",
+  "files.appUsual": "{name} (the usual one)",
   "files.reveal": "Show in the file manager",
   "files.notText": "This is not text, so it cannot be shown here.",
   "files.cut": "Only the beginning is shown.",

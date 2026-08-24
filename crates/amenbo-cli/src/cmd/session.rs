@@ -15,7 +15,14 @@ use crate::output::{human, print_json, CliError, Flags};
 pub(crate) fn session_cmd(flags: &Flags, sub: Option<&SessionCmd>) -> Result<i32, CliError> {
     let surface = session::surface().ok_or_else(CliError::session_outside_surface)?;
     let Some(sub) = sub else { return Ok(canon(flags)) };
-    say(flags, &surface, statement(sub))
+    let statement = statement(sub);
+    // The bound is the label's, and this is the door it is held at (`amenbo_core::session`): what the
+    // row cannot fit is turned away here, where the agent can still write it shorter, rather than
+    // taken in and cut where nobody would know it had been.
+    if let Some(over) = statement.overlong() {
+        return Err(CliError::session_reason_too_long(over));
+    }
+    say(flags, &surface, statement)
 }
 
 /// The clap verb, as the layer's own statement. The two lists are the same list — a verb that parses

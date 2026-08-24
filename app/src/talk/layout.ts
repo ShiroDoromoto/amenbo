@@ -44,9 +44,6 @@ export const DEFAULT_COUNT: Count = 2;
  *  here, because there are only nine digits to press. */
 export const MAX_PAGES = 9;
 
-/** The width below which the columns beside the panes stop being columns (see `sidesAreDrawers`). */
-export const NARROW_PX = 900;
-
 /** The arrangement as the store keeps it — the wire shape of `TalkLayoutDto`. */
 export type SavedLayout = {
   count: number;
@@ -382,17 +379,4 @@ export function restored(saved: SavedLayout, onto: number | null): Layout | null
     focus: first.id,
     adding: false,
   };
-}
-
-/**
- * Whether the columns beside the panes are drawers rather than columns.
- *
- * **The window's width decides it, and nothing else.** A drawer is what a face does when there is no
- * room for three things across it, so the question it answers is how much room there is. The split
- * somebody asked for is a different question: a person who puts one terminal on a wide screen wants
- * that terminal big, not the rail gone — and a rail that closed itself over it is a thing they did
- * not ask for and have to undo.
- */
-export function sidesAreDrawers(width: number): boolean {
-  return width < NARROW_PX;
 }

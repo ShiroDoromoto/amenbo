@@ -112,7 +112,19 @@ describe("the one thing said on the right", () => {
   it("says nothing where nothing was said", () => {
     // Silence is silence. It is not a claim that nothing needs a hand (`AMB-D-748`).
     expect(sayOf([], undefined)).toEqual({ kind: "silent" });
-    expect(sayText({ kind: "silent" }, EN)).toEqual({ mark: "", text: "" });
+    expect(sayText({ kind: "silent" }, EN)).toEqual({ mark: "", text: "", title: "" });
+  });
+
+  it("keeps the whole of what was said for a reader who asks, since the row may not have shown it", () => {
+    // The row gives this place what is left of one line, and a narrow pane leaves it nothing at all
+    // (`../styles/global.css`) — so the words are kept where a hover can reach them, the way the
+    // breakdown of several reservations is.
+    const reason = "which of the two, and the second one moves the store";
+    expect(sayText({ kind: "waiting", text: reason }, EN).title).toBe(reason);
+    expect(sayText({ kind: "note", text: "reading the store" }, EN).title).toBe("reading the store");
+    // Nothing the agent said, nothing to hold back: these two are the row's own words.
+    expect(sayText({ kind: "premise" }, EN).title).toBe("");
+    expect(sayText({ kind: "quiet", minutes: 7 }, EN).title).toBe("");
   });
 });
 
@@ -144,6 +156,10 @@ describe("the row on the page", () => {
     expect(host.querySelector(".plate__now")?.textContent).toBe("#3598 the nameplate");
     expect(host.querySelector(".plate__say")?.textContent).toBe("which of the two");
     expect(row?.getAttribute("data-say")).toBe("waiting");
+    // The mark keeps the whole of it too: where the pane is narrow the words are not drawn, and the
+    // mark is what is left to ask.
+    expect(host.querySelector(".plate__mark--say")?.getAttribute("title")).toBe("which of the two");
+    expect(host.querySelector(".plate__say")?.getAttribute("title")).toBe("which of the two");
   });
 
   it("comes down when there is nothing to label, and comes back with the same row", () => {

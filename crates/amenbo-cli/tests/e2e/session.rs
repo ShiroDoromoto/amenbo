@@ -125,6 +125,54 @@ fn inside_a_pane_each_statement_is_left_whole_for_the_window() {
     assert_eq!(point["why"], "the vocabulary lands here", "a point carries its reason, not just its target");
 }
 
+/// The reason for a person's turn is bounded, and a longer one is turned away rather than cut. The row
+/// it goes on holds three things, so a reason that overran would push the other two into ellipses —
+/// and cutting it here would lose the same words one step later, with the agent believing the whole of
+/// it had been read (`AMB-T-3673`).
+#[test]
+fn a_reason_too_long_for_the_label_is_refused_at_the_door_and_leaves_nothing_behind() {
+    let cli = Cli::new();
+    let dir = amenbo_scratch::scratch("session-long-reason");
+    let pane = in_a_pane(&dir);
+    let limit = amenbo_core::session::WAITING_LIMIT;
+    // Japanese, where the bound is half the characters it is columns: this is one past it, and the
+    // refusal has to say so in columns or the two numbers in it do not compare.
+    let past = "あ".repeat(limit / 2 + 1);
+
+    let (stderr, code) = cli.run_env_err(&pane_env(&pane), &["session", "waiting", &past]);
+    assert_eq!(code, 1, "a reason past the bound exits non-zero: {stderr}");
+    assert!(
+        stderr.contains(&(limit + 2).to_string()) && stderr.contains(&limit.to_string()),
+        "and says how much room it took against how much it may take: {stderr}",
+    );
+    assert!(
+        stderr.contains("Nothing was recorded"),
+        "and says outright that nothing happened: {stderr}",
+    );
+
+    let (stderr, code) =
+        cli.run_env_err(&pane_env(&pane), &["session", "waiting", &past, "--json"]);
+    assert_eq!(code, 1, "the machine face refuses it too: {stderr}");
+    assert!(
+        stderr.contains("session_reason_too_long"),
+        "in a code a caller can branch on: {stderr}",
+    );
+
+    assert!(
+        !dir.exists() || statements(&dir).is_empty(),
+        "and neither refusal left a statement for the window",
+    );
+
+    // The bound itself is within it, and the other verbs are not held to it: what they say does not
+    // share the row three ways.
+    let (stdout, code) =
+        cli.run_env(&pane_env(&pane), &["session", "waiting", &"あ".repeat(limit / 2)]);
+    assert_eq!(code, 0, "a reason of exactly the bound is accepted: {stdout}");
+    let (stdout, code) = cli.run_env(&pane_env(&pane), &["session", "note", &past]);
+    assert_eq!(code, 0, "and a note of the same length is nobody's business but the row's: {stdout}");
+    assert_eq!(statements(&dir).len(), 2, "the two that were accepted are the two that were left");
+}
+
 /// The layer needs no pointer, no project and no facet: it is run in whatever checkout an agent was put
 /// to work in, and what it moves is the pane rather than the store. A folder Amenbo was never bound to
 /// is exactly where this has to keep working.

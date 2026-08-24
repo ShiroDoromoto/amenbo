@@ -92,6 +92,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1.6;
 }
 .termface__action:hover { color: var(--c-text); }
+/* A toggle whose side is on the screen. It is the same button either way — what it says is whether
+   pressing it opens something or puts it away. */
+.termface__action--on { color: var(--c-text); border-color: var(--c-border-strong); }
+/* The file face's two halves, at the far end of the row: they are about the other side of the
+   screen, and the controls for what is in the middle sit between them and the way out. */
+.termface__sides { display: flex; gap: var(--s-2); margin-left: auto; }
 /* The program in the terminal having exited. What is on the screen stays as it was — that is what a
    terminal ends with — and this is the part of it the screen cannot show for itself. */
 .termface__note { color: var(--c-text-muted); font-size: var(--fs-sm); }
@@ -164,10 +170,26 @@ button { font: inherit; color: inherit; cursor: pointer; }
   box-shadow: 0 0 0 2px var(--c-surface-2);
 }
 
-/* The rail and the panes, side by side. The rail keeps its width and the panes take what is left:
-   the panes are what the face is for, and a list of them that grew with their names would take the
-   room from the thing it is a list of. */
+/* The rail and the panes, side by side. A column keeps the width the person gave it and the panes
+   take what is left: the panes are what the face is for, and a list of them that grew with their
+   names would take the room from the thing it is a list of (`app/src/talk/columns.ts`). */
 .termface__body { flex: 1; min-height: 0; display: flex; }
+
+/* One of the columns beside the panes. It holds the column itself and the grip on the edge it shares
+   with them, which is why it is a box of its own: the grip is drawn on the edge rather than in the
+   flow, so it needs something to be positioned against. */
+.termface__column { position: relative; flex: 0 0 auto; min-height: 0; display: flex; }
+.termface__column--rail { width: var(--rail-w, 160px); }
+.termface__column--side { width: var(--side-w, 16rem); }
+/* The edge itself. It is wider than the line it sits on — a border is a pixel and a pointer is not —
+   so it straddles that line rather than sitting to one side of it. */
+.termface__grip {
+  position: absolute; top: 0; bottom: 0; width: 9px; z-index: 3;
+  cursor: col-resize;
+}
+.termface__grip--rail { right: -4px; }
+.termface__grip--side { left: -4px; }
+.termface__grip:hover { background: var(--c-border-strong); }
 
 /* The page: the slots of it, laid out as one row, two across, or four in a square. The grid is
    written per count rather than flowing, because a slot is a fixed place — panes that reflowed as
@@ -201,7 +223,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* What is said about this terminal, and the one control a running pane has. One row, because ending
    it is the last thing there is to say about it. */
 .slot__bar { display: flex; align-items: center; gap: var(--s-2); }
-.slot__plate { flex: 1; min-width: 0; }
+/* The row above the pane is asked how much room it has, so it can give its places up one at a time as
+   the pane narrows (see `.plate` below). The question is asked of this box rather than of the window:
+   what decides whether the words are readable is the pane, and the same row is drawn in the split-out
+   window, where the window's own width is the pane's. */
+.slot__plate { flex: 1; min-width: 0; container-type: inline-size; }
 /* The one control the place has: it removes the frame, terminal and all (`../shell/TerminalPane`). It
    is drawn quietly and sits at the end of the row — nothing else on this face takes anything away, so
    a control that looked urgent would be pressed by mistake more often than on purpose. What stops the
@@ -297,15 +323,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
    for, so a project is a row a person presses and not a caption over some others.
 
    It is the ledger's sidebar in the other face's place, so it is the sidebar's ground: `--c-surface-2`
-   with a rule down its edge, full height, and the padding written the same way (`.sidebar`). Left with
-   no ground of its own it fell through to `--c-bg` and the face came out inside out — the edges sunk
-   below the middle, where every other face of this window has them above it.
+   with a rule down its edge, full height. Left with no ground of its own it fell through to `--c-bg`
+   and the face came out inside out — the edges sunk below the middle, where every other face of this
+   window has them above it. Its width is the column's around it (`.termface__column--rail`), which is
+   what a person drags.
 
    Two lists, each under a heading of its own, and the rail itself does not scroll: the projects take
    what they need up to a share of the height and the panes take the rest, so a machine with many
-   projects cannot push the panes off the bottom. */
+   projects cannot push the panes off the bottom. The padding is the lists' and the headings' rather
+   than the rail's, for the same reason — a list that scrolled inside its own padding would slide its
+   rows out from under the heading they belong to. */
 .rail {
-  flex: 0 0 auto; width: 200px; min-height: 0;
+  flex: 1 1 auto; min-width: 0; min-height: 0;
   display: flex; flex-direction: column;
   background: var(--c-surface-2);
   border-right: 1px solid var(--c-border);
@@ -394,25 +423,30 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--c-text); font-size: var(--fs-sm); width: 100%;
 }
 
-/* One pane, or a window too narrow for three things across it: the rail stops being a column and
-   becomes something opened when it is wanted. It sits over the panes rather than beside them,
-   because the reason it is a drawer is that there is no room beside them. What it is over says it is
-   over them — the rail inside keeps the ground and the padding it has as a column, so the drawer adds
-   nothing but the shadow. */
+/* A window too narrow for three things across it: a column stops being one and becomes something
+   opened when it is wanted. It sits over the panes rather than beside them, because the reason it is
+   a drawer is that there is no room beside them (`app/src/talk/columns.ts`). What it is over says it
+   is over them — what is inside keeps the ground and the padding it has as a column, so the drawer
+   adds nothing but the shadow. */
 .termface--drawers .termface__body { position: relative; }
 .termface__drawer {
   position: absolute; inset: 0 auto 0 0; z-index: 2;
+  width: var(--rail-w, 160px);
   display: flex;
   background: var(--c-surface-2);
   box-shadow: var(--shadow-md);
 }
+/* The file face's drawer is the same thing on the other edge: it is opened from the same row that
+   opens it as a column, and it lies over the panes for the same reason — there is no room beside
+   them. */
+.termface__drawer--side { inset: 0 0 0 auto; width: var(--side-w, 16rem); }
 /* ---------- the file face ---------- */
 /* The right side of the terminal face: what changed in the project's folder lately, and the folder
    itself, folded (`app/src/files/FilesPanel.tsx`). It is a column of the window and not a card lying
    on one, so it is drawn as the ledger's right pane is (`.rightpane`): `--c-surface` to the edges,
    held off the page by a rule rather than by a border round a rounded box. */
 .files {
-  width: 16rem; flex: none;
+  flex: 1 1 auto; min-width: 0;
   min-height: 0; overflow-y: auto;
   display: flex; flex-direction: column; gap: var(--s-3);
   padding: var(--s-3);
@@ -485,6 +519,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* Files, and the page written on. The tabs are the panel's own, drawn small: they are a way between
    two things rather than the panel's subject. */
 .files__tabs { display: flex; gap: var(--s-2); border-bottom: 1px solid var(--c-border); }
+/* The panel's way out, at the end of whichever row it has. Quiet, like the control that ends a pane:
+   what stops it being pressed by mistake is that nothing is lost when it is — the top row opens the
+   panel again, on the half it was showing. */
+.files__close {
+  margin-left: auto; flex: 0 0 auto;
+  padding: 0 var(--s-1);
+  border: 0; background: transparent;
+  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
+}
+.files__close:hover { color: var(--c-text); }
 .files__tab {
   padding: var(--s-1) 0; border: 0; background: none;
   color: var(--c-text-muted); font-size: var(--fs-sm); cursor: pointer;
@@ -985,8 +1029,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
   text-overflow: ellipsis;
 }
 
-/* The one thing said, on the right. It is the agent's own words, so it is bounded by the room it has
-   and not by trusting the sentence to be short. */
+/* The one thing said, on the right. The sentence itself is bounded at the door it comes in by
+   (`amenbo_core::session::WAITING_LIMIT`), so what is left for the row is the difference between a
+   label's line and this pane's share of it. */
 .plate__say {
   flex: 0 1 auto;
   min-width: 0;
@@ -1004,4 +1049,26 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .plate[data-say="waiting"] .plate__say,
 .plate[data-say="premise"] .plate__say {
   color: var(--c-text);
+}
+
+/* A pane too narrow for three things drops them from the right, and the name and the ⏸ are what is
+   left (`AMB-T-3673`).
+
+   **Three things all cut short is a row none of which can be read.** Above this width each place
+   still says something after the ellipsis; below it the middle has room for a ref and no title, and
+   what is said has room for nothing at all — so rather than share the little there is, the row gives
+   it to the two that carry on meaning something: which pane this is, and whether a person is needed
+   in it. The words that went are one hover away, on the mark that stayed (`../talk/nameplate.ts`).
+
+   The design's three widths are one, two and four panes; the width is what is asked, because two
+   across and four across are the same width in this grid (`.termface__page-grid--*` above) and the
+   split-out window is one pane at whatever size its window is. What a reason has to be short enough
+   for is settled at the other end — `session waiting` refuses one past the length of a label
+   (`amenbo_core::session::WAITING_LIMIT`), so this is the row's last resort rather than its plan. */
+@container (max-width: 360px) {
+  .plate__now,
+  .plate__mark--now,
+  .plate__say {
+    display: none;
+  }
 }

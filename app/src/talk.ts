@@ -165,6 +165,10 @@ const root = document.getElementById("root");
 if (root) {
   root.className = "talk";
   const label = document.createElement("div");
+  // The row above the pane is asked its own width, the same as the board's places are: this window is
+  // one pane, so what it has is what the window has, and a narrow one drops the row's places from the
+  // right exactly as a narrow slot does (`./styles/talk.css`).
+  label.className = "talk__plate";
   const face = document.createElement("div");
   face.className = "talk__face";
   root.append(mergeButton(), label, face);

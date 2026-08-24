@@ -5,6 +5,12 @@
 // rank a reader cannot predict what they are looking at — which of four notices won today's draw — and
 // a label nobody can predict is one nobody reads.
 //
+// **The three places are ranked on the way out as well as on the way in.** A pane too narrow for all
+// of them drops them from the right, and what is left is the name and the mark saying a person is
+// needed (`../styles/global.css`) — the reason being unreadable does not stop "your turn" from being
+// read. Whatever went is one hover away. What keeps that a last resort is the other end: a reason
+// longer than a label is refused where it is said (`amenbo_core::session::WAITING_LIMIT`).
+//
 // In front of the three is the mark the pane is known by (`./moving`). It is not a fourth place and
 // takes no words: its colour says which pane this is, and its opacity says whether output is arriving.
 // Both are read at a glance and neither can push the other off the row, which is why they can share a
@@ -186,19 +192,26 @@ export function nowText(now: Now, lang: Lang): { mark: string; text: string; tit
   }
 }
 
-/** The words the right is drawn with, and the mark in front of them. */
-export function sayText(say: Say, lang: Lang): { mark: string; text: string } {
+/**
+ * The words the right is drawn with, the mark in front of them, and what a reader gets on asking.
+ *
+ * The row is one line and gives this place what is left of it, so what is said here is elided where
+ * the pane is narrow and dropped altogether where it is narrower still — the mark stays either way,
+ * because "a person is needed here" survives the reason being unreadable (`AMB-T-3673`). The whole of
+ * it is one hover away instead, the same way the breakdown of several reservations is.
+ */
+export function sayText(say: Say, lang: Lang): { mark: string; text: string; title: string } {
   switch (say.kind) {
     case "waiting":
-      return { mark: "⏸", text: say.text };
+      return { mark: "⏸", text: say.text, title: say.text };
     case "premise":
-      return { mark: "⚠", text: t("talk.premiseBroken", lang) };
+      return { mark: "⚠", text: t("talk.premiseBroken", lang), title: "" };
     case "note":
-      return { mark: "", text: say.text };
+      return { mark: "", text: say.text, title: say.text };
     case "quiet":
-      return { mark: "", text: tf("talk.quiet", { n: say.minutes }, lang) };
+      return { mark: "", text: tf("talk.quiet", { n: say.minutes }, lang), title: "" };
     case "silent":
-      return { mark: "", text: "" };
+      return { mark: "", text: "", title: "" };
   }
 }
 
@@ -220,9 +233,9 @@ export function sayText(say: Say, lang: Lang): { mark: string; text: string } {
 export function mountNameplate(host: HTMLElement): (plate: Plate | null, lang: Lang) => void {
   const row = document.createElement("div");
   row.className = "plate";
-  const part = (name: string) => {
+  const part = (name: string, of?: string) => {
     const el = document.createElement("span");
-    el.className = `plate__${name}`;
+    el.className = of === undefined ? `plate__${name}` : `plate__${name} plate__${name}--${of}`;
     row.append(el);
     return el;
   };
@@ -234,9 +247,11 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null, lang: L
   // measured against, and the two have to be the same number or the panes beat out of step.
   dot.style.setProperty("--pulse", `${PULSE_MS}ms`);
   const name = part("name");
-  const nowMark = part("mark");
+  // The two marks are told apart in the markup because the row drops its places one at a time as the
+  // pane narrows, and a mark goes with the words it belongs to (`../styles/global.css`).
+  const nowMark = part("mark", "now");
   const now = part("now");
-  const sayMark = part("mark");
+  const sayMark = part("mark", "say");
   const say = part("say");
   host.append(row);
 
@@ -262,7 +277,11 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null, lang: L
     now.title = middle.title;
     const right = sayText(plate.say, lang);
     sayMark.textContent = right.mark;
+    // The mark carries the whole of it too: where the row is narrow the words beside it are not drawn
+    // at all, and a hover has to have something left to land on.
+    sayMark.title = right.title;
     say.textContent = right.text;
+    say.title = right.title;
     // A turn that has been handed over is the one thing on this row a person is meant to act on, so it
     // is the one thing drawn as more than grey text.
     row.dataset.say = plate.say.kind;

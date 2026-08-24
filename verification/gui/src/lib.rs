@@ -622,6 +622,14 @@ impl Instructor {
     /// read, and the two are worth having side by side: one says what is standing, and the other
     /// says how many.
     ///
+    /// `terminal side` and `terminal side-width` are `Review`s, and for the reason `frames` is: what
+    /// they read is a region of the screen rather than anything written in one. Every word a column
+    /// carries is drawn elsewhere on the same face — a pane's name is on the row above the pane as
+    /// well as on the list, and the file panel's two halves are named on the top row whether the
+    /// panel is up or not — so a reading finds those words on the shot either way and settles
+    /// nothing. `side-width` is further out still: what it asks is where an edge stands compared with
+    /// the shot before it, which is two pictures rather than one.
+    ///
     /// `dimension key` is read, and it is the cleanest reading on these roads. A key is neither a word
     /// of the interface nor a title drawn twice over — it is what a reader types for somewhere outside
     /// Amenbo — so it stands on the shot in the one field it was typed into, and nowhere else.
@@ -1519,6 +1527,42 @@ impl Instructor {
                 "At the top of the terminal face, in the row of page digits, press {}. The whole screen moves to that page.",
                 count(with, "page")?
             ),
+            // Putting a column away, and asking for it again. Each is said with *where* its control
+            // is, because the two are not in the same place: the rail is folded from the row above
+            // the panes and the file face from a cross on its own panel, while both are asked for
+            // again from that same row. An operator told only "close it" would go looking for one
+            // control on a face that has two.
+            //
+            // The controls are named by what they do rather than by what they read, for the reason
+            // `show-face`'s are: the words are the interface's own and the run's language is
+            // whatever the machine is set to.
+            (Domain::Terminal, "hide-side") => match side(with)? {
+                Side::Rail => "At the top of the terminal face, press the control that folds the list of panes away — the small one just after the way out to a separate window. The list goes, and the panes take the width it was using.".to_string(),
+                Side::Files => "On the panel beside the panes — the one showing the folder's files — press the cross at the end of its own top row. The panel goes, and the panes take the width it was using.".to_string(),
+            },
+            (Domain::Terminal, "show-side") => match side(with)? {
+                Side::Rail => "At the top of the terminal face, press that same control again. The list of panes comes back where it was.".to_string(),
+                Side::Files => "At the top of the terminal face, at the far end of the row, press the one that shows the folder's files. The panel comes back, showing that half.".to_string(),
+            },
+            // The one gesture on these roads. The screen tool presses and types and has no drag, so
+            // this is carried out by hand — and what the operator is told is where the edge is, since
+            // it is a line rather than a button and nothing on the screen labels it.
+            (Domain::Terminal, "drag-side") => {
+                let which = side(with)?;
+                // Said by what it does to the column rather than by left and right: which way is
+                // wider depends on which edge of the face the column is on, and an operator handed a
+                // direction would drag the wrong way on one of the two.
+                let toward = match req(with, "toward")? {
+                    "wider" => "so the column grows by something like a finger's width, and the panes give up that much",
+                    "narrower" => "back to about where the edge started, so the panes take that width again",
+                    other => return Err(format!("action `drag-side` does not know the direction `{other}`")),
+                };
+                format!(
+                    "Put the pointer on the line between {} and the panes — the cursor turns into the one that says a thing can be dragged sideways — and drag it {}. The column follows the pointer while you hold it and stays where you let go.",
+                    which.phrase(),
+                    toward
+                )
+            }
             // A file put in the folder from outside Amenbo, while the app is up. It is written as an
             // instruction and not left to the premise because *when* it happens is the whole of what
             // is under test: what the face draws has to move without anybody touching the app, so the
@@ -2384,6 +2428,37 @@ impl Instructor {
                     req(with, "dir")?
                 ),
             },
+            // Whether a column is beside the panes. The absent half says what the width went to, so an
+            // operator reading it knows a screen that merely drew the column narrower would be a fail.
+            (Domain::Terminal, "side") => {
+                let which = side(with)?;
+                match present(with) {
+                    true => format!(
+                        "On the terminal face, confirm {} is beside the panes, taking width of its own.",
+                        which.phrase()
+                    ),
+                    false => format!(
+                        "On the terminal face, confirm {} is nowhere on the screen — not narrowed, not emptied, gone — and that the panes have spread into the width it was using.",
+                        which.phrase()
+                    ),
+                }
+            }
+            // And where its edge stands now. It is read against the shot before it rather than
+            // against a number: what the drag is asked to have done is move this edge and nothing
+            // else, and the two pictures side by side are what say so.
+            (Domain::Terminal, "side-width") => {
+                let which = side(with)?;
+                let (moved, gave) = match flag(with, "wider")? {
+                    true => ("wider than it was on the shot before this one", "narrower by that much"),
+                    false => ("narrower than it was on the shot before this one", "wider by that much"),
+                };
+                format!(
+                    "Confirm {} is {}, and that the panes beside it are {} — the edge moved, and nothing else on the face did.",
+                    which.phrase(),
+                    moved,
+                    gave
+                )
+            }
             // How many panes are standing on the page. Counted rather than read: the boxes carry no
             // words of the road's, and the whole of what this asks is how many of them there are.
             //
@@ -2675,6 +2750,36 @@ fn flag(with: &Args, key: &str) -> Result<bool, String> {
     with.get(key)
         .and_then(|v| v.as_bool())
         .ok_or_else(|| format!("arg `{key}` must be true or false"))
+}
+
+/// Which of the two columns beside the panes a step is about.
+///
+/// They are named by what each holds rather than by any heading, for the reason the sections below
+/// are: what is written on them is the interface's own words, and the run's language is whatever the
+/// machine is set to.
+#[derive(Clone, Copy)]
+enum Side {
+    Rail,
+    Files,
+}
+
+impl Side {
+    /// The words an instruction is built around, written to fit after "confirm" and after "between".
+    fn phrase(self) -> &'static str {
+        match self {
+            Side::Rail => "the list of panes down one side",
+            Side::Files => "the panel showing the folder's files",
+        }
+    }
+}
+
+fn side(with: &Args) -> Result<Side, String> {
+    match with.get("side").and_then(|v| v.as_str()) {
+        Some("rail") => Ok(Side::Rail),
+        Some("files") => Ok(Side::Files),
+        Some(other) => Err(format!("`side` does not know `{other}` — it is rail or files")),
+        None => Err("arg `side` must say which of the two columns".to_string()),
+    }
 }
 
 /// Which of the file face's three sections a row is being looked for in, as a phrase an instruction

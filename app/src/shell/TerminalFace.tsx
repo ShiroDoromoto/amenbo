@@ -19,6 +19,14 @@ import { t, tf } from "../core/i18n";
 /**
  * The terminal, drawn inside the board's window — the second face of the one window (`AMB-D-753`).
  *
+ * **It is not an editor and it does not pick anybody's AI.** What it holds is where the work happens
+ * and which project that is: folders, panes, pages, and the arrangement of them. Editing a file,
+ * reading a diff, choosing a model, offering somewhere to type a prompt — none of it is here, and the
+ * absence is the design rather than a gap: what an agent's own interface does well it does inside the
+ * pane, weekly, and anything drawn out here would be a worse copy of it that has to be kept up
+ * (`AMB-D-747`). What this face adds is the thing no agent can add for itself — several of them at
+ * once, each answering for a folder, with a ledger on the other side of one switch.
+ *
  * It is put up once and then left alone. Switching back to the ledger hides it with CSS rather than
  * taking it down, which is the one thing this component exists to guarantee: unmounting would take
  * the emulator with it, and a terminal whose pane went away is an agent nobody can get back to. The

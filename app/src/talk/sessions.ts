@@ -79,7 +79,14 @@ export function opened(sessions: Sessions, open: Opened): Sessions {
  * from the host the moment it is written, which can be before the pane that opened the terminal has
  * finished registering it. That is why an unknown session is recorded rather than dropped.
  *
- * `name` is not here: a name belongs to the frame, not to the session running in it (`./frames`). */
+ * `name` is not here: a name belongs to the frame, not to the session running in it (`./frames`).
+ *
+ * **A turn is taken back by working, not by a word for taking it back.** There is no way to say "never
+ * mind" — the layer has no such verb — because an agent that has stopped waiting is an agent that has
+ * gone back to doing something, and saying what it is doing is a word it already has. Two things end a
+ * turn: a note, and the work being finished. A third word would be one an agent could forget while
+ * still remembering to say the other two, and a turn nobody took back is the one thing this must never
+ * leave standing. */
 export function said(sessions: Sessions, statement: SessionSaidDto): Sessions {
   const known = sessions.get(statement.session);
   const entry: Session = known ?? {

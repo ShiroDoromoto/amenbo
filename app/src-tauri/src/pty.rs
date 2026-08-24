@@ -260,6 +260,12 @@ fn started_as(agent: &str) -> Result<&'static amenbo_core::harness::Harness, Cmd
 /// The instruction names the binary this build is ([`amenbo_core::config::Paths::command_name`]), so
 /// a dev-channel window starts agents on the dev channel's own command rather than on the production
 /// one the reader may not have installed.
+///
+/// **There is no card offering the reader a sentence to send instead.** Handing one over was how this
+/// worked while the terminal was somebody else's — Amenbo wrote a request, the person carried it to a
+/// terminal outside — and once the terminal is here there is nothing to carry: the sentence goes in as
+/// the pane opens. What is left of the old shape would be a card asking a person who has just arrived
+/// to decide what to ask for, which is the one thing they do not yet know.
 fn opening_line(harness: &amenbo_core::harness::Harness) -> String {
     let cmd = amenbo_core::config::Paths::command_name();
     launch::command_line(harness.command, &amenbo_core::harness::opening(harness, cmd))

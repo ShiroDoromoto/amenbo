@@ -289,6 +289,16 @@ fn passwd_shell() -> Option<OsString> {
 ///
 /// No login flag is passed, and none is wanted: the `PATH` is already whole, and there is nothing
 /// for a profile to widen (`AMB-T-3565`).
+///
+/// **What Windows Terminal is set to open is not read.** That setting says which profile *that*
+/// application starts, and this is not that application: a pane here is a shell Amenbo starts, and
+/// taking somebody's terminal-app preference for it would be Amenbo answering a question it was not
+/// asked — quietly, and differently on two machines with the same shells installed.
+///
+/// **The code page is left alone.** A pane could be made to run `chcp 65001` on the way in, and it is
+/// not: the console host takes its encoding from the code page it was given, so a fresh one is already
+/// right, and changing it mid-session redraws everything on the screen. A terminal that repainted
+/// itself the moment it opened would be the one thing a person notices about it.
 #[cfg(windows)]
 fn shell() -> (OsString, Vec<OsString>) {
     let program = on_path("pwsh.exe").unwrap_or_else(|| OsString::from("powershell.exe"));

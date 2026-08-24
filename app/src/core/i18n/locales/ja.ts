@@ -679,7 +679,7 @@ export const ja: Translation = {
     "chip.draft": "作成中",
     "premise.changed": "予約後に前提が変わった: {detail}",
     "adrift.mark": "止まっています",
-    "adrift.tip": "amenbo の中には、これを進めているものがもう居ません。amenbo から見えない端末で続いていることもあるので、動かす前に確かめてください。",
+    "adrift.tip": "Amenbo の中には、これを進めているものがもう居ません。Amenbo から見えない端末で続いていることもあるので、動かす前に確かめてください。",
     "premise.warn": "予約後に前提が変わりました（AMB-D-366）: {detail}。独立に仕上がる部分だけ完了するか、todo に戻して手放してください。",
     // One phrase covering both arms of the axis — unsettled (reopen/reject) and superseded. A word naming
     // only the first cannot describe a decision that is still accepted and merely stopped being current.

@@ -1270,6 +1270,41 @@ impl Instructor {
                 "Click into the pane that has a terminal running in it — the one the face came up with, not a slot offering to open one — then type \"{}\" and press return. The shell will not know the command — what the line is for is being on the screen, and, where the pane has not been named yet, being the name it takes.",
                 req(with, "text")?
             ),
+            // A command run for its output, which is what the steps after it read. The clearing is
+            // said first because it is what makes "the ref" a place on the screen rather than one of
+            // several, and the waiting is said last because a press on a half-drawn line is a press
+            // on nothing.
+            (Domain::Terminal, "run") => {
+                let standing_in = match with.contains_key("target") {
+                    true => format!(
+                        ", putting the ref of the task \"{}\" — the `AMB-T-…` it is drawn by, which the pane had on it a step ago — where the command says `<ref>`",
+                        self.target_label(with)
+                    ),
+                    false => String::new(),
+                };
+                format!(
+                    "Click into the pane and clear what is on it — `clear` at the prompt does that — so nothing an earlier step left is still on the screen. Then type `{}` and press return{standing_in}, and wait until it has finished and the prompt is back.",
+                    req(with, "command")?
+                )
+            }
+            // Pressing one of those refs. The folded half asks for the width to be moved rather than
+            // for a particular width: where the fold lands is the run machine's business — its font,
+            // its screen, how wide the window will go — so what the road can ask for is the state,
+            // and the operator is the one who can see when it has arrived.
+            (Domain::Terminal, "press-ref") => match flagged(with, "folded") {
+                false => format!(
+                    "In the pane, press the ref of the task \"{}\" where the output drew it — the `AMB-T-…` characters themselves, which the pane offers as a link.",
+                    self.target_label(with)
+                ),
+                true => format!(
+                    "Drag the window's side edge in or out until the ref of the task \"{}\" is broken across two rows — part of it at the end of one row, the rest at the start of the next — and press it there. The fold is the whole of this step: pressed while it sits whole on one row, it proves what the step above already did.",
+                    self.target_label(with)
+                ),
+            },
+            // Something set running in the pane and left there, which is what parts it from `run`
+            // above: that step ends when the prompt is back, and this one is walked away from with
+            // the output still arriving.
+            //
             // Something set running in the pane and left there. The command is written out in full
             // for the reason `say`'s is — the whole of what the step is for is that something goes
             // on coming out, and an operator improvising that would be improvising the step. It is
@@ -5028,6 +5063,65 @@ steps_gui:
         assert!(
             Instructor::new().expectation(&dot(true)).is_none(),
             "a mark with no words on it is not a reading",
+        );
+    }
+
+    /// Running a command for its output, and pressing a ref out of what it drew. Three things are
+    /// worth holding: the pane is cleared before a command, since "the ref" is otherwise one of
+    /// several places on the screen; a command needing a record's own number says so, because a road
+    /// cannot spell a number the run will mint; and the folded press asks for the fold rather than
+    /// for a width, which is the run machine's to settle.
+    #[test]
+    fn a_ref_is_pressed_out_of_what_a_command_drew() {
+        let s = load(r#"
+id: x
+title: A ref drawn in a pane is pressed
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: SEED }
+    as: seed
+  - type: action
+    domain: terminal
+    op: run
+    with: { command: amenbo task list --actor ai }
+  - type: action
+    domain: terminal
+    op: press-ref
+    with: { target: seed }
+  - type: action
+    domain: terminal
+    op: run
+    with: { command: 'echo "... <ref>"', target: seed }
+  - type: action
+    domain: terminal
+    op: press-ref
+    with: { target: seed, folded: true }
+"#);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> =
+            s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(
+            lines[1].contains("clear what is on it") && lines[1].contains("amenbo task list"),
+            "a command is run on a cleared pane: {}",
+            lines[1]
+        );
+        assert!(!lines[1].contains("<ref>"), "a command needing no ref says nothing of one: {}", lines[1]);
+        assert!(
+            lines[2].contains("\"SEED\"") && !lines[2].contains("broken across"),
+            "an ordinary press names the record and no fold: {}",
+            lines[2]
+        );
+        assert!(
+            lines[3].contains("<ref>") && lines[3].contains("\"SEED\""),
+            "a command that needs the number names the record it belongs to: {}",
+            lines[3]
+        );
+        assert!(
+            lines[4].contains("broken across two rows") && lines[4].contains("Drag"),
+            "the folded press asks for the fold, not for a width: {}",
+            lines[4]
         );
     }
 

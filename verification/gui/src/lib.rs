@@ -1391,8 +1391,12 @@ impl Instructor {
                     )
                 }
             }
+            // Ending the terminal in a pane, which is done from inside it. **The one control the pane
+            // has takes the place away and is not this**, so there is nothing to press here: what
+            // ends a program is the program being told to end. The pane is left standing with its
+            // last output on it, which is the half these roads go on to read.
             (Domain::Terminal, "end-pane") =>
-                "On the pane that has a terminal running in it, press the control that ends it. What is on the screen stays as it is — that is what a terminal ends with — and nothing is running in the pane any more."
+                "In the pane that has a terminal running in it, run: exit — the program ends. The pane stays where it is with what it printed still on it, and nothing is running in it any more."
                     .to_string(),
             // Pointing, which is the same seam as `say` and the same one door — but what it leaves is
             // read on the file face rather than on the pane's label, so the road goes on somewhere else.
@@ -1415,29 +1419,32 @@ impl Instructor {
                 "In the list beside the panes, press the name of the project \"{}\" — the row the project itself is on, not one of the panes listed under it. The face is that project's from here on: its panes are the ones drawn, on its own first page, and no other project's pane is on the screen.",
                 req(with, "project")?
             ),
-            // Opening a pane where there is not one yet. Both ways in are one press and nothing else
-            // — the folder is the project's — so what the step says is which control is pressed and
-            // where the screen ends up, since the two differ on exactly that. Neither names a page:
-            // where a pane lands is the project's arithmetic and not the road's, and a step that
-            // named one would be a road asserting it from the wrong end.
+            // Opening a pane where there is not one yet. **A pane is opened by pressing the empty
+            // frame**, and that is the whole of it — the two ways in differ only in what happens
+            // before the press. From the face there is nothing before it: the empty frame is already
+            // on the page. From the rail there is one press first, which opens nothing — it goes to
+            // where a pane would land, and the empty frame is what is waiting there.
             //
-            // The asking half is where the two ways in stop differing: a project bound to several
-            // folders answers either press with the same question, and nothing opens until it is
-            // answered. So the press is said per control and what follows it is said once.
+            // Neither names a page: where a pane lands is the project's arithmetic and not the road's,
+            // and a step that named one would be a road asserting it from the wrong end.
+            //
+            // The asking half is where the ways in stop differing: a project bound to several folders
+            // answers the press on the empty frame with the same question either way, and nothing
+            // opens until it is answered. So what comes before is said per way in and the press on
+            // the empty frame is said once.
             (Domain::Terminal, "open-pane") => {
                 let press = match req(with, "from")? {
-                    "face" => "On a terminal face with nothing open on it, press the way in in the middle — the one control there is.",
-                    "rail" => "In the list beside the panes, press the way in beside the name of the project being shown — the control at the end of its row.",
+                    "face" => "On the terminal face, press the empty frame — the one box on the page that is not a terminal, at the first gap in it.",
+                    "rail" => "In the list beside the panes, press the way in beside the name of the project being shown — the control at the end of its row. Nothing opens: the screen goes to the page a pane would land on, which is the page with room in it. Press the empty frame waiting there — the one box on that page that is not a terminal.",
                     other => {
                         return Err(format!(
                             "action `open-pane` does not know the way in `{other}` — it is face or rail"
                         ))
                     }
                 };
-                let lands = match (flagged(with, "asks"), req(with, "from")?) {
-                    (true, _) => "Nothing opens: this project is bound to more than one folder, so what comes up where the pane would have been is the question of which of them it works in.",
-                    (false, "face") => "A pane opens in the project the rail is on, in the folder that project is bound to, and nothing is asked.",
-                    (false, _) => "A pane opens in that project, in the folder it is bound to, and the screen goes to it.",
+                let lands = match flagged(with, "asks") {
+                    true => "Nothing opens: this project is bound to more than one folder, so what comes up where the pane would have been is the question of which of them it works in.",
+                    false => "A pane opens there, in the folder the project is bound to, and nothing is asked.",
                 };
                 format!("{press} {lands}")
             }
@@ -1455,13 +1462,15 @@ impl Instructor {
             ),
             // Walking away from the question about where a pane runs. The press is named by what it
             // is *not* — not one of the folders, and not the way in again — because what is under
-            // test is the leaving and not the place it was left from. The page digit is offered as
-            // the one control that is on the face whatever else is: a project with nothing open has
-            // no panes to press and no second project to cross to, and an operator told only "press
+            // test is the leaving and not the place it was left from. The count already in force is
+            // offered as the one control that is on the face whatever else is: a project with
+            // nothing open has no panes to press and no second project to cross to, the page digits
+            // are not drawn at all where there is only one page, and an operator told only "press
             // somewhere else" on a screen holding one question would be hunting for somewhere to
-            // press.
+            // press. Pressing the count that is on asks for the split the face is already at, so
+            // nothing about the page moves with it.
             (Domain::Terminal, "leave-question") =>
-                "Without answering it, leave the question about which folder the pane works in: press somewhere else on the face — the digit of the page being shown, at the top, is on every screen this question can come up on. Answer nothing and press none of the folders it offers."
+                "Without answering it, leave the question about which folder the pane works in: press somewhere else on the face — at the top, the pane count that is already in force is on every screen this question can come up on, and pressing the one already on leaves the page as it is. Answer nothing and press none of the folders it offers."
                     .to_string(),
             // How many panes a page draws. The control is named by what it holds rather than by
             // where it sits, and the number is pressed as it is written: the three counts are all
@@ -1474,7 +1483,7 @@ impl Instructor {
             // place, and go looking for a pane that is exactly where it should be. The screen stays
             // with the pane being worked in, which is the last one opened or typed at.
             (Domain::Terminal, "set-panes") => format!(
-                "At the top of the terminal face, in the group of three pane counts, press {}. The face redraws with that many panes to a page — and the screen stays with the pane being worked in, so it may end up on a different page from the one it was on.",
+                "At the top of the terminal face, in the row of three pane counts, press the one that says {}. It is words rather than a bare digit — the page numbers beside it are the digits — and the one in force is the one that is not dimmed. The page redraws at that split whether or not there are panes to fill it, and the screen stays with the pane being worked in, so it may end up on a different page from the one it was on.",
                 count(with, "count")?
             ),
             // Paging. The digits are the pages, so the step names the one it presses and says the
@@ -2350,16 +2359,19 @@ impl Instructor {
                 ),
             },
             // How many panes are standing on the page. Counted rather than read: the boxes carry no
-            // words of the road's, and the whole of what this asks is how many of them there are. The
-            // wording says what an empty box would look like, because that is the thing being ruled
-            // out and an operator who was not told what to rule out would count the panes and stop.
+            // words of the road's, and the whole of what this asks is how many of them there are.
+            //
+            // What is ruled out is a page that filled its count with boxes, so the wording says what
+            // may stand beside the panes and what may not: **one** empty frame where the page has
+            // room, never a second, and nothing at all where the panes fill the count. An operator
+            // who was told only to count the panes would pass on the screen this exists to catch.
             (Domain::Terminal, "frames") => match count(with, "count")? {
-                0 => "On the terminal face, confirm no pane is standing on the page at all — no terminal, and no empty box waiting to be filled. What is in the middle is the way in — or, while it is standing, the question about where a pane runs — and nothing besides."
+                0 => "On the terminal face, confirm no pane is standing on the page at all — no terminal anywhere on it. What is on it is one empty frame, or, while it is standing, the question about where a pane runs — one box and no more, with the rest of the page bare."
                     .to_string(),
-                1 => "On the terminal face, confirm exactly one pane is standing on the page, and that the rest of it is empty rather than holding boxes asking to be opened."
+                1 => "On the terminal face, confirm exactly one pane is standing on the page. Beside it there is at most one empty frame — never a second — and the rest of the page is bare."
                     .to_string(),
                 n => format!(
-                    "On the terminal face, count the panes standing on the page: confirm there are exactly {n}, and that the rest of it is empty rather than holding boxes asking to be opened."
+                    "On the terminal face, count the panes standing on the page: confirm there are exactly {n}. Beside them there is at most one empty frame — never a second — and the rest of the page is bare."
                 ),
             },
             // ── the file face ─────────────────────────────────────────────────────────────────
@@ -5059,9 +5071,9 @@ steps_gui:
     }
 
     /// The moves a page is worked with, and the two ways a pane is opened. What the road has to be
-    /// able to say is which control was pressed: the face's is the one thing on a screen with nothing
-    /// open, and the rail's is beside the shown project's name in the list, so a step that named
-    /// neither would leave an operator to pick between them.
+    /// able to say is which control was pressed: a pane is opened by pressing the empty frame either
+    /// way, and the rail's way in is a press before it that only moves the screen, so a step that
+    /// named neither would leave an operator to pick between them.
     #[test]
     fn the_page_moves_name_the_control_they_press() {
         let s = load(r#"
@@ -5088,16 +5100,18 @@ steps_gui:
         let mut ins = Instructor::new();
         let lines: Vec<String> =
             s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
-        assert!(lines[0].contains("pane counts, press 1"), "got: {}", lines[0]);
+        assert!(lines[0].contains("pane counts, press the one that says 1"), "got: {}", lines[0]);
         assert!(lines[1].contains("page digits, press 2"), "got: {}", lines[1]);
         assert!(
-            lines[2].contains("nothing open"),
-            "the face's way in is the one thing on an empty screen: {}",
+            lines[2].contains("press the empty frame") && !lines[2].contains("beside the name"),
+            "the face's way in is the empty frame and nothing before it: {}",
             lines[2]
         );
         assert!(
-            lines[3].contains("project being shown") && lines[3].contains("screen goes to it"),
-            "the rail names the project and takes the screen there: {}",
+            lines[3].contains("project being shown")
+                && lines[3].contains("Nothing opens")
+                && lines[3].contains("Press the empty frame"),
+            "the rail names the project, moves the screen, and the pane opens at the empty frame: {}",
             lines[3]
         );
     }

@@ -1,9 +1,11 @@
-# A face with nothing open on it offers one way in, and grows a frame each time one is opened.
+# A face with nothing open on it offers one empty frame, and grows a pane each time one is opened.
 #
 # The count at the top of this face is the most a page will draw and not a number of boxes to stand
 # up. The difference is the whole of this road. A page that filled its count with empty slots would
 # be asking the same question four times over — four boxes, each of them "which folder?" — and a
-# reader with nothing open would meet a screen of them before they had opened anything at all.
+# reader with nothing open would meet a screen of them before they had opened anything at all. So
+# there is one, at the first gap on the page, and it is the page saying it has room rather than a
+# button for opening a terminal.
 #
 # ── What is counted, and why it is counted rather than read ──────────────────────────────────────
 # The boxes carry no words the road put there: a pane that has not been typed into yet is a fresh
@@ -24,13 +26,13 @@
 # apart, and it is set while nothing is open so that what follows is the page growing from nothing
 # rather than a page being cut down to size.
 id: find-one-way-in-rather-than-a-page-of-empty-boxes
-title: A project with nothing open draws one way in, and a frame appears for each pane opened and for nothing else
+title: A project with nothing open draws one empty frame, and a pane appears for each one opened and for nothing else
 description: >
-  Open the terminal face on a project with nothing open in it: what is in the middle is one way in,
-  and no boxes. Set the page to four panes and it is still one way in — the count is the most a page
-  draws, not slots waiting to be filled. Open a pane and get a line onto it, and there is one frame
-  on the page and three empty quarters. Open a second and there are two, the first still showing its
-  own line.
+  Open the terminal face on a project with nothing open in it: what is on the page is one empty
+  frame, and no other box. Set the page to four panes and it is still the one — the count is the
+  most a page draws, not slots waiting to be filled. Open a pane and get a line onto it, and there
+  is one terminal on the page, one empty frame beside it, and two bare quarters. Open a second and
+  there are two terminals, the first still showing its own line.
 
 given:
   - type: action
@@ -91,6 +93,9 @@ steps_gui:
     with:
       from: face
 
+  # One terminal, and the empty frame moved along to the next gap rather than being replaced by a
+  # second question. What is ruled out here is the page filling itself: the count is four and what
+  # stands on it is one pane and one remark about the room left.
   - type: assert
     domain: terminal
     op: frames
@@ -115,7 +120,9 @@ steps_gui:
     with:
       shows: SCENARIO the frame that was opened
 
-  # A second one, from the rail. The folder is the project's, so this is one press and nothing asked.
+  # A second one, from the rail. That way in opens nothing by itself — it goes to the page with room
+  # in it, and the empty frame waiting there is what opens the pane. The folder is the project's, so
+  # nothing is asked on the way.
   - type: action
     domain: terminal
     op: open-pane

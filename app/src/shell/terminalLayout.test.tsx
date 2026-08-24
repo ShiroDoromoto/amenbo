@@ -48,6 +48,9 @@ vi.mock("../mock/adapter", () => ({
 vi.mock("../core/boundFolders", () => ({
   useBoundFolders: () => ({ all: hoisted.folders, live: hoisted.folders, answered: true }),
 }));
+// Taking a place away asks first (`./TerminalPane`). The asking itself is that component's own test;
+// here the answer is always yes, so what this file sees is what the face does with it.
+vi.mock("../core/dialog", () => ({ confirmDialog: async () => true }));
 
 import { TerminalFace } from "./TerminalFace";
 
@@ -66,8 +69,15 @@ const press = async (key: string) => {
     document.dispatchEvent(new KeyboardEvent("keydown", { key, metaKey: true, bubbles: true }));
   });
 };
-/** Ask for another pane in the project being shown — the way in beside its name on the rail. */
-const openPane = async () => click(q(".rail__open")[0] ?? q(".slot--empty")[0]!);
+/** Open another pane in the project being shown, which is two presses. The way in beside the project's
+ *  name on the rail goes to a page with room for one — bringing a page into being where every page is
+ *  full — and the empty frame there is what opens it (`../talk/layout`). */
+const openPaneIn = async (host: HTMLElement) => {
+  const room = [...host.querySelectorAll<HTMLElement>(".rail__open")][0];
+  if (room) await click(room);
+  await click([...host.querySelectorAll<HTMLElement>(".slot--empty")][0]!);
+};
+const openPane = () => openPaneIn(container);
 /** Put the face up. It is not in `beforeEach` because what the project is bound to is set per test,
  *  and the face reads it as it comes up. */
 const mount = async () => {
@@ -98,9 +108,9 @@ describe("the face comes up with nothing open", () => {
     expect(q(".slot--empty")).toHaveLength(1);
   });
 
-  it("counts one page, because that is where the way in is", async () => {
+  it("draws no page numbers, because there is nowhere to go from one page", async () => {
     await mount();
-    expect(q(".termface__page")).toHaveLength(1);
+    expect(q(".termface__page")).toHaveLength(0);
   });
 });
 
@@ -137,8 +147,9 @@ describe("a pane works in a folder of its project", () => {
     hoisted.folders = [{ path: "/repo", exists: true }, { path: "/site", exists: true }];
     await mount();
     await openPane();
-    // Going to a pane, or to a project, is a person doing something else: the question goes with it.
-    await click(q(".termface__page")[0]!);
+    // Asking for a different split, like going to a pane or a project, is a person doing something
+    // else: the question goes with it.
+    await click(q(".termface__count")[0]!);
     expect(q(".slot--asking")).toHaveLength(0);
     expect(q(".slot--empty"), "a place was left where nothing was opened").toHaveLength(1);
   });
@@ -174,13 +185,60 @@ describe("turning a page", () => {
     await act(async () => {
       other.render(createElement(TerminalFace, { onSplitOut: () => {}, note: null, onWaiting: () => {} }));
     });
+    // Three panes at two a page, so the hidden face has somewhere a digit could take it — and is
+    // standing on page 2, where opening the third one left it.
+    await openPaneIn(hidden);
+    await openPaneIn(hidden);
+    await openPaneIn(hidden);
     const before = hidden.querySelector(".termface__page--on")!.textContent;
+    expect(before).toBe("2");
     await act(async () => {
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "2", metaKey: true, bubbles: true }));
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "1", metaKey: true, bubbles: true }));
     });
     expect(hidden.querySelector(".termface__page--on")!.textContent).toBe(before);
     act(() => other.unmount());
     hidden.remove();
+  });
+});
+
+describe("the empty frame", () => {
+  it("is one on a page with room, and none on a full one", async () => {
+    await mount();
+    await openPane();
+    // One pane at two a page: the page has a gap, and one frame says so.
+    expect(q(".slot--empty")).toHaveLength(1);
+
+    await openPane();
+    expect(q(".slot--empty"), "a full page offered somewhere to open a pane").toHaveLength(0);
+  });
+
+  it("is on the page the rail's way in goes to, which it brings into being when every page is full", async () => {
+    await mount();
+    await openPane();
+    await openPane();                              // page 1 full at two a page
+    await click(q(".rail__open")[0]!);
+
+    expect(q(".termface__page")).toHaveLength(2);
+    expect(q(".termface__page--on")[0]!.textContent).toBe("2");
+    expect(q(".slot--empty")).toHaveLength(1);
+    expect(mounts(), "asking for room opened a terminal by itself").toHaveLength(2);
+  });
+});
+
+describe("taking a pane away", () => {
+  it("takes the place off the face and closes the page up", async () => {
+    await mount();
+    await openPane();
+    await openPane();
+    await openPane();                              // three panes, so two pages at two a page
+    expect(q(".termface__page")).toHaveLength(2);
+
+    await act(async () => { q(".slot__end")[0]!.click(); });
+    await act(async () => { await Promise.resolve(); });
+
+    // Two panes left, both on one page — and the page nobody can go to any more is gone with them.
+    expect(q(".slot")).toHaveLength(2);
+    expect(q(".termface__page")).toHaveLength(0);
   });
 });
 
@@ -196,5 +254,15 @@ describe("how many panes", () => {
     expect(q(".termface__page--on")[0]!.textContent).toBe("2");
     expect(q(".slot")).toHaveLength(1);
     expect(mounts(), "the pane carried across was restarted rather than kept").toHaveLength(2);
+  });
+
+  it("splits the page by what was asked for, not by what is open", async () => {
+    await mount();
+    await openPane();
+    await click(q(".termface__count")[2]!);         // four a page, with one pane open
+
+    // The grid is the split. A page that shrank to fit what is open would make the control look as
+    // though it had done nothing.
+    expect(q(".termface__page-grid--4")).toHaveLength(1);
   });
 });

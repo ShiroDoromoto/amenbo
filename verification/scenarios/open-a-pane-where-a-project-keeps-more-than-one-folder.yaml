@@ -24,9 +24,9 @@
 # The file's words are the road's own, for the reason every line these roads read is: what says which
 # folder a pane is in has to be something the interface would never write by itself.
 #
-# The second pane is opened from the rail rather than from the face, since with a pane already open
-# the face's way in is not there to press — and the same question comes up at it, which is what says
-# the asking follows the project's folders rather than the screen being empty.
+# The second pane is opened from the rail rather than from the face, so that both ways in are walked
+# on the one road — and the same question comes up at it, which is what says the asking follows the
+# project's folders rather than the screen being empty.
 #
 # ── Why the first terminal is ended before the second is opened ──────────────────────────────────
 # A step that spoke into one of two running panes would have to say which of them it meant, and there
@@ -100,8 +100,8 @@ steps_gui:
     with:
       project: Greenhouse
 
-  # The face's way in, and this time it opens nothing: the project keeps two folders, so what comes
-  # up where the pane would have been is the question of which of them.
+  # The face's empty frame, and this time pressing it opens nothing: the project keeps two folders,
+  # so what comes up where the pane would have been is the question of which of them.
   - type: action
     domain: terminal
     op: open-pane

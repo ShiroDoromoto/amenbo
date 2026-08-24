@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { mountAgentFrame } from "../talk/agent";
 import { endTerminal } from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
+import { confirmDialog } from "../core/dialog";
 import type { FrameNames, NamedBy } from "../talk/frames";
 import type { PaneStart } from "../talk/terminal";
 import type { SessionSaidDto } from "../bindings/bindings";
@@ -21,10 +22,16 @@ import { currentLang, t } from "../core/i18n";
  * asked for — and **the terminal does not**: a pane is a drawing of a session, and detaching leaves
  * the session running for whichever slot draws it next (`../talk/terminal`). That is why the slot's
  * session id is handed back up: the frame is what remembers, and this is only what draws.
+ *
+ * **The one control on the row removes the place**, which is the only thing on this face that does
+ * (`../talk/layout`). It is not the same act as a program ending: what a terminal exits with stays on
+ * the screen to be read, and a page that closed up under a reader because a shell finished would be
+ * the app deciding they were done with it. So this is asked before it happens, and it ends whatever is
+ * running on the way out — a session whose place has gone is one nobody can reach.
  */
 export function TerminalPane({
   frame, names, start, autoStart, focused,
-  onOpened, onSaid, onPath, onClosed, onName, onFocus, onWaiting,
+  onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onWaiting,
 }: {
   /** Which of the arrangement's places this is (`../talk/layout`). */
   frame: string;
@@ -41,6 +48,8 @@ export function TerminalPane({
   /** A file path drawn in this pane was clicked, as it was drawn. */
   onPath: (frame: string, target: string) => void;
   onClosed: (session: string) => void;
+  /** Take this place away — the frame and not the program in it (`../talk/layout`). */
+  onDrop: (frame: string) => void;
   onName: (frame: string, name: string, by: NamedBy) => void;
   onFocus: (frame: string) => void;
   /** Whether a turn is standing in this pane. The face gathers them: behind the ledger no label can
@@ -65,6 +74,14 @@ export function TerminalPane({
   // callback — that would take the terminal down to learn something it could have been told.
   const on = useRef({ onOpened, onSaid, onPath, onClosed, onName, onWaiting });
   on.current = { onOpened, onSaid, onPath, onClosed, onName, onWaiting };
+
+  /** Take the place away, once the person has said so. The terminal in it is ended first: a session
+   *  whose pane has gone is one nobody can get back to. */
+  const drop = async () => {
+    if (!await confirmDialog(t("face.dropConfirm"))) return;
+    if (live !== null) await endTerminal(live).catch(() => {});
+    onDrop(frame);
+  };
 
   useEffect(() => {
     if (!running) return;
@@ -152,27 +169,26 @@ export function TerminalPane({
       className={`slot${focused ? " slot--focused" : ""}`}
       onMouseDown={() => onFocus(frame)}
     >
+      {/* What is said about this terminal, and the one control the place has. They share the row
+          because the row is what is said about this pane, and removing it is the last thing there is
+          to say. The control is drawn whether or not anything is running: a frame kept from the last
+          run has no session and is still a place somebody has to be able to get rid of. */}
+      <div className="slot__bar">
+        {/* The line above the pane, which is empty until there is a session to say something about
+            — and holds the row's width open either way, so the control does not walk across it. */}
+        <div className="slot__plate" ref={labelRef} />
+        <button
+          className="slot__end"
+          title={t("face.drop")}
+          aria-label={t("face.drop")}
+          onClick={() => { void drop(); }}
+        >
+          ×
+        </button>
+      </div>
       {running
         ? (
           <>
-            {/* The label, and the one control a running pane has. They share the row because the row
-                is what is said about this terminal, and ending it is the last thing there is to say. */}
-            <div className="slot__bar">
-              <div className="slot__plate" ref={labelRef} />
-              {/* Only while something is running. Nothing asks first: what is pressed here is one
-                  press for one thing, and what it ends is a process this person started, with its
-                  output still on the screen afterwards. */}
-              {live !== null && (
-                <button
-                  className="slot__end"
-                  title={t("face.end")}
-                  aria-label={t("face.end")}
-                  onClick={() => { void endTerminal(live).catch(() => {}); }}
-                >
-                  ×
-                </button>
-              )}
-            </div>
             {ended && <span className="termface__note">{t("face.ended")}</span>}
             <div className="termface__face" ref={paneRef} />
           </>

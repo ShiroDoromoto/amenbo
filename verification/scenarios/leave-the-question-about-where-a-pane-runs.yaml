@@ -3,7 +3,7 @@
 # A pane is made when the question is answered, not when it is asked. That is what this road is
 # about, and it is the half nobody sees when it works: the box drawn while the question is standing
 # is the question, so walking away has to take it with it. A build that made the frame first would
-# leave one behind here — an empty box, in the middle of the face, that nobody can say what it is.
+# leave one behind here — a box standing where the empty frame was, that nobody can say what it is.
 #
 # ── Why the project is bound to two folders ──────────────────────────────────────────────────────
 # The question only comes up where there is something to ask. A project bound to one folder opens the
@@ -35,12 +35,12 @@
 id: leave-the-question-about-where-a-pane-runs
 title: A question about where a pane should run, walked away from, leaves no box behind and no pane made
 description: >
-  Open the terminal face on a project bound to two folders and nothing open in it, and press its one
-  way in: the question of which folder goes up where a pane would be, and no pane is made. Leave it
-  without answering — the question is gone, and so is its box: the page is back to nothing standing
-  on it. Press the way in again and the question comes up again, so nothing was made by asking and
-  nothing was used up by walking away. Answer it, and the frame appears — the one the walking-away
-  did not leave behind.
+  Open the terminal face on a project bound to two folders and nothing open in it, and press its
+  empty frame: the question of which folder goes up where a pane would be, and no pane is made.
+  Leave it without answering — the question is gone, and the empty frame is back in its place: the
+  page has nothing standing on it. Press the empty frame again and the question comes up again, so
+  nothing was made by asking and nothing was used up by walking away. Answer it, and the pane
+  appears — the one the walking-away did not leave behind.
 
 given:
   # Named after neither folder: the rail draws the project's name on this same screen, and a reading
@@ -83,8 +83,8 @@ steps_gui:
       project: Sunroom
 
   # Where the road starts from, said rather than assumed: a project with nothing open in it draws one
-  # way in and no boxes. Everything below is about what that count does, so it is worth one step that
-  # it begins where the road says it does.
+  # empty frame and no other box. Everything below is about what that count does, so it is worth one
+  # step that it begins where the road says it does.
   - type: assert
     domain: terminal
     op: frames
@@ -131,8 +131,8 @@ steps_gui:
     with:
       count: 0
 
-  # Asked again on the same press. Nothing was spent by walking away — the way in is still the way in,
-  # and the question it raises is the same one.
+  # Asked again on the same press. Nothing was spent by walking away — the empty frame is back where
+  # it was, and the question it raises is the same one.
   - type: action
     domain: terminal
     op: open-pane

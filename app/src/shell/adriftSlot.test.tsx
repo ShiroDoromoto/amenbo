@@ -56,9 +56,9 @@ afterEach(() => {
   container.remove();
 });
 
-/** Draw it, with the way to the ledger and the way to a task both counted. `wayIn` is whether it
- *  stands on its own where there is nothing to ask — a face with no panes on it. */
-async function draw(folder: string | null, wayIn = true): Promise<void> {
+/** Draw it, with the way to the ledger and the way to a task both counted. Whether there is an empty
+ *  frame on this page at all is the face's decision, not this component's (`./TerminalFace`). */
+async function draw(folder: string | null): Promise<void> {
   await act(async () => {
     root.render(
       createElement(
@@ -70,7 +70,6 @@ async function draw(folder: string | null, wayIn = true): Promise<void> {
           },
           children: createElement(AdriftSlot, {
             folder,
-            wayIn,
             onOpen: () => {},
             onOpenLedger: () => ledger.push(1),
           }),
@@ -85,13 +84,7 @@ function buttons(): HTMLButtonElement[] {
 }
 
 describe("a face with nothing to ask about", () => {
-  it("draws nothing at all beside panes that are open", async () => {
-    await draw("/work/here", false);
-    // An empty box beside a terminal is the identical question this face was built to stop asking.
-    expect(container.textContent).toBe("");
-  });
-
-  it("is the plain way to open a terminal where nothing is open", async () => {
+  it("is the plain empty frame", async () => {
     await draw("/work/here");
 
     expect(buttons()).toHaveLength(1);

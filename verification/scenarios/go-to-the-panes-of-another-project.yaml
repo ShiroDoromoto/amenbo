@@ -68,8 +68,8 @@ steps_gui:
     with:
       project: Greenhouse
 
-  # Nothing is open in this project, so the face has one way in on it. The folder is the project's
-  # own and it is the only one, which is why this press is a press and nothing else.
+  # Nothing is open in this project, so the face has one empty frame on it. The folder is the
+  # project's own and it is the only one, which is why this press is a press and nothing else.
   - type: action
     domain: terminal
     op: open-pane

@@ -85,9 +85,13 @@ const press = async (key: string) => {
     document.dispatchEvent(new KeyboardEvent("keydown", { key, metaKey: true, bubbles: true }));
   });
 };
-/** Ask for another pane in the project being shown. The first is the way in on the empty face; every
- *  one after it is the way in beside the project's name on the rail. */
-const openPane = async () => click(q(".rail__open")[0] ?? q(".slot--empty")[0]!);
+/** Open another pane in the project being shown, which is two presses: the way in beside the project's
+ *  name on the rail goes to a page with room for one, and the empty frame there opens it. */
+const openPane = async () => {
+  const room = q(".rail__open")[0];
+  if (room) await click(room);
+  await click(q(".slot--empty")[0]!);
+};
 /** A pane says a turn is standing in it — or that it is not any more. */
 const turn = async (pane: number, standing: boolean) => {
   await act(async () => { hoisted.tell[pane]!(standing); });

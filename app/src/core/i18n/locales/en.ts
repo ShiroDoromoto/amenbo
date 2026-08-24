@@ -546,7 +546,11 @@ const ui = {
   "face.terminal": "Terminal",
   "face.splitOut": "Open in a separate window",
   "face.merge": "Back to one window",
-  "face.end": "End the terminal in this pane",
+  // The one control a pane has: it takes the place away, and the terminal in it with it
+  // (`app/src/shell/TerminalPane.tsx`). It asks first — nothing brings the frame back, and what a
+  // program exits with is on the screen to be read (`AMB-T-3666`).
+  "face.drop": "Remove this pane",
+  "face.dropConfirm": "Remove this pane? The terminal in it ends, and the place does not come back on the next run.",
   // The OS notification a pane raises when its turn has come and nobody is looking at the terminal
   // (`AMB-T-3611`). It says a turn is standing and not whose: which pane it was is drawn where it
   // happened, and a toast that named one would answer in the one place a person cannot act on it.
@@ -555,6 +559,9 @@ const ui = {
   "face.ended": "The program in this terminal has exited.",
   "face.rail": "Panes",
   "face.paneCount": "Panes on screen",
+  // The split, as words rather than a bare digit: the row of pages beside it is digits too, so the
+  // count says what it counts (`app/src/shell/TerminalFace.tsx`).
+  "face.panes.one": "{n} pane", "face.panes.other": "{n} panes",
   "face.pages": "Pages",
   "face.page": "Page {n}",
   // What the terminal face asks about: what this project was left in the middle of by a pane that has since
@@ -564,7 +571,7 @@ const ui = {
   // stopped, only that nothing it opened is at it (`AMB-D-748`).
   "face.adrift": "Something in this project was left in the middle, and nothing is at it. Carry on with it?",
   "face.open": "Open a terminal here",
-  "face.openHere": "Open another terminal in this project",
+  "face.openHere": "Room for another pane in this project",
   "face.whichFolder": "Which folder does this pane work in?",
   "face.rename": "Rename this pane",
   "face.needsYou": "waiting on you",

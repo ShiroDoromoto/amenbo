@@ -5,7 +5,8 @@ import { useRefNav } from "../core/refNav";
 import { t } from "../core/i18n";
 
 /**
- * A project with nothing open, and — where there is one — what it was left in the middle of.
+ * The empty frame on a page with room, and — where there is one — what this project was left in the
+ * middle of.
  *
  * **A process can die and the ledger not hear about it.** What is left is a task sitting reserved with
  * nobody at it — out of the mailbox, so nobody is offered it — or a decision put up for discussion that
@@ -19,25 +20,22 @@ import { t } from "../core/i18n";
  *
  * The read is scoped to a folder of the project being shown, so the face only ever asks about the
  * project it is on (`../talk/layout`). A project bound to no folder has nothing to ask about and draws
- * the plain way in.
+ * the plain empty frame.
+ *
+ * **There is one of these on a page and only where the page has a gap** — that is the face's to decide,
+ * and it decides it from the frames (`./TerminalFace`). What arrives here is already the single empty
+ * frame, so this draws unconditionally: four identical questions is the thing the count of them
+ * prevents, not the thing this component checks.
  *
  * `onOpen` is what this is for when there is nothing to ask: opening a pane in this project.
- *
- * `wayIn` is whether it stands on its own. A project with nothing open draws this as its one way in,
- * question or no question. Beside panes that *are* open it draws only where there is something to
- * ask — an empty box beside a terminal is the four identical questions this face was built to stop
- * asking (`../talk/layout`).
  */
 export function AdriftSlot({
   folder,
-  wayIn,
   onOpen,
   onOpenLedger,
 }: {
   /** A folder of the project being shown, or null where it is bound to none. */
   folder: string | null;
-  /** Whether to draw at all where there is nothing to ask. */
-  wayIn: boolean;
   onOpen: () => void;
   /** Bring the ledger up. Selecting a task happens on the other face, so following one from here has
    *  to leave this one — the same move the file face makes (`../files/FilesPanel`). */
@@ -82,9 +80,7 @@ export function AdriftSlot({
   );
 
   if (adrift.tasks.length === 0 && adrift.decisions.length === 0) {
-    return wayIn
-      ? <button className="slot slot--empty" onClick={onOpen}>{t("face.open")}</button>
-      : null;
+    return <button className="slot slot--empty" onClick={onOpen}>{t("face.open")}</button>;
   }
 
   // One question over both. What tells a reader which kind a row is, and so what pressing it opens, is

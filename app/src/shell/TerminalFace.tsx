@@ -7,9 +7,9 @@ import {
   frameNames, keepLayout, nameFrame, savedLayout, type FrameNames, type NamedBy,
 } from "../talk/frames";
 import {
-  closedIn, COUNTS, EMPTY_LAYOUT, focusOn, goPage, goProject, laidOut, MAX_PAGES, movedTo, openedFrame,
-  openedIn, pageCount, pageOfFrame, paneIn, panesOf, restored, setCount, sidesAreDrawers, slotsOf,
-  type Count, type Layout,
+  addPane, closedFrame, closedIn, COUNTS, EMPTY_LAYOUT, focusOn, goPage, goProject, laidOut, MAX_PAGES,
+  movedTo, openedFrame, openedIn, pageCount, pageOfFrame, paneIn, restored, roomOnPage, setCount,
+  sidesAreDrawers, slotsOf, type Count, type Layout,
 } from "../talk/layout";
 import { FilesPanel } from "../files/FilesPanel";
 import { markRead, tookPoint, type PointedBySession } from "../files/pointed";
@@ -19,7 +19,7 @@ import { dataAdapter } from "../mock/adapter";
 import { invoke } from "../core/ipc";
 import type { PtySessionDto } from "../bindings/bindings";
 import { inTauri } from "../core/snapshot";
-import { errText, t, tf } from "../core/i18n";
+import { errText, t, tf, tn } from "../core/i18n";
 
 /**
  * The terminal, drawn inside the board's window — the second face of the one window (`AMB-D-753`).
@@ -337,6 +337,21 @@ export function TerminalFace({
     else setAsking({ note: null });
   }, [bound.live, openPane, bindFirstFolder]);
 
+  /**
+   * Somebody asked for another pane, from the rail.
+   *
+   * **It does not open one.** What it does is go to where one would go — the page with a gap in it, or
+   * a page brought into being where every one of them is full — and the empty frame there is what the
+   * next press lands on (`../talk/layout`). The asking and the opening are two presses because the
+   * empty frame is where what to open with is chosen, and a press that skipped it would be choosing
+   * for the person.
+   */
+  const askForRoom = useCallback(() => {
+    setAsking(null);
+    setRailOpen(false);
+    setLayout(addPane);
+  }, []);
+
   // A folder the ledger handed in. Nothing is done with it before the restore has been answered for:
   // the panes that come back are what an already-open one is found among, and seeding one first would
   // put a terminal in a frame the restore was about to take away.
@@ -364,13 +379,13 @@ export function TerminalFace({
   }, [openIn?.nth, settled]);
 
   const drawers = sidesAreDrawers(layout.count, width);
-  const panes = panesOf(layout, layout.project);
-  // Where the pane being opened will land, which is the page the question is put on: a question drawn
-  // somewhere other than where its answer appears is one the reader has to go and find.
-  const landing = Math.ceil((panes.length + 1) / layout.count);
-  const page = asking === null ? layout.page : landing;
+  const page = layout.page;
   const slots = slotsOf(layout, page);
-  const pages = Math.max(pageCount(layout), asking === null ? 1 : landing);
+  const pages = pageCount(layout);
+  // The one empty frame this page draws, where it has a gap to draw it in (`../talk/layout`). The
+  // question about where a pane works stands in its place while it is up, because that is where the
+  // answer appears: a question drawn anywhere else is one the reader has to go and find.
+  const room = roomOnPage(layout, page);
 
   // ⌘1〜9 for the pages. It is caught on the document because the pane below has the keys — a
   // terminal is given every keystroke that is a character, and a page is reached with the ones that
@@ -419,7 +434,7 @@ export function TerminalFace({
         setRailOpen(false);
       }}
       onRename={(frame, name) => named(frame, name, "person")}
-      onOpen={askToOpen}
+      onOpen={askForRoom}
     />
   );
 
@@ -439,7 +454,9 @@ export function TerminalFace({
         {/* How many panes the page shows. Three steps, always all three shown: which one is on is
             what a person is choosing between, and a control that only says the next step makes them
             press it to find out. It is the most a page draws and not a number of boxes to fill —
-            what is open is what is on the screen (`../talk/layout`). */}
+            what is open is what is on the screen (`../talk/layout`).
+            **It says what the number counts**, because the row of pages beside it is digits too: two
+            rows of bare digits is a reader pressing one to find out which is which. */}
         <div className="termface__counts" role="radiogroup" aria-label={t("face.paneCount")}>
           {COUNTS.map((count) => (
             <button
@@ -449,31 +466,41 @@ export function TerminalFace({
               // be on, which is not what the control does.
               role="radio"
               aria-checked={layout.count === count}
-              onClick={() => setLayout((was) => setCount(was, count as Count))}
+              // The question about where a pane works goes with it, the same way it goes when a page
+              // or a pane is reached for: asking for a different split is a person doing something
+              // else, and a question left up would be drawn on whatever page the split lands on.
+              onClick={() => {
+                setAsking(null);
+                setLayout((was) => setCount(was, count as Count));
+              }}
             >
-              {count}
+              {tn("face.panes", count)}
             </button>
           ))}
         </div>
-        {/* The pages of this project, as a row of the digits that reach them. */}
-        <nav className="termface__pages" aria-label={t("face.pages")}>
-          {Array.from({ length: pages }, (_, i) => i + 1).map((one) => (
-            <button
-              key={one}
-              className={`termface__page${page === one ? " termface__page--on" : ""}${
-                needyPages.has(one) ? " termface__page--needs" : ""}`}
-              // Going to a page, not turning something on: the one showing is the current page.
-              aria-current={page === one ? "page" : undefined}
-              title={needyPages.has(one) ? t("face.needsYou") : tf("face.page", { n: one })}
-              onClick={() => { setAsking(null); setLayout((was) => goPage(was, one)); }}
-            >
-              {one}
-              {/* One dot, and only for a turn that is standing. A pane that finished wears nothing:
-                  what is over is not something a person is needed for (`AMB-T-3610`). */}
-              {needyPages.has(one) && <span className="termface__needs" aria-hidden="true" />}
-            </button>
-          ))}
-        </nav>
+        {/* The pages of this project, as a row of the digits that reach them. **A project with one
+            page draws none of it**: a single page nobody can go anywhere from is a control that says
+            only where the reader already is. */}
+        {pages > 1 && (
+          <nav className="termface__pages" aria-label={t("face.pages")}>
+            {Array.from({ length: pages }, (_, i) => i + 1).map((one) => (
+              <button
+                key={one}
+                className={`termface__page${page === one ? " termface__page--on" : ""}${
+                  needyPages.has(one) ? " termface__page--needs" : ""}`}
+                // Going to a page, not turning something on: the one showing is the current page.
+                aria-current={page === one ? "page" : undefined}
+                title={needyPages.has(one) ? t("face.needsYou") : tf("face.page", { n: one })}
+                onClick={() => { setAsking(null); setLayout((was) => goPage(was, one)); }}
+              >
+                {one}
+                {/* One dot, and only for a turn that is standing. A pane that finished wears nothing:
+                    what is over is not something a person is needed for (`AMB-T-3610`). */}
+                {needyPages.has(one) && <span className="termface__needs" aria-hidden="true" />}
+              </button>
+            ))}
+          </nav>
+        )}
         {note !== null && <span className="termface__note">{note}</span>}
         {/* Said only when it was asked for. "As far as the ledger knows" is the whole of the claim:
             a pane nobody has heard from is not a pane where all is well (`AMB-D-748`). */}
@@ -483,9 +510,10 @@ export function TerminalFace({
         {drawers
           ? railOpen && <div className="termface__drawer">{rail}</div>
           : rail}
-        <div className={`termface__page-grid termface__page-grid--${
-          Math.min(layout.count, Math.max(1, slots.length + (asking === null ? 0 : 1)))}`}
-        >
+        {/* The page is the split that was asked for, whether or not there are panes to fill it: the
+            count is the most a page draws, and a grid that shrank to what is open would make the
+            split a thing a reader cannot see the effect of (`../talk/layout`). */}
+        <div className={`termface__page-grid termface__page-grid--${layout.count}`}>
           {!settled || layout.project === null
             ? null
             : (
@@ -520,6 +548,13 @@ export function TerminalFace({
                       // something a person is needed for (`AMB-T-3610`).
                       paneWaiting(frame.id, false);
                     }}
+                    onDrop={(id) => {
+                      setLayout((was) => closedFrame(was, id));
+                      // Nothing is owed to a place that has gone — a turn standing in it was standing
+                      // on the page it was on, and the badge above must stop counting it.
+                      paneWaiting(id, false);
+                      startNow.current.delete(id);
+                    }}
                     onName={named}
                     onFocus={(id) => setLayout((was) => focusOn(was, id))}
                     onWaiting={paneWaiting}
@@ -533,13 +568,11 @@ export function TerminalFace({
                     note={asking.note}
                   />
                 )}
-                {/* A project with nothing open is one way in and no boxes. Beside panes that are open
-                    it is drawn only where this project has work nothing is doing any more, and only
-                    where the page has room to put the question (`./AdriftSlot`). */}
-                {asking === null && (panes.length === 0 || slots.length < layout.count) && (
+                {/* One empty frame, at the first gap on the page, and none at all on a full one: it
+                    is this page saying it has room (`./AdriftSlot`). */}
+                {asking === null && room && (
                   <AdriftSlot
                     folder={bound.live[0]?.path ?? null}
-                    wayIn={panes.length === 0}
                     onOpenLedger={onOpenLedger}
                     onOpen={() => askToOpen(layout.project!)}
                   />

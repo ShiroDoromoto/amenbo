@@ -29,8 +29,8 @@
 id: open-what-the-agent-pointed-at
 title: An agent points at a file from inside its pane, and the person opens it from the column beside
 description: >
-  Open the terminal face on a project whose folder holds a file, and let the thing running in the pane
-  point at it — the agent's own word for "this is worth opening", said with the CLI from inside the
+  Open the terminal face on a project whose folder holds a file, open a plain shell in the pane, and
+  point at the file from in there — the agent's own word for "this is worth opening", said with the CLI from inside the
   terminal. The row arrives in the column beside the pane, and pressing it opens the file. Point at
   something outside the folder as well: the row is drawn, because it is what the agent said, and it is
   not something to press, because what is reachable is fenced by the folder.
@@ -71,6 +71,14 @@ steps_gui:
     op: open-folder
     with:
       dir: greenhouse
+
+  # And down to a plain shell, because what is said below is said by running the CLI. A folder with an
+  # agent on it opens on the agent, and asking one to run a command is asking rather than doing — the
+  # road would go green or red on whether it obliged. The operator types what an agent types, at a
+  # prompt that does what it is told.
+  - type: action
+    domain: terminal
+    op: open-shell
 
   # Nothing has been said yet, and the column says so rather than drawing an empty space that could be
   # read as a section that failed to load.

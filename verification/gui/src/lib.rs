@@ -1222,7 +1222,7 @@ impl Instructor {
             (Domain::Terminal, "show-face") => match req(with, "face")? {
                 "tasks" => "In the pair of segments at the top of the window, press the one that shows the ledger — the tasks, the projects and the board."
                     .to_string(),
-                "terminal" => "In the pair of segments at the top of the window, press the one that shows the terminal — the pane an agent runs in."
+                "terminal" => "In the pair of segments at the top of the window, press the one that shows the terminal — the pane a terminal runs in."
                     .to_string(),
                 other => {
                     return Err(format!("action `show-face` does not know the face `{other}`"))
@@ -1234,9 +1234,17 @@ impl Instructor {
             // What is worth confirming while walking it is that nothing else is asked — no name, no
             // submit — since the whole of this road is one press and a folder.
             (Domain::Terminal, "open-folder") => format!(
-                "On the terminal face, press the one control it offers — the way to choose a folder — and in the picker that opens choose a folder the road calls \"{}\". The pane opens in it as soon as the picker closes: nothing is named and nothing is submitted.",
+                "On the terminal face, press the one control it offers — the way to choose a folder — and in the picker that opens choose a folder the road calls \"{}\". The face moves on by itself as soon as the picker closes — a pane opens on the agent this folder starts with, or the face offers the ones it found, or it says it found none — and nothing is named and nothing is submitted.",
                 req(with, "dir")?
             ),
+            // Getting to a plain shell, which is what a road that speaks in a pane speaks to. It is
+            // written for the three shapes the face can be in rather than for one press, because
+            // which of them is on screen is the run's machine's business and not the road's — an
+            // operator told only "choose the plain shell" would be hunting for a control that is not
+            // on theirs.
+            (Domain::Terminal, "open-shell") =>
+                "Open a plain shell in the pane — the terminal with no agent started in it. Where a pane is already running one, end that first: the row under a pane whose program has ended is where what to open with is chosen, and the plain shell is on the list. Where the face is offering several agents, or saying it found none it can start, the plain shell is a button on what it is showing. Either way a prompt comes up in the pane."
+                    .to_string(),
             // Pressing one of the records the empty slot asks about. What it does is open that record
             // on the ledger — the screen is left, deliberately, because a press that selected without
             // switching would land on a face the reader cannot see — and on the face that reads that

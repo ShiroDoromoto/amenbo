@@ -1228,7 +1228,7 @@ impl Instructor {
             (Domain::Terminal, "show-face") => match req(with, "face")? {
                 "tasks" => "In the pair of segments at the top of the window, press the one that shows the ledger — the tasks, the projects and the board."
                     .to_string(),
-                "terminal" => "In the pair of segments at the top of the window, press the one that shows the terminal — the pane an agent runs in."
+                "terminal" => "In the pair of segments at the top of the window, press the one that shows the terminal — the pane a terminal runs in."
                     .to_string(),
                 other => {
                     return Err(format!("action `show-face` does not know the face `{other}`"))
@@ -1240,9 +1240,17 @@ impl Instructor {
             // What is worth confirming while walking it is that nothing else is asked — no name, no
             // submit — since the whole of this road is one press and a folder.
             (Domain::Terminal, "open-folder") => format!(
-                "On the terminal face, press the one control it offers — the way to choose a folder — and in the picker that opens choose a folder the road calls \"{}\". The pane opens in it as soon as the picker closes: nothing is named and nothing is submitted.",
+                "On the terminal face, press the one control it offers — the way to choose a folder — and in the picker that opens choose a folder the road calls \"{}\". The face moves on by itself as soon as the picker closes — a pane opens on the agent this folder starts with, or the face offers the ones it found, or it says it found none — and nothing is named and nothing is submitted.",
                 req(with, "dir")?
             ),
+            // Getting to a plain shell, which is what a road that speaks in a pane speaks to. It is
+            // written for the three shapes the face can be in rather than for one press, because
+            // which of them is on screen is the run's machine's business and not the road's — an
+            // operator told only "choose the plain shell" would be hunting for a control that is not
+            // on theirs.
+            (Domain::Terminal, "open-shell") =>
+                "Open a plain shell in the pane — the terminal with no agent started in it. Where a pane is already running one, end that first: the row under a pane whose program has ended is where what to open with is chosen, and the plain shell is on the list. Where the face is offering several agents, or saying it found none it can start, the plain shell is a button on what it is showing. Either way a prompt comes up in the pane."
+                    .to_string(),
             // Pressing one of the records the empty slot asks about. What it does is open that record
             // on the ledger — the screen is left, deliberately, because a press that selected without
             // switching would land on a face the reader cannot see — and on the face that reads that
@@ -1281,20 +1289,27 @@ impl Instructor {
             // line, so it has an op of its own below. An unknown word is refused loudly.
             (Domain::Terminal, "say") => {
                 let text = req(with, "text")?;
-                match req(with, "verb")? {
-                    "name" => format!(
-                        "In the pane that has a terminal running in it, run: amenbo session name \"{text}\" — this is the agent naming the pane it is running in."
-                    ),
-                    "note" => format!(
-                        "In the pane that has a terminal running in it, run: amenbo session note \"{text}\" — this is the agent saying what it is doing now."
-                    ),
-                    "waiting" => format!(
-                        "In the pane that has a terminal running in it, run: amenbo session waiting \"{text}\" — this is the agent handing the turn over, and saying why."
-                    ),
-                    "finished" => format!(
-                        "In the pane that has a terminal running in it, run: amenbo session finished \"{text}\" — this is the agent saying what came of the work."
-                    ),
+                let verb = req(with, "verb")?;
+                let (command, what) = match verb {
+                    "name" => ("name", "the agent naming the pane it is running in"),
+                    "note" => ("note", "the agent saying what it is doing now"),
+                    "waiting" => ("waiting", "the agent handing the turn over, and saying why"),
+                    "finished" => ("finished", "the agent saying what came of the work"),
                     other => return Err(format!("action `say` does not know the verb `{other}`")),
+                };
+                // Said and stood at, or said and walked away from. The second is the only way to a
+                // word that arrives while the ledger is the face up: the layer is spoken inside a
+                // pane and read on the other side of the switch, so the operator arms it and
+                // crosses over. The wait is here rather than in the road because how long a person
+                // needs to press one segment is the driver's business, not the goal's.
+                if flagged(with, "away") {
+                    format!(
+                        "In the pane that has a terminal running in it, run: sleep {SAY_AWAY_SECONDS} && amenbo session {command} \"{text}\" — then press the segment that shows the ledger before those seconds are up. What lands is {what}, and it lands while the terminal is the face nobody is looking at, which is the only shape it ever reaches the other face in."
+                    )
+                } else {
+                    format!(
+                        "In the pane that has a terminal running in it, run: amenbo session {command} \"{text}\" — this is {what}."
+                    )
                 }
             }
             (Domain::Terminal, "end-pane") =>
@@ -2145,6 +2160,15 @@ impl Instructor {
                     req(with, "shows")?
                 ),
             },
+            // The dot on the terminal's own segment. It is read from the ledger, which is the only
+            // face it is ever drawn on, and it carries nothing to quote: a road says it is there, or
+            // that crossing over has spent it.
+            (Domain::Terminal, "face-badge") => match present(with) {
+                true => "In the pair of segments at the top of the window, confirm the one that shows the terminal is wearing a small mark — a dot, with no number and no words on it. It says a turn came up behind the face you are not looking at."
+                    .to_string(),
+                false => "In the pair of segments at the top of the window, confirm the one that shows the terminal is wearing no mark at all."
+                    .to_string(),
+            },
             (Domain::Terminal, "pane") => match present(with) {
                 true => format!(
                     "Confirm the pane running a terminal still shows the line \"{}\" — the same terminal, drawn here.",
@@ -2396,6 +2420,19 @@ fn official(with: &Args) -> bool {
 /// always said out loud, so an unsaid one is a step asking that something is there.
 fn present(with: &Args) -> bool {
     with.get("present").and_then(|v| v.as_bool()).unwrap_or(true)
+}
+
+/// How long an armed word waits before it is said, in seconds.
+///
+/// It is a number a person has to beat with one press, so it is neither tight nor generous: long
+/// enough to cross a switch without hurrying, short enough that a road does not stand still. The road
+/// does not name it — what a road says is that the word arrives from behind the other face.
+const SAY_AWAY_SECONDS: u32 = 15;
+
+/// An optional yes-or-no argument, false where it was not written. Unlike [`present`], whose default
+/// is the half most asserts want, these ask for a shape a step takes only when it says so.
+fn flagged(with: &Args, key: &str) -> bool {
+    with.get(key).and_then(|v| v.as_bool()).unwrap_or(false)
 }
 
 /// A required yes-or-no argument. It is not `present`'s neighbour: that one has a default because most

@@ -41,8 +41,8 @@
 id: put-the-terminal-on-its-own-screen
 title: The terminal moves to a screen of its own and back, and the session in it never restarts
 description: >
-  Open the terminal face of the one window, choose the folder it runs in, and type a line into the
-  pane. Switch to the ledger and back: the line is still there, because hiding a terminal must not end
+  Open the terminal face of the one window, choose the folder it runs in, open a plain shell there,
+  and type a line into the pane. Switch to the ledger and back: the line is still there, because hiding a terminal must not end
   it. Then open the terminal in a separate window — the line is on the pane there, the same session
   drawn in the new window — and fold it back, where it is on the pane in the one window again. What is
   under test is the process surviving all three moves: what a reader has running in the pane is theirs
@@ -57,12 +57,21 @@ steps_gui:
 
   # The face opens with no pane on it, because a terminal has to be started somewhere and only the
   # reader knows where. Choosing a folder is the whole of the way in — one press and a folder, with
-  # nothing to name and nothing to submit — and the pane every step below is about is what it leaves.
+  # nothing to name and nothing to submit — and the pane every step below is about opens in it.
   - type: action
     domain: terminal
     op: open-folder
     with:
       dir: workshop
+
+  # And down to a plain shell, which is what the line below is typed at. A folder with an agent on it
+  # opens on the agent, and an agent's screen is its own to draw: the line would be read as something
+  # to answer rather than left sitting where it was typed, and what this road follows from window to
+  # window is exactly that — the line, still where it was put. A shell that does not know the command
+  # leaves it there, which is the whole reason the command is one nothing knows.
+  - type: action
+    domain: terminal
+    op: open-shell
 
   - type: action
     domain: terminal

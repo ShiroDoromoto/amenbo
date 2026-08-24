@@ -1,0 +1,171 @@
+# The rail's upper rows are the division itself, and pressing one moves the whole face.
+#
+# A pane belongs to a project and can work in no folder outside it, so the projects on the rail are
+# not a grouping laid over one list of terminals — they are what the list is cut by. Pressing one is
+# therefore not a filter being narrowed but the face being moved: what is drawn afterwards is that
+# project's panes, and every other project's is off the screen. This road walks that move in both
+# directions and reads both halves of it.
+#
+# ── Why a line in each pane ──────────────────────────────────────────────────────────────────────
+# The road types a line into each pane and reads it back, for the reason `put-the-terminal-on-its-own-
+# screen` does: it is the reader's own words, so a reading finds it on the pane drawing that session
+# and on no other. Two projects with a pane each give the two readings this road is made of — the line
+# of the project being shown is there, and the line of the project being left is nowhere — and a road
+# with one pane could say only the first half.
+#
+# ── Why the second line, typed at the end ────────────────────────────────────────────────────────
+# Going to another project takes a running terminal off the screen exactly as a page turn does, and a
+# pane is drawn rather than held, so the same thing has to be true of it: what a reader has running is
+# theirs until they end it. Words on a pane outlive the process that wrote them — what a terminal
+# printed stays printed — so the first line coming back says only that the screen was restored. A line
+# typed *after* the return is what says the terminal on the other end of it is still listening.
+#
+# ── What this road does not walk ─────────────────────────────────────────────────────────────────
+# Each project here is bound to one folder, so every press that opens a pane opens one and asks
+# nothing. The other shape — a project bound to several, where the press meets a question instead — is
+# `open-a-pane-where-a-project-keeps-more-than-one-folder`.
+#
+# The world raises the two projects and nothing else: a terminal is not a record, and what the panes
+# run is the reader's own shell.
+id: go-to-the-panes-of-another-project
+title: Pressing a project on the rail puts its panes on the face and takes every other project's off, and a terminal carried away by it is still running when its project comes back
+description: >
+  Raise two projects, each with a folder of its own, and open a terminal in each: on the rail, going
+  to the second takes the first's line off the screen entirely, and going back brings it and nothing
+  of the second's. A line typed at the pane that came back is taken, so the terminal behind the
+  project is still running and not a picture of one.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+      dir: greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Boathouse
+      dir: boathouse
+    as: boathouse
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Which project the face came up on is the run's business, so the road puts itself on one before it
+  # opens anything. It may well be the one already shown — that press is allowed to change nothing,
+  # and what the step says is where the screen is afterwards.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  # Nothing is open in this project, so the face has one way in on it. The folder is the project's
+  # own and it is the only one, which is why this press is a press and nothing else.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  # Down to a plain shell, which is what a road that speaks in a pane speaks to. An agent's screen is
+  # its own to draw, and a line typed at one is something to answer rather than something left where
+  # it was put.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the terminal in the greenhouse
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the terminal in the greenhouse
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Boathouse
+
+  # The half that says the rail is a division rather than a grouping: the pane of the project being
+  # left is not somewhere further down the screen, it is off it.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the terminal in the greenhouse
+      present: false
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the terminal in the boathouse
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the terminal in the boathouse
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Greenhouse
+
+  # Back, and it is the same pane: the line it was named by is on it, having been carried off the
+  # screen and brought back by nothing but two presses on the rail.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the terminal in the greenhouse
+
+  # And the other project's pane came nowhere with it. This is the promise the whole face rests on —
+  # panes of two projects are never on one screen — read from the side a reader would notice it from.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the terminal in the boathouse
+      present: false
+
+  # And it is still listening. A pane that came back drawn but with nothing on the other end would
+  # read exactly like this one until something is typed at it, the words already on it having been
+  # printed before any of this happened.
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO still taking what is typed
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO still taking what is typed

@@ -1944,12 +1944,40 @@ const REGISTRY: &[OpSpec] = &[
     // is the same layer and the same seam: the other four carry one line, and this carries a thing and
     // a reason for it — a shape of its own, and one the file face reads rather than the pane's label.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "point", required: &["target", "why"], refs: &[], strings: &["target", "why"], binds: false },
+    // Which project's panes the face is drawing. The rail is not a grouping laid over a list of
+    // panes: a pane belongs to a project and can work in no folder outside it, so pressing a project
+    // is the division itself being moved. What is beside the rail afterwards is that project's, and
+    // every other project's pane is off the screen — which is why a road walks this at all, a pane
+    // carried off by it being a running terminal like any other. `project` is the name drawn on the
+    // row, which is the ledger's own word for it.
+    //
+    // It is pressed rather than arrived at, for the reason `show-face` is. Which project the face
+    // opens on is the run's business — whatever the ledger had selected, or the first project where
+    // it had none — so a road that named a project without pressing for it would be reading a screen
+    // it had not put itself on.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "go-project", required: &["project"], refs: &[], strings: &["project"], binds: false },
     // Opening a pane. A pane belongs to a project and works in a folder that project is bound to, so
     // where it is bound to one nothing is asked at all. `from` is which of the two controls is
     // pressed, and they are not the same place: `face` is the one thing on a screen with nothing open
     // on it, and `rail` is the way in beside the shown project's name in the list beside the panes.
     // Neither names a page — where a pane lands is the project's arithmetic, not the road's.
+    //
+    // `asks: true` is the other half of the folder. Where the project is bound to several, the press
+    // opens nothing: what comes up where the pane would have been is the question of which of them it
+    // works in, and `pick-folder` answers it. A road that walked that path without saying so would
+    // tell an operator nothing was asked while the question stood on the screen in front of them.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-pane", required: &["from"], refs: &[], strings: &["from"], binds: false },
+    // Which of this project's folders the pane about to be opened works in. It is only ever reached
+    // from an `open-pane` that said `asks: true`: bound to one folder the face does not ask, and
+    // bound to none it has no list to offer — that press goes to a picker, which is `open-folder`.
+    //
+    // The answer is given before the frame is made, which is what lets a reader walk away from the
+    // question without leaving a half-opened box behind. `dir` is a name and not a path, the way
+    // `open-folder`'s is: where a run keeps its folders is the run's to decide, and what a road
+    // writes down is what to call the one it means. What the question *offers* is the whole of the
+    // goal — this project's folders, and no way to anywhere outside them — so the list is part of
+    // what the step puts in front of the operator rather than something read in a step of its own.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "pick-folder", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
     // How many panes a page draws: 1, 2 or 4, and no other number. It is not a change of look. The
     // frames are one list cut into pages, so a new count re-pages every pane this device has — which
     // is why a road walks it at all: what has to survive the cut is the terminals running inside them.
@@ -2528,8 +2556,9 @@ impl Scenario {
             // anything is working a queue, `required` whether a declared setting is one its plugin
             // cannot work without, `away` whether a word said in a pane is armed and left behind,
             // `folded` whether the ref being pressed in a pane is one the fold broke across two
-            // rows, and the two key questions whether a catalog serves a signing key and whether
-            // one of its is pinned.
+            // rows, `asks` whether the press that opens a pane meets the question of which folder
+            // rather than a pane, and the two key questions whether a catalog serves a signing key
+            // and whether one of its is pinned.
             for key in [
                 "present",
                 "ok",
@@ -2537,6 +2566,7 @@ impl Scenario {
                 "required",
                 "away",
                 "folded",
+                "asks",
                 "publishes_key",
                 "pinned_key",
             ] {

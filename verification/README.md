@@ -556,17 +556,31 @@ before anything can be found there at all.
 
 The face's own arrangement is in that vocabulary as well, because on this face the arrangement is
 most of what there is: `set-panes` re-cuts the frames into pages of one, two or four, `go-page` moves
-the whole screen to another page, and `open-pane` starts a terminal where there is not one yet —
-`from: slot` in an empty box on the page being looked at, `from: rail` beside a page's name in the
-list, which opens in that page's first free slot and takes the screen there. What they are walked for
-is what they must not do. Every one of those moves re-cuts one list of frames, and a pane that left
-the screen is a pane still running behind it.
-`come-back-to-the-terminal-a-page-turn-took-away` is the road. It types a second line into the pane
-once the page has come back, which is the half a reading of the first cannot carry: what a terminal
-printed stays printed, so the first line says the screen was restored and only something typed after
-the return says anything is still listening. And it keeps a second pane going for the length of it —
-with one frame there is nothing for a new count to move, so a road with a single pane walks
-`set-panes` past the only thing it is dangerous for.
+the whole screen to another page, `go-project` moves it to another project's panes altogether, and
+`open-pane` starts a terminal where there is not one yet — `from: face` at the one control a screen
+with nothing open on it has, `from: rail` beside the shown project's name in the list. What they are
+walked for is what they must not do. Every one of those moves re-cuts or replaces what is drawn, and
+a pane that left the screen is a pane still running behind it.
+`come-back-to-the-terminal-a-page-turn-took-away` is the road for the two that re-cut. It types a
+second line into the pane once the page has come back, which is the half a reading of the first cannot
+carry: what a terminal printed stays printed, so the first line says the screen was restored and only
+something typed after the return says anything is still listening. And it keeps a second pane going
+for the length of it — with one frame there is nothing for a new count to move, so a road with a
+single pane walks `set-panes` past the only thing it is dangerous for.
+`go-to-the-panes-of-another-project` is the road for the one that replaces, and it reads the half the
+other cannot: the rail is the division itself rather than a grouping laid over one list, so what a
+project's press leaves on the screen is that project's panes and nothing of any other's.
+
+Which folder a pane works in belongs to the same seam, because a pane belongs to a project and can
+work in no folder outside it. So the press that opens one does not open a picker: bound to a single
+folder the project is not a question and nothing is asked, and bound to several the press opens
+nothing at all — `asks: true` says so on `open-pane`, and `pick-folder` answers the question that
+comes up where the pane would have been.
+`open-a-pane-where-a-project-keeps-more-than-one-folder` is the road, and it presses both answers
+rather than one: a face that always opened the same folder whatever was pressed would walk a single
+answer green from end to end. Each pane is then asked where it is standing, by reading out a file
+lying in one of the two folders and not the other — a pane draws no path of its own, and that is the
+only reading on this face that says *where* a terminal is working.
 
 `dot` is the one reading on these roads that is not text at all. The mark on a pane's label pulses
 while something is coming out of that terminal, and it is the only thing on screen that says a pane

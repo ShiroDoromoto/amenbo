@@ -84,11 +84,11 @@ const press = async (key: string) => {
     document.dispatchEvent(new KeyboardEvent("keydown", { key, metaKey: true, bubbles: true }));
   });
 };
-/** Open another pane in the project being shown, which is two presses: the way in under the rail's
- *  sessions heading goes to a page with room for one, and the empty frame there opens it. */
+/** Open another pane in the project being shown: the empty frame on a page with room opens it, and a
+ *  full page goes through the strip beside the panes to a page that has room. */
 const openPane = async () => {
-  const room = q(".rail__open")[0];
-  if (room) await click(room);
+  const strip = q(".termface__addstrip")[0];
+  if (strip) await click(strip);
   await click(q(".slot--empty .slot__open")[0]!);
 };
 /** A pane says a turn is standing in it — or that it is not any more. */

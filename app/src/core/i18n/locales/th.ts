@@ -509,7 +509,6 @@ export const th: Translation = {
     "face.rail": "บานหน้าต่าง",
     "face.projects": "โปรเจกต์",
     "face.sessions": "เซสชัน",
-    "face.addPane": "เปิด",
     "face.paneCount": "จำนวนบานหน้าต่างบนหน้าจอ",
     "face.panes.other": "{n} บาน",
     "face.pages": "หน้า",

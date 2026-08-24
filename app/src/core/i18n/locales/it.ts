@@ -527,7 +527,6 @@ export const it: Translation = {
     "face.rail": "Riquadri",
     "face.projects": "Progetti",
     "face.sessions": "Sessioni",
-    "face.addPane": "Apri",
     "face.paneCount": "Riquadri sullo schermo",
     "face.panes.one": "{n} riquadro", "face.panes.many": "{n} riquadri", "face.panes.other": "{n} riquadri",
     "face.pages": "Pagine",

@@ -505,7 +505,6 @@ export const ko: Translation = {
     "face.rail": "페인",
     "face.projects": "프로젝트",
     "face.sessions": "세션",
-    "face.addPane": "열기",
     "face.paneCount": "화면에 보일 페인 수",
     "face.panes.other": "{n}개",
     "face.pages": "페이지",

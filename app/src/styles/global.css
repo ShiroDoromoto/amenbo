@@ -407,18 +407,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
   width: 7px; height: 7px; border-radius: 50%;
   background: var(--c-heed);
 }
-/* One press, and a pane is open in this project. It says what it opens: a bare `+` beside a project's
-   row was read as "add a project", which is the one thing it does not do. Drawn quietly all the same —
-   the rows below it are what a person came to the rail for, and this is what they reach for once. */
-.rail__open {
-  flex: 0 0 auto;
-  display: inline-flex; align-items: center; gap: var(--s-1);
-  padding: var(--s-1) var(--s-2);
-  border: 1px solid var(--c-border); border-radius: var(--r-sm);
-  background: var(--c-surface);
-  color: var(--c-text-muted); font-size: var(--fs-xs); line-height: 1;
-}
-.rail__open:hover { color: var(--c-text); border-color: var(--c-border-strong); }
 .rail__row {
   display: flex; align-items: center; gap: var(--s-1);
   padding: var(--s-1) var(--s-2); border-radius: var(--r-md);

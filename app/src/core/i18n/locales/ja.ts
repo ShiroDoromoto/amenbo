@@ -518,7 +518,6 @@ export const ja: Translation = {
     "face.rail": "ペイン",
     "face.projects": "プロジェクト",
     "face.sessions": "セッション",
-    "face.addPane": "開く",
     "face.paneCount": "画面に出す枚数",
     "face.panes.other": "{n}枚",
     "face.pages": "ページ",

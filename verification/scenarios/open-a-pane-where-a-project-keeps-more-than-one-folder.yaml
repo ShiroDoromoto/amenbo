@@ -24,9 +24,10 @@
 # The file's words are the road's own, for the reason every line these roads read is: what says which
 # folder a pane is in has to be something the interface would never write by itself.
 #
-# The second pane is opened from the rail rather than from the face, so that both ways in are walked
-# on the one road — and the same question comes up at it, which is what says the asking follows the
-# project's folders rather than the screen being empty.
+# Both presses are on the empty frame, and that is not a gap in the road: the frame is the one control
+# that opens a pane, whichever way the screen arrived at it. The strip a full page draws instead opens
+# nothing at all — it moves the screen to the page with room, where this same frame is waiting — so
+# there is no second way in for the question to come up at.
 #
 # ── Why the first terminal is ended before the second is opened ──────────────────────────────────
 # A step that spoke into one of two running panes would have to say which of them it meant, and there
@@ -140,11 +141,14 @@ steps_gui:
     domain: terminal
     op: end-pane
 
+  # The second, at the empty frame beside the first: the page holds two and one frame stands on it.
+  # The same question comes up, which is what says the asking follows the project's folders rather
+  # than the screen being empty.
   - type: action
     domain: terminal
     op: open-pane
     with:
-      from: rail
+      from: face
       asks: true
 
   - type: action

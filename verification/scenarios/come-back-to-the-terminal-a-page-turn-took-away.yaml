@@ -88,15 +88,14 @@ steps_gui:
     with:
       shows: SCENARIO the terminal behind the page
 
-  # A second pane, from the rail beside the project's name. That way in opens nothing: it goes to the
-  # page with room in it, which is this one, and the empty frame there is what opens the pane.
-  # Nothing is asked — the folder is the project's — and the new pane becomes the one being worked
-  # in, which is what decides where the next step leaves the screen.
+  # A second pane, from the empty frame beside the first: the page holds two and one is on it, so the
+  # room is drawn where the pane will be. Nothing is asked — the folder is the project's — and the new
+  # pane becomes the one being worked in, which is what decides where the next step leaves the screen.
   - type: action
     domain: terminal
     op: open-pane
     with:
-      from: rail
+      from: face
 
   # And the first pane is untouched by it. A slot filling up beside a terminal is the commonest thing
   # that happens on this face, so it is worth one step that it is not also the cheapest way to lose

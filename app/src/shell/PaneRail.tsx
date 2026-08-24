@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { folderName, type FrameNames } from "../talk/frames";
 import { panesOf, type Frame, type Layout } from "../talk/layout";
 import type { Project } from "../mock/types";
-import { Icon } from "../components/Icon";
 import { t } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 
@@ -29,18 +28,18 @@ import { asTyped, isEnterSubmit } from "../core/keys";
  * last one (`../talk/frames`), so the rename is here rather than on the pane: it is the one place a
  * frame with nothing running in it can still be named.
  *
- * **And it is where another pane is opened in the project already up.** Where the project is bound to
- * one folder nothing is asked at all; where it is bound to several the question is which of them, and
- * never anything outside the project (`./FolderChoice`).
- *
  * **Two lists under two headings, and not one list that nests.** What a person picks here is a
  * project or a pane of it, and the two are different choices: nesting the panes under the row that
  * chooses their project made the rail one tree where the second choice looked like part of the
- * first. The way in sits under the heading of what it adds to, named — a bare `+` beside a project's
- * row read as "add a project", which is the one thing it does not do.
+ * first.
+ *
+ * **Nothing is opened from here.** Whichever way the face is standing, the way in is already beside
+ * the panes: a page with room draws an empty frame, which is where what to open with is chosen, and a
+ * full page draws the strip (`./TerminalFace`). The rail's own way in went to the page with room —
+ * which, pressed from a page that had room, was where the reader was already standing.
  */
 export function PaneRail({
-  layout, names, projects, needy, onProject, onPick, onRename, onOpen,
+  layout, names, projects, needy, onProject, onPick, onRename,
 }: {
   layout: Layout;
   names: FrameNames;
@@ -52,8 +51,6 @@ export function PaneRail({
   onProject: (project: number) => void;
   onPick: (frame: string) => void;
   onRename: (frame: string, name: string) => void;
-  /** Open another pane in this project. */
-  onOpen: (project: number) => void;
 }) {
   const [renaming, setRenaming] = useState<string | null>(null);
   const field = useRef<HTMLInputElement>(null);
@@ -92,18 +89,6 @@ export function PaneRail({
       </div>
       <div className="rail__head">
         <h2 className="rail__title">{t("face.sessions")}</h2>
-        {/* Under the heading of what it adds to, and named. It is offered for the project being
-            shown and no other: opening a pane goes to it, and a press that moved the screen
-            somewhere else as a side effect is one nobody meant. */}
-        {shownProject !== null && (
-          <button
-            className="rail__open"
-            title={t("face.openHere")}
-            onClick={() => onOpen(shownProject.id)}
-          >
-            <Icon name="plus" /> {t("face.addPane")}
-          </button>
-        )}
       </div>
       <div className="rail__list rail__list--panes">
         {inNameOrder(panes, names, layout.count).map(({ frame, label }) =>

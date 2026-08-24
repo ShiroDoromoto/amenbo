@@ -465,7 +465,7 @@ export function TerminalFace({
   }, [held, bound.answered, layout.project, openOrAsk]);
 
   /**
-   * Somebody asked for another pane, from the rail.
+   * Somebody asked for another pane, from the strip beside the panes.
    *
    * **It does not open one.** What it does is go to where one would go — the page with a gap in it, or
    * a page brought into being where every one of them is full — and the empty frame there is what the
@@ -497,8 +497,8 @@ export function TerminalFace({
       const open = paneIn(was, project, openIn.dir);
       if (open) return focusOn(was, open.id);
       const made = openedFrame(was, project, openIn.dir);
-      // The same mark the rail's way in leaves: this frame is one a person pressed for, so the pane
-      // opens rather than offering to.
+      // The same mark a press on the empty frame leaves (`openPane`): this frame is one a person
+      // pressed for, so the pane opens rather than offering to.
       startNow.current.add(made.frame.id);
       return made.layout;
     });
@@ -678,7 +678,6 @@ export function TerminalFace({
         setRailDrawn(false);
       }}
       onRename={(frame, name) => named(frame, name, "person")}
-      onOpen={askForRoom}
     />
   );
 
@@ -890,10 +889,10 @@ export function TerminalFace({
                   />
                 )}
                 {/* A full page draws no empty frame — there is no gap to draw — so the way in is put
-                    beside the panes instead, as a strip too thin to cost one of them its place. A
-                    person who filled the page here should not have to find the rail to fill the
-                    next: the press is the rail's, and it goes to where the room is
-                    (`../talk/layout`). */}
+                    beside the panes instead, as a strip too thin to cost one of them its place. It
+                    is the only way in a full page has, and it is on the face the page filled up on:
+                    it goes to where the room is, bringing a page into being where every one of them
+                    is full (`../talk/layout`). */}
                 {asking === null && !room && (
                   <button
                     className="termface__addstrip"

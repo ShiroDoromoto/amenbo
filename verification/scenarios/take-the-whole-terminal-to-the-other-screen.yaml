@@ -103,12 +103,13 @@ steps_gui:
     with:
       text: SCENARIO the first page
 
-  # The second and the third, each landing on a page of its own because a page holds one.
+  # The second and the third, each landing on a page of its own because a page holds one. A page that
+  # holds one is full as soon as it has one, so the way in is the strip beside the pane.
   - type: action
     domain: terminal
     op: open-pane
     with:
-      from: rail
+      from: strip
 
   - type: action
     domain: terminal
@@ -124,7 +125,7 @@ steps_gui:
     domain: terminal
     op: open-pane
     with:
-      from: rail
+      from: strip
 
   - type: action
     domain: terminal

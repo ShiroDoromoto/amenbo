@@ -509,7 +509,6 @@ export const id: Translation = {
     "face.rail": "Panel",
     "face.projects": "Proyek",
     "face.sessions": "Sesi",
-    "face.addPane": "Buka",
     "face.paneCount": "Panel di layar",
     "face.panes.other": "{n} panel",
     "face.pages": "Halaman",

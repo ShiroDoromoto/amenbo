@@ -120,14 +120,13 @@ steps_gui:
     with:
       shows: SCENARIO the frame that was opened
 
-  # A second one, from the rail. That way in opens nothing by itself — it goes to the page with room
-  # in it, and the empty frame waiting there is what opens the pane. The folder is the project's, so
-  # nothing is asked on the way.
+  # A second one, from the empty frame that moved along to the next gap — which is the whole of what
+  # this road is named after. The folder is the project's, so nothing is asked on the way.
   - type: action
     domain: terminal
     op: open-pane
     with:
-      from: rail
+      from: face
 
   - type: assert
     domain: terminal

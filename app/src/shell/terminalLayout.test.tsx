@@ -68,12 +68,13 @@ const press = async (key: string) => {
     document.dispatchEvent(new KeyboardEvent("keydown", { key, metaKey: true, bubbles: true }));
   });
 };
-/** Open another pane in the project being shown, which is two presses. The way in beside the project's
- *  name on the rail goes to a page with room for one — bringing a page into being where every page is
- *  full — and the empty frame there is what opens it (`../talk/layout`). */
+/** Open another pane in the project being shown. A page with room draws an empty frame and that is
+ *  the one press; a full page draws the strip instead, which goes to a page with room — bringing one
+ *  into being where every page is full — and the empty frame there is what opens it
+ *  (`../talk/layout`). */
 const openPaneIn = async (host: HTMLElement) => {
-  const room = [...host.querySelectorAll<HTMLElement>(".rail__open")][0];
-  if (room) await click(room);
+  const strip = [...host.querySelectorAll<HTMLElement>(".termface__addstrip")][0];
+  if (strip) await click(strip);
   await click([...host.querySelectorAll<HTMLElement>(".slot--empty .slot__open")][0]!);
 };
 const openPane = () => openPaneIn(container);
@@ -215,11 +216,11 @@ describe("the empty frame", () => {
     expect(q(".slot--empty"), "a full page offered somewhere to open a pane").toHaveLength(0);
   });
 
-  it("is on the page the rail's way in goes to, which it brings into being when every page is full", async () => {
+  it("is on the page the strip goes to, which it brings into being when every page is full", async () => {
     await mount();
     await openPane();
     await openPane();                              // page 1 full at two a page
-    await click(q(".rail__open")[0]!);
+    await click(q(".termface__addstrip")[0]!);
 
     expect(q(".termface__page")).toHaveLength(2);
     expect(q(".termface__page--on")[0]!.textContent).toBe("2");

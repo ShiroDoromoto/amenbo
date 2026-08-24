@@ -16,7 +16,6 @@ let root: Root;
 const project = vi.fn();
 const picked = vi.fn();
 const renamed = vi.fn();
-const opened = vi.fn();
 
 const PROJECTS = [
   { id: 1, name: "amenbo" },
@@ -42,7 +41,6 @@ async function draw(layout: Layout, names: Map<string, string> = new Map()) {
       onProject: project,
       onPick: picked,
       onRename: renamed,
-      onOpen: opened,
     }));
   });
 }
@@ -54,7 +52,6 @@ beforeEach(() => {
   project.mockReset();
   picked.mockReset();
   renamed.mockReset();
-  opened.mockReset();
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -111,22 +108,13 @@ describe("the rail", () => {
     expect(rows()[1]!.querySelector(".rail__idle")).not.toBeNull();
   });
 
-  it("offers one way in, under the heading of what it adds to", async () => {
+  it("offers no way in of its own — the panes' side has a nearer one either way", async () => {
     await draw(twoProjects());
-    // One button and not one per project: what it opens a pane in is the project on the screen, and
-    // a second one beside a project that is not would move the screen as a side effect.
-    expect(container.querySelectorAll(".rail__open")).toHaveLength(1);
-    const heads = [...container.querySelectorAll(".rail__head")];
-    expect(heads[1]!.querySelector(".rail__open"), "it is not under the projects").not.toBeNull();
-    expect(heads[0]!.querySelector(".rail__open")).toBeNull();
-  });
-
-  it("opens a pane in the project being shown, and says which", async () => {
-    await draw(twoProjects());
-    await act(async () => {
-      container.querySelector(".rail__open")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    expect(opened).toHaveBeenCalledWith(1);
+    // A page with room draws an empty frame, and a full one the strip beside the panes: both are on
+    // the face the reader is looking at, so a press here was never the only road (`./TerminalFace`).
+    const ways = [...container.querySelectorAll<HTMLElement>(".rail button")]
+      .filter((one) => !one.classList.contains("rail__project") && !one.classList.contains("rail__row"));
+    expect(ways.map((one) => one.className)).toEqual([]);
   });
 
   it("goes to a pane on a page that is not the one showing", async () => {
@@ -148,7 +136,6 @@ describe("the rail", () => {
         onProject: project,
         onPick: picked,
         onRename: renamed,
-        onOpen: opened,
       }));
     });
     const dots = [...container.querySelectorAll(".rail__project")]

@@ -440,6 +440,12 @@ const REGISTRY: &[OpSpec] = &[
     // `create`, which leaves no session on the line at all. No road stands on it at the moment, for the
     // same reason its task twin does not.
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "adrift", required: &["title"], refs: &["project"], strings: &["title"], binds: true },
+    // Onto the face a project's decisions are read on, which sits beside the views its tasks are read
+    // on rather than under them: a decision is not a task drawn another way. A road that wants to read
+    // a row of that list has to press it, and pressing it is the only way there.
+    //
+    // A screen road alone. A terminal asks for decisions by naming them, and never has to be anywhere.
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "open-face", required: &[], refs: &[], strings: &[], binds: false },
     // A decision's own life: the body is edited while it is still proposed, accepting freezes it,
     // and the link is what makes it a task's premise.
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "edit", required: &["target", "body"], refs: &["target"], strings: &["body"], binds: false },
@@ -1100,6 +1106,21 @@ const REGISTRY: &[OpSpec] = &[
     // its folders). `dir` names the folder the way every `folder` step does; `present: false` is the
     // other half and needs no name, since a task holding none has nothing to name.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "worked-in", required: &["target"], refs: &["target"], strings: &["dir"], binds: false },
+    // The mark the ledger puts on a row nothing is working on, read on each of the two faces that
+    // draws one: a reservation on the board, a proposal on the decision list. What sets the state up
+    // is the `adrift` action of the same name in each domain, and the two are deliberately spelled
+    // alike — one makes the store say it, the other reads the screen saying it back.
+    //
+    // **Both are `Review`s**, for the reason `tick banner` is: the mark is a glyph and a word of the
+    // interface, so a reading of the word would hold this gate to the one language the run was set up
+    // in. It carries no colour to read instead — it is drawn muted on purpose, being an absence of
+    // movement rather than news — so what settles it is an eye on the shot.
+    //
+    // `present: false` is the half that carries the claim: work begun at somebody's own terminal
+    // leaves no session on the line, and a mark on that row would be Amenbo telling a person their
+    // own work had stopped.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "adrift", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "adrift", required: &["target"], refs: &["target"], strings: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "listed", required: &["filter"], refs: &["target"], strings: &["filter", "position"], binds: false },
     // Whether one decision points at another, named by the side the edge is read from (`supersedes`

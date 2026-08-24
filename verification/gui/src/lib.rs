@@ -929,6 +929,10 @@ impl Instructor {
             ),
             // Back onto the board, and it says "again" because that is what is under test: what a screen
             // draws on arrival is not what it was holding before the road walked away from it.
+            (Domain::Decision, "open-face") => {
+                "Press the control that opens this project's decision records, beside the views its tasks are read on."
+                    .to_string()
+            }
             (Domain::Project, "open") => format!(
                 "Open the project \"{}\" again, from the list of projects.",
                 req(with, "project")?
@@ -1776,6 +1780,34 @@ impl Instructor {
                 req(with, "field")?,
                 show(with.get("equals").ok_or("assert `field` needs `equals`")?)
             ),
+            // The mark on a row nothing is working on, read on each of the two faces that draws one.
+            // Neither line names a colour, unlike its neighbours: this mark is drawn muted on purpose,
+            // so what the eye is sent to look for is its shape and where it sits.
+            //
+            // The `present: false` half is the whole claim, and it is why both lines say where the
+            // reservation or the proposal came from: a row begun at somebody's own terminal is one
+            // Amenbo cannot see the far end of, and marking it would be telling a person their own
+            // work had stopped.
+            (Domain::Task, "adrift") => match present(with) {
+                true => format!(
+                    "Confirm the card \"{}\" carries the pause mark and the words beside it that say nothing is working on it — drawn quiet, in the row of marks under the title, with nothing opened.",
+                    self.target_label(with)
+                ),
+                false => format!(
+                    "Confirm the card \"{}\" carries no such mark: it is reserved too, and the reservation is one Amenbo cannot see the far end of, so it must say nothing about it.",
+                    self.target_label(with)
+                ),
+            },
+            (Domain::Decision, "adrift") => match present(with) {
+                true => format!(
+                    "Confirm the decision \"{}\" carries the pause mark and the words beside it that say nothing is bringing it to a close — beside the status, not instead of it.",
+                    self.target_label(with)
+                ),
+                false => format!(
+                    "Confirm the decision \"{}\" carries no such mark: it is open too, and nobody put it up from inside Amenbo, so it must say nothing about it.",
+                    self.target_label(with)
+                ),
+            },
             // The same reading for a decision, off the face that reads decisions. It is the one thing a
             // road can say about a proposal after asking about it: that asking did not settle it.
             (Domain::Decision, "field") => format!(

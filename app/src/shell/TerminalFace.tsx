@@ -185,6 +185,10 @@ export function TerminalFace({
   // is made by opening one, and one nobody finished opening is a box that says nothing
   // (`../talk/layout`). `note` on it is a binding the host refused.
   const [asking, setAsking] = useState<{ note: string | null; agent: string | null } | null>(null);
+  // A press on the empty frame that arrived before the read of this project's folders did. It is state
+  // rather than a ref because carrying it out is what the read landing does, and an effect has to be
+  // told there is one to carry out (`../core/boundFolders`).
+  const [held, setHeld] = useState<{ project: number; agent: string | null } | null>(null);
 
   const projects = dataAdapter.listProjects();
   const bound = useBoundFolders(layout.project);
@@ -419,21 +423,46 @@ export function TerminalFace({
   }, [openPane]);
 
   /**
-   * Somebody asked for another pane in this project.
+   * Where a press lands, now that what the project is bound to is known.
    *
    * Where the project is bound to one folder there is nothing to ask and the pane opens there — the
    * whole difference between the second pane in a project and the first is that the first had a
    * folder to settle. Where it is bound to several, or to none, the question goes up and no frame is
    * made until it is answered (`./FolderChoice`).
    */
-  const askToOpen = useCallback((project: number, agent: string | null) => {
-    setRailDrawn(false);
+  const openOrAsk = useCallback((project: number, agent: string | null) => {
     if (bound.live.length === 1) openPane(project, bound.live[0]!.path, agent);
     // A project bound to nothing has no list to choose from, so the press goes straight to the
     // picker: what is being answered is where this project *is*, and it is one press either way.
     else if (bound.live.length === 0) bindFirstFolder(project, agent);
     else setAsking({ note: null, agent });
   }, [bound.live, openPane, bindFirstFolder]);
+
+  /**
+   * Somebody asked for another pane in this project.
+   *
+   * **A read that has not come back is not an answer of none.** The folders are read again every time
+   * the face lands on a project, and `live` is empty for as long as that read is out — so a press
+   * answered from it puts the folder picker up on a project that is already bound, which reads as a
+   * binding that has come undone (`AMB-T-3700`). The press is held instead and carried out below, so
+   * that it is still one press and still opens where the project actually is.
+   */
+  const askToOpen = useCallback((project: number, agent: string | null) => {
+    setRailDrawn(false);
+    if (bound.answered) openOrAsk(project, agent);
+    else setHeld({ project, agent });
+  }, [bound.answered, openOrAsk]);
+
+  // The held press, once the read has come back. A press held while the face was on another project is
+  // dropped rather than carried over: it was pressed on that project's frame, and opening a pane in a
+  // project nobody is looking at is not what was asked for.
+  useEffect(() => {
+    if (held === null) return;
+    if (held.project !== layout.project) { setHeld(null); return; }
+    if (!bound.answered) return;
+    setHeld(null);
+    openOrAsk(held.project, held.agent);
+  }, [held, bound.answered, layout.project, openOrAsk]);
 
   /**
    * Somebody asked for another pane, from the strip beside the panes.

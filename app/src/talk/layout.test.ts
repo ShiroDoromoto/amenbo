@@ -1,9 +1,9 @@
 // What the arrangement has to keep true, none of which is visible in the arithmetic that does it.
 import { describe, expect, it } from "vitest";
 import {
-  addPane, closedFrame, closedIn, EMPTY_LAYOUT, focusOn, goPage, goProject, laidOut, movedTo,
-  openedFrame, openedIn, pageCount, pageOfFrame, paneIn, panesOf, restored, roomOnPage, setCount,
-  slotsOf, type Layout,
+  ACROSS, addPane, closedFrame, closedIn, COUNTS, DEFAULT_COUNT, EMPTY_LAYOUT, focusOn, goPage,
+  goProject, laidOut, movedTo, openedFrame, openedIn, pageCount, pageOfFrame, paneIn, panesOf,
+  restored, roomOnPage, setCount, slotsOf, type Layout,
 } from "./layout";
 
 /** A layout with `n` panes opened in one project, the way pressing the way in `n` times leaves one. */
@@ -226,6 +226,35 @@ describe("the count is the most a page draws", () => {
 
   it("refuses a page this project has not got", () => {
     expect(goPage(withPanes(2), 3).page).toBe(1);
+  });
+
+  it("offers five counts and comes up on two", () => {
+    // Two is where a first run lands: one terminal is what there was before, and the wide splits are
+    // arrived at rather than handed out (`./layout`).
+    expect(COUNTS).toEqual([1, 2, 4, 6, 8]);
+    expect(DEFAULT_COUNT).toBe(2);
+    // Every count says how many go across, and no count ever asks for a third row.
+    for (const one of COUNTS) {
+      expect(ACROSS[one]).toBeGreaterThan(0);
+      expect(one / ACROSS[one]).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it("draws the count that was pressed for, however few panes are open", () => {
+    // Three panes on a count of eight is one page with room on it, not a page that shrank to three:
+    // the shape is the press, and the gaps past the empty frame stay blank.
+    const wide = withPanes(3, 8);
+    expect(pageCount(wide)).toBe(1);
+    expect(slotsOf(wide, 1)).toHaveLength(3);
+    expect(roomOnPage(wide, 1)).toBe(true);
+  });
+
+  it("keeps a count it has never heard of out of a kept arrangement", () => {
+    // A build that offered some other count wrote one, and this one has to land on something it can
+    // draw rather than on a grid with no rule for it.
+    const kept = { ...laidOut(withPanes(2)), count: 5 as Layout["count"] };
+    expect(restored(kept, null)!.count).toBe(DEFAULT_COUNT);
+    expect(restored({ ...laidOut(withPanes(2)), count: 8 }, null)!.count).toBe(8);
   });
 });
 

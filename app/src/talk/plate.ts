@@ -22,8 +22,9 @@ import {
   standsAsTurn,
   type Changeover,
   type Held,
+  type Say,
 } from "./nameplate";
-import { movingAt, STILL_AFTER_MS } from "./moving";
+import { movingAt, quietFor, STILL_AFTER_MS } from "./moving";
 import { closed, NO_SESSIONS, opened, said, type Sessions } from "./sessions";
 
 /** A pane's label, and the pane's way of telling it what happened. */
@@ -39,6 +40,9 @@ export type Plate = {
   closed(session: string): void;
   /** The frames have been named afresh — what a naming answered with. */
   named(names: FrameNames): void;
+  /** Whether this is the pane being worked in. It decides one thing: whether a long silence says how
+   *  long. A screen of panes each carrying a clock is a screen of clocks. */
+  focused(is: boolean): void;
   /** Take the label away. */
   stop(): void;
 };
@@ -100,6 +104,10 @@ export function mountPlate(
   let lastOutput: number | null = null;
   let moving = false;
   let settling: ReturnType<typeof setTimeout> | undefined;
+  // Whether this is the pane being worked in, and the clock that keeps a long silence's reading true.
+  // Silence raises no events, so the only thing that can notice a minute passing is a minute passing.
+  let focused = false;
+  let ticking: ReturnType<typeof setInterval> | undefined;
 
   /** Take in a chunk having crossed, and draw the change where there is one. */
   function tookOutput(): void {
@@ -128,6 +136,23 @@ export function mountPlate(
     onWaiting(now);
   }
 
+  /**
+   * What the end of the row says.
+   *
+   * The session's own words come first — a turn, a premise, a note — and how long it has been quiet
+   * fills the slot only when they leave it empty. A measurement of silence is the least of what can be
+   * said about a pane, and it must never stand where something that was actually said would.
+   *
+   * It is said in the pane being worked in and nowhere else. Every pane on a screen has been quiet for
+   * some length of time, and a row of clocks is what a reader stops reading.
+   */
+  function saying(): Say {
+    const said = sayOf(held, running === null ? undefined : sessions.get(running));
+    if (said.kind !== "silent" || !focused) return said;
+    const minutes = quietFor(lastOutput, Date.now());
+    return minutes === null ? said : { kind: "quiet", minutes };
+  }
+
   function redraw(): void {
     if (!live) return;
     const { now, changeover: next } = nowOf(held, finished, changeover, Date.now());
@@ -140,7 +165,7 @@ export function mountPlate(
         ? {
             name,
             now,
-            say: sayOf(held, running === null ? undefined : sessions.get(running)),
+            say: saying(),
             dot: { frame, moving },
           }
         : null,
@@ -225,6 +250,16 @@ export function mountPlate(
       names = known;
       redraw();
     },
+    focused: (is) => {
+      if (is === focused) return;
+      focused = is;
+      clearInterval(ticking);
+      ticking = undefined;
+      // A minute passing raises nothing, so the row is asked again every minute while this is the pane
+      // being worked in. Only while: a pane nobody is looking at has nothing to keep true.
+      if (focused) ticking = setInterval(redraw, 60_000);
+      redraw();
+    },
     stop: () => {
       live = false;
       // The pane is going, and a turn standing in it is nobody's to be knocked about any more: the
@@ -232,6 +267,7 @@ export function mountPlate(
       tellWaiting();
       clearTimeout(expiry);
       clearTimeout(settling);
+      clearInterval(ticking);
       unlisten?.();
       host.replaceChildren();
     },

@@ -487,6 +487,7 @@ export const tr: Translation = {
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "Konuşuluyor", "talk.holding": "{n} görev",
     "talk.finished": "{n} tamamlandı", "talk.premiseBroken": "Bir ön koşul artık geçerli değil",
+    "talk.quiet": "{n} dk sessiz",
     "face.switch": "Bu pencerenin gösterdiği",
     "face.tasks": "Görevler",
     "face.terminal": "Terminal",

@@ -35,7 +35,8 @@ vi.mock("../talk/terminal", () => ({
 // The label is a live thing of its own; what it draws is not what this is about.
 vi.mock("../talk/plate", () => ({
   mountPlate: () => ({
-    opened: () => {}, said: () => {}, closed: () => {}, named: () => {}, stop: () => {},
+    opened: () => {}, said: () => {}, closed: () => {}, named: () => {},
+    focused: () => {}, stop: () => {},
   }),
 }));
 

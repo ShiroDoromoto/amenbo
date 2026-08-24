@@ -490,6 +490,7 @@ export const id: Translation = {
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "Sedang berdiskusi", "talk.holding": "{n} tugas",
     "talk.finished": "{n} selesai", "talk.premiseBroken": "Sebuah prasyarat sudah tidak berlaku",
+    "talk.quiet": "hening {n} mnt",
     "face.switch": "Yang ditampilkan jendela ini",
     "face.tasks": "Tugas",
     "face.terminal": "Terminal",

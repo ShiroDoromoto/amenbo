@@ -490,6 +490,7 @@ export const th: Translation = {
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "กำลังปรึกษากันอยู่", "talk.holding": "{n} งาน",
     "talk.finished": "เสร็จ {n}", "talk.premiseBroken": "เงื่อนไขตั้งต้นไม่เป็นจริงแล้ว",
+    "talk.quiet": "เงียบมา {n} นาที",
     "face.switch": "หน้าต่างนี้กำลังแสดงอะไร",
     "face.tasks": "งาน",
     "face.terminal": "เทอร์มินัล",

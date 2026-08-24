@@ -26,6 +26,13 @@ describe("the first line a person types into a pane", () => {
       .toMatchObject({ line: "make verify", sent: true });
   });
 
+  it("does not end the line on the newline inside one", () => {
+    // Shift-Enter is sent as `ESC` and a carriage return (`./terminal`), which is a sequence of two
+    // and passes over like any other. A name is what a person sent, and a line they are still writing
+    // has not been sent.
+    expect(press(["l", "s", "\x1b", "\r", "-", "a"])).toMatchObject({ line: "ls-a", sent: false });
+  });
+
   it("starts again once a line has been sent", () => {
     const sent = press(["l", "s", "\r"]);
     expect(typed(sent, "p")).toMatchObject({ line: "p", sent: false });

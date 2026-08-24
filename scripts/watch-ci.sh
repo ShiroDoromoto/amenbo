@@ -173,10 +173,18 @@ watch_run() {
     done
 }
 
-# Watch a pull request until it lands. Three things are worth a line: a check that
-# failed, a merge that now needs a hand, and the landing itself.
+# Watch a pull request until it lands, or until one of its checks goes red. Three
+# things are worth a line: a check that failed, a merge that now needs a hand, and the
+# landing itself.
+#
+# A failed check ends the watch. A required check that is red does not clear on its
+# own — the pull request cannot land until someone pushes a fix — so watching on is
+# waiting for something that will not happen while nothing is said. Since the events
+# reach a caller reading through a pipe only once the process ends, the red that was
+# already detected would not even be shown. A re-run is what clears a flaky check, and
+# starting another watch after it is the caller's, as it is for `run`.
 watch_pr() {
-    local pr="$1" miss=0 prevfail="" prevms="" v state ms fail
+    local pr="$1" miss=0 prevms="" v state ms fail
     echo "watching pull request $pr  https://github.com/$repo/pull/$pr"
     while :; do
         if ! v=$(gh pr view "$pr" -R "$repo" --json state,mergeStateStatus 2>&1); then
@@ -197,8 +205,7 @@ watch_pr() {
         # from still running unless it is named.
         fail=$(gh pr checks "$pr" -R "$repo" --json name,bucket 2>/dev/null |
             jq -r '.[] | select(.bucket == "fail" or .bucket == "cancel") | "FAIL \(.name) (\(.bucket))"' | sort)
-        [ -n "$fail" ] && [ "$fail" != "$prevfail" ] && echo "$fail"
-        prevfail=$fail
+        [ -n "$fail" ] && { echo "$fail"; return 1; }
         sleep "$POLL_SECONDS"
     done
 }

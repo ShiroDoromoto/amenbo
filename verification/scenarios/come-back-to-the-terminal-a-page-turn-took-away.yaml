@@ -1,0 +1,165 @@
+# A terminal went off the screen when the page turned, and came back still running.
+#
+# The terminal face is one list of frames cut into pages, and there are three ways to cut it: the
+# count, the page digits, and opening a pane where there was not one. Every one of them takes panes
+# off the screen. What a reader has running in one is theirs until they end it, so the whole of this
+# road is the thing those moves must not do — and a pane is drawn rather than held, so there is no
+# way to find out except by turning away and coming back.
+#
+# ── Why the line, and why a second one ───────────────────────────────────────────────────────────
+# The road types a line into the pane and reads it back afterwards, for the reason
+# `put-the-terminal-on-its-own-screen` does: it is the reader's own words, so a reading finds it on
+# the pane drawing that session and on no other, and a pane showing a fresh prompt looks exactly like
+# a pane still drawing the session that was running until the line is on it. A page turned back to a
+# session that had died would come up on a new terminal — the pane opens one where the old session is
+# gone — and the line would not be there.
+#
+# It types a **second** line once the page has come back, and that is the half a reading of the first
+# cannot carry. Words on a pane outlive the process that wrote them: what a terminal has printed stays
+# where it was printed. So the first line coming back says the screen was restored; only something
+# typed *after* the return says the terminal on the other end of it is still listening — which is what
+# a reader means when they say the pane is still theirs.
+#
+# ── Why a second pane ────────────────────────────────────────────────────────────────────────────
+# One terminal would prove the page turn on its own, an empty page being somewhere to turn to. It
+# would not prove the re-cut: with one frame there is nothing for a new count to move, so a road with
+# a single pane would walk `set-panes` past the only thing it is dangerous for. A second frame is what
+# makes the count a re-cut — at one to a page the two are on pages of their own, at two they are side
+# by side — and the re-cut is what carries a running terminal off the screen without anybody paging.
+#
+# The second pane is opened rather than started: a page is one project, and a pane opened on a page
+# that already has a folder takes it, so nothing is asked. That is also why the second pane opens on
+# the page the first is on rather than on a page of its own — an empty page has no folder yet, and a
+# pane opened there would be asked for one.
+#
+# Only the first pane is ever spoken to. The second is not named by a line of its own, because a step
+# that typed into it would have to say which of two running panes it meant and there is no way to say
+# that; what it is here for is to be re-cut, and being re-cut needs no name.
+#
+# ── The pane the reader is working in ────────────────────────────────────────────────────────────
+# Two of the moves below take the screen somewhere the step did not name, and both follow the pane
+# being worked in: opening a pane makes it the one being worked in, and a new count keeps that pane
+# on the screen by moving the screen to its page. So the count of one lands on the *new* pane's page,
+# which is where the first pane is read as gone from — and the page digit is what brings it back.
+#
+# The world is empty on purpose, as it is on every road on this face: a terminal is not a record, and
+# what the pane runs is the reader's own shell. Choosing the folder is what raises the project it
+# belongs to, so the road makes what it needs by walking in.
+id: come-back-to-the-terminal-a-page-turn-took-away
+title: A terminal carried off the screen by a page turn comes back with the same session running in it
+description: >
+  Open the terminal face, choose the folder it runs in, get the pane down to a plain shell and type a
+  line into it. Open a second pane beside it, then cut the page down to one pane each: the screen
+  follows the new pane, and the first one's line is gone from the screen. Turn back to its page — the
+  line is there, and a second line typed at it is taken, so the terminal behind the page is still
+  running and not a picture of one. Cut back to two, and the pane is still the same one.
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The way in, and what settles the page's folder. Every pane opened on this page afterwards takes
+  # it, which is what lets the second one below be one press and nothing else.
+  - type: action
+    domain: terminal
+    op: open-folder
+    with:
+      dir: workshop
+
+  # Down to a plain shell, which is what a road that speaks in a pane speaks to. An agent's screen is
+  # its own to draw, and a line typed at one is something to answer rather than something left sitting
+  # where it was put — and being left where it was put is the whole of what this road follows.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the terminal behind the page
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the terminal behind the page
+
+  # A second pane in the empty box beside it. Nothing is asked — the folder is the page's — and the
+  # new pane becomes the one being worked in, which is what decides where the next step leaves the
+  # screen.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: slot
+
+  # And the first pane is untouched by it. A slot filling up beside a terminal is the commonest thing
+  # that happens on this face, so it is worth one step that it is not also the cheapest way to lose
+  # one.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the terminal behind the page
+
+  # One pane to a page, which cuts the two frames onto pages of their own. The screen stays with the
+  # pane being worked in — the one just opened — so what is on it now is the second page.
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 1
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the terminal behind the page
+      present: false
+
+  # Back to the page the first pane was cut onto. This is the move a reader makes most on this face,
+  # and the one a terminal has to be able to outlive.
+  - type: action
+    domain: terminal
+    op: go-page
+    with:
+      page: 1
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the terminal behind the page
+
+  # And it is still listening. A pane that came back drawn but with nothing on the other end would
+  # read exactly like this one until something is typed at it, the words already on it having been
+  # printed before any of this happened.
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO still taking what is typed
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO still taking what is typed
+
+  # Cut back to two, which brings the second pane onto this page again. The first pane has now been
+  # through both cuts and a page turn, and the line it was named by is still the line on it.
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 2
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the terminal behind the page

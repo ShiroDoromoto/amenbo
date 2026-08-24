@@ -438,7 +438,7 @@ the roads start from), and an ordered list of steps
 under `steps_cli` and/or `steps_gui`. Each step is an `action` (changes state) or an
 `assert` (an expected result), names the `domain` it touches (`task` / `decision` /
 `comment` / `project` / `dimension` / `attachment` / `store` / `folder` / `repo` / `plugin` /
-`mcp` / `tick` / `terminal`) and an
+`mcp` / `tick` / `terminal` / `files`) and an
 `op`, and carries named args under `with`. An action may bind its result with `as:`, and a later step
 refers back to it with `target:` — an op that joins two objects names the second under its own key
 (`decision link`'s `task:`), and every such key is checked back to an earlier binding, not just
@@ -560,6 +560,12 @@ the whole screen to another page, and `open-pane` starts a terminal where there 
 list, which opens in that page's first free slot and takes the screen there. What they are walked for
 is what they must not do. Every one of those moves re-cuts one list of frames, and a pane that left
 the screen is a pane still running behind it.
+`come-back-to-the-terminal-a-page-turn-took-away` is the road. It types a second line into the pane
+once the page has come back, which is the half a reading of the first cannot carry: what a terminal
+printed stays printed, so the first line says the screen was restored and only something typed after
+the return says anything is still listening. And it keeps a second pane going for the length of it —
+with one frame there is nothing for a new count to move, so a road with a single pane walks
+`set-panes` past the only thing it is dangerous for.
 
 `dot` is the one reading on these roads that is not text at all. The mark on a pane's label pulses
 while something is coming out of that terminal, and it is the only thing on screen that says a pane
@@ -569,6 +575,12 @@ The pane it reads has to be one the reader is not working in, the focused pane n
 somebody looking straight at a terminal can already see it moving. And the step is watched rather
 than shot: a pulse rests, twice a turn, at exactly the still dot's own step, so it is a `Review` and
 the instruction says how long to watch.
+
+No road walks the moving half yet, and the reason is a third thing about the mark. A pane reads as
+moving for a moment and a half after its last output, so a pulse to watch for a few seconds is a pane
+that keeps printing — and nothing on this face starts one. The line a road types is deliberately a
+command no shell knows, which prints once and stops. What that half needs is a way to set something
+running in a pane and leave it running, and until there is one the op is written and unwalked.
 
 What a `pane` assert reads is deliberately the reader's own words rather than the interface's. Every
 other word on that face belongs to Amenbo, so a reading of one would hold the gate to whichever
@@ -588,6 +600,39 @@ shortcut around the seam: it is the only door there is.
 `be-told-in-the-pane-that-your-turn-has-come` is the road, and what it defends is the one thing
 nothing outside a pane can find out — an agent going quiet because it is waiting for a person, rather
 than because it is thinking — arriving where that person reads it.
+
+Every road that speaks *in* a pane takes `open-shell` first. A folder with an agent on it opens on
+the agent, which is what a reader wants and what a road cannot use: what an agent does with a line
+typed at it is the agent's own, so a gate resting on one carrying out a command rests on a promise
+nothing holds it to. One op covers the three shapes the face can come up in — a pane already running
+an agent, the offer of several, the notice that none was found — because a plain shell is reachable
+from every one of them, and which of the three is on screen is the run's machine's business rather
+than the road's.
+
+`face-badge` reads the one thing that crosses between the two faces: the mark the terminal's segment
+wears while a turn is standing behind it. It carries no number and no words, so a road says it is
+there or that it is not — and the absent half is half the goal, since being on the terminal face is
+being told and crossing over spends the mark. Raising one takes `say` with `away:`, the only word on
+these roads said from behind the face that reads it: the layer is spoken inside a pane and the mark
+is drawn on the other side of the switch, so the operator arms the word and crosses over before it
+lands. `be-told-on-the-board-that-the-terminal-wants-you` is the road.
+
+And the last is the column beside those panes. **`files`** is the folder a project answers for, read
+from inside Amenbo: three sections in one column — what an agent pointed at, what has changed lately,
+and the folder itself folded down — so every op takes a `section` saying which of the three a row is
+being looked for in, the same file being able to stand in more than one at once. `tree` unfolds the
+folder's section, `enter` opens one folder a level, `open` presses a file and `back` leaves it;
+`listed`, `reading`, `says` and `openable` read what a row is, what an opened file draws, one of the
+face's standing lines, and whether a row is something to press at all.
+
+The other three are the file going the other way — out of Amenbo, to the machine. `menu` right-clicks
+a row, `hand-over` presses one of the three items on the menu that comes up, and `handed-over` reads
+what the press left. Which item is meant travels as a `door` — `usual` for the application the machine
+already opens that kind of file with, `pick` for one the reader chooses for this file alone, `manager`
+for the file manager — rather than as the item's own words, which are the interface's and are drawn in
+whatever language the run's machine is set to. All three are the screen's alone, and the reading stops
+where Amenbo does: what a hand-over ends in belongs to the machine, so the road goes no further than
+the machine having taken the file. `hand-a-file-to-the-machine` is the road.
 
 A few ops exist to put something **wrong**, because a repair cannot be shown working over a store
 where there is nothing to repair — and a sweep that sweeps nothing looks exactly like one that works.

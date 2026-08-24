@@ -1895,12 +1895,26 @@ const REGISTRY: &[OpSpec] = &[
     // It is walked by a hand rather than by a driver on purpose. The layer exists only inside a pane
     // — said anywhere else it is refused — so there is no way to reach it except the one an agent
     // reaches it by, and a road that stood it up some other way would prove a path nobody walks.
+    //
+    // `away` is for the one thing that has to be said from behind the face that reads it: what the
+    // segment wears is raised only by a turn arriving while the ledger is up, and the layer is only
+    // ever spoken inside a pane, which is on the other face. With it the word is armed and the
+    // operator crosses over before it lands, so the step ends on the ledger. How long they have is
+    // the driver's to say and not the road's.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "say", required: &["verb", "text"], refs: &[], strings: &["verb", "text"], binds: false },
     // And what the pane's label carries afterwards. This is the whole of what the surface layer is
     // for: a word said in a terminal that nothing outside it can find out, arriving where a person
     // reads it. The words are the agent's own, so a reading finds them on the label and nowhere in
     // the interface around it.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "label", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    // The mark the terminal's own segment wears while a turn is standing behind it. It is the whole
+    // of what crosses the switch — a dot, with no number and no words — so there is nothing to name
+    // in it and nothing to read out: what a road says here is that it is there, or that it is not.
+    //
+    // The absent half is half the goal. Being on the terminal face is being told, so the mark is
+    // spent by crossing to it: a badge still up after the person has looked would be a light saying
+    // "something is standing" rather than a knock saying "something came up while you were away".
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "face-badge", required: &[], refs: &[], strings: &[], binds: false },
     // What an agent pointed at, said from inside its own pane. It is not a `say` verb even though it
     // is the same layer and the same seam: the other four carry one line, and this carries a thing and
     // a reason for it — a shape of its own, and one the file face reads rather than the pane's label.
@@ -1971,6 +1985,27 @@ const REGISTRY: &[OpSpec] = &[
     // that is one and not the other is the state this asks about, and it cannot be read off a shot,
     // so it is settled by an eye.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "openable", required: &["name"], refs: &[], strings: &["name"], binds: false },
+
+    // ── handing a file to the machine ─────────────────────────────────────────────────────────────
+    // The three ways out of this face that are not reading the file here, and all three are the
+    // machine's own: the application it already opens that kind of file with, one the reader picks
+    // for this file alone, and the file manager they keep their folders in. Amenbo chooses none of
+    // them and remembers none of them, so the road stops at the hand-over and never follows what came
+    // forward — where the file ended up is the machine's answer, not this face's.
+    //
+    // The menu is a right-click, and it is drawn on files alone: a folder's row opens a level and has
+    // nothing to hand anywhere. The row is therefore named the way every other row here is — by its
+    // name, and by the section it is standing in.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "menu", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
+    // One item on that menu pressed. `door` names which of the three rather than the words on the
+    // item, for the reason `note` and `section` are named that way: the wording is the interface's
+    // own, and which language the run's machine is in is not a road's to know.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "hand-over", required: &["door"], refs: &[], strings: &["door"], binds: false },
+    // And what the press left. No shot settles it, and that is the point rather than a gap: what a
+    // hand-over ends in is off Amenbo's own window — an application that came forward, or an
+    // operating system's chooser drawn by the system — and the run shoots the window under test. The
+    // eye that closes it is the one that was standing at the screen when the item was pressed.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "handed-over", required: &["door"], refs: &[], strings: &["door"], binds: false },
 
 ];
 
@@ -2468,12 +2503,20 @@ impl Scenario {
             // The yes/no args are booleans wherever they appear: `present` asks whether something is
             // there, `ok` what verdict a check is expected to come back with, `running` whether
             // anything is working a queue, `required` whether a declared setting is one its plugin
-            // cannot work without, the two key questions whether a catalog serves a signing key and
-            // whether one of its is pinned, and `folded` whether the ref being pressed in a pane is
-            // one the fold broke across two rows.
-            for key in
-                ["present", "ok", "running", "required", "publishes_key", "pinned_key", "folded"]
-            {
+            // cannot work without, `away` whether a word said in a pane is armed and left behind,
+            // `folded` whether the ref being pressed in a pane is one the fold broke across two
+            // rows, and the two key questions whether a catalog serves a signing key and whether
+            // one of its is pinned.
+            for key in [
+                "present",
+                "ok",
+                "running",
+                "required",
+                "away",
+                "folded",
+                "publishes_key",
+                "pinned_key",
+            ] {
                 if let Some(v) = step.with().get(key) {
                     if v.as_bool().is_none() {
                         errs.push(at(i, format!("`{key}` must be a boolean")));

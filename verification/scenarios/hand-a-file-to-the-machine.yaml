@@ -1,0 +1,149 @@
+# The three ways out of the file face that are not reading the file here — and all three are the
+# machine's own.
+#
+# A reader who has handed a folder over gets to read what is in it without leaving the app
+# (`read-a-file-in-the-folder-the-ai-can-see`). This road is the other half of that: the file they are
+# looking at is one they may want somewhere else entirely, and Amenbo's answer to that is to hand it
+# over rather than to grow a way of its own. The application the machine already opens that kind with,
+# one the reader picks for this file alone, and the file manager they keep their folders in — none of
+# the three is a choice Amenbo makes, and none of the three is one it remembers.
+#
+# ── Why it stops at the hand-over ────────────────────────────────────────────────────────────────
+# What is under test is that the face lets go. Where the file lands is the machine's answer, and a
+# road that followed it into a text editor would be walking somebody else's product — differently on
+# every machine it was walked on. So each of the three ends at "the machine took it", and the reader
+# is told plainly to go no further.
+#
+# ── The one that looks different on every OS ─────────────────────────────────────────────────────
+# Picking an application is two shapes behind a single item. Where the operating system has a chooser
+# of its own it draws it; where it has none the applications come back and Amenbo draws them where the
+# menu was. Both are right, and the road says so rather than naming one: a line written for the shape
+# one machine happens to have would be red on every other machine for no fault of the build's.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road here. Handing a file to an application at a shell is the shell's own
+# vocabulary, and Amenbo is the subject of none of it.
+id: hand-a-file-to-the-machine
+title: A file read in Amenbo is handed out to the machine three ways, and Amenbo decides none of them
+description: >
+  Open the terminal face on a project whose folder holds a file, unfold the folder's section and
+  right-click the file. Press each of the three items on the menu in turn: the file goes to the
+  application this machine already opens that kind with, then to something that asks which
+  application to use, then to the file manager. Each time, what is read is that the machine took it —
+  never which application it landed in.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # One ordinary file, under a name the machine will have something to open. What is in it does not
+  # matter to this road — nothing here reads it — but a file with words in it is what a reader would
+  # have, and an empty one would open to a blank window that proves nothing either way.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: notes/watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: enter
+    with:
+      name: notes
+
+  # The row the whole road is about. It is read before it is right-clicked, so a run that finds
+  # nothing under the pointer later fails on the row being absent rather than on the menu.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: tree
+
+  # ── the application the machine already opens this kind with ──────────────────────────────────
+  - type: action
+    domain: files
+    op: menu
+    with:
+      name: watering.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: hand-over
+    with:
+      door: usual
+
+  - type: assert
+    domain: files
+    op: handed-over
+    with:
+      door: usual
+
+  # ── one the reader picks for this file alone ──────────────────────────────────────────────────
+  # The menu is opened again because the last one is gone: pressing an item closes it, which is the
+  # face saying it has let go.
+  - type: action
+    domain: files
+    op: menu
+    with:
+      name: watering.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: hand-over
+    with:
+      door: pick
+
+  - type: assert
+    domain: files
+    op: handed-over
+    with:
+      door: pick
+
+  # ── the file manager the reader keeps their folders in ────────────────────────────────────────
+  - type: action
+    domain: files
+    op: menu
+    with:
+      name: watering.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: hand-over
+    with:
+      door: manager
+
+  - type: assert
+    domain: files
+    op: handed-over
+    with:
+      door: manager

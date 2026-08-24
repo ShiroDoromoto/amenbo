@@ -1846,7 +1846,12 @@ const REGISTRY: &[OpSpec] = &[
     // put it there, in whatever language the app is in, so a road can follow it from one window to
     // the other. It also names the pane's frame — the first line sent into a frame is what it is
     // called — which is how a road says *which* window it means once there are two.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "type-line", required: &["text"], refs: &[], strings: &["text"], binds: false },
+    //
+    // `shows` is which pane, named the way `remove-pane` names one: by the words a road typed into it
+    // earlier. A pane just opened needs none — it is the only one on the page with nothing on it, and
+    // the step before this one made it — but a road that comes *back* to a pane it left does, because
+    // by then every box on the page has a terminal in it and "the pane" names three of them.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "type-line", required: &["text"], refs: &[], strings: &["text", "shows"], binds: false },
     // A command run in the pane, and waited on until what it printed is drawn. It is not `type-line`
     // with a longer word in it: that step's line is the reader's own and is written to be *left* on
     // the screen — the shell is not meant to know it — and this is a program being asked for output

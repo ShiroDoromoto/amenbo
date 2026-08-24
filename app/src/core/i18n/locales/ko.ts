@@ -656,6 +656,8 @@ export const ko: Translation = {
     "block.draft": "시작할 수 없습니다(아직 작성 중): 먼저 작성을 마치세요",
     "chip.draft": "작성 중",
     "premise.changed": "예약한 뒤에 전제가 바뀌었습니다: {detail}",
+    "adrift.mark": "아무도 없음",
+    "adrift.tip": "Amenbo 안에서는 더 이상 아무것도 이 일을 하고 있지 않습니다. Amenbo가 볼 수 없는 터미널에서 계속되고 있을 수 있으니, 옮기기 전에 확인하세요.",
     "premise.warn": "예약한 뒤에 전제가 바뀌었습니다(AMB-D-366): {detail}. 혼자서도 성립하는 부분만 끝내거나, 할 일로 되돌려 넘기세요.",
     "premise.noLongerSettled": "더는 정해진 상태가 아님",
     "detail.premiseChanged": "예약 후 바뀜",

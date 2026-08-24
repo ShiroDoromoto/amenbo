@@ -4,11 +4,12 @@ import { dataAdapter } from "../mock/adapter";
 import { useStore } from "../store/store";
 import type { Status, TaskCard } from "../mock/types";
 import {
-  BlockedChips, DueChip, FacetAvatar, PremiseChangedChip, PriorityDot, StatusSelect, TaskIdChip,
+  AdriftChip, BlockedChips, DueChip, FacetAvatar, PremiseChangedChip, PriorityDot, StatusSelect, TaskIdChip,
 } from "../components/atoms";
 import { isClosed, STATUS_COLUMNS } from "../core/status";
 import { Pager, usePager } from "../components/Pager";
 import { useTaskPage, useTaskSearchIds } from "../core/reads";
+import { useAdrift } from "../core/adrift";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { FirstLoop } from "../components/FirstLoop";
 import { AgentHookWiringRow, useAgentHookWiring } from "./AgentHookWiringRow";
@@ -159,6 +160,10 @@ export function BoardScreen({
   // for. `null` back from the hook is "nothing was asked", which is not the same as "nothing matched".
   const { hits, error: searchError } = useTaskSearchIds(projectId, ref ? "" : rawQ);
   const { tasks: all } = useTaskPage({ projectId, sort: "order" });
+  // Which of this project's work nothing is at. It is asked for the project rather than per row, and marked
+  // on the rows the reader is already looking at — the ledger is where a standing inventory belongs, and it
+  // is put in front of nobody who has not come to read it (`AMB-D-748`).
+  const adrift = useAdrift(projectId);
   const projectDims = project?.dimensions ?? [];
   // If the grouping axis names a dimension id, that is what splits the columns ("status", or a deleted id, → null).
   const groupingDimId =
@@ -436,6 +441,7 @@ export function BoardScreen({
                 name={statusLabel(st)}
                 cards={cards}
                 chips={chips}
+                adrift={adrift.tasks}
                 count={isDone ? colTasks.length - rejected : undefined}
                 note={rejected > 0 ? tf("board.rejectedCount", { n: rejected }) : undefined}
                 overflow={overflow}
@@ -470,6 +476,7 @@ export function BoardScreen({
               name={v.name}
               cards={tasks.filter((tk) => dimAssign[tk.id] === v.id)}
               chips={chips}
+              adrift={adrift.tasks}
               selectedTaskId={selectedTaskId}
               onSelectTask={onSelectTask}
               onStatus={store.setStatus}
@@ -491,6 +498,7 @@ export function BoardScreen({
             name={t("board.noDimensionValue")}
             cards={tasks.filter((tk) => !dimAssign[tk.id])}
             chips={chips}
+            adrift={adrift.tasks}
             selectedTaskId={selectedTaskId}
             onSelectTask={onSelectTask}
             onStatus={store.setStatus}
@@ -522,6 +530,7 @@ export function BoardScreen({
                 <span className="row__spacer" />
                 <BlockedChips task={t} />
                 <PremiseChangedChip task={t} />
+                {adrift.tasks.has(t.id) && <AdriftChip compact />}
                 {t.assignee && <FacetAvatar actor={t.assignee} />}
                 <PriorityDot priority={t.priority} />
                 <DueChip due={t.due} />
@@ -600,11 +609,17 @@ function AddDimensionValue({ onAdd }: { onAdd: (name: string) => void }) {
 // the cards whose props are unchanged. The column itself usually does re-render (the card array and the drop
 // handlers are fresh each render); what matters is that a change of selection stops before the sibling cards.
 const Column = memo(function Column({
-  name, cards, chips, count, note, overflow, onSeeAllList, selectedTaskId, onSelectTask, onStatus, onAdd,
+  name, cards, chips, adrift, count, note, overflow, onSeeAllList, selectedTaskId, onSelectTask, onStatus, onAdd,
   droppable, draggingId, onDropTask, onCardDragStart, onCardDragEnd,
 }: {
   name: string;
   cards: TaskCard[];
+  /**
+   * The reservations nothing is working on, for the whole board (see `core/reads`'s `useAdrift`). The set is
+   * read here and handed to each card as the one boolean it needs, so a card whose answer has not moved keeps
+   * its memo.
+   */
+  adrift: ReadonlySet<number>;
   /**
    * The classification each card draws, by task id (see `cardChips`). One map for the whole board, so the
    * per-card arrays keep their identity and the cards' memo survives a re-render of the column.
@@ -669,6 +684,7 @@ const Column = memo(function Column({
           key={t.id}
           task={t}
           chips={chips[t.id]}
+          adrift={adrift.has(t.id)}
           selected={t.id === selectedTaskId}
           draggable={!!onCardDragStart}
           dragging={t.id === draggingId}
@@ -696,11 +712,13 @@ const Column = memo(function Column({
 // onEndDrag=the stable clearDragging) and the id is bound inside the card from task.id. The status select in the
 // footer must stop mousedown to suppress the card's drag start, or selecting and dragging cannot both work.
 const TaskCardView = memo(function TaskCardView({
-  task, chips, selected, draggable, dragging, onBeginDrag, onEndDrag, onSelect, onStatus,
+  task, chips, adrift, selected, draggable, dragging, onBeginDrag, onEndDrag, onSelect, onStatus,
 }: {
   task: TaskCard;
   /** The values this task carries on the axes flagged for the card. Undefined when it carries none. */
   chips?: CardChip[];
+  /** Whether nothing inside Amenbo is working on it any more (`components/atoms`'s `AdriftChip`). */
+  adrift?: boolean;
   selected: boolean;
   draggable?: boolean;
   dragging?: boolean;
@@ -748,6 +766,7 @@ const TaskCardView = memo(function TaskCardView({
         <DueChip due={task.due} />
         <BlockedChips task={task} />
         <PremiseChangedChip task={task} />
+        {adrift && <AdriftChip />}
       </div>
 
       {/* Its own row rather than more chips on the one above: what the task *is* reads apart from what is

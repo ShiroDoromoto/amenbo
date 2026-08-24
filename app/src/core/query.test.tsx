@@ -227,4 +227,25 @@ describe("invalidateScopes — a scope reaches the queries drawn from it", () =>
     await settle();
     expect(count("installs")).toBe(2); // a gate moved outside this window: re-read the rows that draw it
   });
+
+  // What nothing is working on is answered from two faces at once, so it goes stale from either. A reservation
+  // handed back is a task write and a proposal settled is a decision write, and a mapping that named only one
+  // of them would leave the mark standing on a row that had just been picked up or ruled on.
+  it("refetches what nothing is working on for a task write and for a decision write", async () => {
+    render(createElement(KeyProbe, { qkey: ["adrift", 1], k: "adrift" }));
+    await settle();
+    expect(count("adrift")).toBe(1);
+
+    invalidateScopes(new Set(["plugins"]));
+    await settle();
+    expect(count("adrift")).toBe(1);
+
+    invalidateScopes(new Set(["tasks"]));
+    await settle();
+    expect(count("adrift")).toBe(2);
+
+    invalidateScopes(new Set(["decisions"]));
+    await settle();
+    expect(count("adrift")).toBe(3);
+  });
 });

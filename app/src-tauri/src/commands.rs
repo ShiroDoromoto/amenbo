@@ -3732,7 +3732,7 @@ pub fn session_work(session: String) -> Result<SessionWorkDto, CmdError> {
     Ok(out)
 }
 
-/// What was left in the middle in this folder's project, by a pane that has gone.
+/// What in `project` nothing is working on any more.
 ///
 /// A process can die and the ledger not hear about it, so a task can sit reserved with nobody at it. It
 /// is out of everybody's mailbox while it does, which is the whole of why it goes unnoticed. What makes
@@ -3752,29 +3752,21 @@ pub fn session_work(session: String) -> Result<SessionWorkDto, CmdError> {
 ///   terminal is still open, and saying the work had stopped would be saying something it does not know;
 /// - one held by a session that is running, which is work in hand.
 ///
-/// `folder` is which project is being asked about: a screen of panes is one project (`../talk/layout`),
-/// and the question belongs to the screen it is asked on. A folder that is nobody's answers with
-/// nothing rather than with the whole device.
+/// **The question belongs to a project, and the answer is only ever ids.** It is asked by the ledger,
+/// which is already holding the rows it is asking about — the reader is looking at a board of this
+/// project's work, and what they cannot see in it is which of it nothing is at. A project outside this
+/// store's reach answers with nothing rather than with the device.
 ///
-/// The rows come back rather than the ids, unlike `session_work`, because the whole of what is drawn
-/// is the rows — a second round trip per screen for the same answer is what the perf budget is for.
-///
-/// **Nothing on screen reads this at the moment.** The terminal face's empty frame did, and asking there
-/// was wrong: just after the app comes up no session is alive, so every reservation ever made in a pane
-/// came back and the frame opened on a standing inventory instead of on news. The fact is still a fact
-/// — where it is put to a person is the ledger's to answer, and that is not designed yet.
+/// **That the answer is a standing inventory is why it is asked here and not on the terminal face.**
+/// Just after the app comes up no session is alive, so every reservation ever made in a pane comes
+/// back — which is true, and is news nowhere. An empty frame is a place for news; a ledger is where a
+/// person goes to read stock, and it never interrupts to say so.
 #[tauri::command]
-pub fn adrift(app: tauri::AppHandle, folder: String) -> Result<AdriftDto, CmdError> {
+pub fn adrift(app: tauri::AppHandle, project: i64) -> Result<AdriftDto, CmdError> {
     use amenbo_core::store_engine::{self, TaskQuery};
 
     let _perf = amenbo_core::perf::Timer::start("adrift");
-    let nothing = || AdriftDto { tasks: Vec::new(), decisions: Vec::new() };
-    let Some((_, binding)) = amenbo_core::binding::find_upward(std::path::Path::new(&folder)) else {
-        return Ok(nothing());
-    };
-    let Some(project_id) = binding.project_id else {
-        return Ok(nothing());
-    };
+    let project_id = project;
 
     let live = crate::pty::live(&app);
     let store = open_store_read()?;
@@ -3797,41 +3789,21 @@ pub fn adrift(app: tauri::AppHandle, folder: String) -> Result<AdriftDto, CmdErr
     )?;
 
     let ledger = &store.paths.activity_file;
-    let mut tasks = Vec::new();
-    for id in amenbo_core::session_work::adrift(ledger, &page.ids, &live) {
-        if let Some(row) = amenbo_core::store_engine::read::task_card_row(read_model.conn(), id)? {
-            tasks.push(AdriftRowDto {
-                id: row.id,
-                r#ref: amenbo_core::idref::task(row.id),
-                title: row.title,
-            });
-        }
-    }
+    let tasks = amenbo_core::session_work::adrift(ledger, &page.ids, &live);
 
     // The proposals, read the same way round: which are still proposed is the store's, and which pane
     // put one up is the ledger's. A project holds tens of decisions at most, so the whole listing is
     // taken and narrowed here rather than asked for by status — there is no read that asks by one.
     let listed = store_engine::decision_page(read_model.conn(), store.reach(), project_id, None, 0)?;
     let mut open = Vec::new();
-    let mut titles: std::collections::HashMap<i64, String> = std::collections::HashMap::new();
     for id in &listed.ids {
         if let Some(row) = amenbo_core::store_engine::read::decision_card_row(read_model.conn(), *id)? {
             if row.status == "proposed" {
                 open.push(row.id);
-                titles.insert(row.id, row.title);
             }
         }
     }
-    let decisions = amenbo_core::session_work::adrift_decisions(ledger, &open, &live)
-        .into_iter()
-        .filter_map(|id| {
-            titles.remove(&id).map(|title| AdriftRowDto {
-                id,
-                r#ref: amenbo_core::idref::decision(id),
-                title,
-            })
-        })
-        .collect();
+    let decisions = amenbo_core::session_work::adrift_decisions(ledger, &open, &live);
 
     Ok(AdriftDto { tasks, decisions })
 }

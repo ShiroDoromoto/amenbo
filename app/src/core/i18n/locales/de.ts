@@ -671,6 +671,8 @@ export const de: Translation = {
     "block.draft": "Kann nicht starten (wird noch erstellt): schließe die Erstellung zuerst ab",
     "chip.draft": "Wird erstellt",
     "premise.changed": "Die Prämissen haben sich nach deiner Reservierung geändert: {detail}",
+    "adrift.mark": "Steht still",
+    "adrift.tip": "Innerhalb von Amenbo arbeitet nichts mehr daran. An einem Terminal, das Amenbo nicht sieht, kann es weitergehen — sehen Sie nach, bevor Sie es bewegen.",
     "premise.warn": "Die Prämissen haben sich nach deiner Reservierung geändert (AMB-D-366): {detail}. Bring nur den Teil zu Ende, der für sich steht, oder gib sie zurück, indem du sie auf offen setzt.",
     "premise.noLongerSettled": "nicht mehr entschieden",
     "detail.premiseChanged": "Seit der Reservierung geändert",

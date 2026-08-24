@@ -398,6 +398,33 @@ export function PremiseChangedChip({ task, compact = false }: { task: TaskCard; 
 }
 
 /**
+ * The mark on a row nothing is working on: a reservation, or a proposal, whose pane has gone
+ * (`core/reads`'s `useAdrift`).
+ *
+ * **It is quiet on purpose.** The other marks on this row are news — something moved under a holder,
+ * something is in the way — and this one is the absence of movement, which is the state the row has
+ * been sitting in. Drawing it in the step colours would make an inventory look like an alarm, and the
+ * alarm would be standing on every such row from the moment the app comes up.
+ *
+ * **It says what Amenbo can see, which is less than what is true.** Nothing of Amenbo's own is at the
+ * row; a person may well be carrying on at a terminal it cannot see. So the tooltip asks rather than
+ * concludes, and pressing it does nothing — moving the row is the reader's, or their AI's
+ * (`AMB-D-748`).
+ */
+export function AdriftChip({ compact = false }: { compact?: boolean }) {
+  return (
+    <span
+      className={compact ? "chip--blockglyph faint" : "chip chip--adrift"}
+      role="img"
+      title={t("adrift.tip")}
+      aria-label={t("adrift.tip")}
+    >
+      <Icon name="pause" />{compact ? null : ` ${t("adrift.mark")}`}
+    </span>
+  );
+}
+
+/**
  * The same fact as {@link PremiseChangedChip}, spelled out: the detail pane's field naming every premise that
  * moved under the holder, each a chip that navigates to it. It reads a different axis from `blockedBy` (why
  * anyone cannot start it) — here it is what changed since *this* holder took it — so it is its own field,

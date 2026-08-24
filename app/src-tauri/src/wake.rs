@@ -10,8 +10,8 @@
 //! asks with whatever it has, and opens with the canonical form this answers in.
 //!
 //! **What a press chooses is kept against the person, and what a project pins is kept against the
-//! project.** [`wake_chose`] writes the first ([`amenbo_core::config::Config::last_agent`]) and
-//! [`wake_remember`] the second — the two ranks [`amenbo_core::wake::settle`] reads in that order.
+//! project.** `wake_chose` writes the first ([`amenbo_core::config::Config::last_agent`]) and
+//! `wake_remember` the second — the two ranks [`amenbo_core::wake::settle`] reads in that order.
 //!
 //! **The question comes in two shapes, and the ranks are read the same way for both.** A pane about
 //! to open in a known folder asks `wake_probe`; an empty frame, where no folder has been settled

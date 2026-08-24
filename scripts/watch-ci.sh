@@ -12,8 +12,15 @@
 #   watch-ci.sh pr <number>                  a pull request: its checks, and its landing
 #   watch-ci.sh main <sha>                   the run a merge into main started
 #   watch-ci.sh tag <tag>                    the run a release tag started
-#   watch-ci.sh dispatch <workflow> <ref>    a run started by hand
+#   watch-ci.sh dispatch <workflow> <ref> [not-before]
+#                                            a run started by hand
 #   watch-ci.sh run <id>                     a run by id, when you already have one
+#
+#   watch-ci.sh --print-id <mode> <args>     print the id it resolved to, and stop
+#
+# --print-id is for the caller that needs the run itself and not only its verdict —
+# downloading its artifacts, say. Resolving it here rather than there is the point:
+# an id picked by hand is picked from the same ambiguity described below.
 #
 # The mode is what carries the filter. A run is NOT addressed by id from the outside,
 # because choosing the id is the part that goes wrong: one commit carries runs from
@@ -22,6 +29,9 @@
 # modes above resolve the id themselves, from the commit and the workflow together,
 # and they refuse to guess: no run yet means wait and say so, more than one means
 # stop rather than pick.
+#
+# Progress and diagnostics go to stderr throughout. Stdout carries the id under
+# --print-id and the emitted events otherwise, so a caller may read either.
 #
 #   AMENBO_CI_REPO — OWNER/REPO to watch (default: the repository of the CWD)
 #   AMENBO_CI_POLL, AMENBO_CI_APPEAR, AMENBO_CI_APPEAR_LIMIT, AMENBO_CI_MISS_LIMIT
@@ -43,9 +53,17 @@ usage() { awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' 
 
 die() { echo "✗ $*" >&2; exit 1; }
 
+print_id=""
+if [ "${1:-}" = "--print-id" ]; then print_id=yes; shift; fi
+
 mode="${1:-}"
 case "$mode" in "" | -h | --help) usage; [ -n "$mode" ] || exit 2; exit 0 ;; esac
 shift
+
+# Print the id and stop, or watch it — every mode that resolves one ends here.
+deliver() {
+    if [ -n "$print_id" ]; then echo "$1"; else watch_run "$1"; fi
+}
 
 if [ -n "${AMENBO_CI_REPO:-}" ]; then
     repo="$AMENBO_CI_REPO"
@@ -83,6 +101,38 @@ resolve_one() {
         [ "$tries" -ge "$APPEAR_LIMIT" ] &&
             die "$label has started no run after $((APPEAR_LIMIT * APPEAR_SECONDS))s"
         [ "$tries" = 1 ] && echo "waiting for $label to start a run" >&2
+        sleep "$APPEAR_SECONDS"
+    done
+}
+
+# The newest dispatched run of a workflow on a ref, delivered once it is the right one.
+#
+# A dispatched workflow keeps every run it has ever had on the same ref, so no filter
+# names just this one, and the newest is the only candidate. That is a race against
+# the dispatch that was just sent: until GitHub registers it, the newest run is the
+# PREVIOUS one, whose verdict is about code that is no longer being asked about.
+#
+# So `not-before` closes it. Given an ISO-8601 UTC stamp taken before the dispatch,
+# a newest run older than that is not this one, and it waits instead. ISO-8601 UTC
+# sorts as text, so the comparison needs no date arithmetic. Without the stamp the
+# newest is taken as-is, and its start time is printed for the caller to judge.
+dispatch_newest() {
+    local workflow="$1" ref="$2" not_before="$3" tries=0 row id created
+    while :; do
+        row=$(gh run list -R "$repo" --workflow "$workflow" --branch "$ref" \
+            --event workflow_dispatch --limit 1 --json databaseId,createdAt \
+            --jq '.[0] | "\(.databaseId) \(.createdAt)"') ||
+            die "could not list runs of $workflow on $ref"
+        id="${row%% *}"; created="${row##* }"
+        if [ -n "$row" ] && { [ -z "$not_before" ] || [ ! "$created" \< "$not_before" ]; }; then
+            echo "dispatched run of $workflow on $ref: $id (started $created)" >&2
+            deliver "$id"
+            return $?
+        fi
+        tries=$((tries + 1))
+        [ "$tries" -ge "$APPEAR_LIMIT" ] &&
+            die "$workflow on $ref started no run after $((APPEAR_LIMIT * APPEAR_SECONDS))s"
+        [ "$tries" = 1 ] && echo "waiting for $workflow on $ref to start a run" >&2
         sleep "$APPEAR_SECONDS"
     done
 }
@@ -156,6 +206,8 @@ watch_pr() {
 case "$mode" in
     pr)
         [ $# -eq 1 ] || die "usage: watch-ci.sh pr <number>"
+        # A pull request is not a run, so there is no id to hand back.
+        [ -z "$print_id" ] || die "--print-id takes a run, not a pull request"
         watch_pr "$1"
         ;;
     main)
@@ -164,30 +216,21 @@ case "$mode" in
         # own exit ends only that subshell — inlined as an argument, a refusal to guess
         # would be passed on as if it were an id.
         id=$(resolve_one "main $1" --commit "$1" --event push --workflow ci-change.yml)
-        watch_run "$id"
+        deliver "$id"
         ;;
     tag)
         [ $# -eq 1 ] || die "usage: watch-ci.sh tag <tag>"
         sha=$(git rev-parse "$1^{commit}" 2>/dev/null) || die "no such tag here: $1"
         id=$(resolve_one "tag $1" --commit "$sha" --event push --workflow release-tag.yml)
-        watch_run "$id"
+        deliver "$id"
         ;;
     dispatch)
-        [ $# -eq 2 ] || die "usage: watch-ci.sh dispatch <workflow> <ref>"
-        # A dispatched workflow keeps every run it has ever had on the same ref, so
-        # there is no filter that names just this one. The newest is taken, and the
-        # id and its start time are printed, so a stale pick is visible rather than
-        # silent — the one case here where the caller checks the choice, not the script.
-        id=$(gh run list -R "$repo" --workflow "$1" --branch "$2" --event workflow_dispatch \
-            --limit 1 --json databaseId,createdAt --jq '.[0] | "\(.databaseId) \(.createdAt)"') ||
-            die "could not list runs of $1 on $2"
-        [ -n "$id" ] || die "$1 has no dispatched run on $2"
-        echo "newest dispatched run of $1 on $2: $id"
-        watch_run "${id%% *}"
+        [ $# -ge 2 ] && [ $# -le 3 ] || die "usage: watch-ci.sh dispatch <workflow> <ref> [not-before]"
+        dispatch_newest "$1" "$2" "${3:-}"
         ;;
     run)
         [ $# -eq 1 ] || die "usage: watch-ci.sh run <id>"
-        watch_run "$1"
+        deliver "$1"
         ;;
     *)
         die "unknown mode: $mode (try --help)"

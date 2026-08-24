@@ -138,6 +138,13 @@ if (root) {
   plate = mountPlate(label, () => lang, (waiting) => {
     if (waiting && !document.hasFocus()) void notifyTurn();
   });
+  // This window draws one pane, so the pane being worked in is this one whenever the window has the
+  // keyboard. It is the same question the board answers with its arrangement, asked the only way a
+  // window with one pane can ask it.
+  const looking = () => plate?.focused(document.hasFocus());
+  looking();
+  window.addEventListener("focus", looking);
+  window.addEventListener("blur", looking);
   // The frame does wait on the language, unlike the label: everything it says before a terminal is
   // running — the offer, the install notice, the row on a closed pane — is a whole sentence, and one
   // drawn in English first would be a flicker of the wrong language rather than a pane arriving

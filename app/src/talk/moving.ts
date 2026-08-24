@@ -42,6 +42,32 @@ export function hueOf(frame: string): number {
   return HUES[(Number.isFinite(n) ? Math.abs(Math.trunc(n)) : 0) % HUES.length]!;
 }
 
+/** How long a pane has to have been quiet before how long is worth saying.
+ *
+ *  Everything shorter is ordinary: a compiler between files, an agent between tool calls, a person
+ *  reading what came back. What this is for is the pane that has been quiet long enough that a reader
+ *  cannot tell any more whether they left it a minute ago or half an hour ago — and half an hour is
+ *  what the dot alone cannot tell them. */
+export const QUIET_AFTER_MS = 8 * 60 * 1000;
+
+/**
+ * How many whole minutes a pane has been quiet, where that is worth saying at all.
+ *
+ * **It is a measurement and not a reading of one** (`AMB-D-748`). Nothing here says the pane has
+ * stopped, is stuck, or is waiting: the three reasons for silence are indistinguishable from outside
+ * and this does not try. How long a thing has been true is a fact about the stream, the same kind of
+ * fact as whether anything arrived at all — and it is the one a dot cannot carry, a dot being off in
+ * exactly the same way after one minute and after forty.
+ *
+ * `null` where there is nothing to say: nothing has ever come out, or it came out recently enough that
+ * how long is not yet a question.
+ */
+export function quietFor(lastOutput: number | null, at: number): number | null {
+  if (lastOutput === null) return null;
+  const since = at - lastOutput;
+  return since < QUIET_AFTER_MS ? null : Math.floor(since / 60_000);
+}
+
 /** Whether a pane counts as moving: something arrived, and not long enough ago to have settled. */
 export function movingAt(lastOutput: number | null, at: number): boolean {
   return lastOutput !== null && at - lastOutput < STILL_AFTER_MS;

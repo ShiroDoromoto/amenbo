@@ -48,6 +48,10 @@ export type Say =
   | { readonly kind: "premise" }
   /** What the agent last said it was doing. */
   | { readonly kind: "note"; readonly text: string }
+  /** Nothing has been said and nothing has come out for a while — how long, in whole minutes. It is
+   *  last because it is what fills the slot when there is nothing better in it: anything the session
+   *  actually said outranks a measurement of its silence (`./moving`). */
+  | { readonly kind: "quiet"; readonly minutes: number }
   /** Nothing to say. Not "nothing is happening" — only that nothing was said. */
   | { readonly kind: "silent" };
 
@@ -191,6 +195,8 @@ export function sayText(say: Say, lang: Lang): { mark: string; text: string } {
       return { mark: "⚠", text: t("talk.premiseBroken", lang) };
     case "note":
       return { mark: "", text: say.text };
+    case "quiet":
+      return { mark: "", text: tf("talk.quiet", { n: say.minutes }, lang) };
     case "silent":
       return { mark: "", text: "" };
   }

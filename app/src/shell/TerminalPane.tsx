@@ -137,6 +137,12 @@ export function TerminalPane({
     // — a change of either would be a different pane, and the face gives that one a different key.
   }, [running]);
 
+  // Which pane is being worked in decides one thing on the row: whether a long silence says how long
+  // (`../talk/moving`). It is told rather than read, because the arrangement is the face's.
+  useEffect(() => {
+    plateRef.current?.focused(focused);
+  }, [focused, running]);
+
   // A naming reaches every row, not only the one it happened in: the rail renames a pane that is not
   // the one being worked in, and the row above that pane is where the answer shows.
   useEffect(() => {

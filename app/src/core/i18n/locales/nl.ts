@@ -487,6 +487,7 @@ export const nl: Translation = {
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "In gesprek", "talk.holding": "{n} taken",
     "talk.finished": "{n} klaar", "talk.premiseBroken": "Een aanname klopt niet meer",
+    "talk.quiet": "{n} min stil",
     "face.switch": "Wat dit venster toont",
     "face.tasks": "Taken",
     "face.terminal": "Terminal",

@@ -516,6 +516,7 @@ export const ru: Translation = {
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "Обсуждение", "talk.holding": "задач: {n}",
     "talk.finished": "готово: {n}", "talk.premiseBroken": "Предпосылка перестала выполняться",
+    "talk.quiet": "тихо {n} мин",
     "face.switch": "Что показывает это окно",
     "face.tasks": "Задачи",
     "face.terminal": "Терминал",

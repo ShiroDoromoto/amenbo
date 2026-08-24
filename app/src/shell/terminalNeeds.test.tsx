@@ -44,7 +44,7 @@ vi.mock("../talk/plate", () => ({
     hoisted.tell.push(onWaiting);
     return {
       opened: () => {}, output: () => {}, said: () => {}, closed: () => {},
-      named: () => {}, stop: () => {},
+      named: () => {}, focused: () => {}, stop: () => {},
     };
   },
 }));

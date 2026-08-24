@@ -532,6 +532,7 @@ const ui = {
   // worth saying about it. "{n}" is a count of tasks.
   "talk.idle": "Talking it over", "talk.holding": "{n} tasks",
   "talk.finished": "{n} done", "talk.premiseBroken": "A premise has broken",
+  "talk.quiet": "quiet for {n} min",
   // The two faces of the one window, and the moves between one window and two (`AMB-D-753`).
   "face.switch": "Tasks or terminal",
   "face.tasks": "Tasks",

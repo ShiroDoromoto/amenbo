@@ -487,6 +487,7 @@ export const zhHans: Translation = {
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "商议中", "talk.holding": "{n} 项",
     "talk.finished": "已完成 {n} 项", "talk.premiseBroken": "有一个前提不成立了",
+    "talk.quiet": "已安静 {n} 分钟",
     "face.switch": "此窗口显示的界面",
     "face.tasks": "任务",
     "face.terminal": "终端",

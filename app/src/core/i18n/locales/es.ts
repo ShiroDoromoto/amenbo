@@ -508,6 +508,7 @@ export const es: Translation = {
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "En conversación", "talk.holding": "{n} tareas",
     "talk.finished": "{n} terminadas", "talk.premiseBroken": "Se ha roto una premisa",
+    "talk.quiet": "{n} min sin actividad",
     "face.switch": "Qué muestra esta ventana",
     "face.tasks": "Tareas",
     "face.terminal": "Terminal",

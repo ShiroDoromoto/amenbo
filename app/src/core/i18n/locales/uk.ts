@@ -519,6 +519,8 @@ export const uk: Translation = {
     "face.splitOut": "Відкрити в окремому вікні",
     "face.merge": "Повернути в одне вікно",
     "face.end": "Завершити термінал у цій панелі",
+    "face.turnTitle": "Amenbo — ваша черга",
+    "face.turnBody": "Термінал чекає на вас.",
     "face.ended": "Програму в цьому терміналі завершено.",
     "face.rail": "Панелі",
     "face.paneCount": "Панелей на екрані",

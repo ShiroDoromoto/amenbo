@@ -514,6 +514,8 @@ export const it: Translation = {
     "face.splitOut": "Apri in una finestra separata",
     "face.merge": "Torna a una sola finestra",
     "face.end": "Termina il terminale in questo riquadro",
+    "face.turnTitle": "Amenbo — tocca a te",
+    "face.turnBody": "Un terminale ti sta aspettando.",
     "face.ended": "Il programma di questo terminale è terminato.",
     "face.rail": "Riquadri",
     "face.paneCount": "Riquadri sullo schermo",

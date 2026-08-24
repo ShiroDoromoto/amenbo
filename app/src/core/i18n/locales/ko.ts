@@ -492,6 +492,8 @@ export const ko: Translation = {
     "face.splitOut": "별도 창으로 열기",
     "face.merge": "하나의 창으로 되돌리기",
     "face.end": "이 창의 터미널 끝내기",
+    "face.turnTitle": "Amenbo — 당신 차례입니다",
+    "face.turnBody": "터미널이 당신을 기다리고 있습니다.",
     "face.ended": "이 터미널의 프로그램이 종료되었습니다.",
     "face.rail": "페인",
     "face.paneCount": "화면에 보일 페인 수",

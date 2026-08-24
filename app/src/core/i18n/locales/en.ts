@@ -539,6 +539,11 @@ const ui = {
   "face.splitOut": "Open in a separate window",
   "face.merge": "Back to one window",
   "face.end": "End the terminal in this pane",
+  // The OS notification a pane raises when its turn has come and nobody is looking at the terminal
+  // (`AMB-T-3611`). It says a turn is standing and not whose: which pane it was is drawn where it
+  // happened, and a toast that named one would answer in the one place a person cannot act on it.
+  "face.turnTitle": "Amenbo — your turn",
+  "face.turnBody": "A terminal is waiting on you.",
   "face.ended": "The program in this terminal has exited.",
   "face.rail": "Panes",
   "face.paneCount": "Panes on screen",

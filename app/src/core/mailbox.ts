@@ -20,12 +20,11 @@
 //  - The badge counts the whole inbox (C ∪ D), independent of read/seen state; only the notification is gated.
 //  - The arrival sound belongs to the OS notification; the app has no beep of its own.
 import { useSyncExternalStore } from "react";
-import { getInboxDataGeneration, inTauri, subscribe } from "./snapshot";
+import { getInboxDataGeneration, subscribe } from "./snapshot";
 import { loadInboxItems, type InboxItemBrief } from "./reads";
 import { loadNotified, addNotified } from "./mailboxNotified";
-import { invoke } from "./ipc";
 import { t, tn } from "./i18n";
-import { pushNotice } from "./notice";
+import { notifyOs } from "./osNotify";
 
 /**
  * The arrival rule, isolated so it can be reasoned about on its own: of the inbox items, the ids that should be
@@ -116,27 +115,12 @@ export function useInboxCount(): number {
 
 // ───────────────────────── Announcing arrivals ─────────────────────────
 
-// Whether the UI has already been told once that the OS notification path failed. A toast every time would be
-// insufferable, so it is said once.
-let notifyFailureHintShown = false;
-
 /**
- * Announce an arrival through an OS notification. Delivery is concentrated in the native `notify_os` command
- * (UNUserNotificationCenter on macOS; the notification plugin on Windows and Linux; permission is settled at
- * startup, so JS needs no permission dance of its own). Both the sound and the toast belong to the OS — the app
- * makes no noise of its own. Failure is never swallowed: a denied permission, a missing plugin or an unregistered
- * delegate would kill notifications silently and nobody would ever notice, so it always reaches the log, and the
- * first time it also raises one toast in the UI — the way back to enabling permission.
+ * Announce an arrival through an OS notification — one of the two things Amenbo speaks up about, and
+ * the one that is about records (`./osNotify` holds the delivery, the failure path and the other one).
+ *
+ * It is a count and names no single record, which is why a click on it opens the inbox.
  */
 async function notifyArrival(n: number): Promise<void> {
-  if (!inTauri()) return;
-  try {
-    await invoke("notify_os", { title: t("mailbox.notifyTitle"), body: tn("mailbox.notifyBody", n) });
-  } catch (e) {
-    console.error("[amenbo] OS notification (notify_os) failed:", e);
-    if (!notifyFailureHintShown) {
-      notifyFailureHintShown = true;
-      pushNotice(t("mailbox.notifyFailed"));
-    }
-  }
+  await notifyOs("arrival", t("mailbox.notifyTitle"), tn("mailbox.notifyBody", n));
 }

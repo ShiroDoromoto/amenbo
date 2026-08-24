@@ -514,6 +514,8 @@ export const fr: Translation = {
     "face.splitOut": "Ouvrir dans une fenêtre séparée",
     "face.merge": "Revenir à une seule fenêtre",
     "face.end": "Terminer le terminal de ce volet",
+    "face.turnTitle": "Amenbo — à vous",
+    "face.turnBody": "Un terminal vous attend.",
     "face.ended": "Le programme de ce terminal s'est arrêté.",
     "face.rail": "Volets",
     "face.paneCount": "Volets à l'écran",

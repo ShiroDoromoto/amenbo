@@ -505,6 +505,8 @@ export const ja: Translation = {
     "face.splitOut": "別ウィンドウで開く",
     "face.merge": "1つの窓に戻す",
     "face.end": "このペインの端末を終わらせる",
+    "face.turnTitle": "Amenbo — あなたの番です",
+    "face.turnBody": "端末があなたを待っています。",
     "face.ended": "この端末のプログラムは終了しました。",
     "face.rail": "ペイン",
     "face.paneCount": "画面に出す枚数",

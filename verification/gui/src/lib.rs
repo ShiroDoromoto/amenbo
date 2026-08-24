@@ -2595,6 +2595,15 @@ impl Instructor {
                     req(with, "name")?
                 ),
             },
+            // The mark on the files half's own switch. It is read on the top row rather than in the
+            // panel, that being the whole of what it is for: it is what the half says while it is not
+            // the one on the screen.
+            (Domain::Files, "pointed-badge") => match present(with) {
+                true => "At the top of the terminal face, at the far end of the row, confirm the one that shows the folder's files is wearing a small mark — a dot, with no number and no words on it. It says an agent pointed at something while you were somewhere else."
+                    .to_string(),
+                false => "At the top of the terminal face, at the far end of the row, confirm the one that shows the folder's files is wearing no mark at all."
+                    .to_string(),
+            },
             // What the hand-over left. Every one of the three is a `Review`, and for the same reason:
             // what settles it is not on Amenbo's window, which is the window the run shoots. The
             // operator standing at the screen is the one who saw it, so the line asks them for it.

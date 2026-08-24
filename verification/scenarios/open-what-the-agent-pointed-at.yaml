@@ -22,16 +22,24 @@
 # button that opened it would be a fence with a door in it. So the road points at two things and
 # reads that one of them is a row and the other is a row that opens.
 #
+# ── The half nobody is looking at, and how it calls ──────────────────────────────────────────────
+# The panel opens on the page a person writes on, not on the folder. That is deliberate and it is what
+# makes the badge part of this road rather than a detail beside it: a person goes to the files when
+# they want them, and an agent that pointed at something **cannot send anybody there**. So the switch
+# knocks. The road walks it where it matters — said into a panel nobody has open, said again while the
+# reader is standing on the half — and reads that coming to the half spends the mark.
+#
 # ── What is not kept ─────────────────────────────────────────────────────────────────────────────
 # None of this outlives the window. What an agent pointed at belongs to the session it was said in and
 # is gone with it, which is why the road reads it while the pane is still running rather than proving
 # anything about coming back to it.
 id: open-what-the-agent-pointed-at
-title: An agent points at a file from inside its pane, and the person opens it from the column beside
+title: An agent points at a file from inside its pane, and the person is called over and opens it
 description: >
   Open the terminal face on a project whose folder holds a file, open a plain shell in the pane, and
   point at the file from in there — the agent's own word for "this is worth opening", said with the CLI from inside the
-  terminal. The row arrives in the column beside the pane, and pressing it opens the file. Point at
+  terminal. Say it into a panel nobody has open: the switch for the files wears a mark, and coming to
+  the half spends it. The row is standing there, and pressing it opens the file. Point at
   something outside the folder as well: the row is drawn, because it is what the agent said, and it is
   not something to press, because what is reachable is fenced by the folder.
 
@@ -65,9 +73,8 @@ steps_gui:
     with:
       face: terminal
 
-  # The panel beside the panes opens on the page a person writes on rather than on the folder: a
-  # person goes to the files when they want them, and what an agent points at calls from the switch
-  # itself. So the road asks for the half it is about before reading anything in it.
+  # The panel beside the panes opens on the page a person writes on rather than on the folder, so the
+  # road asks for the half it is about before reading anything in it.
   - type: action
     domain: terminal
     op: show-side
@@ -97,12 +104,47 @@ steps_gui:
     with:
       note: nothing-pointed
 
+  # And the switch says nothing either, for the same reason: there is nothing to be called about.
+  - type: assert
+    domain: files
+    op: pointed-badge
+    with:
+      present: false
+
+  # ── the half that is not up, calling ──────────────────────────────────────────────────────────
+  # The panel goes away, which is the state the badge exists for: a person who is not looking at the
+  # files cannot be sent there, so what the agent says next has to reach them on the switch.
+  - type: action
+    domain: terminal
+    op: hide-side
+    with:
+      side: files
+
   - type: action
     domain: terminal
     op: point
     with:
       target: notes/watering.md
       why: SCENARIO this is the schedule the whole plan turns on
+
+  # Said into a panel nobody has open, and the switch knocks.
+  - type: assert
+    domain: files
+    op: pointed-badge
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  # Being on the half is being told, so the mark is spent by coming here — and what it was about is
+  # standing in the column, which is where the road goes on.
+  - type: assert
+    domain: files
+    op: pointed-badge
+    with:
+      present: false
 
   # Said in the pane, read in the column. The reason travels with it: a thing to open with no reason
   # to open it is a row a person has to go and find out about.
@@ -151,6 +193,14 @@ steps_gui:
     op: openable
     with:
       name: ../elsewhere/ledger.md
+      present: false
+
+  # And nothing knocked. The reader is on the half this was said into, so there is nowhere to call
+  # them from — a badge here would be the face telling somebody about what they are looking at.
+  - type: assert
+    domain: files
+    op: pointed-badge
+    with:
       present: false
 
   # And the end of it. While the pane runs, what is left unopened is a count and nothing more — there

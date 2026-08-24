@@ -1839,6 +1839,28 @@ const REGISTRY: &[OpSpec] = &[
     // the other. It also names the pane's frame — the first line sent into a frame is what it is
     // called — which is how a road says *which* window it means once there are two.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "type-line", required: &["text"], refs: &[], strings: &["text"], binds: false },
+    // A command run in the pane, and waited on until what it printed is drawn. It is not `type-line`
+    // with a longer word in it: that step's line is the reader's own and is written to be *left* on
+    // the screen — the shell is not meant to know it — and this is a program being asked for output
+    // the steps after it read. The pane is cleared first, and that is part of the op rather than a
+    // nicety: a road that pressed "the ref" on a pane still holding two earlier runs would be naming
+    // one of three places on the screen, and only the operator would ever know which they took.
+    //
+    // `target` is there because a road cannot spell a number the run will mint. Where a command needs
+    // a record's own ref, it carries `<ref>` and names the record beside it — the operator puts the
+    // ref in, reading it off the same pane a step above had it on.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "run", required: &["command"], refs: &["target"], strings: &["command"], binds: false },
+    // Pressing a ref where a program drew it in the pane. The record is named rather than spelled out,
+    // for the reason every `target` is: what is on the screen is the run's own numbering.
+    //
+    // `folded: true` asks for that press on a ref the pane broke across two rows, which is the one
+    // place the two ways of finding a ref part company. What Amenbo's own output says of itself
+    // travels beside the characters and a fold cannot touch it; what is read back off the drawn
+    // screen has to be joined across the fold before it can be found at all. A road that only ever
+    // pressed refs sitting whole on one row would leave that joining unwalked, and nothing else
+    // reaches it — a pane is narrow, a ref near the end of a line is ordinary, and the miss it would
+    // hide looks exactly like characters that were never a link.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "press-ref", required: &["target"], refs: &["target"], strings: &[], binds: false },
     // Splitting the terminal out into a window of its own, and folding it back. Two ops rather than
     // one with a direction, because they are pressed in different windows: the way out is on the
     // face, and the way back is in the window it made.
@@ -2482,9 +2504,19 @@ impl Scenario {
             // there, `ok` what verdict a check is expected to come back with, `running` whether
             // anything is working a queue, `required` whether a declared setting is one its plugin
             // cannot work without, `away` whether a word said in a pane is armed and left behind,
-            // and the two key questions whether a catalog serves a signing key and whether one of
-            // its is pinned.
-            for key in ["present", "ok", "running", "required", "away", "publishes_key", "pinned_key"] {
+            // `folded` whether the ref being pressed in a pane is one the fold broke across two
+            // rows, and the two key questions whether a catalog serves a signing key and whether
+            // one of its is pinned.
+            for key in [
+                "present",
+                "ok",
+                "running",
+                "required",
+                "away",
+                "folded",
+                "publishes_key",
+                "pinned_key",
+            ] {
                 if let Some(v) = step.with().get(key) {
                     if v.as_bool().is_none() {
                         errs.push(at(i, format!("`{key}` must be a boolean")));

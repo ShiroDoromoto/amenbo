@@ -1,0 +1,274 @@
+# A ref drawn in a terminal is a record, and pressing it is the way to it.
+#
+# A pane is a real terminal, so everything running in it writes characters and nothing else: a
+# record's ref in an agent's output, in a git log, in a listing, is a way to that record for Amenbo
+# and a run of characters to the terminal. Owning the terminal is what lets it be both, and this road
+# is that being true from end to end — a ref on the screen, a press, and the record standing open
+# where records are read.
+#
+# ── Why it is walked across two windows ──────────────────────────────────────────────────────────
+# The press is on the terminal and what it opens is on the ledger, so the answer always spans two
+# faces. It spans two *windows* only when the terminal has been split out, and that is the shape this
+# road walks: with the terminal on a screen of its own, the ledger is a window that has to be raised
+# from behind, which is the half a webview cannot do for itself. It is walked in that shape rather
+# than the one window's because it is the larger of the two — in one window the same press does
+# everything it does here except raise a sibling, so a road that walks the split shape has walked
+# both.
+#
+# ── The two ways a ref becomes something to press ────────────────────────────────────────────────
+# Amenbo's own output names its destination: a ref inside a pane is wrapped in OSC 8, so the pane is
+# told where the characters point rather than having to work it out. Everything else is read back off
+# the drawn buffer, which is what covers the output Amenbo did not write. The road walks the second
+# alone by sending a listing through another program — a pipe is not a terminal, so the escape is
+# never written and only the characters arrive. It cannot walk the first alone: a ref carrying the
+# escape is still a ref drawn on the screen, and both ways answer it. What the direct run proves is
+# that the escape does not get in the way of what it is for.
+#
+# ── The fold ────────────────────────────────────────────────────────────────────────────────────
+# One press is on a ref the pane broke across two rows. That is the one place the two ways part: the
+# escape travels beside the characters and a fold cannot touch it, while reading them back means
+# joining the rows a line was drawn across before anything can be found. A pane is narrow and a ref
+# near the end of a line is ordinary, so the miss this catches is an everyday one — and it is
+# invisible, being characters that simply were not offered.
+#
+# ── What is read, and where ─────────────────────────────────────────────────────────────────────
+# Each record keeps a remark of its own, and the reading is on that rather than on the title: the row
+# that led here — a line of a listing, a sentence the road echoed — is carrying the title too, so a
+# line read on it would pass over a press that opened nothing and over one that opened the other
+# record just as quietly. The two records take turns being pressed, so no press can pass on a record
+# the one before it left standing open.
+#
+# ── Why the pane runs a shell ───────────────────────────────────────────────────────────────────
+# The commands below are run rather than asked for. A folder with an agent on it opens on the agent,
+# and what an agent does with a line typed at it is the agent's own, so a gate resting on one
+# carrying out a command rests on a promise nothing holds it to.
+id: follow-a-ref-out-of-the-pane
+title: A ref drawn in the pane is pressed, and the record opens on the ledger in the window beside
+description: >
+  Split the terminal out into a window of its own and run Amenbo's own listing in the pane. Press a
+  ref where it is drawn: the ledger comes forward in the other window with that record open, and not
+  the one beside it. Send the same listing through another program, so what reaches the pane is
+  characters alone with no escape saying where they point, and press again. Then move the window's
+  width until a ref is broken across two rows and press it there. What is under test is that a ref on
+  a terminal is a way to the record, however it got onto the screen and wherever the fold fell.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Workshop
+    as: workshop
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: workshop
+      project: workshop
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: Reseal the cold frames before the first frost
+      project: workshop
+    as: frames
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: frames
+
+  # The remark each record keeps to itself. It is on the record's own face and on no row that leads
+  # there, which is the whole of what makes a reading of it say where a press landed.
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: frames
+      notes: SCENARIO the north wall glass was reglazed the winter before last
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: Retire the nightly reconciliation job
+      project: workshop
+    as: nightly
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: nightly
+
+  - type: action
+    domain: task
+    op: update
+    with:
+      target: nightly
+      notes: SCENARIO nothing has watched this job since the ledgers moved
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The folder is already a project's, and the tasks below are that project's — which is what lets the
+  # listing be run with nothing named on the command line: a terminal standing in a folder is standing
+  # in the project it answers for.
+  - type: action
+    domain: terminal
+    op: open-folder
+    with:
+      dir: workshop
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  # Named through the layer rather than by a line typed in, because the name is wanted for what it
+  # does to the window and not for what it puts on the screen: a named frame is what the split-out
+  # window carries in its title bar, and from the split on every step has to say which window it is
+  # in. The ledger's window needs no such naming — it is called after the app, in the one word that is
+  # the same in every language the interface is drawn in.
+  - type: action
+    domain: terminal
+    op: say
+    with:
+      verb: name
+      text: SCENARIO the pressing pane
+
+  - type: assert
+    domain: terminal
+    op: label
+    with:
+      shows: SCENARIO the pressing pane
+
+  - type: action
+    domain: terminal
+    op: split-out
+
+  # ── Amenbo's own output, which says where its refs point ──────────────────────────────────────
+  # The facet is on the line because Amenbo never defaults one, and it is the AI's because a pane is
+  # where an agent works — the hand at the prompt is standing in for one, and what it runs has to
+  # reach as far as one does and no further.
+  - type: action
+    domain: terminal
+    op: run
+    window: SCENARIO the pressing pane
+    with:
+      command: amenbo task list --actor ai
+
+  - type: action
+    domain: terminal
+    op: press-ref
+    window: SCENARIO the pressing pane
+    with:
+      target: frames
+
+  # The other window, raised from behind by the press. Nothing on the ledger was touched by hand
+  # between the split and here, so a window in front with that record open is the whole of what the
+  # press did.
+  - type: assert
+    domain: task
+    op: opened
+    window: Amenbo
+    with:
+      target: frames
+      shows: SCENARIO the north wall glass was reglazed the winter before last
+
+  - type: assert
+    domain: task
+    op: opened
+    window: Amenbo
+    with:
+      target: nightly
+      shows: SCENARIO nothing has watched this job since the ledgers moved
+      present: false
+
+  # ── The same listing through another program, so only the characters arrive ───────────────────
+  # A pipe is not a terminal, so the escape that names a destination is not written and there is
+  # nothing on the screen but text. What finds the ref here is the reading of the drawn buffer, and
+  # nothing else can be.
+  - type: action
+    domain: terminal
+    op: run
+    window: SCENARIO the pressing pane
+    with:
+      command: amenbo task list --actor ai | cat
+
+  # The other record this time. A press that opened nothing would otherwise pass on the record the
+  # press above left standing open.
+  - type: action
+    domain: terminal
+    op: press-ref
+    window: SCENARIO the pressing pane
+    with:
+      target: nightly
+
+  - type: assert
+    domain: task
+    op: opened
+    window: Amenbo
+    with:
+      target: nightly
+      shows: SCENARIO nothing has watched this job since the ledgers moved
+
+  - type: assert
+    domain: task
+    op: opened
+    window: Amenbo
+    with:
+      target: frames
+      shows: SCENARIO the north wall glass was reglazed the winter before last
+      present: false
+
+  # ── And one across the fold ───────────────────────────────────────────────────────────────────
+  # A line long enough that the ref at the end of it is well past where any pane is going to break,
+  # which is what leaves the width free to be moved onto it. The words before the ref are the road's
+  # own and mean nothing: what they are for is the distance.
+  - type: action
+    domain: terminal
+    op: run
+    window: SCENARIO the pressing pane
+    with:
+      command: echo "SCENARIO the frames, the glass, the cold nights and everything else the whole reseal has been waiting on since the autumn is written down in <ref>"
+      target: frames
+
+  - type: action
+    domain: terminal
+    op: press-ref
+    window: SCENARIO the pressing pane
+    with:
+      target: frames
+      folded: true
+
+  - type: assert
+    domain: task
+    op: opened
+    window: Amenbo
+    with:
+      target: frames
+      shows: SCENARIO the north wall glass was reglazed the winter before last
+
+  - type: assert
+    domain: task
+    op: opened
+    window: Amenbo
+    with:
+      target: nightly
+      shows: SCENARIO nothing has watched this job since the ledgers moved
+      present: false
+
+  # Folded back, which is the road's own tidying as much as anything: the shape a machine last used
+  # the app in is remembered where a throwaway store does not reach, and a road that walked away from
+  # two windows would hand whoever owns the machine a second one they never asked for.
+  - type: action
+    domain: terminal
+    op: fold-back
+    window: SCENARIO the pressing pane

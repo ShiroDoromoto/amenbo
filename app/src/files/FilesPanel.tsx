@@ -125,6 +125,19 @@ export function FilesPanel({ projectId, onOpenLedger, pointed, show, tab, onTab,
     </button>
   );
 
+  // The draft page is the project's, and a project has one whether or not it is bound to a folder
+  // (`./MemoPage`). So the half that is up is answered first, and only the files half goes on to ask
+  // where it is rooted — a reader with nowhere to read files still has somewhere to write
+  // (`AMB-T-3690`).
+  if (projectId !== null && tab === "memo") {
+    return (
+      <div className="files">
+        <div className="files__top">{close}</div>
+        <MemoPage projectId={projectId} />
+      </div>
+    );
+  }
+
   if (projectId === null || root === null) {
     // A read that has not come back draws nothing at all: a flash of "no folder" on a project that
     // has one reads as a broken binding (`core/boundFolders`).
@@ -152,15 +165,6 @@ export function FilesPanel({ projectId, onOpenLedger, pointed, show, tab, onTab,
   }
 
   const top = <div className="files__top">{close}</div>;
-
-  if (tab === "memo") {
-    return (
-      <div className="files">
-        {top}
-        <MemoPage projectId={projectId} />
-      </div>
-    );
-  }
 
   return (
     <div className="files">

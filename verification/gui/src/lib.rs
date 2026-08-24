@@ -1297,10 +1297,21 @@ impl Instructor {
             // *Which* pane has to be said. A face can have several panes on it, and beside them it can
             // be asking about work nothing is doing any more — a reader who clicked the wrong box
             // would type this line nowhere at all.
-            (Domain::Terminal, "type-line") => format!(
-                "Click into the pane that has a terminal running in it — the one the folder was opened in, not the question beside it — then type \"{}\" and press return. The shell will not know the command — what the line is for is being on the screen, and, where the pane has not been named yet, being the name it takes.",
-                req(with, "text")?
-            ),
+            //
+            // Where the road named it, it is named by its own line, which is the only thing on a page
+            // of panes that is the road's own. Where it did not, the pane is the one the step before
+            // opened — the box on the page with nothing on it — and saying so is the whole of what
+            // "the pane that has a terminal running in it" ever meant.
+            (Domain::Terminal, "type-line") => {
+                let pane = match arg_str(with, "shows") {
+                    Some(shows) => format!("the pane showing \"{shows}\" — the one the road typed that line into, and not any of the others"),
+                    None => "the pane that has a terminal running in it — the one the folder was opened in, not the question beside it".to_string(),
+                };
+                format!(
+                    "Click into {pane} — then type \"{}\" and press return. The shell will not know the command — what the line is for is being on the screen, and, where the pane has not been named yet, being the name it takes.",
+                    req(with, "text")?
+                )
+            }
             // A command run for its output, which is what the steps after it read. The clearing is
             // said first because it is what makes "the ref" a place on the screen rather than one of
             // several, and the waiting is said last because a press on a half-drawn line is a press

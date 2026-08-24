@@ -1,0 +1,266 @@
+# The window a terminal is split out into takes the pane the person was working in — not whichever
+# one happened to be running — and a name typed into that window lands on that pane's frame.
+#
+# `put-the-terminal-on-its-own-screen` walks the same control on a board with one pane on it, and one
+# pane is the shape both halves of this road are invisible in. A window that took "the one running
+# session" takes the right one where there is only one; a window that named "the first frame" names
+# the right one where the first frame is the only frame. **Neither of them is what a person has on
+# their screen**: a board holds several panes, and the whole reason to split one out is that they are
+# working in it rather than in its neighbours.
+#
+# ── Why the panes carry lines, and why the third does not ────────────────────────────────────────
+# The first two are typed into for the reason every road that speaks in a pane types: the line is the
+# reader's own words, so it is on the screen because a person put it there and not because the
+# interface drew it — which is what lets a road tell one terminal from another in any language. It is
+# also the pane's name, and so the title of the window that draws it, which is how every step below
+# says which of the two windows it is walked in.
+#
+# The third is left with nothing typed into it on purpose. **A name typed into the split-out window
+# only goes anywhere at all where the frame it is for has none** — the first line names a frame that
+# is unnamed and never replaces a name (`amenbo_core::frames`) — so a window pointed at the wrong
+# frame is turned away by the store rather than renaming a pane. What that leaves on the screen is a
+# window that stayed nameless, which is exactly what this road reads.
+#
+# ── Why it comes back to the first pane at the end ───────────────────────────────────────────────
+# The last split is not a third walk of the first one. It is how the road reads a *name* off the
+# board at all: a pane's name is the title of the window it is drawn in, and there is no other place
+# a road can read one. Splitting the first pane out again asks the board what that frame is still
+# called — and the answer has to be the line typed into it at the start, with the name typed in the
+# other window nowhere near it.
+#
+# ── Why it folds back every time ─────────────────────────────────────────────────────────────────
+# The shape a machine last used the app in is remembered where a throwaway store does not reach, so a
+# road that walked away split out would hand whoever owns the machine two windows they never asked
+# for. Every split here is folded back, and the last one is the road's own tidying as much as it is
+# the half of the decision it proves.
+#
+# The world is a project with one folder, so nothing is asked about where a pane works — that
+# question is `choose-the-folder-a-split-out-window-works-in`'s and
+# `open-a-pane-where-a-project-keeps-more-than-one-folder`'s. What the panes run is the reader's own
+# shell, and a terminal is not a record: there is no work on the board to stand up.
+id: split-out-the-pane-you-were-working-in
+title: A terminal split out of a board of several panes takes the one being worked in, and is named for that pane's frame
+description: >
+  Open two panes and get a line onto each, then split the terminal out while working in the second.
+  The window that opens draws that pane's session — its line is on it, its neighbour's is nowhere —
+  and carries that pane's name. Fold it back, open a third pane with nothing typed into it, and split
+  that one out: the window comes up nameless, and the first line typed into it there names that
+  frame. Fold back, and split the first pane out again to read what it is still called: its own line,
+  untouched by the name given in the other window.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Sawmill
+    as: sawmill
+
+  # One, so nothing is asked about where a pane works — every press on an empty frame opens there.
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: log-yard
+      project: sawmill
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Pressed rather than assumed: which project the face comes up on is the run's business, and it is
+  # the project the split-out window inherits.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Sawmill
+
+  # Set while nothing is open, so what follows is a page filling rather than a page cut down to what
+  # is already on it. Four, because three panes have to stand on one page: what a road reads after a
+  # fold-back is the panes it left, and a pane on another page is not on the screen at all.
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 4
+
+  # The first pane, and down to a plain shell — what an agent does with a line typed at it is the
+  # agent's own, and this line has to sit where it was put.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the pane left behind
+
+  # The second, opened after the first has its line so the pane being worked in is unambiguous from
+  # here: the newest one is the one just typed into.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the pane that goes out
+
+  # Two terminals running, which is the state the whole road is about — and the page still has room,
+  # so nothing about what follows is a page running out of it.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 2
+      empty: 1
+
+  # Out into a window of its own, from the pane the line above was just typed into. Every step from
+  # here names its window, this one included, because from here there are two.
+  - type: action
+    domain: terminal
+    op: split-out
+    window: Amenbo
+
+  # **The window is named by the pane it took.** A window carrying any other title is a split that
+  # took the wrong frame, and the operator finds that out here rather than three steps later.
+  - type: assert
+    domain: terminal
+    op: pane
+    window: SCENARIO the pane that goes out
+    with:
+      shows: SCENARIO the pane that goes out
+
+  # And the neighbour's session is not what it took up. This is the half one pane cannot say: a
+  # window that adopted whatever single terminal it found would pass the step above on a board of one
+  # and fail here on a board of two.
+  - type: assert
+    domain: terminal
+    op: pane
+    window: SCENARIO the pane that goes out
+    with:
+      shows: SCENARIO the pane left behind
+      present: false
+
+  - type: action
+    domain: terminal
+    op: fold-back
+    window: SCENARIO the pane that goes out
+
+  # One window again, with both panes back on its face — each still drawing its own session, which is
+  # what says the move cost neither of them anything.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the pane that goes out
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the pane left behind
+
+  # A third pane, taken to a shell and left with nothing typed into it — an unnamed frame, which is
+  # the only kind a name can still land on.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: split-out
+    window: Amenbo
+
+  # The window has no name of its own yet, so it is named here by the part of its title every language
+  # keeps — the product's own name and the dash after it — and it takes the name the line gives it by
+  # the time the step is done. **A window that named some other frame would be turned away by the
+  # store**, the first line never replacing a name that is already there, and would still be sitting
+  # under this title afterwards.
+  - type: action
+    domain: terminal
+    op: type-line
+    window: SCENARIO named from the window
+    with:
+      text: SCENARIO named from the window
+
+  - type: assert
+    domain: terminal
+    op: pane
+    window: SCENARIO named from the window
+    with:
+      shows: SCENARIO named from the window
+
+  - type: action
+    domain: terminal
+    op: fold-back
+    window: SCENARIO named from the window
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO named from the window
+
+  # Back into the first pane, named by its own line because by now every box on the page has a
+  # terminal in it. The line is a second one and names nothing: what it does is put the reader in that
+  # pane, so the split below is of it.
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      shows: SCENARIO the pane left behind
+      text: SCENARIO still the first pane
+
+  - type: action
+    domain: terminal
+    op: split-out
+    window: Amenbo
+
+  # **What the first frame is still called.** The window's title is the only place a road can read a
+  # pane's name, and the answer is the line typed into it at the start — not the name given in the
+  # other window, which belonged to another frame and stayed there. The pane in it is the first pane's
+  # own session, carrying the line above.
+  - type: assert
+    domain: terminal
+    op: pane
+    window: SCENARIO the pane left behind
+    with:
+      shows: SCENARIO still the first pane
+
+  - type: action
+    domain: terminal
+    op: fold-back
+    window: SCENARIO the pane left behind
+
+  # One window, its three panes standing where they were, and the page still offering the room it had.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 3
+      empty: 1

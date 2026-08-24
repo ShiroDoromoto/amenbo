@@ -566,6 +566,50 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .memo__field--wide { font-size: var(--fs-md); }
 
+/* Nothing is pressed to keep what is written here, so the page shows the keeping instead of saying
+   it in words (`AMB-T-3684`). The ring is the settle drawn at its own length — it fills while the
+   typing is in hand and closes on the write — and the word beside it carries the state the ring has
+   stopped moving to say. Neither is taken away once written: the quiet after typing is exactly when
+   a person looks to see whether anything was kept. */
+.memo__keep {
+  display: inline-flex; align-items: center; gap: var(--s-1);
+  margin-left: auto;
+  opacity: 0; transition: opacity 450ms ease;
+}
+.memo__keep--on { opacity: 1; }
+.memo__word { color: var(--c-text-muted); font-size: var(--fs-xs); white-space: nowrap; }
+.memo__keep--kept .memo__word { color: var(--c-accent); }
+/* The middle is cut out of the disc rather than painted over it: the two faces sit on different
+   grounds, and a middle painted in one of them would read as a spot on the other. */
+.memo__ring {
+  flex: 0 0 auto; width: 0.75rem; height: 0.75rem; border-radius: 50%;
+  background: conic-gradient(var(--c-accent) 0turn, transparent 0turn);
+  -webkit-mask: radial-gradient(closest-side, transparent 58%, #000 59%);
+  mask: radial-gradient(closest-side, transparent 58%, #000 59%);
+}
+.memo__keep--typing .memo__ring { animation: memo-fill var(--memo-settle, 600ms) linear forwards; }
+.memo__keep--kept .memo__ring {
+  background: conic-gradient(var(--c-accent) 1turn, transparent 1turn);
+  animation: memo-close 500ms ease forwards;
+}
+/* Only the turn moves between the two ends. Both stops are the same colour at both ends, which is
+   what lets the gradient be interpolated at all rather than swapped at the halfway point. */
+@keyframes memo-fill {
+  from { background: conic-gradient(var(--c-accent) 0turn, transparent 0turn); }
+  to { background: conic-gradient(var(--c-accent) 1turn, transparent 1turn); }
+}
+@keyframes memo-close {
+  0% { opacity: 1; transform: scale(1.18); }
+  60% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0.55; transform: scale(1); }
+}
+/* Motion turned down: the ring keeps its two ends and drops the travel between them. Empty against
+   full still tells the states apart, and the word says which in either case. */
+@media (prefers-reduced-motion: reduce) {
+  .memo__keep--typing .memo__ring,
+  .memo__keep--kept .memo__ring { animation: none; }
+}
+
 /* ---------- the band across the top of the app ---------- */
 /* One band, the app's news drawn in it — the integrity check, an update waiting, a folder that has
    lost its pointer. What varies between them is the step the news takes (`AMB-T-3209`), and the band

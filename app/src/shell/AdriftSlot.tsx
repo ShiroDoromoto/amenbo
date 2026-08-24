@@ -5,6 +5,7 @@ import { invoke } from "../core/ipc";
 import { useRefNav } from "../core/refNav";
 import { SHELL } from "../talk/terminal";
 import { t } from "../core/i18n";
+import { Icon } from "../components/Icon";
 
 /**
  * The empty frame on a page with room, and — where there is one — what this project was left in the
@@ -142,6 +143,12 @@ export function AdriftSlot({
               aria-checked={one.id === on}
               onClick={() => setChose(one.id)}
             >
+              {/* An agent wears the mark; the plain shell does not. What the row is choosing between
+                  is what runs in the pane, and one of the choices is nothing running at all — a mark
+                  on that one would say the shell is an agent of some kind, which is the distinction
+                  the row exists to draw. It is one mark for all of them and not one each: which
+                  agent it is, is what the name says. */}
+              {one.id !== SHELL && <Icon name="robot" />}
               {one.label}
             </button>
           ))}

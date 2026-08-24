@@ -7,6 +7,7 @@ import type { FrameNames, NamedBy } from "../talk/frames";
 import type { PaneStart } from "../talk/terminal";
 import type { SessionSaidDto } from "../bindings/bindings";
 import { currentLang, t } from "../core/i18n";
+import { Icon } from "../components/Icon";
 
 /**
  * One slot of the terminal face: a frame, and the terminal in it when there is one.
@@ -190,7 +191,7 @@ export function TerminalPane({
           aria-label={t("face.drop")}
           onClick={() => { void drop(); }}
         >
-          ×
+          <Icon name="close" />
         </button>
       </div>
       {running

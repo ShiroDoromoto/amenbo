@@ -32,6 +32,7 @@ import {
 } from "./folder";
 import { MemoPage } from "./MemoPage";
 import { fileUnder, isRef, isUrl, unread, type Pointed } from "./pointed";
+import { Icon } from "../components/Icon";
 
 /** The names a file's text is drawn as Markdown under. The one thing here the name decides. */
 const MARKDOWN = [".md", ".markdown"];
@@ -117,7 +118,9 @@ export function FilesPanel({ projectId, onOpenLedger, pointed, show, tab, onTab,
   // be in: a panel that could only be closed while it happened to be showing its tabs would be one
   // a reader has to find their way back out of.
   const close = (
-    <button className="files__close" title={t("pane.close")} onClick={onClose}>×</button>
+    <button className="files__close" title={t("pane.close")} onClick={onClose}>
+      <Icon name="close" />
+    </button>
   );
 
   if (projectId === null || root === null) {
@@ -156,6 +159,7 @@ export function FilesPanel({ projectId, onOpenLedger, pointed, show, tab, onTab,
           aria-selected={tab === one}
           onClick={() => onTab(one)}
         >
+          <Icon name={one === "files" ? "folder" : "pencil"} />
           {t(one === "files" ? "files.tab" : "files.memo")}
         </button>
       ))}

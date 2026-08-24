@@ -22,12 +22,17 @@
 // is what the agent said in so many words. Silence is left as silence — a pane that says nothing shows
 // nothing, rather than being read for signs.
 //
-// **⏸ is the agent's turn-taking and nothing else.** A task that is `blocked` gets a mark saying it has
-// stopped, because that is a fact the ledger holds — but never the ⏸, whose whole meaning is that a
-// person's turn has come. `blocked` means different things in different projects (`AMB-D-748`), and a
-// pane cannot decide which of them was meant.
+// **The pause is the agent's turn-taking and nothing else.** A task that is `blocked` gets a mark
+// saying it has stopped, because that is a fact the ledger holds — but never the pause, whose whole
+// meaning is that a person's turn has come. `blocked` means different things in different projects
+// (`AMB-D-748`), and a pane cannot decide which of them was meant.
+//
+// The marks are the application's own icons and not characters (`AMB-D-686`): a glyph is drawn at
+// whatever size and weight the machine's fonts happen to give it, and this row is where a mark has
+// least room to be wrong about either.
 
 import type { TaskCardDto } from "../bindings/bindings";
+import { iconSvg, type DrawnIcon } from "../components/Icon";
 import { statusLabel, t, tf, type Lang } from "../core/i18n";
 import { hueOf, phaseDelay, PULSE_MS } from "./moving";
 import type { Session } from "./sessions";
@@ -165,14 +170,14 @@ export function standsAsTurn(say: Say): boolean {
 /**
  * The words the middle is drawn with, the mark in front of them, and what a reader gets on asking.
  *
- * The mark for a stopped task is not the ⏸: it says the task has stopped, which the ledger holds, and
- * says nothing about whose turn it is, which it does not.
+ * The mark for a stopped task is not the pause: it says the task has stopped, which the ledger holds,
+ * and says nothing about whose turn it is, which it does not.
  */
-export function nowText(now: Now, lang: Lang): { mark: string; text: string; title: string } {
-  const stopped = (yes: boolean) => (yes ? "⏹" : "");
+export function nowText(now: Now, lang: Lang): { mark: Mark; text: string; title: string } {
+  const stopped = (yes: boolean) => (yes ? "stop" : null) as Mark;
   switch (now.kind) {
     case "idle":
-      return { mark: "", text: t("talk.idle", lang), title: "" };
+      return { mark: null, text: t("talk.idle", lang), title: "" };
     case "one":
       return {
         mark: stopped(now.stopped),
@@ -188,7 +193,7 @@ export function nowText(now: Now, lang: Lang): { mark: string; text: string; tit
         title: now.refs.join("\n"),
       };
     case "finished":
-      return { mark: "", text: tf("talk.finished", { n: now.count }, lang), title: "" };
+      return { mark: null, text: tf("talk.finished", { n: now.count }, lang), title: "" };
   }
 }
 
@@ -200,20 +205,23 @@ export function nowText(now: Now, lang: Lang): { mark: string; text: string; tit
  * because "a person is needed here" survives the reason being unreadable (`AMB-T-3673`). The whole of
  * it is one hover away instead, the same way the breakdown of several reservations is.
  */
-export function sayText(say: Say, lang: Lang): { mark: string; text: string; title: string } {
+export function sayText(say: Say, lang: Lang): { mark: Mark; text: string; title: string } {
   switch (say.kind) {
     case "waiting":
-      return { mark: "⏸", text: say.text, title: say.text };
+      return { mark: "pause", text: say.text, title: say.text };
     case "premise":
-      return { mark: "⚠", text: t("talk.premiseBroken", lang), title: "" };
+      return { mark: "warning", text: t("talk.premiseBroken", lang), title: "" };
     case "note":
-      return { mark: "", text: say.text, title: say.text };
+      return { mark: null, text: say.text, title: say.text };
     case "quiet":
-      return { mark: "", text: tf("talk.quiet", { n: say.minutes }, lang), title: "" };
+      return { mark: null, text: tf("talk.quiet", { n: say.minutes }, lang), title: "" };
     case "silent":
-      return { mark: "", text: "", title: "" };
+      return { mark: null, text: "", title: "" };
   }
 }
+
+/** Which mark stands in front of a part of the row, or nothing where the part asks for none. */
+export type Mark = DrawnIcon | null;
 
 /**
  * Draw the row into `host`, and hand back the way to draw it again.
@@ -271,12 +279,12 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null, lang: L
     }
     name.textContent = plate.name ?? "";
     const middle = nowText(plate.now, lang);
-    nowMark.textContent = middle.mark;
+    drawMark(nowMark, middle.mark);
     nowMark.title = middle.title;
     now.textContent = middle.text;
     now.title = middle.title;
     const right = sayText(plate.say, lang);
-    sayMark.textContent = right.mark;
+    drawMark(sayMark, right.mark);
     // The mark carries the whole of it too: where the row is narrow the words beside it are not drawn
     // at all, and a hover has to have something left to land on.
     sayMark.title = right.title;
@@ -286,4 +294,22 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null, lang: L
     // is the one thing drawn as more than grey text.
     row.dataset.say = plate.say.kind;
   };
+}
+
+/**
+ * Put a mark in its place, or take the place away.
+ *
+ * The element is left **empty** where there is no mark, rather than holding a hidden one: the
+ * stylesheet folds an empty mark out of the row with `:empty`, so a box kept there with nothing drawn
+ * in it would leave a gap in front of words that have no mark (`../styles/global.css`).
+ *
+ * What is there already is read off `data-icon` rather than remembered, so nothing has to be kept in
+ * step with what was drawn last time — and the common redraw, where the mark has not changed, touches
+ * no elements at all.
+ */
+function drawMark(host: HTMLElement, mark: Mark): void {
+  const drawn = host.firstElementChild?.getAttribute("data-icon") ?? null;
+  if (drawn === mark) return;
+  host.replaceChildren();
+  if (mark !== null) host.append(iconSvg(mark));
 }

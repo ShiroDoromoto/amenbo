@@ -185,12 +185,19 @@ describe("the terminals that were running in the face it left", () => {
 
 describe("the button that changes how many windows the app is", () => {
   it("says the move it makes, from whichever window is being read", async () => {
+    // The words, not the row: the button carries a mark before them, and what is pinned here is
+    // which way the press goes (`../components/Icon`).
+    const says = () => q(".termface__action")[0]!.textContent!.trim();
     await mount(false);
-    expect(q(".termface__action")[0]!.textContent).toBe(t("face.splitOut"));
+    expect(says()).toBe(t("face.splitOut"));
+    expect(q(".termface__action")[0]!.querySelector('[data-icon="newWindow"]')).not.toBeNull();
     await act(() => root.unmount());
     root = createRoot(container);
     await mount(true);
-    expect(q(".termface__action")[0]!.textContent).toBe(t("face.merge"));
+    expect(says()).toBe(t("face.merge"));
+    // The same mark either way: what it draws is the arrangement the control is about, and the
+    // words are what say which direction this press goes.
+    expect(q(".termface__action")[0]!.querySelector('[data-icon="newWindow"]')).not.toBeNull();
   });
 
   it("hands nothing over — there is one arrangement, and both windows read it", async () => {

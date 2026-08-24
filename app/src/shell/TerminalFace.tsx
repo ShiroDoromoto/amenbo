@@ -629,9 +629,11 @@ export function TerminalFace({
       <div className="termface__bar">
         {/* Two windows or one, from whichever of them the reader is in. The press says nothing about
             the arrangement: what goes with the terminal is the face whole, and the face is drawn
-            from what this device keeps (`../talk/layout`). */}
+            from what this device keeps (`../talk/layout`). The mark is the same either way, because
+            what it draws is the arrangement the control is about and not the direction of this
+            press — which is what the words beside it say. */}
         <button className="termface__action" onClick={() => onWindow()}>
-          {t(ownWindow ? "face.merge" : "face.splitOut")}
+          <Icon name="newWindow" /> {t(ownWindow ? "face.merge" : "face.splitOut")}
         </button>
         {/* The rail's way in, and its way out. It is here whether the rail is a column or a drawer:
             a column nobody can close goes on taking width from the panes on a small screen, and one
@@ -646,7 +648,7 @@ export function TerminalFace({
           aria-label={t("face.rail")}
           title={t("face.rail")}
         >
-          ☰
+          <Icon name="menu" />
         </button>
         {/* How many panes the page shows. Three steps, always all three shown: which one is on is
             what a person is choosing between, and a control that only says the next step makes them
@@ -720,6 +722,7 @@ export function TerminalFace({
               onClick={() => showSide(which)}
               aria-expanded={sideHere && tab === which}
             >
+              <Icon name={which === "files" ? "folder" : "pencil"} />
               {t(which === "files" ? "files.tab" : "files.memo")}
             </button>
           ))}

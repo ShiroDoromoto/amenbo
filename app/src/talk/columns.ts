@@ -16,7 +16,6 @@
 // **What is kept is the wish, not what is on the screen.** A column can be a column or a drawer, and
 // which of those it is depends on how much room there is; whether the person wants it at all does
 // not. So the flag says whether they asked for it, and `sidesAreDrawers` says how it is drawn.
-import { ACROSS, type Count } from "./layout";
 
 /**
  * The least width a terminal is worth drawing in.
@@ -130,22 +129,26 @@ export function setSideShown(want: boolean): boolean {
 /**
  * Whether the columns beside the panes are drawers rather than columns.
  *
- * **It is decided by room and by nothing else.** The count is in it only as how many panes have to
- * fit across, which is the same number the grid is drawn with (`./layout`) — two and four are both
- * two across, so they need the same width. Asking for one pane is not asking for the rail to go
- * away — somebody who splits a wide screen down to one terminal wants that terminal large, and a
- * face that closed the rail on them would be answering a question nobody asked.
+ * **It is decided by room and by nothing else.** What is measured is whether a pane's worth of
+ * floor is left in the middle — not whether the count that was asked for would fit across it. The
+ * count is deliberately not in it: it would make the width a window needs jump as the count goes
+ * up, so the same window would fold its columns at one count and keep them at another, and on a
+ * window sitting near that boundary opening the rail, opening the memo or dragging an edge would
+ * each flip the answer. Nor is somebody rescued by the fold: closing both columns hands the panes
+ * only what those columns were taking, split across the count, which does not turn a pane too
+ * narrow to read into one that reads — it takes the rail away for nothing. What is protected is
+ * that the middle does not collapse. Making the chosen count comfortable is not this side's to
+ * promise: a count that is cramped on a narrow window is the choice of whoever pressed for it.
  *
- * **It is the count that was asked for, not how many panes are open.** A page with three panes on a
- * count of eight still draws four across, so it wants four across worth of room; measuring the open
- * ones would give a column back at four and take it away again at five, which is the width moving
- * under a reader who opened a pane.
+ * Asking for one pane is not asking for the rail to go away either — somebody who splits a wide
+ * screen down to one terminal wants that terminal large, and a face that closed the rail on them
+ * would be answering a question nobody asked.
  *
  * `rail` and `side` are the widths those columns would take if they were columns, which is zero for
  * one the person has closed: closing a column is what makes room, so it has to count. They are the
  * wish rather than what is drawn, so this cannot answer itself — a drawer that took no width would
  * make the window wide enough for columns, which would make it a column again.
  */
-export function sidesAreDrawers(count: Count, width: number, rail: number, side: number): boolean {
-  return width - rail - side < ACROSS[count] * PANE_MIN;
+export function sidesAreDrawers(width: number, rail: number, side: number): boolean {
+  return width - rail - side < PANE_MIN;
 }

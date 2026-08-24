@@ -249,7 +249,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .slot__end:hover { color: var(--c-text); }
 .slot--focused .termface__pane { border-color: var(--c-accent); }
 /* The empty frame: the dashed place a terminal is opened in, holding what it will be opened with
-   and the one press that does it (`../shell/AdriftSlot`). The box is the frame; the row and the
+   and the one press that does it (`../shell/EmptySlot`). The box is the frame; the row and the
    button inside it are what is said in the room. */
 .slot--empty {
   flex: 1; min-height: 0;
@@ -286,37 +286,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .slot__start--on {
   background: var(--c-accent-weak); border-color: var(--c-accent);
   color: var(--c-accent-text); font-weight: 600;
-}
-
-/* The same way in with something to say: work in this project that nothing is doing any more
-   (`../shell/AdriftSlot`). It is drawn as the same dashed place, because that is what it still is —
-   the question is what has been put in the room, not a different kind of box. */
-.slot--adrift {
-  flex: 1; min-height: 0;
-  gap: var(--s-2);
-  padding: var(--s-3);
-  border: 1.5px dashed var(--c-border-strong); border-radius: var(--r-lg);
-  overflow-y: auto;
-}
-.adrift__ask { color: var(--c-text); font-size: var(--fs-sm); line-height: 1.6; }
-.adrift__list { display: flex; flex-direction: column; gap: var(--s-1); margin: 0; padding: 0; list-style: none; }
-/* One task, pressable across its whole width: what it opens is the task's own face, and a target the
-   width of the words is one a reader has to aim at. */
-.adrift__task {
-  display: flex; gap: var(--s-2); align-items: baseline;
-  width: 100%; padding: var(--s-1) var(--s-2);
-  border: 1px solid var(--c-border); border-radius: var(--r-sm);
-  background: var(--c-surface); color: var(--c-text);
-  font-size: var(--fs-sm); text-align: left;
-}
-.adrift__task:hover { border-color: var(--c-accent); }
-.adrift__ref { color: var(--c-text-muted); font-family: var(--font-mono); font-size: var(--fs-sm); }
-.adrift__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The way in is still here, under the question rather than instead of it: the face is somewhere to
-   start a terminal whether or not there is anything to be asked about. */
-.adrift__open {
-  flex: 0 0 auto;
-  display: flex; flex-direction: column; align-items: center; gap: var(--s-2);
 }
 
 /* Where the pane being opened will work, asked in the place the pane is about to take (`./FolderChoice`).

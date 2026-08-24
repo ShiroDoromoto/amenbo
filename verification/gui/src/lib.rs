@@ -738,11 +738,6 @@ impl Instructor {
             (Domain::Terminal, "pane") | (Domain::Terminal, "label") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
-            // A task the terminal face asks about, read by the title it was created with — the record's
-            // own words, which is why the road names the task rather than spelling them out again.
-            (Domain::Terminal, "adrift") => {
-                Some(Expectation { text: self.target_label(with), present: present(with) })
-            }
             // The folder the question offers, read by the name the road gave it. The buttons carry the
             // folders' own paths, and the last part of one is the word the world was told to make it
             // under — so a reading finds it on the question and nowhere else on this face, and finds
@@ -1290,14 +1285,6 @@ impl Instructor {
             (Domain::Terminal, "open-shell") =>
                 "Open a plain shell in the pane — the terminal with no agent started in it. Where a pane is already running one, end that first (run: exit): the row under a pane whose program has ended is where what to open with is chosen, and the plain shell is on the list. On an empty frame the same list is on the frame itself, above the press that opens it: choose the plain shell there and then press to open. Where the face is offering several agents, or saying it found none it can start, the plain shell is a button on what it is showing. Every way round, a prompt comes up in the pane."
                     .to_string(),
-            // Pressing one of the records the face asks about. What it does is open that record
-            // on the ledger — the screen is left, deliberately, because a press that selected without
-            // switching would land on a face the reader cannot see — and on the face that reads that
-            // kind, a task and a decision being read in different places.
-            (Domain::Terminal, "open-adrift") => format!(
-                "In the question about what was left in the middle, press \"{}\". The window switches to the ledger with that record open, on the face that reads its kind.",
-                self.target_label(with)
-            ),
             // A line typed into the pane and sent. It is typed rather than pasted because what is
             // under test is a terminal: keys are what a terminal is driven by, and a line that
             // arrived some other way would be evidence of a path nobody walks.
@@ -2400,19 +2387,6 @@ impl Instructor {
                     .to_string(),
                 false => "On that same row, watch the dot for a few seconds: confirm it is holding still at its dim step, rather than fading up and down. Still is the pane's resting state, not the pane having gone — the dot is drawn either way."
                     .to_string(),
-            },
-            // What the face asks about. The absent half is not the same sentence turned round: it says
-            // which reservation is being looked for and that the face is right not to name it, so an
-            // operator reading it knows a screen with nothing on it at all would be a fail.
-            (Domain::Terminal, "adrift") => match present(with) {
-                true => format!(
-                    "On the terminal face, confirm the question about what was left in the middle names \"{}\".",
-                    self.target_label(with)
-                ),
-                false => format!(
-                    "In the same question, confirm \"{}\" is not among what it asks about — the question is drawn, and this one is not on it.",
-                    self.target_label(with)
-                ),
             },
             // The question about where a pane runs, read by a folder it offers. The absent half is the
             // one the walking-away is proved by, and it is written to say what a screen with nothing

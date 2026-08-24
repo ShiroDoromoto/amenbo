@@ -576,7 +576,6 @@ const ui = {
   // is one question; which kind a row is, and so what pressing it opens, is said by the ref it carries.
   // It asks rather than tells — Amenbo cannot see somebody's own terminal, so it does not know the work
   // stopped, only that nothing it opened is at it (`AMB-D-748`).
-  "face.adrift": "Something in this project was left in the middle, and nothing is at it. Carry on with it?",
   "face.open": "Open a terminal here",
   "face.openHere": "Room for another pane in this project",
   "face.whichFolder": "Which folder does this pane work in?",

@@ -523,7 +523,6 @@ export const ja: Translation = {
     "face.panes.other": "{n}枚",
     "face.pages": "ページ",
     "face.page": "{n} ページ目",
-    "face.adrift": "このプロジェクトに、途中のまま止まっているものがあります。続けますか？",
     "face.open": "ここで端末を開く",
     "face.openHere": "このプロジェクトでもう1枚ぶんの空きへ",
     "face.whichFolder": "このペインはどのフォルダで作業しますか？",

@@ -192,7 +192,7 @@ export function ProjectSettingsScreen({
             </div>
             {/* What this project's panes open with. It is drawn only where there is something to
                 choose between: a machine with one agent on it has no choice to offer, and one with
-                none has nothing to name (`../shell/AdriftSlot`). */}
+                none has nothing to name (`../shell/EmptySlot`). */}
             {agents.length > 1 && (
               <div className="settings__row">
                 <span className="settings__k">{t("projset.agentLabel")}</span>

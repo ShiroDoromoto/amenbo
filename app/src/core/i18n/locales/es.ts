@@ -532,7 +532,6 @@ export const es: Translation = {
     "face.panes.one": "{n} panel", "face.panes.many": "{n} paneles", "face.panes.other": "{n} paneles",
     "face.pages": "Páginas",
     "face.page": "Página {n}",
-    "face.adrift": "En este proyecto quedó algo a medias y nadie se ocupa de ello. ¿Quieres continuarlo?",
     "face.open": "Abrir una terminal aquí",
     "face.openHere": "Sitio para otro panel en este proyecto",
     "face.whichFolder": "¿En qué carpeta trabaja este panel?",

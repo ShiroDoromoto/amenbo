@@ -103,11 +103,11 @@ describe("closing a column, and opening it again", () => {
 
   it("puts the file face away when the half already up is pressed again", async () => {
     await mount();
-    // It opens on the files, so pressing the files is asking for what is already there.
-    await click(bar(t("files.tab")));
+    // It opens on the memo, so pressing the memo is asking for what is already there.
+    await click(bar(t("files.memo")));
     expect(q(".termface__column--side")).toBeNull();
     // The other half is not "close it again" — it is the half to show.
-    await click(bar(t("files.memo")));
+    await click(bar(t("files.tab")));
     expect(q(".termface__column--side")).not.toBeNull();
   });
 

@@ -69,6 +69,15 @@ steps_gui:
     with:
       face: terminal
 
+  # The panel beside the panes opens on the page a person writes on rather than on the folder: a
+  # person goes to the files when they want them, and what an agent points at calls from the switch
+  # itself. So the road asks for the half it is about before reading anything in it.
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
   # The folder's own section starts folded: what a person opens the face for is the pane, and a tree
   # unfolded over it would be the column deciding what they came for.
   - type: action

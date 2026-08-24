@@ -65,6 +65,41 @@ export function unread(list: readonly Pointed[]): number {
 }
 
 /**
+ * The newest thing each session pointed at that the person has been shown — what the badge on the
+ * files switch is read off (`../shell/TerminalFace`).
+ *
+ * **It is not `read`.** `read` is per row and means somebody clicked it, which is what the count
+ * inside the panel is about. This is per session and means the person has been on the half at all,
+ * which is what a knock is about: the badge answers "something came up while you were somewhere
+ * else", not "something is still standing over there" — the same rule, for the same reason, as the
+ * badge the terminal segment wears (`../shell/terminalBadge`). A badge that came back every time the
+ * panel was closed would be up from the first `point` to the end of the run, and one that is always
+ * up says nothing.
+ *
+ * What is held is the newest `at` rather than a flag, because a flag cannot tell a point that has
+ * arrived since from the one already shown.
+ */
+export type ShownBySession = ReadonlyMap<string, string>;
+
+/** The newest thing a session pointed at — the first of them — or nothing where it pointed at none. */
+export function newestPoint(list: readonly Pointed[]): string | null {
+  return list[0]?.at ?? null;
+}
+
+/** Whether something this session pointed at is waiting to be shown. */
+export function pointWaits(shown: ShownBySession, session: string, newest: string | null): boolean {
+  return newest !== null && shown.get(session) !== newest;
+}
+
+/** Take everything this session has pointed at so far as shown, `newest` being the last of it. */
+export function tookShown(
+  was: ShownBySession, session: string, newest: string,
+): ShownBySession {
+  if (was.get(session) === newest) return was;
+  return new Map(was).set(session, newest);
+}
+
+/**
  * The file a target names inside the project's folder, as segments from it — or nothing, where it
  * names something else.
  *

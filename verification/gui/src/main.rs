@@ -26,6 +26,11 @@
 //! backlog, and it holds the pid that launch answered with, so what is captured is that app and not
 //! whichever copy of the same build happened to be open. Both go when the run ends.
 //!
+//! **A road can ask for the app itself to be run again** (`store run-again`), and that step is the
+//! harness's rather than the operator's, for the same reason the launch is: an app opened from the
+//! machine would come up on the user's own store and under no pid the run can shoot. This one goes
+//! down, another comes up on the same store, and everything after it is shot against that one.
+//!
 //! Into that store, before the app is started, goes the world the scenario declared: `given` is
 //! walked with the CLI the same bundle ships, so a road that stands on records it never makes finds
 //! them there. The screen's own moves are not among them — those are the road, and the operator
@@ -131,7 +136,10 @@ fn run(opts: &Opts) -> Result<bool, String> {
 
     let mut gui = launch::launch(bundle, &store)?;
     gui.wait_until_shootable(&opts.screen)?;
-    let pid = gui.pid;
+    // Held where both the shooting and the restart can reach it. A road may put the app through a
+    // run of its own (`store run-again`), and the pid moves when it does — so what names the app to
+    // the screen tool is read off the launch at every shot rather than copied out once.
+    let gui = std::cell::RefCell::new(gui);
 
     let evidence = opts
         .evidence
@@ -155,9 +163,10 @@ fn run(opts: &Opts) -> Result<bool, String> {
     let outcome = walk(
         &scenario,
         &evidence,
-        |window, path| shoot(pid, window, path, &screen),
+        |window, path| shoot(gui.borrow().pid, window, path, &screen),
         |image| read_shot(image, &screen),
         |brief| hand_over(&stdin, brief),
+        || gui.borrow_mut().run_again(&screen),
     )?;
 
     let stood = world.as_ref().map(World::stood).unwrap_or_default();

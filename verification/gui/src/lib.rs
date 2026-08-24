@@ -25,9 +25,15 @@
 //! its `find` / `click-named` / `click` / `dblclick` / `type` / `key` carry out the action steps
 //! the checklist names.
 //!
+//! One step is nobody's to carry out at the screen: `store run-again` ends this run of the app and
+//! brings another up on the same store ([`launch::Gui::run_again`]), which is how a road reads what
+//! Amenbo keeps of a run against what goes out with one. It is the harness's because the app is —
+//! the store it is pointed at and the pid it is shot by are both the run's own.
+//!
 //! The pure part — turning a step into an instruction and an expectation, and walking a scenario
-//! into per-step evidence with a verdict — is separated from the side effects (running the tool)
-//! so the walk is testable with injected capture, reading and step-boundary wait.
+//! into per-step evidence with a verdict — is separated from the side effects (running the tool,
+//! starting the app again) so the walk is testable with injected capture, reading, step-boundary
+//! wait and restart.
 
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
@@ -1040,6 +1046,15 @@ impl Instructor {
                 "In Amenbo's own settings, set the view a newly created project opens in to the one stored as \"{}\", then return to the screen the road was on.",
                 req(with, "view")?
             ),
+            // The run of the app ending and another coming up. The only step nobody at the screen
+            // carries out: the run owns the app it shoots, so ending this one and starting the next
+            // on the same store is the harness's, done in the walk itself, and it is already over by
+            // the time the step is handed over. What the operator is asked for is what they alone
+            // can say — that the window in front of them is a new one, drawn by an app that came up
+            // on its own, rather than the one they had been working in all along.
+            (Domain::Store, "run-again") =>
+                "Nothing to press: the run has ended Amenbo and started it again on the same store, and the window on the screen is the one the new run drew. Confirm the app you were working in has gone and this one came up in its place — it opens where a fresh launch opens, with nothing of the last run's doing carried out again in front of you — and bring it forward if anything else is standing over it."
+                    .to_string(),
             (Domain::Plugin, "open-entry") => format!(
                 "Open the row for \"{}\", the one served by the catalog \"{}\".",
                 req(with, "name")?,
@@ -2941,17 +2956,26 @@ pub struct StepBrief<'a> {
 /// as well as the rest — so the screen a shot is taken of is one somebody was asked to stand up,
 /// and no shot is filed as evidence of a step nobody carried out. A hand-over that fails aborts the
 /// walk, since a run nobody is holding would shoot whatever screen was left standing.
-pub fn walk<C, O, H>(
+///
+/// `run_again` is the one step nobody at the screen can take ([`ends_the_run`]): the app ends and
+/// another comes up on the same store. It is called **before** that step is handed over rather than
+/// after, which is what lets the operator be asked about a window that is already there — they are
+/// the one who can say it is a new one, and there is nothing for them to do to bring it about. A
+/// failure to start the app again aborts the walk: every step after it would be shot against an
+/// app that is not running.
+pub fn walk<C, O, H, R>(
     scenario: &Scenario,
     evidence_dir: &Path,
     mut capture: C,
     mut read_text: O,
     mut hand_over: H,
+    mut run_again: R,
 ) -> Result<WalkOutcome, String>
 where
     C: FnMut(Option<&str>, &Path) -> Result<(), String>,
     O: FnMut(&Path) -> Result<Reading, String>,
     H: FnMut(&StepBrief<'_>) -> Result<(), String>,
+    R: FnMut() -> Result<(), String>,
 {
     std::fs::create_dir_all(evidence_dir)
         .map_err(|e| format!("could not create evidence dir {}: {e}", evidence_dir.display()))?;
@@ -2973,6 +2997,15 @@ where
         let domain = domain_str(domain);
         let screenshot = format!("{:02}-{kind}-{domain}-{op}.png", i + 1);
         let shot_path = evidence_dir.join(&screenshot);
+
+        // The app put through a run of its own, where the road asks for one. It happens before the
+        // hand-over so that what the operator is asked to confirm is a window already standing:
+        // there is nothing for them to press, and the app they had is gone by the time they read
+        // the line.
+        if ends_the_run(step) {
+            run_again()
+                .map_err(|e| format!("step {}: starting the app again failed: {e}", i + 1))?;
+        }
 
         // Handed over first, shot second. The screen is nobody's until somebody has been asked to
         // stand it up, and a shot taken before that is a photograph of the step before this one.
@@ -3028,6 +3061,16 @@ where
         records.push(record);
     }
     Ok(WalkOutcome { records, passed })
+}
+
+/// Whether this step is the app itself being run again — the one move on a road that is carried out
+/// by the harness rather than by whoever is standing at the screen.
+///
+/// It is asked of the step rather than declared in the scenario, because it is not a thing a road
+/// chooses: an op that ends the run ends it, and a road that could ask for the step without the
+/// restart would be reading a window nothing had put in front of it.
+fn ends_the_run(step: &Step) -> bool {
+    matches!(step, Step::Action { domain: Domain::Store, op, .. } if op == "run-again")
 }
 
 fn domain_str(d: Domain) -> &'static str {
@@ -5524,6 +5567,7 @@ steps_gui:
             // The board OCRs to text that contains the seed title.
             |_| Ok(reading("me-ai board\nSEED\nsome other card")),
             |_| Ok(()),
+            || Ok(()),
         )
         .expect("walk");
 
@@ -5574,6 +5618,7 @@ steps_gui:
                 handed.push(brief.instruction.to_string());
                 Ok(())
             },
+            || Ok(()),
         )
         .expect("walk");
 
@@ -5611,6 +5656,7 @@ steps_gui:
             |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| Ok(reading("an empty board with no such card")),
             |_| Ok(()),
+            || Ok(()),
         )
         .expect("walk");
 
@@ -5696,6 +5742,7 @@ steps_gui:
             |_, p| std::fs::write(p, b"fake-png").map_err(|e| e.to_string()),
             |_| Ok(reading("SCENARIO — nobodv holds it")),
             |_| Ok(()),
+            || Ok(()),
         )
         .expect("walk");
 
@@ -5715,7 +5762,7 @@ steps_gui:
         let s = load(SCENARIO);
         let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-fail-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        let err = walk(&s, &dir, |_, _| Err("no screen".to_string()), |_| Ok(reading("")), |_| Ok(()))
+        let err = walk(&s, &dir, |_, _| Err("no screen".to_string()), |_| Ok(reading("")), |_| Ok(()), || Ok(()))
             .unwrap_err();
         assert!(err.contains("step 1") && err.contains("no screen"), "got: {err}");
         let _ = std::fs::remove_dir_all(&dir);
@@ -5746,6 +5793,7 @@ steps_gui:
                 assert!(!b.instruction.is_empty(), "a step is handed over as a sentence to carry out");
                 Ok(())
             },
+            || Ok(()),
         )
         .expect("walk");
 
@@ -5755,6 +5803,94 @@ steps_gui:
             vec![(0, "action", 0), (1, "action", 1), (2, "assert", 2)],
             "one hand-over per step, from the first, each before its own shot"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The one step nobody at the screen carries out. The app is put through a run of its own before
+    /// the step is handed over, and the order is the whole of it: handed the step first, the operator
+    /// would be asked to confirm a new window while still standing in front of the old one.
+    #[test]
+    fn the_app_is_run_again_before_that_step_is_handed_over() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: task
+    op: create
+    with: { title: SEED }
+    as: seed
+  - type: action
+    domain: store
+    op: run-again
+"#);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-again-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let done: RefCell<Vec<String>> = RefCell::new(Vec::new());
+        let outcome = walk(
+            &s,
+            &dir,
+            |_, p| {
+                done.borrow_mut().push("shot".to_string());
+                std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
+            },
+            |_| Ok(reading("")),
+            |b| {
+                done.borrow_mut().push(format!("handed {}", b.index));
+                Ok(())
+            },
+            || {
+                done.borrow_mut().push("ran again".to_string());
+                Ok(())
+            },
+        )
+        .expect("walk");
+
+        assert_eq!(
+            *done.borrow(),
+            vec!["handed 0", "shot", "ran again", "handed 1", "shot"],
+            "the app is started again for that step alone, and before it is handed over"
+        );
+        assert_eq!(outcome.records[1].op, "run-again", "and the step is recorded like any other");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// An app that would not come up again ends the walk there. Every step after it would be shot
+    /// against nothing running, and those shots would read on the manifest like any others.
+    #[test]
+    fn an_app_that_will_not_start_again_aborts_the_walk() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: store
+    op: run-again
+  - type: assert
+    domain: terminal
+    op: frames
+    with: { count: 0, empty: 1 }
+"#);
+        let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-again-red-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let shots: RefCell<usize> = RefCell::new(0);
+        let err = walk(
+            &s,
+            &dir,
+            |_, p| {
+                *shots.borrow_mut() += 1;
+                std::fs::write(p, b"fake-png").map_err(|e| e.to_string())
+            },
+            |_| Ok(reading("")),
+            |_| Ok(()),
+            || Err("no window came up".to_string()),
+        )
+        .unwrap_err();
+
+        assert!(err.contains("step 1") && err.contains("no window came up"), "got: {err}");
+        assert_eq!(*shots.borrow(), 0, "nothing was shot");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -5777,6 +5913,7 @@ steps_gui:
             },
             |_| Ok(reading("")),
             |_| Err("nobody is watching".to_string()),
+            || Ok(()),
         )
         .unwrap_err();
         assert!(err.contains("step 1") && err.contains("nobody is watching"), "got: {err}");

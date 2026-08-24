@@ -529,6 +529,27 @@ const REGISTRY: &[OpSpec] = &[
     // registers this machine's login with the OS, which is the one piece of state no throwaway store
     // can hold and no run can hand back — that half is walked on real machines instead.
     OpSpec { kind: Kind::Action, domain: Domain::Store, op: "nudge-answer", required: &["nudge", "answer"], refs: &[], strings: &["nudge", "answer"], binds: false },
+    // The app ended and opened again on the same store. It is not a move on a screen at all: it is a
+    // run of Amenbo going out and another coming up, which is the one gap a road cannot otherwise
+    // reach and the only place several promises are kept. What a person set and comes back to is
+    // settled here, against everything that was this run's own and goes with it — the places a
+    // terminal was drawn in, the names on them — which the app keeps for a run and no longer.
+    //
+    // **It is the harness's own step, and the only one that is.** The run owns the app it shoots —
+    // the store it is pointed at is the run's, and the pid is how a shot names this window rather
+    // than whatever else of the same build is open — so an operator who quit Amenbo and opened it
+    // again from their machine would bring up a second app, on their own backlog, that the run
+    // cannot shoot. The instruction handed over says so: there is nothing to press, and what is read
+    // is the window that came back.
+    //
+    // The app is ended rather than asked to leave, for the reason a run takes it down at the end:
+    // asking goes through the app's name, and a name cannot pick out one instance. It is the harder
+    // half of what is under test besides — what outlives a run is written as it is changed rather
+    // than on the way out, so a build that only wrote at the door would go red here and be right to.
+    //
+    // A screen road alone. A CLI command is a run of its own that ends when it has printed, so a
+    // terminal carries nothing across and there is no gap here for this op to be.
+    OpSpec { kind: Kind::Action, domain: Domain::Store, op: "run-again", required: &[], refs: &[], strings: &[], binds: false },
     // What a folder's binding is made of. A folder is named, not pointed at: `dir` is a plain name
     // the driver places somewhere of its own, since a pointer is answered by where a folder sits.
     // `init` raises a project of its own and binds it (hence the binding), `bind` points a folder at

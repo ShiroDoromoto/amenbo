@@ -168,9 +168,9 @@ export function TerminalFace({
   // from the last run would hide the thing the face is for before anybody had asked it to.
   const [railDrawn, setRailDrawn] = useState(false);
   const [sideDrawn, setSideDrawn] = useState(false);
-  // Which of the file face's two the panel shows. It is held here rather than there because the top
-  // row switches between them as well, and a control that could not see which one is up would have
-  // to be pressed to find out (`../files/FilesPanel`).
+  // Which of the file face's two the panel shows. It is held here rather than there because the row
+  // that switches between them is here: the panel is only on the screen while it is open, so a
+  // switch living inside it could not be the one that opens it (`../files/FilesPanel`).
   const [tab, setTab] = useState<"files" | "memo">("files");
   // The question about where the pane being opened works, while it is up. It is not a frame: a place
   // is made by opening one, and one nobody finished opening is a box that says nothing
@@ -486,11 +486,11 @@ export function TerminalFace({
   }, []);
 
   /**
-   * The file face's two, from the top row.
+   * The file face's two, from the top row — the only place they are switched between.
    *
-   * Pressing the one already up is the way to put the panel away, which is what makes the row the
-   * "open" half of the same control rather than a second one: the panel is closed from its own cross
-   * and opened from here, and neither is ever the only one there.
+   * Pressing the one already up is the way to put the panel away, so one control both says which
+   * half is up and opens or closes the panel. The panel's own cross closes it too, and that is not
+   * a second switch: it ends the panel rather than choosing a half.
    */
   const showSide = useCallback((which: "files" | "memo") => {
     if (sideHere && tab === which) wantSide(false);
@@ -712,7 +712,8 @@ export function TerminalFace({
         {/* The file face's two halves, and the way to open it again once it has been closed. They
             sit at the far end because they are about the other side of the screen. Pressing the one
             already up puts the panel away, so the row says which half is open as well as opening
-            one (`../files/FilesPanel`). */}
+            one — and it is the whole of the switch: the panel draws no tabs of its own
+            (`../files/FilesPanel`). */}
         <div className="termface__sides">
           {(["files", "memo"] as const).map((which) => (
             <button

@@ -155,6 +155,17 @@ describe("the file face", () => {
     expect(container.textContent).toContain("notes");
   });
 
+  it("draws no switch of its own between the two halves", async () => {
+    await draw();
+    // The switch is the terminal face's top row, which is reachable while the panel is closed as
+    // well. A second one in here would be two controls doing the same thing, and a reader would
+    // have to work out which is the right one (`../shell/TerminalFace`).
+    expect(container.querySelector("[role=\"tablist\"]")).toBeNull();
+    expect(button(t("files.memo"))).toBeUndefined();
+    // What did stay is the way out: it ends the panel rather than choosing a half.
+    expect(container.querySelector(".files__close")).not.toBeNull();
+  });
+
   it("redraws the row when the host says the folder moved", async () => {
     await draw();
     expect(container.textContent).toContain("a.md");

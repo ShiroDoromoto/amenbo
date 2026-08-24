@@ -2495,8 +2495,19 @@ impl Instructor {
             (Domain::Terminal, "opens-with") => match req(with, "start")? {
                 "shell" => "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row above the press that opens a pane in it: confirm the plain shell is the one that is on, and that the press is live rather than asking to be told what to open with. Where this machine could start no agent there is no row on the frame at all, and that is the same reading: the plain shell is then the whole of what a frame opens with."
                     .to_string(),
+                // The first run, which is a state and not a program: nobody has said, so the frame
+                // says so instead of guessing. Both halves are read because either alone passes on
+                // a build with the other fault — a row with nothing lit above a press that opens
+                // anyway is a build guessing quietly, and a press that asks with a name already lit
+                // is a build asking about an answer it has.
+                //
+                // The row has to be there to be read blank, and that is said out loud: this is the
+                // one reading here a machine cannot be relied on to be able to give, and the road
+                // that asks for it stood the machine up first (`can-start`).
+                "none" => "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row above the press that opens a pane in it: confirm the row is drawn, with several things on it to open with, and that **none of them is on**. The press below it does not open a pane: it asks to be told what to open with, and will not answer until one of the row is chosen. Nothing is chosen here — that is the next step's — and if a name on that row is already on, this step has failed."
+                    .to_string(),
                 other => return Err(format!(
-                    "assert `opens-with` cannot name `{other}` — the plain shell is the one thing every machine's row has, and which agents are on it is that machine's own"
+                    "assert `opens-with` cannot name `{other}` — the plain shell is the one thing every machine's row has, `none` is nobody having chosen yet, and which agents are on the row is that machine's own"
                 )),
             },
             // How many panes are standing on the page. Counted rather than read: the boxes carry no
@@ -5492,6 +5503,35 @@ steps_gui:
         assert!(
             said.contains("no row on the frame at all"),
             "a machine that can start nothing draws no row, and the step has to say so: {said}"
+        );
+        assert!(
+            Instructor::new().expectation(&step).is_none(),
+            "the names on the row are the interface's own words, so no reading is expected off the shot"
+        );
+    }
+
+    /// The first run, which is the one reading on that frame that is not a program: the row is read
+    /// for being drawn and blank, and the press for refusing to open. Both halves, because either
+    /// alone passes on a build carrying the other fault.
+    #[test]
+    fn the_first_run_is_read_as_a_row_with_nothing_on_it_and_a_press_that_asks() {
+        let step = Step::Assert {
+            domain: Domain::Terminal,
+            op: "opens-with".to_string(),
+            with: [("start".to_string(), serde_yaml::Value::from("none"))]
+                .into_iter()
+                .collect(),
+            window: None,
+        };
+        let said = Instructor::new().render(&step).unwrap();
+        assert!(said.contains("none of them is on"), "got: {said}");
+        assert!(
+            said.contains("does not open a pane"),
+            "the press refusing is half the reading: {said}"
+        );
+        assert!(
+            said.contains("several things on it"),
+            "a blank row has to be a row that is there: {said}"
         );
         assert!(
             Instructor::new().expectation(&step).is_none(),

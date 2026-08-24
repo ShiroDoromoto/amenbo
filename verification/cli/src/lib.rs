@@ -498,10 +498,10 @@ impl<'a> Driver<'a> {
             // `domain::tick`. The one action the wake-up carries is a premise's reach into the
             // run's own store, and nothing further.
             Domain::Tick => self.tick_action(op, with),
-            // Where a terminal is drawn is a question about a screen, and this driver has none. It
-            // is refused by name rather than left to a wildcard so that an op added here later
-            // stops the compiler instead of reading as deliberately unwalked.
-            Domain::Terminal => Err(unmapped(domain, op)),
+            // Where a terminal is drawn is a question about a screen, and this driver has none —
+            // bar the one premise that stands the machine up underneath it (`domain::terminal`),
+            // which is settled before any app comes up and is nobody's screen.
+            Domain::Terminal => self.terminal_action(op, with),
             // The file face is a screen too. Reading a file at a shell is `cat`, which is not Amenbo
             // doing anything, so there is nothing here to walk and no gap in the road.
             Domain::Files => Err(unmapped(domain, op)),

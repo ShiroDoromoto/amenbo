@@ -1,131 +1,125 @@
 // What the arrangement has to keep true, none of which is visible in the arithmetic that does it.
 import { describe, expect, it } from "vitest";
 import {
-  closedIn, EMPTY_LAYOUT, focusOn, folderOfPage, frameFor, freeSlot, goPage, laidOut, MAX_PAGES,
-  movedTo, openedIn, openedOn, pageCount, pageFor, pageOfFrame, restored, setCount, settledIn,
-  sidesAreDrawers, slotsOf,
+  closedIn, EMPTY_LAYOUT, focusOn, goPage, goProject, laidOut, movedTo, openedFrame, openedIn,
+  pageCount, pageOfFrame, paneIn, panesOf, restored, setCount, sidesAreDrawers, slotsOf,
   type Layout,
 } from "./layout";
 
-/** A layout with `n` frames materialised at the given count, the way pressing through slots leaves one. */
-function withFrames(n: number, count: Layout["count"] = 2): Layout {
-  let layout: Layout = { ...EMPTY_LAYOUT, count };
-  for (let i = 0; i < n; i++) {
-    layout = frameFor(layout, Math.floor(i / count) + 1, i % count).layout;
-  }
+/** A layout with `n` panes opened in one project, the way pressing the way in `n` times leaves one. */
+function withPanes(n: number, count: Layout["count"] = 2, project = 1): Layout {
+  let layout: Layout = { ...EMPTY_LAYOUT, count, project };
+  for (let i = 0; i < n; i++) layout = openedFrame(layout, project, `/work/${project}`).layout;
   return layout;
 }
 
-describe("pages and slots", () => {
-  it("always offers one more page than the frames fill, so there is somewhere to put the next pane", () => {
+describe("a place is made by opening one", () => {
+  it("has no panes at all until something is opened", () => {
+    expect(EMPTY_LAYOUT.frames).toHaveLength(0);
+    expect(slotsOf(EMPTY_LAYOUT, 1)).toHaveLength(0);
+    // Still a page: it is where the way in is put.
     expect(pageCount(EMPTY_LAYOUT)).toBe(1);
-    expect(pageCount(withFrames(1))).toBe(1);
-    expect(pageCount(withFrames(2))).toBe(2);
-    expect(pageCount(withFrames(4))).toBe(3);
   });
 
-  it("stops at the digits there are to reach pages with", () => {
-    expect(pageCount(withFrames(MAX_PAGES * 2))).toBe(MAX_PAGES);
-    expect(goPage(withFrames(MAX_PAGES * 2), MAX_PAGES + 1).page).toBe(1);
+  it("draws one slot per pane and no empty ones beside them", () => {
+    const two = withPanes(2, 4);
+    expect(slotsOf(two, 1).map((one) => one.id)).toEqual(["1", "2"]);
   });
 
-  it("fills the slots up to the one reached for, rather than leaving a hole in the page", () => {
-    const { layout, frame } = frameFor({ ...EMPTY_LAYOUT, count: 4 }, 1, 3);
-    expect(layout.frames.map((one) => one.id)).toEqual(["1", "2", "3", "4"]);
-    expect(frame.id).toBe("4");
-    expect(slotsOf(layout, 1).map((one) => one?.session)).toEqual([null, null, null, null]);
+  it("goes to the pane it just opened, on the page it landed on", () => {
+    const made = openedFrame(withPanes(2), 1, "/work/1");
+    expect(made.frame.id).toBe("3");
+    expect(made.layout.focus).toBe("3");
+    expect(made.layout.page).toBe(2);
+  });
+});
+
+describe("a pane belongs to a project", () => {
+  it("shows one project's panes and not another's", () => {
+    let layout = withPanes(2, 2, 1);
+    layout = openedFrame(layout, 2, "/work/2").layout;
+    expect(layout.project).toBe(2);
+    expect(slotsOf(layout, 1).map((one) => one.id)).toEqual(["3"]);
+    expect(panesOf(layout, 1).map((one) => one.id)).toEqual(["1", "2"]);
   });
 
-  it("hands a slot the frame already there instead of a second one", () => {
-    const first = frameFor(EMPTY_LAYOUT, 1, 0);
-    const again = frameFor(first.layout, 1, 0);
-    expect(again.frame.id).toBe(first.frame.id);
-    expect(again.layout.frames).toHaveLength(1);
+  it("lands on a project's first pane when it is picked", () => {
+    let layout = withPanes(2, 2, 1);
+    layout = openedFrame(layout, 2, "/work/2").layout;
+    const back = goProject(layout, 1);
+    expect(back.page).toBe(1);
+    expect(back.focus).toBe("1");
+  });
+
+  it("takes the screen to another project when a pane there is reached for", () => {
+    let layout = withPanes(1, 2, 1);
+    layout = openedFrame(layout, 2, "/work/2").layout;
+    const back = focusOn(layout, "1");
+    expect(back.project).toBe(1);
+    expect(back.focus).toBe("1");
+  });
+
+  it("counts a project's pages from its own panes", () => {
+    let layout = withPanes(4, 2, 1);
+    layout = openedFrame(layout, 2, "/work/2").layout;
+    expect(pageCount(layout)).toBe(1);
+    expect(pageCount(goProject(layout, 1))).toBe(2);
   });
 });
 
 describe("a frame is a place, not a process", () => {
   it("keeps the frame when the program in it exits", () => {
-    const { layout, frame } = frameFor(EMPTY_LAYOUT, 1, 0);
-    const running = openedIn(layout, frame.id, "s1", "/w");
-    const ended = closedIn(running, "s1");
+    const { layout, frame } = openedFrame(EMPTY_LAYOUT, 1, "/w");
+    const ended = closedIn(openedIn(layout, frame.id, "s1", "/w"), "s1");
     expect(ended.frames).toHaveLength(1);
     expect(ended.frames[0]!.session).toBeNull();
     expect(ended.frames[0]!.id).toBe(frame.id);
   });
 
   it("never hands a retired id out again — a name is kept against it", () => {
-    const four = withFrames(4);
+    const four = withPanes(4);
     const ended = closedIn(openedIn(four, "1", "s1", null), "s1");
-    expect(frameFor(ended, 3, 0).frame.id).toBe("5");
+    expect(openedFrame(ended, 1, "/w").frame.id).toBe("5");
   });
 });
 
-describe("where another pane goes", () => {
-  it("is the first slot on the page asked about, whichever page is showing", () => {
-    // Two pages of two, with the first slot of page 2 taken: what page 2 has room for is its second.
-    let layout = frameFor(frameFor(frameFor(EMPTY_LAYOUT, 1, 0).layout, 1, 1).layout, 2, 0).layout;
-    layout = goPage(layout, 1);
-    expect(freeSlot(layout, 2)).toBe(1);
-    expect(freeSlot(layout, 1), "a full page has nowhere to put one").toBeNull();
+describe("where a pane works", () => {
+  it("is the folder it was opened in, which an agent's own cd does not redraw", () => {
+    const one = openedIn(withPanes(1), "1", "s1", "/repo");
+    expect(movedTo(one, "s1", "/elsewhere").frames[0]!.folder).toBe("/repo");
   });
 
-  it("always leaves one page with room, so there is always somewhere to start", () => {
-    const layout = withFrames(5);
-    expect(freeSlot(layout, pageCount(layout))).not.toBeNull();
-  });
-});
-
-describe("one page, one project", () => {
-  it("takes the page's folder from the first terminal started on it", () => {
-    const two = openedIn(withFrames(2), "1", "s1", "/repo");
-    expect(folderOfPage(two, 1)).toBe("/repo");
-    // The next page is its own — a different project is a different page.
-    expect(folderOfPage(two, 2)).toBeNull();
-  });
-
-  it("does not let an agent's own cd redraw where the page's panes are opened", () => {
-    const two = openedIn(withFrames(2), "1", "s1", "/repo");
-    expect(folderOfPage(movedTo(two, "s1", "/elsewhere"), 1)).toBe("/repo");
-  });
-
-  it("records where a pane is for a session that was adopted rather than started", () => {
-    const adopted = openedIn(withFrames(2), "1", "s1", null);
-    expect(folderOfPage(movedTo(adopted, "s1", "/said"), 1)).toBe("/said");
-  });
-
-  it("takes the page's folder from the choice, without waiting for a terminal to start in it", () => {
-    // The state a machine with nothing startable is left in: a folder was answered and no terminal
-    // followed. The slot beside it must still open there rather than ask the same question again.
-    const chosen = settledIn(withFrames(2), "1", "/repo");
-    expect(folderOfPage(chosen, 1)).toBe("/repo");
-  });
-
-  it("keeps the folder a frame already had — a second answer would change the page's project", () => {
-    const chosen = settledIn(withFrames(2), "1", "/repo");
-    expect(folderOfPage(settledIn(chosen, "1", "/elsewhere"), 1)).toBe("/repo");
+  it("is learned from the session for a pane that took one up rather than starting it", () => {
+    const adopted = openedIn({ ...EMPTY_LAYOUT, project: 1, frames: [
+      { id: "1", project: 1, session: null, folder: null },
+    ], nextId: 2 }, "1", "s1", null);
+    expect(movedTo(adopted, "s1", "/said").frames[0]!.folder).toBe("/said");
   });
 });
 
-describe("the count is how much of the list a page shows", () => {
+describe("the count is the most a page draws", () => {
   it("carries the pane being worked in across a change of count", () => {
-    // Four frames at two a page: frame 4 is on page 2. At one a page it is on page 4.
-    const four = focusOn(withFrames(4), "4");
+    const four = focusOn(withPanes(4), "4");
     expect(four.page).toBe(2);
     const one = setCount(four, 1);
     expect(pageOfFrame(one, "4")).toBe(4);
     expect(one.page).toBe(4);
   });
 
-  it("does not renumber the frames — the list is what it was", () => {
-    const four = withFrames(4);
+  it("does not renumber the panes — the list is what it was", () => {
+    const four = withPanes(4);
     expect(setCount(four, 4).frames.map((one) => one.id)).toEqual(four.frames.map((one) => one.id));
   });
 
   it("lands on a page that exists when nothing is focused", () => {
-    const wide = goPage(withFrames(8, 2), 5);
-    expect(wide.page).toBe(5);
-    expect(setCount(wide, 4).page).toBeLessThanOrEqual(pageCount(setCount(wide, 4)));
+    const wide = goPage({ ...withPanes(8, 2), focus: null }, 4);
+    expect(wide.page).toBe(4);
+    const wider = setCount(wide, 4);
+    expect(wider.page).toBeLessThanOrEqual(pageCount(wider));
+  });
+
+  it("refuses a page this project has not got", () => {
+    expect(goPage(withPanes(2), 3).page).toBe(1);
   });
 });
 
@@ -147,87 +141,70 @@ describe("the sides", () => {
 
 describe("an arrangement kept between runs", () => {
   it("keeps the shape and lets the sessions go", () => {
-    let layout = frameFor(EMPTY_LAYOUT, 1, 1).layout;
-    layout = openedIn(layout, "1", "session-a", "/work/repo");
-    layout = openedIn(layout, "2", "session-b", "/work/repo");
+    let layout = withPanes(2);
+    layout = openedIn(layout, "1", "session-a", "/work/1");
+    layout = openedIn(layout, "2", "session-b", "/work/1");
 
     const kept = laidOut(layout);
     expect(kept.count).toBe(layout.count);
     expect(kept.frames).toEqual([
-      { id: "1", folder: "/work/repo" },
-      { id: "2", folder: "/work/repo" },
+      { id: "1", project: 1, folder: "/work/1" },
+      { id: "2", project: 1, folder: "/work/1" },
     ]);
     // What was running is not in it at all: a session died with the last run, and a pane drawn as
     // though it were still there would be the window saying something untrue.
     expect(JSON.stringify(kept)).not.toContain("session-a");
   });
 
-  it("comes back as places to open a terminal in, in the same slots", () => {
+  it("comes back as places to open a terminal in, each in its own project", () => {
     const back = restored({
       count: 4,
       nextId: 3,
-      frames: [{ id: "1", folder: "/work/repo" }, { id: "2" }],
-    })!;
+      frames: [{ id: "1", project: 7, folder: "/work/repo" }, { id: "2", project: 8 }],
+    }, null)!;
     expect(back.count).toBe(4);
     expect(back.frames.map((one) => one.session)).toEqual([null, null]);
     expect(back.frames.map((one) => one.folder)).toEqual(["/work/repo", null]);
-    // The face has to be working somewhere, and the first place is where a fresh one starts too.
+    // The face has to be showing something, and the first pane is where a fresh one starts too.
+    expect(back.project).toBe(7);
     expect(back.focus).toBe("1");
     expect(back.page).toBe(1);
+  });
+
+  it("puts a pane whose project nothing recorded where the person is looking", () => {
+    const back = restored({ count: 2, nextId: 2, frames: [{ id: "1", folder: "/work/repo" }] }, 5)!;
+    expect(back.frames[0]!.project).toBe(5);
+  });
+
+  it("has nowhere to put one when the window is on no project either", () => {
+    expect(restored({ count: 2, nextId: 2, frames: [{ id: "1" }] }, null)).toBeNull();
   });
 
   it("hands the next frame an id no name is already on", () => {
     // A kept arrangement whose `nextId` is behind its own frames — an older build, or a file nobody
     // can vouch for — must not let a fresh frame take the name of one that came back.
-    const back = restored({ count: 2, nextId: 1, frames: [{ id: "1" }, { id: "7" }] })!;
-    expect(frameFor(back, 2, 0).frame.id).toBe("8");
+    const back = restored({ count: 2, nextId: 1, frames: [{ id: "1", project: 1 }, { id: "7", project: 1 }] }, null)!;
+    expect(openedFrame(back, 1, "/w").frame.id).toBe("8");
   });
 
   it("is nothing to come back to when it holds no frames", () => {
-    expect(restored({ count: 2, nextId: 1, frames: [] })).toBeNull();
+    expect(restored({ count: 2, nextId: 1, frames: [] }, 1)).toBeNull();
   });
 });
 
 describe("a folder handed in from the ledger", () => {
-  it("lands on the page it is already open on, rather than beside itself", () => {
-    const made = frameFor(EMPTY_LAYOUT, 2, 0);
-    const open = settledIn(made.layout, made.frame.id, "/work/repo");
-    expect(pageFor(open, "/work/repo")).toBe(2);
+  it("finds the pane of that project already working in it, rather than one beside it", () => {
+    const open = openedFrame({ ...EMPTY_LAYOUT, project: 1 }, 1, "/work/repo").layout;
+    expect(paneIn(open, 1, "/work/repo")?.id).toBe("1");
   });
 
-  it("takes a page nothing has been started on, which on a fresh face is the one in front of you", () => {
-    expect(pageFor(EMPTY_LAYOUT, "/work/repo")).toBe(1);
-    const first = frameFor(EMPTY_LAYOUT, 1, 0);
-    const busy = settledIn(first.layout, first.frame.id, "/work/other");
-    expect(pageFor(busy, "/work/repo")).toBe(2);
+  it("is nothing to go to where the folder is open in another project", () => {
+    const open = openedFrame({ ...EMPTY_LAYOUT, project: 2 }, 2, "/work/repo").layout;
+    expect(paneIn(open, 1, "/work/repo")).toBeNull();
   });
 
-  it("is nowhere to go when every page is settled somewhere else", () => {
-    let layout: Layout = { ...EMPTY_LAYOUT, count: 1 };
-    for (let page = 1; page <= MAX_PAGES; page++) {
-      const made = frameFor(layout, page, 0);
-      layout = settledIn(made.layout, made.frame.id, `/work/${page}`);
-    }
-    expect(pageFor(layout, "/work/repo")).toBeNull();
-  });
-
-  // The frame is replaced rather than settled into: a pane already on the screen is drawn, and its
-  // invitation would go on standing over a page that now has an answer.
-  it("comes up as a frame of its own, so the pane is put up again", () => {
-    const standing = frameFor(EMPTY_LAYOUT, 1, 0);
-    const opened = openedOn(standing.layout, 1, "/work/repo");
-    expect(opened.frame.id).not.toBe(standing.frame.id);
-    expect(opened.frame.folder).toBe("/work/repo");
-    expect(folderOfPage(opened.layout, 1)).toBe("/work/repo");
-    expect(slotsOf(opened.layout, 1)[0]!.id).toBe(opened.frame.id);
-  });
-
-  it("leaves a slot with a terminal running in it exactly as it is", () => {
-    const standing = frameFor(EMPTY_LAYOUT, 1, 0);
-    const running = openedIn(standing.layout, standing.frame.id, "session-a", null);
-    const opened = openedOn(running, 1, "/work/repo");
-    expect(opened.frame.id).toBe(standing.frame.id);
-    expect(opened.frame.session).toBe("session-a");
-    expect(folderOfPage(opened.layout, 1)).toBeNull();
+  it("is nothing to go to where nothing of this project is in it", () => {
+    const open = openedFrame({ ...EMPTY_LAYOUT, project: 1 }, 1, "/work/other").layout;
+    expect(paneIn(open, 1, "/work/repo")).toBeNull();
   });
 });

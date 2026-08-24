@@ -2344,6 +2344,11 @@ pub struct TalkLayoutDto {
 pub struct TalkFrameDto {
     /// The id its name is kept against (`FrameNameDto`).
     pub(crate) id: String,
+    /// The project this pane is one of. Absent in an arrangement written before panes belonged to a
+    /// project, which the window answers for (`app/src/talk/layout.ts`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) project: Option<u32>,
     /// The folder its terminal was working in, where it had one.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

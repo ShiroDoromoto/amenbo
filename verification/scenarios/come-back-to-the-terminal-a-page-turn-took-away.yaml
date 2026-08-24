@@ -61,8 +61,9 @@ steps_gui:
     with:
       face: terminal
 
-  # The way in, and what settles the page's folder. Every pane opened on this page afterwards takes
-  # it, which is what lets the second one below be one press and nothing else.
+  # The way in, and what binds the folder to the project the face is on. Every pane opened in that
+  # project afterwards works in it, which is what lets the second one below be one press and nothing
+  # else.
   - type: action
     domain: terminal
     op: open-folder
@@ -88,14 +89,14 @@ steps_gui:
     with:
       shows: SCENARIO the terminal behind the page
 
-  # A second pane in the empty box beside it. Nothing is asked — the folder is the page's — and the
-  # new pane becomes the one being worked in, which is what decides where the next step leaves the
-  # screen.
+  # A second pane, opened from the rail beside the project's name. Nothing is asked — the folder is
+  # the project's — and the new pane becomes the one being worked in, which is what decides where the
+  # next step leaves the screen.
   - type: action
     domain: terminal
     op: open-pane
     with:
-      from: slot
+      from: rail
 
   # And the first pane is untouched by it. A slot filling up beside a terminal is the commonest thing
   # that happens on this face, so it is worth one step that it is not also the cheapest way to lose

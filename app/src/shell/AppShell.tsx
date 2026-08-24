@@ -211,7 +211,7 @@ export function AppShell() {
   }, [shape]);
   // The folder the ledger has asked the terminal to work in, and a count of the asking: the face is a
   // component, so what it is handed is where to work rather than a call to make (`./TerminalFace`).
-  const [openIn, setOpenIn] = useState<{ dir: string; nth: number } | null>(null);
+  const [openIn, setOpenIn] = useState<{ project: number | null; dir: string; nth: number } | null>(null);
   /**
    * "Start in the terminal" — the one move the first loop offers (`../components/FirstLoop`).
    *
@@ -224,10 +224,16 @@ export function AppShell() {
       void invoke("talk_open", { raise: true }).catch(() => {});
       return;
     }
-    setOpenIn((asked) => ({ dir, nth: (asked?.nth ?? 0) + 1 }));
+    // Whose project it is travels with it: a pane belongs to a project (`../talk/layout`), and the
+    // only screen this button is on is that project's own.
+    setOpenIn((asked) => ({
+      project: nav.type === "project" ? Number(nav.id) : null,
+      dir,
+      nth: (asked?.nth ?? 0) + 1,
+    }));
     setTerminalAsked(true);
     setFace("terminal");
-  }, [shape]);
+  }, [shape, nav]);
 
   // "Open in a separate window". The pane comes down as the shape changes, leaving the terminal
   // running for the window that is about to draw it, and this window goes back to the ledger — the

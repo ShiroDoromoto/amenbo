@@ -2134,6 +2134,11 @@ export type TalkFrameDto = {
  */
 id: string, 
 /**
+ * The project this pane is one of. Absent in an arrangement written before panes belonged to a
+ * project, which the window answers for (`app/src/talk/layout.ts`).
+ */
+project?: number, 
+/**
  * The folder its terminal was working in, where it had one.
  */
 folder?: string, };

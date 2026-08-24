@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// What an empty slot says about work nothing is doing any more, and the two things it must not do:
+// What the terminal face says about work nothing is doing any more, and the two things it must not do:
 // ask before there is a project to ask about, and act on the answer.
 //
 // The host's read is stubbed and everything else runs — the point of the component is entirely in
@@ -56,8 +56,9 @@ afterEach(() => {
   container.remove();
 });
 
-/** Draw the slot, with the way to the ledger and the way to a task both counted. */
-async function draw(folder: string | null): Promise<void> {
+/** Draw it, with the way to the ledger and the way to a task both counted. `wayIn` is whether it
+ *  stands on its own where there is nothing to ask — a face with no panes on it. */
+async function draw(folder: string | null, wayIn = true): Promise<void> {
   await act(async () => {
     root.render(
       createElement(
@@ -69,6 +70,7 @@ async function draw(folder: string | null): Promise<void> {
           },
           children: createElement(AdriftSlot, {
             folder,
+            wayIn,
             onOpen: () => {},
             onOpenLedger: () => ledger.push(1),
           }),
@@ -82,8 +84,14 @@ function buttons(): HTMLButtonElement[] {
   return [...container.querySelectorAll("button")];
 }
 
-describe("an empty slot with nothing to ask about", () => {
-  it("is the plain way to open a terminal", async () => {
+describe("a face with nothing to ask about", () => {
+  it("draws nothing at all beside panes that are open", async () => {
+    await draw("/work/here", false);
+    // An empty box beside a terminal is the identical question this face was built to stop asking.
+    expect(container.textContent).toBe("");
+  });
+
+  it("is the plain way to open a terminal where nothing is open", async () => {
     await draw("/work/here");
 
     expect(buttons()).toHaveLength(1);
@@ -98,7 +106,7 @@ describe("an empty slot with nothing to ask about", () => {
   });
 });
 
-describe("an empty slot with something left in the middle", () => {
+describe("a face with something left in the middle", () => {
   it("puts one question over both kinds, and keeps the way to open a terminal", async () => {
     hoisted.adrift = left({
       tasks: [row("AMB-T-11", 11, "the migration")],
@@ -113,7 +121,7 @@ describe("an empty slot with something left in the middle", () => {
     expect(container.textContent).toContain("Carry on with it?");
     expect(container.textContent).toContain("the migration");
     expect(container.textContent).toContain("which of the two roads");
-    // The way in is still there: an empty slot is somewhere to start a terminal whether or not there
+    // The way in is still there: the face is somewhere to start a terminal whether or not there
     // is anything to be asked about.
     expect(buttons().some((b) => b.textContent === "Open a terminal here")).toBe(true);
   });

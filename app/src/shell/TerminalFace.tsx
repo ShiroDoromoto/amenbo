@@ -1,31 +1,41 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AdriftSlot } from "./AdriftSlot";
+import { FolderChoice } from "./FolderChoice";
 import { TerminalPane } from "./TerminalPane";
 import { PaneRail } from "./PaneRail";
 import {
   frameNames, keepLayout, nameFrame, savedLayout, type FrameNames, type NamedBy,
 } from "../talk/frames";
 import {
-  closedIn, COUNTS, EMPTY_LAYOUT, focusOn, folderOfPage, frameFor, freeSlot, goPage, laidOut,
-  MAX_PAGES, movedTo, openedIn, openedOn, pageCount, pageFor, pageOfFrame, restored, setCount,
-  settledIn, sidesAreDrawers, slotsOf,
+  closedIn, COUNTS, EMPTY_LAYOUT, focusOn, goPage, goProject, laidOut, MAX_PAGES, movedTo, openedFrame,
+  openedIn, pageCount, pageOfFrame, paneIn, panesOf, restored, setCount, sidesAreDrawers, slotsOf,
   type Count, type Layout,
 } from "../talk/layout";
 import { FilesPanel } from "../files/FilesPanel";
 import { markRead, tookPoint, type PointedBySession } from "../files/pointed";
+import { useBoundFolders } from "../core/boundFolders";
+import { chooseFolderFor } from "../core/mutations";
+import { dataAdapter } from "../mock/adapter";
+import { invoke } from "../core/ipc";
+import type { PtySessionDto } from "../bindings/bindings";
 import { inTauri } from "../core/snapshot";
-import { t, tf } from "../core/i18n";
+import { errText, t, tf } from "../core/i18n";
 
 /**
  * The terminal, drawn inside the board's window — the second face of the one window (`AMB-D-753`).
  *
  * **It is not an editor and it does not pick anybody's AI.** What it holds is where the work happens
- * and which project that is: folders, panes, pages, and the arrangement of them. Editing a file,
+ * and which project that is: projects, panes, pages, and the arrangement of them. Editing a file,
  * reading a diff, choosing a model, offering somewhere to type a prompt — none of it is here, and the
  * absence is the design rather than a gap: what an agent's own interface does well it does inside the
  * pane, weekly, and anything drawn out here would be a worse copy of it that has to be kept up
  * (`AMB-D-747`). What this face adds is the thing no agent can add for itself — several of them at
  * once, each answering for a folder, with a ledger on the other side of one switch.
+ *
+ * **The project is chosen first and the pane after it.** The rail names the projects; the one picked
+ * there owns the whole screen, and a pane opened on it works in one of *that project's* folders
+ * (`./FolderChoice`). There is no way to point a pane anywhere else, which is what makes the division
+ * a division rather than a label.
  *
  * It is put up once and then left alone. Switching back to the ledger hides it with CSS rather than
  * taking it down, which is the one thing this component exists to guarantee: unmounting would take
@@ -33,14 +43,14 @@ import { t, tf } from "../core/i18n";
  * caller therefore keeps this rendered for as long as the window is the terminal's home, and hides
  * it by hiding its own container.
  *
- * What it holds is the arrangement — which frames there are, which page is up, how many panes it
- * shows (`../talk/layout`) — because that is the one thing no pane can know: a pane is a drawing of a
- * session, and the places the drawings go are the face's. Turning a page takes panes down and leaves
- * the terminals in them running, which is the same thing splitting a window out does.
+ * What it holds is the arrangement — which panes there are, whose project each is, which page is up,
+ * how many it shows (`../talk/layout`) — because that is the one thing no pane can know: a pane is a
+ * drawing of a session, and the places the drawings go are the face's. Turning a page takes panes down
+ * and leaves the terminals in them running, which is the same thing splitting a window out does.
  *
  * When the window *stops* being the terminal's home — the user splits it out, or a language change
- * rebuilds the interface — this does come down, and the sessions do not: the panes detach, and
- * whatever draws next adopts what is still running (`../talk/terminal.ts`).
+ * rebuilds the interface — this does come down, and the sessions do not: the panes detach, and this
+ * face takes them up again when it comes back (see the adoption below).
  *
  * What runs in a pane is not settled here either. The frame put up inside each slot asks the host
  * which agent that folder starts with, and draws the offer or the install notice where that has no
@@ -57,13 +67,14 @@ import { t, tf } from "../core/i18n";
  * reader has to go and check.
  *
  * `openIn` is the ledger asking for a folder to be worked in — the first loop's one button
- * (`app/src/components/FirstLoop.tsx`). It is where to work and not what to do about it: which page
- * takes it, and whether a terminal follows, are this face's own (`../talk/layout`).
+ * (`app/src/components/FirstLoop.tsx`). It is where to work and not what to do about it: the project
+ * it belongs to is the one the ledger was on, and whether a pane is made or an open one reached for
+ * is this face's own (`../talk/layout`).
  *
- * Beside the page is the file face (`app/src/files/FilesPanel.tsx`), which is rooted at the
- * project's folder rather than at any pane's session — so it does not move when the page or the
- * focused pane does (`AMB-T-3602`). It is why this component is told which project the window is on,
- * and how to leave this face for the ledger, neither of which a terminal has any use for.
+ * Beside the page is the file face (`app/src/files/FilesPanel.tsx`), rooted at the project this face
+ * is on — the one picked on the rail, not the one selected on the ledger. `projectId` is only where
+ * the face **starts**: a person who came to the terminal from a project is looking at that project,
+ * and after that the rail is what moves it.
  */
 export function TerminalFace({
   onSplitOut,
@@ -76,27 +87,25 @@ export function TerminalFace({
   onSplitOut: () => void;
   note: string | null;
   onWaiting: (waiting: boolean) => void;
+  /** The project the face opens on, where the window has one to say. */
   projectId?: number | null;
   onOpenLedger?: () => void;
   /**
-   * A folder the ledger asked this face to work in, and a count of the asking — the same shape the
-   * file face's `show` takes, and for the same reason: pressing the button twice is a reader saying
-   * it again, not a state that has not moved.
+   * A folder the ledger asked this face to work in, whose project it is, and a count of the asking —
+   * the same shape the file face's `show` takes, and for the same reason: pressing the button twice
+   * is a reader saying it again, not a state that has not moved.
    */
-  openIn?: { dir: string; nth: number } | null;
+  openIn?: { project: number | null; dir: string; nth: number } | null;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
-  // The face comes up with a terminal, the way a single-pane face always did: the first slot of the
-  // first page is made here so there is a place for it to be in.
-  const [layout, setLayout] = useState<Layout>(() => {
-    const made = frameFor(EMPTY_LAYOUT, 1, 0);
-    return { ...made.layout, focus: made.frame.id };
-  });
+  // Nothing is open until somebody opens something: a pane is made by opening one (`../talk/layout`),
+  // so the face comes up with the way in and no boxes.
+  const [layout, setLayout] = useState<Layout>(EMPTY_LAYOUT);
   const [names, setNames] = useState<FrameNames>(new Map());
-  // Whether the arrangement this device left behind has been answered for. Nothing is drawn into a
-  // slot before it has: a pane put up first and replaced afterwards would start a terminal in a
-  // frame the restore was about to take away (`AMB-T-3607`). Outside Tauri nothing is kept, so there
-  // is nothing to wait for.
+  // Whether the arrangement this device left behind has been answered for. Nothing is drawn into the
+  // page before it has: a pane put up first and replaced afterwards would start a terminal in a
+  // frame the restore was about to take away. Outside Tauri nothing is kept, so there is nothing to
+  // wait for.
   const [settled, setSettled] = useState(!inTauri());
   // What each pane's agent has pointed at, and which sessions have ended. Both are the window's to
   // hold and nobody else's: a session has no existence outside the rectangle it runs in, so neither
@@ -112,18 +121,25 @@ export function TerminalFace({
     layout.frames.find((frame) => frame.id === layout.focus)?.session ?? null;
   const [width, setWidth] = useState(() => (typeof window === "undefined" ? 0 : window.innerWidth));
   const [railOpen, setRailOpen] = useState(false);
+  // The question about where the pane being opened works, while it is up. It is not a frame: a place
+  // is made by opening one, and one nobody finished opening is a box that says nothing
+  // (`../talk/layout`). `note` on it is a binding the host refused.
+  const [asking, setAsking] = useState<{ note: string | null } | null>(null);
 
-  // The frames a person has just asked for a terminal in, and the one the face opens with. It is a
-  // ref rather than state because it is read at the moment a pane is put up and never drawn: a frame
-  // that has had its terminal started is off the list, so turning back to a page whose program exited
-  // offers the way to open one again instead of quietly starting a second shell.
-  const startNow = useRef(new Set<string>([layout.frames[0]!.id]));
+  const projects = dataAdapter.listProjects();
+  const bound = useBoundFolders(layout.project);
+
+  // The frames a person has just asked for a terminal in. It is a ref rather than state because it is
+  // read at the moment a pane is put up and never drawn: a frame that has had its terminal started is
+  // off the list, so coming back to a pane whose program exited offers the way to open one again
+  // instead of quietly starting a second shell.
+  const startNow = useRef(new Set<string>());
 
   // Which panes have a turn standing in them — the agent said so, or the ledger says a task the pane
   // is holding is no longer ready (`../talk/plate`). It is state rather than a ref because it is
-  // drawn: the page a pane is on wears a dot for it, which is how a turn on a page nobody is looking
-  // at is knocked about at all (`AMB-T-3610`). The shell above is told the one fact it draws — that
-  // somebody's turn has come somewhere behind this face — and the set is what says which pane.
+  // drawn: the page a pane is on wears a dot for it, and so does a project that is not the one being
+  // shown, which is how a turn nobody is looking at is knocked about at all (`AMB-T-3610`). The shell
+  // above is told the one fact it draws — that somebody's turn has come somewhere behind this face.
   const [needy, setNeedy] = useState<ReadonlySet<string>>(new Set());
   // Read through a ref for the same reason the panes' callbacks are: the face is mounted once and
   // must not come down to be handed a fresh one.
@@ -144,22 +160,25 @@ export function TerminalFace({
   }, []);
 
   /**
-   * The pages a turn is standing on, minus the one being shown.
+   * The pages of this project a turn is standing on, minus the one being shown.
    *
    * The page in front of the reader needs no dot: the panes on it are drawn, and each says for
    * itself whose turn it is (`../talk/nameplate`). A dot there would be the face telling somebody
-   * about what they are looking at.
+   * about what they are looking at. A turn in **another project** is the rail's to show, for the same
+   * reason: the digits are this project's pages and nothing else's.
    */
   const needyPages = useMemo(() => {
     const pages = new Set<number>();
     for (const frame of needy) {
+      if (layout.frames.find((one) => one.id === frame)?.project !== layout.project) continue;
       const page = pageOfFrame(layout, frame);
       if (page !== null && page !== layout.page) pages.add(page);
     }
     return pages;
   }, [needy, layout]);
 
-  /** The pane to go to when a person asks for the one that needs them. */
+  /** The pane to go to when a person asks for the one that needs them. It may be in another project,
+   *  and going to it takes the screen there — which is the whole of what being told means. */
   const needsYou = useMemo(
     () => layout.frames.find((frame) => needy.has(frame.id))?.id ?? null,
     [needy, layout],
@@ -171,24 +190,62 @@ export function TerminalFace({
     return () => { alive = false; };
   }, []);
 
-  // The arrangement, read once as the face comes up. What comes back is places and folders and no
-  // sessions, so the frames that return are offers to open a terminal — the person presses for the
-  // ones they want, and a window that started them all would be starting work nobody asked for.
+  // Which project the face opens on. It is taken once: after that the rail is what moves it, and a
+  // face that followed the ledger's selection would take a person off the panes they were watching
+  // every time they looked something up.
+  const opensOn = projectId ?? projects[0]?.id ?? null;
   useEffect(() => {
+    if (opensOn === null) return;
+    setLayout((was) => (was.project === null ? { ...was, project: opensOn } : was));
+  }, [opensOn]);
+
+  // The arrangement, read once as the face comes up, and the terminals that are still running taken
+  // up again. What comes back from the store is places and folders and no sessions, so a restored
+  // pane is an offer to open a terminal — the person presses for the ones they want, and a window
+  // that started them all would be starting work nobody asked for.
+  //
+  // **What is running is a different question, and it is answered here.** A session with no pane
+  // drawing it is one this window split out and has just taken back (`AMB-D-753`): it is put in the
+  // pane whose folder it is running in where there is one, and in a new pane on the project being
+  // shown where there is not — a terminal nobody can see is a terminal nobody can end.
+  const restoring = useRef(false);
+  useEffect(() => {
+    // Waiting on the project, where there is one to wait for: it answers for the panes an older
+    // build kept without one (`../talk/layout`).
+    if (restoring.current || (layout.project === null && projects.length > 0)) return;
+    restoring.current = true;
+    const onto = layout.project;
     let alive = true;
-    void savedLayout()
-      .then((saved) => {
+    void Promise.all([
+      savedLayout().catch(() => null),
+      inTauri()
+        ? invoke<PtySessionDto[]>("pty_sessions").catch(() => [] as PtySessionDto[])
+        : Promise.resolve([] as PtySessionDto[]),
+    ])
+      .then(([saved, running]) => {
         if (!alive) return;
-        const back = saved === null ? null : restored(saved);
-        if (back) {
-          setLayout(back);
-          startNow.current.clear();
-        }
+        setLayout((was) => {
+          let next = (saved === null ? null : restored(saved, onto)) ?? was;
+          for (const session of running) {
+            const free = next.frames.find(
+              (frame) => frame.session === null && frame.folder === session.folder,
+            );
+            const frame = free ?? (next.project === null
+              ? null
+              : (() => {
+                const made = openedFrame(next, next.project, session.folder);
+                next = made.layout;
+                return made.frame;
+              })());
+            if (!frame) continue;
+            next = openedIn(next, frame.id, session.session, session.folder);
+          }
+          return next;
+        });
       })
-      .catch(() => {})
       .finally(() => { if (alive) setSettled(true); });
     return () => { alive = false; };
-  }, []);
+  }, [layout.project, projects.length]);
 
   // And kept as it changes. Only the shape is written, so a session opening or closing is not a
   // write — what is kept is where the panes are, not what is in them.
@@ -238,39 +295,82 @@ export function TerminalFace({
     setLayout((was) => openedIn(was, frame, session, folder));
   }, []);
 
-  // A folder chosen in a slot puts the page in a project straight away, so the slots beside it open
-  // there rather than asking again (`../talk/layout`). It is separate from `opened` because a folder
-  // is answered before a terminal is started, and on a machine with nothing to start it is answered
-  // and no terminal follows.
-  const chose = useCallback((frame: string, folder: string) => {
-    setLayout((was) => settledIn(was, frame, folder));
+  /** Make the pane, now that where it works has been answered. */
+  const openPane = useCallback((project: number, folder: string) => {
+    setAsking(null);
+    setLayout((was) => {
+      const made = openedFrame(was, project, folder);
+      startNow.current.add(made.frame.id);
+      return made.layout;
+    });
   }, []);
 
+  /** This project's first folder: chosen from outside the list because there is no list yet, and
+   *  bound to this project rather than to one named after it (`../core/mutations`). */
+  const bindFirstFolder = useCallback((project: number) => {
+    void chooseFolderFor(project)
+      .then((chosen) => {
+        // Cancelling is not a refusal and not an answer: nothing was opened, and nothing is left on
+        // the screen to say it was.
+        if (chosen === null) setAsking(null);
+        else openPane(project, chosen);
+      })
+      // The refusal has to be put somewhere, and where the reader was is where they still are: with
+      // a folder to choose for this project.
+      .catch((e: unknown) => setAsking({ note: errText(e) }));
+  }, [openPane]);
+
+  /**
+   * Somebody asked for another pane in this project.
+   *
+   * Where the project is bound to one folder there is nothing to ask and the pane opens there — the
+   * whole difference between the second pane in a project and the first is that the first had a
+   * folder to settle. Where it is bound to several, or to none, the question goes up and no frame is
+   * made until it is answered (`./FolderChoice`).
+   */
+  const askToOpen = useCallback((project: number) => {
+    setRailOpen(false);
+    if (bound.live.length === 1) openPane(project, bound.live[0]!.path);
+    // A project bound to nothing has no list to choose from, so the press goes straight to the
+    // picker: what is being answered is where this project *is*, and it is one press either way.
+    else if (bound.live.length === 0) bindFirstFolder(project);
+    else setAsking({ note: null });
+  }, [bound.live, openPane, bindFirstFolder]);
+
   // A folder the ledger handed in. Nothing is done with it before the restore has been answered for:
-  // the arrangement that comes back is what the page is picked out of, and seeding one first would
-  // put a terminal in a frame the restore was about to take away (`AMB-T-3607`).
+  // the panes that come back are what an already-open one is found among, and seeding one first would
+  // put a terminal in a frame the restore was about to take away.
+  //
+  // The project is the one the ledger was on when the button was pressed: the first loop is a
+  // project's own card, and a pane belongs to a project (`../talk/layout`).
   //
   // The press is honoured once. `nth` is what says a second press is a second answer, so pressing the
-  // button again on a folder already open goes to it rather than opening a second terminal in it.
+  // button again on a folder already open goes to that pane rather than opening a second terminal in
+  // it.
   useEffect(() => {
     if (!settled || !openIn) return;
+    const project = openIn.project ?? layout.project;
+    if (project === null) return;
     setLayout((was) => {
-      const page = pageFor(was, openIn.dir);
-      // Every page settled in some other folder. The face is still the place the reader was sent, so
-      // it is left as it is rather than turned into a screen holding two projects.
-      if (page === null) return was;
-      if (folderOfPage(was, page) === openIn.dir) return goPage(was, page);
-      const made = openedOn(was, page, openIn.dir);
+      const open = paneIn(was, project, openIn.dir);
+      if (open) return focusOn(was, open.id);
+      const made = openedFrame(was, project, openIn.dir);
       // The same mark the rail's way in leaves: this frame is one a person pressed for, so the pane
       // opens rather than offering to.
       startNow.current.add(made.frame.id);
-      return focusOn(made.layout, made.frame.id);
+      return made.layout;
     });
     // `nth` is what makes the same folder asked for twice two answers.
   }, [openIn?.nth, settled]);
 
-  const pages = pageCount(layout);
   const drawers = sidesAreDrawers(layout.count, width);
+  const panes = panesOf(layout, layout.project);
+  // Where the pane being opened will land, which is the page the question is put on: a question drawn
+  // somewhere other than where its answer appears is one the reader has to go and find.
+  const landing = Math.ceil((panes.length + 1) / layout.count);
+  const page = asking === null ? layout.page : landing;
+  const slots = slotsOf(layout, page);
+  const pages = Math.max(pageCount(layout), asking === null ? 1 : landing);
 
   // ⌘1〜9 for the pages. It is caught on the document because the pane below has the keys — a
   // terminal is given every keystroke that is a character, and a page is reached with the ones that
@@ -306,26 +406,20 @@ export function TerminalFace({
     <PaneRail
       layout={layout}
       names={names}
+      projects={projects}
+      needy={needy}
+      onProject={(project) => {
+        setAsking(null);
+        setLayout((was) => goProject(was, project));
+        setRailOpen(false);
+      }}
       onPick={(frame) => {
+        setAsking(null);
         setLayout((was) => focusOn(was, frame));
         setRailOpen(false);
       }}
       onRename={(frame, name) => named(frame, name, "person")}
-      onOpen={(page) => {
-        setLayout((was) => {
-          // A page with no free slot does not offer the way in, so this is reached with one to find;
-          // a race that lost it leaves the arrangement alone rather than putting a pane somewhere
-          // nobody pressed.
-          const free = freeSlot(was, page);
-          if (free === null) return was;
-          const made = frameFor(was, page, free);
-          startNow.current.add(made.frame.id);
-          // Opening a pane is going to it, and going to it moves the screen to its page. That is the
-          // same move picking a row makes, and it is why the rail's rows are grouped by page at all.
-          return focusOn(made.layout, made.frame.id);
-        });
-        setRailOpen(false);
-      }}
+      onOpen={askToOpen}
     />
   );
 
@@ -344,7 +438,8 @@ export function TerminalFace({
         )}
         {/* How many panes the page shows. Three steps, always all three shown: which one is on is
             what a person is choosing between, and a control that only says the next step makes them
-            press it to find out. */}
+            press it to find out. It is the most a page draws and not a number of boxes to fill —
+            what is open is what is on the screen (`../talk/layout`). */}
         <div className="termface__counts" role="radiogroup" aria-label={t("face.paneCount")}>
           {COUNTS.map((count) => (
             <button
@@ -360,22 +455,22 @@ export function TerminalFace({
             </button>
           ))}
         </div>
-        {/* The pages, as a row of the digits that reach them. */}
+        {/* The pages of this project, as a row of the digits that reach them. */}
         <nav className="termface__pages" aria-label={t("face.pages")}>
-          {Array.from({ length: pages }, (_, i) => i + 1).map((page) => (
+          {Array.from({ length: pages }, (_, i) => i + 1).map((one) => (
             <button
-              key={page}
-              className={`termface__page${layout.page === page ? " termface__page--on" : ""}${
-                needyPages.has(page) ? " termface__page--needs" : ""}`}
+              key={one}
+              className={`termface__page${page === one ? " termface__page--on" : ""}${
+                needyPages.has(one) ? " termface__page--needs" : ""}`}
               // Going to a page, not turning something on: the one showing is the current page.
-              aria-current={layout.page === page ? "page" : undefined}
-              title={needyPages.has(page) ? t("face.needsYou") : tf("face.page", { n: page })}
-              onClick={() => setLayout((was) => goPage(was, page))}
+              aria-current={page === one ? "page" : undefined}
+              title={needyPages.has(one) ? t("face.needsYou") : tf("face.page", { n: one })}
+              onClick={() => { setAsking(null); setLayout((was) => goPage(was, one)); }}
             >
-              {page}
+              {one}
               {/* One dot, and only for a turn that is standing. A pane that finished wears nothing:
                   what is over is not something a person is needed for (`AMB-T-3610`). */}
-              {needyPages.has(page) && <span className="termface__needs" aria-hidden="true" />}
+              {needyPages.has(one) && <span className="termface__needs" aria-hidden="true" />}
             </button>
           ))}
         </nav>
@@ -388,61 +483,72 @@ export function TerminalFace({
         {drawers
           ? railOpen && <div className="termface__drawer">{rail}</div>
           : rail}
-        <div className={`termface__page-grid termface__page-grid--${layout.count}`}>
-          {(settled ? slotsOf(layout, layout.page) : []).map((frame, slot) =>
-            frame
-              ? (
-                <TerminalPane
-                  key={frame.id}
-                  frame={frame.id}
-                  names={names}
-                  start={{
-                    session: frame.session,
-                    // Only the first slot of the first page may take up a terminal it did not start:
-                    // that is where a session split out into its own window comes back to.
-                    adopt: frame.id === layout.frames[0]!.id,
-                    cwd: folderOfPage(layout, layout.page),
-                  }}
-                  autoStart={frame.session !== null || startNow.current.has(frame.id)}
-                  focused={layout.focus === frame.id}
-                  onOpened={opened}
-                  onChose={chose}
-                  onPath={pathClicked}
-                  onSaid={(statement) => {
-                    if (statement.cwd) {
-                      setLayout((was) => movedTo(was, statement.session, statement.cwd!));
-                    }
-                    setPointed((was) => tookPoint(was, statement));
-                  }}
-                  onClosed={(session) => {
-                    setLayout((was) => closedIn(was, session));
-                    setEnded((was) => new Set(was).add(session));
-                    // A session that has ended is not a turn anybody can take: what is over is not
-                    // something a person is needed for (`AMB-T-3610`).
-                    paneWaiting(frame.id, false);
-                  }}
-                  onName={named}
-                  onFocus={(id) => setLayout((was) => focusOn(was, id))}
-                  onWaiting={paneWaiting}
-                />
-              )
-              : (
-                // An empty slot is a place, and a place with room to say something: where this
-                // project has work nothing is doing any more, this is where it is put (`./AdriftSlot`).
-                <AdriftSlot
-                  key={`${layout.page}.${slot}`}
-                  folder={folderOfPage(layout, layout.page)}
-                  onOpenLedger={onOpenLedger}
-                  onOpen={() => setLayout((was) => {
-                    const made = frameFor(was, was.page, slot);
-                    startNow.current.add(made.frame.id);
-                    return focusOn(made.layout, made.frame.id);
-                  })}
-                />
-              ))}
+        <div className={`termface__page-grid termface__page-grid--${
+          Math.min(layout.count, Math.max(1, slots.length + (asking === null ? 0 : 1)))}`}
+        >
+          {!settled || layout.project === null
+            ? null
+            : (
+              <>
+                {slots.map((frame) => (
+                  <TerminalPane
+                    key={frame.id}
+                    frame={frame.id}
+                    names={names}
+                    start={{
+                      session: frame.session,
+                      // Nothing on this face takes up a terminal it was not given: which session
+                      // belongs where is answered once, as the face comes up, and a pane left to
+                      // guess would take the one running terminal off whichever pane had it.
+                      adopt: false,
+                      cwd: frame.folder,
+                    }}
+                    autoStart={frame.session !== null || startNow.current.has(frame.id)}
+                    focused={layout.focus === frame.id}
+                    onOpened={opened}
+                    onPath={pathClicked}
+                    onSaid={(statement) => {
+                      if (statement.cwd) {
+                        setLayout((was) => movedTo(was, statement.session, statement.cwd!));
+                      }
+                      setPointed((was) => tookPoint(was, statement));
+                    }}
+                    onClosed={(session) => {
+                      setLayout((was) => closedIn(was, session));
+                      setEnded((was) => new Set(was).add(session));
+                      // A session that has ended is not a turn anybody can take: what is over is not
+                      // something a person is needed for (`AMB-T-3610`).
+                      paneWaiting(frame.id, false);
+                    }}
+                    onName={named}
+                    onFocus={(id) => setLayout((was) => focusOn(was, id))}
+                    onWaiting={paneWaiting}
+                  />
+                ))}
+                {asking !== null && (
+                  <FolderChoice
+                    folders={bound.live}
+                    onPick={(folder) => openPane(layout.project!, folder)}
+                    onBind={() => bindFirstFolder(layout.project!)}
+                    note={asking.note}
+                  />
+                )}
+                {/* A project with nothing open is one way in and no boxes. Beside panes that are open
+                    it is drawn only where this project has work nothing is doing any more, and only
+                    where the page has room to put the question (`./AdriftSlot`). */}
+                {asking === null && (panes.length === 0 || slots.length < layout.count) && (
+                  <AdriftSlot
+                    folder={bound.live[0]?.path ?? null}
+                    wayIn={panes.length === 0}
+                    onOpenLedger={onOpenLedger}
+                    onOpen={() => askToOpen(layout.project!)}
+                  />
+                )}
+              </>
+            )}
         </div>
         <FilesPanel
-          projectId={projectId ?? null}
+          projectId={layout.project}
           onOpenLedger={onOpenLedger}
           show={show}
           pointed={{

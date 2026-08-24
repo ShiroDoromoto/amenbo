@@ -30,6 +30,19 @@ vi.mock("../talk/agent", () => ({
   },
 }));
 
+// The ledger's projects and the one folder this one is bound to, so the pane this is about is one
+// press away and nothing is asked on the way (`./FolderChoice`).
+vi.mock("../mock/adapter", () => ({
+  dataAdapter: { listProjects: () => [{ id: 1, name: "amenbo" }] },
+}));
+vi.mock("../core/boundFolders", () => ({
+  useBoundFolders: () => ({
+    all: [{ path: "/repo", exists: true }],
+    live: [{ path: "/repo", exists: true }],
+    answered: true,
+  }),
+}));
+
 let container: HTMLDivElement;
 let root: Root;
 
@@ -79,9 +92,18 @@ const flip = async () => {
   });
 };
 
+/** Open the one pane the switching is about. A pane is made by opening one (`../talk/layout`), so
+ *  there is nothing to lose track of until somebody has. */
+const openPane = async () => {
+  await act(async () => {
+    container.querySelector(".slot--empty")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+};
+
 describe("switching faces does not kill the terminal", () => {
   it("hiding the face keeps the one pane it put up, however many times the user switches", async () => {
     await act(async () => root.render(createElement(Switcher, { shell: HiddenShell })));
+    await openPane();
     expect(hoisted.mounted).toBe(1);
 
     await flip(); // to the ledger
@@ -93,14 +115,19 @@ describe("switching faces does not kill the terminal", () => {
     expect(hoisted.detached, "the pane was taken away behind the user's back").toBe(0);
   });
 
-  it("rendering it only while it shows — the spelling that looks the same — loses the pane on every switch", async () => {
+  it("rendering it only while it shows — the spelling that looks the same — loses the pane on the first switch", async () => {
     await act(async () => root.render(createElement(Switcher, { shell: ConditionalShell })));
+    await openPane();
     expect(hoisted.mounted).toBe(1);
 
     await flip();
     await flip();
 
+    // The pane went with the face, and what comes back has nothing open in it: a pane is made by
+    // opening one, so the terminal the reader was in is not even redrawn — it is gone with nothing
+    // on the screen to say so.
     expect(hoisted.detached).toBe(1);
-    expect(hoisted.mounted).toBe(2);
+    expect(hoisted.mounted).toBe(1);
+    expect(container.querySelector(".slot--empty"), "the pane came back").not.toBeNull();
   });
 });

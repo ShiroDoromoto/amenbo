@@ -157,8 +157,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .termface__page-grid--2 { grid-template: 1fr / 1fr 1fr; }
 .termface__page-grid--4 { grid-template: 1fr 1fr / 1fr 1fr; }
 
-/* One slot. It holds the label row and the pane under it, and it is a box whether or not there is a
-   terminal in it: an empty slot is a place on this page, not a gap. */
+/* One slot. It holds the label row and the pane under it. There is one per pane and no more — what is
+   not open is not a box on the screen (`../talk/layout`). */
 .slot { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--s-1); }
 /* What is said about this terminal, and the one control a running pane has. One row, because ending
    it is the last thing there is to say about it. */
@@ -174,8 +174,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .slot__end:hover { color: var(--c-text); }
 .slot--focused .termface__pane { border-color: var(--c-accent); }
-/* A slot with nothing started in it. It fills its place and says what pressing it does — the whole
-   of what an empty frame has to offer (`AMB-T-3607` gives it back what it was). */
+/* The way in on a face with nothing open, and the one a pane whose program ended offers again. It
+   fills its place and says what pressing it does. */
 .slot--empty, .slot__open {
   flex: 1; min-height: 0;
   border: 1px dashed var(--c-border); border-radius: var(--r-md);
@@ -183,7 +183,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .slot--empty:hover, .slot__open:hover { color: var(--c-text); border-color: var(--c-text-muted); }
 
-/* An empty slot with something to say: work in this project that nothing is doing any more
+/* The same way in with something to say: work in this project that nothing is doing any more
    (`../shell/AdriftSlot`). It is drawn as the same dashed place, because that is what it still is —
    the question is what has been put in the room, not a different kind of box. */
 .slot--adrift {
@@ -207,12 +207,21 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .adrift__task:hover { border-color: var(--c-accent); }
 .adrift__ref { color: var(--c-text-muted); font-family: var(--font-mono); font-size: var(--fs-sm); }
 .adrift__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The way in is still here, under the question rather than instead of it: an empty slot is somewhere
-   to start a terminal whether or not there is anything to be asked about. */
+/* The way in is still here, under the question rather than instead of it: the face is somewhere to
+   start a terminal whether or not there is anything to be asked about. */
 .adrift__open { flex: 0 0 auto; padding: var(--s-2); }
 
-/* The list of panes beside them. Rows are grouped by the page they are on, because picking one moves
-   the screen to that page and a reader has to see that coming. */
+/* Where the pane being opened will work, asked in the place the pane is about to take (`./FolderChoice`).
+   It is the same dashed box the way in is, because it is the same place one step further on. */
+.slot--asking {
+  flex: 1; min-height: 0;
+  padding: var(--s-3);
+  border: 1px dashed var(--c-border); border-radius: var(--r-md);
+  overflow-y: auto;
+}
+
+/* The rail: the projects, and under the one being shown, its panes. The division is what the list is
+   for, so a project is a row a person presses and not a caption over some others. */
 .rail {
   flex: 0 0 auto; width: 160px; min-height: 0;
   overflow-y: auto;
@@ -220,17 +229,31 @@ button { font: inherit; color: inherit; cursor: pointer; }
   padding-right: var(--s-2);
   border-right: 1px solid var(--c-border);
 }
-.rail__page { display: flex; flex-direction: column; gap: 2px; }
-/* A page's own line: what it is called, and the way to put another pane on it. They share a row
-   because they are about the same page — and because the way in belongs where the page is named
-   rather than at the end of its rows, where it would read as one more pane. */
-.rail__pagerow { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-2); }
-.rail__pagename {
+.rail__project { display: flex; flex-direction: column; gap: 2px; }
+/* A project's own line: its name, and the way to put another pane in it. They share a row because
+   they are about the same project — and because the way in belongs where the project is named rather
+   than at the end of its rows, where it would read as one more pane. */
+.rail__projectrow { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-2); }
+.rail__projectname {
+  display: flex; align-items: baseline; gap: var(--s-1);
+  min-width: 0; padding: 0;
+  border: 0; background: transparent; text-align: left;
   color: var(--c-text-muted); font-size: var(--fs-xs); text-transform: uppercase;
   letter-spacing: 0.04em;
 }
-/* One press, and a pane is open in this page's project. It is drawn quietly: the rows below it are
-   what a person came to the rail for, and this is what they reach for once. */
+.rail__projectname:hover { color: var(--c-text); }
+/* The project the face is on. It is the heading of the rows under it, so it is the one that reads as
+   text rather than as something still to press. */
+.rail__projectname--on { color: var(--c-text); }
+/* A turn standing in a project that is not the one being shown. It is the same dot the pages wear and
+   for the same reason: somebody is needed there, and the panes that would say so are off the screen. */
+.rail__needs {
+  flex: 0 0 auto;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--c-heed);
+}
+/* One press, and a pane is open in this project. It is drawn quietly: the rows below it are what a
+   person came to the rail for, and this is what they reach for once. */
 .rail__open {
   flex: 0 0 auto;
   padding: 0 var(--s-1);
@@ -257,7 +280,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* A frame with nothing running in it. A dot and not a word: the row is a place, and that it is empty
    is a smaller thing than what it is called. */
 .rail__idle { color: var(--c-text-muted); }
-.rail__slot { height: var(--s-4); }
 .rail__rename {
   padding: var(--s-1) var(--s-2); border-radius: var(--r-md);
   border: 1px solid var(--c-accent); background: var(--c-surface);

@@ -3884,7 +3884,11 @@ pub fn talk_layout() -> Result<Option<TalkLayoutDto>, CmdError> {
         frames: saved
             .frames
             .into_iter()
-            .map(|frame| TalkFrameDto { id: frame.id, folder: frame.folder })
+            .map(|frame| TalkFrameDto {
+                id: frame.id,
+                project: frame.project,
+                folder: frame.folder,
+            })
             .collect(),
     }))
 }
@@ -3901,7 +3905,11 @@ pub fn save_talk_layout(layout: TalkLayoutDto) -> Result<(), CmdError> {
         frames: layout
             .frames
             .into_iter()
-            .map(|frame| amenbo_core::frames::SavedFrame { id: frame.id, folder: frame.folder })
+            .map(|frame| amenbo_core::frames::SavedFrame {
+                id: frame.id,
+                project: frame.project,
+                folder: frame.folder,
+            })
             .collect(),
     })?;
     Ok(())

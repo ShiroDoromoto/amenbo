@@ -51,8 +51,8 @@ steps_gui:
     with:
       face: terminal
 
-  # The way in, and what settles the page's folder. The second pane below takes it, which is what
-  # lets that one be a single press with nothing asked.
+  # The way in, and what binds the folder to the project the face is on. The second pane below works
+  # in it too, which is what lets that one be a single press with nothing asked.
   - type: action
     domain: terminal
     op: open-folder
@@ -85,13 +85,13 @@ steps_gui:
     with:
       text: SCENARIO nothing more is coming
 
-  # The second pane, which is here to take the working place away rather than to be used. It opens in
-  # the empty box beside the first, in the page's folder, and becomes the pane being worked in.
+  # The second pane, which is here to take the working place away rather than to be used. It is opened
+  # from the rail, in the project's folder, and becomes the pane being worked in.
   - type: action
     domain: terminal
     op: open-pane
     with:
-      from: slot
+      from: rail
 
   # The mark, on the pane nobody is in. Nothing else on the screen separates a terminal that is
   # running from the picture one leaves behind.

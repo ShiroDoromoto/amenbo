@@ -18,9 +18,11 @@
 // **Before any of that there is the folder**, because a terminal has to be started somewhere and only
 // the person knows where. Choosing one is the whole of the first run: it is the folder the AI is shown,
 // it is what makes the folder a project's, and it is what opens the terminal — one press, three
-// meanings, and no word the reader has to be taught first (`AMB-T-3606`). A frame with no folder puts
-// the invitation and nothing else, and it is asked for once per page rather than once per pane: the
-// second frame on a screen opens in the folder the first settled (`./layout`).
+// meanings, and no word the reader has to be taught first (`AMB-T-3606`). On the board's face that
+// press happens **before** the pane is made, among the folders the project is bound to
+// (`../shell/FolderChoice`), so a frame there always arrives with one. A frame with no folder puts the
+// invitation and nothing else, which is the split-out window: one pane, no rail, and nobody to have
+// asked it on its way in.
 //
 // **Nothing is asked about a terminal that is already running.** A pane adopts one rather than
 // starting it (`./terminal`), and what is running was settled when it started — asking again would be
@@ -66,8 +68,9 @@ const SHELL = "shell";
  * that draw a pane style theirs differently and neither's box is this module's to name.
  *
  * `start` is which terminal this frame is for. A slot that already had one takes it up again and asks
- * nothing (`./layout`); a folder given here is where the question is put and where a started terminal
- * opens, which is what keeps one page's panes in one project.
+ * nothing (`./layout`); a folder given here is where a started terminal opens. The board's face
+ * always gives one — it settles where a pane works before the pane is made (`../shell/FolderChoice`)
+ * — so the invitation below is the split-out window's, which has no rail to have been asked on.
  */
 export async function mountAgentFrame(
   host: HTMLElement,
@@ -85,10 +88,11 @@ export async function mountAgentFrame(
   // until then, which is the whole reason a closed frame is still a frame.
   let close: (() => void) | null = null;
   let wake: WakeDto | null = null;
-  // Where this frame's terminals are started. It begins as the page's — every pane on one screen opens
-  // in one folder (`./layout`) — and is null only where nothing has been started on that page yet. That
-  // is the frame with the invitation on it; once a folder is answered, by the person choosing one or by
-  // a terminal this frame took up saying where it runs, it is not asked for again.
+  // Where this frame's terminals are started. It is the folder the window settled for this pane
+  // (`./layout`), and is null only for a frame nobody has settled one for — the split-out window's,
+  // and the pane that took up a terminal somebody else started. That is the frame with the invitation
+  // on it; once a folder is answered, by the person choosing one or by a terminal this frame took up
+  // saying where it runs, it is not asked for again.
   let folder: string | null = start.cwd ?? null;
   // Which pane the frame is on. A terminal takes a round trip to mount, and the frame can be cleared
   // while one is in flight — so what comes back is checked against this and thrown away if the frame
@@ -221,9 +225,9 @@ export async function mountAgentFrame(
             return;
           }
           folder = chosen;
-          // Said now rather than when a terminal starts: the two can be a long way apart — a machine
-          // with nothing startable never gets there at all — and the page's folder is what keeps the
-          // other slots on this screen from asking the same question again (`./layout`).
+          // Said now rather than when a terminal starts: the two can be a long way apart, a machine
+          // with nothing startable never getting there at all, and what the window does with a folder
+          // is not this frame's to wait on.
           on.chose(chosen);
           return look();
         })

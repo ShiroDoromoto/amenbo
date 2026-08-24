@@ -602,11 +602,11 @@ impl Instructor {
     /// something the presence of text can settle.
     ///
     /// `terminal dot` is a `Review`, and one that is not about words at all. What it reads is a mark
-    /// with no text on it, and what it reads *of* that mark is movement: a dot that is pulsing rests,
-    /// at either end of its turn, at exactly the opacity a still one holds, so a picture of the two
-    /// can be the same picture. The eye that closes it is therefore watching the screen rather than
-    /// the shot, and the instruction says so and says for how long. The shot is still kept, for the
-    /// half of the row a picture does carry — which pane the mark belongs to.
+    /// with no text on it, and what tells its three faces apart is a glow, a colour and a blink. The
+    /// blink is the one that settles it: at either end of its turn it rests where a still lamp holds,
+    /// so a picture of the two can be the same picture. The eye that closes it is therefore watching
+    /// the screen rather than the shot, and the instruction says so and says for how long. The shot is
+    /// still kept, for the half of the row a picture does carry — which pane the mark belongs to.
     ///
     /// `files handed-over` is a `Review` on all three of its doors, and further out than most: what
     /// settles it is not on Amenbo's window at all. A file handed to the machine leaves through an
@@ -2385,21 +2385,18 @@ impl Instructor {
                     req(with, "shows")?
                 ),
             },
-            // The dot on a pane's label, and whether it is pulsing. It is watched rather than read:
-            // a pulse is movement, and both ends of its turn rest at the still dot's own opacity, so
-            // a picture of a moving dot and a picture of a still one can be the same picture. The
-            // operator is told how long to watch, and told which pane — the one being worked in
-            // never pulses, since a reader looking straight at a terminal can already see it moving.
-            // The moving half says what to look for on a machine that plays no animation as well.
-            // Motion turned down holds the mark at the bright end of the same two steps instead of
-            // moving between them, so the fact survives and the word for it does not — and an
-            // operator told only to watch for a fade would fail a dot that is reporting exactly what
-            // this step is asking about.
-            (Domain::Terminal, "dot") => match flag(with, "moving")? {
-                true => "On the row above a pane the reader is not working in, watch the dot to the left of the name for a few seconds: confirm it is pulsing — fading up and down — which is that terminal putting something out. Judge it by watching rather than by the shot: a still picture of a pulse can be caught at the moment it rests. Where the machine is set to play no animation the dot does not fade at all, and what to confirm there is that it is standing at its bright step rather than its dim one — the same two steps the pulse moves between, held."
-                    .to_string(),
-                false => "On that same row, watch the dot for a few seconds: confirm it is holding still at its dim step, rather than fading up and down. Still is the pane's resting state, not the pane having gone — the dot is drawn either way."
-                    .to_string(),
+            // The lamp on a pane's label, on one of its three faces. Two of them hold still and are a
+            // picture; the third blinks, and that one is watched rather than shot — both ends of its
+            // turn rest at a step a photograph cannot tell from the others.
+            //
+            // Each half of the instruction says what to look for on a machine set to play no
+            // animation as well, because motion turned down holds the calling face at its brightest
+            // instead of moving it: the fact survives and the word for it does not, and an operator
+            // told only to watch for a blink would fail a lamp reporting exactly what was asked.
+            (Domain::Terminal, "dot") => match face(with)? {
+                Face::Lit => format!("{LAMP_ROW} look at the lamp to the left of the name: confirm it is lit and holding still — a soft glow around it, in that pane's own colour, which is that terminal putting something out. It does not fade in and out: the one face that moves is the one calling for a person, and this is not it."),
+                Face::Calling => format!("{LAMP_ROW} watch the lamp to the left of the name for a few seconds: confirm it is blinking, and in the warning colour rather than that pane's own — which is that pane asking for a person. It falls to the same beat as the mark at the other end of the same row, and the two go together. Judge it by watching rather than by the shot: a still picture of a blink can be caught at the moment it rests. Where the machine is set to play no animation the lamp does not blink at all, and what to confirm there is the warning colour, held at its brightest."),
+                Face::Out => format!("{LAMP_ROW} look at the lamp to the left of the name: confirm it is sunk — dim, in that pane's own colour, with no glow around it and no blinking. Out is the pane's resting state, not the pane having gone: the lamp is drawn either way."),
             },
             // What the face asks about. The absent half is not the same sentence turned round: it says
             // which reservation is being looked for and that the face is right not to name it, so an
@@ -2735,11 +2732,10 @@ const SAY_AWAY_SECONDS: u32 = 15;
 
 /// How long a pane set printing goes on putting something out.
 ///
-/// It answers to both ends of the one road it is on. Long enough that the pulse is still going after
-/// a second pane has been opened beside it and the dot has been watched for the few seconds a pulse
-/// has to be watched for; short enough that the step waiting for it to stop is a pause inside a road
-/// rather than a break from one. The road does not name it — what a road says is that the pane keeps
-/// printing and then does not.
+/// It answers to both ends of the one road it is on. Long enough that the lamp is still lit after a
+/// second pane has been opened beside it and the row has been looked at; short enough that the step
+/// waiting for it to stop is a pause inside a road rather than a break from one. The road does not
+/// name it — what a road says is that the pane keeps printing and then does not.
 const KEEP_PRINTING_SECONDS: u32 = 30;
 
 /// An optional yes-or-no argument, false where it was not written. Unlike [`present`], whose default
@@ -2774,6 +2770,32 @@ impl Side {
             Side::Rail => "the list of panes down one side",
             Side::Files => "the panel showing the folder's files",
         }
+    }
+}
+
+/// Which pane's row the lamp is read on, said the same way for all three faces.
+///
+/// A road can have more than one pane on the screen by the time it reads one, and the lamp says
+/// nothing about which pane it belongs to that an operator could use to pick it out — the hue does,
+/// but only against the other lamps. So the step points at the pane by what the road has been doing
+/// rather than by anything on the screen: the one the steps before it were about.
+const LAMP_ROW: &str = "On the row above the pane the steps before this one were about — where another pane has been opened since, it is still that first one —";
+
+/// Which of the lamp's three faces a step is reading (`app/src/talk/nameplate.ts`).
+#[derive(Clone, Copy)]
+enum Face {
+    Lit,
+    Calling,
+    Out,
+}
+
+fn face(with: &Args) -> Result<Face, String> {
+    match with.get("face").and_then(|v| v.as_str()) {
+        Some("lit") => Ok(Face::Lit),
+        Some("calling") => Ok(Face::Calling),
+        Some("out") => Ok(Face::Out),
+        Some(other) => Err(format!("`face` does not know `{other}` — it is lit, calling or out")),
+        None => Err("arg `face` must say which of the three faces the lamp is on".to_string()),
     }
 }
 
@@ -5376,10 +5398,10 @@ steps_gui:
         assert!(err.contains("face or rail"), "got: {err}");
     }
 
-    /// What the moving half of the dot rests on: a pane set printing carries on putting lines out
-    /// while the road walks around it, and the line it ends with is what the road waits on. The
-    /// command is spelt out because an improvised one is the step itself being improvised, and both
-    /// counts are there because a pane comes up in one of two shells.
+    /// What the lit face of the lamp rests on: a pane set printing carries on putting lines out while
+    /// the road walks around it, and the line it ends with is what the road waits on. The command is
+    /// spelt out because an improvised one is the step itself being improvised, and both counts are
+    /// there because a pane comes up in one of two shells.
     #[test]
     fn a_pane_is_set_printing_with_a_line_that_says_when_it_stopped() {
         let step = Step::Action {
@@ -5400,30 +5422,39 @@ steps_gui:
         );
         assert!(
             said.contains("Leave the pane alone"),
-            "a pane stopped by hand is a pane being worked in, which never pulses: {said}"
+            "a pane stopped by hand is a pane the road put out itself: {said}"
         );
     }
 
-    /// The dot is watched, not read. Both halves say how long to watch and neither is judged off the
-    /// shot: a pulse rests, twice a turn, at exactly the still dot's own step.
+    /// The lamp's three faces, and the one of them that is watched rather than shot. The two still
+    /// ones are a picture; the blink rests, twice a turn, at a step a photograph cannot tell from
+    /// them — so only that half tells the operator to watch, and none of the three is a reading.
     #[test]
-    fn the_dot_is_watched_rather_than_read_off_the_shot() {
-        let dot = |moving: bool| Step::Assert {
+    fn the_lamp_is_read_by_its_face_and_the_blinking_one_is_watched() {
+        let dot = |face: &str| Step::Assert {
             domain: Domain::Terminal,
             op: "dot".to_string(),
-            with: [("moving".to_string(), serde_yaml::Value::from(moving))].into_iter().collect(),
+            with: [("face".to_string(), serde_yaml::Value::from(face))].into_iter().collect(),
             window: None,
         };
-        let pulsing = Instructor::new().render(&dot(true)).unwrap();
-        assert!(pulsing.contains("pulsing"), "got: {pulsing}");
+        let lit = Instructor::new().render(&dot("lit")).unwrap();
+        assert!(lit.contains("glow") && lit.contains("holding still"), "got: {lit}");
+        let calling = Instructor::new().render(&dot("calling")).unwrap();
+        assert!(calling.contains("blinking"), "got: {calling}");
         assert!(
-            pulsing.contains("not working in"),
-            "the pane being worked in never pulses: {pulsing}"
+            calling.contains("watch") && calling.contains("warning colour"),
+            "the one face that moves, and the one that leaves the pane's own hue: {calling}"
         );
-        let still = Instructor::new().render(&dot(false)).unwrap();
-        assert!(still.contains("holding still"), "got: {still}");
+        let out = Instructor::new().render(&dot("out")).unwrap();
+        assert!(out.contains("sunk"), "got: {out}");
         assert!(
-            Instructor::new().expectation(&dot(true)).is_none(),
+            out.contains("not the pane having gone"),
+            "out is the resting state, and a lamp that vanished would say the pane had: {out}"
+        );
+        let err = Instructor::new().render(&dot("pulsing")).unwrap_err();
+        assert!(err.contains("lit, calling or out"), "got: {err}");
+        assert!(
+            Instructor::new().expectation(&dot("calling")).is_none(),
             "a mark with no words on it is not a reading",
         );
     }

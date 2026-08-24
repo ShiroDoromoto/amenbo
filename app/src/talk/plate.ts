@@ -14,6 +14,7 @@ import { currentLang, type Lang } from "../core/i18n";
 import { invoke } from "../core/ipc";
 import { frameLabel, frameNames, ONLY_FRAME, type FrameNames } from "./frames";
 import {
+  faceOf,
   FINISHED_HOLD_MS,
   mountNameplate,
   NO_CHANGEOVER,
@@ -102,10 +103,10 @@ export function mountPlate(
   let live = true;
   // What `onWaiting` was last told, so it hears the changes and not every statement.
   let waiting = false;
-  // When something last came out of the terminal, and whether that still counts as moving. The time is
-  // written on every chunk and the row is only redrawn when the answer turns over: a busy build prints
-  // hundreds of times a second, and a row redrawn with each of them would spend the pane's frames on a
-  // mark that had not changed.
+  // When something last came out of the terminal, and whether that still counts as moving — which is
+  // the lamp's lit face (`./nameplate`). The time is written on every chunk and the row is only redrawn
+  // when the answer turns over: a busy build prints hundreds of times a second, and a row redrawn with
+  // each of them would spend the pane's frames on a mark that had not changed.
   let lastOutput: number | null = null;
   let moving = false;
   let settling: ReturnType<typeof setTimeout> | undefined;
@@ -163,6 +164,9 @@ export function mountPlate(
     const { now, changeover: next } = nowOf(held, finished, changeover, Date.now());
     changeover = next;
     const name = frameLabel(names, frame, folder);
+    // The lamp is read off the same answer the row's right is, so the two cannot come to say different
+    // things about the same pane (`./nameplate`).
+    const say = saying();
     // A frame that was named keeps its row whether or not anything has run in it: the name is the
     // person's, and it outlives every session the frame holds (`./frames`). A folder standing in for
     // one is not that — it is what this pane's terminal is working in, so it goes when the pane has
@@ -172,8 +176,8 @@ export function mountPlate(
         ? {
             name,
             now,
-            say: saying(),
-            dot: { frame, moving },
+            say,
+            dot: { frame, face: faceOf(say, moving) },
           }
         : null,
       lang(),

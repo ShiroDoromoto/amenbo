@@ -482,7 +482,8 @@ export const tr: Translation = {
     "talk.noneHint": "Amenbo kabuğunuzun PATH'inde şu komutları aradı: {commands}. Birini kurun, sonra yeniden arayın.",
     "talk.retry": "Yeniden ara",
     "talk.open": "Aç",
-    "talk.agent": "Ajan",
+    "talk.startWith": "Şununla aç",
+    "talk.shell": "Düz kabuk",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "Konuşuluyor", "talk.holding": "{n} görev",

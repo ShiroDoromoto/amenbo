@@ -481,7 +481,8 @@ export const ko: Translation = {
     "talk.noneHint": "Amenbo가 셸의 PATH에서 다음 명령을 찾았습니다: {commands}. 하나를 설치한 뒤 다시 찾아보세요.",
     "talk.retry": "다시 찾기",
     "talk.open": "열기",
-    "talk.agent": "에이전트",
+    "talk.startWith": "열기 대상",
+    "talk.shell": "일반 셸",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "상의 중", "talk.holding": "{n}건",

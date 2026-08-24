@@ -10,6 +10,11 @@
 // | several | the offer, once; the pick is kept and never asked again |
 // | none startable | what was looked for, and a way to look again |
 //
+// **Beside all three there is the shell** ({@link SHELL}) — the folder's own prompt with nothing
+// started at it. It is put wherever this module puts a choice and never where it does not, so a
+// folder that settled on one agent still opens on it unasked. What it is for is the terminal a
+// reader wants after the agent has gone: `git status`, a build, a machine with no agent on it at all.
+//
 // **Before any of that there is the folder**, because a terminal has to be started somewhere and only
 // the person knows where. Choosing one is the whole of the first run: it is the folder the AI is shown,
 // it is what makes the folder a project's, and it is what opens the terminal — one press, three
@@ -35,6 +40,22 @@ import { errText, type Lang, t, tf } from "../core/i18n";
 import { invoke } from "../core/ipc";
 import { chooseWorkFolder } from "../core/mutations";
 import { mountTerminal, type PaneEvents, type PaneStart } from "./terminal";
+
+/**
+ * The pane's own shell, standing among the agents as one more thing to start.
+ *
+ * It is not an agent and has no row in the catalogue (`amenbo_core::harness`), so what the frame
+ * passes around is a *choice* rather than an agent id, and this is the one choice the catalogue does
+ * not answer to. `pty_open` already opens a bare prompt for a pane it is given no agent for, so the
+ * id is turned back into "none" at the single place a terminal is started.
+ *
+ * It is put wherever the frame puts a choice, and nowhere else. A folder that settled on one agent
+ * still opens on it with nothing asked (`AMB-T-3606`) — the shell is something to reach for once the
+ * pane is there, not a question to answer on the way in. It is never written down as this folder's
+ * answer either (`wake_remember`): "which agent do you work with here" is not a question a shell
+ * answers.
+ */
+const SHELL = "shell";
 
 /**
  * Fill `host` with the frame — the pane, and whatever has to be put to the reader before or after
@@ -109,13 +130,17 @@ export async function mountAgentFrame(
     else nothing();
   };
 
-  /** Put up a pane, replacing whatever the frame held. `agent` is what a started terminal runs; a
-   *  pane that adopts one is given none, and the running program is whatever it already was. */
-  const open = (agent: string | null, take: PaneStart = { adopt: false }) => {
+  /** Put up a pane, replacing whatever the frame held. `choice` is what a started terminal runs — a
+   *  catalogued agent, or {@link SHELL} for a prompt with nothing started at it; a pane that adopts
+   *  one is given neither, and the running program is whatever it already was. */
+  const open = (choice: string | null, take: PaneStart = { adopt: false }) => {
     // The host's spelling of the folder where there is one, because a probe canonicalises what it was
     // given and a terminal started under the other spelling is a terminal in a folder nothing else
     // names. A pane that takes one up was never probed, and starts nothing anyway.
     const cwd = wake?.folder ?? folder;
+    // A shell is the absence of an agent rather than a program of its own, which is what the host is
+    // told: the same "none" a pane that took a terminal up is given.
+    const agent = choice === SHELL ? null : choice;
     clear();
     const mine = showing;
     const pane = document.createElement("div");
@@ -131,7 +156,7 @@ export async function mountAgentFrame(
       },
       closed: (session) => {
         on.closed(session);
-        if (mine === showing) frame.append(row(agent));
+        if (mine === showing) frame.append(row(choice));
       },
     };
     void mountTerminal(pane, events, { ...take, cwd, agent })
@@ -143,8 +168,19 @@ export async function mountAgentFrame(
         if (mine !== showing) return;
         pane.className = "agent__failed";
         pane.textContent = errText(e, lang);
-        frame.append(row(agent));
+        frame.append(row(choice));
       });
+  };
+
+  /** The way to a prompt with nothing started at it, drawn wherever the frame is putting a choice
+   *  ({@link SHELL}). It opens rather than remembering: a shell is not this folder's answer. */
+  const shellChoice = () => {
+    const choose = document.createElement("button");
+    choose.type = "button";
+    choose.className = "agent__choice";
+    choose.textContent = t("talk.shell", lang);
+    choose.addEventListener("click", () => open(SHELL));
+    return choose;
   };
 
   /** Keep this folder's answer, then open on it. A refusal to keep it is not a reason not to open. */
@@ -198,7 +234,8 @@ export async function mountAgentFrame(
     frame.append(box);
   };
 
-  /** The offer, put once: several agents are startable here and only the person knows which. */
+  /** The offer, put once: several agents are startable here and only the person knows which — and
+   *  under them the shell, for the reader who wants the folder's prompt and no agent at all. */
   const ask = (offered: string[]) => {
     clear();
     const box = document.createElement("div");
@@ -212,10 +249,12 @@ export async function mountAgentFrame(
       choose.addEventListener("click", () => pick(one.id));
       box.append(choose);
     }
+    box.append(shellChoice());
     frame.append(box);
   };
 
-  /** Nothing on this machine can be started: what was looked for, and the way to look again. */
+  /** No agent on this machine can be started: what was looked for, the way to look again, and the
+   *  shell — which is the only terminal this machine has, and used to be what the face opened with. */
   const nothing = () => {
     clear();
     const box = document.createElement("div");
@@ -233,29 +272,34 @@ export async function mountAgentFrame(
     again.textContent = t("talk.retry", lang);
     again.addEventListener("click", () => void look());
     box.append(again);
+    box.append(shellChoice());
     frame.append(box);
   };
 
   /**
-   * The closed frame's row: which agent the next pane starts as, and open.
+   * The closed frame's row: what the next pane starts as, and open.
    *
    * That the program has ended is not said here — both faces already say it (`face.ended`), and the
-   * same fact twice on one screen reads as two things having happened. The list is drawn only where
-   * there is more than one to choose between: a row offering a choice of one is a control that cannot
-   * do anything.
+   * same fact twice on one screen reads as two things having happened. The list is drawn wherever
+   * this folder has an agent to start, because the shell stands on it beside them ({@link SHELL}) and
+   * there is always the other one to choose. A frame that never probed — a pane that took a terminal
+   * up and then ended — has nothing to list, and its `open` puts the question instead.
    */
-  const row = (agent: string | null) => {
+  const row = (choice: string | null) => {
     const bar = document.createElement("div");
     bar.className = "agent__row";
 
     const offered = named(wake, wake?.offered ?? []);
-    let next = agent ?? offered[0]?.id ?? null;
-    if (offered.length > 1) {
+    let next = choice ?? offered[0]?.id ?? null;
+    if (offered.length) {
       const label = document.createElement("label");
       label.className = "agent__pick";
-      label.textContent = t("talk.agent", lang);
+      label.textContent = t("talk.startWith", lang);
       const choose = document.createElement("select");
-      for (const one of offered) {
+      for (const one of [
+        ...offered.map((agent) => ({ id: agent.id, label: agent.label })),
+        { id: SHELL, label: t("talk.shell", lang) },
+      ]) {
         const option = document.createElement("option");
         option.value = one.id;
         option.textContent = one.label;
@@ -277,7 +321,7 @@ export async function mountAgentFrame(
     // question is put now, which is the first moment there is a terminal to start rather than adopt.
     again.addEventListener("click", () => {
       if (next === null) void look();
-      else if (next === agent) open(next);
+      else if (next === SHELL || next === choice) open(next);
       else pick(next);
     });
     bar.append(again);

@@ -482,7 +482,8 @@ export const nl: Translation = {
     "talk.noneHint": "Amenbo heeft in het PATH van je shell naar deze commando's gezocht: {commands}. Installeer er een en zoek opnieuw.",
     "talk.retry": "Opnieuw zoeken",
     "talk.open": "Openen",
-    "talk.agent": "Agent",
+    "talk.startWith": "Openen met",
+    "talk.shell": "Gewone shell",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "In gesprek", "talk.holding": "{n} taken",

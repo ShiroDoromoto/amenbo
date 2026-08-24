@@ -485,7 +485,8 @@ export const id: Translation = {
     "talk.noneHint": "Amenbo mencari perintah ini di PATH shell Anda: {commands}. Pasang salah satunya, lalu cari lagi.",
     "talk.retry": "Cari lagi",
     "talk.open": "Buka",
-    "talk.agent": "Agen",
+    "talk.startWith": "Buka dengan",
+    "talk.shell": "Shell biasa",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "Sedang berdiskusi", "talk.holding": "{n} tugas",

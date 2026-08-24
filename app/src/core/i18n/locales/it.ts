@@ -503,7 +503,8 @@ export const it: Translation = {
     "talk.noneHint": "Amenbo ha cercato questi comandi nel PATH della tua shell: {commands}. Installane uno, poi cerca di nuovo.",
     "talk.retry": "Cerca di nuovo",
     "talk.open": "Apri",
-    "talk.agent": "Agente",
+    "talk.startWith": "Apri con",
+    "talk.shell": "Shell semplice",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "In conversazione", "talk.holding": "{n} attività",

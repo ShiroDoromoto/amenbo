@@ -1,0 +1,141 @@
+# A pane is taken away for good, and the page closes up behind it.
+#
+# **It is the one move on this face nothing takes back.** Every other way a pane leaves the screen is
+# a pane moving — the page turned, the count was re-cut, the window was folded back — and the session
+# is still running behind it. This ends the terminal and takes the place away with it: the frame is
+# not on the next page, and it is not there on the next run either. So the app asks first, and what
+# this road defends is that the question stands between the press and the loss.
+#
+# ── Why two panes, and why each carries its own line ─────────────────────────────────────────────
+# What is under test is *which* pane went. A road with one pane on the page could not tell a frame
+# being removed from the face clearing itself, and an operator pressing on a page of identical boxes
+# would be choosing which one to press. The lines are the reader's own words, so each box is the one
+# the road named — and the survivor is read by its own line afterwards, which is how "the other one
+# is still running" is said at all.
+#
+# ── Why the page is set to two before either is opened ───────────────────────────────────────────
+# Two panes at two to a page is a page with no room left, which is the other half of the goal: the
+# way in is the page saying it has room, so a full page must not draw one. It is set while nothing is
+# open, so what follows is a page filling rather than a page being cut down to what is already on it.
+#
+# The world is empty on purpose. A terminal is not a record and needs none — what the panes run is
+# the reader's own shell — and the one folder is there so nothing is asked about where a pane works,
+# which is another road's goal (`open-a-pane-where-a-project-keeps-more-than-one-folder`).
+id: get-rid-of-a-pane-for-good
+title: A pane is removed for good after a question, and the page closes up around the one that stays
+description: >
+  Fill a page with two panes and get a line onto each. The page has no room left and offers no way
+  in. Press the way out on one of them: a question comes up before anything happens, and answering it
+  ends that terminal and takes its place away. What is left is the other pane, still showing its own
+  line, with the room the page got back offered beside it.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Boathouse
+    as: boathouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: slipway
+      project: boathouse
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Pressed rather than assumed: which project the face comes up on is the run's business, and a road
+  # that read a screen it had not put itself on would be reading somebody else's.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Boathouse
+
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 2
+
+  # The first pane, and down to a plain shell — what an agent does with a line typed at it is the
+  # agent's own, and this line has to sit where it was put.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the pane that goes
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the pane that stays
+
+  # The page is full, so it offers nothing. This is the reading "at most one empty frame" cannot make:
+  # room the page has not got must not be drawn as a way in.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 2
+      empty: 0
+
+  - type: action
+    domain: terminal
+    op: remove-pane
+    with:
+      shows: SCENARIO the pane that goes
+
+  # One pane, and the room the page got back is offered again — at the gap the pane left, which is
+  # what "the page closes up" means on a page that is drawn rather than held.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 1
+      empty: 1
+
+  # The one that stays is untouched by its neighbour going. A face that re-made its frames around the
+  # gap would read the same on the count above and lose this session here.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the pane that stays
+
+  # And the one that went is gone rather than moved: not on this page, not on another, and not behind
+  # the count — there is no page to turn to, because the panes of this project are one page's worth.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the pane that goes
+      present: false

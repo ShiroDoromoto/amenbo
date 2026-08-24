@@ -1,0 +1,127 @@
+# A person says what a pane opens with once, and the next frame comes up on it.
+#
+# The row on the empty frame is a choice, and a choice that lasted one press would not be one: the
+# reader would say "a plain prompt, not the agent" every single time they opened a terminal. What
+# this road defends is the rank under the project's own pin — what *this person* last opened with,
+# kept against them and not against the project they happened to be in (`crate::wake`).
+#
+# ── Why the page is set to one ───────────────────────────────────────────────────────────────────
+# So that the frame read at the end is a frame **drawn again**, not the one left standing. A page of
+# one is full the moment a pane opens on it, so the empty frame goes; removing the pane makes the
+# page draw a new one, which asks the store afresh what to open with. Read on a frame that never
+# left the screen, this road would pass on a build that keeps nothing at all — the frame would still
+# be showing the press the hand made on it a minute earlier, which proves only that a button stays
+# pressed.
+#
+# ── Why the plain shell is what is chosen ────────────────────────────────────────────────────────
+# It is the one thing on that row every machine has. Which agents are on it is a probe of the run
+# machine's `PATH`, so a road naming one would run on some machines and not others — and the shell
+# is a real choice besides, since it is never what a fresh machine settles on where anything else
+# can be started.
+#
+# ── Why nothing is read before the choice ────────────────────────────────────────────────────────
+# What the row comes up on before anybody has said is the machine's own business: nothing on it
+# where several agents were found, that one where a single agent was, and no row at all where none
+# were. All three are correct, so there is no reading to write down. What is walked here is the
+# carry-over, which is the same fact on all three.
+#
+# The world is empty apart from the place to work. A terminal is not a record and needs none, and
+# the one folder is there so nothing is asked about where the pane runs — that question is another
+# road's (`leave-the-question-about-where-a-pane-runs`).
+id: open-a-pane-with-what-you-opened-the-last-one-with
+title: What a pane was opened with is what the next empty frame comes up on
+description: >
+  On a page that holds one pane, open a terminal from the empty frame after choosing the plain shell
+  on the row above the press. The page is full, so it offers no way in. Take that pane away for
+  good: the page has room again and draws its empty frame afresh — and the row on it comes up with
+  the plain shell already on, and a press that is live. Nobody is asked a second time for an answer
+  they have already given.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Lighthouse
+    as: lighthouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: lamproom
+      project: lighthouse
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Pressed rather than assumed: which project the face comes up on is the run's business, and a road
+  # that read a screen it had not put itself on would be reading somebody else's.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Lighthouse
+
+  # A page that one pane fills. Set while nothing is open, so what follows is a page filling rather
+  # than a page cut down to what is already on it.
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 1
+
+  # Where the road starts from, said rather than assumed: nothing is open, so the page draws its one
+  # way in and nothing else.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 0
+
+  # The choice, and the press that acts on it. On an empty frame both are on the frame itself — the
+  # row above the press is what it opens with — so this one step is the whole of somebody saying
+  # "a plain prompt this time".
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  # The pane is named by the reader's own words, which is how the step below says which one goes.
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the pane opened on a plain prompt
+
+  # The page is full, so the empty frame is gone from the screen rather than sitting behind the pane.
+  # This is what makes the reading at the end a reading of a frame drawn again.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 1
+      empty: 0
+
+  - type: action
+    domain: terminal
+    op: remove-pane
+    with:
+      shows: SCENARIO the pane opened on a plain prompt
+
+  # The room the page got back, offered again — and this frame is new.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 0
+
+  # And it comes up on the answer given a moment ago, without asking for it again.
+  - type: assert
+    domain: terminal
+    op: opens-with
+    with:
+      start: shell

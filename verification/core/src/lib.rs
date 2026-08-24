@@ -2047,6 +2047,22 @@ const REGISTRY: &[OpSpec] = &[
     // gone": the question *is* the box, drawn where a pane would be, so a screen with neither on it is
     // a question that left nothing behind.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "asking-folder", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
+    // What the empty frame will open a pane with, read on the row above the press that opens one.
+    // The row is every agent this machine can start with the plain shell beside them, and exactly one
+    // of them is on. A road reads it to say that a choice made once is still the answer afterwards,
+    // which is the whole of what the row is for and the half no press can show while it is being
+    // made: what is on at the moment of choosing is what the hand just put there.
+    //
+    // `start` is `shell`, and only that. Which agents are on the row is a probe of the run machine's
+    // own `PATH`, so a road that named one would be a road that runs on the machines that happen to
+    // have that tool and nowhere else. The plain shell is on every row by construction — it is the
+    // absence of an agent rather than one of them — which is what makes it the one thing a road can
+    // name here, for the reason `open-shell` names it.
+    //
+    // Where the machine can start nothing at all, no row is drawn: one thing to open with is not a
+    // question. The reading is the same on that machine — what the next pane starts with is the plain
+    // shell — with less on the screen to read it off.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "opens-with", required: &["start"], refs: &[], strings: &["start"], binds: false },
     // How many panes the page being shown draws. It is not `set-panes` read back: that one is the
     // ceiling on how many a page may hold, and this is how many are actually standing there. The two
     // part company on exactly the thing worth defending — a face that filled the ceiling with empty

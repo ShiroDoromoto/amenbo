@@ -16,7 +16,7 @@
 // **What is kept is the wish, not what is on the screen.** A column can be a column or a drawer, and
 // which of those it is depends on how much room there is; whether the person wants it at all does
 // not. So the flag says whether they asked for it, and `sidesAreDrawers` says how it is drawn.
-import type { Count } from "./layout";
+import { ACROSS, type Count } from "./layout";
 
 /**
  * The least width a terminal is worth drawing in.
@@ -131,10 +131,15 @@ export function setSideShown(want: boolean): boolean {
  * Whether the columns beside the panes are drawers rather than columns.
  *
  * **It is decided by room and by nothing else.** The count is in it only as how many panes have to
- * fit across: four are drawn two across, so two counts of panes need the same width. Asking for one
- * pane is not asking for the rail to go away — somebody who splits a wide screen down to one terminal
- * wants that terminal large, and a face that closed the rail on them would be answering a question
- * nobody asked.
+ * fit across, which is the same number the grid is drawn with (`./layout`) — two and four are both
+ * two across, so they need the same width. Asking for one pane is not asking for the rail to go
+ * away — somebody who splits a wide screen down to one terminal wants that terminal large, and a
+ * face that closed the rail on them would be answering a question nobody asked.
+ *
+ * **It is the count that was asked for, not how many panes are open.** A page with three panes on a
+ * count of eight still draws four across, so it wants four across worth of room; measuring the open
+ * ones would give a column back at four and take it away again at five, which is the width moving
+ * under a reader who opened a pane.
  *
  * `rail` and `side` are the widths those columns would take if they were columns, which is zero for
  * one the person has closed: closing a column is what makes room, so it has to count. They are the
@@ -142,6 +147,5 @@ export function setSideShown(want: boolean): boolean {
  * make the window wide enough for columns, which would make it a column again.
  */
 export function sidesAreDrawers(count: Count, width: number, rail: number, side: number): boolean {
-  const across = count === 4 ? 2 : count;
-  return width - rail - side < across * PANE_MIN;
+  return width - rail - side < ACROSS[count] * PANE_MIN;
 }

@@ -80,6 +80,19 @@ describe("the sides", () => {
     expect(sidesAreDrawers(2, room, RAIL_DEFAULT, SIDE_DEFAULT)).toBe(false);
   });
 
+  it("asks for as much width as the count puts across, all the way up", () => {
+    // The two counts that go past a square: six is three across and eight is four, so each wants
+    // that much and no more (`./layout`). A window with room for exactly the wider one keeps its
+    // columns at both.
+    const room = (across: number) => across * PANE_MIN + RAIL_DEFAULT + SIDE_DEFAULT;
+    expect(sidesAreDrawers(6, room(3), RAIL_DEFAULT, SIDE_DEFAULT)).toBe(false);
+    expect(sidesAreDrawers(6, room(3) - 1, RAIL_DEFAULT, SIDE_DEFAULT)).toBe(true);
+    expect(sidesAreDrawers(8, room(4), RAIL_DEFAULT, SIDE_DEFAULT)).toBe(false);
+    expect(sidesAreDrawers(8, room(4) - 1, RAIL_DEFAULT, SIDE_DEFAULT)).toBe(true);
+    // Eight wants more than six does: a window that suits three across is a drawer at four.
+    expect(sidesAreDrawers(8, room(3), RAIL_DEFAULT, SIDE_DEFAULT)).toBe(true);
+  });
+
   it("are columns again once a closed one stops taking width", () => {
     const tight = 2 * PANE_MIN + SIDE_DEFAULT;
     expect(sidesAreDrawers(2, tight, RAIL_DEFAULT, SIDE_DEFAULT)).toBe(true);

@@ -1507,8 +1507,8 @@ impl Instructor {
                 "Without answering it, leave the question about which folder the pane works in: press somewhere else on the face — at the top, the pane count that is already in force is on every screen this question can come up on, and pressing the one already on leaves the page as it is. Answer nothing and press none of the folders it offers."
                     .to_string(),
             // How many panes a page draws. The control is named by what it holds rather than by
-            // where it sits, and the number is pressed as it is written: the three counts are all
-            // drawn at once, so there is nothing to open first. What the step does not say is what
+            // where it sits, and the number is pressed as it is written: every count is drawn at
+            // once, so there is nothing to open first. What the step does not say is what
             // becomes of the panes — the frames are one list re-cut by the new count, so a pane can
             // land on another page, and which of that is right is the assert after it.
             //
@@ -1517,7 +1517,7 @@ impl Instructor {
             // place, and go looking for a pane that is exactly where it should be. The screen stays
             // with the pane being worked in, which is the last one opened or typed at.
             (Domain::Terminal, "set-panes") => format!(
-                "At the top of the terminal face, in the row of three pane counts, press the one that says {}. It is words rather than a bare digit — the page numbers beside it are the digits — and the one in force is the one that is not dimmed. The page redraws at that split whether or not there are panes to fill it, and the screen stays with the pane being worked in, so it may end up on a different page from the one it was on.",
+                "At the top of the terminal face, in the row of pane counts, press the one that says {}. It is words rather than a bare digit — the page numbers beside it are the digits — and the one in force is the one that is not dimmed. The page redraws at that split whether or not there are panes to fill it, and the screen stays with the pane being worked in, so it may end up on a different page from the one it was on.",
                 count(with, "count")?
             ),
             // Paging. The digits are the pages, so the step names the one it presses and says the

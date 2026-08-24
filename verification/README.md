@@ -555,7 +555,7 @@ touch it, while reading them back off the screen means joining the rows a line w
 before anything can be found there at all.
 
 The face's own arrangement is in that vocabulary as well, because on this face the arrangement is
-most of what there is: `set-panes` re-cuts the frames into pages of one, two or four, `go-page` moves
+most of what there is: `set-panes` re-cuts the frames into pages of the count it names, `go-page` moves
 the whole screen to another page, `go-project` moves it to another project's panes altogether, and
 `open-pane` starts a terminal where there is not one yet — `from: face` at the one control a screen
 with nothing open on it has, `from: rail` beside the shown project's name in the list. What they are

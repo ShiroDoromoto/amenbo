@@ -198,9 +198,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .termface__grip--side { left: -4px; }
 .termface__grip:hover { background: var(--c-border-strong); }
 
-/* The page: the slots of it, laid out as one row, two across, or four in a square. The grid is
-   written per count rather than flowing, because a slot is a fixed place — panes that reflowed as
-   one closed would move the pane a reader was watching. */
+/* The page: the slots of it, laid out one across, two across, or two rows of two, three or four.
+   The grid is written per count rather than flowing, because a slot is a fixed place — panes that
+   reflowed as one closed would move the pane a reader was watching, and a count that laid itself out
+   from however many are open would answer a press with the shape it already had.
+
+   **Never a third row.** A terminal runs out of columns before it runs out of lines, so what a wider
+   screen buys is spent going across (`app/src/talk/layout.ts`, where the same numbers decide how much
+   width the columns beside the panes are measured against). */
 .termface__page-grid {
   flex: 1; min-width: 0; min-height: 0;
   display: grid; gap: var(--s-2);
@@ -223,6 +228,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .termface__page-grid--1 { grid-template: 1fr / 1fr; }
 .termface__page-grid--2 { grid-template: 1fr / 1fr 1fr; }
 .termface__page-grid--4 { grid-template: 1fr 1fr / 1fr 1fr; }
+.termface__page-grid--6 { grid-template: 1fr 1fr / 1fr 1fr 1fr; }
+.termface__page-grid--8 { grid-template: 1fr 1fr / 1fr 1fr 1fr 1fr; }
 
 /* One slot. It holds the label row and the pane under it. There is one per pane and no more — what is
    not open is not a box on the screen (`../talk/layout`). */
@@ -1086,9 +1093,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
    it to the two that carry on meaning something: which pane this is, and whether a person is needed
    in it. The words that went are one hover away, on the mark that stayed (`../talk/nameplate.ts`).
 
-   The design's three widths are one, two and four panes; the width is what is asked, because two
-   across and four across are the same width in this grid (`.termface__page-grid--*` above) and the
-   split-out window is one pane at whatever size its window is. What a reason has to be short enough
+   The width is what is asked rather than the count, because a count does not name a width: two
+   across and four across are the same width in this grid (`.termface__page-grid--*` above), six and
+   eight are narrower again, and the split-out window is one pane at whatever size its window is. What a reason has to be short enough
    for is settled at the other end — `session waiting` refuses one past the length of a label
    (`amenbo_core::session::WAITING_LIMIT`), so this is the row's last resort rather than its plan. */
 @container (max-width: 360px) {

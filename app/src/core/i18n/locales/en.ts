@@ -753,6 +753,8 @@ const ui = {
   // The state, as the chip and the detail row both name it (`AMB-D-558`).
   "chip.draft": "Being created",
   "premise.changed": "Premises changed after you reserved this: {detail}",
+  "adrift.mark": "Nothing at it",
+  "adrift.tip": "Nothing inside Amenbo is working on this any more. It may still be going at a terminal Amenbo cannot see, so look before you move it.",
   "premise.warn": "Premises changed after you reserved this (AMB-D-366): {detail}. Finish only the part that stands on its own, or hand it back by setting it to todo.",
   "premise.noLongerSettled": "no longer settled",
   "detail.premiseChanged": "Changed since reserved",

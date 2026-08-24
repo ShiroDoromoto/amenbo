@@ -695,6 +695,8 @@ export const pl: Translation = {
     "block.draft": "Nie może ruszyć (wciąż jest tworzone): najpierw zakończ tworzenie",
     "chip.draft": "W tworzeniu",
     "premise.changed": "Przesłanki zmieniły się po tym, jak to zarezerwowałeś: {detail}",
+    "adrift.mark": "Nikt tym nie zajmuje",
+    "adrift.tip": "Wewnątrz Amenbo nic już nad tym nie pracuje. Może trwać w terminalu, którego Amenbo nie widzi — sprawdź, zanim to przesuniesz.",
     "premise.warn": "Przesłanki zmieniły się po tym, jak to zarezerwowałeś (AMB-D-366): {detail}. Dokończ tylko tę część, która broni się sama, albo oddaj zadanie, ustawiając je z powrotem na todo.",
     "premise.noLongerSettled": "już nierozstrzygnięta",
     "detail.premiseChanged": "Zmieniło się od rezerwacji",

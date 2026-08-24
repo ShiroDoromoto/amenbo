@@ -658,6 +658,8 @@ export const nl: Translation = {
     "block.draft": "Kan niet beginnen (wordt nog aangemaakt): rond het aanmaken eerst af",
     "chip.draft": "Wordt aangemaakt",
     "premise.changed": "De gronden zijn veranderd nadat je dit reserveerde: {detail}",
+    "adrift.mark": "Niemand ermee bezig",
+    "adrift.tip": "Binnen Amenbo werkt hier niets meer aan. Het kan doorgaan in een terminal die Amenbo niet ziet — kijk even voordat u het verplaatst.",
     "premise.warn": "De gronden zijn veranderd nadat je dit reserveerde (AMB-D-366): {detail}. Maak alleen het deel af dat op zichzelf staat, of geef het terug door het op todo te zetten.",
     "premise.noLongerSettled": "niet langer beslecht",
     "detail.premiseChanged": "Veranderd sinds de reservering",

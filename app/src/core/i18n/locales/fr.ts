@@ -686,6 +686,8 @@ export const fr: Translation = {
     "block.draft": "Ne peut pas démarrer (encore en cours de création) : terminez d'abord sa création",
     "chip.draft": "En cours de création",
     "premise.changed": "Les prémisses ont changé après votre réservation : {detail}",
+    "adrift.mark": "Personne dessus",
+    "adrift.tip": "Plus rien, dans Amenbo, ne travaille là-dessus. Cela peut continuer dans un terminal qu'Amenbo ne voit pas — regardez avant de le déplacer.",
     "premise.warn": "Les prémisses ont changé après votre réservation (AMB-D-366) : {detail}. Ne terminez que la part qui tient toute seule, ou rendez-la en la remettant à faire.",
     "premise.noLongerSettled": "n'est plus tranchée",
     "detail.premiseChanged": "A changé depuis la réservation",

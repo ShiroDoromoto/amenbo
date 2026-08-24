@@ -657,6 +657,8 @@ export const zhHant: Translation = {
     "block.draft": "無法開始（還在建立中）：請先完成建立",
     "chip.draft": "建立中",
     "premise.changed": "你預約之後前提有了變動：{detail}",
+    "adrift.mark": "無人在做",
+    "adrift.tip": "Amenbo 裡已經沒有東西在做這件事了。它可能仍在 Amenbo 看不到的終端裡繼續，移動之前先看一眼。",
     "premise.warn": "你預約之後前提有了變動（AMB-D-366）：{detail}。只做完能獨立成立的那部分，或者把它設回待辦交還回去。",
     "premise.noLongerSettled": "不再是定案",
     "detail.premiseChanged": "預約後有變動",

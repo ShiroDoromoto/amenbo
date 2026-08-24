@@ -577,6 +577,11 @@ const ui = {
   // It asks rather than tells — Amenbo cannot see somebody's own terminal, so it does not know the work
   // stopped, only that nothing it opened is at it (`AMB-D-748`).
   "face.adrift": "Something in this project was left in the middle, and nothing is at it. Carry on with it?",
+  // The line over the row of things a terminal can be opened with (`app/src/shell/AdriftSlot.tsx`).
+  // The pills say by their shape that they can be pressed; this says it in words, because a row read
+  // as a caption is not something anybody tries. It does not say "choose an AI" — the plain shell is
+  // on the row and is not one.
+  "face.whichStart": "What does this pane open with?",
   "face.open": "Open a terminal here",
   "face.openHere": "Room for another pane in this project",
   "face.whichFolder": "Which folder does this pane work in?",

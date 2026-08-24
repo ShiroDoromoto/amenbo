@@ -198,6 +198,24 @@ describe("what a terminal opened here is opened with", () => {
     expect(buttons()).toHaveLength(1);
   });
 
+  it("says in words that the row is to be chosen from, and names the row with the same words", async () => {
+    hoisted.wake = startable(["claude-code", "codex-cli"]);
+    await draw("/work/here");
+
+    const ask = container.querySelector(".slot__ask");
+    expect(ask?.textContent, "nothing said what the pills are for").toBe("What does this pane open with?");
+    // The row is pointed at the question rather than given a second wording: what is heard and what
+    // is read have to be the one sentence.
+    expect(container.querySelector(".slot__starts")?.getAttribute("aria-labelledby"))
+      .toBe(ask?.getAttribute("id"));
+  });
+
+  it("says nothing where there is no row to say it about", async () => {
+    await draw("/work/here");
+
+    expect(container.querySelector(".slot__ask"), "a question was put over nothing").toBeFalsy();
+  });
+
   it("comes up on the project's own answer", async () => {
     hoisted.wake = startable(["claude-code", "codex-cli"], "codex-cli");
     await draw("/work/here");

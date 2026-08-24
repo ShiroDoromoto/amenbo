@@ -515,6 +515,7 @@ export const vi: Translation = {
     "face.pages": "Trang",
     "face.page": "Trang {n}",
     "face.adrift": "Trong dự án này có việc còn dang dở mà không ai làm. Bạn có muốn tiếp tục không?",
+    "face.whichStart": "Mở khung này bằng gì?",
     "face.open": "Mở terminal ở đây",
     "face.openHere": "Chỗ cho thêm một khung trong dự án này",
     "face.whichFolder": "Khung này làm việc trong thư mục nào?",

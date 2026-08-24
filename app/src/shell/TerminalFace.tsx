@@ -8,7 +8,7 @@ import {
 } from "../talk/frames";
 import {
   closedIn, COUNTS, EMPTY_LAYOUT, focusOn, goPage, goProject, laidOut, MAX_PAGES, movedTo, openedFrame,
-  openedIn, pageCount, pageOfFrame, panesOf, restored, setCount, sidesAreDrawers, slotsOf,
+  openedIn, pageCount, pageOfFrame, paneIn, panesOf, restored, setCount, sidesAreDrawers, slotsOf,
   type Count, type Layout,
 } from "../talk/layout";
 import { FilesPanel } from "../files/FilesPanel";
@@ -66,6 +66,11 @@ import { errText, t, tf } from "../core/i18n";
  * do about it. Which pane it was is the rail's to show, and a badge that counted would be a number a
  * reader has to go and check.
  *
+ * `openIn` is the ledger asking for a folder to be worked in — the first loop's one button
+ * (`app/src/components/FirstLoop.tsx`). It is where to work and not what to do about it: the project
+ * it belongs to is the one the ledger was on, and whether a pane is made or an open one reached for
+ * is this face's own (`../talk/layout`).
+ *
  * Beside the page is the file face (`app/src/files/FilesPanel.tsx`), rooted at the project this face
  * is on — the one picked on the rail, not the one selected on the ledger. `projectId` is only where
  * the face **starts**: a person who came to the terminal from a project is looking at that project,
@@ -77,6 +82,7 @@ export function TerminalFace({
   onWaiting,
   projectId,
   onOpenLedger,
+  openIn,
 }: {
   onSplitOut: () => void;
   note: string | null;
@@ -84,6 +90,12 @@ export function TerminalFace({
   /** The project the face opens on, where the window has one to say. */
   projectId?: number | null;
   onOpenLedger?: () => void;
+  /**
+   * A folder the ledger asked this face to work in, whose project it is, and a count of the asking —
+   * the same shape the file face's `show` takes, and for the same reason: pressing the button twice
+   * is a reader saying it again, not a state that has not moved.
+   */
+  openIn?: { project: number | null; dir: string; nth: number } | null;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   // Nothing is open until somebody opens something: a pane is made by opening one (`../talk/layout`),
@@ -325,8 +337,32 @@ export function TerminalFace({
     else setAsking({ note: null });
   }, [bound.live, openPane, bindFirstFolder]);
 
-  /** This project's first folder: chosen from outside the list because there is no list yet, and
-   *  bound to this project rather than to one named after it (`../core/mutations`). */
+  // A folder the ledger handed in. Nothing is done with it before the restore has been answered for:
+  // the panes that come back are what an already-open one is found among, and seeding one first would
+  // put a terminal in a frame the restore was about to take away.
+  //
+  // The project is the one the ledger was on when the button was pressed: the first loop is a
+  // project's own card, and a pane belongs to a project (`../talk/layout`).
+  //
+  // The press is honoured once. `nth` is what says a second press is a second answer, so pressing the
+  // button again on a folder already open goes to that pane rather than opening a second terminal in
+  // it.
+  useEffect(() => {
+    if (!settled || !openIn) return;
+    const project = openIn.project ?? layout.project;
+    if (project === null) return;
+    setLayout((was) => {
+      const open = paneIn(was, project, openIn.dir);
+      if (open) return focusOn(was, open.id);
+      const made = openedFrame(was, project, openIn.dir);
+      // The same mark the rail's way in leaves: this frame is one a person pressed for, so the pane
+      // opens rather than offering to.
+      startNow.current.add(made.frame.id);
+      return made.layout;
+    });
+    // `nth` is what makes the same folder asked for twice two answers.
+  }, [openIn?.nth, settled]);
+
   const drawers = sidesAreDrawers(layout.count, width);
   const panes = panesOf(layout, layout.project);
   // Where the pane being opened will land, which is the page the question is put on: a question drawn

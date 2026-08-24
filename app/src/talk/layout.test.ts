@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   closedIn, EMPTY_LAYOUT, focusOn, goPage, goProject, laidOut, movedTo, openedFrame, openedIn,
-  pageCount, pageOfFrame, panesOf, restored, setCount, sidesAreDrawers, slotsOf,
+  pageCount, pageOfFrame, paneIn, panesOf, restored, setCount, sidesAreDrawers, slotsOf,
   type Layout,
 } from "./layout";
 
@@ -189,5 +189,22 @@ describe("an arrangement kept between runs", () => {
 
   it("is nothing to come back to when it holds no frames", () => {
     expect(restored({ count: 2, nextId: 1, frames: [] }, 1)).toBeNull();
+  });
+});
+
+describe("a folder handed in from the ledger", () => {
+  it("finds the pane of that project already working in it, rather than one beside it", () => {
+    const open = openedFrame({ ...EMPTY_LAYOUT, project: 1 }, 1, "/work/repo").layout;
+    expect(paneIn(open, 1, "/work/repo")?.id).toBe("1");
+  });
+
+  it("is nothing to go to where the folder is open in another project", () => {
+    const open = openedFrame({ ...EMPTY_LAYOUT, project: 2 }, 2, "/work/repo").layout;
+    expect(paneIn(open, 1, "/work/repo")).toBeNull();
+  });
+
+  it("is nothing to go to where nothing of this project is in it", () => {
+    const open = openedFrame({ ...EMPTY_LAYOUT, project: 1 }, 1, "/work/other").layout;
+    expect(paneIn(open, 1, "/work/repo")).toBeNull();
   });
 });

@@ -124,6 +124,18 @@ export function frameOfSession(layout: Layout, session: string): Frame | null {
   return layout.frames.find((one) => one.session === session) ?? null;
 }
 
+/**
+ * The pane of this project already working in `folder`, or null where none is.
+ *
+ * **A folder already open is not opened beside itself.** It is what a folder handed in from the
+ * ledger lands on (`../shell/TerminalFace`): pressing the first loop's one button on a project whose
+ * pane is already up is a person going to that pane, and a second one in the same folder would be the
+ * same work in two places with the reader looking in the one they are not on.
+ */
+export function paneIn(layout: Layout, project: number, folder: string): Frame | null {
+  return panesOf(layout, project).find((one) => one.folder === folder) ?? null;
+}
+
 /** One frame replaced, everything else as it was. An id no frame has leaves the layout alone. */
 function withFrame(layout: Layout, frame: string, change: (was: Frame) => Frame): Layout {
   const at = layout.frames.findIndex((one) => one.id === frame);

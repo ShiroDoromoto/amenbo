@@ -9,6 +9,12 @@
 # launches carries the GUI alone, and the check's whole question is whether a SEPARATE process
 # repaints that GUI.
 #
+# The dev channel's preview builds through this same file, with one thing different: DEV_APP_NAME
+# names the app-data the binary addresses — the theme's own, so a member's previews and their real
+# store stand apart on one machine. It is read at compile time by amenbo-core, so it has to be in
+# the environment of the build: the output file name says nothing about it, and a preview compiled
+# without it opens the member's production store.
+#
 # Mounts expected (set by `make dist-cli-linux`):
 #   /src                  (ro)  the repo
 #   /out                  (rw)  where the binary is collected  (host: ./dist)
@@ -17,6 +23,9 @@
 set -euo pipefail
 
 OUT_NAME="${OUT_NAME:?OUT_NAME (the dist file name, e.g. amenbo-linux-arm64) must be passed in}"
+# Optional, and empty means production: exporting it empty would make option_env! read back an empty
+# app name rather than fall through to the production default, so only a non-empty one is set.
+DEV_APP_NAME="${DEV_APP_NAME:-}"
 
 echo "→ [container] syncing source /src → /build (excluding target/node_modules/.git/dist)"
 rsync -a --delete \
@@ -29,6 +38,11 @@ cd /build
 # The same two knobs lint-linux.sh sets, for the same reason: Docker Desktop's VM has more
 # CPUs than memory, and full parallelism OOM-kills an uncached run.
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-4}"
+
+if [ -n "$DEV_APP_NAME" ]; then
+  export AMENBO_APP_NAME="$DEV_APP_NAME"
+  echo "→ [container] dev channel: app-data $DEV_APP_NAME"
+fi
 
 cargo build --release -p amenbo-cli
 mkdir -p /out

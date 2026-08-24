@@ -20,6 +20,7 @@
 
 use std::path::{Component, Path, PathBuf};
 
+use amenbo_core::binding::canonical_dir;
 use base64::Engine as _;
 
 use crate::dto::{FolderChangedDto, FolderEntryDto, FolderFileDto, FolderImageDto};
@@ -61,8 +62,14 @@ const VISIT_CAP: usize = 20_000;
 /// link, and a path that would pass the second could still have been written as `..` — neither
 /// check subsumes the other. What comes back is canonical and inside `root`; whether it may be a
 /// directory is the caller's to say, since one door hands out bytes and the other lists names.
+///
+/// **Canonical here is the reader's spelling** ([`canonical_dir`], `AMB-D-703`), not
+/// `std::fs::canonicalize`'s. On Windows that call answers in the verbatim `\\?\C:\…` form, and a
+/// path in that form is not a path every Win32 entry point takes: `SHOpenWithDialog` rejects it
+/// outright with `E_INVALIDARG` and draws nothing (`AMB-T-3651` measured it on a real machine).
+/// What leaves this fence is handed to the shell, so it leaves in the form the shell accepts.
 pub fn under(root: &Path, segments: impl IntoIterator<Item = impl AsRef<str>>) -> Option<PathBuf> {
-    let root = root.canonicalize().ok()?;
+    let root = canonical_dir(root).ok()?;
 
     let mut path = root.clone();
     for segment in segments {
@@ -78,7 +85,7 @@ pub fn under(root: &Path, segments: impl IntoIterator<Item = impl AsRef<str>>) -
 
     // Now the filesystem's own answer, links followed. A link inside the folder that points out of
     // it is only caught here, which is why the text check above is not the end of it.
-    let path = path.canonicalize().ok()?;
+    let path = canonical_dir(&path).ok()?;
     path.starts_with(&root).then_some(path)
 }
 
@@ -87,13 +94,13 @@ pub fn under(root: &Path, segments: impl IntoIterator<Item = impl AsRef<str>>) -
 /// The caller names a root, and a webview is not trusted to name one: the registry is asked whether
 /// this project claims that folder. Everything else in this module resolves under what comes back.
 pub fn root_of(project_id: i64, root: &str) -> Result<PathBuf, CmdError> {
-    let asked = Path::new(root).canonicalize().map_err(|_| gone())?;
+    let asked = canonical_dir(root).map_err(|_| gone())?;
     let store = crate::commands::open_store_read()?;
     let bound = store
         .bindings()
         .dirs_for_project(project_id)
         .into_iter()
-        .any(|dir| Path::new(dir).canonicalize().is_ok_and(|dir| dir == asked));
+        .any(|dir| canonical_dir(dir).is_ok_and(|dir| dir == asked));
     if bound { Ok(asked) } else { Err(gone()) }
 }
 
@@ -361,8 +368,24 @@ mod tests {
     #[test]
     fn a_folder_is_an_answer_here() {
         let (dir, root) = folders();
-        assert_eq!(under(&root, ["notes"]), Some(root.join("notes").canonicalize().unwrap()));
-        assert_eq!(under(&root, Vec::<String>::new()), Some(root.canonicalize().unwrap()));
+        assert_eq!(under(&root, ["notes"]), Some(canonical_dir(root.join("notes")).unwrap()));
+        assert_eq!(under(&root, Vec::<String>::new()), Some(canonical_dir(&root).unwrap()));
+        drop(dir);
+    }
+
+    /// What the fence hands back is handed on to the shell, so it comes back in the spelling the
+    /// shell takes and not in Win32's internal one (`AMB-D-703`). A verbatim `\\?\C:\…` path is
+    /// what `std::fs::canonicalize` answers with on Windows, and `SHOpenWithDialog` refuses one
+    /// with `E_INVALIDARG` and draws nothing at all — measured on a real machine in `AMB-T-3651`.
+    #[test]
+    fn what_the_fence_hands_back_is_spelled_the_way_the_shell_takes_it() {
+        let (dir, root) = folders();
+        let file = under(&root, ["notes", "a.md"]).expect("a file inside the folder");
+        assert!(
+            !file.to_string_lossy().starts_with(r"\\?\"),
+            "no verbatim prefix leaves the fence: {}",
+            file.display(),
+        );
         drop(dir);
     }
 

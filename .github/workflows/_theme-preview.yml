@@ -250,6 +250,27 @@ jobs:
           THEME: ${{ inputs.theme }}
         run: make dist-cli-dev-linux AMB-THEME="$THEME" LINUX_CLI_ARCH=amd64
 
+      # The same two questions the macOS leg puts to the CLI inside its bundle, put here to the file
+      # a member copies onto their PATH. This leg is the one that hands out a bare CLI, so it is the
+      # one where a build carrying the wrong app-data reaches a member as a command that opens their
+      # real store — the file name alone would not say it, and nothing else here is red.
+      - name: The preview CLI must be unstamped, and on the theme's own channel
+        env:
+          APP_NAME: ${{ needs.names.outputs.app_name }}
+        run: |
+          cli="dist/$APP_NAME"
+          "$cli" version --json
+          stamped=$("$cli" version --json | jq -r .release_build)
+          channel=$("$cli" version --json | jq -r .channel)
+          if [ "$stamped" != "false" ]; then
+            echo "::error::this preview CLI carries the release stamp — it could migrate a member's real store" >&2
+            exit 1
+          fi
+          if [ "$channel" != "$APP_NAME" ]; then
+            echo "::error::this preview CLI answers to '$channel', not '$APP_NAME' — it would open another build's app-data" >&2
+            exit 1
+          fi
+
       - uses: actions/upload-artifact@v7
         with:
           name: preview-${{ inputs.theme }}-linux-x86_64

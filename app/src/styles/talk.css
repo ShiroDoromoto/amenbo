@@ -29,6 +29,11 @@
   color: var(--c-text-muted); font-size: var(--fs-sm);
 }
 
+/* The row that says what is going on in the pane (`../talk/nameplate.ts`). It is a container so the
+   row can ask how much room it has and give its places up one at a time — the same question the
+   board's slots ask, asked here of the window, which is this pane's whole width. */
+.talk__plate { container-type: inline-size; }
+
 /* What the window holds below the bar: the frame the agent question is put in, and the pane once one
    is running (`app/src/talk/agent.ts`). */
 .talk__face { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; }

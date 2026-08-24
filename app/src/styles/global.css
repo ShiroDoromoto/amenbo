@@ -159,7 +159,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* What is said about this terminal, and the one control a running pane has. One row, because ending
    it is the last thing there is to say about it. */
 .slot__bar { display: flex; align-items: center; gap: var(--s-2); }
-.slot__plate { flex: 1; min-width: 0; }
+/* The row above the pane is asked how much room it has, so it can give its places up one at a time as
+   the pane narrows (see `.plate` below). The question is asked of this box rather than of the window:
+   what decides whether the words are readable is the pane, and the same row is drawn in the split-out
+   window, where the window's own width is the pane's. */
+.slot__plate { flex: 1; min-width: 0; container-type: inline-size; }
 /* The one control the place has: it removes the frame, terminal and all (`../shell/TerminalPane`). It
    is drawn quietly and sits at the end of the row — nothing else on this face takes anything away, so
    a control that looked urgent would be pressed by mistake more often than on purpose. What stops the
@@ -899,8 +903,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
   text-overflow: ellipsis;
 }
 
-/* The one thing said, on the right. It is the agent's own words, so it is bounded by the room it has
-   and not by trusting the sentence to be short. */
+/* The one thing said, on the right. The sentence itself is bounded at the door it comes in by
+   (`amenbo_core::session::WAITING_LIMIT`), so what is left for the row is the difference between a
+   label's line and this pane's share of it. */
 .plate__say {
   flex: 0 1 auto;
   min-width: 0;
@@ -918,4 +923,26 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .plate[data-say="waiting"] .plate__say,
 .plate[data-say="premise"] .plate__say {
   color: var(--c-text);
+}
+
+/* A pane too narrow for three things drops them from the right, and the name and the ⏸ are what is
+   left (`AMB-T-3673`).
+
+   **Three things all cut short is a row none of which can be read.** Above this width each place
+   still says something after the ellipsis; below it the middle has room for a ref and no title, and
+   what is said has room for nothing at all — so rather than share the little there is, the row gives
+   it to the two that carry on meaning something: which pane this is, and whether a person is needed
+   in it. The words that went are one hover away, on the mark that stayed (`../talk/nameplate.ts`).
+
+   The design's three widths are one, two and four panes; the width is what is asked, because two
+   across and four across are the same width in this grid (`.termface__page-grid--*` above) and the
+   split-out window is one pane at whatever size its window is. What a reason has to be short enough
+   for is settled at the other end — `session waiting` refuses one past the length of a label
+   (`amenbo_core::session::WAITING_LIMIT`), so this is the row's last resort rather than its plan. */
+@container (max-width: 360px) {
+  .plate__now,
+  .plate__mark--now,
+  .plate__say {
+    display: none;
+  }
 }

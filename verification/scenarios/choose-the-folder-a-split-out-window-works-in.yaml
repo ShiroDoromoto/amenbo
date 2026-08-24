@@ -20,15 +20,10 @@
 #
 # ── How the windows are named ────────────────────────────────────────────────────────────────────
 # From the split onwards every step says which window it is walked in, because from there there are
-# two. The board is "Amenbo", its whole title. The window that opens carries the pane's name, and the
-# pane has none yet — so until it does, it is named here by the part of its title every language
-# keeps: the product's own name and the dash that follows it.
-#
-# **The line typed into the pane names the frame, and the window with it.** A step is shot after it
-# has been carried out, so the step that types the line is already the window under its new name, and
-# every step from there names it by the line. The operator walking that one step is standing at the
-# window that is about to take the name they were handed — which is what the step says, and the only
-# place on this road where the name arrives with the press rather than before it.
+# two. The board is "Amenbo", its whole title. The other holds the whole terminal face rather than
+# one pane of it, so it is not named after anything on the screen: it carries the product's name with
+# a dash and a word after it, and the word is in the run's own language — so it is named here by the
+# part of its title every language keeps.
 id: choose-the-folder-a-split-out-window-works-in
 title: A terminal split into a window of its own with nothing running asks which of the project's folders it works in
 description: >
@@ -68,8 +63,8 @@ steps_gui:
       face: terminal
 
   # Pressed rather than assumed: which project the face comes up on is the run's business, and it is
-  # the project the window inherits — the split-out window has no list to be asked on, so what it
-  # belongs to is what the board was showing when it was split out.
+  # the project the window inherits — nobody chose one on the way into a window nothing was arranged
+  # in, so what it opens on is what the board was showing when it was split out.
   - type: action
     domain: terminal
     op: go-project
@@ -105,20 +100,20 @@ steps_gui:
     op: open-shell
     window: "Amenbo — "
 
-  # The line names the pane's frame, and the title of the window drawing it. The window is named here
-  # by the name it has once the line is sent: the window with no name of its own is the one to type
-  # in, and it is called this by the time the step is done.
+  # The line names the pane's frame — the row above the pane is where it shows, the window keeping
+  # its own name throughout. It is typed for the reason every road that speaks in a pane types one:
+  # it is the reader's own words, and so readable on a screen in any language.
   - type: action
     domain: terminal
     op: type-line
-    window: SCENARIO the window that asked
+    window: "Amenbo — "
     with:
       text: SCENARIO the window that asked
 
   - type: assert
     domain: terminal
     op: pane
-    window: SCENARIO the window that asked
+    window: "Amenbo — "
     with:
       shows: SCENARIO the window that asked
 
@@ -127,7 +122,7 @@ steps_gui:
   - type: assert
     domain: terminal
     op: asking-folder
-    window: SCENARIO the window that asked
+    window: "Amenbo — "
     with:
       dir: rope-walk
       present: false
@@ -137,4 +132,4 @@ steps_gui:
   - type: action
     domain: terminal
     op: fold-back
-    window: SCENARIO the window that asked
+    window: "Amenbo — "

@@ -28,7 +28,6 @@ vi.mock("../talk/agent", () => ({
     _host: HTMLElement,
     _lang: string,
     on: { opened: (s: string, at: string) => void },
-    _paneClass: string,
     start: PaneStart = {},
   ) => {
     hoisted.mounts.push({ start });
@@ -109,7 +108,7 @@ beforeEach(async () => {
     count: 2,
     nextId: 3,
     // The project the face was on. It comes back with the shape and goes out with it again — the
-    // window with no rail is what reads it (`../talk/layout`).
+    // window with no ledger to have been on is what reads it (`../talk/layout`).
     project: 1,
     frames: [
       { id: "1", project: 1, folder: "/work/repo" },
@@ -120,7 +119,7 @@ beforeEach(async () => {
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => {
-    root.render(createElement(TerminalFace, { onSplitOut: () => {}, note: null, onWaiting: () => {} }));
+    root.render(createElement(TerminalFace, { onWindow: () => {}, note: null, onWaiting: () => {} }));
   });
 });
 
@@ -162,8 +161,8 @@ describe("an arrangement that was kept", () => {
     expect(hoisted.kept).toHaveLength(0);
     await answered();
     // What goes back is what came back, with the pane being worked in on it: a restore lands on the
-    // first place, and that is where the person is — which is what the window with no rail draws
-    // when the terminal is split out (`../talk/layout`).
+    // first place, and that is where the person is — which is where the window comes up when the
+    // terminal is split out (`../talk/layout`).
     expect(hoisted.kept[hoisted.kept.length - 1])
       .toEqual({ ...(hoisted.saved as object), splitOut: "1" });
   });

@@ -30,7 +30,6 @@ vi.mock("../talk/agent", () => ({
     _host: HTMLElement,
     _lang: string,
     on: { opened: (s: string, at: string) => void; said: (statement: unknown) => void },
-    _paneClass: string,
     start: PaneStart = {},
   ) => {
     const session = start.session ?? `s${hoisted.mounts.length + 1}`;
@@ -82,7 +81,7 @@ const openPane = () => openPaneIn(container);
  *  and the face reads it as it comes up. */
 const mount = async () => {
   await act(async () => {
-    root.render(createElement(TerminalFace, { onSplitOut: () => {}, note: null, onWaiting: () => {} }));
+    root.render(createElement(TerminalFace, { onWindow: () => {}, note: null, onWaiting: () => {} }));
   });
 };
 
@@ -183,7 +182,7 @@ describe("turning a page", () => {
     document.body.appendChild(hidden);
     const other = createRoot(hidden);
     await act(async () => {
-      other.render(createElement(TerminalFace, { onSplitOut: () => {}, note: null, onWaiting: () => {} }));
+      other.render(createElement(TerminalFace, { onWindow: () => {}, note: null, onWaiting: () => {} }));
     });
     // Three panes at two a page, so the hidden face has somewhere a digit could take it — and is
     // standing on page 2, where opening the third one left it.

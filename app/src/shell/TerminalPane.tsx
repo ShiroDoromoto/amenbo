@@ -95,7 +95,7 @@ export function TerminalPane({
     let detach: (() => void) | null = null;
     setEnded(false);
     // The line above the pane. It holds what is known about the session running there for as long as
-    // it runs, which is the same line the split-out window draws (`../talk/plate.ts`).
+    // it runs (`../talk/plate.ts`).
     const plate = mountPlate(
       label,
       currentLang,
@@ -133,10 +133,11 @@ export function TerminalPane({
         setLive(null);
         on.current.onClosed(session);
       },
-      // The window's own title is not the pane's to say — this window is the board. The name goes to
-      // the store, and what draws it is the line above the pane.
+      // The window's own title is not the pane's to say — a face holds several panes, in either of
+      // the windows it is drawn in. The name goes to the store, and what draws it is the line above
+      // the pane.
       name: (text, by) => on.current.onName(frame, text, by),
-    }, "termface__pane", start, project)
+    }, start, project)
       .then((take) => {
         // Taken away while the host was still answering. Detaching leaves the terminal running for
         // whatever draws it next, which is exactly what a pane that never got shown should do.

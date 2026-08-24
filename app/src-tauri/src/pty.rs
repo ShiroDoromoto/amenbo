@@ -604,7 +604,7 @@ impl CursorQuery {
     }
 }
 
-/// The sessions this process has open, in no particular order — each with when it began.
+/// The sessions this process has open, oldest first — each with when it began.
 ///
 /// A pane asks this on the way up, to find out whether the terminal it is there to draw is already
 /// running — which it is every time the pane has moved rather than been made: split out into its own
@@ -612,19 +612,39 @@ impl CursorQuery {
 /// (`app/src/shell/TerminalFace.tsx`). The registry is the only thing that knows, because it is the
 /// only part of a terminal that outlives the window: a webview that went away took its emulator with
 /// it and could tell nothing to whatever draws next.
+///
+/// **The order is part of the answer.** The face puts each session back in the place whose folder it
+/// is running in, and two panes working in one folder are told apart by nothing else — so the oldest
+/// session goes in the oldest place, which is the pairing they were opened in. Left as the registry
+/// holds them the order is a `HashMap`'s, which is to say a different one each run: the two panes
+/// would trade contents at some splits and not others, and each would then be drawn under the other
+/// one's name, since a name belongs to the place (`amenbo_core::frames`). `started_at` alone can tie
+/// — two panes opened in the same second — so the session's own id settles it, arbitrarily but the
+/// same way every time.
 #[tauri::command]
 pub fn pty_sessions(terminals: tauri::State<'_, Terminals>) -> Vec<PtySessionDto> {
-    terminals
-        .0
-        .lock()
-        .expect("terminals lock")
-        .iter()
-        .map(|(session, terminal)| PtySessionDto {
-            session: session.clone(),
-            started_at: terminal.started_at.clone(),
-            folder: terminal.folder.as_ref().map(|f| f.to_string_lossy().into_owned()),
-        })
-        .collect()
+    in_open_order(
+        terminals
+            .0
+            .lock()
+            .expect("terminals lock")
+            .iter()
+            .map(|(session, terminal)| PtySessionDto {
+                session: session.clone(),
+                started_at: terminal.started_at.clone(),
+                folder: terminal.folder.as_ref().map(|f| f.to_string_lossy().into_owned()),
+            })
+            .collect(),
+    )
+}
+
+/// The sessions as [`pty_sessions`] answers with them: oldest first, ties settled by the session's
+/// own id so the same set always comes back in the same order.
+///
+/// `started_at` is RFC 3339 with a fixed offset, so the text sorts the way the instants do.
+fn in_open_order(mut open: Vec<PtySessionDto>) -> Vec<PtySessionDto> {
+    open.sort_by(|a, b| (&a.started_at, &a.session).cmp(&(&b.started_at, &b.session)));
+    open
 }
 
 /// Draw an already-open terminal in the pane that is asking, and hand back what it has said lately.
@@ -775,6 +795,36 @@ mod tests {
         let replay = pane.adopt("main");
         assert_eq!(replay.len(), RECENT);
         assert_eq!(&replay[replay.len() - 2..], b"$ ");
+    }
+
+    /// A pane put back in its place is put there by folder and by nothing else, so two terminals
+    /// running in one folder are told apart only by the order they come back in. Oldest first is
+    /// what pairs them with the places they were opened in; a `HashMap`'s order would trade their
+    /// contents at some splits and not others, and each would then be drawn under the other's name.
+    #[test]
+    fn the_sessions_come_back_in_the_order_they_were_started() {
+        let at = |session: &str, started_at: &str| PtySessionDto {
+            session: session.into(),
+            started_at: started_at.into(),
+            folder: Some("/work/repo".into()),
+        };
+        let order = |open: Vec<PtySessionDto>| {
+            in_open_order(open).into_iter().map(|one| one.session).collect::<Vec<_>>()
+        };
+
+        let newest_first = vec![
+            at("c", "2026-08-24T00:00:02Z"),
+            at("b", "2026-08-24T00:00:01Z"),
+            at("a", "2026-08-24T00:00:00Z"),
+        ];
+        assert_eq!(order(newest_first), ["a", "b", "c"]);
+
+        // Two panes opened in the same second still come back the same way round every time.
+        let tied = vec![
+            at("y", "2026-08-24T00:00:00Z"),
+            at("x", "2026-08-24T00:00:00Z"),
+        ];
+        assert_eq!(order(tied), ["x", "y"]);
     }
 
     /// The window a session's chunks go to is the pane's to move, which is the whole of how a

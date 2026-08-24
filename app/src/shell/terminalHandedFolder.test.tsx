@@ -18,7 +18,6 @@ vi.mock("../talk/agent", () => ({
     _host: HTMLElement,
     _lang: string,
     on: { opened: (s: string, at: string, where?: string) => void },
-    _paneClass: string,
     start: PaneStart = {},
   ) => {
     hoisted.mounts.push({ cwd: start.cwd ?? undefined });
@@ -50,7 +49,7 @@ let root: Root;
 const draw = (openIn: { project: number | null; dir: string; nth: number } | null) =>
   act(async () => {
     root.render(createElement(TerminalFace, {
-      onSplitOut: () => {}, note: null, onWaiting: () => {}, openIn,
+      onWindow: () => {}, note: null, onWaiting: () => {}, openIn,
     }));
   });
 

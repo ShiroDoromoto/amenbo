@@ -2336,26 +2336,6 @@ pub struct FolderImageDto {
     pub(crate) base64: String,
 }
 
-/// The pane the board is handing to the window it is splitting the terminal out into.
-///
-/// Two things, and they come from different lifetimes. The **frame** is a place in the arrangement,
-/// and it is what the pane's name belongs to (`FrameNameDto`) — without it the window would name a
-/// frame it is not drawing. The **session** is the terminal running in that frame at the moment of
-/// the split, so the window takes up that one rather than guessing from a count of what is open: with
-/// several panes running, a window that adopted "the only session" would adopt none of them.
-#[derive(Clone, Deserialize, Serialize, TS)]
-#[ts(export, export_to = "../../src/bindings/bindings.ts")]
-#[serde(rename_all = "camelCase")]
-pub struct TalkPaneDto {
-    /// The frame the window draws.
-    pub(crate) frame: String,
-    /// The terminal running in it, or `None` for a frame whose program has ended — a place with its
-    /// last output on it is still the place being split out.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub(crate) session: Option<String>,
-}
-
 /// The talk window's arrangement, as this device left it (`amenbo_core::frames::SavedLayout`).
 ///
 /// The shape only: how many panes to a page, the frames in slot order, and the folder each was
@@ -2369,16 +2349,17 @@ pub struct TalkLayoutDto {
     pub(crate) count: u32,
     /// The next frame id to hand out — ids are never reused, so a name stays on its own frame.
     pub(crate) next_id: u32,
-    /// The project whose panes the face was showing. It is what the window with no rail opens as
-    /// (`app/src/talk.ts`); absent where nothing has told the face of a project yet.
+    /// The project whose panes the face was showing. It is what the window the terminal is split out
+    /// into opens as, where the arrangement came back with no panes to name one
+    /// (`app/src/shell/TerminalFace.tsx`); absent where nothing has told the face of a project yet.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) project: Option<u32>,
     /// The frames, in slot order.
     pub(crate) frames: Vec<TalkFrameDto>,
-    /// The frame the window split out of the board draws — the one being worked in when the
-    /// arrangement was kept (`amenbo_core::frames::SavedLayout`). Absent where the terminal has never
-    /// been split out.
+    /// The pane being worked in when the arrangement was kept — the one the window split out of the
+    /// board comes up on (`amenbo_core::frames::SavedLayout`). Absent where nobody has worked in a
+    /// pane yet.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) split_out: Option<String>,

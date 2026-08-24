@@ -262,18 +262,19 @@ describe("an arrangement kept between runs", () => {
     expect(JSON.stringify(kept)).not.toContain("session-a");
   });
 
-  it("carries the project the face is on, for the window that has no rail to be asked on", () => {
-    // The split-out window draws one pane and nobody chose it on its way in, so what it opens as is
-    // the project the board was showing (`../talk.ts`).
+  it("carries the project the face is on, for the window that has no ledger to be asked on", () => {
+    // The window the terminal is split out into has no ledger to have taken a project from, so an
+    // arrangement with no panes to name one opens as the project the board was showing
+    // (`../shell/TerminalFace`).
     expect(laidOut(withPanes(1)).project).toBe(1);
     // A face that has not been told of a project says so by leaving it out, rather than naming one
     // no pane is in.
     expect(laidOut(EMPTY_LAYOUT)).not.toHaveProperty("project");
   });
 
-  it("names the pane being worked in, for the window that draws one of them", () => {
-    // Splitting the terminal out takes the pane the person is in, and a window built by a launch
-    // rather than by that press has nobody left to ask which one that was (`../talk.ts`).
+  it("names the pane being worked in, for the window that comes up on it", () => {
+    // The press that splits hands nothing over, so where the reader was is theirs to read back out
+    // of the shape (`../shell/TerminalFace`).
     const layout = focusOn(withPanes(2), "2");
     expect(laidOut(layout).splitOut).toBe("2");
     // A face with no pane to be working in leaves it out rather than naming a place that is not one.

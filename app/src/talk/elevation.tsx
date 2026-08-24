@@ -18,29 +18,21 @@ import { t } from "../core/i18n";
 import type { Lang } from "../core/i18n";
 
 /**
- * The band, in `lang`, ready to be put above the pane.
+ * The band, ready to stand above the face.
  *
  * `role="status"` rather than `alert`: what it reports has been true since the window opened and
  * will be true until the app is restarted, so it is a state of the window, not an event that
  * interrupted one. A screen reader announcing it at the next pause is the right amount of urgency.
+ *
+ * `lang` is for a reader that wants to name one; the window is rebuilt when the language changes
+ * (`../talk.tsx`), so leaving it out is what the page itself does.
  */
-export function elevationBand(lang: Lang): HTMLElement {
-  const band = document.createElement("div");
-  band.className = "talk__elevated";
-  band.setAttribute("role", "status");
-
-  const title = document.createElement("strong");
-  title.className = "talk__elevated-title";
-  title.textContent = t("talk.elevated.title", lang);
-
-  const body = document.createElement("p");
-  body.className = "talk__elevated-body";
-  body.textContent = t("talk.elevated.body", lang);
-
-  const fix = document.createElement("p");
-  fix.className = "talk__elevated-fix";
-  fix.textContent = t("talk.elevated.fix", lang);
-
-  band.append(title, body, fix);
-  return band;
+export function ElevationBand({ lang }: { lang?: Lang }) {
+  return (
+    <div className="talk__elevated" role="status">
+      <strong className="talk__elevated-title">{t("talk.elevated.title", lang)}</strong>
+      <p className="talk__elevated-body">{t("talk.elevated.body", lang)}</p>
+      <p className="talk__elevated-fix">{t("talk.elevated.fix", lang)}</p>
+    </div>
+  );
 }

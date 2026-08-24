@@ -981,6 +981,10 @@ button.feed__target:hover { color: var(--c-accent); }
 .dimmgr__open:hover { border-color: var(--c-accent); color: var(--c-accent); }
 .dimmgr__current { border-radius: 999px; padding: 0 var(--s-2); background: var(--c-accent); color: #fff; font-size: var(--fs-xs); }
 .dimmgr__danger { color: var(--c-stop); white-space: nowrap; }
+/* The removal that has to say where the tasks go first. It stands in the delete button's place inside
+   the value's pill, so the row keeps its width and the question is asked where the press landed. */
+.dimmgr__reassign { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--fs-xs); }
+.dimmgr__reassignpick { max-width: 14ch; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-sm); padding: 0 2px; color: inherit; font-size: var(--fs-xs); }
 .dimmgr__adddim { align-self: flex-start; }
 .dimmgr__ordered { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-xs); color: var(--c-text-muted); cursor: pointer; white-space: nowrap; }
 .dimmgr__reorder { display: inline-flex; gap: 1px; margin-right: 2px; }

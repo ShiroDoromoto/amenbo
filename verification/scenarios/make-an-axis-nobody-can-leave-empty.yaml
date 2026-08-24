@@ -4,23 +4,27 @@
 # the step that ends a creation and nowhere else, which is what keeps raising it from stopping a
 # board that is already full: the work already filed is finished being written, so it never meets
 # the guard. A road that walked only the filing would read the same over a build whose flag does
-# nothing, so this one is written to be turned away three times — on the axis nobody could answer,
-# on the creation that left the answer out, and on the hand that would take the answer back off.
+# nothing, so this one is written to be turned away five times — on the axis nobody could answer, on
+# the creation that left the answer out, on the hand that would take the answer back off one task at
+# a time, on the removal that would take it off every task at once, and on the removal that would
+# leave the axis with nothing to answer with at all.
 id: make-an-axis-nobody-can-leave-empty
-title: An axis marked required turns away the creation that left it empty, and lets it end once the value is on
+title: An axis marked required turns away the creation that left it empty, and holds the answer on once it is there
 description: >
   Raise the demand on an axis offering no values and be refused — a requirement nobody could answer
   would stop every creation on the project. Raise it on an axis that offers two, file a task without
   answering it, and watch the creation refused and the task held out of the mailbox. Put a value on
-  and watch the same creation end. Then try to take the value back off and be refused there too,
-  until the demand itself is lowered. The work that was already on the board when the demand went up
-  is read once more at the end, untouched.
+  and watch the same creation end. Then try to take the value back off and be refused there too —
+  from the task, and from the axis itself, where removing the value would empty every task on it at
+  once unless the removal says where they go. Say where, and the value goes with the task carried
+  over; the axis's last value does not go at all, until the demand itself is lowered. The work that
+  was already on the board when the demand went up is read back untouched.
 # Two axes and one piece of settled work. The axes are the world rather than the road: filing under
 # one is `classify-work-along-an-axis`'s road, and walking it again here would prove that road twice
 # and this one not at all. `Focus` is left offering nothing on purpose — it is the axis the first
 # refusal is about. And the standing task is finished being written *before* any demand goes up,
-# which is the state the last line reads back: a demand raised over a board changes nothing already
-# on it.
+# which is the state the road reads back once the demand is up: a demand raised over a board changes
+# nothing already on it.
 given:
   - type: action
     domain: dimension
@@ -176,6 +180,69 @@ steps_cli:
       target: seed
       present: true
 
+  # Nor does the door swing back one turn further out. Taking the value itself away would empty every
+  # task answering with it at once — the same state the line above refuses one task at a time — so a
+  # required axis will not let it go while anybody is on it, and says so instead of doing it quietly.
+  - type: action
+    domain: dimension
+    op: value-rm
+    with:
+      dimension: Medium
+      value: print
+      refused: invalid_value
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:Medium=print"
+      target: seed
+      present: true
+
+  # What it asks for is somewhere for them to go, and given that, the value goes. The task is carried
+  # over rather than emptied, which is the whole of the difference between this and being turned away.
+  - type: action
+    domain: dimension
+    op: value-rm
+    with:
+      dimension: Medium
+      value: print
+      to: web
+
+  - type: assert
+    domain: dimension
+    op: listed
+    with:
+      dimension: Medium
+      value: print
+      present: false
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:Medium=web"
+      target: seed
+      present: true
+
+  # And the last one does not go at any price. Naming a destination is no way past this one — there is
+  # no other value of the axis to name — so what is left is a demand the axis can still answer.
+  - type: action
+    domain: dimension
+    op: value-rm
+    with:
+      dimension: Medium
+      value: web
+      refused: invalid_value
+
+  - type: assert
+    domain: dimension
+    op: listed
+    with:
+      dimension: Medium
+      value: web
+      present: true
+
   # Lowered, the axis is an ordinary one again and the same hand goes through. The demand is an
   # attribute and not a one-way gate: what it holds shut, lowering it opens.
   - type: action
@@ -191,22 +258,23 @@ steps_cli:
     with:
       target: seed
       dimension: Medium
-      value: print
+      value: web
 
   - type: assert
     domain: task
     op: listed
     with:
-      filter: "dim:Medium=print"
+      filter: "dim:Medium=web"
       target: seed
       present: false
 
 steps_gui:
   # The screen's half, and it is a different half. A terminal meets the refusals as codes on an exit
   # status; this face has no code to give back, so what it does instead is hold the controls — the box
-  # that would raise a demand nobody could answer, and the button that would end a creation the demand
-  # is not met on. A held control is a thing only a screen can be asked about, which is why the road
-  # here is the two of them and not the codes again.
+  # that would raise a demand nobody could answer, the button that would end a creation the demand is
+  # not met on, and the removal that will not go until it has been told where the tasks land. A held
+  # control is a thing only a screen can be asked about, which is why the road here is those three and
+  # not the codes again.
   - type: action
     domain: dimension
     op: required
@@ -265,3 +333,24 @@ steps_gui:
       target: seed
       field: draft
       equals: false
+
+  # And the other control this face holds: the value the answer was given cannot simply be removed
+  # while the answer stands on it, so the manager asks where the tasks go and carries them there. A
+  # terminal names the destination on the command line; here it is a control that has to be found, and
+  # the reading afterwards is of the board rather than of a refusal — the task is drawn under the value
+  # it was moved to, which no exit status could have said.
+  - type: action
+    domain: dimension
+    op: value-rm
+    with:
+      dimension: Medium
+      value: print
+      to: web
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:Medium=web"
+      target: seed
+      present: true

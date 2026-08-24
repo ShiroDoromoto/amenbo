@@ -302,3 +302,81 @@ describe("the agent can be changed only on a frame that has closed", () => {
     expect(hoisted.panes).toHaveLength(2);
   });
 });
+
+// The folder's own prompt, with nothing started at it. It stands wherever the frame puts a choice —
+// the offer, the notice, the closed frame's row — and nowhere else: a folder that settled on one
+// agent still opens on it unasked, because the shell is what a reader reaches for once the pane is
+// there rather than a question they answer on the way in.
+describe("the shell stands beside the agents, and answers nothing about the folder", () => {
+  it("puts the shell under the offer, and opens it without writing anything down", async () => {
+    const root = await draw(wake());
+
+    const shell = buttons(root).find((b) => b.textContent === "Plain shell");
+    expect(shell, "the offer left no way to open a shell").toBeTruthy();
+    shell?.click();
+    await Promise.resolve();
+
+    // Not remembered: "which agent do you work with in this folder" is not a question a shell
+    // answers, and an answer written down here would be one the offer never asked for.
+    expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_remember");
+    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: null, adopt: false }]);
+  });
+
+  it("offers the shell where nothing is startable, which is the only terminal such a machine has", async () => {
+    const root = await draw(wake({ offered: [] }));
+
+    const shell = buttons(root).find((b) => b.textContent === "Plain shell");
+    expect(shell, "a machine with no agent on it was left with no terminal at all").toBeTruthy();
+    shell?.click();
+    await Promise.resolve();
+
+    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: null, adopt: false }]);
+  });
+
+  it("draws the row for a folder that settled on one agent, since the shell is the other choice", async () => {
+    const root = await draw(wake({ offered: ["claude-code"], settled: "claude-code" }));
+    hoisted.end?.();
+
+    const choose = root.querySelector("select");
+    expect(choose, "the row with one agent on it had nowhere to choose the shell").toBeTruthy();
+    expect([...(choose?.options ?? [])].map((one) => one.textContent)).toEqual([
+      "Claude Code",
+      "Plain shell",
+    ]);
+  });
+
+  it("starts nothing, and writes nothing down, when the row opens the shell", async () => {
+    const root = await draw(wake({ settled: "claude-code" }));
+    hoisted.end?.();
+    const choose = root.querySelector("select");
+    if (choose) {
+      choose.value = "shell";
+      choose.dispatchEvent(new Event("change"));
+    }
+    hoisted.sent = [];
+    buttons(root).find((b) => b.textContent === "Open")?.click();
+    await Promise.resolve();
+
+    expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_remember");
+    expect(hoisted.panes[hoisted.panes.length - 1]).toEqual({
+      cwd: "/work/here",
+      agent: null,
+      adopt: false,
+    });
+  });
+
+  it("keeps the shell as what the next pane opens with, once one has been opened", async () => {
+    const root = await draw(wake({ offered: ["claude-code"], settled: "claude-code" }));
+    hoisted.end?.();
+    const choose = root.querySelector("select");
+    if (choose) {
+      choose.value = "shell";
+      choose.dispatchEvent(new Event("change"));
+    }
+    buttons(root).find((b) => b.textContent === "Open")?.click();
+    await new Promise((r) => setTimeout(r, 0));
+
+    hoisted.end?.();
+    expect(root.querySelector("select")?.value, "the row fell back to the agent").toBe("shell");
+  });
+});

@@ -485,7 +485,8 @@ export const vi: Translation = {
     "talk.noneHint": "Amenbo đã tìm các lệnh này trong PATH của shell: {commands}. Cài một trong số đó rồi tìm lại.",
     "talk.retry": "Tìm lại",
     "talk.open": "Mở",
-    "talk.agent": "Tác nhân",
+    "talk.startWith": "Mở bằng",
+    "talk.shell": "Shell thường",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "Đang trao đổi", "talk.holding": "{n} việc",

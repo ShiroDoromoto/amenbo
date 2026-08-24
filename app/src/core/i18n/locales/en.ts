@@ -515,10 +515,11 @@ const ui = {
   // The talk window names itself from here — `tauri.conf.json` can hold only one fixed string,
   // and two windows both called "Amenbo" cannot be told apart in a window list (`AMB-T-3588`).
   "app.talkWindow": "Amenbo — Talk",
-  // talk window: the folder a pane opens in (`AMB-T-3606`), which agent it opens with, and the row a
-  // closed frame offers (`AMB-T-3591`). `{commands}` is the list of program names that were looked for
-  // on the PATH. `talk.folder` says what the folder is rather than what the agent will do in it: what
-  // a given tool asks before it acts is not Amenbo's to promise (`AMB-D-749`).
+  // talk window: the folder a pane opens in (`AMB-T-3606`), what it opens with — an agent, or the
+  // folder's own shell (`AMB-T-3646`) — and the row a closed frame offers (`AMB-T-3591`).
+  // `{commands}` is the list of program names that were looked for on the PATH. `talk.folder` says
+  // what the folder is rather than what the agent will do in it: what a given tool asks before it
+  // acts is not Amenbo's to promise (`AMB-D-749`).
   "talk.folder": "Choose the folder you show the AI. What you put there is all it can see.",
   "talk.chooseFolder": "Choose a folder",
   "talk.searching": "Looking for the agents on this machine…",
@@ -527,7 +528,10 @@ const ui = {
   "talk.noneHint": "Amenbo looked for these commands on your shell's PATH: {commands}. Install one, then search again.",
   "talk.retry": "Search again",
   "talk.open": "Open",
-  "talk.agent": "Agent",
+  "talk.startWith": "Open with",
+  // The pane's own prompt, with nothing started at it. It stands wherever the frame puts a choice,
+  // so `talk.startWith` names what the row does rather than naming agents alone.
+  "talk.shell": "Plain shell",
   // The one line above a pane of the talk window: what its session is on, and the one thing
   // worth saying about it. "{n}" is a count of tasks.
   "talk.idle": "Talking it over", "talk.holding": "{n} tasks",

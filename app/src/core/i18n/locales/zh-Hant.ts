@@ -482,7 +482,8 @@ export const zhHant: Translation = {
     "talk.noneHint": "Amenbo 在你 shell 的 PATH 裡尋找了這些指令：{commands}。裝上其中一個，然後再找一次。",
     "talk.retry": "再找一次",
     "talk.open": "開啟",
-    "talk.agent": "代理",
+    "talk.startWith": "開啟方式",
+    "talk.shell": "一般 Shell",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "商議中", "talk.holding": "{n} 項",

@@ -494,7 +494,8 @@ export const ja: Translation = {
     "talk.noneHint": "シェルの PATH で、次の名前をさがしました: {commands}。どれか1つを入れてから、もう一度さがしてください。",
     "talk.retry": "もう一度さがす",
     "talk.open": "開く",
-    "talk.agent": "エージェント",
+    "talk.startWith": "開くもの",
+    "talk.shell": "素のシェル",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "相談中", "talk.holding": "{n}件",

@@ -511,7 +511,8 @@ export const ru: Translation = {
     "talk.noneHint": "Amenbo искал в PATH вашей оболочки такие команды: {commands}. Установите одну из них и поищите снова.",
     "talk.retry": "Искать снова",
     "talk.open": "Открыть",
-    "talk.agent": "Агент",
+    "talk.startWith": "Открыть в",
+    "talk.shell": "Обычная оболочка",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "Обсуждение", "talk.holding": "задач: {n}",

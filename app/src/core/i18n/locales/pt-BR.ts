@@ -504,7 +504,8 @@ export const ptBR: Translation = {
     "talk.noneHint": "O Amenbo procurou estes comandos no PATH do seu shell: {commands}. Instale um deles e procure de novo.",
     "talk.retry": "Procurar de novo",
     "talk.open": "Abrir",
-    "talk.agent": "Agente",
+    "talk.startWith": "Abrir com",
+    "talk.shell": "Shell simples",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "Em conversa", "talk.holding": "{n} tarefas",

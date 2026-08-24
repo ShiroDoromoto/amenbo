@@ -485,7 +485,8 @@ export const th: Translation = {
     "talk.noneHint": "Amenbo ค้นหาคำสั่งเหล่านี้ใน PATH ของเชลล์คุณ: {commands} ติดตั้งสักตัวแล้วค้นหาอีกครั้ง",
     "talk.retry": "ค้นหาอีกครั้ง",
     "talk.open": "เปิด",
-    "talk.agent": "เอเจนต์",
+    "talk.startWith": "เปิดด้วย",
+    "talk.shell": "เชลล์ธรรมดา",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "กำลังปรึกษากันอยู่", "talk.holding": "{n} งาน",

@@ -482,7 +482,8 @@ export const hi: Translation = {
     "talk.noneHint": "Amenbo ने आपके शेल के PATH में ये कमांड खोजीं: {commands}। इनमें से एक इंस्टॉल करें, फिर दोबारा खोजें।",
     "talk.retry": "फिर से खोजें",
     "talk.open": "खोलें",
-    "talk.agent": "एजेंट",
+    "talk.startWith": "इससे खोलें",
+    "talk.shell": "सादा शेल",
     // The one line above a pane of the talk window: what its session is on, and the one thing
     // worth saying about it. "{n}" is a count of tasks.
     "talk.idle": "बातचीत जारी", "talk.holding": "{n} कार्य",

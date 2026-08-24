@@ -1,9 +1,9 @@
 // What the arrangement has to keep true, none of which is visible in the arithmetic that does it.
 import { describe, expect, it } from "vitest";
 import {
-  closedIn, EMPTY_LAYOUT, focusOn, goPage, goProject, laidOut, movedTo, openedFrame, openedIn,
-  pageCount, pageOfFrame, paneIn, panesOf, restored, setCount, sidesAreDrawers, slotsOf,
-  type Layout,
+  addPane, closedFrame, closedIn, EMPTY_LAYOUT, focusOn, goPage, goProject, laidOut, movedTo,
+  openedFrame, openedIn, pageCount, pageOfFrame, paneIn, panesOf, restored, roomOnPage, setCount,
+  sidesAreDrawers, slotsOf, type Layout,
 } from "./layout";
 
 /** A layout with `n` panes opened in one project, the way pressing the way in `n` times leaves one. */
@@ -31,6 +31,66 @@ describe("a place is made by opening one", () => {
     expect(made.frame.id).toBe("3");
     expect(made.layout.focus).toBe("3");
     expect(made.layout.page).toBe(2);
+  });
+});
+
+describe("a page with room says so, and a full one says nothing", () => {
+  it("has room on the page the panes stop on, and none on the ones they fill", () => {
+    const three = withPanes(3, 2);
+    expect(roomOnPage(three, 1), "a full page had room in it").toBe(false);
+    expect(roomOnPage(three, 2)).toBe(true);
+  });
+
+  it("has room on the one page of a project with nothing open", () => {
+    expect(roomOnPage({ ...EMPTY_LAYOUT, project: 1 }, 1)).toBe(true);
+  });
+
+  it("has none anywhere when every page is filled to the count", () => {
+    const four = withPanes(4, 2);
+    expect([1, 2].map((page) => roomOnPage(four, page))).toEqual([false, false]);
+  });
+});
+
+describe("asking for another pane", () => {
+  it("goes to the page that has room, and makes no new one", () => {
+    const three = goPage(withPanes(3, 2), 1);
+    const asked = addPane(three);
+    expect(asked.page).toBe(2);
+    expect(pageCount(asked)).toBe(2);
+  });
+
+  it("brings a page into being where every page is full", () => {
+    const two = withPanes(2, 2);
+    expect(pageCount(two)).toBe(1);
+    const asked = addPane(two);
+    expect(asked.page).toBe(2);
+    expect(pageCount(asked)).toBe(2);
+    // Nothing is on it: what makes a place is opening one, and nobody has yet.
+    expect(slotsOf(asked, 2)).toHaveLength(0);
+  });
+
+  it("takes that page away again as soon as the reader is somewhere else", () => {
+    const asked = addPane(withPanes(2, 2));
+    const back = goPage(asked, 1);
+    expect(back.page).toBe(1);
+    expect(pageCount(back), "an empty page outlived the asking").toBe(1);
+  });
+
+  it("makes it a page like any other once a pane is opened on it", () => {
+    const asked = addPane(withPanes(2, 2));
+    const made = openedFrame(asked, 1, "/work/1");
+    expect(made.layout.adding).toBe(false);
+    expect(pageCount(made.layout)).toBe(2);
+    expect(slotsOf(made.layout, 2).map((one) => one.id)).toEqual(["3"]);
+  });
+
+  it("does not survive a change of split, which is measured on the other count", () => {
+    const asked = addPane(withPanes(2, 2));
+    expect(pageCount(setCount(asked, 4))).toBe(1);
+  });
+
+  it("is no part of the arrangement that is kept", () => {
+    expect(JSON.stringify(laidOut(addPane(withPanes(2, 2))))).not.toContain("adding");
   });
 });
 
@@ -80,6 +140,52 @@ describe("a frame is a place, not a process", () => {
     const four = withPanes(4);
     const ended = closedIn(openedIn(four, "1", "s1", null), "s1");
     expect(openedFrame(ended, 1, "/w").frame.id).toBe("5");
+  });
+});
+
+describe("closing a pane takes the place away", () => {
+  it("is gone for good, and what is left closes up", () => {
+    const three = withPanes(3, 2);
+    const left = closedFrame(three, "1");
+    expect(left.frames.map((one) => one.id)).toEqual(["2", "3"]);
+    // Two panes at two a page is one page: the last page lost its slot rather than keeping a hole.
+    expect(pageCount(left)).toBe(1);
+    expect(slotsOf(left, 1).map((one) => one.id)).toEqual(["2", "3"]);
+  });
+
+  it("does not hand the closed pane's id out again", () => {
+    const left = closedFrame(withPanes(2), "2");
+    expect(openedFrame(left, 1, "/w").frame.id).toBe("3");
+  });
+
+  it("leaves the reader on whatever moved into its place", () => {
+    const three = focusOn(withPanes(3, 2), "2");
+    expect(closedFrame(three, "2").focus).toBe("3");
+  });
+
+  it("leaves them on the pane before it where nothing moved up", () => {
+    const three = focusOn(withPanes(3, 2), "3");
+    const left = closedFrame(three, "3");
+    expect(left.focus).toBe("2");
+    // Page 2 has gone with the pane that was the only thing on it.
+    expect(left.page).toBe(1);
+  });
+
+  it("leaves them on nothing when the last pane of the project goes", () => {
+    const left = closedFrame(withPanes(1), "1");
+    expect(left.focus).toBeNull();
+    expect(left.frames).toHaveLength(0);
+    expect(left.page).toBe(1);
+  });
+
+  it("does not move the reader when the pane they are on is not the one that went", () => {
+    const three = focusOn(withPanes(3, 2), "1");
+    expect(closedFrame(three, "3").focus).toBe("1");
+  });
+
+  it("is nothing at all for an id no frame has", () => {
+    const three = withPanes(3, 2);
+    expect(closedFrame(three, "9")).toBe(three);
   });
 });
 

@@ -103,22 +103,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* The controls that pick what is on screen: how many panes, and which page. Both are rows of every
    choice with the one in force marked, rather than a control that says the next step — which of them
    is on is the thing being chosen between, and a reader should not have to press to find out.
-   They are drawn as two different kinds of control on purpose: side by side they are two rows of
-   digits, and a reader who cannot tell which row is which presses one to find out. The count is one
-   joined control — the choices are exclusive steps of the same thing — and the pages are separate
-   places to go. */
-.termface__counts {
-  display: flex; margin-left: var(--s-2);
-  border: 1px solid var(--c-border); border-radius: var(--r-md); overflow: hidden;
-}
+   They are drawn as two different kinds of thing on purpose. **The count is words**: no box around
+   it, the number said with what it counts, and the one in force simply the one that is not dimmed.
+   **A page is a place to go**, so it is a bordered button with a number in it. Side by side as two
+   rows of bare digits they were one control wearing two hats, and a reader who cannot tell which row
+   is which presses one to find out. */
+.termface__counts { display: flex; gap: var(--s-2); margin-left: var(--s-2); }
 .termface__count {
-  min-width: 28px;
-  background: var(--c-surface-sunken); border: 0; border-left: 1px solid var(--c-border);
-  padding: var(--s-1) var(--s-2);
+  background: transparent; border: 0; padding: 0;
   color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1.6;
 }
-.termface__count:first-child { border-left: 0; }
-.termface__count--on { background: var(--c-accent); color: #fff; }
+.termface__count:hover { color: var(--c-text); }
+.termface__count--on { color: var(--c-text); font-weight: 600; }
 
 .termface__pages {
   display: flex; gap: var(--s-1);
@@ -164,8 +160,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
    it is the last thing there is to say about it. */
 .slot__bar { display: flex; align-items: center; gap: var(--s-2); }
 .slot__plate { flex: 1; min-width: 0; }
-/* The way out. It is drawn quietly and sits at the end of the row: nothing else on this face ends
-   anything, so a control that looked urgent would be pressed by mistake more often than on purpose. */
+/* The one control the place has: it removes the frame, terminal and all (`../shell/TerminalPane`). It
+   is drawn quietly and sits at the end of the row — nothing else on this face takes anything away, so
+   a control that looked urgent would be pressed by mistake more often than on purpose. What stops the
+   mistake being final is that it asks first, not that it is loud. */
 .slot__end {
   flex: 0 0 auto;
   padding: 0 var(--s-1);

@@ -12,16 +12,21 @@
 // outlive the session that earned it (`./frames`). Ids are handed out once and never reused: a name
 // is kept against the id, so a reused one would put an old name on a new place.
 //
-// **A place is made by opening one, and by nothing else.** There are no empty slots waiting to be
-// filled: a screen of four boxes all asking the same question is the question asked four times, and a
-// place somebody started making and walked away from is a box nobody can say anything about. So the
-// folder is answered first (`../shell/FolderChoice`) and the frame is made after it — a project with
-// no panes draws one way in, in the middle of the face, and nothing else.
+// **A place is made by opening one, and by nothing else.** A place somebody started making and walked
+// away from is a box nobody can say anything about, so the folder is answered first
+// (`../shell/FolderChoice`) and the frame is made after it.
 //
-// **Pages are how a project's panes go past a screenful.** They are fixed slots in the sense that
-// matters: what is open does not move about on its own. The count is the most that are drawn at once
-// and not a number of boxes to fill, so a page holds up to that many and the last one holds what is
-// left.
+// **A page with room draws one empty frame, and never four.** Four boxes all asking the same question
+// is the question asked four times, so there is a single one and it sits at the first gap on the page.
+// It is the page saying it has room rather than a button for opening a terminal, which is why a full
+// page draws none at all — the frames are what is on the screen, and the empty one is a remark about
+// them.
+//
+// **Pages are how a project's panes go past a screenful, and nobody makes one.** They are fixed slots
+// in the sense that matters: what is open does not move about on its own. The count is the most that
+// are drawn at once and not a number of boxes to fill, so a page holds up to that many and the last
+// one holds what is left. No page stands empty: asking for another pane where every page is full is
+// the one thing that brings one into being, and it lasts as long as the asking (`addPane`).
 
 /** Panes on one screen. Three steps and no more: the reason to have several is to watch them, and a
  *  count that keeps going stops being watchable long before it stops fitting. */
@@ -79,6 +84,14 @@ export type Layout = {
   readonly page: number;
   /** The frame the person is working in, or null before they have picked one. */
   readonly focus: string | null;
+  /**
+   * Whether a page has been brought into being for a pane nobody has opened yet (`addPane`).
+   *
+   * It is the one page that exists without panes on it, and it exists only while the person who asked
+   * for it is on it: going anywhere else, or opening the pane, takes it away again. Nothing about it
+   * is kept — a page nobody put a terminal on is not part of the arrangement (`laidOut`).
+   */
+  readonly adding: boolean;
 };
 
 export const EMPTY_LAYOUT: Layout = {
@@ -88,6 +101,7 @@ export const EMPTY_LAYOUT: Layout = {
   project: null,
   page: 1,
   focus: null,
+  adding: false,
 };
 
 /** The panes of one project, in the order they were opened. A project nobody has opened anything in
@@ -100,11 +114,29 @@ export function panesOf(layout: Layout, project: number | null): readonly Frame[
  * How many pages the shown project's panes make.
  *
  * At least one, because a project with nothing open is still a project a person is looking at, and
- * the page it shows is where the way in is put.
+ * the page it shows is where the empty frame is put. One more while a page has been asked for and
+ * nothing opened on it yet (`addPane`) — that page is reachable, so it is counted.
  */
 export function pageCount(layout: Layout): number {
+  return filledPages(layout) + (layout.adding ? 1 : 0);
+}
+
+/** The pages the shown project's panes actually fill, which is every page but the one `addPane` may
+ *  have brought into being. */
+function filledPages(layout: Layout): number {
   const panes = panesOf(layout, layout.project).length;
   return Math.max(1, Math.ceil(panes / layout.count));
+}
+
+/**
+ * Whether this page of the shown project has a gap in it.
+ *
+ * It is what the empty frame is drawn from: a page with room says so with one, and a full page says
+ * nothing. Only the last page can have a gap — the panes fill the pages in the order they were opened
+ * — so this is false everywhere else without having to be told.
+ */
+export function roomOnPage(layout: Layout, page: number): boolean {
+  return slotsOf(layout, page).length < layout.count;
 }
 
 /** The panes drawn on one page, in the order they were opened. There is one per pane and no more:
@@ -162,6 +194,8 @@ export function openedFrame(layout: Layout, project: number, folder: string | nu
     frames: [...layout.frames, frame],
     nextId: layout.nextId + 1,
     project,
+    // The page asked for has a pane on it now, so it is a page like any other (`addPane`).
+    adding: false,
   };
   return { layout: focusOn(next, frame.id), frame };
 }
@@ -189,6 +223,54 @@ export function closedIn(layout: Layout, session: string): Layout {
 }
 
 /**
+ * The frame itself is gone — the place, not the program in it.
+ *
+ * **This is the one thing that takes a pane off the screen for good**, and it is why the control that
+ * does it asks first (`../shell/TerminalPane`): a program exiting leaves the place and its last output
+ * standing, and only a person saying so removes it. Nothing of it is kept, so it does not come back on
+ * the next run.
+ *
+ * **What is left closes up.** The panes are one list and the pages are slices of it, so the pane after
+ * the closed one moves into its place and the last page loses a slot. That is not the screen
+ * rearranging itself under a reader — the promise is that what is open does not move on its own, and
+ * this moved because they asked for it.
+ *
+ * The reader is left where the closed pane was: whatever moved up into its place, or the pane before
+ * it where nothing did.
+ */
+export function closedFrame(layout: Layout, frame: string): Layout {
+  const gone = layout.frames.find((one) => one.id === frame);
+  if (!gone) return layout;
+  const at = panesOf(layout, gone.project).findIndex((one) => one.id === frame);
+  const next: Layout = {
+    ...layout,
+    frames: layout.frames.filter((one) => one.id !== frame),
+    adding: false,
+  };
+  if (layout.focus !== frame) return { ...next, page: Math.min(next.page, pageCount(next)) };
+  const left = panesOf(next, gone.project);
+  const heir = left[Math.min(at, left.length - 1)];
+  return heir === undefined
+    ? { ...next, focus: null, page: Math.min(next.page, pageCount(next)) }
+    : focusOn(next, heir.id);
+}
+
+/**
+ * Somebody asked for another pane: go to where it would land, and draw the empty frame there.
+ *
+ * **The asking is what makes a page**, and it is the only thing that does. Where a page still has a
+ * gap this is only a move — that page's empty frame is already the one being pressed towards. Where
+ * every page is full there is nowhere to put the question, so a page comes into being to hold it, and
+ * it lasts exactly as long as the person stays on it (`adding`).
+ */
+export function addPane(layout: Layout): Layout {
+  const last = filledPages(layout);
+  return roomOnPage(layout, last)
+    ? { ...layout, page: last, adding: false }
+    : { ...layout, page: last + 1, adding: true };
+}
+
+/**
  * Show a project's panes.
  *
  * The whole screen is that project's from here on: its panes, its pages, and the pane being worked in
@@ -199,13 +281,14 @@ export function closedIn(layout: Layout, session: string): Layout {
 export function goProject(layout: Layout, project: number): Layout {
   if (layout.project === project) return layout;
   const first = panesOf(layout, project)[0] ?? null;
-  return { ...layout, project, page: 1, focus: first?.id ?? null };
+  return { ...layout, project, page: 1, focus: first?.id ?? null, adding: false };
 }
 
-/** Show a page of the project that is up, as far as there are pages to show. */
+/** Show a page of the project that is up, as far as there are pages to show. A page asked for and not
+ *  opened on goes away as soon as the reader is somewhere else — it was the question, not a page. */
 export function goPage(layout: Layout, page: number): Layout {
   if (page < 1 || page > pageCount(layout)) return layout;
-  return { ...layout, page };
+  return { ...layout, page, adding: layout.adding && page === pageCount(layout) };
 }
 
 /** Work in a frame, bringing its project and page up with it — the rail's rows reach panes that are
@@ -213,7 +296,7 @@ export function goPage(layout: Layout, page: number): Layout {
 export function focusOn(layout: Layout, frame: string): Layout {
   const one = layout.frames.find((each) => each.id === frame);
   if (!one) return layout;
-  const shown: Layout = { ...layout, project: one.project };
+  const shown: Layout = { ...layout, project: one.project, adding: false };
   const page = pageOfFrame(shown, frame);
   return page === null ? layout : { ...shown, page, focus: frame };
 }
@@ -226,7 +309,9 @@ export function focusOn(layout: Layout, frame: string): Layout {
  * they were looking at — so the page follows the focus rather than the number.
  */
 export function setCount(layout: Layout, count: Count): Layout {
-  const next: Layout = { ...layout, count };
+  // A page asked for is measured against the old count, so it does not survive a change of it: what
+  // the reader gets back is the pane they were on, on the page it is now.
+  const next: Layout = { ...layout, count, adding: false };
   const page = next.focus === null ? null : pageOfFrame(next, next.focus);
   return { ...next, page: Math.min(page ?? layout.page, pageCount(next)) };
 }
@@ -286,6 +371,7 @@ export function restored(saved: SavedLayout, onto: number | null): Layout | null
     project: first.project,
     page: 1,
     focus: first.id,
+    adding: false,
   };
 }
 

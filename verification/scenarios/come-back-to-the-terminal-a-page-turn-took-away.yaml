@@ -1,8 +1,7 @@
 # A terminal went off the screen when the page turned, and came back still running.
 #
 # The terminal face is one list of frames cut into pages, and there are three ways to cut it: the
-# count, the page digits, and opening a pane where there was not one. Every one of them takes panes
-# off the screen. What a reader has running in one is theirs until they end it, so the whole of this
+# count, the page digits, and asking for another pane. Every one of them takes panes off the screen. What a reader has running in one is theirs until they end it, so the whole of this
 # road is the thing those moves must not do — and a pane is drawn rather than held, so there is no
 # way to find out except by turning away and coming back.
 #
@@ -28,9 +27,9 @@
 # by side — and the re-cut is what carries a running terminal off the screen without anybody paging.
 #
 # The second pane is opened rather than started: a page is one project, and a pane opened on a page
-# that already has a folder takes it, so nothing is asked. That is also why the second pane opens on
-# the page the first is on rather than on a page of its own — an empty page has no folder yet, and a
-# pane opened there would be asked for one.
+# that already has a folder takes it, so nothing is asked. It opens on the page the first is on
+# rather than on a page of its own because that is where the room is — the way in goes to the page
+# with a gap in it, and a page comes into being only where every one of them is full.
 #
 # Only the first pane is ever spoken to. The second is not named by a line of its own, because a step
 # that typed into it would have to say which of two running panes it meant and there is no way to say
@@ -89,9 +88,10 @@ steps_gui:
     with:
       shows: SCENARIO the terminal behind the page
 
-  # A second pane, opened from the rail beside the project's name. Nothing is asked — the folder is
-  # the project's — and the new pane becomes the one being worked in, which is what decides where the
-  # next step leaves the screen.
+  # A second pane, from the rail beside the project's name. That way in opens nothing: it goes to the
+  # page with room in it, which is this one, and the empty frame there is what opens the pane.
+  # Nothing is asked — the folder is the project's — and the new pane becomes the one being worked
+  # in, which is what decides where the next step leaves the screen.
   - type: action
     domain: terminal
     op: open-pane

@@ -8,6 +8,10 @@
 // **One page per project, and never another project's.** The page is the project's own, so switching
 // project reads the other page rather than carrying this one over — which would put a draft in front
 // of somebody who is working on something else, in a field they are about to type into.
+//
+// **Nothing on the page explains it, so the keeping has to be visible.** A person cannot tell from a
+// field that what they type is being written, and the page refuses to say so in a sentence — so what
+// it does say is the state itself, and that is what is asserted here.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -37,6 +41,9 @@ const field = () => container.querySelector<HTMLTextAreaElement>("textarea")
   ?? document.body.querySelector<HTMLTextAreaElement>(".memo__page textarea")!;
 const button = (text: string) =>
   [...document.body.querySelectorAll("button")].find((b) => b.textContent?.includes(text));
+/** How the page says the writing stands, read off the face that is in front of the reader. */
+const word = () => (document.body.querySelector<HTMLElement>(".memo__page .memo__word")
+  ?? container.querySelector<HTMLElement>(".memo__word")!).textContent;
 
 async function draw(projectId: number) {
   await act(async () => {
@@ -108,6 +115,43 @@ describe("the project's draft page", () => {
     expect(field().value).toBe("こちらの下書き");
     await draw(2);
     expect(field().value).toBe("あちらの下書き");
+  });
+
+  it("says nothing until something is typed", async () => {
+    hoisted.kept[1] = "組み立てかけの依頼";
+    await draw(1);
+    // Reading what is already there is not a write, so there is nothing to report about one.
+    expect(word()).toBe("");
+  });
+
+  it("says the typing is in hand, and then that it was kept", async () => {
+    await draw(1);
+    await type("長い依頼");
+    expect(word()).toBe(t("files.memoTyping"));
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(word()).toBe(t("files.memoKept"));
+  });
+
+  it("leaves 'kept' standing through the quiet that follows", async () => {
+    await draw(1);
+    await type("長い依頼");
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    // The quiet is the anxious part. Showing the word for a moment and taking it away again would
+    // leave the reader who is looking at exactly this moment with nothing.
+    expect(word()).toBe(t("files.memoKept"));
+  });
+
+  it("starts the wide page on a blank mark", async () => {
+    await draw(1);
+    await type("長い依頼");
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    await act(async () => { button(t("files.memoWide"))!.click(); });
+    expect(word()).toBe("");
+
+    // And the wide page reports its own writing from there.
+    await type("長い依頼をもっと");
+    expect(word()).toBe(t("files.memoTyping"));
   });
 
   it("opens wide, and comes back", async () => {

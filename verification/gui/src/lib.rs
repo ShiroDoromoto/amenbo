@@ -2362,11 +2362,11 @@ impl Instructor {
             // question that took its box with it.
             (Domain::Terminal, "asking-folder") => match present(with) {
                 true => format!(
-                    "On the terminal face, confirm the question about which folder this pane works in is standing where a pane would be, and that \"{}\" is one of the folders it offers.",
+                    "Confirm the question about which folder this pane works in is standing where the pane would be, and that \"{}\" is one of the folders it offers.",
                     req(with, "dir")?
                 ),
                 false => format!(
-                    "On the terminal face, confirm the question about which folder a pane works in is nowhere on it — no box offering \"{}\", and nothing half-made standing where it was.",
+                    "Confirm the question about which folder a pane works in is nowhere on this screen — no box offering \"{}\", and nothing half-made standing where it was.",
                     req(with, "dir")?
                 ),
             },

@@ -115,11 +115,14 @@ steps_gui:
     with:
       shows: SCENARIO the same terminal
 
-  # And out into a window of its own. Every step from here names the window it is in, because from
-  # here there are two — and a shot of the wrong one is a picture of a screen nobody stood at.
+  # And out into a window of its own. Every step from here names the window it is in, this one
+  # included, because from here there are two — and a shot of the wrong one is a picture of a screen
+  # nobody stood at. This step is shot once it has been carried out, so the second window is already
+  # up when it is: what it is evidence of is the board with the pane gone off it.
   - type: action
     domain: terminal
     op: split-out
+    window: Amenbo
 
   - type: assert
     domain: terminal

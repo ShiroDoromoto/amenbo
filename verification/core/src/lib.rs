@@ -217,8 +217,11 @@ pub enum Domain {
     /// The terminal face: the pane an agent is run in, and whether it is a face of the app's one
     /// window or a window of its own. A domain of its own because none of it is a record — a session
     /// is a process, and which window is drawing it is this machine's arrangement of one screen. The
-    /// screen's alone, too: a terminal is what a reader is already typing in, so there is nothing
-    /// here for the CLI driver to walk.
+    /// screen's alone, bar one premise: a terminal is what a reader is already typing in, so the
+    /// moves here are the operator's and the CLI driver walks none of them. What it does stand up is
+    /// the machine underneath — which agents a pane could be opened with (`can-start`) — because that
+    /// is settled before the app comes up and is no more a screen than a project already on the board
+    /// is.
     Terminal,
     /// The file face: the folder a project is bound to, read from inside Amenbo — the tree folded
     /// down it, what has changed in it lately, and what an agent pointed at. A domain of its own
@@ -1865,10 +1868,24 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Tick, op: "deferred", required: &["when"], refs: &[], strings: &["when"], binds: false },
     // ── the terminal face ─────────────────────────────────────────────────────────────────────────
     // Amenbo is one window with two faces and, for whoever wants them side by side, two windows.
-    // Every op below is the screen's: what they are about is where a running terminal
-    // is drawn, and a terminal is the one surface a reader is already typing in — there is nothing
-    // for the CLI driver to walk, and no gap in it.
+    // Every op below is the screen's, bar the one premise that opens the block: what they are about
+    // is where a running terminal is drawn, and a terminal is the one surface a reader is already
+    // typing in — there is nothing for the CLI driver to walk, and no gap in it.
     //
+    // The exception, and the reason it is one. What a pane can be opened *with* is not a record and
+    // not a screen either: it is which agents this machine has installed, which the build asks by
+    // running the pane's own login shell over the operator's `PATH`. So a road that means to read the
+    // row of them has to be told what is on the machine before the app comes up, and this is the step
+    // that says so. It stands programs up in a directory the app is launched with in front of its
+    // `PATH` (`amenbo_verify_cli::domain::terminal`), which is a premise like any other — the world
+    // standing before the road is walked — and is the screen's own moves' opposite.
+    //
+    // `count` is a **floor and never a ceiling**: nothing the harness hands the app can take an
+    // install away from the operator's machine, so a road may ask for a row with more than one thing
+    // on it and may not ask for one with less. That is the one shape worth standing up in any case:
+    // where several can be started and nobody has chosen, the frame comes up asking, and that is a
+    // state no machine's own `PATH` can be relied on to be in.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "can-start", required: &["count"], refs: &[], strings: &[], binds: false },
     // Which face the one window is showing. Pressed rather than arrived at: the segments are the only
     // way between the two, and a road that could not name which it pressed could not say which face
     // the assert after it read.
@@ -2062,6 +2079,16 @@ const REGISTRY: &[OpSpec] = &[
     // Where the machine can start nothing at all, no row is drawn: one thing to open with is not a
     // question. The reading is the same on that machine — what the next pane starts with is the plain
     // shell — with less on the screen to read it off.
+    //
+    // `start: none` is the other reading, and it names no program: it is **nobody having said yet**.
+    // The first run on a machine with more than one thing to start comes up with nothing on the row
+    // and a press that asks to be told rather than opening on a guess, and that is one state and not
+    // two — a build that lit a name it had never been given, and a build that opened on one, are the
+    // same fault read from either end. It is the one reading here that cannot be taken on whatever
+    // machine the run is on: where a single agent was found that one is on, and where none were there
+    // is no row. So a road that asks for it stands the machine up first (`can-start`), and reads this
+    // before anything on the frame has been pressed — a choice made anywhere in the run ends the
+    // state for good, this person's answer being kept and outliving the press that made it.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "opens-with", required: &["start"], refs: &[], strings: &["start"], binds: false },
     // How many panes the page being shown draws. It is not `set-panes` read back: that one is the
     // ceiling on how many a page may hold, and this is how many are actually standing there. The two
@@ -2314,6 +2341,12 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // and the judgement it gates can never be in the same run. The same kind of reach as
     // `store worn-in`, one key further in.
     (Domain::Tick, "deferred"),
+    // Which agents this machine can start. It is a premise and can be nothing else: the build asks
+    // the question once, as it draws the frame, by running a login shell over the `PATH` it was
+    // launched with — so the answer is fixed before there is a screen to press anything on. What it
+    // arranges is the machine and never the app: programs in a directory of the run's own, handed to
+    // the launch and to nothing else.
+    (Domain::Terminal, "can-start"),
 ];
 
 /// Whether this op may stand a world up (see [`PREMISE_OPS`]).

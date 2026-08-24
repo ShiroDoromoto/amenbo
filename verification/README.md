@@ -211,7 +211,12 @@ environment of its own. `AMENBO_HOME` is the product's own override, so the buil
 a different build for having been asked. `AMENBO_UPDATE_CHECK=0` rides along with it, the same way
 it does on the CLI side: the app asks the release manifest as it comes up, and a road walked over
 and over would otherwise put every one of those launches into the numbers the product is measured
-by. The store follows this workspace's throwaway rules — one parent under the temp tree, a name
+by. The `PATH` is the third thing the launch carries, and the only one that is about the machine
+rather than about Amenbo: the session's own directory of stand-in programs goes in front of the
+inherited one, which is how a road says what a pane could be opened with
+([`terminal can-start`](#given--the-world-a-road-starts-from)). It is handed over on every launch and
+is empty unless a premise filled it, so a run that asked for nothing is a run on the operator's own
+machine. The store follows this workspace's throwaway rules — one parent under the temp tree, a name
 that does not lean on the pid, a sweep of what is over a day old on the way in — and the app is
 started from a directory of its own, since a child inherits the harness's, and the harness is run
 from this repository.
@@ -625,9 +630,18 @@ be installed and nowhere else, while the plain shell is on every row by construc
 `open-a-pane-with-what-you-opened-the-last-one-with`, and what it defends is that a choice made once
 outlives the press that made it: the page is set to one so the frame read at the end is a frame drawn
 again rather than the one left standing, which is the difference between a build that keeps the
-answer and a button that stayed pressed. What the row comes up on *before* anybody has chosen is not
-read at all, and cannot be — nothing on it where several agents were found, that one where a single
-agent was, no row at all where none were, all three correct on the machine they happen to be on.
+answer and a button that stayed pressed. What the row comes up on *before* anybody has chosen is
+`start: none`, and it is the one reading here that no machine can be relied on to give — nothing on it
+where several agents were found, that one where a single agent was, no row at all where none were, all
+three correct on the machine they happen to be on. So the road that reads it stands the machine up
+first (`terminal can-start`, below) and reads before anything on the frame has been pressed: one press
+anywhere keeps this person's answer, and the first run is over in that store for good.
+`be-asked-what-to-open-with-on-the-first-run` is that road. It reads both halves of the state, since
+either alone passes on a build carrying the other fault — a row with nothing lit above a press that
+opens anyway is a build guessing quietly, and a press that asks with a name already lit is a build
+asking about an answer it has. Then it answers, and reads the frame standing beside the pane that
+opens: the row on that answer, the press live. That is what says the asking was a state and not a
+wall.
 
 `dot` is the one reading on these roads that is not text at all. The mark on a pane's label pulses
 while something is coming out of that terminal, and it is the only thing on screen that says a pane
@@ -916,6 +930,19 @@ it a moment before, but that nobody under test could have done it at all. A buil
 as it writes a pointer, so the one store that cannot leave another's is the one being driven, and on
 screen there is not even a command to try it with. Both roads that read the claim — the terminal's
 refusal, the row the screen lists the folder as — therefore open on it.
+
+`terminal can-start` is the one premise that stands up **the machine** rather than anything Amenbo
+holds. What a frame offers to open a pane with is every agent the build could find, and it finds them
+by running the pane's own login shell over the `PATH` that shell reads — so a road left to itself is
+read against whatever the operator installed, which is a different row on every machine. The premise
+puts a program per agent in a directory of the session's own, and the GUI harness hands that directory
+to the app it launches in front of the `PATH` and to nothing else; it goes when the session does, and
+nothing is installed anywhere. **The count is a floor and never a ceiling** — nothing handed to a
+process can take an install off the operator's machine, and the profile that shell reads is theirs —
+so what a road may ask for is a row with *more* than one thing on it, which is the one shape worth
+standing up: it is where the first run has a question to put. A profile that rebuilds the `PATH` from
+scratch instead of adding to it drops the directory, and that shows as the road failing to find the
+row it stood up rather than as a quiet pass.
 
 **A premise that does not stand ends that scenario, red, on the line that failed, and the road is not
 walked at all.** Judging a road against a world half built says nothing about the road — every line it

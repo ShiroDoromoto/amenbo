@@ -37,6 +37,14 @@ pub struct Session {
     /// Beside the store rather than inside it: what `export` and `backup` produce is meant to be
     /// carried away, and a scenario that wrote it into the store would be exporting its own export.
     pub artifacts: PathBuf,
+    /// **What this machine can start**, as far as the app under test can tell: a directory the GUI
+    /// harness hands the app in front of its `PATH` (`amenbo_verify_gui::launch`), holding a program
+    /// per agent a premise said is here (`crate::domain::terminal`).
+    ///
+    /// It is made with the session and left empty, so a run that asks for nothing gets the machine
+    /// the operator actually has. Nothing outside the run ever sees it — the directory goes when the
+    /// session does, and only the app the harness launched was ever pointed at it.
+    pub tools: PathBuf,
     keep: bool,
     base: PathBuf,
 }
@@ -61,10 +69,12 @@ pub fn session(tag: &str, keep: bool) -> std::io::Result<Session> {
     let home = base.join("home");
     let cwd = base.join(CWD_DIR);
     let artifacts = base.join("artifacts");
+    let tools = base.join("tools");
     std::fs::create_dir_all(&home)?;
     std::fs::create_dir_all(&cwd)?;
     std::fs::create_dir_all(&artifacts)?;
-    Ok(Session { home, cwd, artifacts, keep, base })
+    std::fs::create_dir_all(&tools)?;
+    Ok(Session { home, cwd, artifacts, tools, keep, base })
 }
 
 impl Session {

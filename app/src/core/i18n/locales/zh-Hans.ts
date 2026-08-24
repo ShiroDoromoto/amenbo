@@ -32,6 +32,7 @@ export const zhHans: Translation = {
     "newproj.moreTitle": "其他",
     "newproj.copyStatus": "复制 {cmd} status", "newproj.copied": "已复制",
     "newproj.openTerminal": "在终端中打开", "newproj.openFinder": "在访达中显示",
+    "newproj.openExplorer": "在文件资源管理器中显示", "newproj.openFileManager": "在文件管理器中显示",
     "newproj.openProject": "打开项目",
     "firstloop.title": "你的第一轮",
     "firstloop.intro": "让你的 AI 登记最初的几个任务。",

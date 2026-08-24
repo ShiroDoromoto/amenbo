@@ -31,6 +31,7 @@ export const de: Translation = {
     "newproj.moreTitle": "Außerdem",
     "newproj.copyStatus": "{cmd} status kopieren", "newproj.copied": "Kopiert",
     "newproj.openTerminal": "Im Terminal öffnen", "newproj.openFinder": "Im Finder zeigen",
+    "newproj.openExplorer": "Im Explorer zeigen", "newproj.openFileManager": "Im Dateimanager zeigen",
     "newproj.openProject": "Projekt öffnen",
     "firstloop.title": "Deine erste Runde",
     "firstloop.intro": "Bitte deine KI, die ersten Aufgaben einzutragen.",

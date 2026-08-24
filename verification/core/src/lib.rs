@@ -1867,6 +1867,23 @@ const REGISTRY: &[OpSpec] = &[
     // reaches it — a pane is narrow, a ref near the end of a line is ordinary, and the miss it would
     // hide looks exactly like characters that were never a link.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "press-ref", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    // Something set running in the pane and left running, which is the one thing this face has no
+    // other way to reach. The line `type-line` types is a command no shell knows, on purpose, so what
+    // it puts on the screen arrives once and is over — and a pane that printed once has already gone
+    // still by the time a road can look at it. `text` is the line printed last, and it is the road's
+    // own words for the reason `type-line`'s are: what says the run is over has to be something the
+    // interface would never write by itself.
+    //
+    // It is not `run` with a longer command in it. That one is waited on — the step is over when
+    // the prompt is back — and this one is walked away from while the output is still arriving,
+    // which is the whole of the difference and the whole of what the mark it feeds needs.
+    //
+    // It runs out on its own rather than being stopped, and that is the whole of how the still half
+    // of `dot` is reached. Every control a pane has is on the pane — ending it, typing at it — so a
+    // road that cut the output short by hand would be working in the pane it is about, and the pane
+    // being worked in never pulses: what it read afterwards would be a dot holding still because
+    // nothing draws it moving. Left alone, the same pane crosses from moving to still untouched.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "keep-printing", required: &["text"], refs: &[], strings: &["text"], binds: false },
     // Splitting the terminal out into a window of its own, and folding it back. Two ops rather than
     // one with a direction, because they are pressed in different windows: the way out is on the
     // face, and the way back is in the window it made.

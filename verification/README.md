@@ -531,8 +531,9 @@ spans two launches, and no single run holds both.
 
 And the last one is about no record at all. **`terminal`** is the face an agent is run in: whether
 the app is showing the ledger or the pane (`show-face`), what a reader typed into that pane
-(`type-line`), and whether the pane is a face of the one window or a window of its own (`split-out`
-/ `fold-back`), with `pane` reading the line back. `say` is the other half — the surface layer, said
+(`type-line`) and what a reader set running in it (`keep-printing`), and whether the pane is a face
+of the one window or a window of its own (`split-out` / `fold-back`), with `pane` reading the line
+back. `say` is the other half — the surface layer, said
 with the CLI from *inside* the pane it is about (`verb` naming which of its words, `text` what was
 said in it) — and `label` reads what the row above the pane carries afterwards. It is a domain of its own because a session is a
 process — what is under test is *where it is drawn*, which is this machine's arrangement of one
@@ -574,13 +575,27 @@ a pane outlive the process that wrote them. Two things follow for whoever writes
 The pane it reads has to be one the reader is not working in, the focused pane never pulsing, since
 somebody looking straight at a terminal can already see it moving. And the step is watched rather
 than shot: a pulse rests, twice a turn, at exactly the still dot's own step, so it is a `Review` and
-the instruction says how long to watch.
+the instruction says how long to watch. A machine set to play no animation is in that instruction
+too, holding the mark at the bright end of the same two steps instead of moving between them: the
+fact survives with the movement gone, and an operator told only to watch for a fade would fail a dot
+saying exactly what the step asks about.
 
-No road walks the moving half yet, and the reason is a third thing about the mark. A pane reads as
-moving for a moment and a half after its last output, so a pulse to watch for a few seconds is a pane
-that keeps printing — and nothing on this face starts one. The line a road types is deliberately a
-command no shell knows, which prints once and stops. What that half needs is a way to set something
-running in a pane and leave it running, and until there is one the op is written and unwalked.
+The third thing about the mark is what `keep-printing` is for. A pane reads as moving for a moment
+and a half after its last output, so a pulse anybody can watch for a few seconds is a pane that keeps
+printing — and no other step on this face starts one. The line a road types is deliberately a command
+no shell knows, which prints once and is over. `keep-printing` sets something running in the pane and
+leaves it running: a bounded run, about half a minute of a line a second, ending on a line the road
+chose. It is not `run` with a longer command in it — that step is waited on and is over when the
+prompt is back, and this one is walked away from with the output still arriving. Bounded, because that is how the still half is reached. Every control a pane has is on the
+pane and the face takes a press anywhere in one as going to work in it, so there is no way to cut the
+output short by hand that does not also make that pane the one being worked in — and a dot read there
+is holding still because nothing draws it moving, which is a green step proving nothing. Left to run
+out, the same pane crosses from moving to still untouched, and the line it ends with is what a road
+waits on: `pane` reading the road's own words rather than a summary the interface writes in whatever
+language the machine is set to.
+`see-a-pane-is-still-running-without-looking-into-it` is the road, and its second pane is opened for
+one reason — opening one makes it the pane being worked in, which is what leaves the first drawn with
+nobody in it. Nothing is ever said to the second.
 
 What a `pane` assert reads is deliberately the reader's own words rather than the interface's. Every
 other word on that face belongs to Amenbo, so a reading of one would hold the gate to whichever

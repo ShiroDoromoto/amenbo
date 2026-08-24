@@ -1873,12 +1873,26 @@ const REGISTRY: &[OpSpec] = &[
     // It is walked by a hand rather than by a driver on purpose. The layer exists only inside a pane
     // — said anywhere else it is refused — so there is no way to reach it except the one an agent
     // reaches it by, and a road that stood it up some other way would prove a path nobody walks.
+    //
+    // `away` is for the one thing that has to be said from behind the face that reads it: what the
+    // segment wears is raised only by a turn arriving while the ledger is up, and the layer is only
+    // ever spoken inside a pane, which is on the other face. With it the word is armed and the
+    // operator crosses over before it lands, so the step ends on the ledger. How long they have is
+    // the driver's to say and not the road's.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "say", required: &["verb", "text"], refs: &[], strings: &["verb", "text"], binds: false },
     // And what the pane's label carries afterwards. This is the whole of what the surface layer is
     // for: a word said in a terminal that nothing outside it can find out, arriving where a person
     // reads it. The words are the agent's own, so a reading finds them on the label and nowhere in
     // the interface around it.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "label", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    // The mark the terminal's own segment wears while a turn is standing behind it. It is the whole
+    // of what crosses the switch — a dot, with no number and no words — so there is nothing to name
+    // in it and nothing to read out: what a road says here is that it is there, or that it is not.
+    //
+    // The absent half is half the goal. Being on the terminal face is being told, so the mark is
+    // spent by crossing to it: a badge still up after the person has looked would be a light saying
+    // "something is standing" rather than a knock saying "something came up while you were away".
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "face-badge", required: &[], refs: &[], strings: &[], binds: false },
     // What an agent pointed at, said from inside its own pane. It is not a `say` verb even though it
     // is the same layer and the same seam: the other four carry one line, and this carries a thing and
     // a reason for it — a shape of its own, and one the file face reads rather than the pane's label.
@@ -2446,9 +2460,10 @@ impl Scenario {
             // The yes/no args are booleans wherever they appear: `present` asks whether something is
             // there, `ok` what verdict a check is expected to come back with, `running` whether
             // anything is working a queue, `required` whether a declared setting is one its plugin
-            // cannot work without, and the two key questions whether a catalog serves a signing key
-            // and whether one of its is pinned.
-            for key in ["present", "ok", "running", "required", "publishes_key", "pinned_key"] {
+            // cannot work without, `away` whether a word said in a pane is armed and left behind,
+            // and the two key questions whether a catalog serves a signing key and whether one of
+            // its is pinned.
+            for key in ["present", "ok", "running", "required", "away", "publishes_key", "pinned_key"] {
                 if let Some(v) = step.with().get(key) {
                     if v.as_bool().is_none() {
                         errs.push(at(i, format!("`{key}` must be a boolean")));

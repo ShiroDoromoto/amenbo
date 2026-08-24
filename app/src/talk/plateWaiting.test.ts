@@ -30,7 +30,7 @@ beforeEach(() => {
 
 describe("what the plate says about a turn standing in its pane", () => {
   it("says it once, and says it is over when the agent goes back to work", () => {
-    plate.opened("pane-1", AT);
+    plate.opened("pane-1", AT, null);
     plate.said(say({ verb: "note", text: "running the tests" }));
     expect(told, "a pane merely working was reported as a turn").toEqual([]);
 
@@ -46,21 +46,21 @@ describe("what the plate says about a turn standing in its pane", () => {
   });
 
   it("takes the turn away when the program in the terminal exits", () => {
-    plate.opened("pane-1", AT);
+    plate.opened("pane-1", AT, null);
     plate.said(say({ verb: "waiting", text: "which of the two" }));
     plate.closed("pane-1");
     expect(told, "the pane ended and the badge was left standing").toEqual([true, false]);
   });
 
   it("takes the turn away when the label itself comes down", () => {
-    plate.opened("pane-1", AT);
+    plate.opened("pane-1", AT, null);
     plate.said(say({ verb: "waiting", text: "which of the two" }));
     plate.stop();
     expect(told, "the face went and the badge was left standing").toEqual([true, false]);
   });
 
   it("says nothing at all to a pane nobody is waiting on", () => {
-    plate.opened("pane-1", AT);
+    plate.opened("pane-1", AT, null);
     plate.said(say({ verb: "finished", text: "it landed" }));
     plate.closed("pane-1");
     plate.stop();

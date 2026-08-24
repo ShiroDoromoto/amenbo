@@ -14,6 +14,10 @@
 // emulator produced for the key is what the program in the terminal is given, so arrow keys, Ctrl-C,
 // tab completion and bracketed paste all work because nothing tried to make them work.
 //
+// The one thing a pane reads out of a person's typing is the first line they send, which names the
+// frame — and it is read off their presses rather than off the stream, because the stream carries the
+// emulator's answers to the program as well and nothing there tells the two apart (`./frames`).
+//
 // Refs are read **after** all of that, off what was drawn rather than out of what crossed
 // (`./refLinks`), which is what keeps the line above true: the stream is still nobody's to read, and
 // a cell already holds a character every escape has finished with. It is the one thing owning a
@@ -26,7 +30,7 @@ import "@xterm/xterm/css/xterm.css";
 import type { PtyChunkDto, PtySessionDto, SessionSaidDto } from "../bindings/bindings";
 import type { RefSpace } from "../core/idref";
 import { invoke } from "../core/ipc";
-import { NOTHING_TYPED, typed, type NamedBy } from "./frames";
+import { NOTHING_TYPED, pressedKey, typed, type NamedBy, type Pressed } from "./frames";
 import { pathsOnRow, refFromUrl, refsOnRow, type Cell, type Rows } from "./refLinks";
 
 // The events the host sends this pane. Output is a chunk; closed is the program in the terminal
@@ -367,17 +371,37 @@ export async function mountTerminal(
     if (statement.session === session) take(statement);
   }
 
-  // The first line a person sends into this pane names its frame, so a pane is called something before
-  // anyone gets round to naming it. Only the first: the keys are followed until one line has been sent
-  // and then let alone, and whether the name takes at all is the store's to say (`./frames`).
-  let typing = NOTHING_TYPED;
+  // Whatever the emulator made of a press, straight through to the program. **Nothing on the way out
+  // is read**: what the program is given for a key is what the emulator produced for it, which is why
+  // arrow keys, Ctrl-C and bracketed paste all work here without anything having tried to make them.
   const send = (data: string) => {
     void invoke("pty_write", { session, data }).catch(() => {});
-    if (typing.sent) return;
-    typing = typed(typing, data);
+  };
+  const stream = term.onData(send);
+
+  // The first line a person sends into this pane names its frame, so a pane is called something before
+  // anyone gets round to naming it. Only the first: the presses are followed until one line has been
+  // sent and then let alone, and whether the name takes at all is the store's to say (`./frames`).
+  //
+  // **It is read off their presses and not off the stream above**, which carries the emulator's own
+  // answers to the program — the colour it is drawn in, where its cursor is — beside the person's
+  // typing, with nothing to tell the two apart. Read there, an agent that asked what colour it was
+  // being drawn in named its own pane `10;rgb:ecec/e9e9/…` (`AMB-T-3668`, `AMB-D-748`).
+  let typing = NOTHING_TYPED;
+  const wrote = (did: Pressed | null) => {
+    if (typing.sent || did === null) return;
+    typing = typed(typing, did);
     if (typing.sent && typing.line) on.name(typing.line, "typed");
   };
-  const keys = term.onData(send);
+  const presses = term.onKey(({ domEvent }) => wrote(pressedKey(domEvent)));
+  // An input method is a line written a key at a time and settled all at once, so what a person wrote
+  // in one is taken where it is settled rather than while it is being guessed at. It is read off the
+  // box the emulator collects their typing in, which is where a composition happens.
+  const textarea = term.textarea;
+  const composed = (e: CompositionEvent) => {
+    if (e.data) wrote({ kind: "text", text: e.data });
+  };
+  textarea?.addEventListener("compositionend", composed);
 
   // **Shift-Enter, which is the one press the emulator cannot pass on.** What a terminal is given for
   // Enter is a carriage return, and it is given the same one whether or not Shift was held — so an
@@ -424,7 +448,9 @@ export async function mountTerminal(
     resize.disconnect();
     theme.disconnect();
     links.dispose();
-    keys.dispose();
+    stream.dispose();
+    presses.dispose();
+    textarea?.removeEventListener("compositionend", composed);
     void unlistenOutput();
     void unlistenClosed();
     void unlistenSaid();

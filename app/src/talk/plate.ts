@@ -12,7 +12,7 @@
 import type { SessionSaidDto, SessionWorkDto, TaskCardDto } from "../bindings/bindings";
 import { currentLang, type Lang } from "../core/i18n";
 import { invoke } from "../core/ipc";
-import { frameNames, ONLY_FRAME, type FrameNames } from "./frames";
+import { frameLabel, frameNames, ONLY_FRAME, type FrameNames } from "./frames";
 import {
   FINISHED_HOLD_MS,
   mountNameplate,
@@ -29,8 +29,9 @@ import { closed, NO_SESSIONS, opened, said, type Sessions } from "./sessions";
 
 /** A pane's label, and the pane's way of telling it what happened. */
 export type Plate = {
-  /** A terminal has started in the pane, under this session id. */
-  opened(session: string, startedAt: string): void;
+  /** A terminal has started in the pane, under this session id, in `folder`. The folder is what the
+   *  row calls the pane until something names it (`./frames`). */
+  opened(session: string, startedAt: string, folder: string | null): void;
   /** Something came out of the terminal. Said per chunk and read as a time, never as a quantity: what
    *  it turns into is a fixed rhythm rather than a meter (`./moving`). */
   output(): void;
@@ -84,6 +85,10 @@ export function mountPlate(
   // pane is: a session has no existence outside the terminal it runs in (`AMB-D-749`).
   let sessions: Sessions = NO_SESSIONS;
   let names: FrameNames = new Map();
+  // The folder this pane's terminal was started in. It is what the row is headed with until the frame
+  // is named, and it is kept rather than read from the arrangement because this label is drawn in the
+  // split-out window too, which holds no arrangement (`../talk.ts`).
+  let folder: string | null = null;
   let held: Held[] = [];
   let finished = 0;
   let changeover: Changeover = NO_CHANGEOVER;
@@ -157,11 +162,13 @@ export function mountPlate(
     if (!live) return;
     const { now, changeover: next } = nowOf(held, finished, changeover, Date.now());
     changeover = next;
-    const name = names.get(frame) ?? null;
+    const name = frameLabel(names, frame, folder);
     // A frame that was named keeps its row whether or not anything has run in it: the name is the
-    // person's, and it outlives every session the frame holds (`./frames`).
+    // person's, and it outlives every session the frame holds (`./frames`). A folder standing in for
+    // one is not that — it is what this pane's terminal is working in, so it goes when the pane has
+    // never had one.
     draw(
-      ran || name !== null
+      ran || names.has(frame)
         ? {
             name,
             now,
@@ -221,9 +228,10 @@ export function mountPlate(
   redraw();
 
   return {
-    opened: (session, startedAt) => {
+    opened: (session, startedAt, where) => {
       sessions = opened(sessions, { session, startedAt });
       running = session;
+      folder = where;
       ran = true;
       tellWaiting();
       readWork();

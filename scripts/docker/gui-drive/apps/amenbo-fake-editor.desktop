@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Fake Editor
+Comment=Records what it is opened with, and nothing else
+Exec=/opt/drive/fake-app.sh editor %f
+MimeType=text/markdown;text/plain;
+Terminal=false
+Icon=text-editor

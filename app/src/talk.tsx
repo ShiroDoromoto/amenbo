@@ -20,11 +20,11 @@
 // them over the same way. Neither end restarts anything — a pane is a drawing of a session, not the
 // session (`./talk/terminal`).
 //
-// What it owns from the start is its own name. Two windows both titled "Amenbo" are indistinguishable
-// in the window list, the taskbar and the switcher, and the words that tell them apart live in the
-// webview's dictionary rather than in Rust (`AMB-D-396`) — so the title is set here rather than in
-// `tauri.conf.json`, which can only hold one fixed string. The configured title is the product name,
-// which is what shows for the moment before this runs.
+// What it owns from the start is a name that says which face it holds. Two windows both titled
+// "Amenbo" are indistinguishable in the window list, the taskbar and the switcher, and the words
+// that tell them apart live in the webview's dictionary rather than in Rust (`AMB-D-396`) — so the
+// title is set here rather than in `tauri.conf.json`, which can only hold one fixed string. The
+// configured title is the product name, which is what shows for the moment before this runs.
 //
 // The store is read before anything is drawn, the way the board reads it (`./App`): the face names
 // projects, offers folders and writes in the reader's language, and every one of those is the
@@ -34,7 +34,7 @@ import { StrictMode, useEffect, useMemo, useState, useSyncExternalStore } from "
 import { createRoot } from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
-import { currentLang, errText, t } from "./core/i18n";
+import { currentLang, errText, t, tf } from "./core/i18n";
 import { invoke } from "./core/ipc";
 import { notifyTurn } from "./core/osNotify";
 import { RefNavProvider, type RefNav } from "./core/refNav";
@@ -49,10 +49,17 @@ import "./styles/talk.css";
 
 initTheme();
 
-/** Name the window, so a list of windows tells this one from the board (`AMB-D-396`). */
+/**
+ * Name the window, so a list of windows tells this one from the board (`AMB-D-396`).
+ *
+ * The name is the face's, not the window's: what was split out is the terminal, whole, and the
+ * button that splits it out says "terminal" too. A window with a name of its own would be a second
+ * word for the one thing the reader is looking at — so the title is written from `face.terminal`,
+ * the key every other place naming that face already reads.
+ */
 function retitle(): void {
   void getCurrentWindow()
-    .setTitle(t("app.talkWindow"))
+    .setTitle(tf("app.talkWindow", { face: t("face.terminal") }))
     // Outside Tauri (`npm run dev` in a browser) there is no window to name, and a title that could
     // not be set is not worth failing an otherwise-working window over.
     .catch(() => {});

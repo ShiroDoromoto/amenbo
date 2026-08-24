@@ -499,7 +499,7 @@ export const ptBR: Translation = {
     "act.nDecisions.one": "{n} decisão", "act.nDecisions.many": "{n} decisões", "act.nDecisions.other": "{n} decisões",
     "act.nameless": "(excluído)",
     "app.loadError": "Não foi possível carregar os dados.", "app.loading": "Carregando…",
-    "app.talkWindow": "Amenbo — Conversa",
+    "app.talkWindow": "Amenbo — {face}",
     "talk.folder": "Escolha a pasta que você mostra à IA. Ela só vê o que você colocar ali.",
     "talk.chooseFolder": "Escolher pasta",
     "talk.searching": "Procurando os agentes desta máquina…",

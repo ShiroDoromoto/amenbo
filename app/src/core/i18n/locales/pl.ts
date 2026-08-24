@@ -503,7 +503,7 @@ export const pl: Translation = {
     "act.nDecisions.one": "{n} decyzja", "act.nDecisions.few": "{n} decyzje", "act.nDecisions.many": "{n} decyzji", "act.nDecisions.other": "{n} decyzji",
     "act.nameless": "(usunięte)",
     "app.loadError": "Nie udało się wczytać danych.", "app.loading": "Wczytywanie…",
-    "app.talkWindow": "Amenbo — Rozmowa",
+    "app.talkWindow": "Amenbo — {face}",
     "talk.folder": "Wybierz folder, który pokazujesz SI. Widzi tylko to, co w nim umieścisz.",
     "talk.chooseFolder": "Wybierz folder",
     "talk.searching": "Szukanie agentów na tym komputerze…",

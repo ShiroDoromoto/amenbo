@@ -480,7 +480,7 @@ export const id: Translation = {
     "act.nDecisions.other": "{n} keputusan",
     "act.nameless": "(dihapus)",
     "app.loadError": "Gagal memuat data.", "app.loading": "Memuat…",
-    "app.talkWindow": "Amenbo — Percakapan",
+    "app.talkWindow": "Amenbo — {face}",
     "talk.folder": "Pilih folder yang Anda tunjukkan kepada AI. Hanya yang Anda taruh di sana yang bisa dilihatnya.",
     "talk.chooseFolder": "Pilih folder",
     "talk.searching": "Mencari agen yang ada di mesin ini…",

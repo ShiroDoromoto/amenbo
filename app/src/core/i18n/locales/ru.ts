@@ -506,7 +506,7 @@ export const ru: Translation = {
     "act.nDecisions.one": "{n} решение", "act.nDecisions.few": "{n} решения", "act.nDecisions.many": "{n} решений", "act.nDecisions.other": "{n} решения",
     "act.nameless": "(удалено)",
     "app.loadError": "Не удалось загрузить данные.", "app.loading": "Загрузка…",
-    "app.talkWindow": "Amenbo — Диалог",
+    "app.talkWindow": "Amenbo — {face}",
     "talk.folder": "Выберите папку, которую вы показываете ИИ. Он видит только то, что лежит в ней.",
     "talk.chooseFolder": "Выбрать папку",
     "talk.searching": "Ищем агентов на этой машине…",

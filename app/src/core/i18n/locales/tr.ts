@@ -477,7 +477,7 @@ export const tr: Translation = {
     "act.nDecisions.one": "{n} karar", "act.nDecisions.other": "{n} karar",
     "act.nameless": "(silinmiş)",
     "app.loadError": "Veriler yüklenemedi.", "app.loading": "Yükleniyor…",
-    "app.talkWindow": "Amenbo — Sohbet",
+    "app.talkWindow": "Amenbo — {face}",
     "talk.folder": "Yapay zekâya gösterdiğiniz klasörü seçin. Yalnızca oraya koyduklarınızı görebilir.",
     "talk.chooseFolder": "Klasör seç",
     "talk.searching": "Bu makinedeki ajanlar aranıyor…",

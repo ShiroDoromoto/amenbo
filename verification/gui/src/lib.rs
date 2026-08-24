@@ -5550,7 +5550,7 @@ steps_gui:
     fn a_window_a_road_names_reaches_the_operator_the_tool_and_the_manifest() {
         let s = load(&SCENARIO.replace(
             "    with: { filter: \"assignee:me-ai status:todo\", target: seed, present: true }",
-            "    with: { filter: \"assignee:me-ai status:todo\", target: seed, present: true }\n    window: \"Amenbo — Talk\"",
+            "    with: { filter: \"assignee:me-ai status:todo\", target: seed, present: true }\n    window: \"Amenbo — Terminal\"",
         ));
         let dir = std::env::temp_dir().join(format!("amenbo-verify-gui-window-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -5574,18 +5574,18 @@ steps_gui:
 
         // The tool is aimed at the named window on the step that named one, and at the app's one
         // window on the steps that did not — a road says which screen per step, not per run.
-        assert_eq!(aimed, vec![None, None, Some("Amenbo — Talk".to_string())]);
+        assert_eq!(aimed, vec![None, None, Some("Amenbo — Terminal".to_string())]);
         // The operator is told where to stand before being told what to do there.
         assert!(
-            handed[2].starts_with("In the window called \"Amenbo — Talk\": "),
+            handed[2].starts_with("In the window called \"Amenbo — Terminal\": "),
             "got: {}",
             handed[2]
         );
-        assert_eq!(outcome.records[2].window.as_deref(), Some("Amenbo — Talk"));
+        assert_eq!(outcome.records[2].window.as_deref(), Some("Amenbo — Terminal"));
 
         let manifest = write_manifest(&dir, &s, &[], &outcome).expect("manifest");
         let text = std::fs::read_to_string(&manifest).unwrap();
-        assert!(text.contains("\"window\":\"Amenbo — Talk\""), "got: {text}");
+        assert!(text.contains("\"window\":\"Amenbo — Terminal\""), "got: {text}");
         // And a step that named none carries no window at all, rather than a null saying it was
         // asked and left blank.
         assert_eq!(text.matches("\"window\"").count(), 1, "got: {text}");

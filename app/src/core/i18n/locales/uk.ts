@@ -503,7 +503,7 @@ export const uk: Translation = {
     "act.nDecisions.one": "{n} рішення", "act.nDecisions.few": "{n} рішення", "act.nDecisions.many": "{n} рішень", "act.nDecisions.other": "{n} рішення",
     "act.nameless": "(видалене)",
     "app.loadError": "Не вдалося завантажити дані.", "app.loading": "Завантаження…",
-    "app.talkWindow": "Amenbo — Діалог",
+    "app.talkWindow": "Amenbo — {face}",
     "talk.folder": "Виберіть теку, яку ви показуєте ШІ. Він бачить лише те, що ви туди покладете.",
     "talk.chooseFolder": "Вибрати теку",
     "talk.searching": "Шукаємо агентів на цій машині…",

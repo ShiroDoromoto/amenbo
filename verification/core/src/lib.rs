@@ -2763,11 +2763,11 @@ steps_gui:
   - type: assert
     domain: task
     op: narrowing-shut
-    window: "Amenbo — Talk"
+    window: "Amenbo — Terminal"
 "#;
         let s = load_str(yaml).expect("parses");
         s.validate().expect("valid");
-        assert_eq!(s.steps(Driver::Gui)[0].window(), Some("Amenbo — Talk"));
+        assert_eq!(s.steps(Driver::Gui)[0].window(), Some("Amenbo — Terminal"));
     }
 
     /// Written on the wrong road it is a road filed under the wrong key, and the loader says so

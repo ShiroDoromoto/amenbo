@@ -498,7 +498,7 @@ export const es: Translation = {
     "act.nDecisions.one": "{n} decisión", "act.nDecisions.many": "{n} decisiones", "act.nDecisions.other": "{n} decisiones",
     "act.nameless": "(eliminado)",
     "app.loadError": "No se pudieron cargar los datos.", "app.loading": "Cargando…",
-    "app.talkWindow": "Amenbo — Conversación",
+    "app.talkWindow": "Amenbo — {face}",
     "talk.folder": "Elige la carpeta que le muestras a la IA. Solo verá lo que pongas ahí.",
     "talk.chooseFolder": "Elegir carpeta",
     "talk.searching": "Buscando los agentes de esta máquina…",

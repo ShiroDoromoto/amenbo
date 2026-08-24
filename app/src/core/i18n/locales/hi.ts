@@ -477,7 +477,7 @@ export const hi: Translation = {
     "act.nDecisions.one": "{n} निर्णय", "act.nDecisions.other": "{n} निर्णय",
     "act.nameless": "(मिटाया हुआ)",
     "app.loadError": "डेटा लोड नहीं हो सका।", "app.loading": "लोड हो रहा है…",
-    "app.talkWindow": "Amenbo — संवाद",
+    "app.talkWindow": "Amenbo — {face}",
     "talk.folder": "वह फ़ोल्डर चुनें जो आप AI को दिखाते हैं। उसमें रखी चीज़ें ही AI को दिखेंगी।",
     "talk.chooseFolder": "फ़ोल्डर चुनें",
     "talk.searching": "इस मशीन पर एजेंट खोजे जा रहे हैं…",

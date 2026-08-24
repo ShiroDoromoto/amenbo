@@ -75,7 +75,7 @@ const press = async (key: string) => {
 const openPaneIn = async (host: HTMLElement) => {
   const room = [...host.querySelectorAll<HTMLElement>(".rail__open")][0];
   if (room) await click(room);
-  await click([...host.querySelectorAll<HTMLElement>(".slot--empty")][0]!);
+  await click([...host.querySelectorAll<HTMLElement>(".slot--empty .slot__open")][0]!);
 };
 const openPane = () => openPaneIn(container);
 /** Put the face up. It is not in `beforeEach` because what the project is bound to is set per test,

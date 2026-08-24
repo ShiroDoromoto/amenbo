@@ -60,7 +60,7 @@ const click = async (el: HTMLElement) => {
 const openPane = async () => {
   const room = q(".rail__open")[0];
   if (room) await click(room);
-  await click(q(".slot--empty")[0]!);
+  await click(q(".slot--empty .slot__open")[0]!);
 };
 /** Work in a pane, the way a person does: a press anywhere on it. */
 const workIn = async (nth: number) => {

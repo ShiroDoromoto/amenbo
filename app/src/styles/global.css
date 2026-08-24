@@ -172,14 +172,37 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .slot__end:hover { color: var(--c-text); }
 .slot--focused .termface__pane { border-color: var(--c-accent); }
-/* The way in on a face with nothing open, and the one a pane whose program ended offers again. It
-   fills its place and says what pressing it does. */
-.slot--empty, .slot__open {
+/* The empty frame: the dashed place a terminal is opened in, holding what it will be opened with
+   and the one press that does it (`../shell/AdriftSlot`). The box is the frame; the row and the
+   button inside it are what is said in the room. */
+.slot--empty {
   flex: 1; min-height: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--s-2); padding: var(--s-3);
+  border: 1px dashed var(--c-border); border-radius: var(--r-md);
+}
+/* The press, and the one a pane whose program ended offers again — that one stands on its own, so it
+   carries the dashed edge itself. */
+.slot__open {
+  flex: 0 0 auto;
+  padding: var(--s-2) var(--s-3);
   border: 1px dashed var(--c-border); border-radius: var(--r-md);
   background: transparent; color: var(--c-text-muted); font-size: var(--fs-sm);
 }
-.slot--empty:hover, .slot__open:hover { color: var(--c-text); border-color: var(--c-text-muted); }
+.slot--empty > .slot__open { border-style: solid; border-color: transparent; }
+.slot__open:hover { color: var(--c-text); border-color: var(--c-text-muted); }
+
+/* What the terminal is opened with. Words rather than boxes, and the one in force simply the one
+   that is not dimmed — the same shape the split count wears above (`.termface__count`), because both
+   are one choice among a few and neither is a place to go. It is not drawn at all where the shell is
+   the only thing this machine can start: a row of one says nothing a reader can act on. */
+.slot__starts { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-3); }
+.slot__start {
+  background: transparent; border: 0; padding: 0;
+  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1.6;
+}
+.slot__start:hover { color: var(--c-text); }
+.slot__start--on { color: var(--c-text); font-weight: 600; }
 
 /* The same way in with something to say: work in this project that nothing is doing any more
    (`../shell/AdriftSlot`). It is drawn as the same dashed place, because that is what it still is —
@@ -207,7 +230,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .adrift__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The way in is still here, under the question rather than instead of it: the face is somewhere to
    start a terminal whether or not there is anything to be asked about. */
-.adrift__open { flex: 0 0 auto; padding: var(--s-2); }
+.adrift__open {
+  flex: 0 0 auto;
+  display: flex; flex-direction: column; align-items: center; gap: var(--s-2);
+}
 
 /* Where the pane being opened will work, asked in the place the pane is about to take (`./FolderChoice`).
    It is the same dashed box the way in is, because it is the same place one step further on. */

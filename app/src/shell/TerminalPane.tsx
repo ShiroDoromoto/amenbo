@@ -30,11 +30,14 @@ import { currentLang, t } from "../core/i18n";
  * running on the way out — a session whose place has gone is one nobody can reach.
  */
 export function TerminalPane({
-  frame, names, start, autoStart, focused,
+  frame, project, names, start, autoStart, focused,
   onOpened, onSaid, onPath, onClosed, onDrop, onName, onFocus, onWaiting,
 }: {
   /** Which of the arrangement's places this is (`../talk/layout`). */
   frame: string;
+  /** Which project this place belongs to — whose answer the agent it opens with is kept against
+   *  (`../talk/agent`). */
+  project: number;
   /** What every frame is called, so a naming from anywhere reaches this row. */
   names: FrameNames;
   /** Which terminal to draw here, and where to start one. */
@@ -133,7 +136,7 @@ export function TerminalPane({
       // The window's own title is not the pane's to say — this window is the board. The name goes to
       // the store, and what draws it is the line above the pane.
       name: (text, by) => on.current.onName(frame, text, by),
-    }, "termface__pane", start)
+    }, "termface__pane", start, project)
       .then((take) => {
         // Taken away while the host was still answering. Detaching leaves the terminal running for
         // whatever draws it next, which is exactly what a pane that never got shown should do.

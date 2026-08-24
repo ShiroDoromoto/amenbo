@@ -96,7 +96,7 @@ const flip = async () => {
  *  there is nothing to lose track of until somebody has. */
 const openPane = async () => {
   await act(async () => {
-    container.querySelector(".slot--empty")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    container.querySelector(".slot--empty .slot__open")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
 };
 

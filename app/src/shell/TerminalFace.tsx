@@ -128,7 +128,7 @@ export function TerminalFace({
   // The question about where the pane being opened works, while it is up. It is not a frame: a place
   // is made by opening one, and one nobody finished opening is a box that says nothing
   // (`../talk/layout`). `note` on it is a binding the host refused.
-  const [asking, setAsking] = useState<{ note: string | null } | null>(null);
+  const [asking, setAsking] = useState<{ note: string | null; agent: string | null } | null>(null);
 
   const projects = dataAdapter.listProjects();
   const bound = useBoundFolders(layout.project);
@@ -138,6 +138,11 @@ export function TerminalFace({
   // off the list, so coming back to a pane whose program exited offers the way to open one again
   // instead of quietly starting a second shell.
   const startNow = useRef(new Set<string>());
+  // What each of those panes is to be opened with — the agent chosen on the empty frame it was
+  // pressed on (`./AdriftSlot`). A ref rather than state for the same reason `startNow` is one: it
+  // is read where the pane is built and never drawn, and it is this pane's alone, so nothing about
+  // it belongs in the arrangement that is kept (`../talk/layout`).
+  const startWith = useRef(new Map<string, string>());
 
   // Which panes have a turn standing in them — the agent said so, or the ledger says a task the pane
   // is holding is no longer ready (`../talk/plate`). It is state rather than a ref because it is
@@ -299,29 +304,37 @@ export function TerminalFace({
     setLayout((was) => openedIn(was, frame, session, folder));
   }, []);
 
-  /** Make the pane, now that where it works has been answered. */
-  const openPane = useCallback((project: number, folder: string) => {
+  /**
+   * Make the pane, now that where it works has been answered.
+   *
+   * `agent` is what the empty frame was set to when it was pressed (`./AdriftSlot`). It rides beside
+   * the frame rather than on it: what a pane opens with is that pane's, so it is not part of the
+   * arrangement that comes back on the next run (`../talk/layout`), and the project's own answer is
+   * kept where answers are kept (`../talk/agent`).
+   */
+  const openPane = useCallback((project: number, folder: string, agent: string | null) => {
     setAsking(null);
     setLayout((was) => {
       const made = openedFrame(was, project, folder);
       startNow.current.add(made.frame.id);
+      if (agent !== null) startWith.current.set(made.frame.id, agent);
       return made.layout;
     });
   }, []);
 
   /** This project's first folder: chosen from outside the list because there is no list yet, and
    *  bound to this project rather than to one named after it (`../core/mutations`). */
-  const bindFirstFolder = useCallback((project: number) => {
+  const bindFirstFolder = useCallback((project: number, agent: string | null) => {
     void chooseFolderFor(project)
       .then((chosen) => {
         // Cancelling is not a refusal and not an answer: nothing was opened, and nothing is left on
         // the screen to say it was.
         if (chosen === null) setAsking(null);
-        else openPane(project, chosen);
+        else openPane(project, chosen, agent);
       })
       // The refusal has to be put somewhere, and where the reader was is where they still are: with
       // a folder to choose for this project.
-      .catch((e: unknown) => setAsking({ note: errText(e) }));
+      .catch((e: unknown) => setAsking({ note: errText(e), agent }));
   }, [openPane]);
 
   /**
@@ -332,13 +345,13 @@ export function TerminalFace({
    * folder to settle. Where it is bound to several, or to none, the question goes up and no frame is
    * made until it is answered (`./FolderChoice`).
    */
-  const askToOpen = useCallback((project: number) => {
+  const askToOpen = useCallback((project: number, agent: string | null) => {
     setRailOpen(false);
-    if (bound.live.length === 1) openPane(project, bound.live[0]!.path);
+    if (bound.live.length === 1) openPane(project, bound.live[0]!.path, agent);
     // A project bound to nothing has no list to choose from, so the press goes straight to the
     // picker: what is being answered is where this project *is*, and it is one press either way.
-    else if (bound.live.length === 0) bindFirstFolder(project);
-    else setAsking({ note: null });
+    else if (bound.live.length === 0) bindFirstFolder(project, agent);
+    else setAsking({ note: null, agent });
   }, [bound.live, openPane, bindFirstFolder]);
 
   /**
@@ -383,6 +396,10 @@ export function TerminalFace({
   }, [openIn?.nth, settled]);
 
   const drawers = sidesAreDrawers(layout.count, width);
+  // The paths alone, and a stable one per set of them: the empty frame reads what the agents are
+  // traced across off this, and a fresh array every render would send it back to the host on every
+  // keystroke elsewhere on the page (`./AdriftSlot`).
+  const boundPaths = useMemo(() => bound.live.map((one) => one.path), [bound.live]);
   const page = layout.page;
   const slots = slotsOf(layout, page);
   const pages = pageCount(layout);
@@ -538,6 +555,7 @@ export function TerminalFace({
                   <TerminalPane
                     key={frame.id}
                     frame={frame.id}
+                    project={frame.project}
                     names={names}
                     start={{
                       session: frame.session,
@@ -546,6 +564,7 @@ export function TerminalFace({
                       // guess would take the one running terminal off whichever pane had it.
                       adopt: false,
                       cwd: frame.folder,
+                      agent: startWith.current.get(frame.id) ?? null,
                     }}
                     autoStart={frame.session !== null || startNow.current.has(frame.id)}
                     focused={layout.focus === frame.id}
@@ -570,6 +589,7 @@ export function TerminalFace({
                       // on the page it was on, and the badge above must stop counting it.
                       paneWaiting(id, false);
                       startNow.current.delete(id);
+                      startWith.current.delete(id);
                     }}
                     onName={named}
                     onFocus={(id) => setLayout((was) => focusOn(was, id))}
@@ -579,8 +599,8 @@ export function TerminalFace({
                 {asking !== null && (
                   <FolderChoice
                     folders={bound.live}
-                    onPick={(folder) => openPane(layout.project!, folder)}
-                    onBind={() => bindFirstFolder(layout.project!)}
+                    onPick={(folder) => openPane(layout.project!, folder, asking.agent)}
+                    onBind={() => bindFirstFolder(layout.project!, asking.agent)}
                     note={asking.note}
                   />
                 )}
@@ -588,9 +608,10 @@ export function TerminalFace({
                     is this page saying it has room (`./AdriftSlot`). */}
                 {asking === null && room && (
                   <AdriftSlot
-                    folder={bound.live[0]?.path ?? null}
+                    folders={boundPaths}
+                    project={layout.project}
                     onOpenLedger={onOpenLedger}
-                    onOpen={() => askToOpen(layout.project!)}
+                    onOpen={(agent) => askToOpen(layout.project!, agent)}
                   />
                 )}
               </>

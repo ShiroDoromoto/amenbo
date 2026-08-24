@@ -646,19 +646,25 @@ pub struct Config {
     /// unanswered after the user has removed the registration themselves (`AMB-D-718`).
     #[serde(default)]
     pub tick_consent: Option<crate::tick::TickConsent>,
-    /// **Which agent a folder's panes are opened with**, by absolute folder path
-    /// ([`crate::wake`]). Written only where the person was actually asked — a folder with one
-    /// startable agent settles itself and leaves no row, so this holds answers, never guesses.
+    /// **Which agent a project's panes are opened with**, by project id ([`crate::wake`]). Written
+    /// where the person first opened a pane and left unchanged after that — the answer is theirs to
+    /// change on the project's own settings, and a pane opened with something else for one turn is
+    /// not them changing it.
     ///
-    /// It is the device's, not the project's: what can be started is what is installed on this
-    /// machine, and the same folder on a second machine may have nothing of the sort on it. **Never
-    /// synced**, for the same reason.
+    /// **The project is the scale, not the folder.** One project can bind several folders, so a
+    /// folder-shaped answer splits into as many answers as the project has folders and the reader
+    /// gets a different agent depending which one a pane happens to open in.
+    ///
+    /// It is the device's all the same: what can be started is what is installed on this machine,
+    /// and the same project on a second machine may have nothing of the sort on it. **Never
+    /// synced**, for the same reason — which is also why the store's own project row is the wrong
+    /// place for it.
     ///
     /// A row whose agent has since gone is left alone rather than pruned. It costs a line, and the
-    /// day the tool comes back is the day the folder's answer is right again — [`crate::wake::settle`]
+    /// day the tool comes back is the day the project's answer is right again — [`crate::wake::settle`]
     /// already ignores one that does not hold.
     #[serde(default)]
-    pub folder_agent: std::collections::BTreeMap<String, String>,
+    pub project_agent: std::collections::BTreeMap<String, String>,
 }
 
 /// Cap on the size of an avatar data URL, in bytes. A loose limit to stop breakage and runaways —
@@ -712,7 +718,7 @@ impl Default for Config {
             ai_avatar: None,
             hook_consent: None,
             tick_consent: None,
-            folder_agent: Default::default(),
+            project_agent: Default::default(),
         }
     }
 }
@@ -875,18 +881,22 @@ impl Config {
         ]
     }
 
-    /// Which agent this folder's panes are opened with, if the person has been asked
-    /// ([`Config::folder_agent`]). The path is used as the key exactly as given, so a caller hands
-    /// over the canonical form — the same folder reached by two paths is one folder, and two rows
-    /// would be two answers to one question.
-    pub fn agent_for(&self, folder: &std::path::Path) -> Option<&str> {
-        self.folder_agent.get(&folder.to_string_lossy().into_owned()).map(String::as_str)
+    /// Which agent this project's panes are opened with, where one has been settled
+    /// ([`Config::project_agent`]).
+    pub fn agent_for(&self, project: i64) -> Option<&str> {
+        self.project_agent.get(&project.to_string()).map(String::as_str)
     }
 
-    /// Keep this folder's answer, replacing any earlier one — what a person picking from the offer
-    /// leaves behind ([`crate::wake`]).
-    pub fn remember_agent(&mut self, folder: &std::path::Path, id: &str) {
-        self.folder_agent.insert(folder.to_string_lossy().into_owned(), id.to_string());
+    /// Keep this project's answer, replacing any earlier one — what the project's settings write,
+    /// and what the first pane opened in a project leaves behind ([`crate::wake`]).
+    pub fn remember_agent(&mut self, project: i64, id: &str) {
+        self.project_agent.insert(project.to_string(), id.to_string());
+    }
+
+    /// Forget this project's answer, so the next pane opened in it settles one again — what
+    /// clearing the choice on the project's settings leaves behind.
+    pub fn forget_agent(&mut self, project: i64) {
+        self.project_agent.remove(&project.to_string());
     }
 
     /// Read the config file, falling back to the defaults when it is absent — for the cases that

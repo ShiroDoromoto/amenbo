@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import type { AdriftDto, AdriftRowDto } from "../bindings/bindings";
+import type { AdriftDto, AdriftRowDto, WakeDto } from "../bindings/bindings";
 import { fetchAdrift } from "../core/mutations";
+import { invoke } from "../core/ipc";
 import { useRefNav } from "../core/refNav";
+import { SHELL } from "../talk/terminal";
 import { t } from "../core/i18n";
 
 /**
@@ -27,22 +29,68 @@ import { t } from "../core/i18n";
  * frame, so this draws unconditionally: four identical questions is the thing the count of them
  * prevents, not the thing this component checks.
  *
- * `onOpen` is what this is for when there is nothing to ask: opening a pane in this project.
+ * **What a terminal is opened with is chosen here**, on the frame, and pressed once. The row above
+ * the button is every agent this machine can start plus the plain shell, with the project's own
+ * answer already on — so the common press is the same one press it always was, and choosing
+ * something else costs a press and no dialog (`AMB-T-3667`). What is chosen here is this pane's: the
+ * project settles its answer the first time and changes it on its own settings, never by somebody
+ * reaching for a different tool for one turn (`../talk/agent`).
+ *
+ * `onOpen` is what this is for when there is nothing to ask: opening a pane in this project, with
+ * the agent that was chosen — {@link SHELL} for a prompt with nothing started at it.
  */
 export function AdriftSlot({
-  folder,
+  folders,
+  project,
   onOpen,
   onOpenLedger,
 }: {
-  /** A folder of the project being shown, or null where it is bound to none. */
-  folder: string | null;
-  onOpen: () => void;
+  /** The folders the project being shown is bound to. The first is what the adrift read is scoped to
+   *  and the whole list is what the agents are traced across (`crate::wake`). */
+  folders: readonly string[];
+  /** The project being shown, or null on a face that has none — which is a face with nothing to
+   *  keep an answer against. */
+  project: number | null;
+  onOpen: (agent: string) => void;
   /** Bring the ledger up. Selecting a task happens on the other face, so following one from here has
    *  to leave this one — the same move the file face makes (`../files/FilesPanel`). */
   onOpenLedger?: () => void;
 }) {
   const [adrift, setAdrift] = useState<AdriftDto>({ tasks: [], decisions: [] });
   const nav = useRefNav();
+  const folder = folders[0] ?? null;
+  // What this machine can start, and what this project has settled on. Read once per project rather
+  // than per press: a probe is a login shell reading the reader's own profile (`crate::wake`), and a
+  // frame that ran one on every render would pay for it on every keystroke elsewhere on the page.
+  const [wake, setWake] = useState<WakeDto | null>(null);
+  // Which of them the next pane opens with, once the reader has said. Null until they do, because
+  // what is on before that is the project's answer and that arrives with the read.
+  const [chose, setChose] = useState<string | null>(null);
+  const key = folders.join("\n");
+
+  useEffect(() => {
+    let alive = true;
+    setWake(null);
+    setChose(null);
+    invoke<WakeDto>("wake_choices", { project, folders: key === "" ? [] : key.split("\n") })
+      .then((said) => { if (alive) setWake(said); })
+      // A read that failed leaves the row off and the button alone: the frame's job is to open a
+      // pane, and the agent it opens with is settled again on the other side (`../talk/agent`).
+      .catch(() => { if (alive) setWake(null); })
+    ;
+    return () => { alive = false; };
+  }, [project, key]);
+
+  // The row, in catalog order, with the plain shell at the end of it. The shell is not an agent and
+  // has no row in the catalogue, so it is put here rather than found (`../talk/agent`).
+  const starts = useMemo(() => {
+    const offered = (wake?.offered ?? [])
+      .flatMap((id) => (wake?.candidates ?? []).filter((one) => one.id === id))
+      .map((one) => ({ id: one.id, label: one.label }));
+    return [...offered, { id: SHELL, label: t("talk.shell") }];
+  }, [wake]);
+  // What is on: what the reader said, else the project's answer, else the first thing on the row.
+  const on = chose ?? wake?.settled ?? starts[0]?.id ?? SHELL;
 
   // Re-read whenever the store moves: a task the reader has just picked up again is one this must stop
   // asking about, and the answer changes from outside this window by construction.
@@ -79,8 +127,32 @@ export function AdriftSlot({
     [nav, onOpenLedger],
   );
 
+  /** The row of things to open with, and the one press that opens on the one that is on. */
+  const ways = (
+    <>
+      {starts.length > 1 && (
+        <div className="slot__starts" role="radiogroup" aria-label={t("talk.startWith")}>
+          {starts.map((one) => (
+            <button
+              key={one.id}
+              className={`slot__start${one.id === on ? " slot__start--on" : ""}`}
+              // Choosing between things, not turning one of them on: what a press does is say which
+              // of the row the pane opens with, and exactly one of them is always on.
+              role="radio"
+              aria-checked={one.id === on}
+              onClick={() => setChose(one.id)}
+            >
+              {one.label}
+            </button>
+          ))}
+        </div>
+      )}
+      <button className="slot__open" onClick={() => onOpen(on)}>{t("face.open")}</button>
+    </>
+  );
+
   if (adrift.tasks.length === 0 && adrift.decisions.length === 0) {
-    return <button className="slot slot--empty" onClick={onOpen}>{t("face.open")}</button>;
+    return <div className="slot slot--empty">{ways}</div>;
   }
 
   // One question over both. What tells a reader which kind a row is, and so what pressing it opens, is
@@ -103,7 +175,7 @@ export function AdriftSlot({
           </li>
         ))}
       </ul>
-      <button className="slot__open adrift__open" onClick={onOpen}>{t("face.open")}</button>
+      <div className="adrift__open">{ways}</div>
     </div>
   );
 }

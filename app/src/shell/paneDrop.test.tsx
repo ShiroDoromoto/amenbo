@@ -80,6 +80,7 @@ async function pane(autoStart = true): Promise<void> {
   await act(async () => {
     root.render(createElement(TerminalPane, {
       frame: "1",
+      project: 1,
       names: new Map(),
       start: { cwd: "/work/here" },
       autoStart,

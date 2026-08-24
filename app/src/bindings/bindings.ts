@@ -2365,8 +2365,12 @@ export type WakeDto = {
 /**
  * The folder this answers for, canonical — what the face opens the pane in, so that the pane
  * and the answer are about the same folder.
+ *
+ * Absent where the question was asked about a project rather than about one folder
+ * ([`crate::wake::wake_choices`]): a project's folders are several, and none of them is the
+ * one a pane that has not been opened yet will run in.
  */
-folder: string, 
+folder?: string, 
 /**
  * Every catalogued agent, in catalog order. The install notice is drawn from this, which is why
  * the ones this machine does not have are here too.
@@ -2380,4 +2384,14 @@ offered: Array<string>,
  * The id to open with, when nothing needs asking. `None` with a non-empty `offered` is the
  * question; `None` with an empty one is the notice.
  */
-settled?: string, };
+settled?: string, 
+/**
+ * What this project has settled on **as written** ([`amenbo_core::config::Config::agent_for`]),
+ * rather than what the rank arrives at.
+ *
+ * The two come apart on a machine with one agent installed, where `settled` names it and
+ * nothing was ever kept. A face asking the reader to change the answer draws this: "nothing
+ * kept" and "kept the only one there is" read the same off `settled` and are different answers
+ * to the question being put.
+ */
+kept?: string, };

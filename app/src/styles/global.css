@@ -269,6 +269,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .slot__open:hover { filter: brightness(1.08); }
 
+/* The question and the row under it, kept together: the words are what say the pills are an offer, so
+   they sit closer to the row than the row sits to the press that acts on it. */
+.slot__pick {
+  flex: 0 0 auto;
+  display: flex; flex-direction: column; align-items: center; gap: var(--s-2);
+}
+/* The words over the row. Quiet and small — it is a question about the pills, not a heading over the
+   frame, and one that shouts would take the eye before the thing it is asking about. */
+.slot__ask {
+  margin: 0;
+  color: var(--c-text-muted); font-size: var(--fs-sm); text-align: center;
+}
+
 /* What the terminal is opened with: one pill each, and the one in force filled with the accent. They
    are pressable and a reader has to see that they are — words alone read as a caption, and a caption
    is not something anybody tries. Each pill holds its name on one line and the row wraps instead:

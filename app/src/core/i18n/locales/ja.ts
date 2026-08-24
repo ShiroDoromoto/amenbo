@@ -524,6 +524,7 @@ export const ja: Translation = {
     "face.pages": "ページ",
     "face.page": "{n} ページ目",
     "face.adrift": "このプロジェクトに、途中のまま止まっているものがあります。続けますか？",
+    "face.whichStart": "何で開きますか",
     "face.open": "ここで端末を開く",
     "face.openHere": "このプロジェクトでもう1枚ぶんの空きへ",
     "face.whichFolder": "このペインはどのフォルダで作業しますか？",

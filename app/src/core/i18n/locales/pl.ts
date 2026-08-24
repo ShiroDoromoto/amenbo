@@ -538,6 +538,7 @@ export const pl: Translation = {
     "face.pages": "Strony",
     "face.page": "Strona {n}",
     "face.adrift": "W tym projekcie coś zostało w połowie i nikt się tym nie zajmuje. Kontynuować?",
+    "face.whichStart": "Czym otworzyć ten panel?",
     "face.open": "Otwórz tu terminal",
     "face.openHere": "Miejsce na kolejny panel w tym projekcie",
     "face.whichFolder": "W którym folderze pracuje ten panel?",

@@ -94,7 +94,12 @@ type Props = Parameters<typeof FilesPanel>[0];
 async function draw(props: Partial<Props> = {}) {
   await act(async () => {
     const projectId = "projectId" in props ? (props.projectId ?? null) : 1;
-    root.render(createElement(FilesPanel, { ...props, projectId }));
+    // Which half is up, and the panel's own way out, belong to the terminal face around it
+    // (`../shell/TerminalFace`). These tests are about what the files half draws, so the files half
+    // is what they hand it.
+    root.render(createElement(FilesPanel, {
+      tab: "files", onTab: () => {}, onClose: () => {}, ...props, projectId,
+    }));
   });
   await settle();
 }
@@ -335,7 +340,7 @@ describe("the file face", () => {
 
   it("says a project with no folder has none, rather than drawing empty rows", async () => {
     await draw({ projectId: null });
-    expect(container.textContent).toBe(t("files.noFolder"));
+    expect(container.querySelector(".files__none")?.textContent).toBe(t("files.noFolder"));
     expect(hoisted.asked).toEqual([]);
   });
 

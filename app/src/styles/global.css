@@ -83,6 +83,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1.6;
 }
 .termface__action:hover { color: var(--c-text); }
+/* A toggle whose side is on the screen. It is the same button either way — what it says is whether
+   pressing it opens something or puts it away. */
+.termface__action--on { color: var(--c-text); border-color: var(--c-border-strong); }
+/* The file face's two halves, at the far end of the row: they are about the other side of the
+   screen, and the controls for what is in the middle sit between them and the way out. */
+.termface__sides { display: flex; gap: var(--s-2); margin-left: auto; }
 /* The program in the terminal having exited. What is on the screen stays as it was — that is what a
    terminal ends with — and this is the part of it the screen cannot show for itself. */
 .termface__note { color: var(--c-text-muted); font-size: var(--fs-sm); }
@@ -137,10 +143,26 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--c-heed); border: 1px solid var(--c-bg);
 }
 
-/* The rail and the panes, side by side. The rail keeps its width and the panes take what is left:
-   the panes are what the face is for, and a list of them that grew with their names would take the
-   room from the thing it is a list of. */
+/* The rail and the panes, side by side. A column keeps the width the person gave it and the panes
+   take what is left: the panes are what the face is for, and a list of them that grew with their
+   names would take the room from the thing it is a list of (`app/src/talk/columns.ts`). */
 .termface__body { flex: 1; min-height: 0; display: flex; gap: var(--s-2); }
+
+/* One of the columns beside the panes. It holds the column itself and the grip on the edge it shares
+   with them, which is why it is a box of its own: the grip is drawn on the edge rather than in the
+   flow, so it needs something to be positioned against. */
+.termface__column { position: relative; flex: 0 0 auto; min-height: 0; display: flex; }
+.termface__column--rail { width: var(--rail-w, 160px); }
+.termface__column--side { width: var(--side-w, 16rem); }
+/* The edge itself. It is wider than the line it sits on — a border is a pixel and a pointer is not —
+   and it straddles the gap between the column and the panes rather than eating into either. */
+.termface__grip {
+  position: absolute; top: 0; bottom: 0; width: 9px; z-index: 3;
+  cursor: col-resize;
+}
+.termface__grip--rail { right: calc(var(--s-2) * -1 - 4px); }
+.termface__grip--side { left: calc(var(--s-2) * -1 - 4px); }
+.termface__grip:hover { background: var(--c-border-strong); }
 
 /* The page: the slots of it, laid out as one row, two across, or four in a square. The grid is
    written per count rather than flowing, because a slot is a fixed place — panes that reflowed as
@@ -247,7 +269,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* The rail: the projects, and under the one being shown, its panes. The division is what the list is
    for, so a project is a row a person presses and not a caption over some others. */
 .rail {
-  flex: 0 0 auto; width: 160px; min-height: 0;
+  flex: 1 1 auto; min-width: 0; min-height: 0;
   overflow-y: auto;
   display: flex; flex-direction: column; gap: var(--s-2);
   padding-right: var(--s-2);
@@ -310,22 +332,27 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--c-text); font-size: var(--fs-sm); width: 100%;
 }
 
-/* One pane, or a window too narrow for three things across it: the rail stops being a column and
-   becomes something opened when it is wanted. It sits over the panes rather than beside them,
-   because the reason it is a drawer is that there is no room beside them. */
+/* A window too narrow for three things across it: a column stops being one and becomes something
+   opened when it is wanted. It sits over the panes rather than beside them, because the reason it is
+   a drawer is that there is no room beside them (`app/src/talk/columns.ts`). */
 .termface--drawers .termface__body { position: relative; }
 .termface__drawer {
   position: absolute; inset: 0 auto 0 0; z-index: 2;
+  width: var(--rail-w, 160px);
   display: flex;
   background: var(--c-surface); border-radius: var(--r-md);
   box-shadow: var(--shadow-md);
   padding: var(--s-2);
 }
+/* The file face's drawer is the same thing on the other edge: it is opened from the same row that
+   opens it as a column, and it lies over the panes for the same reason — there is no room beside
+   them. */
+.termface__drawer--side { inset: 0 0 0 auto; width: var(--side-w, 16rem); }
 /* ---------- the file face ---------- */
 /* The right side of the terminal face: what changed in the project's folder lately, and the folder
    itself, folded (`app/src/files/FilesPanel.tsx`). */
 .files {
-  width: 16rem; flex: none;
+  flex: 1 1 auto; min-width: 0;
   min-height: 0; overflow-y: auto;
   display: flex; flex-direction: column; gap: var(--s-3);
   padding: var(--s-3);
@@ -399,6 +426,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* Files, and the page written on. The tabs are the panel's own, drawn small: they are a way between
    two things rather than the panel's subject. */
 .files__tabs { display: flex; gap: var(--s-2); border-bottom: 1px solid var(--c-border); }
+/* The panel's way out, at the end of whichever row it has. Quiet, like the control that ends a pane:
+   what stops it being pressed by mistake is that nothing is lost when it is — the top row opens the
+   panel again, on the half it was showing. */
+.files__close {
+  margin-left: auto; flex: 0 0 auto;
+  padding: 0 var(--s-1);
+  border: 0; background: transparent;
+  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
+}
+.files__close:hover { color: var(--c-text); }
 .files__tab {
   padding: var(--s-1) 0; border: 0; background: none;
   color: var(--c-text-muted); font-size: var(--fs-sm); cursor: pointer;

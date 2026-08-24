@@ -137,23 +137,25 @@ pub struct SavedLayout {
     pub next_id: u32,
     /// The project whose panes the face was showing.
     ///
-    /// It is here for the window that has no rail: the terminal split out into one of its own draws
-    /// a single pane and nobody asked it on its way in, so the project it belongs to is the one the
-    /// board was on when it was split out (`app/src/talk/agent.ts`). `None` is an arrangement
-    /// written before that was kept, and a face that has not been told of a project yet.
+    /// It is here for the window that has no ledger: the terminal split out into one of its own was
+    /// asked nothing on its way in, so where an arrangement comes back with no panes to name a
+    /// project, what it opens on is the one the board was showing
+    /// (`app/src/shell/TerminalFace.tsx`). `None` is an arrangement written before that was kept,
+    /// and a face that has not been told of a project yet.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub project: Option<u32>,
     /// The frames, in slot order.
     pub frames: Vec<SavedFrame>,
-    /// The frame the window split out of the board draws.
+    /// The pane that was being worked in when the arrangement was last kept.
     ///
-    /// That window is one pane and has no rail (`AMB-D-753`), so which of the arrangement's places it
-    /// is showing is not a question it can answer for itself — and it has to be answered, because the
-    /// pane it draws carries a frame's name and takes one. It is the frame that was being worked in
-    /// when the arrangement was last kept, which is the pane a person splits out: the one they are in.
+    /// It is what the window split out of the board comes up on (`AMB-D-753`). That window draws the
+    /// whole face, so every place is reachable in it either way — what this settles is where the
+    /// reader lands, and landing on the first place of the first project would be putting them
+    /// somewhere they did not ask to be. Nothing is handed over at the split, so this is the only
+    /// record of it.
     ///
-    /// `None` is an arrangement written before that was kept, and a machine that has never split the
-    /// terminal out. **What was running in it is not here** — that is a fact about this run and lives
+    /// `None` is an arrangement written before that was kept, and a machine where nobody has worked
+    /// in a pane. **What was running in it is not here** — that is a fact about this run and lives
     /// as long as the process does (`crate::pty`), where a frame is a place and outlives every session
     /// in it.
     #[serde(default, skip_serializing_if = "Option::is_none")]

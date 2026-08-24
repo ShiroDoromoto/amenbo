@@ -68,8 +68,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* ---------- the terminal face ---------- */
 /* The terminal as the board's window draws it: a bar with the way out to a window of its own and the
    controls for what is on screen, then the rail of panes and the page of slots beside it
-   (../talk/layout.ts). The window a terminal is split out into is one pane and draws neither
-   (styles/talk.css) — the control there is the way back. */
+   (../talk/layout.ts). The window a terminal is split out into draws the same face, so these rules
+   are the ones it is drawn with there too (styles/talk.css). */
 .shell__terminal { min-height: 0; }
 .termface {
   height: 100%; min-height: 0;

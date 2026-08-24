@@ -58,6 +58,12 @@ import { errText, t, tf, tn } from "../core/i18n";
  * rebuilds the interface — this does come down, and the sessions do not: the panes detach, and this
  * face takes them up again when it comes back (see the adoption below).
  *
+ * **It is the same face in either window.** Splitting the terminal out puts this component up in a
+ * window of its own (`../talk.tsx`) rather than one pane of it: the rail, the pages, the split and
+ * the files beside them all go, because a face that arrived on the second display with only a pane
+ * left would be a person carrying one terminal out rather than moving where they work
+ * (`AMB-D-753`). `ownWindow` is the whole of the difference, and it comes to two things.
+ *
  * What runs in a pane is not settled here either. The frame put up inside each slot asks the host
  * which agent that folder starts with, and draws the offer or the install notice where that has no
  * single answer (`../talk/agent.ts`) — which is also where a refusal to start one is shown, so
@@ -89,22 +95,37 @@ import { errText, t, tf, tn } from "../core/i18n";
  * and after that the rail is what moves it.
  */
 export function TerminalFace({
-  onSplitOut,
+  onWindow,
+  ownWindow,
   note,
   onWaiting,
   projectId,
   onOpenLedger,
   openIn,
 }: {
-  /** Take the terminal into a window of its own. What goes with it is the pane being worked in —
-   *  the frame, so the window names the place it is drawing, and the terminal running there, so it
-   *  takes that one up rather than guessing from a count of what is open (`../talk.ts`). Null where
-   *  this face has no pane to be working in, which is the window with nothing to take up. */
-  onSplitOut: (pane: { frame: string; session?: string } | null) => void;
+  /** The one button that changes how many windows the app is: on the board it takes the terminal
+   *  into a window of its own, and in that window it folds the app back. It is handed nothing,
+   *  because there is nothing about the arrangement the other side has to be told — what is kept
+   *  is what the window that comes up reads (`../talk/layout`). */
+  onWindow: () => void;
+  /**
+   * Whether this face has a window to itself — the one the terminal was split out into, rather than
+   * the board's (`AMB-D-753`).
+   *
+   * It says two things and no more. The button above reads "fold back" instead of "split out", and
+   * the arrangement is come back to where the person left it: which pane they were working in is
+   * kept with the shape, and this is the window that has nobody to have asked. Everything else on
+   * the face is the same in both windows, which is the whole point of splitting one out.
+   */
+  ownWindow?: boolean;
   note: string | null;
   onWaiting: (waiting: boolean) => void;
-  /** The project the face opens on, where the window has one to say. */
+  /** The project the face opens on, where the window has one to say. The window the terminal was
+   *  split out into has no ledger to have been on, so it says nothing and the arrangement answers. */
   projectId?: number | null;
+  /** Go to the ledger, for a record clicked in a file or on an empty frame. Nothing in the window
+   *  the terminal was split out into: the ledger is the other window there, and raising it is the
+   *  host's (`crate::windows::show_ref`, `../core/refNav`). */
   onOpenLedger?: () => void;
   /**
    * A folder the ledger asked this face to work in, whose project it is, and a count of the asking —
@@ -240,9 +261,16 @@ export function TerminalFace({
   // that started them all would be starting work nobody asked for.
   //
   // **What is running is a different question, and it is answered here.** A session with no pane
-  // drawing it is one this window split out and has just taken back (`AMB-D-753`): it is put in the
-  // pane whose folder it is running in where there is one, and in a new pane on the project being
-  // shown where there is not — a terminal nobody can see is a terminal nobody can end.
+  // drawing it is one the other window was drawing a moment ago — the face moving between the two
+  // windows is what leaves them loose (`AMB-D-753`). It is put in the pane whose folder it is running
+  // in where there is one, and in a new pane on the project being shown where there is not: a
+  // terminal nobody can see is a terminal nobody can end.
+  //
+  // The folder is all there is to go on, and two panes may share one — so the sessions are taken in
+  // the order they were started and the places in the order they were opened, which pairs them the
+  // way they were paired. The host answers oldest-first for exactly this (`crate::pty::pty_sessions`);
+  // paired any other way the two panes trade contents, and each is then drawn under the other's
+  // name, because a name belongs to the place rather than to what is running in it (`../talk/frames`).
   const restoring = useRef(false);
   useEffect(() => {
     // Waiting on the project, where there is one to wait for: it answers for the panes an older
@@ -261,6 +289,12 @@ export function TerminalFace({
         if (!alive) return;
         setLayout((was) => {
           let next = (saved === null ? null : restored(saved, onto)) ?? was;
+          // The project the board was on, for the window that has no ledger to have taken one from.
+          // It answers only where nothing came back to say it: an arrangement with panes in it names
+          // the project of every one of them, and this is the machine that has never had any.
+          if (ownWindow && next.frames.length === 0 && saved?.project != null) {
+            next = { ...next, project: saved.project };
+          }
           for (const session of running) {
             const free = next.frames.find(
               (frame) => frame.session === null && frame.folder === session.folder,
@@ -275,12 +309,18 @@ export function TerminalFace({
             if (!frame) continue;
             next = openedIn(next, frame.id, session.session, session.folder);
           }
+          // And the pane that was being worked in when the arrangement was kept, which is the pane
+          // the person split the terminal out of (`../talk/layout`). It carries the page and the
+          // project with it, so the window comes up where they left rather than on the first place
+          // of the first project. The board never reads it back: which pane is being worked in
+          // *now* is its own state, and an old write must not move a reader's place.
+          if (ownWindow && saved?.splitOut != null) next = focusOn(next, saved.splitOut);
           return next;
         });
       })
       .finally(() => { if (alive) setSettled(true); });
     return () => { alive = false; };
-  }, [layout.project, projects.length]);
+  }, [layout.project, projects.length, ownWindow]);
 
   // And kept as it changes. Only the shape is written, so a session opening or closing is not a
   // write — what is kept is where the panes are, not what is in them.
@@ -587,18 +627,13 @@ export function TerminalFace({
       style={{ "--rail-w": `${railWidth}px`, "--side-w": `${sideWidth}px` } as CSSProperties}
     >
       <div className="termface__bar">
-        <button
-          className="termface__action"
-          onClick={() => onSplitOut(
-            focusedFrame === null
-              ? null
-              : {
-                  frame: focusedFrame.id,
-                  ...(focusedSession === null ? {} : { session: focusedSession }),
-                },
-          )}
-        >
-          <Icon name="newWindow" /> {t("face.splitOut")}
+        {/* Two windows or one, from whichever of them the reader is in. The press says nothing about
+            the arrangement: what goes with the terminal is the face whole, and the face is drawn
+            from what this device keeps (`../talk/layout`). The mark is the same either way, because
+            what it draws is the arrangement the control is about and not the direction of this
+            press — which is what the words beside it say. */}
+        <button className="termface__action" onClick={() => onWindow()}>
+          <Icon name="newWindow" /> {t(ownWindow ? "face.merge" : "face.splitOut")}
         </button>
         {/* The rail's way in, and its way out. It is here whether the rail is a column or a drawer:
             a column nobody can close goes on taking width from the panes on a small screen, and one

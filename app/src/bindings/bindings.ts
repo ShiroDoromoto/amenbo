@@ -2160,8 +2160,9 @@ count: number,
  */
 nextId: number, 
 /**
- * The project whose panes the face was showing. It is what the window with no rail opens as
- * (`app/src/talk.ts`); absent where nothing has told the face of a project yet.
+ * The project whose panes the face was showing. It is what the window the terminal is split out
+ * into opens as, where the arrangement came back with no panes to name one
+ * (`app/src/shell/TerminalFace.tsx`); absent where nothing has told the face of a project yet.
  */
 project?: number, 
 /**
@@ -2169,31 +2170,11 @@ project?: number,
  */
 frames: Array<TalkFrameDto>, 
 /**
- * The frame the window split out of the board draws — the one being worked in when the
- * arrangement was kept (`amenbo_core::frames::SavedLayout`). Absent where the terminal has never
- * been split out.
+ * The pane being worked in when the arrangement was kept — the one the window split out of the
+ * board comes up on (`amenbo_core::frames::SavedLayout`). Absent where nobody has worked in a
+ * pane yet.
  */
 splitOut?: string, };
-
-/**
- * The pane the board is handing to the window it is splitting the terminal out into.
- *
- * Two things, and they come from different lifetimes. The **frame** is a place in the arrangement,
- * and it is what the pane's name belongs to (`FrameNameDto`) — without it the window would name a
- * frame it is not drawing. The **session** is the terminal running in that frame at the moment of
- * the split, so the window takes up that one rather than guessing from a count of what is open: with
- * several panes running, a window that adopted "the only session" would adopt none of them.
- */
-export type TalkPaneDto = { 
-/**
- * The frame the window draws.
- */
-frame: string, 
-/**
- * The terminal running in it, or `None` for a frame whose program has ended — a place with its
- * last output on it is still the place being split out.
- */
-session?: string, };
 
 export type TaskCardDto = { id: number, title: string, 
 /**
@@ -2367,7 +2348,7 @@ export type WakeDto = {
  * and the answer are about the same folder.
  *
  * Absent where the question was asked about a project rather than about one folder
- * ([`crate::wake::wake_choices`]): a project's folders are several, and none of them is the
+ * (`crate::wake::wake_choices`): a project's folders are several, and none of them is the
  * one a pane that has not been opened yet will run in.
  */
 folder?: string, 

@@ -4,8 +4,8 @@ import { t } from "../core/i18n";
 /**
  * The app-wide backstop. A synchronous throw in any child's render would otherwise unmount the whole
  * React tree and leave a black screen (the body's dark background and nothing else); this catches it
- * and shows a fallback with a way back. It wraps the root (`<App/>` in main.tsx), so even the first
- * render at startup is covered.
+ * and shows a fallback with a way back. It wraps the root of each window — `<App/>` in main.tsx and
+ * the talk window's own page (`../talk.tsx`) — so even the first render at startup is covered.
  */
 export class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };

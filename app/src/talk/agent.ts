@@ -21,15 +21,14 @@
 // meanings, and no word the reader has to be taught first (`AMB-T-3606`). On the board's face that
 // press happens **before** the pane is made, among the folders the project is bound to
 // (`../shell/FolderChoice`), so a frame there always arrives with one. A frame with no folder puts the
-// invitation and nothing else, which is the split-out window: one pane, no rail, and nobody to have
-// asked it on its way in.
+// invitation and nothing else, which is an empty place on a page: room for a pane nobody has opened.
 //
 // **The invitation keeps to the same folders the board's does.** A pane belongs to a project, so what
-// it may work in is what that project is bound to and nothing else — a window that could reach any
+// it may work in is what that project is bound to and nothing else — a frame that could reach any
 // folder on the machine would put a pane from another project on a screen the rail promises cannot
-// hold one. The window with no rail is told which project it is by the arrangement the board left
-// (`../talk.ts`), and the one case with no list to keep to is the machine with no project yet, where
-// the press is the first run's and the folder chosen raises the project it belongs to.
+// hold one. Which project that is comes from the face the frame sits on (`../shell/TerminalFace`),
+// and the one case with no list to keep to is the machine with no project yet, where the press is the
+// first run's and the folder chosen raises the project it belongs to.
 //
 // **What the empty frame chose is carried in rather than asked for again.** The face puts the
 // startable agents on the frame itself and opens on one press ({@link PaneStart.agent} ·
@@ -58,18 +57,23 @@ import { invoke } from "../core/ipc";
 import { chooseFolderFor, chooseWorkFolder, fetchBoundFolders } from "../core/mutations";
 import { mountTerminal, SHELL, type PaneEvents, type PaneStart } from "./terminal";
 
+/** The class the terminal's box is drawn with. xterm.js measures the element it was opened in, so
+ *  this is the rule that decides how many columns and rows the program inside is told it has
+ *  (`app/src/styles/global.css`). One name, because there is one face that draws a pane — the board
+ *  shows it and the split-out window shows the same one (`../shell/TerminalFace`). */
+const PANE_CLASS = "termface__pane";
+
 /**
  * Fill `host` with the frame — the pane, and whatever has to be put to the reader before or after
  * one — and return the way to take it away again.
  *
  * `on` is passed straight through to whatever pane is running: this module decides what starts, not
- * what is heard. `paneClass` is the class the terminal's box is drawn with, because the two faces
- * that draw a pane style theirs differently and neither's box is this module's to name.
+ * what is heard.
  *
  * `start` is which terminal this frame is for. A slot that already had one takes it up again and asks
- * nothing (`./layout`); a folder given here is where a started terminal opens. The board's face
- * always gives one — it settles where a pane works before the pane is made (`../shell/FolderChoice`)
- * — so the invitation below is the split-out window's, which has no rail to have been asked on.
+ * nothing (`./layout`); a folder given here is where a started terminal opens. The face settles where
+ * a pane works before the pane is made (`../shell/FolderChoice`), so the invitation below is for the
+ * frame that arrived without one — a pane that took up a terminal somebody else started.
  *
  * `project` is which project this frame's pane is one of. It is what the invitation asks among —
  * that project's bound folders and nothing else — and it is **whose answer the agent is kept
@@ -82,7 +86,6 @@ export async function mountAgentFrame(
   host: HTMLElement,
   lang: Lang,
   on: PaneEvents,
-  paneClass: string,
   start: PaneStart = {},
   project: number | null = null,
 ): Promise<() => void> {
@@ -95,11 +98,11 @@ export async function mountAgentFrame(
   // until then, which is the whole reason a closed frame is still a frame.
   let close: (() => void) | null = null;
   let wake: WakeDto | null = null;
-  // Where this frame's terminals are started. It is the folder the window settled for this pane
-  // (`./layout`), and is null only for a frame nobody has settled one for — the split-out window's,
-  // and the pane that took up a terminal somebody else started. That is the frame with the invitation
-  // on it; once a folder is answered, by the person choosing one or by a terminal this frame took up
-  // saying where it runs, it is not asked for again.
+  // Where this frame's terminals are started. It is the folder the face settled for this pane
+  // (`./layout`), and is null only for a frame nobody has settled one for — the pane that took up a
+  // terminal somebody else started. That is the frame with the invitation on it; once a folder is
+  // answered, by the person choosing one or by a terminal this frame took up saying where it runs,
+  // it is not asked for again.
   let folder: string | null = start.cwd ?? null;
   // Which pane the frame is on. A terminal takes a round trip to mount, and the frame can be cleared
   // while one is in flight — so what comes back is checked against this and thrown away if the frame
@@ -159,7 +162,7 @@ export async function mountAgentFrame(
     clear();
     const mine = showing;
     const pane = document.createElement("div");
-    pane.className = paneClass;
+    pane.className = PANE_CLASS;
     frame.append(pane);
     const events: PaneEvents = {
       ...on,

@@ -1,24 +1,31 @@
 // @vitest-environment jsdom
-// What the press that takes the terminal into a window of its own hands over.
+// What the window the terminal is split out into is.
 //
-// **One pane goes, and the window has to be told which.** The window it opens is one pane with no
-// rail (`AMB-D-753`), so it cannot work out for itself which of the board's places it is drawing —
-// and it has to know two things about it. The frame, because the name of a pane belongs to the place
-// and not to the process in it (`../talk/frames`): a window naming some other frame would rename a
-// pane still sitting on the board. The session, because a window that adopted "the one terminal that
-// is open" would adopt none of several — the state a board with more than one pane running is in
-// every day.
+// **It is the face, whole.** The point of the second window is to put the terminal on another
+// display, so a window that arrived there with one pane and a way back would be a person carrying a
+// terminal out rather than moving where they work (`AMB-D-753`). The rail, the split, the pages and
+// the file face all go with it, and the only difference is that the ledger is not in this window.
 //
-// Neither is visible in code that looks right either way: a window handed the wrong frame draws a
-// terminal and looks like a window that was handed the right one.
+// **And it comes up where the person left.** Which pane they were working in is kept with the shape
+// (`../talk/layout`), because the press that splits hands nothing over — there is one arrangement,
+// and both windows read it. A window that ignored it would open on the first place of the first
+// project, which is somewhere the reader was not.
+//
+// Neither is visible in code that looks right either way: a window with a pane in it looks like a
+// window that was built correctly, whichever pane it is and whatever is missing beside it.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { t } from "../core/i18n";
 import type { PaneStart } from "../talk/terminal";
 
 const hoisted = vi.hoisted(() => ({
-  mounts: 0,
-  folders: [{ path: "/repo", exists: true }] as { path: string; exists: boolean }[],
+  saved: null as unknown,
+  /** The terminals the host says are running, as it answers: oldest first
+   *  (`crate::pty::pty_sessions`). */
+  running: [] as { session: string; startedAt: string; folder: string | null }[],
+  /** Which session each pane was put up to draw, in the order the panes were built. */
+  drawn: [] as (string | null | undefined)[],
 }));
 
 vi.mock("../talk/agent", () => ({
@@ -26,22 +33,50 @@ vi.mock("../talk/agent", () => ({
     _host: HTMLElement,
     _lang: string,
     on: { opened: (s: string, at: string) => void },
-    _paneClass: string,
     start: PaneStart = {},
   ) => {
-    hoisted.mounts += 1;
-    on.opened(start.session ?? `s${hoisted.mounts}`, "2026-08-24T00:00:00Z");
+    hoisted.drawn.push(start.session);
+    on.opened(start.session ?? "s1", "2026-08-24T00:00:00Z");
     return Promise.resolve(() => {});
   },
 }));
+
+vi.mock("../talk/frames", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../talk/frames")>()),
+  frameNames: async () => new Map(),
+  nameFrame: async () => new Map(),
+  savedLayout: async () => hoisted.saved,
+  keepLayout: async () => {},
+}));
+
+// Inside Tauri, because that is where an arrangement is kept at all.
+vi.mock("../core/snapshot", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../core/snapshot")>()),
+  inTauri: () => true,
+}));
+
+// The file face beside the page watches folders on a host that is not here.
+vi.mock("../files/FilesPanel", () => ({ FilesPanel: () => null }));
 
 vi.mock("../mock/adapter", () => ({
   dataAdapter: { listProjects: () => [{ id: 1, name: "amenbo" }] },
 }));
 vi.mock("../core/boundFolders", () => ({
-  useBoundFolders: () => ({ all: hoisted.folders, live: hoisted.folders, answered: true }),
+  useBoundFolders: () => ({
+    all: [{ path: "/work/a", exists: true }],
+    live: [{ path: "/work/a", exists: true }],
+    answered: true,
+  }),
 }));
-vi.mock("../files/FilesPanel", () => ({ FilesPanel: () => null }));
+
+vi.mock("../core/ipc", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../core/ipc")>();
+  return {
+    ...real,
+    invoke: async (cmd: string, args?: Record<string, unknown>) =>
+      (cmd === "pty_sessions" ? hoisted.running : real.invoke(cmd, args)),
+  };
+});
 
 import { TerminalFace } from "./TerminalFace";
 
@@ -49,40 +84,45 @@ import { TerminalFace } from "./TerminalFace";
 
 let container: HTMLDivElement;
 let root: Root;
-const split = vi.fn();
+const pressed = vi.fn();
 
 const q = (sel: string) => [...container.querySelectorAll<HTMLElement>(sel)];
-const click = async (el: HTMLElement) => {
-  await act(async () => { el.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
-};
-/** Open another pane in the project being shown: the way in beside its name on the rail goes to a
- *  page with room, and the empty frame waiting there is what opens the pane. */
-const openPane = async () => {
-  const room = q(".rail__open")[0];
-  if (room) await click(room);
-  await click(q(".slot--empty .slot__open")[0]!);
-};
-/** Work in a pane, the way a person does: a press anywhere on it. */
-const workIn = async (nth: number) => {
-  await act(async () => {
-    q(".slot")[nth]!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-  });
-};
-const splitOut = () => click(q(".termface__action")[0]!);
+const railNames = () => q(".rail__row .rail__name").map((el) => el.textContent);
+const focusedName = () =>
+  container.querySelector(".rail__row--focused .rail__name")?.textContent ?? null;
 
-const mount = async () => {
+/** Put the face up, in one window or the other, and let the arrangement come back. */
+async function mount(ownWindow: boolean) {
   await act(async () => {
-    root.render(createElement(TerminalFace, { onSplitOut: split, note: null, onWaiting: () => {} }));
+    root.render(createElement(TerminalFace, {
+      onWindow: pressed, ownWindow, note: null, onWaiting: () => {},
+    }));
+    await new Promise((r) => setTimeout(r, 0));
   });
-};
+}
 
 beforeEach(() => {
   // The face measures the window to work out whether the columns beside the panes are columns at all
   // (`../talk/columns`). jsdom's window is 1024, which is genuinely too narrow for two panes and two
-  // columns — so a test about what is drawn beside the panes says it is on a wide screen.
+  // columns — so a test that reads the rail says it is on a wide screen.
   window.innerWidth = 1600;
-  hoisted.mounts = 0;
-  split.mockReset();
+  pressed.mockReset();
+  hoisted.running = [];
+  hoisted.drawn = [];
+  // Four panes over two pages, and the person was working in the third — which is on the second
+  // page, and is not where a restore lands by itself.
+  hoisted.saved = {
+    count: 2,
+    nextId: 5,
+    project: 1,
+    frames: [
+      { id: "1", project: 1, folder: "/work/a" },
+      { id: "2", project: 1, folder: "/work/b" },
+      { id: "3", project: 1, folder: "/work/c" },
+      { id: "4", project: 1, folder: "/work/d" },
+    ],
+    splitOut: "3",
+  };
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -93,30 +133,79 @@ afterEach(() => {
   container.remove();
 });
 
-describe("taking the terminal into a window of its own", () => {
-  it("hands over the pane being worked in, and the terminal running in it", async () => {
-    await mount();
-    await openPane();
-    await openPane();
-    // The pane just opened is the one being worked in, which is what a person means by "this one".
-    await splitOut();
-    expect(split).toHaveBeenCalledWith({ frame: "2", session: "s2" });
+describe("the window the terminal is split out into", () => {
+  it("draws the whole face — the rail, the split and the pages — and not one pane", async () => {
+    await mount(true);
+    // Every pane has a row, so there is somewhere to go to any of them.
+    expect(railNames()).toEqual(["a", "b", "c", "d"]);
+    // The split is choosable, and the pages of this project are reachable: without either, the panes
+    // beyond the one on screen are panes the reader cannot get to.
+    expect(q(".termface__counts")).toHaveLength(1);
+    expect(q(".termface__page")).toHaveLength(2);
   });
 
-  it("follows the pane the person moved to, not the one opened last", async () => {
-    await mount();
-    await openPane();
-    await openPane();
-    await workIn(0);
-    await splitOut();
-    expect(split).toHaveBeenCalledWith({ frame: "1", session: "s1" });
+  it("comes up on the pane that was being worked in, and on its page", async () => {
+    await mount(true);
+    expect(focusedName()).toBe("c");
+    // The second page, where that pane is — two panes to a page, and it is the third.
+    expect(container.querySelector(".termface__page--on")?.textContent).toContain("2");
   });
 
-  it("hands over nothing where there is no pane to be working in", async () => {
-    // A face with nothing open has one way in and no place to split out — the window that opens has
-    // to start a terminal for itself, and there is no frame of the board's for it to draw.
-    await mount();
-    await splitOut();
-    expect(split).toHaveBeenCalledWith(null);
+  it("leaves the board where a restore lands, on the first place", async () => {
+    // The kept pane is the split-out window's to read. Which pane is being worked in *now* is the
+    // board's own state, and an old write must not move a reader's place.
+    await mount(false);
+    expect(focusedName()).toBe("a");
+  });
+});
+
+describe("the terminals that were running in the face it left", () => {
+  it("puts each back in the place it was opened in, where two panes share a folder", async () => {
+    // The folder is all there is to tell two places apart, so what pairs them is the order: the
+    // oldest terminal in the oldest place. Paired any other way the two panes trade contents, and
+    // each is drawn under the other's name — a name belongs to the place (`../talk/frames`).
+    hoisted.saved = {
+      count: 2,
+      nextId: 3,
+      project: 1,
+      frames: [
+        { id: "1", project: 1, folder: "/work/a" },
+        { id: "2", project: 1, folder: "/work/a" },
+      ],
+      splitOut: "1",
+    };
+    hoisted.running = [
+      { session: "older", startedAt: "2026-08-24T00:00:00Z", folder: "/work/a" },
+      { session: "newer", startedAt: "2026-08-24T00:00:09Z", folder: "/work/a" },
+    ];
+    await mount(true);
+    expect(hoisted.drawn).toEqual(["older", "newer"]);
+  });
+});
+
+describe("the button that changes how many windows the app is", () => {
+  it("says the move it makes, from whichever window is being read", async () => {
+    // The words, not the row: the button carries a mark before them, and what is pinned here is
+    // which way the press goes (`../components/Icon`).
+    const says = () => q(".termface__action")[0]!.textContent!.trim();
+    await mount(false);
+    expect(says()).toBe(t("face.splitOut"));
+    expect(q(".termface__action")[0]!.querySelector('[data-icon="newWindow"]')).not.toBeNull();
+    await act(() => root.unmount());
+    root = createRoot(container);
+    await mount(true);
+    expect(says()).toBe(t("face.merge"));
+    // The same mark either way: what it draws is the arrangement the control is about, and the
+    // words are what say which direction this press goes.
+    expect(q(".termface__action")[0]!.querySelector('[data-icon="newWindow"]')).not.toBeNull();
+  });
+
+  it("hands nothing over — there is one arrangement, and both windows read it", async () => {
+    await mount(false);
+    await act(async () => {
+      q(".termface__action")[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(pressed).toHaveBeenCalledTimes(1);
+    expect(pressed.mock.calls[0]).toHaveLength(0);
   });
 });

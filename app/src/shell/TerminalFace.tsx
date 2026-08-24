@@ -598,7 +598,7 @@ export function TerminalFace({
                 },
           )}
         >
-          {t("face.splitOut")}
+          <Icon name="newWindow" /> {t("face.splitOut")}
         </button>
         {/* The rail's way in, and its way out. It is here whether the rail is a column or a drawer:
             a column nobody can close goes on taking width from the panes on a small screen, and one
@@ -613,7 +613,7 @@ export function TerminalFace({
           aria-label={t("face.rail")}
           title={t("face.rail")}
         >
-          ☰
+          <Icon name="menu" />
         </button>
         {/* How many panes the page shows. Three steps, always all three shown: which one is on is
             what a person is choosing between, and a control that only says the next step makes them
@@ -687,6 +687,7 @@ export function TerminalFace({
               onClick={() => showSide(which)}
               aria-expanded={sideHere && tab === which}
             >
+              <Icon name={which === "files" ? "folder" : "pencil"} />
               {t(which === "files" ? "files.tab" : "files.memo")}
             </button>
           ))}

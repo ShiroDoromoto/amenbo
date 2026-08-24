@@ -1426,7 +1426,7 @@ impl Instructor {
             // because an operator who did not know would have no way to tell an app that lost a pane
             // from one doing exactly as it said.
             (Domain::Terminal, "remove-pane") => format!(
-                "On the pane showing \"{}\", press the × at the end of its own row — the control beside what is said about that pane, and not the one on any other. A question comes up before anything happens: read it, then answer it yes. The terminal in that pane ends, the pane goes, and the page closes up behind it.",
+                "On the pane showing \"{}\", press the cross at the end of its own row — the control beside what is said about that pane, and not the one on any other. A question comes up before anything happens: read it, then answer it yes. The terminal in that pane ends, the pane goes, and the page closes up behind it.",
                 req(with, "shows")?
             ),
             // Pointing, which is the same seam as `say` and the same one door — but what it leaves is

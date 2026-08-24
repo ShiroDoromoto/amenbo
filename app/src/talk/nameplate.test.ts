@@ -48,10 +48,10 @@ describe("what the middle of the row says", () => {
   it("marks a task that has stopped, and never as a turn being handed over", () => {
     const stopped = nowOf([held({ status: "blocked" })], 0, NO_CHANGEOVER, 0).now;
     expect(stopped).toMatchObject({ kind: "one", stopped: true });
-    // ⏸ is the agent saying a person's turn has come. `blocked` is not that, and must not borrow it
-    // (`AMB-D-748`).
-    expect(nowText(stopped, EN).mark).not.toBe("⏸");
-    expect(nowText(stopped, EN).mark).toBe("⏹");
+    // The pause is the agent saying a person's turn has come. `blocked` is not that, and must not
+    // borrow it (`AMB-D-748`).
+    expect(nowText(stopped, EN).mark).not.toBe("pause");
+    expect(nowText(stopped, EN).mark).toBe("stop");
   });
 
   it("shows an ending for a moment and then stops showing it", () => {
@@ -100,7 +100,7 @@ describe("the one thing said on the right", () => {
     });
     const say = sayOf([held({ ready: false })], sessions.get("pane-1"));
     expect(say).toEqual({ kind: "waiting", text: "which of the two" });
-    expect(sayText(say, EN).mark).toBe("⏸");
+    expect(sayText(say, EN).mark).toBe("pause");
   });
 
   it("says a premise has broken before it repeats what the agent was doing", () => {
@@ -112,7 +112,7 @@ describe("the one thing said on the right", () => {
   it("says nothing where nothing was said", () => {
     // Silence is silence. It is not a claim that nothing needs a hand (`AMB-D-748`).
     expect(sayOf([], undefined)).toEqual({ kind: "silent" });
-    expect(sayText({ kind: "silent" }, EN)).toEqual({ mark: "", text: "", title: "" });
+    expect(sayText({ kind: "silent" }, EN)).toEqual({ mark: null, text: "", title: "" });
   });
 
   it("keeps the whole of what was said for a reader who asks, since the row may not have shown it", () => {

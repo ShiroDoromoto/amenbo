@@ -87,6 +87,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--c-surface-2); border-bottom: 1px solid var(--c-border);
 }
 .termface__action {
+  display: inline-flex; align-items: center; gap: var(--s-1);
   background: var(--c-surface-sunken); border: 1px solid var(--c-border);
   border-radius: var(--r-md); padding: var(--s-1) var(--s-3);
   color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1.6;
@@ -240,6 +241,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
    mistake being final is that it asks first, not that it is loud. */
 .slot__end {
   flex: 0 0 auto;
+  display: inline-flex; align-items: center;
   padding: 0 var(--s-1);
   border: 0; background: transparent;
   color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
@@ -274,6 +276,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
    the shell is the only thing this machine can start: a row of one says nothing a reader can act on. */
 .slot__starts { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-2); }
 .slot__start {
+  display: inline-flex; align-items: center; gap: var(--s-1);
   padding: var(--s-1) var(--s-3);
   border: 1px solid var(--c-border); border-radius: 999px;
   background: var(--c-surface); color: var(--c-text-muted);
@@ -530,12 +533,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
    panel again, on the half it was showing. */
 .files__close {
   margin-left: auto; flex: 0 0 auto;
+  display: inline-flex; align-items: center;
   padding: 0 var(--s-1);
   border: 0; background: transparent;
   color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
 }
 .files__close:hover { color: var(--c-text); }
 .files__tab {
+  display: inline-flex; align-items: center; gap: var(--s-1);
   padding: var(--s-1) 0; border: 0; background: none;
   color: var(--c-text-muted); font-size: var(--fs-sm); cursor: pointer;
 }
@@ -1045,7 +1050,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
   text-overflow: ellipsis;
 }
 
-/* ⏸ / ⚠ / ⏹ — each sits in front of the part it belongs to, and an empty one takes no room. */
+/* The pause, the warning, the stop — each sits in front of the part it belongs to, and an empty one
+   takes no room. The mark is an icon and not a character (`../components/Icon.tsx`), so the place it
+   sits in is a box the size of the drawing rather than a slot of text: `:empty` is what folds it
+   away, and the drawing is the element's only child for exactly that reason. */
+.plate__mark {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center;
+}
 .plate__mark:empty {
   display: none;
 }

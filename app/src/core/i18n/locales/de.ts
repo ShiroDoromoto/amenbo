@@ -530,7 +530,7 @@ export const de: Translation = {
     "files.memo": "Die Seite",
     "files.memoWide": "Breit schreiben",
     "files.memoNarrow": "Zurück in die Leiste",
-    "files.memoPlaceholder": "Stellen Sie hier eine lange Anfrage zusammen. Was bleiben soll, wandert in eine Aufgabe oder eine Entscheidung.",
+    "files.memoPlaceholder": "Stellen Sie hier eine lange Anfrage zusammen.",
     "files.changed": "Kürzlich geändert",
     "files.tree": "Der Ordner",
     "files.nothingChanged": "Bisher hat sich nichts geändert.",

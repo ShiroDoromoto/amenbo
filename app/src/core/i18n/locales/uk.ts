@@ -546,7 +546,7 @@ export const uk: Translation = {
     "files.memo": "Сторінка",
     "files.memoWide": "Писати широко",
     "files.memoNarrow": "Назад на панель",
-    "files.memoPlaceholder": "Складіть тут довге прохання. Те, що варто зберегти, іде в завдання або рішення.",
+    "files.memoPlaceholder": "Складіть тут довге прохання.",
     "files.changed": "Нещодавно змінені",
     "files.tree": "Тека",
     "files.nothingChanged": "Поки нічого не змінилося.",

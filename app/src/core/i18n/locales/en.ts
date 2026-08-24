@@ -580,7 +580,7 @@ const ui = {
   "files.memo": "The page",
   "files.memoWide": "Write it wide",
   "files.memoNarrow": "Back to the panel",
-  "files.memoPlaceholder": "Put a long request together here. What is worth keeping goes to a task or a decision.",
+  "files.memoPlaceholder": "Put a long request together here.",
   "files.changed": "Changed lately",
   "files.tree": "The folder",
   "files.nothingChanged": "Nothing has changed yet.",

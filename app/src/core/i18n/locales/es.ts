@@ -541,7 +541,7 @@ export const es: Translation = {
     "files.memo": "La página",
     "files.memoWide": "Escribir en grande",
     "files.memoNarrow": "Volver al panel",
-    "files.memoPlaceholder": "Prepara aquí una petición larga. Lo que merezca quedarse pasa a una tarea o a una decisión.",
+    "files.memoPlaceholder": "Prepara aquí una petición larga.",
     "files.changed": "Cambiado hace poco",
     "files.tree": "La carpeta",
     "files.nothingChanged": "Todavía no ha cambiado nada.",

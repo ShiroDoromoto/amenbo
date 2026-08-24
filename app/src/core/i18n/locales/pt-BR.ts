@@ -542,7 +542,7 @@ export const ptBR: Translation = {
     "files.memo": "A página",
     "files.memoWide": "Escrever amplo",
     "files.memoNarrow": "Voltar ao painel",
-    "files.memoPlaceholder": "Monte aqui um pedido longo. O que vale guardar vai para uma tarefa ou uma decisão.",
+    "files.memoPlaceholder": "Monte aqui um pedido longo.",
     "files.changed": "Alterados recentemente",
     "files.tree": "A pasta",
     "files.nothingChanged": "Nada mudou ainda.",

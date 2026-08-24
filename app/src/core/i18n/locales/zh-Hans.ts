@@ -520,7 +520,7 @@ export const zhHans: Translation = {
     "files.memo": "便笺",
     "files.memoWide": "写得宽一些",
     "files.memoNarrow": "回到面板",
-    "files.memoPlaceholder": "长一点的请求在这里拼起来。想留下的就转成任务或决定记录。",
+    "files.memoPlaceholder": "长一点的请求在这里拼起来。",
     "files.changed": "最近改动",
     "files.tree": "文件夹",
     "files.nothingChanged": "还没有任何改动。",

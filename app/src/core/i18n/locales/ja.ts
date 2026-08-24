@@ -532,7 +532,7 @@ export const ja: Translation = {
     "files.memo": "メモ",
     "files.memoWide": "広く書く",
     "files.memoNarrow": "パネルに戻す",
-    "files.memoPlaceholder": "長い依頼はここで組み立てます。残したくなったらタスクか決定記録へ移してください。",
+    "files.memoPlaceholder": "長い依頼はここで組み立てます。",
     "files.changed": "変わったもの",
     "files.tree": "フォルダ",
     "files.nothingChanged": "まだ何も変わっていません。",

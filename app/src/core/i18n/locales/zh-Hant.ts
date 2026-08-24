@@ -520,7 +520,7 @@ export const zhHant: Translation = {
     "files.memo": "便箋",
     "files.memoWide": "寫得寬一些",
     "files.memoNarrow": "回到面板",
-    "files.memoPlaceholder": "長一點的請求在這裡拼起來。想留下的就轉成任務或決定記錄。",
+    "files.memoPlaceholder": "長一點的請求在這裡拼起來。",
     "files.changed": "最近變動",
     "files.tree": "資料夾",
     "files.nothingChanged": "還沒有任何變動。",

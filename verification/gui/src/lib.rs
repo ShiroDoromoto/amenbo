@@ -1280,7 +1280,7 @@ impl Instructor {
             // operator told only "choose the plain shell" would be hunting for a control that is not
             // on theirs.
             (Domain::Terminal, "open-shell") =>
-                "Open a plain shell in the pane — the terminal with no agent started in it. Where a pane is already running one, end that first: the row under a pane whose program has ended is where what to open with is chosen, and the plain shell is on the list. Where the face is offering several agents, or saying it found none it can start, the plain shell is a button on what it is showing. Either way a prompt comes up in the pane."
+                "Open a plain shell in the pane — the terminal with no agent started in it. Where a pane is already running one, end that first (run: exit): the row under a pane whose program has ended is where what to open with is chosen, and the plain shell is on the list. On an empty frame the same list is on the frame itself, above the press that opens it: choose the plain shell there and then press to open. Where the face is offering several agents, or saying it found none it can start, the plain shell is a button on what it is showing. Every way round, a prompt comes up in the pane."
                     .to_string(),
             // Pressing one of the records the face asks about. What it does is open that record
             // on the ledger — the screen is left, deliberately, because a press that selected without
@@ -1419,8 +1419,11 @@ impl Instructor {
                 "In the list beside the panes, press the name of the project \"{}\" — the row the project itself is on, not one of the panes listed under it. The face is that project's from here on: its panes are the ones drawn, on its own first page, and no other project's pane is on the screen.",
                 req(with, "project")?
             ),
-            // Opening a pane where there is not one yet. **A pane is opened by pressing the empty
-            // frame**, and that is the whole of it — the two ways in differ only in what happens
+            // Opening a pane where there is not one yet. **A pane is opened from the empty frame**,
+            // by the press on it that opens one — the row above that press is what it opens *with*,
+            // and a road that said nothing about the row would be walked with whatever was on it. So
+            // the step says to leave it alone: what this is about is the pane appearing, and which
+            // agent it runs is another road's (`open-shell`). That is the whole of it — the two ways in differ only in what happens
             // before the press. From the face there is nothing before it: the empty frame is already
             // on the page. From the rail there is one press first, which opens nothing — it goes to
             // where a pane would land, and the empty frame is what is waiting there.
@@ -1434,8 +1437,8 @@ impl Instructor {
             // the empty frame is said once.
             (Domain::Terminal, "open-pane") => {
                 let press = match req(with, "from")? {
-                    "face" => "On the terminal face, press the empty frame — the one box on the page that is not a terminal, at the first gap in it.",
-                    "rail" => "In the list beside the panes, press the way in beside the name of the project being shown — the control at the end of its row. Nothing opens: the screen goes to the page a pane would land on, which is the page with room in it. Press the empty frame waiting there — the one box on that page that is not a terminal.",
+                    "face" => "On the terminal face, find the empty frame — the one box on the page that is not a terminal, at the first gap in it — and press what opens a terminal in it, leaving the row above that press as it came up.",
+                    "rail" => "In the list beside the panes, press the way in beside the name of the project being shown — the control at the end of its row. Nothing opens: the screen goes to the page a pane would land on, which is the page with room in it. On the empty frame waiting there, press what opens a terminal in it, leaving the row above that press as it came up.",
                     other => {
                         return Err(format!(
                             "action `open-pane` does not know the way in `{other}` — it is face or rail"
@@ -5103,17 +5106,22 @@ steps_gui:
         assert!(lines[0].contains("pane counts, press the one that says 1"), "got: {}", lines[0]);
         assert!(lines[1].contains("page digits, press 2"), "got: {}", lines[1]);
         assert!(
-            lines[2].contains("press the empty frame") && !lines[2].contains("beside the name"),
+            lines[2].contains("the empty frame") && !lines[2].contains("beside the name"),
             "the face's way in is the empty frame and nothing before it: {}",
             lines[2]
         );
         assert!(
             lines[3].contains("project being shown")
                 && lines[3].contains("Nothing opens")
-                && lines[3].contains("Press the empty frame"),
+                && lines[3].contains("the empty frame waiting there"),
             "the rail names the project, moves the screen, and the pane opens at the empty frame: {}",
             lines[3]
         );
+        // Both say to leave the row above the press alone: which agent a pane opens with is another
+        // road's, and a step silent about it would be walked with whatever happened to be on.
+        for one in [&lines[2], &lines[3]] {
+            assert!(one.contains("leaving the row above that press as it came up"), "got: {one}");
+        }
     }
 
     /// Where the project keeps several folders, both ways in meet the same question and neither opens

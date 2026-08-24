@@ -62,6 +62,8 @@ vi.mock("../core/mutations", () => ({
   }),
 }));
 vi.mock("./terminal", () => ({
+  // The one choice that is not a catalogued id, kept where the field it lands in is declared.
+  SHELL: "shell",
   mountTerminal: vi.fn(
     async (
       host: HTMLElement,
@@ -147,9 +149,9 @@ async function chooseFolder(root: HTMLElement): Promise<void> {
 }
 
 /** The frame with a folder already chosen — where every question after the first one is asked from. */
-async function draw(answer: WakeDto): Promise<HTMLElement> {
+async function draw(answer: WakeDto, project: number | null = null): Promise<HTMLElement> {
   hoisted.chosen = "/work/here";
-  const root = await put(answer);
+  const root = await put(answer, project);
   await chooseFolder(root);
   return root;
 }
@@ -193,7 +195,7 @@ describe("a frame with no folder asks for one, and asks for nothing else", () =>
     // Said as soon as it is answered, not when a terminal comes up: the slots beside this one open in
     // the same folder, and on a machine with nothing startable no terminal ever follows.
     expect(heard.chose, "the window was not told where this frame settled").toEqual(["/work/here"]);
-    expect(hoisted.sent).toContainEqual(["wake_probe", { folder: "/work/here" }]);
+    expect(hoisted.sent).toContainEqual(["wake_probe", { folder: "/work/here", project: null }]);
     expect(hoisted.panes).toEqual([{ adopt: false, cwd: "/work/here", agent: "claude-code" }]);
   });
 
@@ -236,7 +238,7 @@ describe("a frame with no folder asks for one, and asks for nothing else", () =>
     await new Promise((r) => setTimeout(r, 0));
 
     expect(hoisted.chose, "the folder was asked for a second time").toBe(0);
-    expect(hoisted.sent).toContainEqual(["wake_probe", { folder: "/work/adopted" }]);
+    expect(hoisted.sent).toContainEqual(["wake_probe", { folder: "/work/adopted", project: null }]);
     expect(hoisted.panes[hoisted.panes.length - 1]).toEqual({ adopt: false, cwd: "/work/here", agent: "claude-code" });
   });
 });
@@ -262,7 +264,7 @@ describe("a window told which project it is on asks among that project's folders
     await new Promise((r) => setTimeout(r, 0));
 
     expect(heard.chose, "the window was not told where this frame settled").toEqual(["/work/api"]);
-    expect(hoisted.sent).toContainEqual(["wake_probe", { folder: "/work/api" }]);
+    expect(hoisted.sent).toContainEqual(["wake_probe", { folder: "/work/api", project: 7 }]);
     expect(hoisted.panes).toEqual([{ adopt: false, cwd: "/work/here", agent: "claude-code" }]);
   });
 
@@ -304,7 +306,7 @@ describe("the frame draws what the host settled", () => {
   });
 
   it("offers the choice when several answer, and keeps the one that is picked", async () => {
-    const root = await draw(wake());
+    const root = await draw(wake(), 7);
     expect(hoisted.panes).toEqual([]);
 
     const choice = buttons(root).find((b) => b.textContent === "Codex CLI");
@@ -312,10 +314,22 @@ describe("the frame draws what the host settled", () => {
     choice?.click();
     await Promise.resolve();
 
+    // Kept against the project rather than the folder: one project can bind several folders, and an
+    // answer written per folder is one project answering the same question several ways.
     expect(hoisted.sent).toContainEqual([
       "wake_remember",
-      { folder: "/work/here", agent: "codex-cli" },
+      { project: 7, agent: "codex-cli" },
     ]);
+    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "codex-cli", adopt: false }]);
+  });
+
+  it("keeps nothing where the frame belongs to no project — there is nothing to keep it against", async () => {
+    const root = await draw(wake());
+
+    buttons(root).find((b) => b.textContent === "Codex CLI")?.click();
+    await Promise.resolve();
+
+    expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_remember");
     expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "codex-cli", adopt: false }]);
   });
 
@@ -343,7 +357,7 @@ describe("the agent can be changed only on a frame that has closed", () => {
   });
 
   it("offers the agent and open once the program has ended", async () => {
-    const root = await draw(wake({ settled: "claude-code" }));
+    const root = await draw(wake({ settled: "claude-code" }), 7);
     expect(root.querySelector("select")).toBeNull();
 
     hoisted.end?.();
@@ -359,15 +373,34 @@ describe("the agent can be changed only on a frame that has closed", () => {
     buttons(root).find((b) => b.textContent === "Open")?.click();
     await Promise.resolve();
 
-    expect(hoisted.sent).toContainEqual([
-      "wake_remember",
-      { folder: "/work/here", agent: "codex-cli" },
-    ]);
+    // The pane opens on what was picked, and **the project's answer stays where it was**: reaching
+    // for another tool on one frame is that frame, and what the project opens with is changed on the
+    // project's own settings (`AMB-T-3667`).
+    expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_remember");
     expect(hoisted.panes[hoisted.panes.length - 1]).toEqual({
       cwd: "/work/here",
       agent: "codex-cli",
       adopt: false,
     });
+  });
+
+  it("settles the project's answer from the row where it had settled on nothing", async () => {
+    const root = await draw(wake(), 7);
+    buttons(root).find((b) => b.textContent === "Claude Code")?.click();
+    await Promise.resolve();
+    hoisted.sent.length = 0;
+    hoisted.answers = [wake()];
+
+    hoisted.end?.();
+    const choose = root.querySelector("select");
+    if (choose) {
+      choose.value = "codex-cli";
+      choose.dispatchEvent(new Event("change"));
+    }
+    buttons(root).find((b) => b.textContent === "Open")?.click();
+    await Promise.resolve();
+
+    expect(hoisted.sent).toContainEqual(["wake_remember", { project: 7, agent: "codex-cli" }]);
   });
 
   it("does not write the answer down again when the same agent is opened", async () => {

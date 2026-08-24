@@ -31,6 +31,14 @@
 // (`../talk.ts`), and the one case with no list to keep to is the machine with no project yet, where
 // the press is the first run's and the folder chosen raises the project it belongs to.
 //
+// **What the empty frame chose is carried in rather than asked for again.** The face puts the
+// startable agents on the frame itself and opens on one press ({@link PaneStart.agent} ·
+// `../shell/AdriftSlot`), so a pane arriving with a choice has already been through the question
+// this module would put — and putting it a second time would be asking about a decision the person
+// has just made. What such a pane still needs from here is the probe: the folder's canonical form,
+// and whether the project had settled on anything, which is what says if this choice is the answer
+// or one turn's departure from it.
+//
 // **Nothing is asked about a terminal that is already running.** A pane adopts one rather than
 // starting it (`./terminal`), and what is running was settled when it started — asking again would be
 // asking about a decision that has already been carried out. So the question is put exactly where a
@@ -48,23 +56,7 @@ import type { BoundFolderDto, PtySessionDto, WakeCandidateDto, WakeDto } from ".
 import { errText, type Lang, t, tf } from "../core/i18n";
 import { invoke } from "../core/ipc";
 import { chooseFolderFor, chooseWorkFolder, fetchBoundFolders } from "../core/mutations";
-import { mountTerminal, type PaneEvents, type PaneStart } from "./terminal";
-
-/**
- * The pane's own shell, standing among the agents as one more thing to start.
- *
- * It is not an agent and has no row in the catalogue (`amenbo_core::harness`), so what the frame
- * passes around is a *choice* rather than an agent id, and this is the one choice the catalogue does
- * not answer to. `pty_open` already opens a bare prompt for a pane it is given no agent for, so the
- * id is turned back into "none" at the single place a terminal is started.
- *
- * It is put wherever the frame puts a choice, and nowhere else. A folder that settled on one agent
- * still opens on it with nothing asked (`AMB-T-3606`) — the shell is something to reach for once the
- * pane is there, not a question to answer on the way in. It is never written down as this folder's
- * answer either (`wake_remember`): "which agent do you work with here" is not a question a shell
- * answers.
- */
-const SHELL = "shell";
+import { mountTerminal, SHELL, type PaneEvents, type PaneStart } from "./terminal";
 
 /**
  * Fill `host` with the frame — the pane, and whatever has to be put to the reader before or after
@@ -79,10 +71,12 @@ const SHELL = "shell";
  * always gives one — it settles where a pane works before the pane is made (`../shell/FolderChoice`)
  * — so the invitation below is the split-out window's, which has no rail to have been asked on.
  *
- * `project` is which project this frame's pane is one of, and it is what the invitation asks among:
- * that project's bound folders and nothing else. The board's face passes none because it never puts
- * an invitation up; the window with no rail passes the project the board left in its arrangement.
- * Null is a machine that has no project yet, where the first folder chosen is what raises one.
+ * `project` is which project this frame's pane is one of. It is what the invitation asks among —
+ * that project's bound folders and nothing else — and it is **whose answer the agent is kept
+ * against**: which agent a person works with is a thing about the work rather than about a
+ * directory, and one project can bind several folders (`crate::wake`). Both faces pass it; null is a
+ * machine that has no project yet, where the first folder chosen is what raises one, and a pane
+ * there settles nothing until it does.
  */
 export async function mountAgentFrame(
   host: HTMLElement,
@@ -137,11 +131,15 @@ export async function mountAgentFrame(
     if (folder === null) return invite(null);
     frame.append(said("agent__looking", t("talk.searching", lang)));
     try {
-      wake = await invoke<WakeDto>("wake_probe", { folder });
+      wake = await invoke<WakeDto>("wake_probe", { folder, project });
     } catch (e: unknown) {
       frame.replaceChildren(said("agent__failed", errText(e, lang)));
       return;
     }
+    // The empty frame's choice, where the pane arrived with one — settling the project's answer only
+    // if it had none, the same as every other way one is chosen ({@link pick}).
+    const chose = start.agent;
+    if (chose !== null && chose !== undefined) return pick(chose);
     if (wake.settled) open(wake.settled);
     else if (wake.offered.length) ask(wake.offered);
     else nothing();
@@ -200,9 +198,22 @@ export async function mountAgentFrame(
     return choose;
   };
 
-  /** Keep this folder's answer, then open on it. A refusal to keep it is not a reason not to open. */
+  /**
+   * Open on this agent, and keep it as the project's answer where there was not one.
+   *
+   * **A project settles its agent once, and pressing another one does not re-settle it.** What a
+   * person reaches for on one pane is that pane — the answer is theirs to change on the project's
+   * own settings, and a face that rewrote it every time would turn one turn's departure into a
+   * decision nobody made (`AMB-T-3667`).
+   *
+   * The shell is never kept either ({@link SHELL}): "which agent do you work with here" is not a
+   * question a prompt with nothing started at it answers. A frame with no project has nowhere to
+   * keep one, and opens all the same. A refusal to keep it is not a reason not to open.
+   */
   const pick = (agent: string) => {
-    void invoke("wake_remember", { folder: wake?.folder ?? folder, agent }).catch(() => {});
+    if (agent !== SHELL && project !== null && !wake?.settled) {
+      void invoke("wake_remember", { project, agent }).catch(() => {});
+    }
     open(agent);
   };
 
@@ -370,7 +381,6 @@ export async function mountAgentFrame(
     // question is put now, which is the first moment there is a terminal to start rather than adopt.
     again.addEventListener("click", () => {
       if (next === null) void look();
-      else if (next === SHELL || next === choice) open(next);
       else pick(next);
     });
     bar.append(again);

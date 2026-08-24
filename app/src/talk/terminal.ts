@@ -105,6 +105,22 @@ export type PaneStart = {
   agent?: string | null;
 };
 
+/**
+ * The pane's own shell, standing among the agents as one more thing to start — the one value of
+ * {@link PaneStart.agent} that is not a catalogued id.
+ *
+ * It is not an agent and has no row in the catalogue (`amenbo_core::harness`), so what a face passes
+ * around is a *choice* rather than an agent id, and this is the one choice the catalogue does not
+ * answer to. `pty_open` already opens a bare prompt for a pane it is given no agent for, so the id
+ * is turned back into "none" at the single place a terminal is started (`./agent`).
+ *
+ * It is put wherever a face puts a choice, and nowhere else. A project that settled on one agent
+ * still opens on it with nothing asked (`AMB-T-3606`) — the shell is something to reach for, not a
+ * question to answer on the way in. It is never written down as the project's answer either
+ * (`wake_remember`): "which agent do you work with here" is not a question a shell answers.
+ */
+export const SHELL = "shell";
+
 /** What Shift-Enter is sent as: `ESC` and a carriage return, the form the programs that want it read. */
 export const NEWLINE = "\x1b\r";
 

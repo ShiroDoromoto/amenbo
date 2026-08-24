@@ -20,11 +20,16 @@
 //! before the program runs, and a face that guessed would be telling the reader something it made up
 //! (`AMB-T-3591`). The vocabulary here is **installed / not installed**, and nothing wider.
 //!
-//! **Asking is once per folder.** A folder with several startable agents is a folder whose answer is
-//! the person's, so it is asked for and then kept ([`crate::config::Config::agent_for`]) rather than
-//! put again every time a pane opens. A remembered answer that stops being startable — the tool was
-//! removed — is not an error and not a question either: it simply stops being the answer, and the
-//! rank underneath takes over.
+//! **The answer is the project's, and it is settled once.** Which agent a person works with is a
+//! thing about the work rather than about a directory, and one project can bind several folders — so
+//! it is kept against the project ([`crate::config::Config::agent_for`]) and not against each folder
+//! separately, which would give one project as many answers as it has folders. A remembered answer
+//! that stops being startable — the tool was removed — is not an error and not a question either: it
+//! simply stops being the answer, and the rank underneath takes over.
+//!
+//! **The trace still reads per folder**, because that is where a provider leaves one. What a project
+//! traces is what any of its folders traces: a preference shown in one of them is the project's, and
+//! a face gathers the folders before it asks (`app/src-tauri/src/wake.rs`).
 
 use crate::harness::{self, Harness, Wiring};
 
@@ -79,10 +84,10 @@ pub fn candidates(found: &[Wiring], installed: impl Fn(&str) -> bool) -> Vec<Can
         .collect()
 }
 
-/// The candidates a face offers, in catalog order: the ones this folder traces **and** this machine
+/// The candidates a face offers, in catalog order: the ones the folders trace **and** this machine
 /// has, or — when the product is empty — every one this machine has.
 ///
-/// The fallback is not a weakening of the rule. A folder with no trace has said nothing, and the
+/// The fallback is not a weakening of the rule. Folders with no trace have said nothing, and the
 /// question then is only which of the installed agents to open; treating that as "none" would put an
 /// install notice in front of a reader whose tools are all installed.
 pub fn offered(candidates: &[Candidate]) -> Vec<&Candidate> {
@@ -96,11 +101,11 @@ pub fn offered(candidates: &[Candidate]) -> Vec<&Candidate> {
     candidates.iter().filter(|c| c.installed).collect()
 }
 
-/// The folder's answer: what was remembered if it still holds, otherwise what [`offered`] leaves.
+/// The project's answer: what was remembered if it still holds, otherwise what [`offered`] leaves.
 ///
 /// A remembered id is honoured only while it is still startable, and only while it is still one of
-/// the offered — a folder that has since grown a trace for the agent actually used in it should not
-/// be held to an answer given before it did.
+/// the offered — a project whose folders have since grown a trace for the agent actually used in it
+/// should not be held to an answer given before they did.
 pub fn settle(remembered: Option<&str>, candidates: &[Candidate]) -> Choice {
     let offered = offered(candidates);
     if let Some(kept) = remembered {

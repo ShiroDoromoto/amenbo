@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
-// What the terminal face says about work nothing is doing any more, and the two things it must not do:
-// ask before there is a project to ask about, and act on the answer.
+// The empty frame: what it says about work nothing is doing any more, and what a terminal opened from
+// it is opened with. Two things it must not do: ask before there is a project to ask about, and act
+// on the answer.
 //
-// The host's read is stubbed and everything else runs — the point of the component is entirely in
-// which of the two shapes it draws and what pressing them does.
+// The host's reads are stubbed and everything else runs — the point of the component is entirely in
+// which of the shapes it draws and what pressing them does.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AdriftDto, AdriftRowDto } from "../bindings/bindings";
+import type { AdriftDto, AdriftRowDto, WakeDto } from "../bindings/bindings";
 import { RefNavProvider } from "../core/refNav";
 import { AdriftSlot } from "./AdriftSlot";
 
@@ -17,12 +18,21 @@ const hoisted = vi.hoisted(() => ({
   /** What the host answers with, and which folders it was asked about. */
   adrift: { tasks: [], decisions: [] } as unknown,
   asked: [] as string[],
+  /** What this machine can start, and what the project has settled on. */
+  wake: { candidates: [], offered: [] } as unknown,
 }));
 
 vi.mock("../core/mutations", () => ({
   fetchAdrift: vi.fn(async (folder: string) => {
     hoisted.asked.push(folder);
     return hoisted.adrift;
+  }),
+}));
+
+vi.mock("../core/ipc", () => ({
+  invoke: vi.fn(async (cmd: string) => {
+    if (cmd === "wake_choices") return hoisted.wake;
+    throw new Error(`the frame asked the host for ${cmd}`);
   }),
 }));
 
@@ -36,16 +46,31 @@ function left(over: Partial<AdriftDto>): AdriftDto {
   return { tasks: [], decisions: [], ...over };
 }
 
+/** What this machine can start: every id named here is installed and offered, in the order given. */
+function startable(ids: string[], settled?: string): WakeDto {
+  return {
+    candidates: ids.map((id) => ({ id, label: id, command: id, traced: false, installed: true })),
+    offered: ids,
+    ...(settled === undefined ? {} : { settled }),
+  };
+}
+
 let container: HTMLDivElement;
 let root: Root;
 const opened: string[] = [];
 const ledger: number[] = [];
+/** What the frame was pressed to open a terminal with, in the order it was pressed. */
+const started: string[] = [];
 
 beforeEach(() => {
   hoisted.adrift = left({});
   hoisted.asked = [];
+  // A machine with no agent on it, which leaves the shell as the only thing to open with — the one
+  // shape where the row of them is not drawn at all.
+  hoisted.wake = startable([]);
   opened.length = 0;
   ledger.length = 0;
+  started.length = 0;
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -69,14 +94,27 @@ async function draw(folder: string | null): Promise<void> {
             selectDecision: (id: number | null) => { opened.push(`decision ${id}`); },
           },
           children: createElement(AdriftSlot, {
-            folder,
-            onOpen: () => {},
+            folders: folder === null ? [] : [folder],
+            project: folder === null ? null : 1,
+            onOpen: (agent: string) => { started.push(agent); },
             onOpenLedger: () => ledger.push(1),
           }),
         },
       ),
     );
   });
+}
+
+/** Press the button whose words contain this, and say so where there is none. */
+async function press(words: string): Promise<void> {
+  const one = buttons().find((b) => b.textContent?.includes(words));
+  expect(one, `"${words}" was not pressable`).toBeTruthy();
+  await act(async () => { one?.click(); });
+}
+
+/** The one that is on, out of the row of things to open with. */
+function on(): string | null {
+  return container.querySelector(".slot__start--on")?.textContent ?? null;
 }
 
 function buttons(): HTMLButtonElement[] {
@@ -126,11 +164,6 @@ describe("a face with something left in the middle", () => {
     });
     await draw("/work/here");
 
-    const press = async (words: string) => {
-      const one = buttons().find((b) => b.textContent?.includes(words));
-      expect(one, `"${words}" was not pressable`).toBeTruthy();
-      await act(async () => { one?.click(); });
-    };
     await press("the migration");
     await press("which of the two roads");
 
@@ -146,5 +179,76 @@ describe("a face with something left in the middle", () => {
 
     expect(container.querySelector(".slot--adrift"), "the plain slot was drawn").toBeTruthy();
     expect(container.textContent).toContain("which of the two roads");
+  });
+});
+
+describe("what a terminal opened here is opened with", () => {
+  it("is a row of what this machine can start, with the plain shell at the end of it", async () => {
+    hoisted.wake = startable(["claude-code", "codex-cli"]);
+    await draw("/work/here");
+
+    expect([...container.querySelectorAll(".slot__start")].map((b) => b.textContent))
+      .toEqual(["claude-code", "codex-cli", "Plain shell"]);
+  });
+
+  it("draws no row where the shell is the only thing there is", async () => {
+    await draw("/work/here");
+
+    expect(container.querySelector(".slot__starts"), "a row of one was drawn").toBeFalsy();
+    expect(buttons()).toHaveLength(1);
+  });
+
+  it("comes up on the project's own answer", async () => {
+    hoisted.wake = startable(["claude-code", "codex-cli"], "codex-cli");
+    await draw("/work/here");
+
+    expect(on()).toBe("codex-cli");
+  });
+
+  it("comes up on the first of them where the project has settled on nothing", async () => {
+    hoisted.wake = startable(["claude-code", "codex-cli"]);
+    await draw("/work/here");
+
+    expect(on()).toBe("claude-code");
+  });
+
+  it("opens with the one that is on, and one press does it", async () => {
+    hoisted.wake = startable(["claude-code", "codex-cli"], "codex-cli");
+    await draw("/work/here");
+
+    await press("Open a terminal here");
+
+    expect(started).toEqual(["codex-cli"]);
+  });
+
+  it("opens with another one without asking anything on the way", async () => {
+    hoisted.wake = startable(["claude-code", "codex-cli"], "codex-cli");
+    await draw("/work/here");
+
+    await press("claude-code");
+    expect(on(), "the press did not move what is on").toBe("claude-code");
+    await press("Open a terminal here");
+
+    expect(started).toEqual(["claude-code"]);
+  });
+
+  it("opens on the plain shell, which is a choice like the others here", async () => {
+    hoisted.wake = startable(["claude-code"]);
+    await draw("/work/here");
+
+    await press("Plain shell");
+    await press("Open a terminal here");
+
+    expect(started).toEqual(["shell"]);
+  });
+
+  it("puts the row on the frame that is asking about work left in the middle too", async () => {
+    hoisted.wake = startable(["claude-code", "codex-cli"], "codex-cli");
+    hoisted.adrift = left({ tasks: [row("AMB-T-11", 11, "the migration")] });
+    await draw("/work/here");
+
+    expect(on()).toBe("codex-cli");
+    await press("Open a terminal here");
+    expect(started).toEqual(["codex-cli"]);
   });
 });

@@ -9,6 +9,13 @@
 //! the same folder, and `~/work` and `/Users/me/work` are the same folder written twice — so a face
 //! asks with whatever it has, and opens with the canonical form this answers in.
 //!
+//! **The question comes in two shapes, and the answer is kept against the project either way.** A
+//! pane about to open in a known folder asks `wake_probe`; an empty frame, where no folder
+//! has been settled yet, asks `wake_choices` about the project and hands over the folders it
+//! is bound to. What differs is only where the trace is read from — one folder, or all of them —
+//! because a preference shown in any of a project's folders is the project's
+//! ([`amenbo_core::wake`]).
+//!
 //! **Not on the perf budget, deliberately.** A probe's time is a login shell reading the reader's
 //! own profile ([`crate::launch::installed`]), so it busts a 50 ms budget on every machine and
 //! nothing in Amenbo can make it not. A WARN that fires every time a window opens and names nothing
@@ -31,34 +38,75 @@ use crate::error::CmdError;
 /// `folder` is where the pane would open, and it is asked for rather than defaulted: a pane is opened
 /// in the folder the person chose (`app/src/talk/agent.ts`), so there is no such thing here as a probe
 /// about nowhere in particular.
+///
+/// `project` is whose answer is remembered. A pane that belongs to no project — the window split out
+/// before the board told it which one it was on — passes none, and gets the rank without a
+/// remembered answer on top of it.
 #[tauri::command]
-pub fn wake_probe(folder: String) -> Result<WakeDto, CmdError> {
+pub fn wake_probe(folder: String, project: Option<i64>) -> Result<WakeDto, CmdError> {
     let folder = resolve(folder)?;
     let found = amenbo_core::harness::probe(&folder, amenbo_core::config::Paths::command_name());
+    let candidates = weighed(&found);
+    answer(
+        Some(folder.to_string_lossy().into_owned()),
+        candidates,
+        project,
+    )
+}
+
+/// What a **project** opens its panes with, asked before there is a pane or a folder to ask about.
+///
+/// This is the empty frame's question (`app/src/shell/AdriftSlot.tsx`), and it is the same judgment
+/// as [`wake_probe`] over a wider trace: `folders` are the project's own bound folders, and a
+/// provider traced in any of them is traced for the project. A folder that has gone is skipped
+/// rather than refused — the reader is choosing what to open with, and a stale binding is not a
+/// reason to put a refusal in place of the choice.
+#[tauri::command]
+pub fn wake_choices(project: Option<i64>, folders: Vec<String>) -> Result<WakeDto, CmdError> {
+    let command = amenbo_core::config::Paths::command_name();
+    let found: Vec<amenbo_core::harness::Wiring> = folders
+        .iter()
+        .filter_map(|one| std::fs::canonicalize(one).ok())
+        .flat_map(|one| amenbo_core::harness::probe(&one, command))
+        .collect();
+    answer(None, weighed(&found), project)
+}
+
+/// Every catalogued provider, told apart by what this machine can start.
+fn weighed(found: &[amenbo_core::harness::Wiring]) -> Vec<wake::Candidate> {
     let commands: Vec<&str> = amenbo_core::harness::HARNESSES
         .iter()
         .map(|h| h.command)
         .collect();
     let installed = crate::launch::installed(&commands);
-    let candidates = wake::candidates(&found, |cmd| installed.iter().any(|one| one == cmd));
+    wake::candidates(found, |cmd| installed.iter().any(|one| one == cmd))
+}
 
+/// The candidates and the project's answer, in the shape a face reads.
+fn answer(
+    folder: Option<String>,
+    candidates: Vec<wake::Candidate>,
+    project: Option<i64>,
+) -> Result<WakeDto, CmdError> {
     let config = config()?;
-    let settled = match wake::settle(config.agent_for(&folder), &candidates) {
+    let kept = project.and_then(|id| config.agent_for(id));
+    let settled = match wake::settle(kept, &candidates) {
         Choice::Settled(id) => Some(id.to_string()),
         Choice::Ask(_) | Choice::Nothing => None,
     };
     Ok(WakeDto {
-        folder: folder.to_string_lossy().into_owned(),
+        folder,
         offered: wake::offered(&candidates)
             .iter()
             .map(|one| one.id.to_string())
             .collect(),
         candidates: candidates.iter().map(row).collect(),
         settled,
+        kept: kept.map(str::to_string),
     })
 }
 
-/// Keep this folder's answer, so the offer is not put again the next time a pane opens here.
+/// Keep this project's answer, so the next pane opened in it starts with the same thing.
 ///
 /// The id is checked against the catalog rather than trusted, because what is written here is read
 /// back as the thing to start.
@@ -69,7 +117,7 @@ pub fn wake_probe(folder: String) -> Result<WakeDto, CmdError> {
 /// round — it loses nothing and happens every time a window opens — so [`wake_probe`] takes the
 /// cheap road, the same one `ui_language` takes.
 #[tauri::command]
-pub fn wake_remember(folder: String, agent: String) -> Result<(), CmdError> {
+pub fn wake_remember(project: i64, agent: String) -> Result<(), CmdError> {
     if wake::started_as(&agent).is_none() {
         return Err(CmdError::coded(
             "wake_unknown_agent",
@@ -77,10 +125,19 @@ pub fn wake_remember(folder: String, agent: String) -> Result<(), CmdError> {
             serde_json::json!({ "agent": agent }),
         ));
     }
-    let folder = resolve(folder)?;
     crate::migrate::gate()?;
     let mut store = amenbo_core::Store::open_at(paths()?).map_err(not_kept)?;
-    store.config.remember_agent(&folder, &agent);
+    store.config.remember_agent(project, &agent);
+    store.save_config().map_err(not_kept)
+}
+
+/// Drop this project's answer, so the next pane opened in it settles one from the rank again — what
+/// the project's settings write when the reader takes the choice back off.
+#[tauri::command]
+pub fn wake_forget(project: i64) -> Result<(), CmdError> {
+    crate::migrate::gate()?;
+    let mut store = amenbo_core::Store::open_at(paths()?).map_err(not_kept)?;
+    store.config.forget_agent(project);
     store.save_config().map_err(not_kept)
 }
 

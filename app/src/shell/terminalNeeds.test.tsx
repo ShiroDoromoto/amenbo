@@ -90,7 +90,7 @@ const press = async (key: string) => {
 const openPane = async () => {
   const room = q(".rail__open")[0];
   if (room) await click(room);
-  await click(q(".slot--empty")[0]!);
+  await click(q(".slot--empty .slot__open")[0]!);
 };
 /** A pane says a turn is standing in it — or that it is not any more. */
 const turn = async (pane: number, standing: boolean) => {

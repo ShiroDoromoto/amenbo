@@ -37,8 +37,8 @@
 id: be-told-in-the-pane-that-your-turn-has-come
 title: An agent hands the turn over from inside its pane, and the person reads it on the label
 description: >
-  Open the terminal face, choose the folder the pane runs in, and let the thing running there speak for
-  itself: name the pane, then
+  Open the terminal face, choose the folder the pane runs in, open a plain shell there, and say what
+  the thing running in a pane says for itself: name the pane, then
   hand the turn over with the reason in the same breath. Both arrive on the label above the pane, in
   the agent's own words. What is under test is the whole seam — a word said with the CLI inside a
   terminal, read out of the drop box by the app, and drawn where somebody looking at the screen will
@@ -52,13 +52,21 @@ steps_gui:
       face: terminal
 
   # The pane this road is about does not exist until somebody says where it runs. Choosing a folder is
-  # the whole of that — one press, and the terminal opens in what was chosen — and it is the step every
-  # word below is typed into.
+  # the whole of that — one press, and the terminal opens in what was chosen — and it is the folder
+  # every word below is run in.
   - type: action
     domain: terminal
     op: open-folder
     with:
       dir: workshop
+
+  # And down to a plain shell, because the two words below are *run* rather than typed. A folder with
+  # an agent on it opens on the agent, and a command handed to an agent is a request: whether it is
+  # carried out is the agent's own, and a gate whose green rests on that rests on a promise nothing
+  # holds it to. The seam under test is the CLI's, so what walks it here is the CLI.
+  - type: action
+    domain: terminal
+    op: open-shell
 
   # Named first, and by the agent rather than by the hand: a name typed as a line would name the frame
   # too, but this road is about the layer, so the name comes through the layer.

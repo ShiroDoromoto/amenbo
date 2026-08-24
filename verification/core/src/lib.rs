@@ -1825,6 +1825,14 @@ const REGISTRY: &[OpSpec] = &[
     // path, the way `folder bind`'s is: which folder the run works in is the run's to decide, and what
     // a road writes down is what to call the one it picked.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-folder", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
+    // Getting the pane to a plain shell — a terminal with no agent started in it. A folder with an
+    // agent on it opens on one, which is what a reader wants and what a road cannot speak in: what an
+    // agent does with a line typed at it is the agent's own, so a gate resting on one carrying out a
+    // command rests on a promise nothing holds it to. Every road that says something *in* a pane
+    // takes this step first, and what it says afterwards is said to a shell. One op rather than
+    // three, because the shell is reachable from every shape the face can come up in — which is the
+    // whole of what lets these roads be walked on any machine.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-shell", required: &[], refs: &[], strings: &[], binds: false },
     // A line typed into the pane and sent. `text` is the reader's own words rather than the
     // interface's, which is what makes it worth reading back: it is on the screen because a person
     // put it there, in whatever language the app is in, so a road can follow it from one window to

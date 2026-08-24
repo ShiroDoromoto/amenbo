@@ -24,7 +24,7 @@ import { currentLang, t } from "../core/i18n";
  */
 export function TerminalPane({
   frame, names, start, autoStart, focused,
-  onOpened, onChose, onSaid, onPath, onClosed, onName, onFocus, onWaiting,
+  onOpened, onSaid, onPath, onClosed, onName, onFocus, onWaiting,
 }: {
   /** Which of the arrangement's places this is (`../talk/layout`). */
   frame: string;
@@ -37,9 +37,6 @@ export function TerminalPane({
   autoStart: boolean;
   focused: boolean;
   onOpened: (frame: string, session: string, folder: string | null) => void;
-  /** The frame settled where it works — the person chose a folder, whether or not a terminal came up
-   *  in it. It is what puts a page in a project (`../talk/layout`). */
-  onChose: (frame: string, folder: string) => void;
   onSaid: (statement: SessionSaidDto) => void;
   /** A file path drawn in this pane was clicked, as it was drawn. */
   onPath: (frame: string, target: string) => void;
@@ -66,8 +63,8 @@ export function TerminalPane({
   // What the face wants done with what happens here, read at the moment it happens. The pane is put up
   // once and lives longer than any one render, so the effect below must not be re-run to see a newer
   // callback — that would take the terminal down to learn something it could have been told.
-  const on = useRef({ onOpened, onChose, onSaid, onPath, onClosed, onName, onWaiting });
-  on.current = { onOpened, onChose, onSaid, onPath, onClosed, onName, onWaiting };
+  const on = useRef({ onOpened, onSaid, onPath, onClosed, onName, onWaiting });
+  on.current = { onOpened, onSaid, onPath, onClosed, onName, onWaiting };
 
   useEffect(() => {
     if (!running) return;
@@ -90,9 +87,8 @@ export function TerminalPane({
       opened: (session, startedAt, where) => {
         plate.opened(session, startedAt);
         setLive(session);
-        // Where the terminal actually runs, which is not always the folder this slot was handed: the
-        // first frame on a page has none until somebody chooses one, and what they chose is what
-        // settles the page (`../talk/layout`).
+        // Where the terminal actually runs, which is not always the folder this slot was handed: a
+        // pane that took one up learns it from the session (`../talk/layout`).
         on.current.onOpened(frame, session, where ?? start.cwd ?? null);
       },
       // A path drawn in this pane was clicked. Where it leads is the face's to work out — it knows
@@ -101,7 +97,9 @@ export function TerminalPane({
       // Straight through and nowhere else: the row above the pane is the only thing that reads it, and
       // what it reads is the time (`../talk/moving`).
       output: () => plate.output(),
-      chose: (chosen) => on.current.onChose(frame, chosen),
+      // Nothing on this face is opened without a folder — the question is answered before the pane
+      // is made (`./FolderChoice`) — so there is no choice for the frame to report.
+      chose: () => {},
       said: (statement) => {
         plate.said(statement);
         on.current.onSaid(statement);

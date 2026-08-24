@@ -112,8 +112,8 @@ pub fn name_frame(
 
 /// The talk window's arrangement, as one machine left it.
 ///
-/// The frames are in the order they sit in, and `count` is what that order is read against: how many
-/// panes to a page. Neither is worth anything without the other, so they are kept and answered
+/// The frames are in the order they were opened, and `count` is what that order is read against: how
+/// many panes a page draws at most. Neither is worth anything without the other, so they are kept and answered
 /// together. `next_id` travels because ids are never reused — a frame that comes back keeps the name
 /// the person gave it, and a fresh frame must not be handed an id that already has one.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -127,12 +127,18 @@ pub struct SavedLayout {
     pub frames: Vec<SavedFrame>,
 }
 
-/// One frame, as far as it survives a run: where it was, and what it was working on.
+/// One frame, as far as it survives a run: whose project it was, where it was, and what it was
+/// working on.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedFrame {
     /// The id the name is kept against ([`frame_names`]).
     pub id: String,
+    /// The project the pane is one of. `None` is an arrangement written before panes belonged to a
+    /// project: what to do with one of those is the window's, since only it knows where the person
+    /// is looking.
+    #[serde(default)]
+    pub project: Option<u32>,
     /// The folder its terminal was working in, where it had one.
     pub folder: Option<String>,
 }
@@ -205,8 +211,8 @@ mod tests {
             count: 4,
             next_id: 3,
             frames: vec![
-                SavedFrame { id: "1".into(), folder: Some("/work/repo".into()) },
-                SavedFrame { id: "2".into(), folder: None },
+                SavedFrame { id: "1".into(), project: Some(1), folder: Some("/work/repo".into()) },
+                SavedFrame { id: "2".into(), project: Some(2), folder: None },
             ],
         };
         save_layout(&engine, &laid).unwrap();
@@ -215,6 +221,23 @@ mod tests {
         let back = saved_layout(&engine).unwrap().expect("the arrangement");
         assert_eq!(back, laid);
         assert_eq!(frame_names(&engine).unwrap()["1"].name, "the migration");
+    }
+
+    /// An arrangement written before panes belonged to a project still parses: what to do with a
+    /// pane whose project nothing records is the window's, and refusing to read the row would take
+    /// away the folder it could have answered with.
+    #[test]
+    fn a_frame_kept_without_a_project_still_comes_back() {
+        let engine = StoreEngine::open_in_memory().unwrap();
+        engine
+            .set_meta(
+                LAYOUT_META,
+                Some(r#"{"count":2,"nextId":2,"frames":[{"id":"1","folder":"/work/repo"}]}"#),
+            )
+            .unwrap();
+        let back = saved_layout(&engine).unwrap().expect("the arrangement");
+        assert_eq!(back.frames[0].project, None, "nothing said which project it was");
+        assert_eq!(back.frames[0].folder.as_deref(), Some("/work/repo"));
     }
 
     /// A scalar nobody can read is no arrangement, not a failure to open the window over.

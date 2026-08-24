@@ -5,9 +5,9 @@
 # screen said so. This road is the screen that now does.
 #
 # ── The screen road alone ────────────────────────────────────────────────────────────────────────
-# There is no second road here and no gap in one. What is under test is a question drawn in an empty
-# slot of the terminal face, and a terminal has no empty slot: somebody at a shell reads their
-# reservations by asking for them, which is a different thing and is walked elsewhere.
+# There is no second road here and no gap in one. What is under test is a question drawn on the
+# terminal face, and a terminal has nowhere to draw one: somebody at a shell reads their reservations
+# by asking for them, which is a different thing and is walked elsewhere.
 #
 # ── The two reservations, and why the second one is the point ────────────────────────────────────
 # The world stands up two tasks, reserved two different ways:
@@ -17,21 +17,21 @@
 #    say so because it knows which of its own sessions are still open.
 #  - one **plainly** (`task status`), which carries no session at all. That is what a reservation made
 #    at somebody's own terminal looks like, and Amenbo cannot see that terminal. It must not be asked
-#    about, and the road reads its absence in the same slot as the other one's presence — one screen,
-#    both halves, so a build that started guessing would fail here rather than quietly widening.
+#    about, and the road reads its absence in the same question as the other one's presence — one
+#    screen, both halves, so a build that started guessing would fail here rather than quietly widening.
 #
 # ── And the other kind, which is the same rule ───────────────────────────────────────────────────
 # A decision put up for discussion and never settled is left in the middle exactly as a reservation is,
 # and it is found the same way: the ledger says which pane put it up, the store says it is still
-# proposed. So the world stands up two of those as well, one in a pane and one not, and the slot is
-# read for both. The question is one sentence over the two kinds — it is one question — and which kind
+# proposed. So the world stands up two of those as well, one in a pane and one not, and the question
+# is read for both. The question is one sentence over the two kinds — it is one question — and which kind
 # a row is, and so what pressing it opens, is said by the ref it carries.
 #
 # ── Why the question is where it is ──────────────────────────────────────────────────────────────
-# An empty slot is the one place on the face with room for it and the one place a reader is already
-# looking for something to start. So the road opens the face, gives the page a folder — which is what
-# puts the screen in a project, and the question is asked about that project and no other — and reads
-# the slot beside it.
+# A face with nothing open on it is the one place with room for it and the one place a reader is
+# already looking for something to start. So the road opens the face and reads what it is asking about
+# — the project the face is on, and no other. The folder it is given is what puts the screen in that
+# project.
 #
 # ── What pressing it may do, and what it may not ─────────────────────────────────────────────────
 # Pressing a task opens it on the ledger's face. That is the whole of the affordance and it is the
@@ -43,7 +43,7 @@ title: What a pane that has gone left in the middle is put back in front of a pe
 description: >
   Stand up four things left open in one project — a reservation and a proposal made in a pane that is
   no longer running, and one of each made the way somebody's own terminal makes them — then open the
-  terminal face and give its page that project's folder. The empty slot beside the pane asks about the
+  terminal face and give it that project's folder. Beside the pane it opens, the face asks about the
   two the pane left and says nothing about the other two. Pressing one opens that record on the
   ledger's face, each kind on the face that reads it, which is where the answer is given: nothing on
   this screen moves anything.
@@ -56,7 +56,7 @@ given:
       name: Greenhouse
     as: greenhouse
 
-  # The folder is what puts a screen in a project: the page's panes open in it, and the question is
+  # The folder is what puts a screen in a project: the project's panes open in it, and the question is
   # asked about the project it belongs to and no other.
   - type: action
     domain: folder
@@ -143,8 +143,8 @@ steps_gui:
     with:
       face: terminal
 
-  # The page's folder, which is the project the question is about. It is the same one press the face
-  # opens on, and here it is also what makes the slot beside it a slot in a project.
+  # The project's folder, which is what the question is asked about. It is the same one press the face
+  # opens on, and here it is also what puts the screen in the project the question is about.
   - type: action
     domain: terminal
     op: open-folder

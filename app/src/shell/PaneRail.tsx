@@ -1,37 +1,52 @@
 import { useEffect, useRef, useState } from "react";
 import type { FrameNames } from "../talk/frames";
-import { freeSlot, pageCount, slotsOf, type Layout } from "../talk/layout";
-import { t, tf } from "../core/i18n";
+import { panesOf, type Frame, type Layout } from "../talk/layout";
+import type { Project } from "../mock/types";
+import { t } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 
 /**
- * The list of panes beside them: every frame this device has, page by page.
+ * The rail beside the panes: the projects, and under the one being shown, its panes.
  *
- * **It is the way to a pane that is not on the screen.** Pages are fixed slots and nothing is held
- * back (`../talk/layout`), so the only two ways to a pane are paging to it and picking it here — and
- * this is the one of them that shows what is there to be picked. Rows are grouped by the page they
- * are on because that is the thing a person is about to do: reaching a pane moves the whole screen
- * to its page, and a reader who cannot see that coming loses the pane they were watching.
+ * **It is where the project is chosen, and choosing one changes the whole screen.** A pane belongs to
+ * a project (`../talk/layout`) and there is no way to point one at a folder outside it, so the rail is
+ * not a list of panes that happen to be grouped — it is the division itself, drawn. Picking a project
+ * puts its panes on the face and takes the others off; picking a pane goes to it, bringing its page up
+ * with it.
+ *
+ * **Only the shown project's panes are listed.** The others are one row each: what a person does with
+ * a project they are not in is go to it, and a rail that unfolded every one of them would be a list of
+ * everything this machine has ever opened. What a folded project still says is that somebody's turn is
+ * standing in it — a dot, which is the only way a turn in a project nobody is looking at is knocked
+ * about at all (`AMB-T-3610`).
+ *
+ * **Panes are in name order.** They are opened in whatever order the work went, and a list that kept
+ * that order would move a pane's row every time an older one was closed and opened again. A name is
+ * what a person looks for.
  *
  * **The rail is where a person names a pane.** A name belongs to the frame and a person's word is the
  * last one (`../talk/frames`), so the rename is here rather than on the pane: it is the one place a
  * frame with nothing running in it can still be named.
  *
- * **And it is where another pane is started in a project already open.** A page is one project
- * (`../talk/layout`), so a page that has a folder has everywhere a new pane needs: pressing the way in
- * beside its name opens one there and nothing is asked. It is the whole difference between the second
- * pane in a project and the first — the first is a folder being chosen, and every one after it is a
- * press.
+ * **And it is where another pane is opened in the project already up.** Where the project is bound to
+ * one folder nothing is asked at all; where it is bound to several the question is which of them, and
+ * never anything outside the project (`./FolderChoice`).
  */
 export function PaneRail({
-  layout, names, onPick, onRename, onOpen,
+  layout, names, projects, needy, onProject, onPick, onRename, onOpen,
 }: {
   layout: Layout;
   names: FrameNames;
+  /** The projects this machine knows, in the order the ledger keeps them. */
+  projects: readonly Project[];
+  /** The frames a turn is standing in. What is drawn from it here is the dot on a project that is not
+   *  the one being shown — the panes of the one that is say it for themselves. */
+  needy: ReadonlySet<string>;
+  onProject: (project: number) => void;
   onPick: (frame: string) => void;
   onRename: (frame: string, name: string) => void;
-  /** Start a pane in the first free slot of this page. A page with no free slot does not offer it. */
-  onOpen: (page: number) => void;
+  /** Open another pane in this project. */
+  onOpen: (project: number) => void;
 }) {
   const [renaming, setRenaming] = useState<string | null>(null);
   const field = useRef<HTMLInputElement>(null);
@@ -40,73 +55,99 @@ export function PaneRail({
     field.current?.select();
   }, [renaming]);
 
-  const pages = Array.from({ length: pageCount(layout) }, (_, i) => i + 1);
-
   return (
     <nav className="rail" aria-label={t("face.rail")}>
-      {pages.map((page) => (
-        <div className="rail__page" key={page}>
-          <div className="rail__pagerow">
-            <span className="rail__pagename">{tf("face.page", { n: page })}</span>
-            {/* Only where there is somewhere to put one. A page whose slots are all taken has nothing
-                this could do, and a control that cannot do anything is one a reader learns to ignore.
-                There is always at least one page with room: the arrangement offers one more page than
-                the frames fill. */}
-            {freeSlot(layout, page) !== null && (
+      {projects.map((project) => {
+        const shown = layout.project === project.id;
+        const panes = panesOf(layout, project.id);
+        return (
+          <div className="rail__project" key={project.id}>
+            <div className="rail__projectrow">
               <button
-                className="rail__open"
-                title={t("face.openHere")}
-                aria-label={t("face.openHere")}
-                onClick={() => onOpen(page)}
+                className={`rail__projectname${shown ? " rail__projectname--on" : ""}`}
+                aria-current={shown ? "true" : undefined}
+                onClick={() => onProject(project.id)}
               >
-                +
+                {project.name}
+                {/* Only for a project the reader is not looking at: the panes of the one they are
+                    each say whose turn it is for themselves (`../talk/nameplate`). */}
+                {!shown && panes.some((pane) => needy.has(pane.id)) && (
+                  <span className="rail__needs" title={t("face.needsYou")} aria-hidden="true" />
+                )}
               </button>
-            )}
-          </div>
-          {slotsOf(layout, page).map((frame, slot) => {
-            // A slot no frame has been made for yet has nothing to name and nothing to go to: the
-            // page is what leads there, and pressing it is what makes the frame.
-            if (!frame) return <div className="rail__slot" key={`${page}.${slot}`} />;
-            const name = names.get(frame.id) ?? null;
-            return renaming === frame.id
-              ? (
-                <input
-                  key={frame.id}
-                  ref={field}
-                  className="rail__rename"
-                  defaultValue={name ?? ""}
-                  autoFocus
-                  aria-label={t("face.rename")}
-                  {...asTyped}
-                  onKeyDown={(e) => {
-                    if (isEnterSubmit(e)) {
-                      e.preventDefault();
-                      const text = e.currentTarget.value.trim();
-                      if (text) onRename(frame.id, text);
-                      setRenaming(null);
-                    }
-                    if (e.key === "Escape") setRenaming(null);
-                  }}
-                  onBlur={() => setRenaming(null)}
-                />
-              )
-              : (
+              {/* Beside the project it opens in, because that is what it is about. It is offered for
+                  the project being shown and no other: opening a pane goes to it, and a press that
+                  moved the screen somewhere else as a side effect is one nobody meant. */}
+              {shown && (
                 <button
-                  key={frame.id}
-                  className={`rail__row${layout.focus === frame.id ? " rail__row--focused" : ""}`}
-                  onClick={() => onPick(frame.id)}
-                  onDoubleClick={() => setRenaming(frame.id)}
-                  title={t("face.rename")}
+                  className="rail__open"
+                  title={t("face.openHere")}
+                  aria-label={t("face.openHere")}
+                  onClick={() => onOpen(project.id)}
                 >
-                  {/* A frame with no name is still a place, and the place is what it is called until
-                      someone says otherwise — the number is the slot, counted the way the page is. */}
-                  <span className="rail__name">{name ?? `${page}.${slot + 1}`}</span>
-                  {frame.session === null && <span className="rail__idle">·</span>}
+                  +
                 </button>
-              );
-          })}
-        </div>
-      ))}
+              )}
+            </div>
+            {shown && inNameOrder(panes, names, layout.count).map(({ frame, label }) =>
+              renaming === frame.id
+                ? (
+                  <input
+                    key={frame.id}
+                    ref={field}
+                    className="rail__rename"
+                    defaultValue={names.get(frame.id) ?? ""}
+                    autoFocus
+                    aria-label={t("face.rename")}
+                    {...asTyped}
+                    onKeyDown={(e) => {
+                      if (isEnterSubmit(e)) {
+                        e.preventDefault();
+                        const text = e.currentTarget.value.trim();
+                        if (text) onRename(frame.id, text);
+                        setRenaming(null);
+                      }
+                      if (e.key === "Escape") setRenaming(null);
+                    }}
+                    onBlur={() => setRenaming(null)}
+                  />
+                )
+                : (
+                  <button
+                    key={frame.id}
+                    className={`rail__row${layout.focus === frame.id ? " rail__row--focused" : ""}`}
+                    onClick={() => onPick(frame.id)}
+                    onDoubleClick={() => setRenaming(frame.id)}
+                    title={t("face.rename")}
+                  >
+                    <span className="rail__name">{label}</span>
+                    {frame.session === null && <span className="rail__idle">·</span>}
+                  </button>
+                ))}
+          </div>
+        );
+      })}
     </nav>
   );
+}
+
+/**
+ * The panes of one project with what each is called, in name order.
+ *
+ * A pane nobody has named is called where it is — the page it is on and its place on it, counted the
+ * way the pages are. That is a name too as far as the order is concerned: sorting the unnamed ones
+ * away from the named would put a reader's own words in one half of the list and the app's in the
+ * other, and the list is one list.
+ */
+function inNameOrder(
+  panes: readonly Frame[],
+  names: FrameNames,
+  count: number,
+): { frame: Frame; label: string }[] {
+  return panes
+    .map((frame, at) => ({
+      frame,
+      label: names.get(frame.id) ?? `${Math.floor(at / count) + 1}.${(at % count) + 1}`,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 }

@@ -55,6 +55,35 @@ vi.mock("../core/snapshot", async (importOriginal) => ({
   inTauri: () => true,
 }));
 
+// The file face beside the panes, stood out: it watches folders on the host, and inside Tauri — which
+// is what this file pretends to be — that is a read nothing here can answer.
+vi.mock("../files/FilesPanel", () => ({ FilesPanel: () => null }));
+
+// The ledger's projects and the one folder this one is bound to. A restored pane carries its own
+// project, so what these answer for is the face's opening one and the way in on an empty face.
+vi.mock("../mock/adapter", () => ({
+  dataAdapter: { listProjects: () => [{ id: 1, name: "amenbo" }] },
+}));
+vi.mock("../core/boundFolders", () => ({
+  useBoundFolders: () => ({
+    all: [{ path: "/work/repo", exists: true }],
+    live: [{ path: "/work/repo", exists: true }],
+    answered: true,
+  }),
+}));
+
+// Nothing is running: what a session with no pane does to the face is `AMB-D-753`'s and not this
+// file's. Only that one read is answered — everything else goes on to the host that is not here, and
+// is caught by whoever asked, which is what the rest of the window does in a browser anyway.
+vi.mock("../core/ipc", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../core/ipc")>();
+  return {
+    ...real,
+    invoke: async (cmd: string, args?: Record<string, unknown>) =>
+      (cmd === "pty_sessions" ? [] : real.invoke(cmd, args)),
+  };
+});
+
 import { TerminalFace } from "./TerminalFace";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -79,7 +108,10 @@ beforeEach(async () => {
   hoisted.saved = {
     count: 2,
     nextId: 3,
-    frames: [{ id: "1", folder: "/work/repo" }, { id: "2", folder: "/work/repo" }],
+    frames: [
+      { id: "1", project: 1, folder: "/work/repo" },
+      { id: "2", project: 1, folder: "/work/repo" },
+    ],
   };
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -121,9 +153,9 @@ describe("an arrangement that was kept", () => {
     expect(hoisted.mounts[0]!.start.cwd).toBe("/work/repo");
   });
 
-  it("never writes its own opening arrangement over the kept one", async () => {
-    // Before the answer, the face is holding the single frame it makes for itself. Writing that
-    // would be the person's panes gone, and nothing would say it had happened.
+  it("never writes anything over the kept one before it has come back", async () => {
+    // A write before the answer would be the person's panes gone, and nothing would say it had
+    // happened.
     expect(hoisted.kept).toHaveLength(0);
     await answered();
     expect(hoisted.kept[hoisted.kept.length - 1]).toEqual(hoisted.saved);
@@ -139,10 +171,11 @@ describe("an arrangement that was kept", () => {
     expect(JSON.stringify(hoisted.kept)).not.toContain("session");
   });
 
-  it("makes its own arrangement where nothing was kept", async () => {
+  it("comes up with the way in and nothing running where nothing was kept", async () => {
     hoisted.saved = null;
     await answered();
-    // One frame with a terminal in it, the way a face with nothing to restore has always come up.
-    expect(hoisted.mounts).toHaveLength(1);
+    // A pane is made by opening one: a face with nothing to restore starts nothing at all.
+    expect(hoisted.mounts).toHaveLength(0);
+    expect(q(".slot--empty")).toHaveLength(1);
   });
 });

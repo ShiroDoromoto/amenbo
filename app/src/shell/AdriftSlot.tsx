@@ -5,30 +5,39 @@ import { useRefNav } from "../core/refNav";
 import { t } from "../core/i18n";
 
 /**
- * An empty slot, and — where there is one — what this project was left in the middle of.
+ * A project with nothing open, and — where there is one — what it was left in the middle of.
  *
  * **A process can die and the ledger not hear about it.** What is left is a task sitting reserved with
  * nobody at it — out of the mailbox, so nobody is offered it — or a decision put up for discussion that
  * nobody will ever bring to a close. Nothing on any screen said so. This is where it is said, because
- * an empty slot is the one place on the face with room for it and the one place a reader is already
+ * a face with no panes on it is the one place with room for it and the one place a reader is already
  * looking for something to start.
  *
  * **It asks; it does not decide** (`AMB-D-748`). Amenbo knows the reservation was made in a pane it
  * opened and that the pane has gone — it does not know whether the person went on at their own terminal,
  * so the row is a question and pressing one opens the task rather than moving it. Nothing here writes.
  *
- * The read is scoped to the page's folder, so a screen only ever asks about the project it is in
- * (`../talk/layout`). A page with no folder has nothing to ask about and draws the plain way in.
+ * The read is scoped to a folder of the project being shown, so the face only ever asks about the
+ * project it is on (`../talk/layout`). A project bound to no folder has nothing to ask about and draws
+ * the plain way in.
  *
- * `onOpen` is what the slot is for when there is nothing to ask: starting a terminal here.
+ * `onOpen` is what this is for when there is nothing to ask: opening a pane in this project.
+ *
+ * `wayIn` is whether it stands on its own. A project with nothing open draws this as its one way in,
+ * question or no question. Beside panes that *are* open it draws only where there is something to
+ * ask — an empty box beside a terminal is the four identical questions this face was built to stop
+ * asking (`../talk/layout`).
  */
 export function AdriftSlot({
   folder,
+  wayIn,
   onOpen,
   onOpenLedger,
 }: {
-  /** The folder this page's panes work in, or null before one has been settled. */
+  /** A folder of the project being shown, or null where it is bound to none. */
   folder: string | null;
+  /** Whether to draw at all where there is nothing to ask. */
+  wayIn: boolean;
   onOpen: () => void;
   /** Bring the ledger up. Selecting a task happens on the other face, so following one from here has
    *  to leave this one — the same move the file face makes (`../files/FilesPanel`). */
@@ -73,7 +82,9 @@ export function AdriftSlot({
   );
 
   if (adrift.tasks.length === 0 && adrift.decisions.length === 0) {
-    return <button className="slot slot--empty" onClick={onOpen}>{t("face.open")}</button>;
+    return wayIn
+      ? <button className="slot slot--empty" onClick={onOpen}>{t("face.open")}</button>
+      : null;
   }
 
   // One question over both. What tells a reader which kind a row is, and so what pressing it opens, is
@@ -101,5 +112,5 @@ export function AdriftSlot({
   );
 }
 
-/** Nothing left behind — what a slot with no project to ask about draws, and what a failed read says. */
+/** Nothing left behind — what a face with no project to ask about draws, and what a failed read says. */
 const NOTHING: AdriftDto = { tasks: [], decisions: [] };

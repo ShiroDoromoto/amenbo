@@ -20,6 +20,18 @@ const hoisted = vi.hoisted(() => ({
   typed: [] as string[],
 }));
 
+// The ledger's projects and the one folder this one is bound to, so opening a pane asks nothing.
+vi.mock("../mock/adapter", () => ({
+  dataAdapter: { listProjects: () => [{ id: 1, name: "amenbo" }] },
+}));
+vi.mock("../core/boundFolders", () => ({
+  useBoundFolders: () => ({
+    all: [{ path: "/repo", exists: true }],
+    live: [{ path: "/repo", exists: true }],
+    answered: true,
+  }),
+}));
+
 vi.mock("../talk/agent", () => ({
   mountAgentFrame: (
     _host: HTMLElement,
@@ -73,6 +85,9 @@ const press = async (key: string) => {
     document.dispatchEvent(new KeyboardEvent("keydown", { key, metaKey: true, bubbles: true }));
   });
 };
+/** Ask for another pane in the project being shown. The first is the way in on the empty face; every
+ *  one after it is the way in beside the project's name on the rail. */
+const openPane = async () => click(q(".rail__open")[0] ?? q(".slot--empty")[0]!);
 /** A pane says a turn is standing in it — or that it is not any more. */
 const turn = async (pane: number, standing: boolean) => {
   await act(async () => { hoisted.tell[pane]!(standing); });
@@ -100,11 +115,13 @@ afterEach(() => {
 });
 
 describe("a turn standing on a page", () => {
-  it("wears no dot while nobody has said a turn is standing", () => {
+  it("wears no dot while nobody has said a turn is standing", async () => {
+    await openPane();
     expect(q(".termface__needs")).toHaveLength(0);
   });
 
   it("says nothing about the page in front of you, and wears a dot once you leave it", async () => {
+    await openPane();
     await turn(0, true);
     // The pane is on the screen and its own row says whose turn it is. A dot here would be the face
     // telling somebody about what they are looking at.
@@ -112,14 +129,17 @@ describe("a turn standing on a page", () => {
     // The shell is told either way: behind the other face, nothing of this can be seen at all.
     expect(told).toEqual([true]);
 
-    // Fill this page so there is another one, and turn to it.
-    await click(q(".slot--empty")[0]!);
+    // Fill this page and open one on the next, then turn to it.
+    await openPane();
+    await openPane();
     await press("2");
     expect(q(".termface__needs")).toHaveLength(1);
   });
 
   it("keeps the turn when the page turns, and drops it when the pane says it is over", async () => {
-    await click(q(".slot--empty")[0]!);
+    await openPane();
+    await openPane();
+    await openPane();
     await turn(0, true);
     await press("2");
     // Turning a page takes the panes down. The turn is not taken down with them — a page turn is
@@ -134,7 +154,8 @@ describe("a turn standing on a page", () => {
   });
 
   it("knocks the shell once however many panes are standing", async () => {
-    await click(q(".slot--empty")[0]!);
+    await openPane();
+    await openPane();
     await turn(0, true);
     await turn(1, true);
     // Two panes, one knock.
@@ -150,9 +171,9 @@ describe("a turn standing on a page", () => {
 describe("going to the pane that needs you", () => {
   it("goes to the page it is on and does not type into it", async () => {
     // Fill this page, then make a pane on the next one and let its turn come.
-    await click(q(".slot--empty")[0]!);
-    await press("2");
-    await click(q(".slot--empty")[0]!);
+    await openPane();
+    await openPane();
+    await openPane();
     await turn(2, true);
 
     await press("1");
@@ -165,6 +186,7 @@ describe("going to the pane that needs you", () => {
   });
 
   it("says so, in the ledger's own terms, when there is nowhere to go", async () => {
+    await openPane();
     await press("j");
     expect(container.textContent).toContain(t("face.nothingNeedsYou"));
   });

@@ -1006,7 +1006,7 @@ export async function setAssignee(id: number, kind: Facet | null): Promise<void>
 
 /**
  * What was left in the middle in this folder's project — what the terminal face puts to a person in an
- * empty slot (`../shell/AdriftSlot`).
+ * face with nothing open on it (`../shell/AdriftSlot`).
  *
  * A pane can die and the ledger not hear about it, leaving a task reserved with nobody at it and out of
  * everybody's mailbox, or a decision put up that nobody will ever bring to a close. What makes those
@@ -1056,6 +1056,25 @@ export async function chooseWorkFolder(): Promise<string | null> {
   const dir = await pickFolder();
   if (dir === null) return null;
   await invokeAck("folder_open", { dir });
+  return dir;
+}
+
+/**
+ * Choose this project's **first** folder — the terminal face's way in for a project bound to none.
+ *
+ * It differs from `chooseWorkFolder` in the one way that matters on that face: the folder is bound to
+ * the project the person is already looking at, rather than to whatever project the folder's own name
+ * would raise. A pane belongs to a project (`../talk/layout`), so a folder chosen to open a pane in
+ * has to end up in that project or the pane would be somewhere else entirely.
+ *
+ * Returns the folder chosen, or null where nothing was — the dialog cancelled, or the browser
+ * iteration, which has no folders to choose from. A binding the host refuses is thrown, because the
+ * caller has the question on screen to say it on.
+ */
+export async function chooseFolderFor(projectId: number): Promise<string | null> {
+  const dir = await pickFolder();
+  if (dir === null) return null;
+  await bindFolder(projectId, dir);
   return dir;
 }
 

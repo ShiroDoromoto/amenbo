@@ -4,7 +4,7 @@
 // A pane going away never ends a session — that is a pane moving, and the session outlives it
 // (`AMB-D-753`) — so this control is the whole of how a person stops something. What is pinned here is
 // that it names the session that is actually running and appears exactly while one is: a way out drawn
-// over an empty slot ends nothing, and one still drawn after the program exited would name a session
+// over a frame with nothing running ends nothing, and one still drawn after the program exited would name a session
 // the host has already forgotten.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -66,7 +66,6 @@ async function pane(): Promise<void> {
       autoStart: true,
       focused: true,
       onOpened: () => {},
-      onChose: () => {},
       onSaid: () => {},
       onPath: () => {},
       onClosed: () => {},

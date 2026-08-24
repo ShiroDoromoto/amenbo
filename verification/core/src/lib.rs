@@ -1894,7 +1894,7 @@ const REGISTRY: &[OpSpec] = &[
     // how a road tells "the same terminal, moved" from "another terminal, started". The absent half
     // is what a road reads while the other face is up.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "pane", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
-    // What an empty slot asks about: work in this page's project that nothing is doing any more. The
+    // What the terminal face asks about: work in the project it is on that nothing is doing any more. The
     // task is named by reference rather than by words, because what is drawn is the record's own title
     // and a road that spelt it out would be checking its own typing.
     //
@@ -1942,13 +1942,11 @@ const REGISTRY: &[OpSpec] = &[
     // is the same layer and the same seam: the other four carry one line, and this carries a thing and
     // a reason for it — a shape of its own, and one the file face reads rather than the pane's label.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "point", required: &["target", "why"], refs: &[], strings: &["target", "why"], binds: false },
-    // Opening a pane where there is not one yet, which is every way in but the first. A page is one
-    // project and a pane opened on it takes the page's folder, so nothing is asked here — the folder
-    // was settled by the first terminal started there. `from` is which of the two controls is pressed,
-    // and they are not the same move: `slot` is an empty box on the page being looked at, and `rail`
-    // is the way in beside a page's name in the list beside the panes, which opens in that page's
-    // first free slot and takes the screen there. A `rail` step names the `page` it presses beside; a
-    // `slot` one does not, that page being the one already on screen.
+    // Opening a pane. A pane belongs to a project and works in a folder that project is bound to, so
+    // where it is bound to one nothing is asked at all. `from` is which of the two controls is
+    // pressed, and they are not the same place: `face` is the one thing on a screen with nothing open
+    // on it, and `rail` is the way in beside the shown project's name in the list beside the panes.
+    // Neither names a page — where a pane lands is the project's arithmetic, not the road's.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-pane", required: &["from"], refs: &[], strings: &["from"], binds: false },
     // How many panes a page draws: 1, 2 or 4, and no other number. It is not a change of look. The
     // frames are one list cut into pages, so a new count re-pages every pane this device has — which

@@ -722,7 +722,7 @@ impl Instructor {
             (Domain::Terminal, "pane") | (Domain::Terminal, "label") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
-            // A task the empty slot asks about, read by the title it was created with — the record's
+            // A task the terminal face asks about, read by the title it was created with — the record's
             // own words, which is why the road names the task rather than spelling them out again.
             (Domain::Terminal, "adrift") => {
                 Some(Expectation { text: self.target_label(with), present: present(with) })
@@ -1256,7 +1256,7 @@ impl Instructor {
             // What is worth confirming while walking it is that nothing else is asked — no name, no
             // submit — since the whole of this road is one press and a folder.
             (Domain::Terminal, "open-folder") => format!(
-                "On the terminal face, press the one control it offers — the way to choose a folder — and in the picker that opens choose a folder the road calls \"{}\". The face moves on by itself as soon as the picker closes — a pane opens on the agent this folder starts with, or the face offers the ones it found, or it says it found none — and nothing is named and nothing is submitted.",
+                "On the terminal face, press the one control it offers — the way in in the middle — and in the picker that opens choose a folder the road calls \"{}\". The folder is bound to the project the face is on, and the face moves on by itself as soon as the picker closes — a pane opens on the agent this folder starts with, or the face offers the ones it found, or it says it found none — and nothing is named and nothing is submitted.",
                 req(with, "dir")?
             ),
             // Getting to a plain shell, which is what a road that speaks in a pane speaks to. It is
@@ -1267,23 +1267,23 @@ impl Instructor {
             (Domain::Terminal, "open-shell") =>
                 "Open a plain shell in the pane — the terminal with no agent started in it. Where a pane is already running one, end that first: the row under a pane whose program has ended is where what to open with is chosen, and the plain shell is on the list. Where the face is offering several agents, or saying it found none it can start, the plain shell is a button on what it is showing. Either way a prompt comes up in the pane."
                     .to_string(),
-            // Pressing one of the records the empty slot asks about. What it does is open that record
+            // Pressing one of the records the face asks about. What it does is open that record
             // on the ledger — the screen is left, deliberately, because a press that selected without
             // switching would land on a face the reader cannot see — and on the face that reads that
             // kind, a task and a decision being read in different places.
             (Domain::Terminal, "open-adrift") => format!(
-                "In the empty slot's question, press \"{}\". The window switches to the ledger with that record open, on the face that reads its kind.",
+                "In the question about what was left in the middle, press \"{}\". The window switches to the ledger with that record open, on the face that reads its kind.",
                 self.target_label(with)
             ),
             // A line typed into the pane and sent. It is typed rather than pasted because what is
             // under test is a terminal: keys are what a terminal is driven by, and a line that
             // arrived some other way would be evidence of a path nobody walks.
             //
-            // *Which* pane has to be said. The face shows a page of slots, and the ones nothing has
-            // been started in offer to open a terminal rather than holding one — a reader who clicked
-            // the wrong box would start a second shell and type this line into it.
+            // *Which* pane has to be said. A face can have several panes on it, and beside them it can
+            // be asking about work nothing is doing any more — a reader who clicked the wrong box
+            // would type this line nowhere at all.
             (Domain::Terminal, "type-line") => format!(
-                "Click into the pane that has a terminal running in it — the one the face came up with, not a slot offering to open one — then type \"{}\" and press return. The shell will not know the command — what the line is for is being on the screen, and, where the pane has not been named yet, being the name it takes.",
+                "Click into the pane that has a terminal running in it — the one the folder was opened in, not the question beside it — then type \"{}\" and press return. The shell will not know the command — what the line is for is being on the screen, and, where the pane has not been named yet, being the name it takes.",
                 req(with, "text")?
             ),
             // A command run for its output, which is what the steps after it read. The clearing is
@@ -1387,21 +1387,18 @@ impl Instructor {
                 req(with, "why")?
             ),
             // Opening a pane where there is not one yet. Both ways in are one press and nothing else
-            // — the folder is the page's, settled by the first terminal started there — so what the
-            // step says is which control is pressed and where the screen ends up, since the two
-            // differ on exactly that. The rail's names the page it is pressed beside, because the
-            // list draws every page at once and a step that did not say which row would be a reader
-            // picking one.
+            // — the folder is the project's — so what the step says is which control is pressed and
+            // where the screen ends up, since the two differ on exactly that. Neither names a page:
+            // where a pane lands is the project's arithmetic and not the road's, and a step that
+            // named one would be a road asserting it from the wrong end.
             (Domain::Terminal, "open-pane") => match req(with, "from")? {
-                "slot" => "On the page being shown, press an empty slot — a box offering to open a terminal rather than one holding it. A pane opens there and nothing is asked: the folder is the one this page's first terminal was started in."
+                "face" => "On a terminal face with nothing open on it, press the way in in the middle — the one control there is. A pane opens in the project the rail is on, in the folder that project is bound to, and nothing is asked."
                     .to_string(),
-                "rail" => format!(
-                    "In the list of panes beside them, press the way in at the end of the row for page {} — the control beside that page's name. A pane opens in the first free slot of that page, in that page's folder, and the screen moves there.",
-                    count(with, "page")?
-                ),
+                "rail" => "In the list beside the panes, press the way in beside the name of the project being shown — the control at the end of its row. A pane opens in that project, in the folder it is bound to, and the screen goes to it."
+                    .to_string(),
                 other => {
                     return Err(format!(
-                        "action `open-pane` does not know the way in `{other}` — it is slot or rail"
+                        "action `open-pane` does not know the way in `{other}` — it is face or rail"
                     ))
                 }
             },
@@ -1539,7 +1536,7 @@ impl Instructor {
                     .ok_or_else(|| "arg `axes` must say how many axes are narrowing".to_string())?
             ),
             // Which record the press opened. Both halves name the phrase rather than the record's title:
-            // whatever row led here is carrying the title too — a hit, or the question an empty slot
+            // whatever row led here is carrying the title too — a hit, or the question the terminal face
             // puts — so a line read on it would pass over a press that opened nothing, and over one that
             // opened the wrong record just as quietly.
             (Domain::Task, "opened") => match present(with) {
@@ -2264,16 +2261,16 @@ impl Instructor {
                 false => "On that same row, watch the dot for a few seconds: confirm it is holding still at its dim step, rather than fading up and down. Still is the pane's resting state, not the pane having gone — the dot is drawn either way."
                     .to_string(),
             },
-            // What an empty slot asks about. The absent half is not the same sentence turned round: it
-            // says which reservation is being looked for and that the slot is right not to name it, so
-            // an operator reading it knows a screen with nothing on it at all would be a fail.
+            // What the face asks about. The absent half is not the same sentence turned round: it says
+            // which reservation is being looked for and that the face is right not to name it, so an
+            // operator reading it knows a screen with nothing on it at all would be a fail.
             (Domain::Terminal, "adrift") => match present(with) {
                 true => format!(
-                    "In the empty slot on the terminal face, confirm the question about what was left in the middle names \"{}\".",
+                    "On the terminal face, confirm the question about what was left in the middle names \"{}\".",
                     self.target_label(with)
                 ),
                 false => format!(
-                    "In the same empty slot, confirm \"{}\" is not among what it asks about — the question is drawn, and this one is not on it.",
+                    "In the same question, confirm \"{}\" is not among what it asks about — the question is drawn, and this one is not on it.",
                     self.target_label(with)
                 ),
             },
@@ -4973,10 +4970,10 @@ steps_gui:
         );
     }
 
-    /// The moves a page is worked with, and the two ways a pane is opened on one. What the road has
-    /// to be able to say is which control was pressed: the slot is on the page being looked at and
-    /// the rail's is beside a page's name in the list, so a step that named neither would leave an
-    /// operator to pick — and the two land the screen in different places.
+    /// The moves a page is worked with, and the two ways a pane is opened. What the road has to be
+    /// able to say is which control was pressed: the face's is the one thing on a screen with nothing
+    /// open, and the rail's is beside the shown project's name in the list, so a step that named
+    /// neither would leave an operator to pick between them.
     #[test]
     fn the_page_moves_name_the_control_they_press() {
         let s = load(r#"
@@ -4994,21 +4991,25 @@ steps_gui:
   - type: action
     domain: terminal
     op: open-pane
-    with: { from: slot }
+    with: { from: face }
   - type: action
     domain: terminal
     op: open-pane
-    with: { from: rail, page: 1 }
+    with: { from: rail }
 "#);
         let mut ins = Instructor::new();
         let lines: Vec<String> =
             s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
         assert!(lines[0].contains("pane counts, press 1"), "got: {}", lines[0]);
         assert!(lines[1].contains("page digits, press 2"), "got: {}", lines[1]);
-        assert!(lines[2].contains("empty slot"), "the slot is on the page being shown: {}", lines[2]);
         assert!(
-            lines[3].contains("row for page 1") && lines[3].contains("screen moves there"),
-            "the rail names its page and takes the screen there: {}",
+            lines[2].contains("nothing open"),
+            "the face's way in is the one thing on an empty screen: {}",
+            lines[2]
+        );
+        assert!(
+            lines[3].contains("project being shown") && lines[3].contains("screen goes to it"),
+            "the rail names the project and takes the screen there: {}",
             lines[3]
         );
     }
@@ -5027,7 +5028,7 @@ steps_gui:
             window: None,
         };
         let err = Instructor::new().render(&step).unwrap_err();
-        assert!(err.contains("slot or rail"), "got: {err}");
+        assert!(err.contains("face or rail"), "got: {err}");
     }
 
     /// What the moving half of the dot rests on: a pane set printing carries on putting lines out

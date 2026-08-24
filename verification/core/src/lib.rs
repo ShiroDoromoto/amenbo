@@ -1978,6 +1978,31 @@ const REGISTRY: &[OpSpec] = &[
     // goal — this project's folders, and no way to anywhere outside them — so the list is part of
     // what the step puts in front of the operator rather than something read in a step of its own.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "pick-folder", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
+    // Walking away from that question without answering it. A frame is made when the question is
+    // answered and not when it is asked, so this is the one move that reaches the state after a
+    // question nobody answered: what a face draws when somebody changed their mind. It is an op of
+    // its own rather than a value on `open-pane`, because it is pressed after that step and not
+    // instead of it — the question has to be standing before there is anything to leave.
+    //
+    // *How* it is left is the driver's to say and not the road's. The question comes down on a press
+    // anywhere else on the face, and which of those places is nearest is the run machine's business;
+    // a road that named one would be walking that control's own road instead of this one.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "leave-question", required: &[], refs: &[], strings: &[], binds: false },
+    // Whether that question is standing, read by a folder it offers. `dir` is the road's own name for
+    // one of the project's folders, the way `open-folder`'s is — so what a reading finds is a word the
+    // road put in the world itself, and not one of the interface's, which is what lets both halves be
+    // read on a screen in any language.
+    //
+    // The absent half is what the walking-away is proved by, and it says more than "the question is
+    // gone": the question *is* the box, drawn where a pane would be, so a screen with neither on it is
+    // a question that left nothing behind.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "asking-folder", required: &["dir"], refs: &[], strings: &["dir"], binds: false },
+    // How many panes the page being shown draws. It is not `set-panes` read back: that one is the
+    // ceiling on how many a page may hold, and this is how many are actually standing there. The two
+    // part company on exactly the thing worth defending — a face that filled the ceiling with empty
+    // boxes would be asking the same question four times over, and a count of the ceiling could never
+    // tell that from a face with one pane on it.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "frames", required: &["count"], refs: &[], strings: &[], binds: false },
     // How many panes a page draws: 1, 2 or 4, and no other number. It is not a change of look. The
     // frames are one list cut into pages, so a new count re-pages every pane this device has — which
     // is why a road walks it at all: what has to survive the cut is the terminals running inside them.

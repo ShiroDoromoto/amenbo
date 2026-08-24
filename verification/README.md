@@ -582,6 +582,23 @@ answer green from end to end. Each pane is then asked where it is standing, by r
 lying in one of the two folders and not the other — a pane draws no path of its own, and that is the
 only reading on this face that says *where* a terminal is working.
 
+The other end of that question is where a frame comes from. A pane is made when the question is
+answered and not when it is asked, so the box drawn while it stands is the question and walking away
+takes it with it — `leave-question` is that move, and `leave-the-question-about-where-a-pane-runs` the
+road. Where the leaving is done is the driver's to say rather than the road's, the question coming
+down on a press anywhere else on the face. The road ends by answering the same question, since what
+the walking-away did not leave behind is exactly what an answer makes.
+`asking-folder` reads whether the question is standing, by a folder it offers: the rows carry the
+folders' own paths, so what a reading finds is a word the road put in the world and not one of the
+interface's, and its absent half is what says the box left with the question.
+
+`frames` counts what is standing on the page, and it is a `Review` for the reason `dot` below is —
+a box carries no words of the road's, and an empty one would carry the interface's. What it defends
+is that the pane count is the most a page draws rather than slots waiting to be filled:
+`find-one-way-in-rather-than-a-page-of-empty-boxes` sets the count to four with nothing open and
+reads the page still empty, then grows it one frame per pane opened. A face that filled its ceiling
+with boxes would be asking the same question four times over, and nothing else here would say so.
+
 `dot` is the one reading on these roads that is not text at all. The mark on a pane's label pulses
 while something is coming out of that terminal, and it is the only thing on screen that says a pane
 is *alive* rather than drawn — a terminal that ended leaves its last output where it was, so words on

@@ -614,6 +614,14 @@ impl Instructor {
     /// the run shoots the window under test. The eye that closes it is the operator's at the moment
     /// they pressed the item, which is why each of the three lines asks them to say what they saw.
     ///
+    /// `terminal frames` is a `Review` for a reason close to the dot's: what it reads is a count of
+    /// boxes, and a box on this face is a box whether it holds a terminal or a question. Nothing on
+    /// it is the road's own words — the panes have not been typed into yet, and the empty ones this
+    /// step exists to rule out would carry the interface's — so there is nothing for a reading to
+    /// look for, and its absence would settle nothing either way. Its neighbour `asking-folder` is
+    /// read, and the two are worth having side by side: one says what is standing, and the other
+    /// says how many.
+    ///
     /// `dimension key` is read, and it is the cleanest reading on these roads. A key is neither a word
     /// of the interface nor a title drawn twice over — it is what a reader types for somewhere outside
     /// Amenbo — so it stands on the shot in the one field it was typed into, and nowhere else.
@@ -726,6 +734,13 @@ impl Instructor {
             // own words, which is why the road names the task rather than spelling them out again.
             (Domain::Terminal, "adrift") => {
                 Some(Expectation { text: self.target_label(with), present: present(with) })
+            }
+            // The folder the question offers, read by the name the road gave it. The buttons carry the
+            // folders' own paths, and the last part of one is the word the world was told to make it
+            // under — so a reading finds it on the question and nowhere else on this face, and finds
+            // it gone once the question has been left.
+            (Domain::Terminal, "asking-folder") => {
+                Some(Expectation { text: arg_str(with, "dir")?.to_string(), present: present(with) })
             }
             // A row on the file face, and the words an opened file draws. Both are read off the shot
             // as the road wrote them: a file's name is a name the road gave it, and what is inside is
@@ -1438,6 +1453,16 @@ impl Instructor {
                 "In the question standing where the pane will be, press the folder the road calls \"{}\" — the row whose path ends in that name. Confirm as you press that what it offers is this project's folders and nothing besides: no picker, and no way out to a folder the project is not bound to. The pane opens in the one pressed.",
                 req(with, "dir")?
             ),
+            // Walking away from the question about where a pane runs. The press is named by what it
+            // is *not* — not one of the folders, and not the way in again — because what is under
+            // test is the leaving and not the place it was left from. The page digit is offered as
+            // the one control that is on the face whatever else is: a project with nothing open has
+            // no panes to press and no second project to cross to, and an operator told only "press
+            // somewhere else" on a screen holding one question would be hunting for somewhere to
+            // press.
+            (Domain::Terminal, "leave-question") =>
+                "Without answering it, leave the question about which folder the pane works in: press somewhere else on the face — the digit of the page being shown, at the top, is on every screen this question can come up on. Answer nothing and press none of the folders it offers."
+                    .to_string(),
             // How many panes a page draws. The control is named by what it holds rather than by
             // where it sits, and the number is pressed as it is written: the three counts are all
             // drawn at once, so there is nothing to open first. What the step does not say is what
@@ -2308,6 +2333,33 @@ impl Instructor {
                 false => format!(
                     "In the same question, confirm \"{}\" is not among what it asks about — the question is drawn, and this one is not on it.",
                     self.target_label(with)
+                ),
+            },
+            // The question about where a pane runs, read by a folder it offers. The absent half is the
+            // one the walking-away is proved by, and it is written to say what a screen with nothing
+            // on it means here: the question is the box, so a face drawing neither it nor a pane is a
+            // question that took its box with it.
+            (Domain::Terminal, "asking-folder") => match present(with) {
+                true => format!(
+                    "On the terminal face, confirm the question about which folder this pane works in is standing where a pane would be, and that \"{}\" is one of the folders it offers.",
+                    req(with, "dir")?
+                ),
+                false => format!(
+                    "On the terminal face, confirm the question about which folder a pane works in is nowhere on it — no box offering \"{}\", and nothing half-made standing where it was.",
+                    req(with, "dir")?
+                ),
+            },
+            // How many panes are standing on the page. Counted rather than read: the boxes carry no
+            // words of the road's, and the whole of what this asks is how many of them there are. The
+            // wording says what an empty box would look like, because that is the thing being ruled
+            // out and an operator who was not told what to rule out would count the panes and stop.
+            (Domain::Terminal, "frames") => match count(with, "count")? {
+                0 => "On the terminal face, confirm no pane is standing on the page at all — no terminal, and no empty box waiting to be filled. What is in the middle is the way in — or, while it is standing, the question about where a pane runs — and nothing besides."
+                    .to_string(),
+                1 => "On the terminal face, confirm exactly one pane is standing on the page, and that the rest of it is empty rather than holding boxes asking to be opened."
+                    .to_string(),
+                n => format!(
+                    "On the terminal face, count the panes standing on the page: confirm there are exactly {n}, and that the rest of it is empty rather than holding boxes asking to be opened."
                 ),
             },
             // ── the file face ─────────────────────────────────────────────────────────────────

@@ -3891,6 +3891,7 @@ pub fn talk_layout() -> Result<Option<TalkLayoutDto>, CmdError> {
                 folder: frame.folder,
             })
             .collect(),
+        split_out: saved.split_out,
     }))
 }
 
@@ -3913,6 +3914,7 @@ pub fn save_talk_layout(layout: TalkLayoutDto) -> Result<(), CmdError> {
                 folder: frame.folder,
             })
             .collect(),
+        split_out: layout.split_out,
     })?;
     Ok(())
 }

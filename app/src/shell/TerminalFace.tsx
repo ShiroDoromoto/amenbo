@@ -84,7 +84,11 @@ export function TerminalFace({
   onOpenLedger,
   openIn,
 }: {
-  onSplitOut: () => void;
+  /** Take the terminal into a window of its own. What goes with it is the pane being worked in —
+   *  the frame, so the window names the place it is drawing, and the terminal running there, so it
+   *  takes that one up rather than guessing from a count of what is open (`../talk.ts`). Null where
+   *  this face has no pane to be working in, which is the window with nothing to take up. */
+  onSplitOut: (pane: { frame: string; session?: string } | null) => void;
   note: string | null;
   onWaiting: (waiting: boolean) => void;
   /** The project the face opens on, where the window has one to say. */
@@ -441,7 +445,19 @@ export function TerminalFace({
   return (
     <div className={`termface${drawers ? " termface--drawers" : ""}`} ref={rootRef}>
       <div className="termface__bar">
-        <button className="termface__action" onClick={onSplitOut}>{t("face.splitOut")}</button>
+        <button
+          className="termface__action"
+          onClick={() => onSplitOut(
+            focusedFrame === null
+              ? null
+              : {
+                  frame: focusedFrame.id,
+                  ...(focusedSession === null ? {} : { session: focusedSession }),
+                },
+          )}
+        >
+          {t("face.splitOut")}
+        </button>
         {drawers && (
           <button
             className="termface__action"

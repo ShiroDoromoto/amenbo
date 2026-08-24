@@ -271,6 +271,15 @@ describe("an arrangement kept between runs", () => {
     expect(laidOut(EMPTY_LAYOUT)).not.toHaveProperty("project");
   });
 
+  it("names the pane being worked in, for the window that draws one of them", () => {
+    // Splitting the terminal out takes the pane the person is in, and a window built by a launch
+    // rather than by that press has nobody left to ask which one that was (`../talk.ts`).
+    const layout = focusOn(withPanes(2), "2");
+    expect(laidOut(layout).splitOut).toBe("2");
+    // A face with no pane to be working in leaves it out rather than naming a place that is not one.
+    expect(laidOut(EMPTY_LAYOUT)).not.toHaveProperty("splitOut");
+  });
+
   it("comes back as places to open a terminal in, each in its own project", () => {
     const back = restored({
       count: 4,

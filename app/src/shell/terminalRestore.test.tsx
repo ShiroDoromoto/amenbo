@@ -161,7 +161,11 @@ describe("an arrangement that was kept", () => {
     // happened.
     expect(hoisted.kept).toHaveLength(0);
     await answered();
-    expect(hoisted.kept[hoisted.kept.length - 1]).toEqual(hoisted.saved);
+    // What goes back is what came back, with the pane being worked in on it: a restore lands on the
+    // first place, and that is where the person is — which is what the window with no rail draws
+    // when the terminal is split out (`../talk/layout`).
+    expect(hoisted.kept[hoisted.kept.length - 1])
+      .toEqual({ ...(hoisted.saved as object), splitOut: "1" });
   });
 
   it("keeps the shape as it changes, and keeps no session in it", async () => {

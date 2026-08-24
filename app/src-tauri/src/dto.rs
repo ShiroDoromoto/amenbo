@@ -2320,6 +2320,26 @@ pub struct FolderImageDto {
     pub(crate) base64: String,
 }
 
+/// The pane the board is handing to the window it is splitting the terminal out into.
+///
+/// Two things, and they come from different lifetimes. The **frame** is a place in the arrangement,
+/// and it is what the pane's name belongs to (`FrameNameDto`) — without it the window would name a
+/// frame it is not drawing. The **session** is the terminal running in that frame at the moment of
+/// the split, so the window takes up that one rather than guessing from a count of what is open: with
+/// several panes running, a window that adopted "the only session" would adopt none of them.
+#[derive(Clone, Deserialize, Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct TalkPaneDto {
+    /// The frame the window draws.
+    pub(crate) frame: String,
+    /// The terminal running in it, or `None` for a frame whose program has ended — a place with its
+    /// last output on it is still the place being split out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) session: Option<String>,
+}
+
 /// The talk window's arrangement, as this device left it (`amenbo_core::frames::SavedLayout`).
 ///
 /// The shape only: how many panes to a page, the frames in slot order, and the folder each was
@@ -2340,6 +2360,12 @@ pub struct TalkLayoutDto {
     pub(crate) project: Option<u32>,
     /// The frames, in slot order.
     pub(crate) frames: Vec<TalkFrameDto>,
+    /// The frame the window split out of the board draws — the one being worked in when the
+    /// arrangement was kept (`amenbo_core::frames::SavedLayout`). Absent where the terminal has never
+    /// been split out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) split_out: Option<String>,
 }
 
 /// One frame of a kept arrangement: where it sat, and what it was working on.

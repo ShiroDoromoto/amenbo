@@ -87,6 +87,9 @@ devtool/              optional Go helper: a throwaway dev GUI per task, the VM i
 guards/               one invariant apiece, asserted over the tree by `make test` and CI
 scripts/              what the Makefile calls out to: build, sign, notarise, verify, bake
                       the brand set
+  windows/            typed by hand, not by the Makefile: drive a real Windows desktop
+                      from here, for the roads out of the app that only a physical
+                      machine can walk
 ```
 
 Design points:

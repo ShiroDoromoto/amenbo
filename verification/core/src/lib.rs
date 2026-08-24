@@ -1428,12 +1428,14 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "none-linked", required: &["absent"], refs: &[], strings: &["absent"], binds: false },
     // What a project with no work in it yet hands its reader: the loop that joins the two ends — the
     // reader asks their AI, the AI writes to Amenbo, and what it wrote lands on the board. Every move
-    // the interface can make on their behalf it makes, so what the screen carries is a terminal
-    // already inside the linked folder and a request finished enough to paste.
+    // the interface can make on their behalf it makes, so the whole of it is one press: a terminal
+    // opens inside the linked folder and the agent in it is handed the request before it starts.
     //
     // `hands_over` is the words that request has to carry, and what they name is the command the AI is
     // sent to run before it does anything else. It is the one part of the card that is the same in
-    // whatever language the app is in, so it is the part a reading can be held to.
+    // whatever language the app is in, so it is the part a reading can be held to — and it is read off
+    // the way out to the reader's own terminal, which is where the request is written down now that
+    // nobody on the one press has to paste it.
     //
     // GUI only, and not by omission: none of this reaches the store. A request that lost the command,
     // and a terminal opened somewhere other than the linked folder, leave exactly the rows behind

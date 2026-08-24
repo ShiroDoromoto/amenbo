@@ -689,13 +689,6 @@ button.feed__target:hover { color: var(--c-accent); }
 .firstloop__head { display: flex; flex-direction: column; gap: 2px; }
 .firstloop__title { font-weight: var(--fw-bold); font-size: var(--fs-md); }
 .firstloop__intro { font-size: var(--fs-sm); }
-.firstloop__step { display: flex; gap: var(--s-3); }
-.firstloop__num {
-  width: 24px; height: 24px; flex: none; border-radius: 50%;
-  background: var(--c-accent); color: #fff; font-size: var(--fs-sm); font-weight: var(--fw-bold);
-  display: flex; align-items: center; justify-content: center;
-}
-.firstloop__stepbody { display: flex; flex-direction: column; gap: var(--s-2); min-width: 0; }
 .firstloop__steptitle { font-weight: var(--fw-bold); }
 .firstloop__stephint { font-size: var(--fs-sm); }
 .firstloop__prompt {
@@ -703,12 +696,11 @@ button.feed__target:hover { color: var(--c-accent); }
   background: var(--c-surface-sunken); font-size: var(--fs-sm); line-height: 1.6;
 }
 .firstloop .btn { align-self: flex-start; }
-.firstloop__fallback { display: flex; flex-direction: column; gap: var(--s-2); }
-.firstloop__path {
-  margin: 0; padding: var(--s-2) var(--s-3); border-radius: var(--r-sm);
-  background: var(--c-surface-sunken); font-family: var(--font-mono); font-size: var(--fs-sm);
-  overflow-wrap: anywhere;
-}
+/* The way out to the reader's own terminal: closed it is one line, open it is that line with the
+   request under it. It keeps its own column so the two never sit side by side — what is inside
+   belongs to the line that opened it, not to the loop's own list. */
+.firstloop__outside { display: flex; flex-direction: column; gap: var(--s-2); }
+.firstloop__end { display: flex; flex-direction: column; gap: 2px; }
 /* On a board the loop is the only thing on the surface, so it gets the surface's own margin and a
    width it can be read across (inside the creation screen the column already caps it). */
 .board__firstloop { padding: var(--s-5); max-width: 720px; }

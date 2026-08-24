@@ -50,6 +50,7 @@ const render = () =>
       onCreated: (target: { type: string; id: string }) => { hoisted.landed.push(target); },
       onCancel: () => {},
       onOpenMcp: (projectId: number) => { hoisted.opened.push(projectId); },
+      onStartTerminal: () => {},
     }));
   });
 

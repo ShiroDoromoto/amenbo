@@ -140,6 +140,53 @@ export function folderOfPage(layout: Layout, page: number): string | null {
 }
 
 /**
+ * The page a folder handed in from the ledger is worked in — the one already in it, or the first one
+ * nothing has been started on. Null only where every page is settled in some other folder.
+ *
+ * **A folder already open is not opened beside itself.** One screen is one project ({@link
+ * folderOfPage}), so a second page in the same folder would be that project twice with its panes
+ * split between them — the reader would go looking for the pane they left in the one they are not on.
+ *
+ * Where it is not open yet, the page that takes it is one with nothing settled, because settling is
+ * what a page's folder is: putting it on a page that has one would make that page two projects. On a
+ * face nobody has started anything on that is the first page, which is why the ordinary first run
+ * lands on the screen the reader is already looking at.
+ */
+export function pageFor(layout: Layout, folder: string): number | null {
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    if (folderOfPage(layout, page) === folder) return page;
+  }
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    if (folderOfPage(layout, page) === null) return page;
+  }
+  return null;
+}
+
+/**
+ * A frame on `page` with `folder` already settled on it, for a folder handed in from the ledger.
+ *
+ * **The frame is a new one where the slot's is empty**, and that is the point rather than an
+ * accident: a frame is drawn from the moment it is put up, so a folder settled underneath one that
+ * is already on the screen would leave its invitation standing over a page that now has an answer.
+ * A fresh id is what brings the pane up again. Nothing is lost by it — a frame with no session is a
+ * place and nothing more, and the one thing a place carries of its own, its name, is given to frames
+ * a person has worked in (`./frames`).
+ *
+ * A slot with a terminal running in it is left exactly as it is: what is running there was started
+ * somewhere, and replacing it would be this taking a session away from whoever is in it.
+ */
+export function openedOn(layout: Layout, page: number, folder: string): { layout: Layout; frame: Frame } {
+  const made = frameFor(layout, page, 0);
+  const at = indexOf(made.layout.count, page, 0);
+  const standing = made.layout.frames[at]!;
+  if (standing.session !== null) return { layout: made.layout, frame: standing };
+  const frame: Frame = { id: String(made.layout.nextId), session: null, folder };
+  const frames = [...made.layout.frames];
+  frames[at] = frame;
+  return { layout: { ...made.layout, frames, nextId: made.layout.nextId + 1 }, frame };
+}
+
+/**
  * Make sure a slot has a frame, and answer with the layout and the frame at it.
  *
  * Slots are filled up to the one asked for. Reaching for the fourth slot of an empty page is a person

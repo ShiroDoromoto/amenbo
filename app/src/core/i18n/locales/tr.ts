@@ -520,7 +520,7 @@ export const tr: Translation = {
     "files.memo": "Sayfa",
     "files.memoWide": "Geniş yaz",
     "files.memoNarrow": "Panele dön",
-    "files.memoPlaceholder": "Uzun bir isteği burada topla. Saklanmaya değer olan bir göreve ya da karara gider.",
+    "files.memoPlaceholder": "Uzun bir isteği burada topla.",
     "files.changed": "Son değişenler",
     "files.tree": "Klasör",
     "files.nothingChanged": "Henüz hiçbir şey değişmedi.",

@@ -523,7 +523,7 @@ export const vi: Translation = {
     "files.memo": "Trang ghi",
     "files.memoWide": "Viết rộng",
     "files.memoNarrow": "Về lại bảng",
-    "files.memoPlaceholder": "Soạn yêu cầu dài ở đây. Điều đáng giữ thì chuyển sang một việc hoặc một quyết định.",
+    "files.memoPlaceholder": "Soạn yêu cầu dài ở đây.",
     "files.changed": "Vừa thay đổi",
     "files.tree": "Thư mục",
     "files.nothingChanged": "Chưa có gì thay đổi.",

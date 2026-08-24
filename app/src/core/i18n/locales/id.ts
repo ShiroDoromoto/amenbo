@@ -523,7 +523,7 @@ export const id: Translation = {
     "files.memo": "Halaman",
     "files.memoWide": "Tulis melebar",
     "files.memoNarrow": "Kembali ke panel",
-    "files.memoPlaceholder": "Susun permintaan panjang di sini. Yang layak disimpan pindah ke tugas atau keputusan.",
+    "files.memoPlaceholder": "Susun permintaan panjang di sini.",
     "files.changed": "Baru berubah",
     "files.tree": "Folder",
     "files.nothingChanged": "Belum ada yang berubah.",

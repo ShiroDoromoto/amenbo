@@ -546,7 +546,7 @@ export const pl: Translation = {
     "files.memo": "Strona",
     "files.memoWide": "Pisz szeroko",
     "files.memoNarrow": "Wróć do panelu",
-    "files.memoPlaceholder": "Ułóż tu długą prośbę. To, co warto zachować, trafia do zadania lub decyzji.",
+    "files.memoPlaceholder": "Ułóż tu długą prośbę.",
     "files.changed": "Ostatnio zmienione",
     "files.tree": "Folder",
     "files.nothingChanged": "Nic się jeszcze nie zmieniło.",

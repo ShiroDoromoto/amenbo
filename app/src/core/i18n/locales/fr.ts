@@ -541,7 +541,7 @@ export const fr: Translation = {
     "files.memo": "La page",
     "files.memoWide": "Écrire en grand",
     "files.memoNarrow": "Revenir au panneau",
-    "files.memoPlaceholder": "Composez ici une longue demande. Ce qui mérite d'être gardé part dans une tâche ou une décision.",
+    "files.memoPlaceholder": "Composez ici une longue demande.",
     "files.changed": "Modifié récemment",
     "files.tree": "Le dossier",
     "files.nothingChanged": "Rien n'a encore changé.",

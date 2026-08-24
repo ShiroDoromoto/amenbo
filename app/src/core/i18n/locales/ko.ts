@@ -519,7 +519,7 @@ export const ko: Translation = {
     "files.memo": "메모",
     "files.memoWide": "넓게 쓰기",
     "files.memoNarrow": "패널로 돌아가기",
-    "files.memoPlaceholder": "긴 부탁은 여기에서 엮습니다. 남기고 싶은 것은 작업이나 결정으로 옮기세요.",
+    "files.memoPlaceholder": "긴 부탁은 여기에서 엮습니다.",
     "files.changed": "최근에 바뀐 것",
     "files.tree": "폴더",
     "files.nothingChanged": "아직 바뀐 것이 없습니다.",

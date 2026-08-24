@@ -520,7 +520,7 @@ export const nl: Translation = {
     "files.memo": "De pagina",
     "files.memoWide": "Breed schrijven",
     "files.memoNarrow": "Terug naar het paneel",
-    "files.memoPlaceholder": "Stel hier een lang verzoek samen. Wat bewaard moet blijven gaat naar een taak of een besluit.",
+    "files.memoPlaceholder": "Stel hier een lang verzoek samen.",
     "files.changed": "Onlangs gewijzigd",
     "files.tree": "De map",
     "files.nothingChanged": "Er is nog niets gewijzigd.",

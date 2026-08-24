@@ -520,7 +520,7 @@ export const hi: Translation = {
     "files.memo": "पन्ना",
     "files.memoWide": "बड़े में लिखें",
     "files.memoNarrow": "पैनल पर लौटें",
-    "files.memoPlaceholder": "लंबा अनुरोध यहाँ तैयार करें। जो रखना हो वह किसी टास्क या निर्णय में जाए।",
+    "files.memoPlaceholder": "लंबा अनुरोध यहाँ तैयार करें।",
     "files.changed": "हाल में बदली फ़ाइलें",
     "files.tree": "फ़ोल्डर",
     "files.nothingChanged": "अभी तक कुछ नहीं बदला।",

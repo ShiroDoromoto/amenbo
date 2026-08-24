@@ -549,7 +549,7 @@ export const ru: Translation = {
     "files.memo": "Страница",
     "files.memoWide": "Писать широко",
     "files.memoNarrow": "Вернуться на панель",
-    "files.memoPlaceholder": "Соберите здесь длинную просьбу. То, что стоит сохранить, уходит в задачу или решение.",
+    "files.memoPlaceholder": "Соберите здесь длинную просьбу.",
     "files.changed": "Недавно изменённые",
     "files.tree": "Папка",
     "files.nothingChanged": "Пока ничего не изменилось.",

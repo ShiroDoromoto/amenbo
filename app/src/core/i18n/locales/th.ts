@@ -523,7 +523,7 @@ export const th: Translation = {
     "files.memo": "หน้าบันทึก",
     "files.memoWide": "เขียนแบบกว้าง",
     "files.memoNarrow": "กลับไปที่แผง",
-    "files.memoPlaceholder": "เรียบเรียงคำขอยาว ๆ ที่นี่ สิ่งที่ควรเก็บให้ย้ายไปเป็นงานหรือบันทึกการตัดสิน",
+    "files.memoPlaceholder": "เรียบเรียงคำขอยาว ๆ ที่นี่",
     "files.changed": "เปลี่ยนแปลงล่าสุด",
     "files.tree": "โฟลเดอร์",
     "files.nothingChanged": "ยังไม่มีอะไรเปลี่ยนแปลง",

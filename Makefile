@@ -233,6 +233,12 @@ CLI_LINUX_HOST    := $(DIST_DIR)/amenbo-linux-$(HOST_GUI_ARCH)
 # the HOST arch, so it gets its own tag: the same tag under two platforms would have the
 # dist image (amd64 by default) and this one overwrite each other on every build.
 LINUX_LINT_IMAGE  := amenbo-linux-lint:$(HOST_GUI_ARCH)
+# The hand-driven room (gui-drive-linux) is its own image and its own container name, so it can be
+# left standing beside anything else and taken down by name. amd64 is the default because what is
+# usually put in it is a preview a workflow baked, and those are x86_64.
+GUI_DRIVE_IMAGE   := amenbo-linux-gui-drive:latest
+GUI_DRIVE_NAME    ?= amenbo-gui-drive
+GUI_DRIVE_ARCH    ?= amd64
 # The CLI build image is that same Dockerfile again, for the arch being shipped — its own tag for
 # the same reason the lint has one (two platforms under one tag overwrite each other).
 LINUX_CLI_IMAGE   := amenbo-linux-cli:$(LINUX_CLI_ARCH)
@@ -242,7 +248,7 @@ LINUX_CLI_IMAGE   := amenbo-linux-cli:$(LINUX_CLI_ARCH)
 # so it does not appear here = shell-gate's actionlint sees that.
 SHELL_SOURCES := $(shell git ls-files '*.sh' '.githooks/*')
 
-.PHONY: help install install-dev gui gui-dev gui-dev-names gui-dev-linux install-gui install-gui-dev install-gui-dev-vm dev-build hooks lock verify lint-linux verify-gui-linux verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate product-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate gui-inputs-gate ci-aggregate-gate workflow-run-gate brand sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux dist-cli-dev-linux verify-existing-store release codesign-cert devtool devtool-bin
+.PHONY: help install install-dev gui gui-dev gui-dev-names gui-dev-linux install-gui install-gui-dev install-gui-dev-vm dev-build hooks lock verify lint-linux verify-gui-linux gui-drive-linux gui-drive-linux-stop verify-network-linux verify-network-mac gate test gate-tools gate-cheap gate-rust gate-app-rust gate-gui gate-verification doc-gate doc-gate-rust doc-gate-app shell-gate comment-gate go-gate scopes-gate cli-name-gate product-name-gate sidecar-name-gate selfupdate-gate ts-derive-gate gui-inputs-gate ci-aggregate-gate workflow-run-gate brand sweep-stale schema-freeze schema-renumber dist-gui dist-gui-mac dist-gui-linux dist-cli-linux dist-cli-dev-linux verify-existing-store release codesign-cert devtool devtool-bin
 
 help:
 	@echo "make install      - [retired] the prod CLI ships in the unified installer; release with make release"
@@ -515,6 +521,42 @@ $(GUI_APPIMAGE_HOST):
 ## it here — the same recipe, run as its own job — so there this rule never fires.
 $(CLI_LINUX_HOST):
 	$(MAKE) dist-cli-linux LINUX_CLI_ARCH=$(HOST_GUI_ARCH)
+
+## Put the Linux GUI in a container that can be pressed, and leave it standing. The unattended check
+## above runs a road and exits; this one hands the room over — a virtual display, a session bus, a
+## bound folder and the app — so a person or an agent drives it through `docker exec`.
+## It is the only place a right-click can be given to the app at all (macOS has no such button to
+## give), and the only place the far side of a door out of the app is visible: every application on
+## offer records what it was opened with, and the file manager the "reveal in folder" road asks the
+## bus for is one of ours. What opened is then a line in /out/opened.log.
+## The AppImage and the CLI are named, not built: this is normally driven with a preview a workflow
+## baked, so point it at what was downloaded.
+##   make gui-drive-linux DRIVE_APPIMAGE=<path>.AppImage DRIVE_CLI=<path>
+##   docker exec amenbo-gui-drive rclick 300 240   (then shot / click / type / key / log)
+##   make gui-drive-linux-stop
+gui-drive-linux:
+	@[ -n "$(DRIVE_APPIMAGE)" ] || { echo "✗ DRIVE_APPIMAGE=<path to the AppImage> is required"; exit 1; }
+	@[ -n "$(DRIVE_CLI)" ] || { echo "✗ DRIVE_CLI=<path to the Linux CLI> is required"; exit 1; }
+	@command -v docker >/dev/null 2>&1 || { echo "✗ docker is required"; exit 1; }
+	@mkdir -p $(DIST_DIR)/gui-drive
+	cp "$(DRIVE_APPIMAGE)" "$(DRIVE_CLI)" scripts/docker/
+	docker build --platform linux/$(GUI_DRIVE_ARCH) -f scripts/docker/Dockerfile.linux-gui-drive \
+	  --build-arg APPIMAGE=$(notdir $(DRIVE_APPIMAGE)) --build-arg CLI=$(notdir $(DRIVE_CLI)) \
+	  -t $(GUI_DRIVE_IMAGE) scripts/docker/; status=$$?; \
+	  rm -f scripts/docker/$(notdir $(DRIVE_APPIMAGE)) scripts/docker/$(notdir $(DRIVE_CLI)); \
+	  exit $$status
+	-@docker rm -f $(GUI_DRIVE_NAME) >/dev/null 2>&1
+	docker run -d --name $(GUI_DRIVE_NAME) --platform linux/$(GUI_DRIVE_ARCH) \
+	  -v "$(CURDIR)/$(DIST_DIR)/gui-drive:/out" $(GUI_DRIVE_IMAGE) >/dev/null
+	@echo "→ the room is coming up; watch it with: docker logs -f $(GUI_DRIVE_NAME)"
+	@echo "→ press it with: docker exec $(GUI_DRIVE_NAME) rclick <x> <y>   (shot / click / rclick / type / key / log)"
+	@echo "→ screenshots and the door log land in $(DIST_DIR)/gui-drive/"
+
+## Take the room down. Nothing in it is worth keeping — the store is throwaway and what was seen is
+## already in $(DIST_DIR)/gui-drive/.
+gui-drive-linux-stop:
+	-@docker rm -f $(GUI_DRIVE_NAME) >/dev/null 2>&1
+	@echo "→ $(GUI_DRIVE_NAME) is gone"
 
 ## Stand up a real network FS (NFS/SMB) and exercise whether store_watch sees a store on it as
 ## "network" and wakes on polling. Get the detection wrong and the GUI misses other hosts' writes

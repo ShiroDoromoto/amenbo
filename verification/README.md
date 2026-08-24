@@ -540,6 +540,19 @@ screen and nothing the store holds. Screen roads alone, and for a reason no othe
 terminal is the surface a reader is already typing in, so the question does not arise for somebody
 at a shell.
 
+What a road says *in* a pane it says to a shell. A pane comes up on whatever agent the folder starts
+with, and a command handed to an agent is a request — whether it is carried out is the agent's own —
+so `open-shell` takes the pane down to a plain prompt first, and every road that speaks in one takes
+it. `run` is a command run there for its output: it clears the pane before it, so what a step after
+it presses is one place on the screen rather than one of several, and where the command needs a
+record's own number it carries `<ref>` and names the record beside it, a road having no way to spell
+a number the run will mint. `press-ref` is the press itself — the ref where the output drew it,
+naming the record rather than the characters — and `folded: true` asks for the same press on a ref
+the pane broke across two rows. That last one is the only place the two ways a ref becomes pressable
+part company: what Amenbo's own output says of itself travels beside the characters and a fold cannot
+touch it, while reading them back off the screen means joining the rows a line was drawn across
+before anything can be found there at all.
+
 The face's own arrangement is in that vocabulary as well, because on this face the arrangement is
 most of what there is: `set-panes` re-cuts the frames into pages of one, two or four, `go-page` moves
 the whole screen to another page, and `open-pane` starts a terminal where there is not one yet —

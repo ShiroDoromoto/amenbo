@@ -100,13 +100,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .termface__face { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 
 /* The terminal's box. xterm.js measures the element it was opened in, so this is what decides how
-   many columns and rows the program inside is told it has. */
+   many columns and rows the program inside is told it has.
+   The ground inside is `--c-pane-bg` and stays dark whichever theme is up (`styles/tokens.css`), so on
+   the light one this is a dark rectangle inside a light face — which is the point, not a slip. The
+   edge is the face's still: what is fixed is what the pane holds, and the border is where it stops.
+   `color-scheme` goes with the ground, or the scrollbar the emulator's viewport puts up is drawn for
+   a light one over a dark pane. */
 .termface__pane {
   flex: 1; min-height: 0;
   padding: var(--s-3);
   border: 1px solid var(--c-border);
   border-radius: var(--r-md);
-  background: var(--c-surface);
+  background: var(--c-pane-bg);
+  color-scheme: dark;
   overflow: hidden;
 }
 /* The controls that pick what is on screen: how many panes, and which page. Both are rows of every

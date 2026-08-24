@@ -36,14 +36,18 @@
 /* The terminal's box. xterm.js measures the element it was opened in, so this is what decides how
    many columns and rows the program inside is told it has — which is why it takes the room that is
    left rather than a height of its own, and why `min-height` is written: a flex item's floor is its
-   content, and a terminal's content is as tall as its scrollback. */
+   content, and a terminal's content is as tall as its scrollback.
+   The ground inside is the one the board's panes are on and stays dark whichever theme is up
+   (`styles/tokens.css`): a terminal split out into its own window is the same pane, so the window it
+   is in must not change what it is drawn on. */
 .talk__pane {
   flex: 1 1 auto;
   min-height: 0;
   padding: var(--s-3);
   border: 1px solid var(--c-border);
   border-radius: var(--r-md);
-  background: var(--c-surface);
+  background: var(--c-pane-bg);
+  color-scheme: dark;
   overflow: hidden;
 }
 

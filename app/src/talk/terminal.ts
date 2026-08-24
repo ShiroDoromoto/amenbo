@@ -144,17 +144,24 @@ export function isNewline(e: KeyboardEvent): boolean {
     && !e.metaKey;
 }
 
-// The terminal's own colours, taken from the same tokens the rest of the interface is drawn from so
-// a pane does not sit on the page as a black rectangle. Only the chrome follows the theme: the
-// program inside cannot be told the colours changed (xterm.js does not implement the sequence that
-// announces it), so what a TUI paints for itself stays as it chose.
-function themeColors(): { background: string; foreground: string; cursor: string } {
+// The colours a pane is drawn in — **the one part of the interface the theme does not reach**. They
+// are tokens like everything else (`styles/tokens.css`), and the tokens they read are the ones no
+// theme overrides, so light and dark give the same three values.
+//
+// It is not a preference. An agent picks the colours it writes in by asking the terminal what ground
+// it is on, and this is what answers: xterm.js reports these for OSC 10 and 11. A ground that followed
+// the theme would strand every answer already given — the escape that announces a colour change
+// (DECSET 2031) is not implemented here (`AMB-T-3546`), so a terminal already running cannot be told
+// the theme was switched, and what a TUI painted for the old ground stays painted. Dark always is the
+// one arrangement where that cannot happen; the cost is a dark pane inside a light face, which is
+// paid on purpose.
+function paneColors(): { background: string; foreground: string; cursor: string } {
   const style = getComputedStyle(document.documentElement);
   const token = (name: string, fallback: string) => style.getPropertyValue(name).trim() || fallback;
   return {
-    background: token("--c-surface", "#ffffff"),
-    foreground: token("--c-text", "#23211c"),
-    cursor: token("--c-accent", "#0e7c7b"),
+    background: token("--c-pane-bg", "#242320"),
+    foreground: token("--c-pane-text", "#ece9e1"),
+    cursor: token("--c-pane-cursor", "#2ba6a4"),
   };
 }
 
@@ -290,7 +297,7 @@ export async function mountTerminal(
       "ui-monospace, monospace",
     fontSize: 13,
     cursorBlink: true,
-    theme: themeColors(),
+    theme: paneColors(),
     // The second way a ref becomes clickable: our own output wraps one in OSC 8, so the escape says
     // where the text points and no pattern has to find it (`AMB-T-3595`). Non-HTTP addresses have to
     // be let through for `amenbo://` to arrive at all — which is safe here because arriving is not
@@ -454,15 +461,8 @@ export async function mountTerminal(
   });
   resize.observe(host);
 
-  // The theme is settled on the document element, so a change of it is an attribute change there.
-  const theme = new MutationObserver(() => {
-    term.options.theme = themeColors();
-  });
-  theme.observe(document.documentElement, { attributeFilter: ["data-theme"] });
-
   return () => {
     resize.disconnect();
-    theme.disconnect();
     links.dispose();
     stream.dispose();
     presses.dispose();

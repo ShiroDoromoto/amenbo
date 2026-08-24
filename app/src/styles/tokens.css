@@ -7,7 +7,8 @@
      The rule the grounds are put on is the same on both: the edges (the sidebar or the rail, the band
      over them) sit above the middle on `--c-surface-2`, what the middle holds is `--c-surface`, and
      the middle itself is `--c-bg`. A terminal's black belongs to the program drawing in the pane, not
-     to the face the pane is on, and never widens past it. */
+     to the face the pane is on, and never widens past it — the pane's own ground is the one exception
+     to the sentence above, and it is written out below. */
   --c-bg: #f7f6f3;
   --c-surface: #ffffff;
   --c-surface-2: #fbfaf8;
@@ -22,6 +23,24 @@
   --c-accent: #0e7c7b;
   --c-accent-weak: #d6ecec;
   --c-accent-text: #095a59;
+
+  /* ----- the pane's inside -----
+     The one ground in the application that does **not** follow the theme. Light or dark, the inside
+     of a terminal pane is these values, and the emulator answers the background query (OSC 10 / 11)
+     with them too — the values below are the dark theme's, so the dark side is unchanged and the
+     light side is where a pane now differs from the face it sits on.
+
+     It is fixed because an agent picks its colours by asking the terminal what ground it is drawn on,
+     and a ground that moved would leave those answers behind: xterm.js does not implement the escape
+     that announces a colour change (DECSET 2031, measured in `AMB-T-3546`), so a terminal already
+     running cannot be told the theme was switched. Answering "dark" always is the one arrangement with
+     no terminal left painting for the wrong ground.
+
+     Only the inside. The rail, the band and the right-hand panel follow the theme like everything else
+     (`AMB-T-3676`) — what is fixed here stops at the pane's edge. */
+  --c-pane-bg: #242320;
+  --c-pane-text: #ece9e1;
+  --c-pane-cursor: #2ba6a4;
 
   /* ----- the brand mark -----
      Black on the light ground, white on the dark one — the pair every origin in `assets/brand/`

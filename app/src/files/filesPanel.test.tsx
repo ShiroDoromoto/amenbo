@@ -25,6 +25,8 @@ const hoisted = vi.hoisted(() => ({
   watching: { changed: [] as FolderChangedDto[], partial: false } as FolderChangesDto,
   /** What the host answers when asked what to open a file with — empty where the OS drew it. */
   apps: [] as FolderAppDto[],
+  /** The folders the project is bound to. Empty is a project nobody has bound one to yet. */
+  bound: [] as { path: string; exists: boolean }[],
 }));
 
 vi.mock("./folder", () => ({
@@ -62,11 +64,7 @@ vi.mock("./folder", () => ({
 
 // The folder the project is bound to, answered without a store.
 vi.mock("../core/boundFolders", () => ({
-  useBoundFolders: () => ({
-    all: [{ path: ROOT, exists: true }],
-    live: [{ path: ROOT, exists: true }],
-    answered: true,
-  }),
+  useBoundFolders: () => ({ all: hoisted.bound, live: hoisted.bound, answered: true }),
 }));
 
 // What a reference resolves to. The store is not here, and what is under test is what the panel
@@ -135,6 +133,7 @@ beforeEach(() => {
     changed: [{ path: ["notes", "a.md"], modified: new Date().toISOString() }],
     partial: false,
   };
+  hoisted.bound = [{ path: ROOT, exists: true }];
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -353,6 +352,18 @@ describe("the file face", () => {
     await draw({ projectId: null });
     expect(container.querySelector(".files__none")?.textContent).toBe(t("files.noFolder"));
     expect(hoisted.asked).toEqual([]);
+  });
+
+  it("draws the draft page for a project bound to no folder, which is where the files half stops", async () => {
+    hoisted.bound = [];
+
+    await draw({ tab: "memo" });
+    expect(container.querySelector("textarea"), "the draft page was not drawn").toBeTruthy();
+    expect(container.querySelector(".files__none")).toBeFalsy();
+
+    // The half that has to be rooted somewhere is the only one the missing folder stops.
+    await draw({ tab: "files" });
+    expect(container.querySelector(".files__none")?.textContent).toBe(t("files.noFolder"));
   });
 
   it("leaves the tree folded, and opens it one level at a time", async () => {

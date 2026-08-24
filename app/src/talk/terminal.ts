@@ -105,6 +105,25 @@ export type PaneStart = {
   agent?: string | null;
 };
 
+/** What Shift-Enter is sent as: `ESC` and a carriage return, the form the programs that want it read. */
+export const NEWLINE = "\x1b\r";
+
+/**
+ * Whether this press is the one the pane answers for rather than passing on.
+ *
+ * Shift and Enter, and nothing else held with them: what Alt or Ctrl with Enter means belongs to the
+ * program in the pane, and a terminal that answered for those would be deciding it. A key press is
+ * also two events, and only the down one is a press.
+ */
+export function isNewline(e: KeyboardEvent): boolean {
+  return e.type === "keydown"
+    && e.key === "Enter"
+    && e.shiftKey
+    && !e.altKey
+    && !e.ctrlKey
+    && !e.metaKey;
+}
+
 // The terminal's own colours, taken from the same tokens the rest of the interface is drawn from so
 // a pane does not sit on the page as a black rectangle. Only the chrome follows the theme: the
 // program inside cannot be told the colours changed (xterm.js does not implement the sequence that
@@ -352,11 +371,36 @@ export async function mountTerminal(
   // anyone gets round to naming it. Only the first: the keys are followed until one line has been sent
   // and then let alone, and whether the name takes at all is the store's to say (`./frames`).
   let typing = NOTHING_TYPED;
-  const keys = term.onData((data) => {
+  const send = (data: string) => {
     void invoke("pty_write", { session, data }).catch(() => {});
     if (typing.sent) return;
     typing = typed(typing, data);
     if (typing.sent && typing.line) on.name(typing.line, "typed");
+  };
+  const keys = term.onData(send);
+
+  // **Shift-Enter, which is the one press the emulator cannot pass on.** What a terminal is given for
+  // Enter is a carriage return, and it is given the same one whether or not Shift was held — so an
+  // agent that takes Shift-Enter for "another line" and Enter for "send it" is handed two presses it
+  // cannot tell apart, and every multi-line answer goes off half-written.
+  //
+  // What is sent instead is `ESC` and the carriage return, which is the form those programs read and
+  // the only one this pane needs to speak. It is written here rather than announced: a terminal can
+  // tell the program it will describe *every* press in a richer form — the kitty protocol, or
+  // `modifyOtherKeys` — and a program that took the offer would then expect that form for presses this
+  // has no answer for. Claiming a vocabulary and then not having it is worse than not claiming one
+  // (`AMB-T-3612` measured what the terminals of the day actually do).
+  //
+  // **The press is taken away from the page as well as from the emulator.** Answering `false` here says
+  // only that the emulator is to stay out of it; the browser goes on with its own default, which for
+  // this key is a newline typed into the hidden box the emulator reads — and that newline reaches the
+  // program as the carriage return this exists to replace. Both halves have to be refused, or the
+  // press is sent twice and the second one wins.
+  term.attachCustomKeyEventHandler((e) => {
+    if (!isNewline(e)) return true;
+    e.preventDefault();
+    send(NEWLINE);
+    return false;
   });
 
   // Re-measure on every change of the pane's size, and tell the host what the new size is. Both

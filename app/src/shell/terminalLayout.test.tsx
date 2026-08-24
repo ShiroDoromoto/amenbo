@@ -86,6 +86,10 @@ const mount = async () => {
 };
 
 beforeEach(() => {
+  // The face measures the window to work out whether the columns beside the panes are columns at all
+  // (`../talk/columns`). jsdom's window is 1024, which is genuinely too narrow for two panes and two
+  // columns — so a test about what is drawn beside the panes says it is on a wide screen.
+  window.innerWidth = 1600;
   hoisted.mounts = [];
   hoisted.detached = 0;
   hoisted.folders = [{ path: "/repo", exists: true }];

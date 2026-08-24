@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { AdriftSlot } from "./AdriftSlot";
 import { FolderChoice } from "./FolderChoice";
 import { TerminalPane } from "./TerminalPane";
@@ -9,8 +10,12 @@ import {
 import {
   addPane, closedFrame, closedIn, COUNTS, EMPTY_LAYOUT, focusOn, goPage, goProject, laidOut, MAX_PAGES,
   movedTo, openedFrame, openedIn, pageCount, pageOfFrame, paneIn, restored, roomOnPage, setCount,
-  sidesAreDrawers, slotsOf, type Count, type Layout,
+  slotsOf, type Count, type Layout,
 } from "../talk/layout";
+import {
+  clampRailWidth, clampSideWidth, getRailShown, getRailWidth, getSideShown, getSideWidth,
+  setRailShown, setRailWidth, setSideShown, setSideWidth, sidesAreDrawers,
+} from "../talk/columns";
 import { FilesPanel } from "../files/FilesPanel";
 import { markRead, tookPoint, type PointedBySession } from "../files/pointed";
 import { useBoundFolders } from "../core/boundFolders";
@@ -76,6 +81,12 @@ import { errText, t, tf, tn } from "../core/i18n";
  * (`app/src/components/FirstLoop.tsx`). It is where to work and not what to do about it: the project
  * it belongs to is the one the ledger was on, and whether a pane is made or an open one reached for
  * is this face's own (`../talk/layout`).
+ *
+ * **Both columns beside the panes can be put away, and each carries the way back.** The rail's is on
+ * the top row and the file face's is on the panel itself, opened again from the same row; either can
+ * be dragged wider, and where there is no room for columns at all both become drawers over the panes
+ * (`../talk/columns`). What is remembered is the wish and the width, not which of the two shapes the
+ * window happened to be in.
  *
  * Beside the page is the file face (`app/src/files/FilesPanel.tsx`), rooted at the project this face
  * is on — the one picked on the rail, not the one selected on the ledger. `projectId` is only where
@@ -145,7 +156,21 @@ export function TerminalFace({
   const focusedFrame = layout.frames.find((frame) => frame.id === layout.focus) ?? null;
   const focusedSession = focusedFrame?.session ?? null;
   const [width, setWidth] = useState(() => (typeof window === "undefined" ? 0 : window.innerWidth));
-  const [railOpen, setRailOpen] = useState(false);
+  // The columns beside the panes: whether each was asked for, and how wide the person has made it.
+  // Both are this device's and are kept between runs (`../talk/columns`); what is *drawn* from them
+  // depends on whether there is room for columns at all, which is `drawers` below.
+  const [railShown, setRailShownState] = useState(getRailShown);
+  const [sideShown, setSideShownState] = useState(getSideShown);
+  const [railWidth, setRailWidthState] = useState(getRailWidth);
+  const [sideWidth, setSideWidthState] = useState(getSideWidth);
+  // A drawer is opened rather than kept open: it lies over the panes, so one that came back open
+  // from the last run would hide the thing the face is for before anybody had asked it to.
+  const [railDrawn, setRailDrawn] = useState(false);
+  const [sideDrawn, setSideDrawn] = useState(false);
+  // Which of the file face's two the panel shows. It is held here rather than there because the top
+  // row switches between them as well, and a control that could not see which one is up would have
+  // to be pressed to find out (`../files/FilesPanel`).
+  const [tab, setTab] = useState<"files" | "memo">("files");
   // The question about where the pane being opened works, while it is up. It is not a frame: a place
   // is made by opening one, and one nobody finished opening is a box that says nothing
   // (`../talk/layout`). `note` on it is a binding the host refused.
@@ -386,7 +411,7 @@ export function TerminalFace({
    * made until it is answered (`./FolderChoice`).
    */
   const askToOpen = useCallback((project: number, agent: string | null) => {
-    setRailOpen(false);
+    setRailDrawn(false);
     if (bound.live.length === 1) openPane(project, bound.live[0]!.path, agent);
     // A project bound to nothing has no list to choose from, so the press goes straight to the
     // picker: what is being answered is where this project *is*, and it is one press either way.
@@ -405,7 +430,7 @@ export function TerminalFace({
    */
   const askForRoom = useCallback(() => {
     setAsking(null);
-    setRailOpen(false);
+    setRailDrawn(false);
     setLayout(addPane);
   }, []);
 
@@ -435,7 +460,102 @@ export function TerminalFace({
     // `nth` is what makes the same folder asked for twice two answers.
   }, [openIn?.nth, settled]);
 
-  const drawers = sidesAreDrawers(layout.count, width);
+  // Whether the columns beside the panes are columns at all. It is measured against what the person
+  // asked for rather than against what is drawn: a drawer takes no width, so measuring the drawn
+  // widths would make every narrow window wide enough for columns again (`../talk/columns`).
+  const drawers = sidesAreDrawers(
+    layout.count, width, railShown ? railWidth : 0, sideShown ? sideWidth : 0,
+  );
+
+  // What is on the screen on each side. A column is there because it was asked for; a drawer is
+  // there because it was just opened, and both are put away by the same press.
+  const railHere = drawers ? railDrawn : railShown;
+  const sideHere = drawers ? sideDrawn : sideShown;
+
+  /** Ask for a side, or put it away. The wish is kept either way — a person who closes the rail on a
+   *  narrow window has closed it, and it must not come back as a column when the window grows. */
+  const wantRail = useCallback((want: boolean) => {
+    setRailShownState(setRailShown(want));
+    setRailDrawn(want);
+  }, []);
+
+  const wantSide = useCallback((want: boolean) => {
+    setSideShownState(setSideShown(want));
+    setSideDrawn(want);
+  }, []);
+
+  /**
+   * The file face's two, from the top row.
+   *
+   * Pressing the one already up is the way to put the panel away, which is what makes the row the
+   * "open" half of the same control rather than a second one: the panel is closed from its own cross
+   * and opened from here, and neither is ever the only one there.
+   */
+  const showSide = useCallback((which: "files" | "memo") => {
+    if (sideHere && tab === which) wantSide(false);
+    else {
+      setTab(which);
+      wantSide(true);
+    }
+  }, [sideHere, tab, wantSide]);
+
+  // A window that has just become too narrow for columns does not open two drawers over the panes:
+  // what was a column is put away, and the way to open it is the same press it always was.
+  useEffect(() => {
+    if (drawers) {
+      setRailDrawn(false);
+      setSideDrawn(false);
+    }
+  }, [drawers]);
+
+  // Dragging the edge between a column and the panes. The width follows the pointer while it moves
+  // and is kept when it stops, the way the board's own columns are dragged (`../shell/AppShell`).
+  const dragging = useCallback(
+    (measure: (at: number) => number, take: (px: number) => void, keep: (px: number) => number) =>
+      (e: ReactPointerEvent) => {
+        e.preventDefault();
+        const onMove = (ev: PointerEvent) => take(measure(ev.clientX));
+        const onUp = (ev: PointerEvent) => {
+          document.removeEventListener("pointermove", onMove);
+          document.removeEventListener("pointerup", onUp);
+          document.body.style.cursor = "";
+          document.body.style.userSelect = "";
+          take(keep(measure(ev.clientX)));
+        };
+        document.body.style.cursor = "col-resize";
+        document.body.style.userSelect = "none";
+        document.addEventListener("pointermove", onMove);
+        document.addEventListener("pointerup", onUp);
+      },
+    [],
+  );
+
+  const dragRail = useMemo(
+    () => dragging(
+      // The rail's edge is its right one, so the width is how far the pointer is from the face's left.
+      (at) => clampRailWidth(at - (rootRef.current?.getBoundingClientRect().left ?? 0)),
+      setRailWidthState,
+      setRailWidth,
+    ),
+    [dragging],
+  );
+
+  const dragSide = useMemo(
+    () => dragging(
+      // The file face's edge is its left one, so the width is how far the pointer is from the right.
+      (at) => clampSideWidth((rootRef.current?.getBoundingClientRect().right ?? 0) - at),
+      setSideWidthState,
+      setSideWidth,
+    ),
+    [dragging],
+  );
+
+  // A window that has shrunk cannot leave a column over its share of it. The kept width is left
+  // alone: what was asked for on a wide screen is what comes back on one.
+  useEffect(() => {
+    setRailWidthState((px) => clampRailWidth(px));
+    setSideWidthState((px) => clampSideWidth(px));
+  }, [width]);
   // The paths alone, and a stable one per set of them: the empty frame reads what the agents are
   // traced across off this, and a fresh array every render would send it back to the host on every
   // keystroke elsewhere on the page (`./AdriftSlot`).
@@ -487,12 +607,12 @@ export function TerminalFace({
       onProject={(project) => {
         setAsking(null);
         setLayout((was) => goProject(was, project));
-        setRailOpen(false);
+        setRailDrawn(false);
       }}
       onPick={(frame) => {
         setAsking(null);
         setLayout((was) => focusOn(was, frame));
-        setRailOpen(false);
+        setRailDrawn(false);
       }}
       onRename={(frame, name) => named(frame, name, "person")}
       onOpen={askForRoom}
@@ -500,7 +620,11 @@ export function TerminalFace({
   );
 
   return (
-    <div className={`termface${drawers ? " termface--drawers" : ""}`} ref={rootRef}>
+    <div
+      className={`termface${drawers ? " termface--drawers" : ""}`}
+      ref={rootRef}
+      style={{ "--rail-w": `${railWidth}px`, "--side-w": `${sideWidth}px` } as CSSProperties}
+    >
       <div className="termface__bar">
         {/* Two windows or one, from whichever of them the reader is in. The press says nothing about
             the arrangement: what goes with the terminal is the face whole, and the face is drawn
@@ -508,15 +632,21 @@ export function TerminalFace({
         <button className="termface__action" onClick={() => onWindow()}>
           {t(ownWindow ? "face.merge" : "face.splitOut")}
         </button>
-        {drawers && (
-          <button
-            className="termface__action"
-            onClick={() => setRailOpen((open) => !open)}
-            aria-expanded={railOpen}
-          >
-            {t("face.rail")}
-          </button>
-        )}
+        {/* The rail's way in, and its way out. It is here whether the rail is a column or a drawer:
+            a column nobody can close goes on taking width from the panes on a small screen, and one
+            closed with no way back is worse than one that never closed. */}
+        <button
+          className={`termface__action${railHere ? " termface__action--on" : ""}`}
+          onClick={() => wantRail(!railHere)}
+          aria-expanded={railHere}
+          // The rail is what it opens, and the rail is what it is called. The face says it with the
+          // bars rather than the word: the row it sits in already counts panes twice over, and a
+          // third "panes" on it would be three controls a reader has to tell apart by reading.
+          aria-label={t("face.rail")}
+          title={t("face.rail")}
+        >
+          ☰
+        </button>
         {/* How many panes the page shows. Three steps, always all three shown: which one is on is
             what a person is choosing between, and a control that only says the next step makes them
             press it to find out. It is the most a page draws and not a number of boxes to fill —
@@ -571,11 +701,41 @@ export function TerminalFace({
         {/* Said only when it was asked for. "As far as the ledger knows" is the whole of the claim:
             a pane nobody has heard from is not a pane where all is well (`AMB-D-748`). */}
         {nothingNeedsYou && <span className="termface__note">{t("face.nothingNeedsYou")}</span>}
+        {/* The file face's two halves, and the way to open it again once it has been closed. They
+            sit at the far end because they are about the other side of the screen. Pressing the one
+            already up puts the panel away, so the row says which half is open as well as opening
+            one (`../files/FilesPanel`). */}
+        <div className="termface__sides">
+          {(["files", "memo"] as const).map((which) => (
+            <button
+              key={which}
+              className={`termface__action${
+                sideHere && tab === which ? " termface__action--on" : ""}`}
+              onClick={() => showSide(which)}
+              aria-expanded={sideHere && tab === which}
+            >
+              {t(which === "files" ? "files.tab" : "files.memo")}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="termface__body">
-        {drawers
-          ? railOpen && <div className="termface__drawer">{rail}</div>
-          : rail}
+        {/* The rail: a column with the panes beside it, or, where there is no room for one, a drawer
+            over them. The edge between the column and the panes is where its width is dragged. */}
+        {railHere && (drawers
+          ? <div className="termface__drawer">{rail}</div>
+          : (
+            <div className="termface__column termface__column--rail">
+              {rail}
+              <div
+                className="termface__grip termface__grip--rail"
+                role="separator"
+                aria-orientation="vertical"
+                title={t("pane.resize")}
+                onPointerDown={dragRail}
+              />
+            </div>
+          ))}
         {/* The page is the split that was asked for, whether or not there are panes to fill it: the
             count is the most a page draws, and a grid that shrank to what is open would make the
             split a thing a reader cannot see the effect of (`../talk/layout`). */}
@@ -650,20 +810,47 @@ export function TerminalFace({
               </>
             )}
         </div>
-        <FilesPanel
-          projectId={layout.project}
-          onOpenLedger={onOpenLedger}
-          show={show}
-          pointed={{
-            points: focusedSession === null ? [] : (pointed.get(focusedSession) ?? []),
-            // Which pane pointed, called what the rail and its own row call it (`../talk/frames`).
-            name: focusedFrame === null ? null : frameLabel(names, focusedFrame.id, focusedFrame.folder),
-            ended: focusedSession !== null && ended.has(focusedSession),
-            onRead: (at) => {
-              if (focusedSession !== null) setPointed((was) => markRead(was, focusedSession, at));
-            },
-          }}
-        />
+        {/* The file face, on the other side of the panes, and drawn the same two ways the rail is.
+            It is closed from its own cross and opened again from the top row: whichever way it went
+            away, the way back is in front of the reader (`../files/FilesPanel`). */}
+        {sideHere && (
+          <div
+            className={drawers
+              ? "termface__drawer termface__drawer--side"
+              : "termface__column termface__column--side"}
+          >
+            {!drawers && (
+              <div
+                className="termface__grip termface__grip--side"
+                role="separator"
+                aria-orientation="vertical"
+                title={t("pane.resize")}
+                onPointerDown={dragSide}
+              />
+            )}
+            <FilesPanel
+              projectId={layout.project}
+              onOpenLedger={onOpenLedger}
+              show={show}
+              tab={tab}
+              // Both halves are reached the same way, and asking for one is asking for the panel:
+              // a file clicked in a pane opens the face it is read in.
+              onTab={(which) => { setTab(which); wantSide(true); }}
+              onClose={() => wantSide(false)}
+              pointed={{
+                points: focusedSession === null ? [] : (pointed.get(focusedSession) ?? []),
+                // Which pane pointed, called what the rail and its own row call it (`../talk/frames`).
+                name: focusedFrame === null
+                  ? null
+                  : frameLabel(names, focusedFrame.id, focusedFrame.folder),
+                ended: focusedSession !== null && ended.has(focusedSession),
+                onRead: (at) => {
+                  if (focusedSession !== null) setPointed((was) => markRead(was, focusedSession, at));
+                },
+              }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

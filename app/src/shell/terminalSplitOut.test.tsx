@@ -102,6 +102,10 @@ async function mount(ownWindow: boolean) {
 }
 
 beforeEach(() => {
+  // The face measures the window to work out whether the columns beside the panes are columns at all
+  // (`../talk/columns`). jsdom's window is 1024, which is genuinely too narrow for two panes and two
+  // columns — so a test that reads the rail says it is on a wide screen.
+  window.innerWidth = 1600;
   pressed.mockReset();
   hoisted.running = [];
   hoisted.drawn = [];

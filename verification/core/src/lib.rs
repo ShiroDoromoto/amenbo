@@ -2032,6 +2032,40 @@ const REGISTRY: &[OpSpec] = &[
     // on the screen and by far the commoner, so it is the move a terminal has to be able to outlive:
     // a page is drawn rather than held, and the panes it took away are still running behind it.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "go-page", required: &["page"], refs: &[], strings: &[], binds: false },
+    // The columns beside the panes, put away and brought back. `side` says which of the two: the rail
+    // that lists the panes, and the file face on the other edge.
+    //
+    // **Which control does it is the whole reason both halves are here.** A column is folded by a
+    // control of its own — the rail from the row above the panes, the file face from a cross on the
+    // panel itself — and both are opened again from that same row. A road that only folded one of
+    // them would leave the pairing untested on the other, and a column with no way back is the one
+    // failure this face cannot recover from: nothing else on the screen says the thing is still
+    // there to be asked for.
+    //
+    // They are two ops rather than one carrying a direction, for the reason `split-out` and
+    // `fold-back` are two: the press that puts a column away and the press that brings it back are
+    // in different places, and a road that named the wrong one would be pressing something else.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "hide-side", required: &["side"], refs: &[], strings: &["side"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "show-side", required: &["side"], refs: &[], strings: &["side"], binds: false },
+    // The edge a column shares with the panes, dragged. `toward` is which way — `wider` takes room
+    // from the panes, `narrower` gives it back — and both halves are walked, because a width that
+    // only ever grows is half a control and the half a reader is left with is the one that took
+    // their pane's room.
+    //
+    // **It is the one step on these roads carried out by hand.** The screen tool presses, types and
+    // reads; it has no drag, and a gesture is what this control is. So the instruction says where to
+    // put the pointer and what to watch follow it, and the shot after it is what an eye closes.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "drag-side", required: &["side", "toward"], refs: &[], strings: &["side", "toward"], binds: false },
+    // Whether a column is beside the panes at all. `present: false` is the half the folding is proved
+    // by, and it is the half worth having: a column that went away is what gives the panes the width,
+    // and a face that drew it anyway would look exactly like one that had honoured the press until
+    // somebody measured. It is not required, the way it is on no assert this face has: absence is
+    // said out loud and presence is what a step means when it says nothing.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "side", required: &["side"], refs: &[], strings: &["side"], binds: false },
+    // And how wide it is, after a drag. `wider` says which way it should have gone, against where it
+    // stood on the shot before — the two pictures side by side are the reading, which is why this one
+    // is left to an eye rather than to a search for words.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "side-width", required: &["side", "wider"], refs: &[], strings: &["side"], binds: false },
     // Whether the dot on the pane's label is pulsing — something came out of that terminal a moment
     // ago. It is the one reading that says a pane is *alive* rather than drawn: a terminal that ended
     // leaves its last output where it was, so words on a pane outlive the process that wrote them and

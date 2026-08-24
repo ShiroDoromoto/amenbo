@@ -122,7 +122,81 @@ pub enum Statement {
     Point { target: String, why: String },
 }
 
+/// How much of the pane's label the reason for a person's turn may take, in the columns a terminal
+/// would count.
+///
+/// **The label holds one line, and the reason is the last of three things on it** (`app/src/talk/
+/// nameplate.ts`): what the pane is called, what its session is on, and this. A reason written past
+/// that does not make the row longer — it pushes the other two into ellipses, and three things all cut
+/// short is a label nobody can read any of.
+///
+/// **So the overflow is stopped at the door rather than mended at the display.** What comes in is a
+/// sentence an agent wrote, which is as long as the agent felt like being; the row cannot argue with
+/// it afterwards. Refusing costs the agent one rewrite and says exactly what is wanted: the one thing
+/// a person has to decide. What led up to it belongs where it will still be true tomorrow — a comment
+/// on the task — and saying it here would be writing a paragraph onto a pane's label.
+///
+/// **Measured in room rather than in characters**, because room is what runs out. A count of
+/// characters would give a reason in Japanese twice the row a reason in English gets, which is the
+/// same rule reading as two different rules to the two people it is applied to. Sixty columns is
+/// thirty Japanese characters or sixty English ones, and either is a sentence.
+pub const WAITING_LIMIT: usize = 60;
+
+/// The room a string takes on a row, counted the way a terminal counts it: two columns for the
+/// characters that are drawn twice as wide, one for the rest.
+///
+/// **An approximation, and deliberately a generous one.** The full answer is a Unicode table that
+/// moves with every release, and what it is being asked for here is whether a sentence will fit on a
+/// label — so the wide blocks that actually turn up in one are named, and anything else counts as
+/// narrow. Erring that way lets a rare character through rather than refusing a reason a person could
+/// have read.
+fn columns(text: &str) -> usize {
+    text.chars().map(|c| if wide(c) { 2 } else { 1 }).sum()
+}
+
+/// Whether a character is drawn two columns wide. The blocks are the East Asian wide and fullwidth
+/// ones — CJK, kana, hangul, the fullwidth forms — plus the emoji that are drawn as wide everywhere
+/// they are drawn at all.
+fn wide(c: char) -> bool {
+    matches!(c as u32,
+        0x1100..=0x115F        // Hangul Jamo, the initial consonants
+        | 0x2E80..=0x303E      // CJK radicals through the kana punctuation
+        | 0x3041..=0x33FF      // kana, bopomofo, hangul compatibility, the squared abbreviations
+        | 0x3400..=0x4DBF      // CJK ideographs, extension A
+        | 0x4E00..=0x9FFF      // CJK ideographs
+        | 0xA000..=0xA4CF      // Yi
+        | 0xAC00..=0xD7A3      // Hangul syllables
+        | 0xF900..=0xFAFF      // CJK compatibility ideographs
+        | 0xFE30..=0xFE6F      // CJK compatibility forms
+        | 0xFF00..=0xFF60      // fullwidth forms
+        | 0xFFE0..=0xFFE6      // fullwidth signs
+        | 0x1F300..=0x1F64F    // emoji: symbols, pictographs, emoticons
+        | 0x1F900..=0x1F9FF    // emoji: supplemental symbols
+        | 0x20000..=0x3FFFD    // CJK ideographs, the supplementary planes
+    )
+}
+
+/// A statement whose text takes more room than it may: how much it takes, and how much it is allowed.
+/// It carries no sentence — the surface that refused it assembles that (`amenbo-cli`'s `output`), the
+/// way validate's issues do. Both figures are columns ([`columns`]), which is what the message has to
+/// say for the two numbers in it to be comparable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Overlong {
+    /// The room the text takes, in columns.
+    pub got: usize,
+    /// The room it is allowed, in columns.
+    pub limit: usize,
+}
+
 impl Statement {
+    /// How far this statement runs past its bound, or `None` when it is within one — which everything
+    /// but [`Statement::Waiting`] is, having nothing that has to fit beside two other things.
+    pub fn overlong(&self) -> Option<Overlong> {
+        let Statement::Waiting(text) = self else { return None };
+        let got = columns(text.trim());
+        (got > WAITING_LIMIT).then_some(Overlong { got, limit: WAITING_LIMIT })
+    }
+
     /// The word this statement is filed under, and the one the window branches on. It is the verb the
     /// person typed, so the two never drift.
     pub fn verb(&self) -> &'static str {
@@ -307,7 +381,10 @@ pub fn spec() -> Value {
                  can be said from outside it.",
         "owed": [
             "Say `waiting` the moment a person's turn has come, and why. Nobody can find this out by \
-             watching — silence looks the same whether you are building, thinking, or waiting.",
+             watching — silence looks the same whether you are building, thinking, or waiting. The \
+             reason goes on one line of the pane's label beside two other things, so it is bounded and \
+             a longer one is refused rather than cut: say the one thing they have to decide, and leave \
+             what led up to it where it will still be true tomorrow.",
             "Say `finished` when the work is done, and what came of it."
         ],
         "offered": [
@@ -321,10 +398,14 @@ pub fn spec() -> Value {
         "commands": [
             { "command": "session name", "args": "<text>", "summary": "Name this pane. The name sticks to the frame, so it survives what runs in it." },
             { "command": "session note", "args": "<text>", "summary": "A line about what you are doing now, shown on the pane's label." },
-            { "command": "session waiting", "args": "<text>", "summary": "A person's turn has come. Say why in the same breath — the reason is what they read." },
+            { "command": "session waiting", "args": "<text>", "summary": format!("A person's turn has come. Say why in the same breath — the reason is what they read. It goes on one line of the label: up to {WAITING_LIMIT} columns — {WAITING_LIMIT} characters of English or half that of Japanese — and a longer one is refused rather than cut.") },
             { "command": "session finished", "args": "<text>", "summary": "The work is done. Say what came of it." },
             { "command": "session point", "args": "<target> --why <text>", "summary": "Point at a file, a task, a decision or a URL worth opening, and say why it is worth it." }
         ],
+        // Columns rather than characters, so the bound means the same room in every language it is
+        // written in. A reader that wants to check before speaking can, and a reader that does not
+        // is told by the refusal.
+        "limits": { "waiting": { "unit": "columns", "max": WAITING_LIMIT } },
         "outside": "Every one of these fails outside the talk window's terminal, with a non-zero exit. \
                     That is deliberate: a quiet success would leave you believing you had spoken while \
                     the person's screen never changed."
@@ -351,6 +432,50 @@ mod tests {
         assert_eq!(v["session"], "pane-1", "the pane it was said in rides with it");
         assert_eq!(v["schema"], SCHEMA, "and the shape a reader is holding it to");
         assert!(v["at"].as_str().is_some_and(|s| s.ends_with('Z')), "stamped in UTC: {v}");
+    }
+
+    /// The reason for a person's turn is the one thing here with a bound, and what is counted is the
+    /// room it takes rather than the characters it is made of: a reason in Japanese and one in English
+    /// get the same row, which is the point of measuring at all. Nothing else is bounded — the rest of
+    /// the row's places are not shared three ways.
+    #[test]
+    fn a_reason_past_the_bound_is_named_as_such_and_measured_in_the_room_it_takes() {
+        let half = WAITING_LIMIT / 2;
+        assert_eq!(
+            Statement::Waiting("あ".repeat(half)).overlong(),
+            None,
+            "a Japanese reason of exactly the bound is within it",
+        );
+        assert_eq!(
+            Statement::Waiting("a".repeat(WAITING_LIMIT)).overlong(),
+            None,
+            "and so is an English one of the same room, at twice the characters",
+        );
+
+        assert_eq!(
+            Statement::Waiting("あ".repeat(half + 1)).overlong(),
+            Some(Overlong { got: WAITING_LIMIT + 2, limit: WAITING_LIMIT }),
+            "one character past it is past it, and it is said in the same unit as the bound",
+        );
+        assert_eq!(
+            Statement::Waiting("a".repeat(WAITING_LIMIT + 1)).overlong(),
+            Some(Overlong { got: WAITING_LIMIT + 1, limit: WAITING_LIMIT }),
+        );
+
+        assert_eq!(
+            Statement::Waiting(format!("  {}  ", "a".repeat(WAITING_LIMIT))).overlong(),
+            None,
+            "the room the reason takes is the reason, not the spaces around it",
+        );
+
+        for other in [
+            Statement::Name("x".repeat(WAITING_LIMIT * 3)),
+            Statement::Note("x".repeat(WAITING_LIMIT * 3)),
+            Statement::Finished("x".repeat(WAITING_LIMIT * 3)),
+            Statement::Point { target: "AMB-T-1".into(), why: "x".repeat(WAITING_LIMIT * 3) },
+        ] {
+            assert_eq!(other.overlong(), None, "only the reason is bounded: {other:?}");
+        }
     }
 
     #[test]

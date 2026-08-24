@@ -15,13 +15,13 @@
 /* The standing band about this process holding an administrator's token (see ../talk/elevation.tsx).
    Heed, not stop: the terminal below it works, and the band is there so the reader knows something
    while it does — which is the step the board's own banner takes for the same kind of thing, drawn
-   the same way so the two windows do not colour one meaning twice. It keeps its natural height and
-   never scrolls the page: the face is what gives up the room. */
+   the same way so the two windows do not colour one meaning twice. It is drawn to the edges of the
+   window rather than inset, the way every ground over a face is: a band held off the sides reads as
+   a card lying on the window rather than as part of it. It keeps its natural height and never
+   scrolls the page — the face is what gives up the room. */
 .talk__elevated {
   flex: 0 0 auto;
-  margin: var(--s-3) var(--s-3) 0;
-  padding: var(--s-2) var(--s-4);
-  border-radius: var(--r-md);
+  padding: var(--s-2) var(--s-5);
   background: var(--c-heed);
   color: #fff;
   font-size: var(--fs-sm);

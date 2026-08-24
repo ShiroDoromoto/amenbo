@@ -1270,6 +1270,19 @@ impl Instructor {
                 "Click into the pane that has a terminal running in it — the one the face came up with, not a slot offering to open one — then type \"{}\" and press return. The shell will not know the command — what the line is for is being on the screen, and, where the pane has not been named yet, being the name it takes.",
                 req(with, "text")?
             ),
+            // Something set running in the pane and left there. The command is written out in full
+            // for the reason `say`'s is — the whole of what the step is for is that something goes
+            // on coming out, and an operator improvising that would be improvising the step. It is
+            // written twice because the two shells a pane comes up in count their pings with
+            // different words and the rest of the line is the same in both. What it ends with is the
+            // road's own line: a step that waited for the interface to say it had finished would be
+            // waiting on words drawn in whatever language the run's machine is set to.
+            (Domain::Terminal, "keep-printing") => {
+                let text = req(with, "text")?;
+                format!(
+                    "In the pane that has a terminal running in it, run: ping -c {KEEP_PRINTING_SECONDS} 127.0.0.1; echo \"{text}\" — where that pane's shell is PowerShell, the count is written -n {KEEP_PRINTING_SECONDS} and the rest of the line is the same. A line arrives about once a second for the {KEEP_PRINTING_SECONDS} seconds that takes, which is a terminal putting something out with nobody typing at it. Leave the pane alone once it is going: what every step after this reads is a pane nobody is working in, and the step looking for \"{text}\" is the road waiting for the printing to stop."
+                )
+            }
             // The two moves between one window and two. Named by what each does rather than by the
             // words on them, and each said with where it is: the way out is on the face, the way back
             // is in the window it made, and a road that pressed the wrong one would be in the wrong
@@ -2189,8 +2202,13 @@ impl Instructor {
             // a picture of a moving dot and a picture of a still one can be the same picture. The
             // operator is told how long to watch, and told which pane — the one being worked in
             // never pulses, since a reader looking straight at a terminal can already see it moving.
+            // The moving half says what to look for on a machine that plays no animation as well.
+            // Motion turned down holds the mark at the bright end of the same two steps instead of
+            // moving between them, so the fact survives and the word for it does not — and an
+            // operator told only to watch for a fade would fail a dot that is reporting exactly what
+            // this step is asking about.
             (Domain::Terminal, "dot") => match flag(with, "moving")? {
-                true => "On the row above a pane the reader is not working in, watch the dot to the left of the name for a few seconds: confirm it is pulsing — fading up and down — which is that terminal putting something out. Judge it by watching rather than by the shot: a still picture of a pulse can be caught at the moment it rests."
+                true => "On the row above a pane the reader is not working in, watch the dot to the left of the name for a few seconds: confirm it is pulsing — fading up and down — which is that terminal putting something out. Judge it by watching rather than by the shot: a still picture of a pulse can be caught at the moment it rests. Where the machine is set to play no animation the dot does not fade at all, and what to confirm there is that it is standing at its bright step rather than its dim one — the same two steps the pulse moves between, held."
                     .to_string(),
                 false => "On that same row, watch the dot for a few seconds: confirm it is holding still at its dim step, rather than fading up and down. Still is the pane's resting state, not the pane having gone — the dot is drawn either way."
                     .to_string(),
@@ -2433,6 +2451,15 @@ fn present(with: &Args) -> bool {
 /// enough to cross a switch without hurrying, short enough that a road does not stand still. The road
 /// does not name it — what a road says is that the word arrives from behind the other face.
 const SAY_AWAY_SECONDS: u32 = 15;
+
+/// How long a pane set printing goes on putting something out.
+///
+/// It answers to both ends of the one road it is on. Long enough that the pulse is still going after
+/// a second pane has been opened beside it and the dot has been watched for the few seconds a pulse
+/// has to be watched for; short enough that the step waiting for it to stop is a pause inside a road
+/// rather than a break from one. The road does not name it — what a road says is that the pane keeps
+/// printing and then does not.
+const KEEP_PRINTING_SECONDS: u32 = 30;
 
 /// An optional yes-or-no argument, false where it was not written. Unlike [`present`], whose default
 /// is the half most asserts want, these ask for a shape a step takes only when it says so.
@@ -4950,6 +4977,34 @@ steps_gui:
         };
         let err = Instructor::new().render(&step).unwrap_err();
         assert!(err.contains("slot or rail"), "got: {err}");
+    }
+
+    /// What the moving half of the dot rests on: a pane set printing carries on putting lines out
+    /// while the road walks around it, and the line it ends with is what the road waits on. The
+    /// command is spelt out because an improvised one is the step itself being improvised, and both
+    /// counts are there because a pane comes up in one of two shells.
+    #[test]
+    fn a_pane_is_set_printing_with_a_line_that_says_when_it_stopped() {
+        let step = Step::Action {
+            domain: Domain::Terminal,
+            op: "keep-printing".to_string(),
+            with: [("text".to_string(), serde_yaml::Value::from("SCENARIO that is all"))]
+                .into_iter()
+                .collect(),
+            bind: None,
+            window: None,
+        };
+        let said = Instructor::new().render(&step).unwrap();
+        assert!(said.contains("ping -c 30"), "the run is bounded, and spelt out: {said}");
+        assert!(said.contains("-n 30"), "the other shell counts its pings differently: {said}");
+        assert!(
+            said.matches("SCENARIO that is all").count() == 2,
+            "the road's own line is what it ends with and what the road waits on: {said}"
+        );
+        assert!(
+            said.contains("Leave the pane alone"),
+            "a pane stopped by hand is a pane being worked in, which never pulses: {said}"
+        );
     }
 
     /// The dot is watched, not read. Both halves say how long to watch and neither is judged off the

@@ -1,0 +1,118 @@
+# A pane says it is still running to somebody who is not in it.
+#
+# Words on a pane say nothing about whether anything is still there to write more of them: what a
+# terminal printed stays printed, so a pane whose session died an hour ago looks exactly like one
+# working. The dot on the label is the only thing on this face that tells those apart, and what it
+# reports is the one fact a pane can offer about itself — that something came out of it a moment ago,
+# and nothing read into the silence when nothing has. This road is that mark, walked through both of
+# its answers on one pane: pulsing while the output is arriving, and settled once it has stopped.
+#
+# ── Why something has to be set running ──────────────────────────────────────────────────────────
+# A pane reads as moving for a moment and a half after its last output, and the mark is watched
+# rather than shot — a pulse rests, twice a turn, at exactly the still dot's own step. So a pane that
+# printed once is already still by the time anybody can look at it, and the line `type-line` types is
+# a command no shell knows on purpose: it arrives once and is over. `keep-printing` is what this road
+# needs and the only step that could give it — something set going in the pane that goes on putting
+# lines out while the road walks around it.
+#
+# ── Why the second pane ──────────────────────────────────────────────────────────────────────────
+# The pane being worked in never pulses. A reader looking straight at a terminal can see it moving,
+# so the mark is drawn for the panes they are not looking at — which means a road that read the dot
+# on the pane it had just typed into would be reading a mark the face deliberately holds still. The
+# second pane is opened for that alone: opening one makes it the pane being worked in, and the first
+# is left on the same page, drawn, with nobody in it. Nothing is ever said to the second one.
+#
+# ── Why the printing runs out rather than being stopped ──────────────────────────────────────────
+# Every control a pane has is on the pane, and the face takes a press anywhere in a pane as going to
+# work in it. So there is no way to cut the output short by hand that does not also make that pane
+# the one being worked in — and the reading after it would find a dot holding still because nothing
+# draws it moving, which is a green step that proves nothing. Left to run out, the same pane crosses
+# from moving to still with nobody touching it, and the still half is read where the moving half was.
+#
+# The line the printing ends with is what times the crossing. It is the road's own words, for the
+# reason every other line these roads read is: what says the run is over has to be something the
+# interface would never write by itself, in a language the run's machine cannot change.
+#
+# The world is empty, as it is on every road on this face: a terminal is not a record, and what the
+# pane runs is the reader's own shell. Choosing the folder is what raises the project it belongs to.
+id: see-a-pane-is-still-running-without-looking-into-it
+title: A pane nobody is working in says by the dot on its label that something is still coming out of it, and stops saying it when the output does
+description: >
+  Open the terminal face, choose the folder it runs in, get the pane down to a plain shell and set
+  something printing in it. Open a second pane beside it, which takes the working place away from the
+  first: the dot on the first pane's label is pulsing, and it is the only thing on the screen saying
+  that pane is alive rather than drawn. Wait for the line the printing ends with, and the same dot is
+  holding still — the pane never touched, and the mark following the stream and nothing else.
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The way in, and what settles the page's folder. The second pane below takes it, which is what
+  # lets that one be a single press with nothing asked.
+  - type: action
+    domain: terminal
+    op: open-folder
+    with:
+      dir: workshop
+
+  # Down to a plain shell. What an agent does with a line typed at it is the agent's own, and this
+  # road rests on a command carrying out exactly what it says.
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the pane that keeps printing
+
+  # That the line landed where the road meant it to. Everything after this is about this pane, and it
+  # is the last step that can say which pane that is by something the road put there itself.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the pane that keeps printing
+
+  - type: action
+    domain: terminal
+    op: keep-printing
+    with:
+      text: SCENARIO nothing more is coming
+
+  # The second pane, which is here to take the working place away rather than to be used. It opens in
+  # the empty box beside the first, in the page's folder, and becomes the pane being worked in.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: slot
+
+  # The mark, on the pane nobody is in. Nothing else on the screen separates a terminal that is
+  # running from the picture one leaves behind.
+  - type: assert
+    domain: terminal
+    op: dot
+    with:
+      moving: true
+
+  # The line the printing ends with, which is where this road waits: what comes after it has to be
+  # read on a pane that has actually stopped, and nothing but this says it has.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO nothing more is coming
+
+  # And the dot has followed the stream down. The pane is the same pane, in the same place, with the
+  # same words on it — the only thing that changed is that nothing is arriving any more.
+  - type: assert
+    domain: terminal
+    op: dot
+    with:
+      moving: false

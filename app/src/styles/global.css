@@ -73,10 +73,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .shell__terminal { min-height: 0; }
 .termface {
   height: 100%; min-height: 0;
-  padding: var(--s-3);
-  display: flex; flex-direction: column; gap: var(--s-2);
+  display: flex; flex-direction: column;
 }
-.termface__bar { display: flex; align-items: center; gap: var(--s-3); }
+/* The band over the face, and the same one the ledger's own band is: `--c-surface-2` with a rule
+   under it, drawn to the edges of what it is over (`.board__toolbar`). The face has no padding of its
+   own for that reason — a ground inset from the window reads as a card lying on the window, and the
+   two faces are one window showing one thing or the other (`AMB-D-753`), so a reader must not be able
+   to tell which is up by the colour under the same control. What sits inside the band keeps the gap
+   the band's own padding gives it. */
+.termface__bar {
+  display: flex; align-items: center; gap: var(--s-3);
+  padding: var(--s-3) var(--s-5);
+  background: var(--c-surface-2); border-bottom: 1px solid var(--c-border);
+}
 .termface__action {
   background: var(--c-surface-sunken); border: 1px solid var(--c-border);
   border-radius: var(--r-md); padding: var(--s-1) var(--s-3);
@@ -140,7 +149,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* The rail and the panes, side by side. The rail keeps its width and the panes take what is left:
    the panes are what the face is for, and a list of them that grew with their names would take the
    room from the thing it is a list of. */
-.termface__body { flex: 1; min-height: 0; display: flex; gap: var(--s-2); }
+.termface__body { flex: 1; min-height: 0; display: flex; }
 
 /* The page: the slots of it, laid out as one row, two across, or four in a square. The grid is
    written per count rather than flowing, because a slot is a fixed place — panes that reflowed as
@@ -148,6 +157,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .termface__page-grid {
   flex: 1; min-width: 0; min-height: 0;
   display: grid; gap: var(--s-2);
+  padding: var(--s-3);
 }
 .termface__page-grid--1 { grid-template: 1fr / 1fr; }
 .termface__page-grid--2 { grid-template: 1fr / 1fr 1fr; }
@@ -245,12 +255,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 /* The rail: the projects, and under the one being shown, its panes. The division is what the list is
-   for, so a project is a row a person presses and not a caption over some others. */
+   for, so a project is a row a person presses and not a caption over some others.
+
+   It is the ledger's sidebar in the other face's place, so it is the sidebar's ground: `--c-surface-2`
+   with a rule down its edge, full height, and the padding written the same way (`.sidebar`). Left with
+   no ground of its own it fell through to `--c-bg` and the face came out inside out — the edges sunk
+   below the middle, where every other face of this window has them above it. */
 .rail {
   flex: 0 0 auto; width: 160px; min-height: 0;
   overflow-y: auto;
   display: flex; flex-direction: column; gap: var(--s-2);
-  padding-right: var(--s-2);
+  padding: var(--s-3) var(--s-2);
+  background: var(--c-surface-2);
   border-right: 1px solid var(--c-border);
 }
 .rail__project { display: flex; flex-direction: column; gap: 2px; }
@@ -312,25 +328,27 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* One pane, or a window too narrow for three things across it: the rail stops being a column and
    becomes something opened when it is wanted. It sits over the panes rather than beside them,
-   because the reason it is a drawer is that there is no room beside them. */
+   because the reason it is a drawer is that there is no room beside them. What it is over says it is
+   over them — the rail inside keeps the ground and the padding it has as a column, so the drawer adds
+   nothing but the shadow. */
 .termface--drawers .termface__body { position: relative; }
 .termface__drawer {
   position: absolute; inset: 0 auto 0 0; z-index: 2;
   display: flex;
-  background: var(--c-surface); border-radius: var(--r-md);
+  background: var(--c-surface-2);
   box-shadow: var(--shadow-md);
-  padding: var(--s-2);
 }
 /* ---------- the file face ---------- */
 /* The right side of the terminal face: what changed in the project's folder lately, and the folder
-   itself, folded (`app/src/files/FilesPanel.tsx`). */
+   itself, folded (`app/src/files/FilesPanel.tsx`). It is a column of the window and not a card lying
+   on one, so it is drawn as the ledger's right pane is (`.rightpane`): `--c-surface` to the edges,
+   held off the page by a rule rather than by a border round a rounded box. */
 .files {
   width: 16rem; flex: none;
   min-height: 0; overflow-y: auto;
   display: flex; flex-direction: column; gap: var(--s-3);
   padding: var(--s-3);
-  border: 1px solid var(--c-border);
-  border-radius: var(--r-md);
+  border-left: 1px solid var(--c-border);
   background: var(--c-surface);
   font-size: var(--fs-sm);
 }

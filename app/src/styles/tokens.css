@@ -1,6 +1,13 @@
 /* amenbo design tokens */
 :root {
-  /* ----- color: neutral (warm gray) ----- */
+  /* ----- color: neutral (warm gray) -----
+     One set of grounds for the whole application, and no face defines its own. The window shows the
+     ledger or the terminal (`AMB-D-753`), and the same part in the same place must be the same colour
+     across the switch — a ground that changed with the face made one window read as two applications.
+     The rule the grounds are put on is the same on both: the edges (the sidebar or the rail, the band
+     over them) sit above the middle on `--c-surface-2`, what the middle holds is `--c-surface`, and
+     the middle itself is `--c-bg`. A terminal's black belongs to the program drawing in the pane, not
+     to the face the pane is on, and never widens past it. */
   --c-bg: #f7f6f3;
   --c-surface: #ffffff;
   --c-surface-2: #fbfaf8;

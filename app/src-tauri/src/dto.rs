@@ -2233,6 +2233,24 @@ pub struct FolderEntryDto {
     pub(crate) is_dir: bool,
 }
 
+/// One application a file could be opened with, as the file face draws a row of the chooser it has
+/// to draw itself (`crate::open_with`).
+///
+/// It exists only where the operating system has no chooser of its own — macOS. The path is what
+/// names the application when one is picked, and it is checked against this same list on the way
+/// back: what the face was offered is the whole of what it may ask for.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderAppDto {
+    /// What the machine calls it — the localised name, spelled the way a file manager spells it.
+    pub(crate) name: String,
+    /// The application bundle itself, which is what opening with it names.
+    pub(crate) path: String,
+    /// Whether this is the one the file would have opened with anyway, which is why it is first.
+    pub(crate) usual: bool,
+}
+
 /// What the file face's second row is drawn from: the rows, and whether they are the whole story
 /// (`crate::folder_watch`).
 ///

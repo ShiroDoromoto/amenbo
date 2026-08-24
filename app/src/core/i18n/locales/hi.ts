@@ -523,6 +523,8 @@ export const hi: Translation = {
     "files.noFolder": "इस प्रोजेक्ट का अभी कोई फ़ोल्डर नहीं है।",
     "files.back": "सूची पर वापस",
     "files.openWith": "सामान्य ऐप में खोलें",
+    "files.chooseApp": "चुने हुए ऐप में खोलें",
+    "files.appUsual": "{name} (सामान्य वाला)",
     "files.reveal": "फ़ाइल मैनेजर में दिखाएँ",
     "files.notText": "यह टेक्स्ट नहीं है, इसलिए इसे यहाँ नहीं दिखाया जा सकता।",
     "files.cut": "सिर्फ़ शुरुआत दिखाई जा रही है।",

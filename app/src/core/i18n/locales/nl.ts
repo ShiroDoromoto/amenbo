@@ -523,6 +523,8 @@ export const nl: Translation = {
     "files.noFolder": "Dit project heeft nog geen map.",
     "files.back": "Terug naar de lijst",
     "files.openWith": "Openen met de gebruikelijke app",
+    "files.chooseApp": "Openen met een app naar keuze",
+    "files.appUsual": "{name} (de gebruikelijke)",
     "files.reveal": "Tonen in de bestandsbeheerder",
     "files.notText": "Dit is geen tekst en kan hier niet worden getoond.",
     "files.cut": "Alleen het begin wordt getoond.",

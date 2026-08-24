@@ -552,6 +552,8 @@ export const ru: Translation = {
     "files.noFolder": "У этого проекта пока нет папки.",
     "files.back": "Назад к списку",
     "files.openWith": "Открыть в обычном приложении",
+    "files.chooseApp": "Открыть в выбранном приложении",
+    "files.appUsual": "{name} (обычное)",
     "files.reveal": "Показать в файловом менеджере",
     "files.notText": "Это не текст, поэтому показать его здесь нельзя.",
     "files.cut": "Показано только начало.",

@@ -17,8 +17,8 @@
 // binary and the first bytes make it a picture (`crate::folder`); the name decides only whether
 // text is drawn as Markdown, which is a question about rendering rather than about what the file
 // is.
-import { useEffect, useMemo, useState } from "react";
-import type { FolderChangesDto } from "../bindings/bindings";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { FolderAppDto, FolderChangesDto } from "../bindings/bindings";
 import { Markdown } from "../components/Markdown";
 import { useBoundFolders } from "../core/boundFolders";
 import { t, tf, whenLabel } from "../core/i18n";
@@ -26,8 +26,8 @@ import { openExternalUrl } from "../core/mutations";
 import { resolveRef } from "../core/reads";
 import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
 import {
-  folderEntries, folderOpenFile, folderRead, folderRevealFile, folderUnwatch, folderWatch,
-  onFolderChanged,
+  folderEntries, folderOpenFile, folderOpenFileWith, folderOpenWith, folderRead, folderRevealFile,
+  folderUnwatch, folderWatch, onFolderChanged,
 } from "./folder";
 import { MemoPage } from "./MemoPage";
 import { fileUnder, isRef, isUrl, unread, type Pointed } from "./pointed";
@@ -226,9 +226,15 @@ export function FilesPanel({ projectId, onOpenLedger, pointed, show }: {
 /**
  * What can be done with a file that is not reading it here: hand it to the machine.
  *
- * Both roads out are the OS's own — the application the reader already opens that kind of file
- * with, and the file manager they already keep their folders in. Neither is a choice Amenbo makes
- * or remembers (`AMB-T-3605`).
+ * All three roads out are the OS's own — the application the reader already opens that kind of file
+ * with, one they pick for this file alone, and the file manager they already keep their folders in.
+ * None of them is a choice Amenbo makes or remembers (`AMB-T-3605`).
+ *
+ * **Picking one is two shapes behind a single item.** Where the operating system has a chooser of
+ * its own it draws it and the file is open before anything comes back; where it has none — macOS —
+ * the applications come back and are drawn here (`crate::open_with`). Which of those happened is
+ * read off the answer and nothing else: a list to draw, or nothing to draw. That is why the menu
+ * stays open across the call rather than closing on the click, and why an empty answer closes it.
  *
  * A failure is not drawn. What could go wrong is the file having gone since the row was drawn, and
  * the row itself is about to say so: the folder is watched, and a file that is not there stops being
@@ -241,10 +247,20 @@ function FileMenu({ projectId, root, path, at, onClose }: {
   at: { x: number; y: number };
   onClose: () => void;
 }) {
+  // The applications to pick from, once they have been asked for and there are any — the second
+  // face of this one menu, drawn where the OS has no chooser to draw it for us.
+  const [apps, setApps] = useState<FolderAppDto[] | null>(null);
+  const box = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
-    const close = () => onClose();
-    // Anything else the person does closes it. A menu that outlived the next click would sit over
-    // rows it is no longer about.
+    // Anything the person does **outside** the menu closes it: one that outlived the next click
+    // would sit over rows it is no longer about. Inside is the opposite — a press on an item is the
+    // first half of choosing it, and closing there unmounts the button before the click can land on
+    // it, so the item never fires at all.
+    const close = (event: Event) => {
+      if (event.target instanceof Node && box.current?.contains(event.target)) return;
+      onClose();
+    };
     document.addEventListener("pointerdown", close);
     document.addEventListener("keydown", close);
     window.addEventListener("blur", close);
@@ -260,22 +276,50 @@ function FileMenu({ projectId, root, path, at, onClose }: {
     void go().catch(() => {});
   };
 
+  /** Ask, and then either draw what came back or step aside because the OS already asked. */
+  const choose = () => {
+    void folderOpenWith(projectId, root, path)
+      .then((found) => (found.length > 0 ? setApps(found) : onClose()))
+      .catch(() => onClose());
+  };
+
   return (
-    <div className="files__menu" style={{ left: at.x, top: at.y }} role="menu">
-      <button
-        className="files__menuitem"
-        role="menuitem"
-        onClick={() => act(() => folderOpenFile(projectId, root, path))}
-      >
-        {t("files.openWith")}
-      </button>
-      <button
-        className="files__menuitem"
-        role="menuitem"
-        onClick={() => act(() => folderRevealFile(projectId, root, path))}
-      >
-        {t("files.reveal")}
-      </button>
+    <div className="files__menu" style={{ left: at.x, top: at.y }} role="menu" ref={box}>
+      {apps === null ? (
+        <>
+          <button
+            className="files__menuitem"
+            role="menuitem"
+            onClick={() => act(() => folderOpenFile(projectId, root, path))}
+          >
+            {t("files.openWith")}
+          </button>
+          <button className="files__menuitem" role="menuitem" onClick={choose}>
+            {t("files.chooseApp")}
+          </button>
+          <button
+            className="files__menuitem"
+            role="menuitem"
+            onClick={() => act(() => folderRevealFile(projectId, root, path))}
+          >
+            {t("files.reveal")}
+          </button>
+        </>
+      ) : (
+        apps.map((app) => (
+          <button
+            key={app.path}
+            className="files__menuitem"
+            role="menuitem"
+            onClick={() => act(() => folderOpenFileWith(projectId, root, path, app.path))}
+          >
+            {/* The one the file would have opened with anyway is said to be that, not just put
+                first: a list whose order carries the meaning loses it the moment somebody reads
+                from the middle. */}
+            {app.usual ? tf("files.appUsual", { name: app.name }) : app.name}
+          </button>
+        ))
+      )}
     </div>
   );
 }

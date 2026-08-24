@@ -8,7 +8,9 @@
 //
 // Outside Tauri (`npm run dev` in a browser) there is no filesystem to ask, and the face draws its
 // empty state rather than an error: a folder with nothing in it is what the browser fallback is.
-import type { FolderChangesDto, FolderEntryDto, FolderFileDto } from "../bindings/bindings";
+import type {
+  FolderAppDto, FolderChangesDto, FolderEntryDto, FolderFileDto,
+} from "../bindings/bindings";
 import { invoke } from "../core/ipc";
 import { inTauri } from "../core/snapshot";
 
@@ -80,6 +82,43 @@ export async function folderOpenFile(
 ): Promise<void> {
   if (!inTauri()) return;
   await invoke<void>("folder_open_file", { projectId, root, path });
+}
+
+/**
+ * Ask what to open a file with, and draw whatever comes back.
+ *
+ * **The answer is empty on the operating systems that have a chooser of their own** (Windows,
+ * Linux): the host showed it, the reader picked in it and the file is already open — there is
+ * nothing left for this side to draw. macOS has no such dialog, so the applications that claim the
+ * file come back instead, the usual one first, and the face draws the list itself and hands one
+ * back to {@link folderOpenFileWith} (`crate::open_with`).
+ *
+ * Which of those two a machine is means nothing here. A caller that draws the list it is given and
+ * does nothing with an empty one is right on all three.
+ */
+export async function folderOpenWith(
+  projectId: number,
+  root: string,
+  path: string[],
+): Promise<FolderAppDto[]> {
+  if (!inTauri()) return [];
+  return await invoke<FolderAppDto[]>("folder_open_with", { projectId, root, path });
+}
+
+/**
+ * Open one file with the application picked off the list {@link folderOpenWith} handed back.
+ *
+ * `app` is that row's `path` and nothing else: the host checks it against the same list before
+ * opening anything, so a name this side made up is refused rather than run.
+ */
+export async function folderOpenFileWith(
+  projectId: number,
+  root: string,
+  path: string[],
+  app: string,
+): Promise<void> {
+  if (!inTauri()) return;
+  await invoke<void>("folder_open_file_with", { projectId, root, path, app });
 }
 
 /** Show one file where it lives, in the machine's file manager. */

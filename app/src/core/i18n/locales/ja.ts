@@ -535,6 +535,8 @@ export const ja: Translation = {
     "files.noFolder": "このプロジェクトにはフォルダがありません。",
     "files.back": "一覧へ戻る",
     "files.openWith": "いつものアプリで開く",
+    "files.chooseApp": "アプリを選んで開く",
+    "files.appUsual": "{name}（いつものアプリ）",
     "files.reveal": "フォルダで表示",
     "files.notText": "テキストではないので、ここには出せません。",
     "files.cut": "先頭だけを出しています。",

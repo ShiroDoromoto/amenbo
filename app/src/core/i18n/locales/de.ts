@@ -533,6 +533,8 @@ export const de: Translation = {
     "files.noFolder": "Dieses Projekt hat noch keinen Ordner.",
     "files.back": "Zurück zur Liste",
     "files.openWith": "Mit der üblichen App öffnen",
+    "files.chooseApp": "Mit einer ausgewählten App öffnen",
+    "files.appUsual": "{name} (die übliche)",
     "files.reveal": "Im Dateimanager zeigen",
     "files.notText": "Das ist kein Text und lässt sich hier nicht anzeigen.",
     "files.cut": "Es wird nur der Anfang angezeigt.",

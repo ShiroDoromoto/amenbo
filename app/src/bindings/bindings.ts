@@ -411,6 +411,28 @@ attachments: number,
 missing: number, };
 
 /**
+ * One application a file could be opened with, as the file face draws a row of the chooser it has
+ * to draw itself (`crate::open_with`).
+ *
+ * It exists only where the operating system has no chooser of its own — macOS. The path is what
+ * names the application when one is picked, and it is checked against this same list on the way
+ * back: what the face was offered is the whole of what it may ask for.
+ */
+export type FolderAppDto = { 
+/**
+ * What the machine calls it — the localised name, spelled the way a file manager spells it.
+ */
+name: string, 
+/**
+ * The application bundle itself, which is what opening with it names.
+ */
+path: string, 
+/**
+ * Whether this is the one the file would have opened with anyway, which is why it is first.
+ */
+usual: boolean, };
+
+/**
  * A file that changed lately, as the file face's second row draws it (`crate::folder`).
  *
  * The path is the segments from the folder the face is rooted at, so the row can be opened by

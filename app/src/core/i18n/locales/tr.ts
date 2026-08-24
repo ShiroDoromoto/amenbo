@@ -523,6 +523,8 @@ export const tr: Translation = {
     "files.noFolder": "Bu projenin henüz bir klasörü yok.",
     "files.back": "Listeye dön",
     "files.openWith": "Her zamanki uygulamayla aç",
+    "files.chooseApp": "Seçtiğim uygulamayla aç",
+    "files.appUsual": "{name} (her zamanki)",
     "files.reveal": "Dosya yöneticisinde göster",
     "files.notText": "Bu metin değil, burada gösterilemez.",
     "files.cut": "Yalnızca başı gösteriliyor.",

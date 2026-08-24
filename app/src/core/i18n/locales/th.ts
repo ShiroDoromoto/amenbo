@@ -526,6 +526,8 @@ export const th: Translation = {
     "files.noFolder": "โปรเจกต์นี้ยังไม่มีโฟลเดอร์",
     "files.back": "กลับไปที่รายการ",
     "files.openWith": "เปิดด้วยแอปที่ใช้ประจำ",
+    "files.chooseApp": "เปิดด้วยแอปที่เลือกเอง",
+    "files.appUsual": "{name} (แอปที่ใช้ประจำ)",
     "files.reveal": "แสดงในตัวจัดการไฟล์",
     "files.notText": "นี่ไม่ใช่ข้อความ จึงแสดงที่นี่ไม่ได้",
     "files.cut": "แสดงเฉพาะส่วนต้นเท่านั้น",

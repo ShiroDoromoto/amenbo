@@ -10,7 +10,9 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { FolderChangedDto, FolderChangesDto, FolderEntryDto, FolderFileDto } from "../bindings/bindings";
+import type {
+  FolderAppDto, FolderChangedDto, FolderChangesDto, FolderEntryDto, FolderFileDto,
+} from "../bindings/bindings";
 
 const ROOT = "/work/repo";
 
@@ -21,6 +23,8 @@ const hoisted = vi.hoisted(() => ({
   /** The host's side of the watch: what it answers with, and the way to push a later list. */
   tell: null as null | ((changes: FolderChangesDto) => void),
   watching: { changed: [] as FolderChangedDto[], partial: false } as FolderChangesDto,
+  /** What the host answers when asked what to open a file with — empty where the OS drew it. */
+  apps: [] as FolderAppDto[],
 }));
 
 vi.mock("./folder", () => ({
@@ -46,6 +50,13 @@ vi.mock("./folder", () => ({
   },
   folderRevealFile: async (_projectId: number, root: string, path: string[]) => {
     hoisted.asked.push(`reveal:${root}:${path.join("/")}`);
+  },
+  folderOpenWith: async (_projectId: number, root: string, path: string[]): Promise<FolderAppDto[]> => {
+    hoisted.asked.push(`ask:${root}:${path.join("/")}`);
+    return hoisted.apps;
+  },
+  folderOpenFileWith: async (_projectId: number, root: string, path: string[], app: string) => {
+    hoisted.asked.push(`with:${root}:${path.join("/")}:${app}`);
   },
 }));
 
@@ -93,8 +104,14 @@ function point(over: Partial<Pointed> & Pick<Pointed, "target">): Pointed {
   return { at: over.target, why: "", cwd: ROOT, read: false, ...over };
 }
 
+/**
+ * Pressing something the way a browser does: the pointer goes down first, and only then does the
+ * click land. Dispatching the click alone would pass over a menu that closes itself on the way
+ * down — which is a menu whose items can never be reached.
+ */
 function click(el: Element | null | undefined) {
   return act(async () => {
+    el?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
     el?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await new Promise((r) => setTimeout(r, 0));
   });
@@ -107,6 +124,7 @@ beforeEach(() => {
   hoisted.asked = [];
   hoisted.entries = {};
   hoisted.file = { truncated: false };
+  hoisted.apps = [];
   hoisted.tell = null;
   hoisted.watching = {
     changed: [{ path: ["notes", "a.md"], modified: new Date().toISOString() }],
@@ -235,13 +253,55 @@ describe("the file face", () => {
     expect(hoisted.asked).toContain(`reveal:${ROOT}:notes/a.md`);
   });
 
+  it("draws the applications where the machine has no dialog of its own", async () => {
+    // macOS: Launch Services only lists, so the list comes back and the menu draws it itself.
+    hoisted.apps = [
+      { name: "Zed", path: "/Applications/Zed.app", usual: true },
+      { name: "MuseScore 4", path: "/Applications/MuseScore 4.app", usual: false },
+    ];
+    await draw();
+    await act(async () => {
+      button("a.md")!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+    });
+    await click(button(t("files.chooseApp")));
+    expect(hoisted.asked).toContain(`ask:${ROOT}:notes/a.md`);
+    // The menu is still standing, now showing what came back — and the one the file would have
+    // opened with anyway says so rather than relying on being first.
+    expect(button(tf("files.appUsual", { name: "Zed" }))).toBeDefined();
+    expect(button("MuseScore 4")).toBeDefined();
+    // The three doors are gone: this is the same menu, not a second one over it.
+    expect(button(t("files.reveal"))).toBeUndefined();
+
+    await click(button("MuseScore 4"));
+    expect(hoisted.asked).toContain(`with:${ROOT}:notes/a.md:/Applications/MuseScore 4.app`);
+  });
+
+  it("steps aside where the machine drew the dialog itself", async () => {
+    // Windows and Linux: the chooser was shown, the file is already open, and nothing came back.
+    hoisted.apps = [];
+    await draw();
+    await act(async () => {
+      button("a.md")!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
+    });
+    await click(button(t("files.chooseApp")));
+    expect(hoisted.asked).toContain(`ask:${ROOT}:notes/a.md`);
+    // An empty answer is not an empty list to draw — there is nothing left to ask.
+    expect(button(t("files.chooseApp"))).toBeUndefined();
+    expect(button(t("files.reveal"))).toBeUndefined();
+  });
+
   it("closes the menu on the next thing the person does", async () => {
     await draw();
     await act(async () => {
       button("a.md")!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
     });
     expect(button(t("files.openWith"))).toBeDefined();
-    // A menu that outlived the next click would sit over rows it is no longer about.
+    // A menu that outlived the next click would sit over rows it is no longer about — but the press
+    // that starts a click on an item is not "the next thing", it is the choosing itself.
+    await act(async () => {
+      button(t("files.openWith"))!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    });
+    expect(button(t("files.openWith"))).toBeDefined();
     await act(async () => {
       document.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
     });

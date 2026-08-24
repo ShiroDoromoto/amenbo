@@ -11,6 +11,16 @@
 // `session name` from the agent running in it, then the person saying so, which is the last word for
 // good. The ranking itself is the store's (`amenbo_core::frames`), so this file never decides whether a
 // name takes: it says who is naming and draws what comes back.
+//
+// **The terminal is not one of the three.** What a program in a pane sends — the title it asks for
+// (OSC 0 / 2), the colour it answers with — is decided by whoever wrote it, and a name taken from
+// there is a name amenbo cannot mean anything by (`AMB-D-748`). The first line is the *person's*
+// keys, read off the presses and never off the stream leaving the pane: that stream carries the
+// emulator's own answers to the program beside the person's typing, and nothing in it tells the two
+// apart — which is how `10;rgb:ecec/e9e9/…` came to be a pane's name (`AMB-T-3668`).
+//
+// A frame nobody has named is called after the folder it works in, which is a fact rather than a
+// message from anyone.
 
 import type { FrameNameDto, TalkLayoutDto } from "../bindings/bindings";
 import { invoke } from "../core/ipc";
@@ -51,55 +61,98 @@ export async function nameFrame(frame: string, name: string, by: NamedBy): Promi
 export type Typing = {
   /** The line as it stands, with the editing they have done to it applied. */
   readonly line: string;
-  /** True on the keystroke that sent it. */
+  /** True on the press that sent it. */
   readonly sent: boolean;
-  /** How far into an escape sequence the keys have got, so the rest of one is passed over rather than
-   *  typed into the name. Nothing to read: it is where the accumulator is. */
-  readonly esc: "" | "esc" | "csi";
 };
 
-export const NOTHING_TYPED: Typing = { line: "", sent: false, esc: "" };
+export const NOTHING_TYPED: Typing = { line: "", sent: false };
+
+/**
+ * What a person did to the line they are writing.
+ *
+ * Three things happen to a line and nothing else is part of one: characters go in, one comes back
+ * out, or the line goes. A press that is none of them — an arrow key, a Ctrl-C, a tab — is not a
+ * smaller version of one of the three; it is the person doing something else entirely.
+ */
+export type Pressed =
+  /** Characters entered: a key, or the whole of what an input method settled. */
+  | { readonly kind: "text"; readonly text: string }
+  /** One character taken back. */
+  | { readonly kind: "erase" }
+  /** The line has gone. */
+  | { readonly kind: "send" };
+
+/**
+ * What a key press does to the line being written, or nothing where it is not part of one.
+ *
+ * **It is read off the press and never off what the press sends.** A pane's stream carries the
+ * person's typing and the emulator's answers to the program in it, and nothing there tells them
+ * apart (`AMB-D-748`); a press is a person by construction.
+ *
+ * Presses made while an input method is composing are its keys rather than the person's: what they
+ * are writing is settled when the composition ends, and the whole of it arrives then (`./terminal`).
+ */
+export function pressedKey(e: KeyboardEvent): Pressed | null {
+  if (e.isComposing) return null;
+  // Shift-Enter is the pane writing a newline into the line the person is still on (`./terminal`),
+  // so it is not the press that sends — and a line still being written has not been sent.
+  if (e.key === "Enter") return e.shiftKey ? null : { kind: "send" };
+  if (e.key === "Backspace") return { kind: "erase" };
+  // A key held with a modifier is a command rather than a character, whatever character it is on.
+  if (e.ctrlKey || e.altKey || e.metaKey) return null;
+  // Named keys — `ArrowUp`, `Tab`, `Escape`, `Dead` — are longer than the one character a key that
+  // *is* a character carries. Counted in characters and not in code units, so an emoji is one.
+  return [...e.key].length === 1 ? { kind: "text", text: e.key } : null;
+}
 
 /**
  * Follow the keys a person presses, far enough to know what their first line said.
  *
  * This is not an emulator and does not try to be one: what it needs is the first line a person sends
- * into a fresh pane, to call the pane something better than a number. So it takes plain characters,
- * honours the two ways of taking one back, and passes over the keys that are not characters — an arrow
- * key, a paste's own brackets, a Ctrl-C. A name is a line of text, and the keys that are not text are
- * not part of one.
+ * into a fresh pane, to call the pane something better than a number.
  *
  * A line that came out wrong is a name a person can change, which is what lets this stay this small.
  */
-export function typed(so_far: Typing, data: string): Typing {
-  let line = so_far.sent ? "" : so_far.line;
-  let esc = so_far.sent ? "" : so_far.esc;
-  for (const key of data) {
-    // Inside an escape sequence: `ESC [` and `ESC O` open one that runs to a byte in `@`–`~`, and
-    // anything else after `ESC` is a sequence of two.
-    if (esc === "esc") {
-      esc = key === "[" || key === "O" ? "csi" : "";
-      continue;
-    }
-    if (esc === "csi") {
-      if (key >= "@" && key <= "~") esc = "";
-      continue;
-    }
-    if (key === "\x1b") {
-      esc = "esc";
-      continue;
-    }
-    if (key === "\r" || key === "\n") return { line: line.trim(), sent: true, esc: "" };
-    // Backspace, either of the two bytes a terminal sends for it.
-    if (key === "\x7f" || key === "\b") {
-      line = line.slice(0, -1);
-      continue;
-    }
-    // What is left below a space is a key that is not a character — Ctrl-C, a tab. None of them belong
-    // in a name, and none of them end the line either.
-    if (key >= " ") line += key;
+export function typed(so_far: Typing, did: Pressed): Typing {
+  // A line that has been sent is behind them: the next thing they type starts the next line, which
+  // is more typing rather than another name (`amenbo_core::frames`).
+  const line = so_far.sent ? "" : so_far.line;
+  switch (did.kind) {
+    case "text":
+      return { line: line + did.text, sent: false };
+    // Counted in characters, so taking back an emoji takes back the emoji.
+    case "erase":
+      return { line: [...line].slice(0, -1).join(""), sent: false };
+    case "send":
+      return { line: line.trim(), sent: true };
   }
-  return { line, sent: false, esc };
+}
+
+/**
+ * The folder's own name — the last part of its path, in either separator.
+ *
+ * Null for a path with no parts to it, which is a machine's root and not a folder anyone is working
+ * in.
+ */
+export function folderName(path: string | null | undefined): string | null {
+  if (!path) return null;
+  const parts = path.split(/[\\/]/).filter((part) => part !== "");
+  return parts[parts.length - 1] ?? null;
+}
+
+/**
+ * What a frame is called on the screen: the name it carries, else the folder it works in.
+ *
+ * **The folder is not a name and does not become one** — nothing is written, and the first thing to
+ * name the frame takes the row. It is what a pane is called in the meantime, which is better than a
+ * number for the same reason the first line typed is: a person knows their own folders
+ * (`crate::session`).
+ *
+ * Null is a frame with neither, which is a place nothing has been opened in yet — what to call one of
+ * those is the business of whatever is drawing it.
+ */
+export function frameLabel(names: FrameNames, frame: string, folder: string | null): string | null {
+  return names.get(frame) ?? folderName(folder);
 }
 
 /**

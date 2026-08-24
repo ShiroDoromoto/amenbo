@@ -35,6 +35,15 @@ const FRAME_NAMES_META: &str = "talk.frame_names";
 /// The `store_meta` key the arrangement lives under, as one JSON object.
 const LAYOUT_META: &str = "talk.layout";
 
+/// How long a frame's name may be, in characters.
+///
+/// **A name is a label and not a sentence.** All three of the things that name a frame can run long —
+/// a first line typed at an agent is a request, and `session name` is whatever the agent thought of —
+/// and the row it is drawn on has the rest of what is happening to fit on it beside the name. The
+/// bound is here rather than at the three doors because it is one rule about names, and the window
+/// gives what is left of a long one an ellipsis rather than the room.
+const NAME_LIMIT: usize = 80;
+
 /// Who named a frame. The order of the variants is the order of their authority: a naming may replace
 /// one of its own rank or lower, never a higher one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -103,7 +112,10 @@ pub fn name_frame(
             names.remove(frame);
         }
         name => {
-            names.insert(frame.to_string(), FrameName { name: name.to_string(), by });
+            // Cut by characters and not by bytes: a name in Japanese is a third of the characters a
+            // byte count would leave of it, and half a character is not a shorter name.
+            let name: String = name.chars().take(NAME_LIMIT).collect();
+            names.insert(frame.to_string(), FrameName { name, by });
         }
     }
     engine.set_meta(FRAME_NAMES_META, Some(&serde_json::to_string(&names)?))?;
@@ -206,6 +218,18 @@ mod tests {
 
         name_frame(&engine, "1", "  ", Person).unwrap();
         assert!(!frame_names(&engine).unwrap().contains_key("1"), "a blank name un-names the frame");
+    }
+
+    /// A name is a label, so a long one is cut to a label's length — in characters, because half a
+    /// character is not a shorter name.
+    #[test]
+    fn a_name_is_cut_to_what_a_row_can_carry() {
+        let engine = StoreEngine::open_in_memory().unwrap();
+        let asked = "の".repeat(NAME_LIMIT * 2);
+        name_frame(&engine, "1", &asked, Session).unwrap();
+        let kept = &frame_names(&engine).unwrap()["1"].name;
+        assert_eq!(kept.chars().count(), NAME_LIMIT, "cut to the label's length");
+        assert_eq!(kept, &"の".repeat(NAME_LIMIT), "and cut on a character");
     }
 
     /// The shape survives the run and what was running does not: the frames come back as places, and

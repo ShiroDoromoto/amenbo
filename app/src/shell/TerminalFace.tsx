@@ -4,7 +4,7 @@ import { FolderChoice } from "./FolderChoice";
 import { TerminalPane } from "./TerminalPane";
 import { PaneRail } from "./PaneRail";
 import {
-  frameNames, keepLayout, nameFrame, savedLayout, type FrameNames, type NamedBy,
+  frameLabel, frameNames, keepLayout, nameFrame, savedLayout, type FrameNames, type NamedBy,
 } from "../talk/frames";
 import {
   closedIn, COUNTS, EMPTY_LAYOUT, focusOn, goPage, goProject, laidOut, MAX_PAGES, movedTo, openedFrame,
@@ -117,8 +117,8 @@ export function TerminalFace({
   const [ended, setEnded] = useState<ReadonlySet<string>>(new Set());
   // The pane the top row of the file face follows. A frame with nothing running in it points at
   // nothing, which is the empty row rather than the row of whichever pane spoke last.
-  const focusedSession =
-    layout.frames.find((frame) => frame.id === layout.focus)?.session ?? null;
+  const focusedFrame = layout.frames.find((frame) => frame.id === layout.focus) ?? null;
+  const focusedSession = focusedFrame?.session ?? null;
   const [width, setWidth] = useState(() => (typeof window === "undefined" ? 0 : window.innerWidth));
   const [railOpen, setRailOpen] = useState(false);
   // The question about where the pane being opened works, while it is up. It is not a frame: a place
@@ -553,7 +553,8 @@ export function TerminalFace({
           show={show}
           pointed={{
             points: focusedSession === null ? [] : (pointed.get(focusedSession) ?? []),
-            name: layout.focus === null ? null : (names.get(layout.focus) ?? null),
+            // Which pane pointed, called what the rail and its own row call it (`../talk/frames`).
+            name: focusedFrame === null ? null : frameLabel(names, focusedFrame.id, focusedFrame.folder),
             ended: focusedSession !== null && ended.has(focusedSession),
             onRead: (at) => {
               if (focusedSession !== null) setPointed((was) => markRead(was, focusedSession, at));

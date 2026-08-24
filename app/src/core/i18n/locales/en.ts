@@ -571,13 +571,7 @@ const ui = {
   "face.panes.one": "{n} pane", "face.panes.other": "{n} panes",
   "face.pages": "Pages",
   "face.page": "Page {n}",
-  // What the terminal face asks about: what this project was left in the middle of by a pane that has since
-  // gone — a task reserved, or a decision put up and never settled. One sentence over both, because it
-  // is one question; which kind a row is, and so what pressing it opens, is said by the ref it carries.
-  // It asks rather than tells — Amenbo cannot see somebody's own terminal, so it does not know the work
-  // stopped, only that nothing it opened is at it (`AMB-D-748`).
-  "face.adrift": "Something in this project was left in the middle, and nothing is at it. Carry on with it?",
-  // The line over the row of things a terminal can be opened with (`app/src/shell/AdriftSlot.tsx`).
+  // The line over the row of things a terminal can be opened with (`app/src/shell/EmptySlot.tsx`).
   // The pills say by their shape that they can be pressed; this says it in words, because a row read
   // as a caption is not something anybody tries. It does not say "choose an AI" — the plain shell is
   // on the row and is not one.

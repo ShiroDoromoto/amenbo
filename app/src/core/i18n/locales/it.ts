@@ -532,7 +532,6 @@ export const it: Translation = {
     "face.panes.one": "{n} riquadro", "face.panes.many": "{n} riquadri", "face.panes.other": "{n} riquadri",
     "face.pages": "Pagine",
     "face.page": "Pagina {n}",
-    "face.adrift": "In questo progetto è rimasto qualcosa a metà e nessuno se ne sta occupando. Vuoi riprenderlo?",
     "face.whichStart": "Con che cosa si apre questo riquadro?",
     "face.open": "Apri un terminale qui",
     "face.openHere": "Spazio per un altro riquadro in questo progetto",

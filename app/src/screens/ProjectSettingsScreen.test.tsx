@@ -599,7 +599,7 @@ async function pickAgent(value: string) {
 }
 
 // Which agent a project's panes open with is settled the first time one is opened and changed here —
-// never by somebody reaching for a different tool on one frame (`../shell/AdriftSlot`).
+// never by somebody reaching for a different tool on one frame (`../shell/EmptySlot`).
 describe("the agent this project's panes open with", () => {
   it("is offered where this machine has more than one to choose between", async () => {
     hoisted.wake = startable(["claude-code", "codex-cli"], "codex-cli");

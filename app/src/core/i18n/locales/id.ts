@@ -514,7 +514,6 @@ export const id: Translation = {
     "face.panes.other": "{n} panel",
     "face.pages": "Halaman",
     "face.page": "Halaman {n}",
-    "face.adrift": "Ada yang tertinggal separuh jalan di proyek ini dan tidak ada yang mengerjakannya. Lanjutkan?",
     "face.whichStart": "Buka panel ini dengan apa?",
     "face.open": "Buka terminal di sini",
     "face.openHere": "Tempat untuk satu panel lagi di proyek ini",

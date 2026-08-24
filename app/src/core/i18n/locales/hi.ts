@@ -511,7 +511,6 @@ export const hi: Translation = {
     "face.panes.one": "{n} पैन", "face.panes.other": "{n} पैन",
     "face.pages": "पृष्ठ",
     "face.page": "पृष्ठ {n}",
-    "face.adrift": "इस प्रोजेक्ट में कुछ बीच में ही रुका है और उस पर कोई नहीं है। क्या आप इसे जारी रखेंगे?",
     "face.whichStart": "यह पैनल किससे खोलें?",
     "face.open": "यहाँ टर्मिनल खोलें",
     "face.openHere": "इस प्रोजेक्ट में एक और पैन के लिए जगह",

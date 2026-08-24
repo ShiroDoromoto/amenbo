@@ -537,7 +537,6 @@ export const uk: Translation = {
     "face.panes.one": "{n} панель", "face.panes.few": "{n} панелі", "face.panes.many": "{n} панелей", "face.panes.other": "{n} панелі",
     "face.pages": "Сторінки",
     "face.page": "Сторінка {n}",
-    "face.adrift": "У цьому проєкті щось лишилося на півдорозі, і ніхто цим не зайнятий. Продовжити?",
     "face.whichStart": "Чим відкрити цю панель?",
     "face.open": "Відкрити тут термінал",
     "face.openHere": "Місце для ще однієї панелі в цьому проєкті",

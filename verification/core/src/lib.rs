@@ -299,6 +299,10 @@ const REGISTRY: &[OpSpec] = &[
     // It is deliberately not the only way to reserve. A road that means to show what is **not** adrift
     // uses `status` and gets a reservation with no session on it, which is what a person's own terminal
     // leaves and what Amenbo must never read as abandoned.
+    //
+    // **No road stands on it at the moment.** The one that did read the question the terminal face drew,
+    // and that question is gone; where the state is put to a person next is the ledger's to answer. The
+    // premise stays because it is the store state itself, not the screen that read it.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "adrift", required: &["target"], refs: &["target"], strings: &[], binds: false },
     // The other terminal. A reason is required by the command, so it is required here: what separates
     // work decided against from work carried out is why, and it is recorded rather than remembered.
@@ -433,7 +437,8 @@ const REGISTRY: &[OpSpec] = &[
     // proposed and that birth is the only moment the ledger records who put it up: nothing said later
     // can put a session on it. As with the task, no driver has a pane, so it is adrift from the first
     // moment anything looks — and a road that wants a proposal Amenbo may **not** speak for uses
-    // `create`, which leaves no session on the line at all.
+    // `create`, which leaves no session on the line at all. No road stands on it at the moment, for the
+    // same reason its task twin does not.
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "adrift", required: &["title"], refs: &["project"], strings: &["title"], binds: true },
     // A decision's own life: the body is edited while it is still proposed, accepting freezes it,
     // and the link is what makes it a task's premise.
@@ -1901,18 +1906,6 @@ const REGISTRY: &[OpSpec] = &[
     // how a road tells "the same terminal, moved" from "another terminal, started". The absent half
     // is what a road reads while the other face is up.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "pane", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
-    // What the terminal face asks about: work in the project it is on that nothing is doing any more. The
-    // task is named by reference rather than by words, because what is drawn is the record's own title
-    // and a road that spelt it out would be checking its own typing.
-    //
-    // The absent half is the one that matters most. A reservation with no session on it is one Amenbo
-    // cannot speak for, and the road reads its absence here — a screen that asked about it would be
-    // telling somebody at their own terminal that their work had stopped.
-    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "adrift", required: &["target"], refs: &["target"], strings: &[], binds: false },
-    // Pressing one of them. It is the whole of what the question offers, and the whole of what it may
-    // offer: the screen does not know the work stopped, only that nothing it opened is at it, so the
-    // press opens the task where a person answers rather than answering for them. It leaves this face.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-adrift", required: &["target"], refs: &["target"], strings: &[], binds: false },
     // Ending the terminal in the pane. It is the only way out — a pane going away is a pane moving,
     // and the session outlives it — so it is also the only way a road reaches the state that follows
     // one: what a pane says once nothing is running in it any more.

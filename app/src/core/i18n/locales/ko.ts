@@ -510,7 +510,6 @@ export const ko: Translation = {
     "face.panes.other": "{n}개",
     "face.pages": "페이지",
     "face.page": "{n}페이지",
-    "face.adrift": "이 프로젝트에 도중에 멈춘 것이 있습니다. 이어서 하시겠습니까?",
     "face.whichStart": "이 창을 무엇으로 열까요?",
     "face.open": "여기에 터미널 열기",
     "face.openHere": "이 프로젝트에 페인 하나 더 놓을 자리로",

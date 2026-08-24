@@ -56,7 +56,7 @@ pub fn wake_probe(folder: String, project: Option<i64>) -> Result<WakeDto, CmdEr
 
 /// What a **project** opens its panes with, asked before there is a pane or a folder to ask about.
 ///
-/// This is the empty frame's question (`app/src/shell/AdriftSlot.tsx`), and it is the same judgment
+/// This is the empty frame's question (`app/src/shell/EmptySlot.tsx`), and it is the same judgment
 /// as [`wake_probe`] over a wider trace: `folders` are the project's own bound folders, and a
 /// provider traced in any of them is traced for the project. A folder that has gone is skipped
 /// rather than refused — the reader is choosing what to open with, and a stale binding is not a

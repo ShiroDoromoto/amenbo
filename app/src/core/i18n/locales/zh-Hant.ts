@@ -511,6 +511,7 @@ export const zhHant: Translation = {
     "face.panes.other": "{n} 個",
     "face.pages": "頁",
     "face.page": "第 {n} 頁",
+    "face.whichStart": "這個窗格要用什麼開啟？",
     "face.open": "在此開啟終端機",
     "face.openHere": "在這個專案裡給下一個窗格騰出位置",
     "face.whichFolder": "這個窗格在哪個資料夾中工作？",

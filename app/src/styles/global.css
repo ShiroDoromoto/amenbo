@@ -269,6 +269,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .slot__open:hover { filter: brightness(1.08); }
 
+/* The question and the row under it, kept together: the words are what say the pills are an offer, so
+   they sit closer to the row than the row sits to the press that acts on it. */
+.slot__pick {
+  flex: 0 0 auto;
+  display: flex; flex-direction: column; align-items: center; gap: var(--s-2);
+}
+/* The words over the row. Quiet and small — it is a question about the pills, not a heading over the
+   frame, and one that shouts would take the eye before the thing it is asking about. */
+.slot__ask {
+  margin: 0;
+  color: var(--c-text-muted); font-size: var(--fs-sm); text-align: center;
+}
+
 /* What the terminal is opened with: one pill each, and the one in force filled with the accent. They
    are pressable and a reader has to see that they are — words alone read as a caption, and a caption
    is not something anybody tries. Each pill holds its name on one line and the row wraps instead:
@@ -494,9 +507,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .files__menuitem:hover { background: var(--c-surface-sunken); }
 
 /* ---------- the two halves of the panel ---------- */
-/* Files, and the page written on. The tabs are the panel's own, drawn small: they are a way between
-   two things rather than the panel's subject. */
-.files__tabs { display: flex; gap: var(--s-2); border-bottom: 1px solid var(--c-border); }
+/* The row above whichever half is up. It holds the way out and nothing else: the switch between
+   files and the page written on is the terminal face's top row, which is where it can be reached
+   from whether the panel is open or closed (`app/src/files/FilesPanel.tsx`). */
+.files__top { display: flex; }
 /* The panel's way out, at the end of whichever row it has. Quiet, like the control that ends a pane:
    what stops it being pressed by mistake is that nothing is lost when it is — the top row opens the
    panel again, on the half it was showing. */
@@ -508,12 +522,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
 }
 .files__close:hover { color: var(--c-text); }
-.files__tab {
-  display: inline-flex; align-items: center; gap: var(--s-1);
-  padding: var(--s-1) 0; border: 0; background: none;
-  color: var(--c-text-muted); font-size: var(--fs-sm); cursor: pointer;
-}
-.files__tab--on { color: var(--c-text); box-shadow: inset 0 -2px 0 var(--c-accent); }
 
 /* The draft page. It takes the room the panel has, because writing is what it is for
    (`app/src/files/MemoPage.tsx`). */

@@ -540,6 +540,7 @@ export const ru: Translation = {
     "face.panes.one": "{n} панель", "face.panes.few": "{n} панели", "face.panes.many": "{n} панелей", "face.panes.other": "{n} панели",
     "face.pages": "Страницы",
     "face.page": "Страница {n}",
+    "face.whichStart": "Чем открыть эту панель?",
     "face.open": "Открыть здесь терминал",
     "face.openHere": "Место для ещё одной панели в этом проекте",
     "face.whichFolder": "В какой папке работает эта панель?",

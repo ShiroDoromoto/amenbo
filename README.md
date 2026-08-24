@@ -85,8 +85,11 @@ verification/         black-box checks of an installed build, run before a relea
 devtool/              optional Go helper: a throwaway dev GUI per task, the VM it is driven
                       in, and a fake outside world
 guards/               one invariant apiece, asserted over the tree by `make test` and CI
-scripts/              what the Makefile calls out to: build, sign, notarise, verify, bake
-                      the brand set
+scripts/              what the Makefile calls out to — build, sign, notarise, verify,
+                      bake the brand set — and a few meant to be typed by hand, such as
+                      watch-ci.sh, which watches one CI run and prints only what changes
+  windows/            drive a real Windows desktop from here, for the roads out of the
+                      app that only a physical machine can walk
 ```
 
 Design points:

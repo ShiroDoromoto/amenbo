@@ -511,6 +511,7 @@ export const nl: Translation = {
     "face.panes.one": "{n} deelvenster", "face.panes.other": "{n} deelvensters",
     "face.pages": "Pagina's",
     "face.page": "Pagina {n}",
+    "face.whichStart": "Waarmee opent dit deelvenster?",
     "face.open": "Hier een terminal openen",
     "face.openHere": "Plek voor nog een deelvenster in dit project",
     "face.whichFolder": "In welke map werkt dit deelvenster?",

@@ -511,6 +511,7 @@ export const zhHans: Translation = {
     "face.panes.other": "{n} 个",
     "face.pages": "页",
     "face.page": "第 {n} 页",
+    "face.whichStart": "这个窗格用什么打开？",
     "face.open": "在此打开终端",
     "face.openHere": "在这个项目里给下一个窗格腾出位置",
     "face.whichFolder": "这个窗格在哪个文件夹里工作？",

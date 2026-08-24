@@ -511,6 +511,7 @@ export const tr: Translation = {
     "face.panes.one": "{n} bölme", "face.panes.other": "{n} bölme",
     "face.pages": "Sayfalar",
     "face.page": "Sayfa {n}",
+    "face.whichStart": "Bu bölme neyle açılsın?",
     "face.open": "Burada bir terminal aç",
     "face.openHere": "Bu projede bir bölme daha için yer",
     "face.whichFolder": "Bu bölme hangi klasörde çalışıyor?",

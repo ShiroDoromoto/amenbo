@@ -514,6 +514,7 @@ export const vi: Translation = {
     "face.panes.other": "{n} khung",
     "face.pages": "Trang",
     "face.page": "Trang {n}",
+    "face.whichStart": "Mở khung này bằng gì?",
     "face.open": "Mở terminal ở đây",
     "face.openHere": "Chỗ cho thêm một khung trong dự án này",
     "face.whichFolder": "Khung này làm việc trong thư mục nào?",

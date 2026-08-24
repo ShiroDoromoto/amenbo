@@ -532,6 +532,7 @@ export const fr: Translation = {
     "face.panes.one": "{n} volet", "face.panes.many": "{n} volets", "face.panes.other": "{n} volets",
     "face.pages": "Pages",
     "face.page": "Page {n}",
+    "face.whichStart": "Avec quoi ouvrir ce volet ?",
     "face.open": "Ouvrir un terminal ici",
     "face.openHere": "De la place pour un autre volet dans ce projet",
     "face.whichFolder": "Dans quel dossier ce volet travaille-t-il ?",

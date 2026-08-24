@@ -514,6 +514,7 @@ export const th: Translation = {
     "face.panes.other": "{n} บาน",
     "face.pages": "หน้า",
     "face.page": "หน้า {n}",
+    "face.whichStart": "จะเปิดแผงนี้ด้วยอะไร",
     "face.open": "เปิดเทอร์มินัลที่นี่",
     "face.openHere": "ที่ว่างสำหรับบานหน้าต่างอีกอันในโปรเจกต์นี้",
     "face.whichFolder": "บานหน้าต่างนี้ทำงานในโฟลเดอร์ใด",

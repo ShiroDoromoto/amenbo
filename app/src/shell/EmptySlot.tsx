@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import type { WakeDto } from "../bindings/bindings";
 import { invoke } from "../core/ipc";
 import { SHELL } from "../talk/terminal";
@@ -22,9 +22,12 @@ import { Icon } from "../components/Icon";
  * **What a terminal is opened with is chosen here**, on the frame, and pressed once. The row above
  * the button is every agent this machine can start plus the plain shell, with the project's own
  * answer already on — so the common press is the same one press it always was, and choosing
- * something else costs a press and no dialog (`AMB-T-3667`). What is chosen here is this pane's: the
- * project settles its answer the first time and changes it on its own settings, never by somebody
- * reaching for a different tool for one turn (`../talk/agent`).
+ * something else costs a press and no dialog (`AMB-T-3667`). **The row is asked about in words as
+ * well as drawn as pressable**: shape alone leaves it to be worked out, and a reader who takes the
+ * names for a label of the button under them never tries one. The question is what the row opens
+ * with, not which AI — the shell on it is neither (`AMB-T-3682`). What is chosen here is this pane's:
+ * the project settles its answer the first time and changes it on its own settings, never by
+ * somebody reaching for a different tool for one turn (`../talk/agent`).
  *
  * `onOpen` is what this is for: opening a pane in this project, with the agent that was chosen —
  * {@link SHELL} for a prompt with nothing started at it.
@@ -50,6 +53,10 @@ export function EmptySlot({
   // Which of them the next pane opens with, once the reader has said. Null until they do, because
   // what is on before that is the project's answer and that arrives with the read.
   const [chose, setChose] = useState<string | null>(null);
+  // What names the row of choices, for a reader who is hearing the frame rather than seeing it. The
+  // question is on the screen, so the row is pointed at it rather than given a second wording of its
+  // own — two names for one thing is how the spoken frame and the drawn one drift apart.
+  const askId = useId();
 
   useEffect(() => {
     let alive = true;
@@ -78,26 +85,32 @@ export function EmptySlot({
   return (
     <div className="slot slot--empty">
       {starts.length > 1 && (
-        <div className="slot__starts" role="radiogroup" aria-label={t("talk.startWith")}>
-          {starts.map((one) => (
-            <button
-              key={one.id}
-              className={`slot__start${one.id === on ? " slot__start--on" : ""}`}
-              // Choosing between things, not turning one of them on: what a press does is say which
-              // of the row the pane opens with, and exactly one of them is always on.
-              role="radio"
-              aria-checked={one.id === on}
-              onClick={() => setChose(one.id)}
-            >
-              {/* An agent wears the mark; the plain shell does not. What the row is choosing between
-                  is what runs in the pane, and one of the choices is nothing running at all — a mark
-                  on that one would say the shell is an agent of some kind, which is the distinction
-                  the row exists to draw. It is one mark for all of them and not one each: which
-                  agent it is, is what the name says. */}
-              {one.id !== SHELL && <Icon name="robot" />}
-              {one.label}
-            </button>
-          ))}
+        <div className="slot__pick">
+          {/* The question the row is an answer to. It is put where the row is put and nowhere else:
+              a frame with one thing to open with has nothing to ask about, and asking anyway would
+              be a question with one answer. */}
+          <p className="slot__ask" id={askId}>{t("face.whichStart")}</p>
+          <div className="slot__starts" role="radiogroup" aria-labelledby={askId}>
+            {starts.map((one) => (
+              <button
+                key={one.id}
+                className={`slot__start${one.id === on ? " slot__start--on" : ""}`}
+                // Choosing between things, not turning one of them on: what a press does is say which
+                // of the row the pane opens with, and exactly one of them is always on.
+                role="radio"
+                aria-checked={one.id === on}
+                onClick={() => setChose(one.id)}
+              >
+                {/* An agent wears the mark; the plain shell does not. What the row is choosing between
+                    is what runs in the pane, and one of the choices is nothing running at all — a mark
+                    on that one would say the shell is an agent of some kind, which is the distinction
+                    the row exists to draw. It is one mark for all of them and not one each: which
+                    agent it is, is what the name says. */}
+                {one.id !== SHELL && <Icon name="robot" />}
+                {one.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
       <button className="slot__open" onClick={() => onOpen(on)}>{t("face.open")}</button>

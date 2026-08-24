@@ -521,6 +521,7 @@ export const de: Translation = {
     "face.panes.one": "{n} Bereich", "face.panes.other": "{n} Bereiche",
     "face.pages": "Seiten",
     "face.page": "Seite {n}",
+    "face.whichStart": "Womit soll dieses Feld geöffnet werden?",
     "face.open": "Hier ein Terminal öffnen",
     "face.openHere": "Platz für einen weiteren Bereich in diesem Projekt",
     "face.whichFolder": "In welchem Ordner arbeitet dieser Bereich?",

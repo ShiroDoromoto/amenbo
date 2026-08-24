@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Fake Viewer
+Comment=Records what it is opened with, and nothing else
+Exec=/opt/drive/fake-app.sh viewer %f
+MimeType=text/markdown;text/plain;
+Terminal=false
+Icon=text-x-generic

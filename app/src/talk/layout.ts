@@ -48,14 +48,16 @@ export const MAX_PAGES = 9;
 export type SavedLayout = {
   count: number;
   nextId: number;
-  /** The project whose panes the face was showing. It is read by the window that has no rail to ask
-   *  on (`../talk.ts`); this face takes its own from the ledger, so nothing here reads it back. */
+  /** The project whose panes the face was showing. It answers for the window the terminal was split
+   *  out into, which has no ledger to have taken one from — and only where the arrangement came back
+   *  with no panes in it, since a pane names its own project (`../shell/TerminalFace`). */
   project?: number;
   frames: { id: string; project?: number; folder?: string }[];
-  /** The frame the window split out of this face draws — the one being worked in when the
-   *  arrangement was kept, which is the pane a person splits out (`AMB-D-753`). It is read by that
-   *  window and never by this face: which pane is being worked in *now* is this face's own state,
-   *  and reading a kept one back would move the person's place on the strength of an old write. */
+  /** The pane being worked in when the arrangement was kept. It is what the window split out of
+   *  this face comes up on, so the reader lands where they left rather than on the first place of
+   *  the first project (`AMB-D-753`). Read by that window and never by the board: which pane is
+   *  being worked in *now* is the board's own state, and reading a kept one back would move the
+   *  person's place on the strength of an old write. */
   splitOut?: string;
 };
 
@@ -328,9 +330,9 @@ export function setCount(layout: Layout, count: Count): Layout {
  * nothing is started until somebody presses.
  *
  * **The project this face is on goes with it**, and is the one part of the shape this face never
- * reads back (`restored`). It is written for the window with no rail: a terminal split out into one
- * of its own has nobody to have asked it which project it is drawing, so what it opens as is the
- * project the board was on (`../talk.ts`).
+ * reads back (`restored`). It is written for the window with no ledger: a terminal split out into
+ * one of its own has nobody to have asked it which project it is drawing, so an arrangement with no
+ * panes in it opens as the project the board was on (`../talk.tsx`).
  */
 export function laidOut(layout: Layout): SavedLayout {
   return {
@@ -342,9 +344,8 @@ export function laidOut(layout: Layout): SavedLayout {
       project: frame.project,
       ...(frame.folder === null ? {} : { folder: frame.folder }),
     })),
-    // The pane being worked in, written down for the window that has no rail: splitting the terminal
-    // out takes the pane the person is in, and a window built by a launch rather than by that press
-    // has nobody left to ask which one that was.
+    // The pane being worked in, written down for the window the terminal is split out into: the
+    // press says nothing, so where the reader was is theirs to read back out of the shape.
     ...(layout.focus === null ? {} : { splitOut: layout.focus }),
   };
 }

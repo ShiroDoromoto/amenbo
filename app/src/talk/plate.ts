@@ -51,13 +51,13 @@ export type Plate = {
 /**
  * Put a label above a pane and keep it there.
  *
- * `lang` is asked each time rather than taken once: the board knows the reader's language from the
- * snapshot, and the split-out window learns it from a question it asks as it comes up, so neither can
- * hand over a settled answer at the moment the pane is built.
+ * `lang` is asked each time rather than taken once: what the reader's language is comes out of the
+ * snapshot, which is read as the window comes up — so the answer is not settled at the moment a pane
+ * is built.
  *
  * `frame` is which of the arrangement's places this pane is in (`./layout`), because the name on the
- * row belongs to the place rather than to the session (`./frames`). The split-out window is one pane
- * and has only ever had one frame, so it takes the default.
+ * row belongs to the place rather than to the session (`./frames`). A lone pane that has never been
+ * told which place it is takes the first of them.
  *
  * `onWaiting` is told whenever the answer to "is a turn standing in this pane" changes. **A turn
  * stands for two reasons and neither of them is silence** (`AMB-D-748`, `AMB-T-3610`): the agent said
@@ -69,9 +69,9 @@ export type Plate = {
  * It is said from here because the session map and what the ledger answered are both here, and the
  * callers who want it are the shell's: with the terminal behind the other face neither this label nor
  * the dot on its page can be seen at all, so the badge on the face switch and the dots on the pages
- * are drawn from this instead (`../shell/terminalBadge`, `../shell/TerminalFace`). The split-out
- * window passes nothing — its label is on screen already. The change is what is reported, not the
- * statement: an agent at work says a great deal and almost none of it moves the answer.
+ * are drawn from this instead (`../shell/terminalBadge`, `../shell/TerminalFace`). The change is what
+ * is reported, not the statement: an agent at work says a great deal and almost none of it moves the
+ * answer.
  */
 export function mountPlate(
   host: HTMLElement,
@@ -86,8 +86,8 @@ export function mountPlate(
   let sessions: Sessions = NO_SESSIONS;
   let names: FrameNames = new Map();
   // The folder this pane's terminal was started in. It is what the row is headed with until the frame
-  // is named, and it is kept rather than read from the arrangement because this label is drawn in the
-  // split-out window too, which holds no arrangement (`../talk.ts`).
+  // is named, and it is kept here rather than read back out of the arrangement: what the row says is
+  // about the session in front of the reader, and a place is not one.
   let folder: string | null = null;
   let held: Held[] = [];
   let finished = 0;

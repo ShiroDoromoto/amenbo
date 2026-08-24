@@ -1,0 +1,239 @@
+# The window a terminal is split out into holds the terminal face whole — every pane, the rail, the
+# split and the pages — and comes up on the pane the person was working in.
+#
+# `put-the-terminal-on-its-own-screen` walks the same control on a board with one pane on it, and one
+# pane is the shape everything this road is about is invisible in. A window that carried one pane out
+# carries the right one where there is only one, and a window that came up on the first page comes up
+# in the right place where there is only one page. **Neither of them is what a person has on their
+# screen**: a board holds several panes over several pages, and what "put the terminal on the other
+# display" means is that all of it goes.
+#
+# ── What breaks without this road ────────────────────────────────────────────────────────────────
+# A window that took one pane still looks like a window that worked. It draws a terminal, the line
+# typed into it is on it, and nothing on the screen says the other two panes are unreachable until
+# the reader goes looking for them — by which time they have moved the window to the second display
+# and started working. What they find then is a terminal they cannot add a pane to, page away from or
+# split, and the only way back to the panes they left is folding the whole app into one window again.
+#
+# ── Why the panes carry lines ────────────────────────────────────────────────────────────────────
+# Every pane is typed into for the reason every road that speaks in a pane types: the line is the
+# reader's own words, so it is on the screen because a person put it there and not because the
+# interface drew it — which is what lets a road tell one terminal from another in any language. Three
+# of them, so "the page the reader was on" is a page that is neither the first nor the last.
+#
+# ── Why the panes are one to a page ──────────────────────────────────────────────────────────────
+# One pane to a page is what makes the pages worth reading: with three pages, the window coming up on
+# the second is a fact about where the reader was rather than an accident of there being only one
+# place to come up on. The split is set back to four at the end for the same reason in reverse — a
+# page that draws all three at once is what says the panes came over as panes and not as a picture of
+# one.
+#
+# ── Why it folds back ────────────────────────────────────────────────────────────────────────────
+# The shape a machine last used the app in is remembered where a throwaway store does not reach, so a
+# road that walked away split out would hand whoever owns the machine two windows they never asked
+# for. The last steps are the road's own tidying as much as they are the half of the decision they
+# prove.
+#
+# The world is a project with one folder, so nothing is asked about where a pane works — that
+# question is `choose-the-folder-a-split-out-window-works-in`'s and
+# `open-a-pane-where-a-project-keeps-more-than-one-folder`'s. What the panes run is the reader's own
+# shell, and a terminal is not a record: there is no work on the board to stand up.
+id: take-the-whole-terminal-to-the-other-screen
+title: The window the terminal is split out into holds the whole face, and opens on the pane that was being worked in
+description: >
+  Open three panes one to a page and get a line onto each, go back to the middle one, and split the
+  terminal out. The window that opens comes up on that pane, and the other two are reachable in it by
+  the pages beside them — then set it to four panes to see all three standing on one page, which is
+  the split control working in the second window too. Fold back, and the board has them all again.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Sawmill
+    as: sawmill
+
+  # One, so nothing is asked about where a pane works — every press on an empty frame opens there.
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: log-yard
+      project: sawmill
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # Pressed rather than assumed: which project the face comes up on is the run's business, and it is
+  # the project whose panes the split-out window draws.
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Sawmill
+
+  # Set while nothing is open, so what follows is pages filling rather than pages cut out of panes
+  # already standing.
+  - type: action
+    domain: terminal
+    op: set-panes
+    with:
+      count: 1
+
+  # The first pane, and down to a plain shell — what an agent does with a line typed at it is the
+  # agent's own, and these lines have to sit where they were put.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: face
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the first page
+
+  # The second and the third, each landing on a page of its own because a page holds one.
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: rail
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the middle page
+
+  - type: action
+    domain: terminal
+    op: open-pane
+    with:
+      from: rail
+
+  - type: action
+    domain: terminal
+    op: open-shell
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      text: SCENARIO the last page
+
+  # Back to the middle one, which is where the reader is when they press. The line is a second one
+  # and names nothing: what it does is put them in that pane.
+  - type: action
+    domain: terminal
+    op: go-page
+    with:
+      page: 2
+
+  - type: action
+    domain: terminal
+    op: type-line
+    with:
+      shows: SCENARIO the middle page
+      text: SCENARIO still the middle page
+
+  # Out into a window of its own. Every step from here names its window, this one included, because
+  # from here there are two: the board keeps the product's name alone, and the other carries it with
+  # a dash and a word after it. The word is in the run's own language, so the window is named below by
+  # the part of its title every language keeps.
+  - type: action
+    domain: terminal
+    op: split-out
+    window: Amenbo
+
+  # **It came up where the reader was.** A window that opened on the first page would draw a terminal
+  # and look exactly like this one, and the reader would be somewhere they did not ask to be.
+  - type: assert
+    domain: terminal
+    op: pane
+    window: "Amenbo — "
+    with:
+      shows: SCENARIO still the middle page
+
+  # And the pages are there, which is what says the other panes came over rather than being left on a
+  # board nobody is looking at. Read from the far one back, so a window that could only reach forward
+  # is caught too.
+  - type: action
+    domain: terminal
+    op: go-page
+    window: "Amenbo — "
+    with:
+      page: 3
+
+  - type: assert
+    domain: terminal
+    op: pane
+    window: "Amenbo — "
+    with:
+      shows: SCENARIO the last page
+
+  - type: action
+    domain: terminal
+    op: go-page
+    window: "Amenbo — "
+    with:
+      page: 1
+
+  - type: assert
+    domain: terminal
+    op: pane
+    window: "Amenbo — "
+    with:
+      shows: SCENARIO the first page
+
+  # And the split, which is the last of the three controls a window carrying one pane would have lost.
+  # Four is a ceiling rather than a number of boxes to fill, so what stands on the page is the three
+  # panes and the one way in beside them.
+  - type: action
+    domain: terminal
+    op: set-panes
+    window: "Amenbo — "
+    with:
+      count: 4
+
+  - type: assert
+    domain: terminal
+    op: frames
+    window: "Amenbo — "
+    with:
+      count: 3
+      empty: 1
+
+  - type: action
+    domain: terminal
+    op: fold-back
+    window: "Amenbo — "
+
+  # One window again, with all three panes on its face — each still drawing its own session, which is
+  # what says the move cost none of them anything.
+  - type: assert
+    domain: terminal
+    op: frames
+    with:
+      count: 3
+      empty: 1
+
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO still the middle page

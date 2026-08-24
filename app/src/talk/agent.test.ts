@@ -131,7 +131,7 @@ async function put(answer: WakeDto, project: number | null = null): Promise<HTML
   hoisted.answers = [answer];
   const root = document.createElement("div");
   document.body.replaceChildren(root);
-  await mountAgentFrame(root, "en", events, "pane", {}, project);
+  await mountAgentFrame(root, "en", events, {}, project);
   return root;
 }
 
@@ -243,8 +243,7 @@ describe("a frame with no folder asks for one, and asks for nothing else", () =>
   });
 });
 
-// The window split out of the board draws one pane and has no rail, so nobody asked it on its way in
-// which project it is drawing. It is told by the arrangement the board left (`../talk.ts`), and from
+// A frame is told which project it is on by the face it sits on (`../shell/TerminalFace`), and from
 // there it keeps the rule that face keeps: a pane works in one of its project's folders and no other.
 describe("a window told which project it is on asks among that project's folders and no others", () => {
   it("offers the project's folders, and never the machine's", async () => {

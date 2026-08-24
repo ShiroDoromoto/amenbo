@@ -29,9 +29,8 @@ import type { SavedLayout } from "./layout";
 /** Who is naming a frame. Ranked in the store, lowest first. */
 export type NamedBy = "typed" | "session" | "person";
 
-/** The frame the split-out window's one pane is. That window is a single pane by construction
- *  (`AMB-D-753`), so it is always the first of the arrangement's places; the board's face has the
- *  rest of them (`./layout`), and keeping an arrangement across runs is `AMB-T-3607`'s. */
+/** The first of the arrangement's places (`./layout`) — where a lone pane sits when nobody has said
+ *  which of them it is drawing. */
 export const ONLY_FRAME = "1";
 
 /** Frame → what it is called. */

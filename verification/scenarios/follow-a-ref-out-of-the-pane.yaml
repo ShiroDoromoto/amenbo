@@ -131,26 +131,14 @@ steps_gui:
     domain: terminal
     op: open-shell
 
-  # Named through the layer rather than by a line typed in, because the name is wanted for what it
-  # does to the window and not for what it puts on the screen: a named frame is what the split-out
-  # window carries in its title bar, and from the split on every step has to say which window it is
-  # in. The ledger's window needs no such naming — it is called after the app, in the one word that is
-  # the same in every language the interface is drawn in.
-  - type: action
-    domain: terminal
-    op: say
-    with:
-      verb: name
-      text: SCENARIO the pressing pane
-
-  - type: assert
-    domain: terminal
-    op: label
-    with:
-      shows: SCENARIO the pressing pane
-
-  # Named, this step included: it is shot after it has been carried out, and by then there are two
-  # windows for a shot to be of. What it is evidence of is the board the pane left.
+  # From the split on every step has to say which window it is in. The ledger's window is called after
+  # the app, in the one word that is the same in every language the interface is drawn in; the other
+  # holds the whole terminal face rather than one pane of it, so it is not named after anything on the
+  # screen — it carries that same word with a dash and a word after it, and the word after is in the
+  # run's own language. So it is named below by the part of its title every language keeps.
+  #
+  # This step is shot after it has been carried out, and by then there are two windows for a shot to
+  # be of. What it is evidence of is the board the pane left.
   - type: action
     domain: terminal
     op: split-out
@@ -163,14 +151,14 @@ steps_gui:
   - type: action
     domain: terminal
     op: run
-    window: SCENARIO the pressing pane
+    window: "Amenbo — "
     with:
       command: amenbo task list --actor ai
 
   - type: action
     domain: terminal
     op: press-ref
-    window: SCENARIO the pressing pane
+    window: "Amenbo — "
     with:
       target: frames
 
@@ -201,7 +189,7 @@ steps_gui:
   - type: action
     domain: terminal
     op: run
-    window: SCENARIO the pressing pane
+    window: "Amenbo — "
     with:
       command: amenbo task list --actor ai | cat
 
@@ -210,7 +198,7 @@ steps_gui:
   - type: action
     domain: terminal
     op: press-ref
-    window: SCENARIO the pressing pane
+    window: "Amenbo — "
     with:
       target: nightly
 
@@ -238,7 +226,7 @@ steps_gui:
   - type: action
     domain: terminal
     op: run
-    window: SCENARIO the pressing pane
+    window: "Amenbo — "
     with:
       command: echo "SCENARIO the frames, the glass, the cold nights and everything else the whole reseal has been waiting on since the autumn is written down in <ref>"
       target: frames
@@ -246,7 +234,7 @@ steps_gui:
   - type: action
     domain: terminal
     op: press-ref
-    window: SCENARIO the pressing pane
+    window: "Amenbo — "
     with:
       target: frames
       folded: true
@@ -274,4 +262,4 @@ steps_gui:
   - type: action
     domain: terminal
     op: fold-back
-    window: SCENARIO the pressing pane
+    window: "Amenbo — "

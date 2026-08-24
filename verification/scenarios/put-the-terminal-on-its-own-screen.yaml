@@ -13,7 +13,7 @@
 # somebody at a shell.
 #
 # ── What the line is for ─────────────────────────────────────────────────────────────────────────
-# The road types one line into the terminal and then follows it. That line does three things at once,
+# The road types one line into the terminal and then follows it. That line does two things at once,
 # and each is why it is written rather than something the interface says:
 #
 #  - It is **the reader's own words.** Every other word on this face belongs to the interface, so a
@@ -23,9 +23,13 @@
 #    difference is the whole of the decision this road defends: switching faces, splitting the window
 #    out and folding it back must all leave the process alone, and a reader with an agent running in
 #    the pane is who pays if one of them does not.
-#  - It is **the window's name.** The first line sent into a pane names its frame, and a named frame
-#    is what the window's title bar carries — so `window:` below names a window by a word this road
-#    chose, rather than by a title the interface would have written in a language nobody declared.
+#
+# ── How the two windows are told apart ───────────────────────────────────────────────────────────
+# The window the terminal is split out into holds the whole face rather than one pane of it, so it is
+# not named after anything on the screen: what its bar carries is the app's own name for that window.
+# The board keeps the product's name alone and the other carries it with a dash and a word after it —
+# the word after it is in the run's own language, so `window:` below names that window by the part of
+# its title every language keeps. That is enough to stand at the right one, which is all it is for.
 #
 # ── Why it folds back at the end ─────────────────────────────────────────────────────────────────
 # The shape a machine last used the app in is remembered, and it is remembered where a throwaway
@@ -127,14 +131,14 @@ steps_gui:
   - type: assert
     domain: terminal
     op: pane
-    window: SCENARIO the same terminal
+    window: "Amenbo — "
     with:
       shows: SCENARIO the same terminal
 
   - type: action
     domain: terminal
     op: fold-back
-    window: SCENARIO the same terminal
+    window: "Amenbo — "
 
   # Folded back: one window again, and the terminal is its face once more with the same line on it.
   # Nothing names a window here, which is the other half of what this step says — the second window

@@ -37,7 +37,6 @@ vi.mock("../talk/agent", () => ({
     _host: HTMLElement,
     _lang: string,
     on: { opened: (s: string, at: string) => void },
-    _paneClass: string,
     start: PaneStart = {},
   ) => {
     on.opened(start.session ?? `s${hoisted.tell.length + 1}`, "2026-08-24T00:00:00Z");
@@ -110,7 +109,7 @@ beforeEach(async () => {
   root = createRoot(container);
   await act(async () => {
     root.render(createElement(TerminalFace, {
-      onSplitOut: () => {},
+      onWindow: () => {},
       note: null,
       onWaiting: (waiting: boolean) => told.push(waiting),
     }));

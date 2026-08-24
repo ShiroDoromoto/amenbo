@@ -275,6 +275,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
   font-size: var(--fs-sm); font-weight: 600;
 }
 .slot__open:hover { filter: brightness(1.08); }
+/* The same press before anybody has chosen, which is the first run and only it. It steps back to an
+   outline so the row above is the one lit thing in the frame — what the reader has to do is choose,
+   and the button says so in words rather than waiting to refuse a press (`../shell/EmptySlot`). */
+.slot__open:disabled {
+  background: transparent; border-color: var(--c-border); color: var(--c-text-faint);
+  cursor: default;
+}
+.slot__open:disabled:hover { filter: none; }
 
 /* The question and the row under it, kept together: the words are what say the pills are an offer, so
    they sit closer to the row than the row sits to the press that acts on it. */

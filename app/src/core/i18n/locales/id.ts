@@ -516,6 +516,7 @@ export const id: Translation = {
     "face.page": "Halaman {n}",
     "face.whichStart": "Buka panel ini dengan apa?",
     "face.open": "Buka terminal di sini",
+    "face.openPick": "Pilih satu",
     "face.openHere": "Tempat untuk satu panel lagi di proyek ini",
     "face.whichFolder": "Panel ini bekerja di folder yang mana?",
     "face.rename": "Ganti nama panel ini",

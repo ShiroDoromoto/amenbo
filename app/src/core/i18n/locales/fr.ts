@@ -534,6 +534,7 @@ export const fr: Translation = {
     "face.page": "Page {n}",
     "face.whichStart": "Avec quoi ouvrir ce volet ?",
     "face.open": "Ouvrir un terminal ici",
+    "face.openPick": "Choisissez-en un",
     "face.openHere": "De la place pour un autre volet dans ce projet",
     "face.whichFolder": "Dans quel dossier ce volet travaille-t-il ?",
     "face.rename": "Renommer ce volet",

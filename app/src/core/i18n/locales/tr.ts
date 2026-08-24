@@ -513,6 +513,7 @@ export const tr: Translation = {
     "face.page": "Sayfa {n}",
     "face.whichStart": "Bu bölme neyle açılsın?",
     "face.open": "Burada bir terminal aç",
+    "face.openPick": "Birini seçin",
     "face.openHere": "Bu projede bir bölme daha için yer",
     "face.whichFolder": "Bu bölme hangi klasörde çalışıyor?",
     "face.rename": "Bu bölmeyi yeniden adlandır",

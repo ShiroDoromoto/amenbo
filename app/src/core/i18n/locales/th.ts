@@ -516,6 +516,7 @@ export const th: Translation = {
     "face.page": "หน้า {n}",
     "face.whichStart": "จะเปิดแผงนี้ด้วยอะไร",
     "face.open": "เปิดเทอร์มินัลที่นี่",
+    "face.openPick": "เลือกสักอย่าง",
     "face.openHere": "ที่ว่างสำหรับบานหน้าต่างอีกอันในโปรเจกต์นี้",
     "face.whichFolder": "บานหน้าต่างนี้ทำงานในโฟลเดอร์ใด",
     "face.rename": "เปลี่ยนชื่อบานหน้าต่างนี้",

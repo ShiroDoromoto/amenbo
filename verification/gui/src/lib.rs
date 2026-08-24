@@ -1478,11 +1478,16 @@ impl Instructor {
                         ))
                     }
                 };
+                // The one time the row is not left as it came up. Before anybody on this machine has
+                // opened a pane there is nothing on it, and the press says so rather than opening on
+                // a guess — so the step has to say what to do about a control that will not answer.
+                // Which one is chosen is still another road's, hence "any of them".
+                let first_run = "If nothing on that row is on and the press will not answer — the first run on a machine, before anybody has opened a pane — choose any of them first, and the press comes alive; that is the only time this step chooses.";
                 let lands = match flagged(with, "asks") {
                     true => "Nothing opens: this project is bound to more than one folder, so what comes up where the pane would have been is the question of which of them it works in.",
                     false => "A pane opens there, in the folder the project is bound to, and nothing is asked.",
                 };
-                format!("{press} {lands}")
+                format!("{press} {first_run} {lands}")
             }
             // Answering that question. The row is found by the folder's name at the end of the path
             // it draws, since what the face writes on it is where the folder is and the road knows
@@ -5317,9 +5322,12 @@ steps_gui:
             lines[3]
         );
         // Both say to leave the row above the press alone: which agent a pane opens with is another
-        // road's, and a step silent about it would be walked with whatever happened to be on.
+        // road's, and a step silent about it would be walked with whatever happened to be on. Both
+        // also say what to do on the machine where nothing on it is on yet, since there the press
+        // does not answer and an operator left to work that out would mark a working face red.
         for one in [&lines[2], &lines[3]] {
             assert!(one.contains("leaving the row above that press as it came up"), "got: {one}");
+            assert!(one.contains("choose any of them first"), "got: {one}");
         }
     }
 

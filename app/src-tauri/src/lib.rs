@@ -453,6 +453,7 @@ pub fn run() {
       commands::plugin_update_apply_all,
       wake::wake_probe,
       wake::wake_remember,
+      wake::wake_chose,
       wake::wake_forget,
       wake::wake_choices,
       commands::session_work,

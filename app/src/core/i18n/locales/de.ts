@@ -523,6 +523,7 @@ export const de: Translation = {
     "face.page": "Seite {n}",
     "face.whichStart": "Womit soll dieses Feld geöffnet werden?",
     "face.open": "Hier ein Terminal öffnen",
+    "face.openPick": "Bitte wählen",
     "face.openHere": "Platz für einen weiteren Bereich in diesem Projekt",
     "face.whichFolder": "In welchem Ordner arbeitet dieser Bereich?",
     "face.rename": "Diesen Bereich umbenennen",

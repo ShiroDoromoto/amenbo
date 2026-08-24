@@ -11,10 +11,16 @@
 // read. Whatever went is one hover away. What keeps that a last resort is the other end: a reason
 // longer than a label is refused where it is said (`amenbo_core::session::WAITING_LIMIT`).
 //
-// In front of the three is the mark the pane is known by (`./moving`). It is not a fourth place and
-// takes no words: its colour says which pane this is, and its opacity says whether output is arriving.
-// Both are read at a glance and neither can push the other off the row, which is why they can share a
-// mark this small when three sentences cannot share a line.
+// In front of the three is the lamp the pane is known by (`./moving`). It is not a fourth place and
+// takes no words, and it has three faces: **lit** while output is arriving, **blinking** while a
+// person's turn is standing, and **out** the rest of the time. All three are read at a glance and none
+// can push the others off the row, which is why they can share a mark this small when three sentences
+// cannot share a line.
+//
+// **The one face that moves is the rare one.** Movement given to the commonest state would leave every
+// pane on the screen going all day, and a mark that is always moving is one nobody can look away from
+// or read anything into. A turn standing is rare, and when it happens somebody really is being called
+// — so that is where the movement goes, and being lit is a glow held still.
 //
 // **What is shown is derived or declared, never guessed** (`AMB-D-748`). The reservations come off the
 // ledger, where every write from inside a pane carries its session's id; a broken premise is
@@ -34,7 +40,7 @@
 import type { TaskCardDto } from "../bindings/bindings";
 import { iconSvg, type DrawnIcon } from "../components/Icon";
 import { statusLabel, t, tf, type Lang } from "../core/i18n";
-import { hueOf, phaseDelay, PULSE_MS } from "./moving";
+import { BLINK_MS, hueOf, phaseDelay } from "./moving";
 import type { Session } from "./sessions";
 
 /** A task the session is holding, as much of it as the label needs. */
@@ -66,13 +72,39 @@ export type Say =
   /** Nothing to say. Not "nothing is happening" — only that nothing was said. */
   | { readonly kind: "silent" };
 
-/** The mark in front of the name: which pane this is, and whether it is moving (`./moving`). */
+/** Which of the lamp's three faces it is showing. */
+export type Face =
+  /** Output is arriving. A glow, held still, in the pane's own hue. */
+  | "lit"
+  /** A person's turn is standing here. The warning colour, at the same beat and the same faintness as
+   *  the mark at the other end of the row — the two are one signal drawn twice (`./moving`). */
+  | "calling"
+  /** Neither. **Out is not away**: the lamp sinks in place rather than going, because a mark that
+   *  vanished would read as the pane having gone. Nothing is read into it (`AMB-D-748`) — a pane that
+   *  is printing nothing may be building, thinking, or waiting on somebody who has not been told. */
+  | "out";
+
+/** The lamp in front of the name: which pane this is, and which face it is on (`./moving`). */
 export type Dot = {
-  /** The frame the row belongs to. Its hue is what tells one pane from another. */
+  /** The frame the row belongs to. Its hue is what tells one pane from another — on every face but
+   *  the calling one, which leaves the hue for the colour that says come here. */
   readonly frame: string;
-  /** Whether output is arriving. Nothing is read into its being false (`AMB-D-748`). */
-  readonly moving: boolean;
+  /** Which of the three it is showing. */
+  readonly face: Face;
 };
+
+/**
+ * Which face the lamp is on.
+ *
+ * **A turn outranks the stream.** The two are not exclusive — a blocker can open on a task a pane is
+ * holding while its build prints away — and when both are true the lamp says the one a person is meant
+ * to act on. It is the same rank the row itself reads by, and it is worked out from the same answer,
+ * so the lamp and the words beside it can never come to disagree.
+ */
+export function faceOf(say: Say, moving: boolean): Face {
+  if (standsAsTurn(say)) return "calling";
+  return moving ? "lit" : "out";
+}
 
 /** The whole row. */
 export type Plate = {
@@ -252,8 +284,9 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null, lang: L
   const dot = part("dot");
   dot.setAttribute("aria-hidden", "true");
   // The turn's length, handed to the stylesheet rather than written there: it is what the phase is
-  // measured against, and the two have to be the same number or the panes beat out of step.
-  dot.style.setProperty("--pulse", `${PULSE_MS}ms`);
+  // measured against, and the two have to be the same number or the panes beat out of step. It goes on
+  // the row rather than on the lamp because the mark at the other end blinks to it too.
+  row.style.setProperty("--blink", `${BLINK_MS}ms`);
   const name = part("name");
   // The two marks are told apart in the markup because the row drops its places one at a time as the
   // pane narrows, and a mark goes with the words it belongs to (`../styles/global.css`).
@@ -263,19 +296,21 @@ export function mountNameplate(host: HTMLElement): (plate: Plate | null, lang: L
   const say = part("say");
   host.append(row);
 
-  // What the dot was doing last time. Setting the delay again on a dot that is already pulsing would
-  // start the turn over, which is the one thing the shared phase exists to prevent — so it is written
-  // only where the answer has changed, which is also the only moment it can be out of step.
-  let moving: boolean | null = null;
+  // Which face the lamp was on last time. Setting the phase again on a row that is already blinking
+  // would start the turn over, which is the one thing the shared phase exists to prevent — so it is
+  // written only where the answer has changed, which is also the only moment it can be out of step.
+  let face: Face | null = null;
 
   return (plate: Plate | null, lang: Lang) => {
     row.hidden = plate === null;
     if (plate === null) return;
     dot.style.setProperty("--dot-hue", String(hueOf(plate.dot.frame)));
-    if (plate.dot.moving !== moving) {
-      moving = plate.dot.moving;
-      dot.dataset.moving = moving ? "yes" : "no";
-      if (moving) dot.style.animationDelay = phaseDelay(Date.now());
+    if (plate.dot.face !== face) {
+      face = plate.dot.face;
+      dot.dataset.face = face;
+      // Joining where every other blinking mark already is, rather than starting where this one was
+      // noticed. The lamp and the mark on the right both read it off the row (`./moving`).
+      if (face === "calling") row.style.setProperty("--phase", phaseDelay(Date.now()));
     }
     name.textContent = plate.name ?? "";
     const middle = nowText(plate.now, lang);

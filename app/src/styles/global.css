@@ -1023,47 +1023,89 @@ button { font: inherit; color: inherit; cursor: pointer; }
    front of the words, and then as a dot on a pane that had not started. */
 .plate[hidden] { display: none; }
 
-/* The mark the pane is known by, and the one thing it can say about itself without being told
-   (see ../talk/moving.ts).
+/* The lamp the pane is known by, on one of three faces (see ../talk/nameplate.ts).
 
-   **Hue says which pane; opacity says whether it is moving.** Two readings on one mark only work while
-   they cannot be mistaken for each other, so the colour never changes with what is happening and the
-   brightness never changes with which pane it is.
+   **Hue says which pane; the face says what is happening in it.** Two readings on one mark only work
+   while they cannot be mistaken for each other, so the colour never changes with what is happening —
+   with the one exception that proves it, the calling face, which drops the pane's hue for the warning
+   colour precisely because it has stopped saying which pane this is and started saying come here.
 
-   **Stopping is going still, not going away.** A pane that has quietened keeps its dot at the resting
-   step: it is still that pane, and a mark that vanished would read as the pane having gone. */
+   **Out is not away.** A pane that has quietened keeps its lamp at the resting step: it is still that
+   pane, and a mark that vanished would read as the pane having gone.
+
+   The lamp is built of two layers, and the glow goes **over** the core rather than behind it: put
+   behind, it is covered by the parent's ground and nothing is seen at all. */
 .plate__dot {
+  position: relative;
   flex: 0 0 auto;
   align-self: center;
   width: 8px; height: 8px;
+  color: hsl(var(--dot-hue, 199) 55% var(--dot-light, 42%));
+}
+/* The core. */
+.plate__dot::before {
+  content: "";
+  position: absolute; inset: 0;
   border-radius: 50%;
-  background: hsl(var(--dot-hue, 199) 55% var(--dot-light, 42%));
-  opacity: 0.3;
+  background: currentColor;
+}
+/* The glow, laid over the core: the same colour blurred out past the edge, which brightens the middle
+   and reads as light coming off it. Off on every face but the two that are lit. */
+.plate__dot::after {
+  content: "";
+  position: absolute; inset: -4px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0;
+  filter: blur(3px);
+  pointer-events: none;
 }
 /* Lifted off a dark ground: the same hue at the light side's lightness reads as a smudge on it, and
    the resting step is the dimmest thing on the row to begin with. */
 [data-theme="dark"] .plate__dot { --dot-light: 62%; }
-/* The turn is timed from one place — `PULSE_MS`, which is also what the phase is read against
-   (../talk/moving.ts). Written here as well, the two would drift and the panes would fall out of step
-   with nothing to show for it. */
-.plate__dot[data-moving="yes"] {
-  animation: plate-pulse var(--pulse) ease-in-out infinite;
-}
-/* Opacity alone. Anything that moved the dot would push the words beside it about, and anything that
-   turned would be claiming progress rather than reporting a stream. */
-@keyframes plate-pulse {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 0.95; }
-}
-/* The pane being worked in does not pulse. A reader looking straight at the terminal can see it
-   moving; the mark is for the panes they are not looking at. */
-.slot--focused .plate__dot { animation: none; }
 
-/* Motion turned down: the same two steps, held still. What the pulse carried was the difference
-   between them, and the difference survives without the movement. */
+/* Lit — output is arriving. The glow is simply on, and stays on: what it reports is a state that
+   lasts, and a mark that moved for it would leave every pane on the screen moving all day. */
+.plate__dot[data-face="lit"]::after { opacity: 0.7; }
+
+/* Out — nothing is arriving and nobody is being called. Sunk in place, in the pane's own hue. */
+.plate__dot[data-face="out"] { opacity: 0.3; }
+
+/* Calling — a person's turn is standing here. The one face that moves, because it is the one that is
+   rare and the one that is actually asking for somebody.
+
+   The colour is the warning colour, the same one the page's badge and an off-screen project's dot
+   wear: the same thing is said three times as the reader gets closer, and it is said in one colour.
+
+   **What moves is the opacity and nothing else.** Anything that shifted the lamp would push the words
+   beside it about; and a colour carried across a blur cannot be interpolated, so a fade written as a
+   change of colour comes out as a jump between two of them.
+
+   The beat and the phase are both the row's — `BLINK_MS` and `phaseDelay` (../talk/moving.ts) — so
+   that this and the mark at the other end of the row fall together rather than reading as two things
+   being asked. */
+.plate__dot[data-face="calling"] {
+  color: var(--c-heed);
+  animation: plate-blink var(--blink) infinite;
+  animation-delay: var(--phase, 0s);
+}
+.plate__dot[data-face="calling"]::after {
+  opacity: 0.7;
+  animation: plate-blink-glow var(--blink) infinite;
+  animation-delay: var(--phase, 0s);
+}
+@keyframes plate-blink { 50% { opacity: 0.25; } }
+@keyframes plate-blink-glow { 50% { opacity: 0.12; } }
+
+/* Motion turned down: the calling face held at its brightest. What the blink carried was "come here",
+   and the warning colour on a lamp that is otherwise the pane's own carries it without the movement. */
 @media (prefers-reduced-motion: reduce) {
-  .plate__dot { animation: none; opacity: 0.25; }
-  .plate__dot[data-moving="yes"] { animation: none; opacity: 0.95; }
+  .plate__dot[data-face="calling"],
+  .plate__dot[data-face="calling"]::after,
+  .plate[data-say="waiting"] .plate__mark--say,
+  .plate[data-say="premise"] .plate__mark--say {
+    animation: none;
+  }
 }
 
 /* The pane's name. It belongs to the frame, so it is the one part of the row that does not move when
@@ -1119,6 +1161,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .plate[data-say="waiting"] .plate__say,
 .plate[data-say="premise"] .plate__say {
   color: var(--c-text);
+}
+/* The mark in front of those words blinks, to the same beat and the same faintness as the lamp at the
+   far end of the row — the two are one signal drawn twice, and drawn to two rhythms they would read as
+   two. It is the mark and not the words: where the pane is narrow the words are not drawn at all, and
+   what is left has to go on saying that somebody is needed (`../talk/nameplate.ts`). */
+.plate[data-say="waiting"] .plate__mark--say,
+.plate[data-say="premise"] .plate__mark--say {
+  animation: plate-blink var(--blink) infinite;
+  animation-delay: var(--phase, 0s);
 }
 
 /* A pane too narrow for three things drops them from the right, and the name and the ⏸ are what is

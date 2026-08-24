@@ -509,7 +509,6 @@ export const vi: Translation = {
     "face.rail": "Khung",
     "face.projects": "Dự án",
     "face.sessions": "Phiên",
-    "face.addPane": "Mở",
     "face.paneCount": "Số khung trên màn hình",
     "face.panes.other": "{n} khung",
     "face.pages": "Trang",

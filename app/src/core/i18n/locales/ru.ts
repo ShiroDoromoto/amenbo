@@ -535,7 +535,6 @@ export const ru: Translation = {
     "face.rail": "Панели",
     "face.projects": "Проекты",
     "face.sessions": "Сессии",
-    "face.addPane": "Открыть",
     "face.paneCount": "Панелей на экране",
     "face.panes.one": "{n} панель", "face.panes.few": "{n} панели", "face.panes.many": "{n} панелей", "face.panes.other": "{n} панели",
     "face.pages": "Страницы",

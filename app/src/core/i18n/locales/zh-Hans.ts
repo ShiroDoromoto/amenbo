@@ -506,7 +506,6 @@ export const zhHans: Translation = {
     "face.rail": "窗格",
     "face.projects": "项目",
     "face.sessions": "会话",
-    "face.addPane": "打开",
     "face.paneCount": "屏幕上的窗格数",
     "face.panes.other": "{n} 个",
     "face.pages": "页",

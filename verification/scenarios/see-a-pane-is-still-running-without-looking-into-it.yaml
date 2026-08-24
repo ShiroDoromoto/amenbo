@@ -85,12 +85,13 @@ steps_gui:
       text: SCENARIO nothing more is coming
 
   # The second pane, which is here to take the working place away rather than to be used. It is opened
-  # from the rail, in the project's folder, and becomes the pane being worked in.
+  # from the empty frame beside the first, in the project's folder, and becomes the pane being worked
+  # in.
   - type: action
     domain: terminal
     op: open-pane
     with:
-      from: rail
+      from: face
 
   # The mark, on the pane nobody is in. Nothing else on the screen separates a terminal that is
   # running from the picture one leaves behind.

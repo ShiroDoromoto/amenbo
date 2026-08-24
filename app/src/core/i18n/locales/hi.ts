@@ -506,7 +506,6 @@ export const hi: Translation = {
     "face.rail": "पैन",
     "face.projects": "परियोजनाएँ",
     "face.sessions": "सत्र",
-    "face.addPane": "खोलें",
     "face.paneCount": "स्क्रीन पर पैन",
     "face.panes.one": "{n} पैन", "face.panes.other": "{n} पैन",
     "face.pages": "पृष्ठ",

@@ -1462,8 +1462,12 @@ impl Instructor {
             // the step says to leave it alone: what this is about is the pane appearing, and which
             // agent it runs is another road's (`open-shell`). That is the whole of it — the two ways in differ only in what happens
             // before the press. From the face there is nothing before it: the empty frame is already
-            // on the page. From the rail there is one press first, which opens nothing — it goes to
+            // on the page. From the strip there is one press first, which opens nothing — it goes to
             // where a pane would land, and the empty frame is what is waiting there.
+            //
+            // The strip is what a full page has instead of an empty frame, so a road only reaches it
+            // where the page it stands on is full: on a page with room the way in is the frame, and
+            // there is no second control to press.
             //
             // Neither names a page: where a pane lands is the project's arithmetic and not the road's,
             // and a step that named one would be a road asserting it from the wrong end.
@@ -1475,10 +1479,10 @@ impl Instructor {
             (Domain::Terminal, "open-pane") => {
                 let press = match req(with, "from")? {
                     "face" => "On the terminal face, find the empty frame — the one box on the page that is not a terminal, at the first gap in it — and press what opens a terminal in it, leaving the row above that press as it came up.",
-                    "rail" => "In the list beside the panes, press the way in beside the heading over the panes — the one control on that heading's row. Nothing opens: the screen goes to the page a pane would land on, which is the page with room in it. On the empty frame waiting there, press what opens a terminal in it, leaving the row above that press as it came up.",
+                    "strip" => "On the terminal face, which is full, press the thin strip standing beside the panes at the edge of the page — the one control there that is not a pane. Nothing opens: the screen goes to the page a pane would land on, which is the page with room in it, brought into being where every one of them is full. On the empty frame waiting there, press what opens a terminal in it, leaving the row above that press as it came up.",
                     other => {
                         return Err(format!(
-                            "action `open-pane` does not know the way in `{other}` — it is face or rail"
+                            "action `open-pane` does not know the way in `{other}` — it is face or strip"
                         ))
                     }
                 };
@@ -5348,8 +5352,8 @@ steps_gui:
 
     /// The moves a page is worked with, and the two ways a pane is opened. What the road has to be
     /// able to say is which control was pressed: a pane is opened by pressing the empty frame either
-    /// way, and the rail's way in is a press before it that only moves the screen, so a step that
-    /// named neither would leave an operator to pick between them.
+    /// way, and the strip a full page draws is a press before it that only moves the screen, so a
+    /// step that named neither would leave an operator to pick between them.
     #[test]
     fn the_page_moves_name_the_control_they_press() {
         let s = load(r#"
@@ -5371,7 +5375,7 @@ steps_gui:
   - type: action
     domain: terminal
     op: open-pane
-    with: { from: rail }
+    with: { from: strip }
 "#);
         let mut ins = Instructor::new();
         let lines: Vec<String> =
@@ -5384,10 +5388,10 @@ steps_gui:
             lines[2]
         );
         assert!(
-            lines[3].contains("the heading over the panes")
+            lines[3].contains("the thin strip")
                 && lines[3].contains("Nothing opens")
                 && lines[3].contains("the empty frame waiting there"),
-            "the rail's way in moves the screen, and the pane opens at the empty frame: {}",
+            "the strip moves the screen, and the pane opens at the empty frame: {}",
             lines[3]
         );
         // Both say to leave the row above the press alone: which agent a pane opens with is another
@@ -5418,7 +5422,7 @@ steps_gui:
             window: None,
         };
 
-        for from in ["face", "rail"] {
+        for from in ["face", "strip"] {
             let said = Instructor::new().render(&open(from, true)).unwrap();
             assert!(said.contains("Nothing opens"), "the press opens no pane: {said}");
             assert!(said.contains("which of them it works in"), "and what it meets instead: {said}");
@@ -5489,7 +5493,7 @@ steps_gui:
             window: None,
         };
         let err = Instructor::new().render(&step).unwrap_err();
-        assert!(err.contains("face or rail"), "got: {err}");
+        assert!(err.contains("face or strip"), "got: {err}");
     }
 
     /// What the empty frame will open with is read on the frame rather than on the pane it has not

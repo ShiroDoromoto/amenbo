@@ -506,7 +506,6 @@ export const nl: Translation = {
     "face.rail": "Deelvensters",
     "face.projects": "Projecten",
     "face.sessions": "Sessies",
-    "face.addPane": "Openen",
     "face.paneCount": "Deelvensters op het scherm",
     "face.panes.one": "{n} deelvenster", "face.panes.other": "{n} deelvensters",
     "face.pages": "Pagina's",

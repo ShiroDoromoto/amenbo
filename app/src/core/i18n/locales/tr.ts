@@ -506,7 +506,6 @@ export const tr: Translation = {
     "face.rail": "Bölmeler",
     "face.projects": "Projeler",
     "face.sessions": "Oturumlar",
-    "face.addPane": "Aç",
     "face.paneCount": "Ekrandaki bölme sayısı",
     "face.panes.one": "{n} bölme", "face.panes.other": "{n} bölme",
     "face.pages": "Sayfalar",

@@ -571,8 +571,9 @@ before anything can be found there at all.
 The face's own arrangement is in that vocabulary as well, because on this face the arrangement is
 most of what there is: `set-panes` re-cuts the frames into pages of the count it names, `go-page` moves
 the whole screen to another page, `go-project` moves it to another project's panes altogether, and
-`open-pane` starts a terminal where there is not one yet — `from: face` at the one control a screen
-with nothing open on it has, `from: rail` beside the shown project's name in the list. What they are
+`open-pane` starts a terminal where there is not one yet — `from: face` at the empty frame a page with
+room draws, `from: strip` at the thin strip a full page draws instead, which opens nothing itself and
+moves the screen to the page with room, where that same frame is waiting. What they are
 walked for is what they must not do. Every one of those moves re-cuts or replaces what is drawn, and
 a pane that left the screen is a pane still running behind it.
 `come-back-to-the-terminal-a-page-turn-took-away` is the road for the two that re-cut. It types a

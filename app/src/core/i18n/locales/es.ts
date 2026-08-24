@@ -527,7 +527,6 @@ export const es: Translation = {
     "face.rail": "Paneles",
     "face.projects": "Proyectos",
     "face.sessions": "Sesiones",
-    "face.addPane": "Abrir",
     "face.paneCount": "Paneles en pantalla",
     "face.panes.one": "{n} panel", "face.panes.many": "{n} paneles", "face.panes.other": "{n} paneles",
     "face.pages": "Páginas",

@@ -528,7 +528,6 @@ export const ptBR: Translation = {
     "face.rail": "Painéis",
     "face.projects": "Projetos",
     "face.sessions": "Sessões",
-    "face.addPane": "Abrir",
     "face.paneCount": "Painéis na tela",
     "face.panes.one": "{n} painel", "face.panes.many": "{n} painéis", "face.panes.other": "{n} painéis",
     "face.pages": "Páginas",

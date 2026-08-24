@@ -608,6 +608,12 @@ impl Instructor {
     /// the shot, and the instruction says so and says for how long. The shot is still kept, for the
     /// half of the row a picture does carry — which pane the mark belongs to.
     ///
+    /// `files handed-over` is a `Review` on all three of its doors, and further out than most: what
+    /// settles it is not on Amenbo's window at all. A file handed to the machine leaves through an
+    /// application that came forward, or an operating system's own chooser drawn by the system, and
+    /// the run shoots the window under test. The eye that closes it is the operator's at the moment
+    /// they pressed the item, which is why each of the three lines asks them to say what they saw.
+    ///
     /// `dimension key` is read, and it is the cleanest reading on these roads. A key is neither a word
     /// of the interface nor a title drawn twice over — it is what a reader types for somewhere outside
     /// Amenbo — so it stands on the shot in the one field it was typed into, and nowhere else.
@@ -1366,6 +1372,24 @@ impl Instructor {
             (Domain::Files, "back") =>
                 "Press the way back out of the file. The column returns to its three sections."
                     .to_string(),
+            // Handing the file to the machine. The menu is a right-click and is drawn on files alone —
+            // a folder's row opens a level — so the step names a row the way every other one here
+            // does, and says where the menu comes up, since nothing else on this face does.
+            (Domain::Files, "menu") => format!(
+                "Come back to Amenbo if a hand-over left something else in front of it. Then in {}, right-click the row \"{}\": a short menu of what can be done with that file comes up where the pointer is.",
+                section(with)?,
+                req(with, "name")?
+            ),
+            // One item pressed. The item is described rather than quoted: its words are the
+            // interface's, and the run's language is whatever the machine is set to.
+            (Domain::Files, "hand-over") => match door(with)? {
+                "usual" => "In that menu, press the item that opens the file with the application this machine already opens that kind of file with."
+                    .to_string(),
+                "pick" => "In that menu, press the item that opens the file with an application you pick."
+                    .to_string(),
+                // `door` has already turned away anything that is not one of the three.
+                _ => "In that menu, press the item that shows the file in the file manager.".to_string(),
+            },
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -2192,6 +2216,17 @@ impl Instructor {
                     req(with, "name")?
                 ),
             },
+            // What the hand-over left. Every one of the three is a `Review`, and for the same reason:
+            // what settles it is not on Amenbo's window, which is the window the run shoots. The
+            // operator standing at the screen is the one who saw it, so the line asks them for it.
+            (Domain::Files, "handed-over") => match door(with)? {
+                "usual" => "Confirm the machine took the file: the menu has gone, something came forward with the file open in it, and Amenbo drew nothing about the hand-over. Which application came forward, and what it does with the file, is not this road's — go no further than something having opened. The shot is of Amenbo's own window rather than of what came forward, so say what you saw."
+                    .to_string(),
+                "pick" => "Confirm something to choose an application from is on the screen. Which shape it takes belongs to the machine — on some it is a list of applications drawn where the menu was, on others the operating system's own chooser — and either one is right: what is read here is that a choice arrived, never who drew it. Leave it without choosing, and say which of the two you saw."
+                    .to_string(),
+                _ => "Confirm the file manager came forward with the file standing out in the folder it is in. Go no further into it — that the file reached it is the whole of this reading — and, the shot being of Amenbo's own window, say what you saw."
+                    .to_string(),
+            },
             _ => return Err(unmapped(domain, op)),
         })
     }
@@ -2381,6 +2416,19 @@ fn section(with: &Args) -> Result<&'static str, String> {
         Some("tree") => Ok("the folder's own section"),
         Some(other) => Err(format!("`section` does not know `{other}` — it is pointed, changed or tree")),
         None => Err("arg `section` must say which of the three sections".to_string()),
+    }
+}
+
+/// Which of the three ways out of a file's menu a step is about. They are named by what each hands the
+/// file to rather than by the item's words, for the reason `section` and `note` are: the words are the
+/// interface's own, and the run's language is whatever the machine is set to.
+fn door(with: &Args) -> Result<&'static str, String> {
+    match with.get("door").and_then(|v| v.as_str()) {
+        Some("usual") => Ok("usual"),
+        Some("pick") => Ok("pick"),
+        Some("manager") => Ok("manager"),
+        Some(other) => Err(format!("`door` does not know `{other}` — it is usual, pick or manager")),
+        None => Err("arg `door` must say which of the three ways out of the menu".to_string()),
     }
 }
 
@@ -2821,6 +2869,61 @@ steps_gui:
             ins.expectation(&steps[3]),
             Some(Expectation { text: "Raise the tunnel".to_string(), present: true })
         );
+    }
+
+    /// **The three ways out of a file's menu are three different sentences, and none of them is shot.**
+    /// What the operator is told to press has to name one item and not another — the three sit next to
+    /// each other on one menu — and what they are then asked to confirm cannot be read off the picture
+    /// the run takes: an application that came forward, or the operating system's own chooser, is not on
+    /// Amenbo's window. An expectation appearing on any of the three would send OCR hunting Amenbo's
+    /// window for words that were never going to be there, and fail the road over the harness.
+    #[test]
+    fn each_way_out_of_a_files_menu_is_its_own_line_and_none_of_them_is_read_off_the_shot() {
+        let s = load(r#"
+id: x
+title: y
+steps_gui:
+  - type: action
+    domain: files
+    op: menu
+    with: { name: watering.md, section: tree }
+  - type: action
+    domain: files
+    op: hand-over
+    with: { door: usual }
+  - type: assert
+    domain: files
+    op: handed-over
+    with: { door: usual }
+  - type: action
+    domain: files
+    op: hand-over
+    with: { door: pick }
+  - type: assert
+    domain: files
+    op: handed-over
+    with: { door: pick }
+  - type: action
+    domain: files
+    op: hand-over
+    with: { door: manager }
+  - type: assert
+    domain: files
+    op: handed-over
+    with: { door: manager }
+"#);
+        let steps = s.steps(Driver::Gui);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> = steps.iter().map(|st| ins.render(st).unwrap()).collect();
+
+        assert!(lines[0].contains("right-click the row \"watering.md\""), "got: {}", lines[0]);
+        assert!(lines[1].contains("already opens that kind of file with"), "got: {}", lines[1]);
+        assert!(lines[3].contains("an application you pick"), "got: {}", lines[3]);
+        assert!(lines[5].contains("shows the file in the file manager"), "got: {}", lines[5]);
+
+        for i in [2, 4, 6] {
+            assert_eq!(ins.expectation(&steps[i]), None, "step {i} is not a reading of the shot");
+        }
     }
 
     /// Absent, a form reading leans the way every one of these leaned before there was anything to hide.

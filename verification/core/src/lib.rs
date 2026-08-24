@@ -1942,6 +1942,27 @@ const REGISTRY: &[OpSpec] = &[
     // so it is settled by an eye.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "openable", required: &["name"], refs: &[], strings: &["name"], binds: false },
 
+    // ── handing a file to the machine ─────────────────────────────────────────────────────────────
+    // The three ways out of this face that are not reading the file here, and all three are the
+    // machine's own: the application it already opens that kind of file with, one the reader picks
+    // for this file alone, and the file manager they keep their folders in. Amenbo chooses none of
+    // them and remembers none of them, so the road stops at the hand-over and never follows what came
+    // forward — where the file ended up is the machine's answer, not this face's.
+    //
+    // The menu is a right-click, and it is drawn on files alone: a folder's row opens a level and has
+    // nothing to hand anywhere. The row is therefore named the way every other row here is — by its
+    // name, and by the section it is standing in.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "menu", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
+    // One item on that menu pressed. `door` names which of the three rather than the words on the
+    // item, for the reason `note` and `section` are named that way: the wording is the interface's
+    // own, and which language the run's machine is in is not a road's to know.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "hand-over", required: &["door"], refs: &[], strings: &["door"], binds: false },
+    // And what the press left. No shot settles it, and that is the point rather than a gap: what a
+    // hand-over ends in is off Amenbo's own window — an application that came forward, or an
+    // operating system's chooser drawn by the system — and the run shoots the window under test. The
+    // eye that closes it is the one that was standing at the screen when the item was pressed.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "handed-over", required: &["door"], refs: &[], strings: &["door"], binds: false },
+
 ];
 
 fn lookup(kind: Kind, domain: Domain, op: &str) -> Option<&'static OpSpec> {

@@ -129,33 +129,51 @@ button { font: inherit; color: inherit; cursor: pointer; }
    **A page is a place to go**, so it is a bordered button with a number in it. Side by side as two
    rows of bare digits they were one control wearing two hats, and a reader who cannot tell which row
    is which presses one to find out. */
-.termface__counts { display: flex; gap: var(--s-2); margin-left: var(--s-2); }
+.termface__counts {
+  display: flex; margin-left: var(--s-2);
+  padding: 2px;
+  background: var(--c-surface-sunken);
+  border: 1px solid var(--c-border); border-radius: var(--r-sm);
+}
 .termface__count {
-  background: transparent; border: 0; padding: 0;
+  background: transparent; border: 0;
+  padding: 2px var(--s-2); border-radius: var(--r-sm);
   color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1.6;
 }
 .termface__count:hover { color: var(--c-text); }
-.termface__count--on { color: var(--c-text); font-weight: 600; }
+/* The one in force is the one lifted out of the well: a raised face on a sunken ground says which of
+   a fixed few is on without a second colour, and the group says the three are one choice. */
+.termface__count--on {
+  background: var(--c-surface); color: var(--c-text); font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
 
 .termface__pages {
   display: flex; gap: var(--s-1);
   padding-left: var(--s-3); border-left: 1px solid var(--c-border);
 }
 .termface__page {
-  min-width: 26px; height: 26px;
-  background: transparent; border: 1px solid var(--c-border); border-radius: 50%;
+  min-width: 29px; height: 25px;
+  background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--r-sm);
   color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
 }
-.termface__page--on { background: var(--c-accent); border-color: var(--c-accent); color: #fff; }
-/* A turn standing on a page that is not the one showing. The dot is `--c-heed` — the step that means
-   "it moves, know this while it does" (`styles/tokens.css`) — because that is exactly what it says:
-   somebody is needed there, not that anything is wrong. A page whose panes have finished wears
-   nothing at all: what is over is not something a person is needed for (`AMB-T-3610`). */
+.termface__page--on {
+  background: var(--c-accent); border-color: var(--c-accent); color: #fff; font-weight: 600;
+}
+/* The turns standing on a page that is not the one showing, counted. `--c-heed` is the step that
+   means "it moves, know this while it does" (`styles/tokens.css`) — which is exactly what it says:
+   somebody is needed there, not that anything is wrong. It sits on the corner of the number and
+   carries a ring of the band's own ground, so it reads as put on the button rather than part of it.
+   A page whose panes have finished wears nothing at all: what is over is not something a person is
+   needed for (`AMB-T-3610`). */
 .termface__page { position: relative; }
 .termface__needs {
-  position: absolute; top: -1px; right: -1px;
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--c-heed); border: 1px solid var(--c-bg);
+  position: absolute; top: -5px; right: -5px;
+  display: flex; align-items: center; justify-content: center;
+  min-width: 15px; height: 15px; padding: 0 4px; border-radius: 999px;
+  background: var(--c-heed); color: #fff;
+  font-size: var(--fs-xs); font-weight: 700; line-height: 1;
+  box-shadow: 0 0 0 2px var(--c-surface-2);
 }
 
 /* The rail and the panes, side by side. A column keeps the width the person gave it and the panes
@@ -186,6 +204,20 @@ button { font: inherit; color: inherit; cursor: pointer; }
   flex: 1; min-width: 0; min-height: 0;
   display: grid; gap: var(--s-2);
   padding: var(--s-3);
+}
+/* A full page has no gap to draw an empty frame in, so the way in goes beside the panes instead —
+   a strip the width of the mark it holds, which costs the page no place. The grid gives up the room
+   for it rather than the strip lying over a pane. */
+.termface__page-grid--add { position: relative; padding-right: calc(var(--s-3) + 26px + var(--s-2)); }
+.termface__addstrip {
+  position: absolute; top: var(--s-3); right: var(--s-3); bottom: var(--s-3);
+  width: 26px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px dashed var(--c-border-strong); border-radius: var(--r-lg);
+  background: transparent; color: var(--c-text-faint);
+}
+.termface__addstrip:hover {
+  border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text);
 }
 .termface__page-grid--1 { grid-template: 1fr / 1fr; }
 .termface__page-grid--2 { grid-template: 1fr / 1fr 1fr; }
@@ -220,31 +252,38 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .slot--empty {
   flex: 1; min-height: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: var(--s-2); padding: var(--s-3);
-  border: 1px dashed var(--c-border); border-radius: var(--r-md);
+  gap: var(--s-3); padding: var(--s-3);
+  border: 1.5px dashed var(--c-border-strong); border-radius: var(--r-lg);
 }
-/* The press, and the one a pane whose program ended offers again — that one stands on its own, so it
-   carries the dashed edge itself. */
+/* The press, and the one a pane whose program ended offers again. It is the only thing to do in the
+   frame it stands in, so it is drawn as the one thing to do: filled, and the accent. What is chosen
+   above it is chosen among a few; this is the press that acts on the choice. */
 .slot__open {
   flex: 0 0 auto;
-  padding: var(--s-2) var(--s-3);
-  border: 1px dashed var(--c-border); border-radius: var(--r-md);
-  background: transparent; color: var(--c-text-muted); font-size: var(--fs-sm);
+  padding: var(--s-2) var(--s-5);
+  border: 1px solid var(--c-accent); border-radius: var(--r-md);
+  background: var(--c-accent); color: #fff;
+  font-size: var(--fs-sm); font-weight: 600;
 }
-.slot--empty > .slot__open { border-style: solid; border-color: transparent; }
-.slot__open:hover { color: var(--c-text); border-color: var(--c-text-muted); }
+.slot__open:hover { filter: brightness(1.08); }
 
-/* What the terminal is opened with. Words rather than boxes, and the one in force simply the one
-   that is not dimmed — the same shape the split count wears above (`.termface__count`), because both
-   are one choice among a few and neither is a place to go. It is not drawn at all where the shell is
-   the only thing this machine can start: a row of one says nothing a reader can act on. */
-.slot__starts { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-3); }
+/* What the terminal is opened with: one pill each, and the one in force filled with the accent. They
+   are pressable and a reader has to see that they are — words alone read as a caption, and a caption
+   is not something anybody tries. Each pill holds its name on one line and the row wraps instead:
+   a name broken across two lines stops looking like one thing to press. It is not drawn at all where
+   the shell is the only thing this machine can start: a row of one says nothing a reader can act on. */
+.slot__starts { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-2); }
 .slot__start {
-  background: transparent; border: 0; padding: 0;
-  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1.6;
+  padding: var(--s-1) var(--s-3);
+  border: 1px solid var(--c-border); border-radius: 999px;
+  background: var(--c-surface); color: var(--c-text-muted);
+  font-size: var(--fs-sm); line-height: 1.6; white-space: nowrap;
 }
-.slot__start:hover { color: var(--c-text); }
-.slot__start--on { color: var(--c-text); font-weight: 600; }
+.slot__start:hover { color: var(--c-text); border-color: var(--c-border-strong); }
+.slot__start--on {
+  background: var(--c-accent-weak); border-color: var(--c-accent);
+  color: var(--c-accent-text); font-weight: 600;
+}
 
 /* The same way in with something to say: work in this project that nothing is doing any more
    (`../shell/AdriftSlot`). It is drawn as the same dashed place, because that is what it still is —
@@ -253,7 +292,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   flex: 1; min-height: 0;
   gap: var(--s-2);
   padding: var(--s-3);
-  border: 1px dashed var(--c-border); border-radius: var(--r-md);
+  border: 1.5px dashed var(--c-border-strong); border-radius: var(--r-lg);
   overflow-y: auto;
 }
 .adrift__ask { color: var(--c-text); font-size: var(--fs-sm); line-height: 1.6; }
@@ -282,7 +321,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .slot--asking {
   flex: 1; min-height: 0;
   padding: var(--s-3);
-  border: 1px dashed var(--c-border); border-radius: var(--r-md);
+  border: 1.5px dashed var(--c-border-strong); border-radius: var(--r-lg);
   overflow-y: auto;
 }
 
@@ -290,49 +329,81 @@ button { font: inherit; color: inherit; cursor: pointer; }
    for, so a project is a row a person presses and not a caption over some others.
 
    It is the ledger's sidebar in the other face's place, so it is the sidebar's ground: `--c-surface-2`
-   with a rule down its edge, full height, and the padding written the same way (`.sidebar`). Left with
-   no ground of its own it fell through to `--c-bg` and the face came out inside out — the edges sunk
-   below the middle, where every other face of this window has them above it. */
+   with a rule down its edge, full height. Left with no ground of its own it fell through to `--c-bg`
+   and the face came out inside out — the edges sunk below the middle, where every other face of this
+   window has them above it. Its width is the column's around it (`.termface__column--rail`), which is
+   what a person drags.
+
+   Two lists, each under a heading of its own, and the rail itself does not scroll: the projects take
+   what they need up to a share of the height and the panes take the rest, so a machine with many
+   projects cannot push the panes off the bottom. The padding is the lists' and the headings' rather
+   than the rail's, for the same reason — a list that scrolled inside its own padding would slide its
+   rows out from under the heading they belong to. */
 .rail {
   flex: 1 1 auto; min-width: 0; min-height: 0;
-  overflow-y: auto;
-  display: flex; flex-direction: column; gap: var(--s-2);
-  padding: var(--s-3) var(--s-2);
+  display: flex; flex-direction: column;
   background: var(--c-surface-2);
   border-right: 1px solid var(--c-border);
 }
-.rail__project { display: flex; flex-direction: column; gap: 2px; }
+/* What the list under it is. Small, spaced and quiet — it is the caption of a list a person reads
+   past, not a row to press — and it carries the way in for the list it heads. */
+.rail__head {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: var(--s-2);
+  padding: var(--s-3) var(--s-3) var(--s-1);
+}
+.rail__title {
+  flex: 1; min-width: 0; margin: 0;
+  color: var(--c-text-faint); font-size: var(--fs-xs); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.rail__list {
+  min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 0 var(--s-2) var(--s-2);
+}
+/* The projects take what they need and no more than a share of the rail; the panes take the rest.
+   A machine with a project for every folder it has ever opened must not push the panes out of
+   sight — the panes are what the face is for. */
+.rail__list--projects { flex: 0 1 auto; max-height: 44%; }
+.rail__list--panes { flex: 1 1 auto; }
+/* One project. It is the same row shape as a pane below it, because both are places to go, and it
+   is marked when it is the one on the screen: what is chosen here is what the whole face shows. */
+.rail__project {
+  display: flex; align-items: center; gap: var(--s-1);
+  padding: var(--s-1) var(--s-2); border-radius: var(--r-md);
+  background: transparent; border: 1px solid transparent;
+  color: var(--c-text); font-size: var(--fs-sm); text-align: left;
+}
+.rail__project:hover { background: var(--c-surface); }
+.rail__project--on {
+  background: var(--c-surface); border-color: var(--c-border-strong);
+  font-weight: 600; box-shadow: var(--shadow-sm);
+}
 /* A project's own line: its name, and the way to put another pane in it. They share a row because
    they are about the same project — and because the way in belongs where the project is named rather
    than at the end of its rows, where it would read as one more pane. */
-.rail__projectrow { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-2); }
-.rail__projectname {
-  display: flex; align-items: baseline; gap: var(--s-1);
-  min-width: 0; padding: 0;
-  border: 0; background: transparent; text-align: left;
-  color: var(--c-text-muted); font-size: var(--fs-xs); text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.rail__projectname:hover { color: var(--c-text); }
-/* The project the face is on. It is the heading of the rows under it, so it is the one that reads as
-   text rather than as something still to press. */
-.rail__projectname--on { color: var(--c-text); }
-/* A turn standing in a project that is not the one being shown. It is the same dot the pages wear and
-   for the same reason: somebody is needed there, and the panes that would say so are off the screen. */
+/* A turn standing in a project that is not the one being shown. It is the same colour the pages wear
+   and for the same reason: somebody is needed there, and the panes that would say so are off the
+   screen. A dot and not a count — what a reader does about a project they are not in is go to it,
+   and the number of turns waiting there does not change that (`AMB-T-3610`). */
 .rail__needs {
   flex: 0 0 auto;
   width: 7px; height: 7px; border-radius: 50%;
   background: var(--c-heed);
 }
-/* One press, and a pane is open in this project. It is drawn quietly: the rows below it are what a
-   person came to the rail for, and this is what they reach for once. */
+/* One press, and a pane is open in this project. It says what it opens: a bare `+` beside a project's
+   row was read as "add a project", which is the one thing it does not do. Drawn quietly all the same —
+   the rows below it are what a person came to the rail for, and this is what they reach for once. */
 .rail__open {
   flex: 0 0 auto;
-  padding: 0 var(--s-1);
-  border: 0; background: transparent;
-  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
+  display: inline-flex; align-items: center; gap: var(--s-1);
+  padding: var(--s-1) var(--s-2);
+  border: 1px solid var(--c-border); border-radius: var(--r-sm);
+  background: var(--c-surface);
+  color: var(--c-text-muted); font-size: var(--fs-xs); line-height: 1;
 }
-.rail__open:hover { color: var(--c-text); }
+.rail__open:hover { color: var(--c-text); border-color: var(--c-border-strong); }
 .rail__row {
   display: flex; align-items: center; gap: var(--s-1);
   padding: var(--s-1) var(--s-2); border-radius: var(--r-md);

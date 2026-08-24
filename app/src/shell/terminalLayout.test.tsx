@@ -260,6 +260,24 @@ describe("how many panes", () => {
     expect(mounts(), "the pane carried across was restarted rather than kept").toHaveLength(2);
   });
 
+  it("puts the way in beside the panes once the page is full, and nowhere else", async () => {
+    await mount();
+    await openPane();
+    // A page with a gap draws the empty frame, and that frame is the way in. A second one beside it
+    // would be the same offer twice.
+    expect(q(".termface__addstrip")).toHaveLength(0);
+
+    await openPane();                              // two a page, so the page is now full
+    expect(q(".slot--empty")).toHaveLength(0);
+    expect(q(".termface__addstrip")).toHaveLength(1);
+
+    // Pressing it goes to where the room is, which is the next page — the same thing the rail's own
+    // way in does.
+    await click(q(".termface__addstrip")[0]!);
+    expect(q(".termface__page--on")[0]!.textContent).toBe("2");
+    expect(q(".slot--empty")).toHaveLength(1);
+  });
+
   it("splits the page by what was asked for, not by what is open", async () => {
     await mount();
     await openPane();

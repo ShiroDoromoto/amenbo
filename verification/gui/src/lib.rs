@@ -1438,16 +1438,16 @@ impl Instructor {
             ),
             // Moving the whole face to another project. The row is named by the project's own name,
             // and the step says where the press leaves the screen rather than what the press looks
-            // like: the rail carries two rows for a project — its name and, under the one being
-            // shown, its panes — and an operator who took a pane's row would be going to a pane
-            // instead of to a project, which is a different move with a different screen after it.
+            // like: the rail carries two lists, the projects and then the panes of the one being
+            // shown, and an operator who took a pane's row would be going to a pane instead of to a
+            // project, which is a different move with a different screen after it.
             //
             // What it says is the state arrived at rather than the change, and deliberately: which
             // project the face came up on is the run's business, so a road may well press the one
             // already shown, and a line promising the screen would change would read as a failure on
             // the one press that is allowed to do nothing.
             (Domain::Terminal, "go-project") => format!(
-                "In the list beside the panes, press the name of the project \"{}\" — the row the project itself is on, not one of the panes listed under it. The face is that project's from here on: its panes are the ones drawn, on its own first page, and no other project's pane is on the screen.",
+                "In the list beside the panes, under its first heading, press the name of the project \"{}\" — a row in that upper list and not one in the list of panes below it. The face is that project's from here on: its panes are the ones drawn, on its own first page, and no other project's pane is on the screen.",
                 req(with, "project")?
             ),
             // Opening a pane where there is not one yet. **A pane is opened from the empty frame**,
@@ -1469,7 +1469,7 @@ impl Instructor {
             (Domain::Terminal, "open-pane") => {
                 let press = match req(with, "from")? {
                     "face" => "On the terminal face, find the empty frame — the one box on the page that is not a terminal, at the first gap in it — and press what opens a terminal in it, leaving the row above that press as it came up.",
-                    "rail" => "In the list beside the panes, press the way in beside the name of the project being shown — the control at the end of its row. Nothing opens: the screen goes to the page a pane would land on, which is the page with room in it. On the empty frame waiting there, press what opens a terminal in it, leaving the row above that press as it came up.",
+                    "rail" => "In the list beside the panes, press the way in beside the heading over the panes — the one control on that heading's row. Nothing opens: the screen goes to the page a pane would land on, which is the page with room in it. On the empty frame waiting there, press what opens a terminal in it, leaving the row above that press as it came up.",
                     other => {
                         return Err(format!(
                             "action `open-pane` does not know the way in `{other}` — it is face or rail"
@@ -2470,12 +2470,16 @@ impl Instructor {
                 // What may be standing beside the panes. Said exactly where the road says so, and as
                 // "at most one" where it does not: a page with room draws its one way in at the first
                 // gap, and a page whose panes fill the count has no room to offer and must draw none.
+                //
+                // A full page is not bare all the same. With no gap to draw a frame in, the way in is
+                // a strip on the right edge instead — thin enough to cost no pane its place — and an
+                // operator told the page must hold nothing but panes would mark a working face red.
                 let beside = |them: &str| match with.get("empty").and_then(|v| v.as_u64()) {
                     None => Ok(format!(
                         "Beside {them} there is at most one empty frame — never a second — and the rest of the page is bare."
                     )),
                     Some(0) => Ok(format!(
-                        "Beside {them} there is no empty frame at all: the panes fill what this page draws, so it has no room to offer and nothing on it is anything but a pane."
+                        "Beside {them} there is no empty frame at all: the panes fill what this page draws, so it has no room to offer. What stands beside them is the thin way in down the right edge of the page — the strip that opens another pane — and nothing else."
                     )),
                     Some(1) => Ok(format!(
                         "Beside {them} there is exactly one empty frame, at the first gap in the page — never a second — and the rest of the page is bare."
@@ -5267,10 +5271,10 @@ steps_gui:
             lines[2]
         );
         assert!(
-            lines[3].contains("project being shown")
+            lines[3].contains("the heading over the panes")
                 && lines[3].contains("Nothing opens")
                 && lines[3].contains("the empty frame waiting there"),
-            "the rail names the project, moves the screen, and the pane opens at the empty frame: {}",
+            "the rail's way in moves the screen, and the pane opens at the empty frame: {}",
             lines[3]
         );
         // Both say to leave the row above the press alone: which agent a pane opens with is another
@@ -5346,7 +5350,7 @@ steps_gui:
         let said = Instructor::new().render(&step).unwrap();
         assert!(said.contains("\"Greenhouse\""), "got: {said}");
         assert!(
-            said.contains("not one of the panes listed under it"),
+            said.contains("not one in the list of panes below it"),
             "a pane's row is a different move: {said}"
         );
         assert!(

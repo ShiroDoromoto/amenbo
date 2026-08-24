@@ -17,6 +17,7 @@ import {
   setRailShown, setRailWidth, setSideShown, setSideWidth, sidesAreDrawers,
 } from "../talk/columns";
 import { FilesPanel } from "../files/FilesPanel";
+import { Icon } from "../components/Icon";
 import { markRead, tookPoint, type PointedBySession } from "../files/pointed";
 import { useBoundFolders } from "../core/boundFolders";
 import { chooseFolderFor } from "../core/mutations";
@@ -202,11 +203,11 @@ export function TerminalFace({
    * reason: the digits are this project's pages and nothing else's.
    */
   const needyPages = useMemo(() => {
-    const pages = new Set<number>();
+    const pages = new Map<number, number>();
     for (const frame of needy) {
       if (layout.frames.find((one) => one.id === frame)?.project !== layout.project) continue;
       const page = pageOfFrame(layout, frame);
-      if (page !== null && page !== layout.page) pages.add(page);
+      if (page !== null && page !== layout.page) pages.set(page, (pages.get(page) ?? 0) + 1);
     }
     return pages;
   }, [needy, layout]);
@@ -657,9 +658,14 @@ export function TerminalFace({
                 onClick={() => { setAsking(null); setLayout((was) => goPage(was, one)); }}
               >
                 {one}
-                {/* One dot, and only for a turn that is standing. A pane that finished wears nothing:
+                {/* How many turns are standing on that page, and nothing at all where none are. It
+                    counts because a page is somewhere to go: what the number buys is knowing whether
+                    going there answers one thing or four, which the badge on the face switch cannot
+                    say and must not try to (`./terminalBadge`). A pane that finished wears nothing:
                     what is over is not something a person is needed for (`AMB-T-3610`). */}
-                {needyPages.has(one) && <span className="termface__needs" aria-hidden="true" />}
+                {needyPages.has(one) && (
+                  <span className="termface__needs">{needyPages.get(one)}</span>
+                )}
               </button>
             ))}
           </nav>
@@ -706,7 +712,10 @@ export function TerminalFace({
         {/* The page is the split that was asked for, whether or not there are panes to fill it: the
             count is the most a page draws, and a grid that shrank to what is open would make the
             split a thing a reader cannot see the effect of (`../talk/layout`). */}
-        <div className={`termface__page-grid termface__page-grid--${layout.count}`}>
+        <div
+          className={`termface__page-grid termface__page-grid--${layout.count}${
+            room ? "" : " termface__page-grid--add"}`}
+        >
           {!settled || layout.project === null
             ? null
             : (
@@ -773,6 +782,21 @@ export function TerminalFace({
                     onOpenLedger={onOpenLedger}
                     onOpen={(agent) => askToOpen(layout.project!, agent)}
                   />
+                )}
+                {/* A full page draws no empty frame — there is no gap to draw — so the way in is put
+                    beside the panes instead, as a strip too thin to cost one of them its place. A
+                    person who filled the page here should not have to find the rail to fill the
+                    next: the press is the rail's, and it goes to where the room is
+                    (`../talk/layout`). */}
+                {asking === null && !room && (
+                  <button
+                    className="termface__addstrip"
+                    title={t("face.openHere")}
+                    aria-label={t("face.openHere")}
+                    onClick={askForRoom}
+                  >
+                    <Icon name="plus" />
+                  </button>
                 )}
               </>
             )}

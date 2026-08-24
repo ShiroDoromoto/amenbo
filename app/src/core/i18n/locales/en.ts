@@ -559,6 +559,9 @@ const ui = {
   "face.turnBody": "A terminal is waiting on you.",
   "face.ended": "The program in this terminal has exited.",
   "face.rail": "Panes",
+  "face.projects": "Projects",
+  "face.sessions": "Sessions",
+  "face.addPane": "Open",
   "face.paneCount": "Panes on screen",
   // The split, as words rather than a bare digit: the row of pages beside it is digits too, so the
   // count says what it counts (`app/src/shell/TerminalFace.tsx`).

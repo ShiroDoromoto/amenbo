@@ -55,7 +55,7 @@ const draw = (openIn: { project: number | null; dir: string; nth: number } | nul
   });
 
 const shownProject = () =>
-  container.querySelector(".rail__projectname--on")!.textContent;
+  container.querySelector(".rail__project--on")!.textContent;
 
 beforeEach(() => {
   // The face measures the window to work out whether the columns beside the panes are columns at all

@@ -85,8 +85,8 @@ const press = async (key: string) => {
     document.dispatchEvent(new KeyboardEvent("keydown", { key, metaKey: true, bubbles: true }));
   });
 };
-/** Open another pane in the project being shown, which is two presses: the way in beside the project's
- *  name on the rail goes to a page with room for one, and the empty frame there opens it. */
+/** Open another pane in the project being shown, which is two presses: the way in under the rail's
+ *  sessions heading goes to a page with room for one, and the empty frame there opens it. */
 const openPane = async () => {
   const room = q(".rail__open")[0];
   if (room) await click(room);
@@ -159,6 +159,19 @@ describe("a turn standing on a page", () => {
     await press("2");
     expect(q(".termface__needs")).toHaveLength(0);
     expect(told).toEqual([true, false]);
+  });
+
+  it("counts the turns standing on a page, because going there answers that many", async () => {
+    await openPane();
+    await openPane();                 // page 1, full at two a page
+    await openPane();
+    await openPane();                 // and two more on page 2, which is where the screen now is
+    await turn(2, true);
+    await turn(3, true);
+    await press("1");
+
+    expect(q(".termface__needs")).toHaveLength(1);
+    expect(q(".termface__needs")[0]!.textContent).toBe("2");
   });
 
   it("knocks the shell once however many panes are standing", async () => {

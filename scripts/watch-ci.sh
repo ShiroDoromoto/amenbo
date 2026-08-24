@@ -2,8 +2,9 @@
 # watch-ci.sh — watch one CI run (or one pull request) and print only what changes.
 #
 # Emits a line when a check fails, when a pull request needs a hand, and when the
-# thing being watched reaches a verdict — then exits. Nothing else. That makes it
-# something to hand to a background watcher once, rather than a loop to poll.
+# thing being watched reaches a verdict — then exits. Otherwise it speaks only to say
+# it could not read what it is watching. That makes it something to hand to a
+# background watcher once, rather than a loop to poll.
 #
 # Exit code is the verdict: 0 = green, 1 = red, or the watch itself broke and said so.
 #
@@ -184,7 +185,7 @@ watch_run() {
 # already detected would not even be shown. A re-run is what clears a flaky check, and
 # starting another watch after it is the caller's, as it is for `run`.
 watch_pr() {
-    local pr="$1" miss=0 prevms="" v state ms fail
+    local pr="$1" miss=0 prevms="" prevck="" v state ms checks fail
     echo "watching pull request $pr  https://github.com/$repo/pull/$pr"
     while :; do
         if ! v=$(gh pr view "$pr" -R "$repo" --json state,mergeStateStatus 2>&1); then
@@ -200,12 +201,29 @@ watch_pr() {
         # DIRTY is the only merge state that will not clear on its own.
         [ "$ms" = DIRTY ] && [ "$ms" != "$prevms" ] && echo "needs a hand: $ms"
         prevms=$ms
+        # `gh pr checks` refuses, rather than reporting nothing, when the head commit
+        # carries no check yet — the window right after a push, which is exactly when
+        # a watch gets started. So the call is allowed to fail and is read for what it
+        # left behind: a JSON array is an answer, empty or not, and anything else is
+        # nothing to go on this round. Saying so once, in the shape the broken watch
+        # above uses, is what keeps this from being the silent death it was: the
+        # assignment was killed by `pipefail` under `set -e`, and the reason for it
+        # went to /dev/null.
+        #
+        # What ends the watch when the connection itself is gone stays `gh pr view`,
+        # which fails the same way earlier in the same round and counts its misses.
+        checks=$(gh pr checks "$pr" -R "$repo" --json name,bucket 2>&1) || :
         # `cancel` is reported alongside `fail`: a cancelled required check leaves the
         # merge waiting on something that will never arrive, which is indistinguishable
         # from still running unless it is named.
-        fail=$(gh pr checks "$pr" -R "$repo" --json name,bucket 2>/dev/null |
-            jq -r '.[] | select(.bucket == "fail" or .bucket == "cancel") | "FAIL \(.name) (\(.bucket))"' | sort)
-        [ -n "$fail" ] && { echo "$fail"; return 1; }
+        if fail=$(jq -er 'map(select(.bucket == "fail" or .bucket == "cancel")
+                | "FAIL \(.name) (\(.bucket))") | sort | join("\n")' <<< "$checks" 2>/dev/null); then
+            prevck=""
+            [ -n "$fail" ] && { echo "$fail"; return 1; }
+        else
+            [ "$checks" != "$prevck" ] && echo "checks not read: ${checks:-no output}"
+            prevck=$checks
+        fi
         sleep "$POLL_SECONDS"
     done
 }

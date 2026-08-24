@@ -108,6 +108,9 @@ beforeEach(async () => {
   hoisted.saved = {
     count: 2,
     nextId: 3,
+    // The project the face was on. It comes back with the shape and goes out with it again — the
+    // window with no rail is what reads it (`../talk/layout`).
+    project: 1,
     frames: [
       { id: "1", project: 1, folder: "/work/repo" },
       { id: "2", project: 1, folder: "/work/repo" },

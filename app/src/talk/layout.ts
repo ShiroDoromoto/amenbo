@@ -46,6 +46,9 @@ export const NARROW_PX = 900;
 export type SavedLayout = {
   count: number;
   nextId: number;
+  /** The project whose panes the face was showing. It is read by the window that has no rail to ask
+   *  on (`../talk.ts`); this face takes its own from the ledger, so nothing here reads it back. */
+  project?: number;
   frames: { id: string; project?: number; folder?: string }[];
 };
 
@@ -236,11 +239,17 @@ export function setCount(layout: Layout, count: Count): Layout {
  * session died with the last run, and a pane drawn as though it were still there would be the window
  * saying something untrue. So a restored frame comes back as a place with its last folder on it, and
  * nothing is started until somebody presses.
+ *
+ * **The project this face is on goes with it**, and is the one part of the shape this face never
+ * reads back (`restored`). It is written for the window with no rail: a terminal split out into one
+ * of its own has nobody to have asked it which project it is drawing, so what it opens as is the
+ * project the board was on (`../talk.ts`).
  */
 export function laidOut(layout: Layout): SavedLayout {
   return {
     count: layout.count,
     nextId: layout.nextId,
+    ...(layout.project === null ? {} : { project: layout.project }),
     frames: layout.frames.map((frame) => ({
       id: frame.id,
       project: frame.project,

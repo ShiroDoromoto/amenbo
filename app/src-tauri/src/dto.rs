@@ -2333,6 +2333,11 @@ pub struct TalkLayoutDto {
     pub(crate) count: u32,
     /// The next frame id to hand out — ids are never reused, so a name stays on its own frame.
     pub(crate) next_id: u32,
+    /// The project whose panes the face was showing. It is what the window with no rail opens as
+    /// (`app/src/talk.ts`); absent where nothing has told the face of a project yet.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) project: Option<u32>,
     /// The frames, in slot order.
     pub(crate) frames: Vec<TalkFrameDto>,
 }

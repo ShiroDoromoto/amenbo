@@ -24,6 +24,13 @@
 // invitation and nothing else, which is the split-out window: one pane, no rail, and nobody to have
 // asked it on its way in.
 //
+// **The invitation keeps to the same folders the board's does.** A pane belongs to a project, so what
+// it may work in is what that project is bound to and nothing else — a window that could reach any
+// folder on the machine would put a pane from another project on a screen the rail promises cannot
+// hold one. The window with no rail is told which project it is by the arrangement the board left
+// (`../talk.ts`), and the one case with no list to keep to is the machine with no project yet, where
+// the press is the first run's and the folder chosen raises the project it belongs to.
+//
 // **Nothing is asked about a terminal that is already running.** A pane adopts one rather than
 // starting it (`./terminal`), and what is running was settled when it started — asking again would be
 // asking about a decision that has already been carried out. So the question is put exactly where a
@@ -37,10 +44,10 @@
 //
 // Naming is not this module's (`./frames`): a frame is called what a person or the agent called it,
 // and which agent it opens with is a different question about the same frame.
-import type { PtySessionDto, WakeCandidateDto, WakeDto } from "../bindings/bindings";
+import type { BoundFolderDto, PtySessionDto, WakeCandidateDto, WakeDto } from "../bindings/bindings";
 import { errText, type Lang, t, tf } from "../core/i18n";
 import { invoke } from "../core/ipc";
-import { chooseWorkFolder } from "../core/mutations";
+import { chooseFolderFor, chooseWorkFolder, fetchBoundFolders } from "../core/mutations";
 import { mountTerminal, type PaneEvents, type PaneStart } from "./terminal";
 
 /**
@@ -71,6 +78,11 @@ const SHELL = "shell";
  * nothing (`./layout`); a folder given here is where a started terminal opens. The board's face
  * always gives one — it settles where a pane works before the pane is made (`../shell/FolderChoice`)
  * — so the invitation below is the split-out window's, which has no rail to have been asked on.
+ *
+ * `project` is which project this frame's pane is one of, and it is what the invitation asks among:
+ * that project's bound folders and nothing else. The board's face passes none because it never puts
+ * an invitation up; the window with no rail passes the project the board left in its arrangement.
+ * Null is a machine that has no project yet, where the first folder chosen is what raises one.
  */
 export async function mountAgentFrame(
   host: HTMLElement,
@@ -78,6 +90,7 @@ export async function mountAgentFrame(
   on: PaneEvents,
   paneClass: string,
   start: PaneStart = {},
+  project: number | null = null,
 ): Promise<() => void> {
   const frame = document.createElement("div");
   frame.className = "agent__frame";
@@ -193,47 +206,79 @@ export async function mountAgentFrame(
     open(agent);
   };
 
+  /** This frame has settled where it works. The window is told now rather than when a terminal
+   *  starts: the two can be a long way apart, a machine with nothing startable never getting there
+   *  at all, and what the window does with a folder is not this frame's to wait on. */
+  const settle = async (chosen: string) => {
+    folder = chosen;
+    on.chose(chosen);
+    await look();
+  };
+
   /**
-   * The first run: one line about what choosing a folder means, and the one button that does it.
+   * Where this pane works, asked of the person — and asked among this project's folders only.
    *
-   * The line says what the folder *is* rather than what the AI will do with it — an agent's own
-   * behaviour is not Amenbo's to promise (`AMB-D-749`), and a sentence about a confirmation that some
-   * tools do not ask for would be a lie on the first screen a reader ever sees. What is true of every
-   * one of them is where they can look.
+   * **A project bound to one folder is not a question**: the pane opens there and nothing is put on
+   * the screen, which is the rule the board's face keeps too (`../shell/FolderChoice`). Bound to
+   * several, the answers are those folders. Bound to none — and that is also every machine with no
+   * project yet — there is no list to choose from, so the press is the first run's one press: it
+   * says what the folder *is* rather than what the AI will do with it, because an agent's own
+   * behaviour is not Amenbo's to promise (`AMB-D-749`) and a sentence about a confirmation some
+   * tools do not ask for would be a lie on the first screen a reader ever sees.
+   *
+   * That press binds where it lands: to **this** project where the window has one, and to the
+   * project the folder's own name raises where it has not (`../core/mutations`). A folder bound to
+   * some other project would put this pane outside the project it belongs to, which is the one thing
+   * the rail promises cannot happen.
    *
    * `note` is a refusal from the last attempt, kept under the invitation rather than in place of it:
-   * a folder that could not be bound leaves the reader exactly where they were, which is with a folder
-   * still to choose.
+   * a folder that could not be bound leaves the reader exactly where they were, which is with a
+   * folder still to choose.
    */
-  const invite = (note: string | null) => {
+  const invite = async (note: string | null) => {
+    // Read before the frame is emptied: what is on the screen is the invitation the reader is
+    // looking at, and blanking it for the length of a store read would be a flicker for nothing.
+    const bound = project === null ? [] : await folders(project);
+    if (bound.length === 1) return await settle(bound[0]!.path);
     clear();
     const box = document.createElement("div");
     box.className = "agent__ask";
-    box.append(said("agent__askTitle", t("talk.folder", lang)));
-    const choose = document.createElement("button");
-    choose.type = "button";
-    choose.className = "agent__choice";
-    choose.textContent = t("talk.chooseFolder", lang);
-    choose.addEventListener("click", () => {
-      choose.disabled = true;
-      void chooseWorkFolder()
-        .then((chosen) => {
-          // Cancelling is not a refusal and not an answer: the invitation stands, ready to be pressed
-          // again.
-          if (chosen === null) {
-            choose.disabled = false;
-            return;
-          }
-          folder = chosen;
-          // Said now rather than when a terminal starts: the two can be a long way apart, a machine
-          // with nothing startable never getting there at all, and what the window does with a folder
-          // is not this frame's to wait on.
-          on.chose(chosen);
-          return look();
-        })
-        .catch((e: unknown) => invite(errText(e, lang)));
-    });
-    box.append(choose);
+    box.append(said("agent__askTitle", t(bound.length === 0 ? "talk.folder" : "face.whichFolder", lang)));
+    // Pressed once, whichever way in it is. Both roads end in a pane, and a second press before that
+    // lands would open a second one.
+    const press = (act: () => void) => {
+      for (const one of box.querySelectorAll("button")) one.disabled = true;
+      act();
+    };
+    if (bound.length === 0) {
+      const choose = document.createElement("button");
+      choose.type = "button";
+      choose.className = "agent__choice";
+      choose.textContent = t("talk.chooseFolder", lang);
+      choose.addEventListener("click", () => press(() => {
+        void (project === null ? chooseWorkFolder() : chooseFolderFor(project))
+          .then((chosen) => {
+            // Cancelling is not a refusal and not an answer: the invitation stands, ready to be
+            // pressed again.
+            if (chosen === null) {
+              choose.disabled = false;
+              return;
+            }
+            return settle(chosen);
+          })
+          .catch((e: unknown) => invite(errText(e, lang)));
+      }));
+      box.append(choose);
+    } else {
+      for (const one of bound) {
+        const choose = document.createElement("button");
+        choose.type = "button";
+        choose.className = "agent__choice";
+        choose.textContent = one.path;
+        choose.addEventListener("click", () => press(() => void settle(one.path)));
+        box.append(choose);
+      }
+    }
     if (note !== null) box.append(said("agent__failed", note));
     frame.append(box);
   };
@@ -334,6 +379,19 @@ export async function mountAgentFrame(
 
   await look();
   return clear;
+}
+
+/**
+ * The folders a project is bound to that are actually there — the only ones a terminal can be started
+ * in, and the only ones a pane of that project may work in (`../shell/FolderChoice`).
+ *
+ * A read that would not come back is a project with nothing to offer, which leaves the press that
+ * binds a folder to it: the invitation to link one is the safe half of being wrong, the way it is
+ * wherever else this is asked (`../core/boundFolders`).
+ */
+async function folders(project: number): Promise<BoundFolderDto[]> {
+  const bound = await fetchBoundFolders(project).catch(() => [] as BoundFolderDto[]);
+  return bound.filter((one) => one.exists);
 }
 
 /** The catalogue rows behind a list of ids, in the order the ids came in. */

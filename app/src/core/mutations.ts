@@ -1038,8 +1038,8 @@ export async function pickFolder(): Promise<string | null> {
 }
 
 /**
- * Choose the folder to work in, and make it one that can be worked in — the terminal face's single way
- * in (`AMB-T-3606`).
+ * Choose the folder to work in, and make it one that can be worked in — the first run's way in
+ * (`AMB-T-3606`).
  *
  * **One press is the whole of it.** Picking a folder there means three things at once: the folder is
  * the one the AI is shown, it belongs to a project (raised here and named after the folder if it did
@@ -1047,6 +1047,11 @@ export async function pickFolder(): Promise<string | null> {
  * step between the dialog closing and the pane opening — which is why this binds rather than handing
  * the caller a path to bind later, and why a folder that already belongs to a project comes back
  * unchanged instead of as a refusal (`folder_open`).
+ *
+ * **It is the road for a machine that has no project yet**, and that is the only place left that
+ * takes it: a pane belongs to a project, so wherever there is one to belong to the folder is chosen
+ * among that project's own (`chooseFolderFor`, `../talk/agent`). Raising a project from a folder's
+ * name is right when there is none to raise it beside, and wrong the moment there is.
  *
  * Returns the folder chosen, or null where nothing was — the dialog cancelled, or the browser
  * iteration, which has no folders to choose from. Anything the binding refuses is thrown, because the
@@ -1060,12 +1065,14 @@ export async function chooseWorkFolder(): Promise<string | null> {
 }
 
 /**
- * Choose this project's **first** folder — the terminal face's way in for a project bound to none.
+ * Choose this project's **first** folder — the way in, on either face, for a project bound to none.
  *
- * It differs from `chooseWorkFolder` in the one way that matters on that face: the folder is bound to
- * the project the person is already looking at, rather than to whatever project the folder's own name
+ * It differs from `chooseWorkFolder` in the one way that matters there: the folder is bound to the
+ * project the person is already looking at, rather than to whatever project the folder's own name
  * would raise. A pane belongs to a project (`../talk/layout`), so a folder chosen to open a pane in
- * has to end up in that project or the pane would be somewhere else entirely.
+ * has to end up in that project or the pane would be somewhere else entirely. The board's face takes
+ * it from the rail (`../shell/TerminalFace`) and the window split out of it from the arrangement the
+ * board left (`../talk/agent`).
  *
  * Returns the folder chosen, or null where nothing was — the dialog cancelled, or the browser
  * iteration, which has no folders to choose from. A binding the host refuses is thrown, because the

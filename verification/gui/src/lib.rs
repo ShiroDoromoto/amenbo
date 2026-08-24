@@ -1398,6 +1398,18 @@ impl Instructor {
             (Domain::Terminal, "end-pane") =>
                 "In the pane that has a terminal running in it, run: exit — the program ends. The pane stays where it is with what it printed still on it, and nothing is running in it any more."
                     .to_string(),
+            // Getting rid of the place. The pane is named by the words the road typed into it, since
+            // that is the only thing on a page of panes that is the road's own — and being sure which
+            // one is pressed is the whole point on the one move nothing takes back.
+            //
+            // The question is half the step, so the operator is told to read it before answering: what
+            // is being defended is that it stands there at all. What the answer costs is said with it,
+            // because an operator who did not know would have no way to tell an app that lost a pane
+            // from one doing exactly as it said.
+            (Domain::Terminal, "remove-pane") => format!(
+                "On the pane showing \"{}\", press the × at the end of its own row — the control beside what is said about that pane, and not the one on any other. A question comes up before anything happens: read it, then answer it yes. The terminal in that pane ends, the pane goes, and the page closes up behind it.",
+                req(with, "shows")?
+            ),
             // Pointing, which is the same seam as `say` and the same one door — but what it leaves is
             // read on the file face rather than on the pane's label, so the road goes on somewhere else.
             (Domain::Terminal, "point") => format!(
@@ -2311,7 +2323,7 @@ impl Instructor {
                     req(with, "shows")?
                 ),
                 false => format!(
-                    "Confirm the line \"{}\" is nowhere on the screen — the pane drawing it is not being shown, the ledger being up, another page being the one on screen, or the face being on another project's panes.",
+                    "Confirm the line \"{}\" is nowhere on the screen — the pane that drew it is not being shown, the ledger being up, another page being the one on screen, the face being on another project's panes, or that pane having been taken away for good.",
                     req(with, "shows")?
                 ),
             },
@@ -2365,15 +2377,43 @@ impl Instructor {
             // may stand beside the panes and what may not: **one** empty frame where the page has
             // room, never a second, and nothing at all where the panes fill the count. An operator
             // who was told only to count the panes would pass on the screen this exists to catch.
-            (Domain::Terminal, "frames") => match count(with, "count")? {
-                0 => "On the terminal face, confirm no pane is standing on the page at all — no terminal anywhere on it. What is on it is one empty frame, or, while it is standing, the question about where a pane runs — one box and no more, with the rest of the page bare."
-                    .to_string(),
-                1 => "On the terminal face, confirm exactly one pane is standing on the page. Beside it there is at most one empty frame — never a second — and the rest of the page is bare."
-                    .to_string(),
-                n => format!(
-                    "On the terminal face, count the panes standing on the page: confirm there are exactly {n}. Beside them there is at most one empty frame — never a second — and the rest of the page is bare."
-                ),
-            },
+            (Domain::Terminal, "frames") => {
+                // What may be standing beside the panes. Said exactly where the road says so, and as
+                // "at most one" where it does not: a page with room draws its one way in at the first
+                // gap, and a page whose panes fill the count has no room to offer and must draw none.
+                let beside = |them: &str| match with.get("empty").and_then(|v| v.as_u64()) {
+                    None => Ok(format!(
+                        "Beside {them} there is at most one empty frame — never a second — and the rest of the page is bare."
+                    )),
+                    Some(0) => Ok(format!(
+                        "Beside {them} there is no empty frame at all: the panes fill what this page draws, so it has no room to offer and nothing on it is anything but a pane."
+                    )),
+                    Some(1) => Ok(format!(
+                        "Beside {them} there is exactly one empty frame, at the first gap in the page — never a second — and the rest of the page is bare."
+                    )),
+                    Some(n) => Err(format!(
+                        "assert `frames` cannot ask for {n} empty frames — a page draws one at its first gap or none at all"
+                    )),
+                };
+                match count(with, "count")? {
+                    // A page with nothing standing on it always has room, so its way in is always
+                    // drawn: asking for a page with neither is asking for a screen there is no way to
+                    // reach, and an operator who went looking would find the empty frame and be right.
+                    0 if with.get("empty").and_then(|v| v.as_u64()) == Some(0) => return Err(
+                        "assert `frames` cannot ask for a page with no panes and no empty frame — a page with room always draws its one way in".to_string()
+                    ),
+                    0 => "On the terminal face, confirm no pane is standing on the page at all — no terminal anywhere on it. What is on it is one empty frame, or, while it is standing, the question about where a pane runs — one box and no more, with the rest of the page bare."
+                        .to_string(),
+                    1 => format!(
+                        "On the terminal face, confirm exactly one pane is standing on the page. {}",
+                        beside("it")?
+                    ),
+                    n => format!(
+                        "On the terminal face, count the panes standing on the page: confirm there are exactly {n}. {}",
+                        beside("them")?
+                    ),
+                }
+            }
             // ── the file face ─────────────────────────────────────────────────────────────────
             (Domain::Files, "listed") => match present(with) {
                 true => format!(

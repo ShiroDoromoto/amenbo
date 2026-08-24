@@ -159,8 +159,8 @@ export function AppShell() {
   // looking at is this one — "nothing comes forward but what somebody pressed" (`AMB-D-753`).
   const raiseTalk = useRef(false);
   // Nothing else travels with the press. What the window draws is the terminal face whole, and the
-  // face reads the arrangement this device keeps and takes up the terminals still running — the same
-  // two questions it answers when the app folds back into one window (`./TerminalFace`, `../talk.tsx`).
+  // face reads the arrangement this run holds and takes up the terminals still running — the same two
+  // questions it answers when the app folds back into one window (`./TerminalFace`, `../talk.tsx`).
   useEffect(() => {
     if (!inTauri()) return;
     if (shape !== "two") {

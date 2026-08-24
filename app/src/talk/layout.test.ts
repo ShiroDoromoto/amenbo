@@ -299,7 +299,7 @@ describe("an arrangement kept between runs", () => {
       count: 4,
       nextId: 3,
       frames: [{ id: "1", project: 7, folder: "/work/repo" }, { id: "2", project: 8 }],
-    }, null)!;
+    }, null);
     expect(back.count).toBe(4);
     expect(back.frames.map((one) => one.session)).toEqual([null, null]);
     expect(back.frames.map((one) => one.folder)).toEqual(["/work/repo", null]);
@@ -310,23 +310,30 @@ describe("an arrangement kept between runs", () => {
   });
 
   it("puts a pane whose project nothing recorded where the person is looking", () => {
-    const back = restored({ count: 2, nextId: 2, frames: [{ id: "1", folder: "/work/repo" }] }, 5)!;
+    const back = restored({ count: 2, nextId: 2, frames: [{ id: "1", folder: "/work/repo" }] }, 5);
     expect(back.frames[0]!.project).toBe(5);
   });
 
   it("has nowhere to put one when the window is on no project either", () => {
-    expect(restored({ count: 2, nextId: 2, frames: [{ id: "1" }] }, null)).toBeNull();
+    expect(restored({ count: 2, nextId: 2, frames: [{ id: "1" }] }, null).frames).toHaveLength(0);
   });
 
   it("hands the next frame an id no name is already on", () => {
-    // A kept arrangement whose `nextId` is behind its own frames — an older build, or a file nobody
-    // can vouch for — must not let a fresh frame take the name of one that came back.
-    const back = restored({ count: 2, nextId: 1, frames: [{ id: "1", project: 1 }, { id: "7", project: 1 }] }, null)!;
+    // An arrangement whose `nextId` is behind its own frames — an older build, or a hand-over nobody
+    // can vouch for — must not let a fresh frame take the name of one that came with it.
+    const back = restored({ count: 2, nextId: 1, frames: [{ id: "1", project: 1 }, { id: "7", project: 1 }] }, null);
     expect(openedFrame(back, 1, "/w").frame.id).toBe("8");
   });
 
-  it("is nothing to come back to when it holds no frames", () => {
-    expect(restored({ count: 2, nextId: 1, frames: [] }, 1)).toBeNull();
+  it("brings the split back with no frames to draw it with", () => {
+    // What every window that comes up after a run reads: the frames are not kept, and the split the
+    // person chose is (`AMB-T-3687`). It is the empty face, laid out the way they laid it out.
+    const back = restored({ count: 4, nextId: 1, project: 3, frames: [] }, 3);
+    expect(back.count).toBe(4);
+    expect(back.frames).toHaveLength(0);
+    expect(back.project).toBe(3);
+    expect(back.focus).toBeNull();
+    expect(pageCount(back)).toBe(1);
   });
 });
 

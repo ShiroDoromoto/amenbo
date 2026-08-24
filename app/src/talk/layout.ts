@@ -9,8 +9,10 @@
 //
 // **A frame is a place, not a process.** It exists once a terminal has been opened in it and stays
 // when one ends, which is what lets a pane keep its last output on the screen and what lets a name
-// outlive the session that earned it (`./frames`). Ids are handed out once and never reused: a name
-// is kept against the id, so a reused one would put an old name on a new place.
+// outlive the session that earned it (`./frames`). Ids are handed out once and never reused within a
+// run: a name is held against the id, so a reused one would put an old name on a new place. **A place
+// does not outlive the app**, though — what is kept between runs is the split and the project, and
+// not the frames (`AMB-T-3687`).
 //
 // **A place is made by opening one, and by nothing else.** A place somebody started making and walked
 // away from is a box nobody can say anything about, so the folder is answered first
@@ -64,20 +66,32 @@ export const DEFAULT_COUNT: Count = 2;
  *  here, because there are only nine digits to press. */
 export const MAX_PAGES = 9;
 
-/** The arrangement as the store keeps it — the wire shape of `TalkLayoutDto`. */
+/**
+ * The arrangement as it is handed over — the wire shape of `TalkLayoutDto`.
+ *
+ * **It is how the two windows share one face**, and it lasts as long as the app is up: whichever
+ * window is drawing the face writes it, and the one the terminal is split out into reads it as it
+ * comes up (`app/src-tauri/src/frames.rs`).
+ *
+ * **What outlives the run is `count` and `project`, and nothing else** (`AMB-T-3687`). So an
+ * arrangement read at the start of a run has no frames in it, and the face comes up on the project
+ * the reader was looking at with one way in on it.
+ */
 export type SavedLayout = {
   count: number;
+  /** The next id to hand out. It is this run's, like the frames it numbers: an arrangement that comes
+   *  back with no frames starts again at the first. */
   nextId: number;
   /** The project whose panes the face was showing. It answers for the window the terminal was split
    *  out into, which has no ledger to have taken one from — and only where the arrangement came back
    *  with no panes in it, since a pane names its own project (`../shell/TerminalFace`). */
   project?: number;
   frames: { id: string; project?: number; folder?: string }[];
-  /** The pane being worked in when the arrangement was kept. It is what the window split out of
-   *  this face comes up on, so the reader lands where they left rather than on the first place of
+  /** The pane being worked in when the arrangement was last written. It is what the window split out
+   *  of this face comes up on, so the reader lands where they left rather than on the first place of
    *  the first project (`AMB-D-753`). Read by that window and never by the board: which pane is
-   *  being worked in *now* is the board's own state, and reading a kept one back would move the
-   *  person's place on the strength of an old write. */
+   *  being worked in *now* is the board's own state, and reading a written one back would move the
+   *  person's place on the strength of an older write. */
   splitOut?: string;
 };
 
@@ -341,13 +355,13 @@ export function setCount(layout: Layout, count: Count): Layout {
 }
 
 /**
- * The arrangement as it is kept between runs, and as it comes back.
+ * The arrangement as it is written down, for the other window to read.
  *
- * **What is kept is the shape**: how many panes to a page, the panes in the order they were opened,
- * and for each the project it is one of and the folder it was working in. What was running is not — a
- * session died with the last run, and a pane drawn as though it were still there would be the window
- * saying something untrue. So a restored frame comes back as a place with its last folder on it, and
- * nothing is started until somebody presses.
+ * **What is written is the shape**: how many panes to a page, the panes in the order they were
+ * opened, and for each the project it is one of and the folder it is working in. What is running is
+ * not — a session is a process, and a pane drawn as though one were still in it would be the window
+ * saying something untrue. So a pane comes over as a place with its folder on it, and nothing is
+ * started until somebody presses.
  *
  * **The project this face is on goes with it**, and is the one part of the shape this face never
  * reads back (`restored`). It is written for the window with no ledger: a terminal split out into
@@ -371,14 +385,18 @@ export function laidOut(layout: Layout): SavedLayout {
 }
 
 /**
- * The layout a kept arrangement comes back as, or nothing where it says nothing.
+ * The layout an arrangement comes back as.
+ *
+ * **An arrangement with no frames in it still says something**, and it is what every window that
+ * comes up after a run reads: the split the person chose is theirs, and it comes back whether or not
+ * there is anything to draw with it (`AMB-T-3687`). What that leaves is the empty face, laid out the
+ * way they laid it out.
  *
  * `onto` is the project the window is on, and it answers for the frames an older build wrote without
  * one: a pane whose project nothing records is put where the person is rather than dropped, and where
- * there is nowhere to put it there is nothing to draw. An arrangement with no frames left is nothing
- * to come back to — what would be restored is the empty face the window makes for itself anyway.
+ * there is nowhere to put it there is nothing to draw.
  */
-export function restored(saved: SavedLayout, onto: number | null): Layout | null {
+export function restored(saved: SavedLayout, onto: number | null): Layout {
   const count = COUNTS.find((one) => one === saved.count) ?? DEFAULT_COUNT;
   const frames: Frame[] = [];
   for (const frame of saved.frames) {
@@ -386,18 +404,17 @@ export function restored(saved: SavedLayout, onto: number | null): Layout | null
     if (project === null) continue;
     frames.push({ id: frame.id, project, session: null, folder: frame.folder ?? null });
   }
-  if (frames.length === 0) return null;
-  const first = frames[0]!;
+  const first = frames[0];
   return {
     frames,
-    // Ids are never reused, so the next one has to clear every frame that came back — a kept
-    // arrangement written by a newer build, or an id list nobody can vouch for, must not hand a
-    // fresh frame the name of an old one.
+    // Ids are never reused, so the next one has to clear every frame that came with the arrangement
+    // — one written by a newer build, or an id list nobody can vouch for, must not hand a fresh
+    // frame the name of one already up.
     nextId: Math.max(saved.nextId, ...frames.map((frame) => Number(frame.id) + 1 || 0)),
     count,
-    project: first.project,
+    project: first?.project ?? onto,
     page: 1,
-    focus: first.id,
+    focus: first?.id ?? null,
     adding: false,
   };
 }

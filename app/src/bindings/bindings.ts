@@ -542,7 +542,8 @@ running: string, };
 
 /**
  * What one frame of the talk window is called, and who called it that — which is what says whether
- * the next naming may replace it ([`amenbo_core::frames`]).
+ * the next naming may replace it ([`amenbo_core::frames`]). It is this run's: a name is about a
+ * place, and the places go when the app does (`crate::frames`).
  */
 export type FrameNameDto = { 
 /**
@@ -2126,11 +2127,11 @@ export type StoreLocationsDto = {
 root: string, };
 
 /**
- * One frame of a kept arrangement: where it sat, and what it was working on.
+ * One frame of the arrangement: where it sits, and what it is working on.
  */
 export type TalkFrameDto = { 
 /**
- * The id its name is kept against (`FrameNameDto`).
+ * The id its name is held against (`FrameNameDto`).
  */
 id: string, 
 /**
@@ -2144,11 +2145,15 @@ project?: number,
 folder?: string, };
 
 /**
- * The talk window's arrangement, as this device left it (`amenbo_core::frames::SavedLayout`).
+ * The talk window's arrangement, as the window drawing the face has it (`crate::frames`).
  *
  * The shape only: how many panes to a page, the frames in slot order, and the folder each was
- * working in. **What was running is not here** — a session died with the last run, and a pane drawn
- * as though it were still there would be the window saying something untrue (`AMB-T-3607`).
+ * working in. **What was running is not here** — a session is a process, and a pane drawn as though
+ * one were still in it would be the window saying something untrue (`AMB-T-3607`).
+ *
+ * It is what the two windows hand the face between themselves with, and it lives as long as the app
+ * does. Only `count` and `project` outlive that (`amenbo_core::frames::SavedLayout`), so an
+ * arrangement read at the start of a run has no frames in it (`AMB-T-3687`).
  */
 export type TalkLayoutDto = { 
 /**
@@ -2156,13 +2161,15 @@ export type TalkLayoutDto = {
  */
 count: number, 
 /**
- * The next frame id to hand out — ids are never reused, so a name stays on its own frame.
+ * The next frame id to hand out — ids are never reused within a run, so a name stays on its own
+ * frame. It is not kept: a run starts its ids at the first (`crate::frames`).
  */
 nextId: number, 
 /**
  * The project whose panes the face was showing. It is what the window the terminal is split out
- * into opens as, where the arrangement came back with no panes to name one
- * (`app/src/shell/TerminalFace.tsx`); absent where nothing has told the face of a project yet.
+ * into opens as, where the arrangement came with no panes to name one — which is every window
+ * that comes up after a run (`app/src/shell/TerminalFace.tsx`); absent where nothing has told
+ * the face of a project yet.
  */
 project?: number, 
 /**
@@ -2170,9 +2177,8 @@ project?: number,
  */
 frames: Array<TalkFrameDto>, 
 /**
- * The pane being worked in when the arrangement was kept — the one the window split out of the
- * board comes up on (`amenbo_core::frames::SavedLayout`). Absent where nobody has worked in a
- * pane yet.
+ * The pane being worked in when the arrangement was last written — the one the window split out
+ * of the board comes up on (`AMB-D-753`). Absent where nobody has worked in a pane in this run.
  */
 splitOut?: string, };
 

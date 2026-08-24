@@ -20,6 +20,8 @@ mod folder;
 /// Being told what changed in that folder instead of going to look: a non-recursive watch per
 /// folder over the pruned tree, and a scan to say what actually moved (`AMB-T-3604`).
 mod folder_watch;
+/// The talk window's face while the app is up — where its panes are and what they are called.
+mod frames;
 /// The third door onto a file in that folder: opening it with an application the reader picks. Two
 /// operating systems have a chooser of their own and one has none, so it is three implementations
 /// rather than one behind a `cfg` (`AMB-T-3642`).
@@ -199,6 +201,10 @@ pub fn run() {
     // different threads and long after the call that opened it returned (`pty`).
     .manage(pty::Terminals::default())
     .manage(folder_watch::FolderWatches::default())
+    // The face of the talk window, held for the life of the app rather than of either window: the
+    // two windows hand the arrangement between themselves through it, and none of it is kept
+    // (`frames`).
+    .manage(frames::TalkFace::default())
     .menu(menu::build)
     .on_menu_event(|app, event| {
       if event.id() == menu::CHECK_UPDATES_ID {
@@ -451,12 +457,12 @@ pub fn run() {
       wake::wake_choices,
       commands::session_work,
       commands::adrift,
-      commands::frame_names,
-      commands::name_frame,
+      frames::frame_names,
+      frames::name_frame,
       commands::project_memo,
       commands::set_project_memo,
-      commands::talk_layout,
-      commands::save_talk_layout,
+      frames::talk_layout,
+      frames::save_talk_layout,
       launch::elevated,
       windows::show_ref,
       folder::folder_entries,

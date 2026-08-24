@@ -477,7 +477,7 @@ export const nl: Translation = {
     "act.nDecisions.one": "{n} besluit", "act.nDecisions.other": "{n} besluiten",
     "act.nameless": "(verwijderd)",
     "app.loadError": "Gegevens laden is mislukt.", "app.loading": "Bezig met laden…",
-    "app.talkWindow": "Amenbo — Gesprek",
+    "app.talkWindow": "Amenbo — {face}",
     "talk.folder": "Kies de map die je de AI laat zien. Alleen wat daarin staat, kan de AI zien.",
     "talk.chooseFolder": "Map kiezen",
     "talk.searching": "Bezig met zoeken naar de agents op deze machine…",

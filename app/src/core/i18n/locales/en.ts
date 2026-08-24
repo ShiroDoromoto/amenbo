@@ -518,7 +518,10 @@ const ui = {
   "app.loadError": "Failed to load data.", "app.loading": "Loading…",
   // The talk window names itself from here — `tauri.conf.json` can hold only one fixed string,
   // and two windows both called "Amenbo" cannot be told apart in a window list (`AMB-T-3588`).
-  "app.talkWindow": "Amenbo — Talk",
+  // `{face}` is the name of the face the window was split out with, taken from the same key the
+  // rest of the UI calls that face by (`face.terminal`), so the window and the button that opened
+  // it never say two different words for one thing.
+  "app.talkWindow": "Amenbo — {face}",
   // talk window: the folder a pane opens in (`AMB-T-3606`), what it opens with — an agent, or the
   // folder's own shell (`AMB-T-3646`) — and the row a closed frame offers (`AMB-T-3591`).
   // `{commands}` is the list of program names that were looked for on the PATH. `talk.folder` says

@@ -489,7 +489,7 @@ export const ja: Translation = {
     "act.nDecisions.other": "決定{n}件",
     "act.nameless": "（削除済み）",
     "app.loadError": "データを読み込めませんでした。", "app.loading": "読み込み中…",
-    "app.talkWindow": "Amenbo — 対話",
+    "app.talkWindow": "Amenbo — {face}",
     "talk.folder": "AI に見せるフォルダを選びます。ここに置いたものだけが AI に見えます。",
     "talk.chooseFolder": "フォルダを選ぶ",
     "talk.searching": "この機械にあるエージェントをさがしています…",

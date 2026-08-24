@@ -477,7 +477,7 @@ export const zhHant: Translation = {
     "act.nTasks.other": "{n} 個任務", "act.nDecisions.other": "{n} 則決策",
     "act.nameless": "（已刪除）",
     "app.loadError": "資料載入失敗。", "app.loading": "載入中…",
-    "app.talkWindow": "Amenbo — 對話",
+    "app.talkWindow": "Amenbo — {face}",
     "talk.folder": "選擇你要給智慧代理看的資料夾。只有放在裡面的東西它才看得到。",
     "talk.chooseFolder": "選擇資料夾",
     "talk.searching": "正在尋找這台機器上的智慧代理…",

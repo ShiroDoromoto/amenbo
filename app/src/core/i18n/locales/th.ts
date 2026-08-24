@@ -480,7 +480,7 @@ export const th: Translation = {
     "act.nDecisions.other": "{n} การตัดสินใจ",
     "act.nameless": "(ถูกลบไปแล้ว)",
     "app.loadError": "โหลดข้อมูลไม่สำเร็จ", "app.loading": "กำลังโหลด…",
-    "app.talkWindow": "Amenbo — บทสนทนา",
+    "app.talkWindow": "Amenbo — {face}",
     "talk.folder": "เลือกโฟลเดอร์ที่จะให้ AI เห็น สิ่งที่วางไว้ในนั้นเท่านั้นที่ AI มองเห็น",
     "talk.chooseFolder": "เลือกโฟลเดอร์",
     "talk.searching": "กำลังค้นหาเอเจนต์ในเครื่องนี้…",

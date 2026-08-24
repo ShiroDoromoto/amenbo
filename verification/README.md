@@ -922,13 +922,13 @@ bar:
 
 ```yaml
 steps_gui:
-  - { type: assert, domain: task, op: carded, with: { target: seed, present: true }, window: "Amenbo — Talk" }
+  - { type: assert, domain: task, op: carded, with: { target: seed, present: true }, window: "Amenbo — Terminal" }
 ```
 
 A whole title wins first, and any title holding what was written answers when none does — the same
 rule a name reaches an element by, and needed for the same reason: one window's title is often the
 start of another's, so `"Amenbo"` has to be able to mean the shorter of `"Amenbo"` and
-`"Amenbo — Talk"`.
+`"Amenbo — Terminal"`.
 
 **Say nothing and the step means the app's one window.** That is the honest default while an app
 draws one, and it stops being one the moment it draws two: the tool then refuses the step and lists

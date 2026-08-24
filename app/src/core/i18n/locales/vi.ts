@@ -480,7 +480,7 @@ export const vi: Translation = {
     "act.nDecisions.other": "{n} quyết định",
     "act.nameless": "(đã xoá)",
     "app.loadError": "Không tải được dữ liệu.", "app.loading": "Đang tải…",
-    "app.talkWindow": "Amenbo — Hội thoại",
+    "app.talkWindow": "Amenbo — {face}",
     "talk.folder": "Chọn thư mục bạn cho AI xem. AI chỉ thấy những gì bạn đặt trong đó.",
     "talk.chooseFolder": "Chọn thư mục",
     "talk.searching": "Đang tìm các tác nhân trên máy này…",

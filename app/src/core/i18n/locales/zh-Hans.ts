@@ -477,7 +477,7 @@ export const zhHans: Translation = {
     "act.nTasks.other": "{n} 个任务", "act.nDecisions.other": "{n} 条决策",
     "act.nameless": "（已删除）",
     "app.loadError": "数据加载失败。", "app.loading": "加载中…",
-    "app.talkWindow": "Amenbo — 对话",
+    "app.talkWindow": "Amenbo — {face}",
     "talk.folder": "选择你要给智能体看的文件夹。只有放在里面的东西它才看得到。",
     "talk.chooseFolder": "选择文件夹",
     "talk.searching": "正在查找这台机器上的智能体…",

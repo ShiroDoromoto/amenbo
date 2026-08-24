@@ -547,6 +547,12 @@ the whole screen to another page, and `open-pane` starts a terminal where there 
 list, which opens in that page's first free slot and takes the screen there. What they are walked for
 is what they must not do. Every one of those moves re-cuts one list of frames, and a pane that left
 the screen is a pane still running behind it.
+`come-back-to-the-terminal-a-page-turn-took-away` is the road. It types a second line into the pane
+once the page has come back, which is the half a reading of the first cannot carry: what a terminal
+printed stays printed, so the first line says the screen was restored and only something typed after
+the return says anything is still listening. And it keeps a second pane going for the length of it —
+with one frame there is nothing for a new count to move, so a road with a single pane walks
+`set-panes` past the only thing it is dangerous for.
 
 `dot` is the one reading on these roads that is not text at all. The mark on a pane's label pulses
 while something is coming out of that terminal, and it is the only thing on screen that says a pane
@@ -556,6 +562,12 @@ The pane it reads has to be one the reader is not working in, the focused pane n
 somebody looking straight at a terminal can already see it moving. And the step is watched rather
 than shot: a pulse rests, twice a turn, at exactly the still dot's own step, so it is a `Review` and
 the instruction says how long to watch.
+
+No road walks the moving half yet, and the reason is a third thing about the mark. A pane reads as
+moving for a moment and a half after its last output, so a pulse to watch for a few seconds is a pane
+that keeps printing — and nothing on this face starts one. The line a road types is deliberately a
+command no shell knows, which prints once and stops. What that half needs is a way to set something
+running in a pane and leave it running, and until there is one the op is written and unwalked.
 
 What a `pane` assert reads is deliberately the reader's own words rather than the interface's. Every
 other word on that face belongs to Amenbo, so a reading of one would hold the gate to whichever

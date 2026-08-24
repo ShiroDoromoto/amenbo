@@ -1261,7 +1261,7 @@ impl Instructor {
             // been started in offer to open a terminal rather than holding one — a reader who clicked
             // the wrong box would start a second shell and type this line into it.
             (Domain::Terminal, "type-line") => format!(
-                "Click into the pane that has a terminal running in it — the one the face came up with, not a slot offering to open one — then type \"{}\" and press return. The shell will not know the command — what the line is for is being on the screen, and being the name the pane takes.",
+                "Click into the pane that has a terminal running in it — the one the face came up with, not a slot offering to open one — then type \"{}\" and press return. The shell will not know the command — what the line is for is being on the screen, and, where the pane has not been named yet, being the name it takes.",
                 req(with, "text")?
             ),
             // The two moves between one window and two. Named by what each does rather than by the
@@ -1333,8 +1333,13 @@ impl Instructor {
             // drawn at once, so there is nothing to open first. What the step does not say is what
             // becomes of the panes — the frames are one list re-cut by the new count, so a pane can
             // land on another page, and which of that is right is the assert after it.
+            //
+            // Where the *screen* ends up is said, and it is a different kind of thing: an operator
+            // who was not told may read a page they did not ask for as the app having lost their
+            // place, and go looking for a pane that is exactly where it should be. The screen stays
+            // with the pane being worked in, which is the last one opened or typed at.
             (Domain::Terminal, "set-panes") => format!(
-                "At the top of the terminal face, in the group of three pane counts, press {}. The page redraws with that many panes on it.",
+                "At the top of the terminal face, in the group of three pane counts, press {}. The face redraws with that many panes to a page — and the screen stays with the pane being worked in, so it may end up on a different page from the one it was on.",
                 count(with, "count")?
             ),
             // Paging. The digits are the pages, so the step names the one it presses and says the
@@ -2135,7 +2140,7 @@ impl Instructor {
                     req(with, "shows")?
                 ),
                 false => format!(
-                    "Confirm the line \"{}\" is nowhere on the screen — the terminal is not the face being shown.",
+                    "Confirm the line \"{}\" is nowhere on the screen — the pane drawing it is not being shown, the ledger being up or another page being the one on screen.",
                     req(with, "shows")?
                 ),
             },

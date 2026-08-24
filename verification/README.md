@@ -715,6 +715,14 @@ folder's section, `enter` opens one folder a level, `open` presses a file and `b
 `listed`, `reading`, `says` and `openable` read what a row is, what an opened file draws, one of the
 face's standing lines, and whether a row is something to press at all.
 
+`pointed-badge` reads the one thing that half says from outside itself: the mark its switch wears
+while something pointed at is waiting behind it. The panel opens on the page a person writes on, so
+the files are not what a reader is on by default — and an agent that pointed at something cannot send
+anybody there, which is what the switch is knocking for. Like `face-badge` it carries no number and no
+words, and the absent half is half the goal: being on the half is being told, so coming to it spends
+the mark for good. Raising one takes nothing but `terminal point` said while that half is not up.
+`open-what-the-agent-pointed-at` is the road.
+
 The other three are the file going the other way — out of Amenbo, to the machine. `menu` right-clicks
 a row, `hand-over` presses one of the three items on the menu that comes up, and `handed-over` reads
 what the press left. Which item is meant travels as a `door` — `usual` for the application the machine

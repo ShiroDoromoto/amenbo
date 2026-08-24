@@ -2193,6 +2193,20 @@ const REGISTRY: &[OpSpec] = &[
     // that is one and not the other is the state this asks about, and it cannot be read off a shot,
     // so it is settled by an eye.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "openable", required: &["name"], refs: &[], strings: &["name"], binds: false },
+    // The mark the files half's own switch wears while something pointed at is waiting behind it. It
+    // is the one way this face can call: a person goes to the files when they want them, and an agent
+    // that pointed at something cannot send anybody there — so the switch knocks, rather than the
+    // panel standing open on the chance something arrives.
+    //
+    // It takes no argument. There is one badge on that row and nothing in it to quote — a dot, with
+    // no number and no words — so what a road says is that it is there, or that it is not. `present:
+    // false` carries two different claims and both are worth walking: nothing has been pointed at
+    // yet, and the person has since been on the half, which spends the mark for good. A badge still
+    // up after they have looked would be a light saying "something is over there" rather than a knock
+    // saying "something came up while you were somewhere else" — and one that is always up says
+    // nothing at all. **Being pointed at is the only thing that raises it**: a file changing is what a
+    // running agent does all day.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "pointed-badge", required: &[], refs: &[], strings: &[], binds: false },
 
     // ── handing a file to the machine ─────────────────────────────────────────────────────────────
     // The three ways out of this face that are not reading the file here, and all three are the

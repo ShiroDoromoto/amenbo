@@ -576,6 +576,22 @@ shortcut around the seam: it is the only door there is.
 nothing outside a pane can find out — an agent going quiet because it is waiting for a person, rather
 than because it is thinking — arriving where that person reads it.
 
+Every road that speaks *in* a pane takes `open-shell` first. A folder with an agent on it opens on
+the agent, which is what a reader wants and what a road cannot use: what an agent does with a line
+typed at it is the agent's own, so a gate resting on one carrying out a command rests on a promise
+nothing holds it to. One op covers the three shapes the face can come up in — a pane already running
+an agent, the offer of several, the notice that none was found — because a plain shell is reachable
+from every one of them, and which of the three is on screen is the run's machine's business rather
+than the road's.
+
+`face-badge` reads the one thing that crosses between the two faces: the mark the terminal's segment
+wears while a turn is standing behind it. It carries no number and no words, so a road says it is
+there or that it is not — and the absent half is half the goal, since being on the terminal face is
+being told and crossing over spends the mark. Raising one takes `say` with `away:`, the only word on
+these roads said from behind the face that reads it: the layer is spoken inside a pane and the mark
+is drawn on the other side of the switch, so the operator arms the word and crosses over before it
+lands. `be-told-on-the-board-that-the-terminal-wants-you` is the road.
+
 A few ops exist to put something **wrong**, because a repair cannot be shown working over a store
 where there is nothing to repair — and a sweep that sweeps nothing looks exactly like one that works.
 `folder legacy-pointer` leaves a bound folder's `.amenbo` in the shape an older build wrote, which is

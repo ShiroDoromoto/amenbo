@@ -534,6 +534,7 @@ export const es: Translation = {
     "face.page": "Página {n}",
     "face.adrift": "En este proyecto quedó algo a medias y nadie se ocupa de ello. ¿Quieres continuarlo?",
     "face.open": "Abrir una terminal aquí",
+    "face.openPick": "Elige uno",
     "face.openHere": "Sitio para otro panel en este proyecto",
     "face.whichFolder": "¿En qué carpeta trabaja este panel?",
     "face.rename": "Cambiar el nombre de este panel",

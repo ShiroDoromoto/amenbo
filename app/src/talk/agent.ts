@@ -14,6 +14,8 @@
 // started at it. It is put wherever this module puts a choice and never where it does not, so a
 // folder that settled on one agent still opens on it unasked. What it is for is the terminal a
 // reader wants after the agent has gone: `git status`, a build, a machine with no agent on it at all.
+// It is a choice like the others and is kept like the others: somebody who opened a plain prompt
+// last time gets one again (`crate::wake::SHELL`).
 //
 // **Before any of that there is the folder**, because a terminal has to be started somewhere and only
 // the person knows where. Choosing one is the whole of the first run: it is the folder the AI is shown,
@@ -35,8 +37,16 @@
 // `../shell/AdriftSlot`), so a pane arriving with a choice has already been through the question
 // this module would put — and putting it a second time would be asking about a decision the person
 // has just made. What such a pane still needs from here is the probe: the folder's canonical form,
-// and whether the project had settled on anything, which is what says if this choice is the answer
-// or one turn's departure from it.
+// and the ranks behind it.
+//
+// **What a person opens with is kept against the person, and this module is where it is written**
+// ({@link pick} · `wake_chose`). Every way of choosing one ends there — the choice carried in from
+// the empty frame, the offer a folder with several puts up, the row on a frame that has closed, and
+// the shell beside all of them — so the next pane they open, in this project or in one they have not
+// made yet, comes up on the same thing. **What it never writes is the project's own answer**: that
+// is the pin somebody puts on a project deliberately, on the project's own settings, and a face that
+// wrote it from a pane would turn one turn's reach for another tool into a decision nobody made
+// (`AMB-T-3686`).
 //
 // **Nothing is asked about a terminal that is already running.** A pane adopts one rather than
 // starting it (`./terminal`), and what is running was settled when it started — asking again would be
@@ -76,11 +86,10 @@ const PANE_CLASS = "termface__pane";
  * frame that arrived without one — a pane that took up a terminal somebody else started.
  *
  * `project` is which project this frame's pane is one of. It is what the invitation asks among —
- * that project's bound folders and nothing else — and it is **whose answer the agent is kept
- * against**: which agent a person works with is a thing about the work rather than about a
- * directory, and one project can bind several folders (`crate::wake`). Both faces pass it; null is a
- * machine that has no project yet, where the first folder chosen is what raises one, and a pane
- * there settles nothing until it does.
+ * that project's bound folders and nothing else — and it is **whose pin the host reads first**: a
+ * project that has been fixed on one agent opens on it whatever this person last reached for
+ * (`crate::wake`). Both faces pass it; null is a machine that has no project yet, where the first
+ * folder chosen is what raises one, and until it does there is no pin to read.
  */
 export async function mountAgentFrame(
   host: HTMLElement,
@@ -139,8 +148,8 @@ export async function mountAgentFrame(
       frame.replaceChildren(said("agent__failed", errText(e, lang)));
       return;
     }
-    // The empty frame's choice, where the pane arrived with one — settling the project's answer only
-    // if it had none, the same as every other way one is chosen ({@link pick}).
+    // The empty frame's choice, where the pane arrived with one — kept as this person's answer, the
+    // same as every other way one is chosen ({@link pick}).
     const chose = start.agent;
     if (chose !== null && chose !== undefined) return pick(chose);
     if (wake.settled) open(wake.settled);
@@ -191,32 +200,35 @@ export async function mountAgentFrame(
   };
 
   /** The way to a prompt with nothing started at it, drawn wherever the frame is putting a choice
-   *  ({@link SHELL}). It opens rather than remembering: a shell is not this folder's answer. */
+   *  ({@link SHELL}). Pressed, it is a choice like any other on the row and is kept like one
+   *  ({@link pick}) — what it is never kept as is the *project's* answer, which is a question about
+   *  which agent the work is done with (`wake_remember`). */
   const shellChoice = () => {
     const choose = document.createElement("button");
     choose.type = "button";
     choose.className = "agent__choice";
     choose.textContent = t("talk.shell", lang);
-    choose.addEventListener("click", () => open(SHELL));
+    choose.addEventListener("click", () => pick(SHELL));
     return choose;
   };
 
   /**
-   * Open on this agent, and keep it as the project's answer where there was not one.
+   * Open on this, and keep it as **this person's** answer — what they last opened a pane with.
    *
-   * **A project settles its agent once, and pressing another one does not re-settle it.** What a
-   * person reaches for on one pane is that pane — the answer is theirs to change on the project's
-   * own settings, and a face that rewrote it every time would turn one turn's departure into a
-   * decision nobody made (`AMB-T-3667`).
+   * Every press that chooses one comes through here, and what it leaves behind is the rank under the
+   * project's own pin (`crate::wake`): the next pane this person opens, here or in a project they
+   * have not made yet, comes up on the same thing. The shell is kept the same way ({@link SHELL}) —
+   * "what did you open with last time" is a question a plain prompt answers.
    *
-   * The shell is never kept either ({@link SHELL}): "which agent do you work with here" is not a
-   * question a prompt with nothing started at it answers. A frame with no project has nowhere to
-   * keep one, and opens all the same. A refusal to keep it is not a reason not to open.
+   * **The project's own answer is not written from here** (`wake_remember`). It is the pin somebody
+   * puts on a project on purpose, and one turn's reach for another tool is not them moving it
+   * (`AMB-T-3686`). It does not depend on the frame having a project either, which is why a window
+   * split out before the board told it which one it is on keeps a choice all the same.
+   *
+   * A refusal to keep it is not a reason not to open.
    */
   const pick = (agent: string) => {
-    if (agent !== SHELL && project !== null && !wake?.settled) {
-      void invoke("wake_remember", { project, agent }).catch(() => {});
-    }
+    void invoke("wake_chose", { agent }).catch(() => {});
     open(agent);
   };
 

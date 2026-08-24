@@ -9,12 +9,15 @@
 //! the same folder, and `~/work` and `/Users/me/work` are the same folder written twice — so a face
 //! asks with whatever it has, and opens with the canonical form this answers in.
 //!
-//! **The question comes in two shapes, and the answer is kept against the project either way.** A
-//! pane about to open in a known folder asks `wake_probe`; an empty frame, where no folder
-//! has been settled yet, asks `wake_choices` about the project and hands over the folders it
-//! is bound to. What differs is only where the trace is read from — one folder, or all of them —
-//! because a preference shown in any of a project's folders is the project's
-//! ([`amenbo_core::wake`]).
+//! **What a press chooses is kept against the person, and what a project pins is kept against the
+//! project.** [`wake_chose`] writes the first ([`amenbo_core::config::Config::last_agent`]) and
+//! [`wake_remember`] the second — the two ranks [`amenbo_core::wake::settle`] reads in that order.
+//!
+//! **The question comes in two shapes, and the ranks are read the same way for both.** A pane about
+//! to open in a known folder asks `wake_probe`; an empty frame, where no folder has been settled
+//! yet, asks `wake_choices` about the project and hands over the folders it is bound to. What
+//! differs is only where the trace is read from — one folder, or all of them — because a preference
+//! shown in any of a project's folders is the project's ([`amenbo_core::wake`]).
 //!
 //! **Not on the perf budget, deliberately.** A probe's time is a login shell reading the reader's
 //! own profile ([`crate::launch::installed`]), so it busts a 50 ms budget on every machine and
@@ -90,7 +93,7 @@ fn answer(
 ) -> Result<WakeDto, CmdError> {
     let config = config()?;
     let kept = project.and_then(|id| config.agent_for(id));
-    let settled = match wake::settle(kept, &candidates) {
+    let settled = match wake::settle(kept, config.last_agent(), &candidates) {
         Choice::Settled(id) => Some(id.to_string()),
         Choice::Ask(_) | Choice::Nothing => None,
     };
@@ -128,6 +131,35 @@ pub fn wake_remember(project: i64, agent: String) -> Result<(), CmdError> {
     crate::migrate::gate()?;
     let mut store = amenbo_core::Store::open_at(paths()?).map_err(not_kept)?;
     store.config.remember_agent(project, &agent);
+    store.save_config().map_err(not_kept)
+}
+
+/// Keep what a pane was just opened with as **this person's** answer, so the next one they open
+/// anywhere comes up on the same thing ([`amenbo_core::config::Config::last_agent`]).
+///
+/// Every press that chooses one goes through here — the row on the empty frame, the offer a folder
+/// with several puts up, and the row on a frame whose program has ended (`app/src/talk/agent.ts`).
+/// The rank's own answer does not: a pane that opened on what was already settled is nobody
+/// deciding anything.
+///
+/// [`amenbo_core::wake::SHELL`] is allowed where [`wake_remember`] would refuse it. What is being
+/// recorded is what this person opened with, and a plain prompt is one of the things they open with;
+/// what a *project* works with is a different question, and a shell is not an answer to it.
+///
+/// Written through the store for the same reason [`wake_remember`] is: a write is a whole-file
+/// rewrite of the device's settings.
+#[tauri::command]
+pub fn wake_chose(agent: String) -> Result<(), CmdError> {
+    if agent != wake::SHELL && wake::started_as(&agent).is_none() {
+        return Err(CmdError::coded(
+            "wake_unknown_agent",
+            "That is not an agent Amenbo knows how to start.",
+            serde_json::json!({ "agent": agent }),
+        ));
+    }
+    crate::migrate::gate()?;
+    let mut store = amenbo_core::Store::open_at(paths()?).map_err(not_kept)?;
+    store.config.remember_last_agent(&agent);
     store.save_config().map_err(not_kept)
 }
 

@@ -534,6 +534,7 @@ export const it: Translation = {
     "face.page": "Pagina {n}",
     "face.adrift": "In questo progetto è rimasto qualcosa a metà e nessuno se ne sta occupando. Vuoi riprenderlo?",
     "face.open": "Apri un terminale qui",
+    "face.openPick": "Scegline uno",
     "face.openHere": "Spazio per un altro riquadro in questo progetto",
     "face.whichFolder": "In quale cartella lavora questo riquadro?",
     "face.rename": "Rinomina questo riquadro",

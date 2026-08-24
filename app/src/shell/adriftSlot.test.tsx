@@ -20,6 +20,8 @@ const hoisted = vi.hoisted(() => ({
   asked: [] as string[],
   /** What this machine can start, and what the project has settled on. */
   wake: { candidates: [], offered: [] } as unknown,
+  /** Set to refuse the read, the way a host that could not answer does. */
+  wakeFails: false,
 }));
 
 vi.mock("../core/mutations", () => ({
@@ -31,7 +33,10 @@ vi.mock("../core/mutations", () => ({
 
 vi.mock("../core/ipc", () => ({
   invoke: vi.fn(async (cmd: string) => {
-    if (cmd === "wake_choices") return hoisted.wake;
+    if (cmd === "wake_choices") {
+      if (hoisted.wakeFails) throw new Error("the host could not say");
+      return hoisted.wake;
+    }
     throw new Error(`the frame asked the host for ${cmd}`);
   }),
 }));
@@ -59,8 +64,9 @@ let container: HTMLDivElement;
 let root: Root;
 const opened: string[] = [];
 const ledger: number[] = [];
-/** What the frame was pressed to open a terminal with, in the order it was pressed. */
-const started: string[] = [];
+/** What the frame was pressed to open a terminal with, in the order it was pressed — null where the
+ *  frame had nothing to say and left the answer to the pane's own side. */
+const started: (string | null)[] = [];
 
 beforeEach(() => {
   hoisted.adrift = left({});
@@ -68,6 +74,7 @@ beforeEach(() => {
   // A machine with no agent on it, which leaves the shell as the only thing to open with — the one
   // shape where the row of them is not drawn at all.
   hoisted.wake = startable([]);
+  hoisted.wakeFails = false;
   opened.length = 0;
   ledger.length = 0;
   started.length = 0;
@@ -96,7 +103,7 @@ async function draw(folder: string | null): Promise<void> {
           children: createElement(AdriftSlot, {
             folders: folder === null ? [] : [folder],
             project: folder === null ? null : 1,
-            onOpen: (agent: string) => { started.push(agent); },
+            onOpen: (agent: string | null) => { started.push(agent); },
             onOpenLedger: () => ledger.push(1),
           }),
         },
@@ -191,25 +198,57 @@ describe("what a terminal opened here is opened with", () => {
       .toEqual(["claude-code", "codex-cli", "Plain shell"]);
   });
 
-  it("draws no row where the shell is the only thing there is", async () => {
+  it("draws no row where the shell is the only thing there is, and opens on it", async () => {
     await draw("/work/here");
 
     expect(container.querySelector(".slot__starts"), "a row of one was drawn").toBeFalsy();
     expect(buttons()).toHaveLength(1);
+
+    // Not the first run's "nothing is on": there is nothing to choose between, so the one thing
+    // there is, is what the press opens.
+    await press("Open a terminal here");
+    expect(started).toEqual(["shell"]);
   });
 
-  it("comes up on the project's own answer", async () => {
+  it("comes up on what the host arrived at", async () => {
     hoisted.wake = startable(["claude-code", "codex-cli"], "codex-cli");
     await draw("/work/here");
 
     expect(on()).toBe("codex-cli");
   });
 
-  it("comes up on the first of them where the project has settled on nothing", async () => {
+  // The first run: nobody has ever chosen, and more than one thing can be started. Nothing is on and
+  // the button says what to do, rather than being pressable and doing nothing (`AMB-T-3686`).
+  it("comes up on nothing at all where nobody has chosen yet", async () => {
     hoisted.wake = startable(["claude-code", "codex-cli"]);
     await draw("/work/here");
 
-    expect(on()).toBe("claude-code");
+    expect(on(), "something was on before anybody chose").toBeNull();
+    expect(container.querySelector(".slot__open")?.textContent).toBe("Choose one");
+  });
+
+  it("does not open a terminal until one of them is chosen", async () => {
+    hoisted.wake = startable(["claude-code", "codex-cli"]);
+    await draw("/work/here");
+
+    await press("Choose one");
+    expect(started, "a press with nothing chosen opened one anyway").toEqual([]);
+
+    await press("codex-cli");
+    expect(container.querySelector(".slot__open")?.textContent).toBe("Open a terminal here");
+    await press("Open a terminal here");
+    expect(started).toEqual(["codex-cli"]);
+  });
+
+  // A frame that never heard back is not the first run: it has nothing to draw a row from and
+  // nothing to say about what is on, so it presses with no answer and the pane settles one.
+  it("opens with no answer at all where the read did not come back", async () => {
+    hoisted.wakeFails = true;
+    await draw("/work/here");
+
+    expect(container.querySelector(".slot__starts"), "a row was drawn off a read that failed").toBeFalsy();
+    await press("Open a terminal here");
+    expect(started).toEqual([null]);
   });
 
   it("opens with the one that is on, and one press does it", async () => {

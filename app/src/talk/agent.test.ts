@@ -5,6 +5,10 @@
 // Only the three boundaries are stubbed — what the host answers, the folder the person chooses, and
 // the terminal itself — so the branching, the remembering, and the row on a closed pane all run for
 // real.
+//
+// **What is kept is the person's, never the project's** (`AMB-T-3686`): every press that chooses one
+// writes `wake_chose`, and nothing here ever writes `wake_remember` — that is the pin somebody puts
+// on a project on its own settings.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { BoundFolderDto, PtySessionDto, WakeDto } from "../bindings/bindings";
 import type { PaneEvents } from "./terminal";
@@ -156,6 +160,13 @@ async function draw(answer: WakeDto, project: number | null = null): Promise<HTM
   return root;
 }
 
+/** What was kept as this person's answer, in the order it crossed (`wake_chose`). */
+function kept(): string[] {
+  return hoisted.sent
+    .filter(([name]) => name === "wake_chose")
+    .map(([, args]) => String(args?.agent));
+}
+
 /** The buttons on screen, by their text. */
 function buttons(root: HTMLElement): HTMLButtonElement[] {
   return [...root.querySelectorAll("button")];
@@ -301,7 +312,9 @@ describe("the frame draws what the host settled", () => {
 
     expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "claude-code", adopt: false }]);
     expect(buttons(root)).toEqual([]);
-    expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_remember");
+    // Nobody chose anything: a pane that opened on what the host had already arrived at is not a
+    // decision, and writing one down would make the rank look like a press.
+    expect(kept()).toEqual([]);
   });
 
   it("offers the choice when several answer, and keeps the one that is picked", async () => {
@@ -313,22 +326,41 @@ describe("the frame draws what the host settled", () => {
     choice?.click();
     await Promise.resolve();
 
-    // Kept against the project rather than the folder: one project can bind several folders, and an
-    // answer written per folder is one project answering the same question several ways.
-    expect(hoisted.sent).toContainEqual([
-      "wake_remember",
-      { project: 7, agent: "codex-cli" },
-    ]);
+    // Kept against the person, so the next pane they open — here, or in a project they have not made
+    // yet — comes up on it. The project's own pin is not touched: that is theirs to set on the
+    // project's settings, and one press is not them setting it.
+    expect(kept()).toEqual(["codex-cli"]);
+    expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_remember");
     expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "codex-cli", adopt: false }]);
   });
 
-  it("keeps nothing where the frame belongs to no project — there is nothing to keep it against", async () => {
+  it("keeps it even where the frame belongs to no project — the answer is the person's", async () => {
     const root = await draw(wake());
 
     buttons(root).find((b) => b.textContent === "Codex CLI")?.click();
     await Promise.resolve();
 
-    expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_remember");
+    // A window split out before the board told it which project it is on still knows who is at it.
+    expect(kept()).toEqual(["codex-cli"]);
+    expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "codex-cli", adopt: false }]);
+  });
+
+  it("keeps what an empty frame chose, without putting the question a second time", async () => {
+    hoisted.chosen = "/work/here";
+    const root = await put(wake(), 7);
+    await chooseFolder(root);
+    document.body.replaceChildren();
+    hoisted.sent = [];
+    hoisted.panes = [];
+
+    // What the empty frame was pressed on rides in on the pane (`../shell/AdriftSlot`).
+    const carried = document.createElement("div");
+    document.body.append(carried);
+    hoisted.answers = [wake()];
+    await mountAgentFrame(carried, "en", events, { cwd: "/work/here", agent: "codex-cli" }, 7);
+
+    expect(buttons(carried), "the question was put about a choice already made").toEqual([]);
+    expect(kept()).toEqual(["codex-cli"]);
     expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: "codex-cli", adopt: false }]);
   });
 
@@ -372,9 +404,10 @@ describe("the agent can be changed only on a frame that has closed", () => {
     buttons(root).find((b) => b.textContent === "Open")?.click();
     await Promise.resolve();
 
-    // The pane opens on what was picked, and **the project's answer stays where it was**: reaching
-    // for another tool on one frame is that frame, and what the project opens with is changed on the
-    // project's own settings (`AMB-T-3667`).
+    // The pane opens on what was picked, and it is kept as the person's. **The project's pin stays
+    // where it was**: what the project opens with is changed on the project's own settings, never by
+    // somebody reaching for another tool on one frame (`AMB-T-3686`).
+    expect(kept()).toEqual(["codex-cli"]);
     expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_remember");
     expect(hoisted.panes[hoisted.panes.length - 1]).toEqual({
       cwd: "/work/here",
@@ -383,7 +416,7 @@ describe("the agent can be changed only on a frame that has closed", () => {
     });
   });
 
-  it("settles the project's answer from the row where it had settled on nothing", async () => {
+  it("keeps what the row opened with, the same as every other press that chooses one", async () => {
     const root = await draw(wake(), 7);
     buttons(root).find((b) => b.textContent === "Claude Code")?.click();
     await Promise.resolve();
@@ -399,16 +432,18 @@ describe("the agent can be changed only on a frame that has closed", () => {
     buttons(root).find((b) => b.textContent === "Open")?.click();
     await Promise.resolve();
 
-    expect(hoisted.sent).toContainEqual(["wake_remember", { project: 7, agent: "codex-cli" }]);
+    expect(kept()).toEqual(["codex-cli"]);
+    expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_remember");
   });
 
-  it("does not write the answer down again when the same agent is opened", async () => {
+  it("opens again on the same one, and says so again — the press is a choice either way", async () => {
     const root = await draw(wake({ settled: "claude-code" }));
+    hoisted.sent = [];
     hoisted.end?.();
     buttons(root).find((b) => b.textContent === "Open")?.click();
     await Promise.resolve();
 
-    expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_remember");
+    expect(kept()).toEqual(["claude-code"]);
     expect(hoisted.panes).toHaveLength(2);
   });
 });
@@ -426,8 +461,10 @@ describe("the shell stands beside the agents, and answers nothing about the fold
     shell?.click();
     await Promise.resolve();
 
-    // Not remembered: "which agent do you work with in this folder" is not a question a shell
-    // answers, and an answer written down here would be one the offer never asked for.
+    // Kept as the person's, the same as an agent would be: "what did you open with last time" is a
+    // question a plain prompt answers. What it is never written down as is the *project's* answer —
+    // "which agent do you work with here" is not.
+    expect(kept()).toEqual(["shell"]);
     expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_remember");
     expect(hoisted.panes).toEqual([{ cwd: "/work/here", agent: null, adopt: false }]);
   });
@@ -455,7 +492,7 @@ describe("the shell stands beside the agents, and answers nothing about the fold
     ]);
   });
 
-  it("starts nothing, and writes nothing down, when the row opens the shell", async () => {
+  it("starts nothing, and keeps the shell as the person's, when the row opens it", async () => {
     const root = await draw(wake({ settled: "claude-code" }));
     hoisted.end?.();
     const choose = root.querySelector("select");
@@ -467,6 +504,7 @@ describe("the shell stands beside the agents, and answers nothing about the fold
     buttons(root).find((b) => b.textContent === "Open")?.click();
     await Promise.resolve();
 
+    expect(kept()).toEqual(["shell"]);
     expect(hoisted.sent.map(([name]) => name)).not.toContain("wake_remember");
     expect(hoisted.panes[hoisted.panes.length - 1]).toEqual({
       cwd: "/work/here",

@@ -513,6 +513,7 @@ export const zhHans: Translation = {
     "face.page": "第 {n} 页",
     "face.adrift": "这个项目里有事情停在半路，没有人在做。要继续吗？",
     "face.open": "在此打开终端",
+    "face.openPick": "请选择一个",
     "face.openHere": "在这个项目里给下一个窗格腾出位置",
     "face.whichFolder": "这个窗格在哪个文件夹里工作？",
     "face.rename": "重命名此窗格",

@@ -268,6 +268,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
   font-size: var(--fs-sm); font-weight: 600;
 }
 .slot__open:hover { filter: brightness(1.08); }
+/* The same press before anybody has chosen, which is the first run and only it. It steps back to an
+   outline so the row above is the one lit thing in the frame — what the reader has to do is choose,
+   and the button says so in words rather than waiting to refuse a press (`../shell/AdriftSlot`). */
+.slot__open:disabled {
+  background: transparent; border-color: var(--c-border); color: var(--c-text-faint);
+  cursor: default;
+}
+.slot__open:disabled:hover { filter: none; }
 
 /* What the terminal is opened with: one pill each, and the one in force filled with the accent. They
    are pressable and a reader has to see that they are — words alone read as a caption, and a caption

@@ -665,6 +665,23 @@ pub struct Config {
     /// already ignores one that does not hold.
     #[serde(default)]
     pub project_agent: std::collections::BTreeMap<String, String>,
+    /// **The last thing this person opened a pane with** ([`crate::wake`]) — the rank under the
+    /// project's own answer, and what makes a choice made once hold in every project after it.
+    ///
+    /// **The person is the scale, not the project.** Which agent somebody works with is their own
+    /// habit rather than a property of a directory, so a project-shaped answer alone would ask the
+    /// question again on every project they ever make — an endless friction for the reader who works
+    /// with one agent everywhere. What a project keeps ([`Config::project_agent`]) is the answer
+    /// somebody pinned on purpose, and it still wins.
+    ///
+    /// It holds [`crate::wake::SHELL`] as well as a catalogued agent id: "I opened a plain prompt
+    /// last time" is an answer to *this* question, though it is not one to the project's.
+    ///
+    /// A value whose tool has since gone is left alone rather than pruned, the same as a project's —
+    /// [`crate::wake::settle`] already passes over one that does not hold. **A user-level setting;
+    /// never synced**, because what can be started is a fact about this machine.
+    #[serde(default)]
+    pub last_agent: Option<String>,
 }
 
 /// Cap on the size of an avatar data URL, in bytes. A loose limit to stop breakage and runaways —
@@ -719,6 +736,7 @@ impl Default for Config {
             hook_consent: None,
             tick_consent: None,
             project_agent: Default::default(),
+            last_agent: None,
         }
     }
 }
@@ -897,6 +915,18 @@ impl Config {
     /// clearing the choice on the project's settings leaves behind.
     pub fn forget_agent(&mut self, project: i64) {
         self.project_agent.remove(&project.to_string());
+    }
+
+    /// What this person last opened a pane with, where they have opened one
+    /// ([`Config::last_agent`]).
+    pub fn last_agent(&self) -> Option<&str> {
+        self.last_agent.as_deref()
+    }
+
+    /// Keep what was just opened with as this person's own answer, replacing whatever they opened
+    /// with before — what every press that chooses one leaves behind ([`crate::wake`]).
+    pub fn remember_last_agent(&mut self, id: &str) {
+        self.last_agent = Some(id.to_string());
     }
 
     /// Read the config file, falling back to the defaults when it is absent — for the cases that

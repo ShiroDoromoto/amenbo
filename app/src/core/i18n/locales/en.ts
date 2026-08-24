@@ -578,6 +578,10 @@ const ui = {
   // stopped, only that nothing it opened is at it (`AMB-D-748`).
   "face.adrift": "Something in this project was left in the middle, and nothing is at it. Carry on with it?",
   "face.open": "Open a terminal here",
+  // The same button before anybody has chosen — the first run, and only it. It says what to do
+  // rather than being pressable and doing nothing: what is missing is written on the thing the
+  // reader would press, so there is no refusal to explain afterwards (`AMB-T-3686`).
+  "face.openPick": "Choose one",
   "face.openHere": "Room for another pane in this project",
   "face.whichFolder": "Which folder does this pane work in?",
   "face.rename": "Rename this pane",

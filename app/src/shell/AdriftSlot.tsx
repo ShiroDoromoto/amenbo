@@ -31,14 +31,23 @@ import { Icon } from "../components/Icon";
  * prevents, not the thing this component checks.
  *
  * **What a terminal is opened with is chosen here**, on the frame, and pressed once. The row above
- * the button is every agent this machine can start plus the plain shell, with the project's own
- * answer already on — so the common press is the same one press it always was, and choosing
- * something else costs a press and no dialog (`AMB-T-3667`). What is chosen here is this pane's: the
- * project settles its answer the first time and changes it on its own settings, never by somebody
- * reaching for a different tool for one turn (`../talk/agent`).
+ * the button is every agent this machine can start plus the plain shell, with the answer the host
+ * arrived at already on — so the common press is the same one press it always was, and choosing
+ * something else costs a press and no dialog (`AMB-T-3667`). What comes up on is the project's pin
+ * where it has one, else what this person last opened with, and the choice made here is kept as the
+ * second of those (`../talk/agent` · `crate::wake`).
+ *
+ * **The first run is the one time nothing is on.** Nobody has chosen, there is more than one thing
+ * to choose between, and the frame says so on the button rather than guessing: it reads "choose one"
+ * and does not press. A reader is never told why a press did nothing, because there is no press that
+ * does nothing (`AMB-T-3686`). A machine with a single startable agent is not that case — one thing
+ * to open with is not a question — and neither is a machine with none, where the shell is the whole
+ * of the row and is on.
  *
  * `onOpen` is what this is for when there is nothing to ask: opening a pane in this project, with
- * the agent that was chosen — {@link SHELL} for a prompt with nothing started at it.
+ * the agent that was chosen — {@link SHELL} for a prompt with nothing started at it, and null where
+ * the read that would have said never came back, which leaves the answer to be settled on the pane's
+ * own side (`../talk/agent`).
  */
 export function AdriftSlot({
   folders,
@@ -52,7 +61,7 @@ export function AdriftSlot({
   /** The project being shown, or null on a face that has none — which is a face with nothing to
    *  keep an answer against. */
   project: number | null;
-  onOpen: (agent: string) => void;
+  onOpen: (agent: string | null) => void;
   /** Bring the ledger up. Selecting a task happens on the other face, so following one from here has
    *  to leave this one — the same move the file face makes (`../files/FilesPanel`). */
   onOpenLedger?: () => void;
@@ -65,7 +74,7 @@ export function AdriftSlot({
   // frame that ran one on every render would pay for it on every keystroke elsewhere on the page.
   const [wake, setWake] = useState<WakeDto | null>(null);
   // Which of them the next pane opens with, once the reader has said. Null until they do, because
-  // what is on before that is the project's answer and that arrives with the read.
+  // what is on before that is the host's answer and that arrives with the read.
   const [chose, setChose] = useState<string | null>(null);
   const key = folders.join("\n");
 
@@ -84,14 +93,24 @@ export function AdriftSlot({
 
   // The row, in catalog order, with the plain shell at the end of it. The shell is not an agent and
   // has no row in the catalogue, so it is put here rather than found (`../talk/agent`).
+  //
+  // **Empty until the read comes back, and empty again if it did not.** A row is what this machine
+  // can start, and a frame that has not been told cannot draw one — the shell alone would be a row
+  // saying this machine has no agents on it, which is a different answer from having no answer.
   const starts = useMemo(() => {
-    const offered = (wake?.offered ?? [])
-      .flatMap((id) => (wake?.candidates ?? []).filter((one) => one.id === id))
+    if (wake === null) return [];
+    const offered = wake.offered
+      .flatMap((id) => wake.candidates.filter((one) => one.id === id))
       .map((one) => ({ id: one.id, label: one.label }));
     return [...offered, { id: SHELL, label: t("talk.shell") }];
   }, [wake]);
-  // What is on: what the reader said, else the project's answer, else the first thing on the row.
-  const on = chose ?? wake?.settled ?? starts[0]?.id ?? SHELL;
+  // What is on: what the reader said, else what the host arrived at, else — where the row has one
+  // thing on it — that one, since a row of one is not a choice. Null is nobody having chosen: the
+  // first run, and the read that has not come back or did not come.
+  const on = chose ?? wake?.settled ?? (starts.length === 1 ? starts[0]!.id : null);
+  // The first run, and only it: the row is drawn, nothing on it is on, and the button says so. A
+  // frame that never heard from the host is not this — it opens, and the pane settles what with.
+  const asking = wake !== null && on === null;
 
   // Re-read whenever the store moves: a task the reader has just picked up again is one this must stop
   // asking about, and the answer changes from outside this window by construction.
@@ -154,7 +173,11 @@ export function AdriftSlot({
           ))}
         </div>
       )}
-      <button className="slot__open" onClick={() => onOpen(on)}>{t("face.open")}</button>
+      {/* Not pressed while nothing is on, and it says which it is rather than explaining a refusal
+          afterwards: what the reader has to do is written on the thing they would press. */}
+      <button className="slot__open" onClick={() => onOpen(on)} disabled={asking}>
+        {asking ? t("face.openPick") : t("face.open")}
+      </button>
     </>
   );
 

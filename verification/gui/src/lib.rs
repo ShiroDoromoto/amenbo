@@ -601,6 +601,13 @@ impl Instructor {
     /// row can stand in are drawn as words of the interface, and which of them is standing is not
     /// something the presence of text can settle.
     ///
+    /// `terminal dot` is a `Review`, and one that is not about words at all. What it reads is a mark
+    /// with no text on it, and what it reads *of* that mark is movement: a dot that is pulsing rests,
+    /// at either end of its turn, at exactly the opacity a still one holds, so a picture of the two
+    /// can be the same picture. The eye that closes it is therefore watching the screen rather than
+    /// the shot, and the instruction says so and says for how long. The shot is still kept, for the
+    /// half of the row a picture does carry — which pane the mark belongs to.
+    ///
     /// `dimension key` is read, and it is the cleanest reading on these roads. A key is neither a word
     /// of the interface nor a title drawn twice over — it is what a reader types for somewhere outside
     /// Amenbo — so it stands on the shot in the one field it was typed into, and nowhere else.
@@ -1293,6 +1300,41 @@ impl Instructor {
                 "In the pane that has a terminal running in it, run: amenbo session point \"{}\" --why \"{}\" — this is the agent pointing at something worth opening, and saying why.",
                 req(with, "target")?,
                 req(with, "why")?
+            ),
+            // Opening a pane where there is not one yet. Both ways in are one press and nothing else
+            // — the folder is the page's, settled by the first terminal started there — so what the
+            // step says is which control is pressed and where the screen ends up, since the two
+            // differ on exactly that. The rail's names the page it is pressed beside, because the
+            // list draws every page at once and a step that did not say which row would be a reader
+            // picking one.
+            (Domain::Terminal, "open-pane") => match req(with, "from")? {
+                "slot" => "On the page being shown, press an empty slot — a box offering to open a terminal rather than one holding it. A pane opens there and nothing is asked: the folder is the one this page's first terminal was started in."
+                    .to_string(),
+                "rail" => format!(
+                    "In the list of panes beside them, press the way in at the end of the row for page {} — the control beside that page's name. A pane opens in the first free slot of that page, in that page's folder, and the screen moves there.",
+                    count(with, "page")?
+                ),
+                other => {
+                    return Err(format!(
+                        "action `open-pane` does not know the way in `{other}` — it is slot or rail"
+                    ))
+                }
+            },
+            // How many panes a page draws. The control is named by what it holds rather than by
+            // where it sits, and the number is pressed as it is written: the three counts are all
+            // drawn at once, so there is nothing to open first. What the step does not say is what
+            // becomes of the panes — the frames are one list re-cut by the new count, so a pane can
+            // land on another page, and which of that is right is the assert after it.
+            (Domain::Terminal, "set-panes") => format!(
+                "At the top of the terminal face, in the group of three pane counts, press {}. The page redraws with that many panes on it.",
+                count(with, "count")?
+            ),
+            // Paging. The digits are the pages, so the step names the one it presses and says the
+            // whole screen moves: a pane that was on the page being left is not on the screen after
+            // this, which is the state half these roads are about.
+            (Domain::Terminal, "go-page") => format!(
+                "At the top of the terminal face, in the row of page digits, press {}. The whole screen moves to that page.",
+                count(with, "page")?
             ),
             // A file put in the folder from outside Amenbo, while the app is up. It is written as an
             // instruction and not left to the premise because *when* it happens is the whole of what
@@ -2088,6 +2130,17 @@ impl Instructor {
                     "Confirm the line \"{}\" is nowhere on the screen — the terminal is not the face being shown.",
                     req(with, "shows")?
                 ),
+            },
+            // The dot on a pane's label, and whether it is pulsing. It is watched rather than read:
+            // a pulse is movement, and both ends of its turn rest at the still dot's own opacity, so
+            // a picture of a moving dot and a picture of a still one can be the same picture. The
+            // operator is told how long to watch, and told which pane — the one being worked in
+            // never pulses, since a reader looking straight at a terminal can already see it moving.
+            (Domain::Terminal, "dot") => match flag(with, "moving")? {
+                true => "On the row above a pane the reader is not working in, watch the dot to the left of the name for a few seconds: confirm it is pulsing — fading up and down — which is that terminal putting something out. Judge it by watching rather than by the shot: a still picture of a pulse can be caught at the moment it rests."
+                    .to_string(),
+                false => "On that same row, watch the dot for a few seconds: confirm it is holding still at its dim step, rather than fading up and down. Still is the pane's resting state, not the pane having gone — the dot is drawn either way."
+                    .to_string(),
             },
             // What an empty slot asks about. The absent half is not the same sentence turned round: it
             // says which reservation is being looked for and that the slot is right not to name it, so
@@ -4694,6 +4747,87 @@ steps_gui:
         assert!(
             Instructor::new().expectation(&step).is_none(),
             "nothing standing there is not a reading",
+        );
+    }
+
+    /// The moves a page is worked with, and the two ways a pane is opened on one. What the road has
+    /// to be able to say is which control was pressed: the slot is on the page being looked at and
+    /// the rail's is beside a page's name in the list, so a step that named neither would leave an
+    /// operator to pick — and the two land the screen in different places.
+    #[test]
+    fn the_page_moves_name_the_control_they_press() {
+        let s = load(r#"
+id: x
+title: A page is re-cut, paged and opened on
+steps_gui:
+  - type: action
+    domain: terminal
+    op: set-panes
+    with: { count: 1 }
+  - type: action
+    domain: terminal
+    op: go-page
+    with: { page: 2 }
+  - type: action
+    domain: terminal
+    op: open-pane
+    with: { from: slot }
+  - type: action
+    domain: terminal
+    op: open-pane
+    with: { from: rail, page: 1 }
+"#);
+        let mut ins = Instructor::new();
+        let lines: Vec<String> =
+            s.steps(Driver::Gui).iter().map(|st| ins.render(st).unwrap()).collect();
+        assert!(lines[0].contains("pane counts, press 1"), "got: {}", lines[0]);
+        assert!(lines[1].contains("page digits, press 2"), "got: {}", lines[1]);
+        assert!(lines[2].contains("empty slot"), "the slot is on the page being shown: {}", lines[2]);
+        assert!(
+            lines[3].contains("row for page 1") && lines[3].contains("screen moves there"),
+            "the rail names its page and takes the screen there: {}",
+            lines[3]
+        );
+    }
+
+    /// A way in the face does not have is refused here rather than rendered into a sentence nobody
+    /// could carry out — the same fail-closed contract an unmapped op keeps.
+    #[test]
+    fn a_way_into_a_pane_the_face_does_not_offer_is_refused() {
+        let step = Step::Action {
+            domain: Domain::Terminal,
+            op: "open-pane".to_string(),
+            with: [("from".to_string(), serde_yaml::Value::from("keyboard"))]
+                .into_iter()
+                .collect(),
+            bind: None,
+            window: None,
+        };
+        let err = Instructor::new().render(&step).unwrap_err();
+        assert!(err.contains("slot or rail"), "got: {err}");
+    }
+
+    /// The dot is watched, not read. Both halves say how long to watch and neither is judged off the
+    /// shot: a pulse rests, twice a turn, at exactly the still dot's own step.
+    #[test]
+    fn the_dot_is_watched_rather_than_read_off_the_shot() {
+        let dot = |moving: bool| Step::Assert {
+            domain: Domain::Terminal,
+            op: "dot".to_string(),
+            with: [("moving".to_string(), serde_yaml::Value::from(moving))].into_iter().collect(),
+            window: None,
+        };
+        let pulsing = Instructor::new().render(&dot(true)).unwrap();
+        assert!(pulsing.contains("pulsing"), "got: {pulsing}");
+        assert!(
+            pulsing.contains("not working in"),
+            "the pane being worked in never pulses: {pulsing}"
+        );
+        let still = Instructor::new().render(&dot(false)).unwrap();
+        assert!(still.contains("holding still"), "got: {still}");
+        assert!(
+            Instructor::new().expectation(&dot(true)).is_none(),
+            "a mark with no words on it is not a reading",
         );
     }
 

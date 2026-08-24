@@ -540,6 +540,23 @@ screen and nothing the store holds. Screen roads alone, and for a reason no othe
 terminal is the surface a reader is already typing in, so the question does not arise for somebody
 at a shell.
 
+The face's own arrangement is in that vocabulary as well, because on this face the arrangement is
+most of what there is: `set-panes` re-cuts the frames into pages of one, two or four, `go-page` moves
+the whole screen to another page, and `open-pane` starts a terminal where there is not one yet —
+`from: slot` in an empty box on the page being looked at, `from: rail` beside a page's name in the
+list, which opens in that page's first free slot and takes the screen there. What they are walked for
+is what they must not do. Every one of those moves re-cuts one list of frames, and a pane that left
+the screen is a pane still running behind it.
+
+`dot` is the one reading on these roads that is not text at all. The mark on a pane's label pulses
+while something is coming out of that terminal, and it is the only thing on screen that says a pane
+is *alive* rather than drawn — a terminal that ended leaves its last output where it was, so words on
+a pane outlive the process that wrote them. Two things follow for whoever writes a road with it in.
+The pane it reads has to be one the reader is not working in, the focused pane never pulsing, since
+somebody looking straight at a terminal can already see it moving. And the step is watched rather
+than shot: a pulse rests, twice a turn, at exactly the still dot's own step, so it is a `Review` and
+the instruction says how long to watch.
+
 What a `pane` assert reads is deliberately the reader's own words rather than the interface's. Every
 other word on that face belongs to Amenbo, so a reading of one would hold the gate to whichever
 language the run's machine is set to — and, more to the point, a pane showing a fresh prompt looks

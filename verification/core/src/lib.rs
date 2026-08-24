@@ -1875,6 +1875,37 @@ const REGISTRY: &[OpSpec] = &[
     // is the same layer and the same seam: the other four carry one line, and this carries a thing and
     // a reason for it — a shape of its own, and one the file face reads rather than the pane's label.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "point", required: &["target", "why"], refs: &[], strings: &["target", "why"], binds: false },
+    // Opening a pane where there is not one yet, which is every way in but the first. A page is one
+    // project and a pane opened on it takes the page's folder, so nothing is asked here — the folder
+    // was settled by the first terminal started there. `from` is which of the two controls is pressed,
+    // and they are not the same move: `slot` is an empty box on the page being looked at, and `rail`
+    // is the way in beside a page's name in the list beside the panes, which opens in that page's
+    // first free slot and takes the screen there. A `rail` step names the `page` it presses beside; a
+    // `slot` one does not, that page being the one already on screen.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "open-pane", required: &["from"], refs: &[], strings: &["from"], binds: false },
+    // How many panes a page draws: 1, 2 or 4, and no other number. It is not a change of look. The
+    // frames are one list cut into pages, so a new count re-pages every pane this device has — which
+    // is why a road walks it at all: what has to survive the cut is the terminals running inside them.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "set-panes", required: &["count"], refs: &[], strings: &[], binds: false },
+    // Which page is being shown, counted from 1. Paging is one of the two ways to a pane that is not
+    // on the screen and by far the commoner, so it is the move a terminal has to be able to outlive:
+    // a page is drawn rather than held, and the panes it took away are still running behind it.
+    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "go-page", required: &["page"], refs: &[], strings: &[], binds: false },
+    // Whether the dot on the pane's label is pulsing — something came out of that terminal a moment
+    // ago. It is the one reading that says a pane is *alive* rather than drawn: a terminal that ended
+    // leaves its last output where it was, so words on a pane outlive the process that wrote them and
+    // a road reading only those cannot tell a session that came back from the picture of one. `moving`
+    // says which half is being read. The dot's colour is not this op's and must not be read as its
+    // neighbour: hue says which pane, and the pulse says what is happening in it.
+    //
+    // Two things about the mark decide where a road may put this step, and both are the screen's
+    // rather than this registry's. **The pane being worked in never pulses** — a reader looking
+    // straight at a terminal can see it moving, so the mark is for the panes they are not looking at
+    // — which means the pane a step reads has to be one the road has left. And **the pulse is
+    // movement**, so it is watched rather than shot: at either end of its turn a moving dot rests at
+    // exactly the still one's opacity, and a road that judged it off a picture would go red on the
+    // frame it happened to catch.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "dot", required: &["moving"], refs: &[], strings: &[], binds: false },
 
     // ── the file face ─────────────────────────────────────────────────────────────────────────────
     // The folder a project is bound to, read from inside Amenbo. Three sections in one column: what an

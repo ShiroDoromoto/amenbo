@@ -230,18 +230,15 @@ describe("the count is the most a page draws", () => {
 });
 
 describe("the sides", () => {
-  it("are drawers when one pane was asked for, however wide the window", () => {
-    expect(sidesAreDrawers(1, 2560)).toBe(true);
+  it("are drawers on a narrow window", () => {
+    expect(sidesAreDrawers(700)).toBe(true);
   });
 
-  it("are drawers on a narrow window, whatever count was asked for", () => {
-    expect(sidesAreDrawers(4, 700)).toBe(true);
-    expect(sidesAreDrawers(2, 700)).toBe(true);
-  });
-
-  it("are columns otherwise", () => {
-    expect(sidesAreDrawers(2, 1400)).toBe(false);
-    expect(sidesAreDrawers(4, 1400)).toBe(false);
+  it("are columns on a wide one — the split asked for does not close them", () => {
+    expect(sidesAreDrawers(1400)).toBe(false);
+    // One pane on a wide screen is somebody wanting that terminal big. The rail closing itself over
+    // it is a thing they did not ask for and have to undo.
+    expect(sidesAreDrawers(2560)).toBe(false);
   });
 });
 

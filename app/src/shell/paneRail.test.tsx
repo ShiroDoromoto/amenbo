@@ -68,7 +68,7 @@ afterEach(() => {
 describe("the rail", () => {
   it("names every project and lists the panes of the one being shown", async () => {
     await draw(twoProjects());
-    expect([...container.querySelectorAll(".rail__projectname")].map((one) => one.textContent))
+    expect([...container.querySelectorAll(".rail__project")].map((one) => one.textContent))
       .toEqual(["amenbo", "the site"]);
     // Project 2 has a pane of its own; it is not on the rail, because it is not on the screen.
     expect(rows()).toHaveLength(4);
@@ -77,7 +77,7 @@ describe("the rail", () => {
   it("changes the whole screen when a project is picked", async () => {
     await draw(twoProjects());
     await act(async () => {
-      container.querySelectorAll(".rail__projectname")[1]!
+      container.querySelectorAll(".rail__project")[1]!
         .dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(project).toHaveBeenCalledWith(2);
@@ -111,14 +111,17 @@ describe("the rail", () => {
     expect(rows()[1]!.querySelector(".rail__idle")).not.toBeNull();
   });
 
-  it("offers the way in on the project being shown and on no other", async () => {
+  it("offers one way in, under the heading of what it adds to", async () => {
     await draw(twoProjects());
-    const ways = [...container.querySelectorAll(".rail__project")]
-      .map((one) => one.querySelector(".rail__open") !== null);
-    expect(ways).toEqual([true, false]);
+    // One button and not one per project: what it opens a pane in is the project on the screen, and
+    // a second one beside a project that is not would move the screen as a side effect.
+    expect(container.querySelectorAll(".rail__open")).toHaveLength(1);
+    const heads = [...container.querySelectorAll(".rail__head")];
+    expect(heads[1]!.querySelector(".rail__open"), "it is not under the projects").not.toBeNull();
+    expect(heads[0]!.querySelector(".rail__open")).toBeNull();
   });
 
-  it("opens a pane in the project it was pressed beside, and says which", async () => {
+  it("opens a pane in the project being shown, and says which", async () => {
     await draw(twoProjects());
     await act(async () => {
       container.querySelector(".rail__open")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));

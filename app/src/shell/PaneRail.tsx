@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { folderName, type FrameNames } from "../talk/frames";
 import { panesOf, type Frame, type Layout } from "../talk/layout";
 import type { Project } from "../mock/types";
+import { Icon } from "../components/Icon";
 import { t } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 
@@ -31,6 +32,12 @@ import { asTyped, isEnterSubmit } from "../core/keys";
  * **And it is where another pane is opened in the project already up.** Where the project is bound to
  * one folder nothing is asked at all; where it is bound to several the question is which of them, and
  * never anything outside the project (`./FolderChoice`).
+ *
+ * **Two lists under two headings, and not one list that nests.** What a person picks here is a
+ * project or a pane of it, and the two are different choices: nesting the panes under the row that
+ * chooses their project made the rail one tree where the second choice looked like part of the
+ * first. The way in sits under the heading of what it adds to, named — a bare `+` beside a project's
+ * row read as "add a project", which is the one thing it does not do.
  */
 export function PaneRail({
   layout, names, projects, needy, onProject, onPick, onRename, onOpen,
@@ -55,78 +62,86 @@ export function PaneRail({
     field.current?.select();
   }, [renaming]);
 
+  const shownProject = projects.find((one) => one.id === layout.project) ?? null;
+  const panes = shownProject === null ? [] : panesOf(layout, shownProject.id);
+
   return (
     <nav className="rail" aria-label={t("face.rail")}>
-      {projects.map((project) => {
-        const shown = layout.project === project.id;
-        const panes = panesOf(layout, project.id);
-        return (
-          <div className="rail__project" key={project.id}>
-            <div className="rail__projectrow">
-              <button
-                className={`rail__projectname${shown ? " rail__projectname--on" : ""}`}
-                aria-current={shown ? "true" : undefined}
-                onClick={() => onProject(project.id)}
-              >
-                {project.name}
-                {/* Only for a project the reader is not looking at: the panes of the one they are
-                    each say whose turn it is for themselves (`../talk/nameplate`). */}
-                {!shown && panes.some((pane) => needy.has(pane.id)) && (
-                  <span className="rail__needs" title={t("face.needsYou")} aria-hidden="true" />
-                )}
-              </button>
-              {/* Beside the project it opens in, because that is what it is about. It is offered for
-                  the project being shown and no other: opening a pane goes to it, and a press that
-                  moved the screen somewhere else as a side effect is one nobody meant. */}
-              {shown && (
-                <button
-                  className="rail__open"
-                  title={t("face.openHere")}
-                  aria-label={t("face.openHere")}
-                  onClick={() => onOpen(project.id)}
-                >
-                  +
-                </button>
+      <div className="rail__head">
+        <h2 className="rail__title">{t("face.projects")}</h2>
+      </div>
+      <div className="rail__list rail__list--projects">
+        {projects.map((project) => {
+          const shown = layout.project === project.id;
+          return (
+            <button
+              key={project.id}
+              className={`rail__project${shown ? " rail__project--on" : ""}`}
+              aria-current={shown ? "true" : undefined}
+              onClick={() => onProject(project.id)}
+            >
+              <span className="rail__name">{project.name}</span>
+              {/* Only for a project the reader is not looking at: the panes of the one they are
+                  each say whose turn it is for themselves (`../talk/nameplate`). */}
+              {!shown && panesOf(layout, project.id).some((pane) => needy.has(pane.id)) && (
+                <span className="rail__needs" title={t("face.needsYou")} aria-hidden="true" />
               )}
-            </div>
-            {shown && inNameOrder(panes, names, layout.count).map(({ frame, label }) =>
-              renaming === frame.id
-                ? (
-                  <input
-                    key={frame.id}
-                    ref={field}
-                    className="rail__rename"
-                    defaultValue={names.get(frame.id) ?? ""}
-                    autoFocus
-                    aria-label={t("face.rename")}
-                    {...asTyped}
-                    onKeyDown={(e) => {
-                      if (isEnterSubmit(e)) {
-                        e.preventDefault();
-                        const text = e.currentTarget.value.trim();
-                        if (text) onRename(frame.id, text);
-                        setRenaming(null);
-                      }
-                      if (e.key === "Escape") setRenaming(null);
-                    }}
-                    onBlur={() => setRenaming(null)}
-                  />
-                )
-                : (
-                  <button
-                    key={frame.id}
-                    className={`rail__row${layout.focus === frame.id ? " rail__row--focused" : ""}`}
-                    onClick={() => onPick(frame.id)}
-                    onDoubleClick={() => setRenaming(frame.id)}
-                    title={t("face.rename")}
-                  >
-                    <span className="rail__name">{label}</span>
-                    {frame.session === null && <span className="rail__idle">·</span>}
-                  </button>
-                ))}
-          </div>
-        );
-      })}
+            </button>
+          );
+        })}
+      </div>
+      <div className="rail__head">
+        <h2 className="rail__title">{t("face.sessions")}</h2>
+        {/* Under the heading of what it adds to, and named. It is offered for the project being
+            shown and no other: opening a pane goes to it, and a press that moved the screen
+            somewhere else as a side effect is one nobody meant. */}
+        {shownProject !== null && (
+          <button
+            className="rail__open"
+            title={t("face.openHere")}
+            onClick={() => onOpen(shownProject.id)}
+          >
+            <Icon name="plus" /> {t("face.addPane")}
+          </button>
+        )}
+      </div>
+      <div className="rail__list rail__list--panes">
+        {inNameOrder(panes, names, layout.count).map(({ frame, label }) =>
+          renaming === frame.id
+            ? (
+              <input
+                key={frame.id}
+                ref={field}
+                className="rail__rename"
+                defaultValue={names.get(frame.id) ?? ""}
+                autoFocus
+                aria-label={t("face.rename")}
+                {...asTyped}
+                onKeyDown={(e) => {
+                  if (isEnterSubmit(e)) {
+                    e.preventDefault();
+                    const text = e.currentTarget.value.trim();
+                    if (text) onRename(frame.id, text);
+                    setRenaming(null);
+                  }
+                  if (e.key === "Escape") setRenaming(null);
+                }}
+                onBlur={() => setRenaming(null)}
+              />
+            )
+            : (
+              <button
+                key={frame.id}
+                className={`rail__row${layout.focus === frame.id ? " rail__row--focused" : ""}`}
+                onClick={() => onPick(frame.id)}
+                onDoubleClick={() => setRenaming(frame.id)}
+                title={t("face.rename")}
+              >
+                <span className="rail__name">{label}</span>
+                {frame.session === null && <span className="rail__idle">·</span>}
+              </button>
+            ))}
+      </div>
     </nav>
   );
 }

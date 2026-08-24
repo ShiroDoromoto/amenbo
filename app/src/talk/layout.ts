@@ -387,11 +387,12 @@ export function restored(saved: SavedLayout, onto: number | null): Layout | null
 /**
  * Whether the columns beside the panes are drawers rather than columns.
  *
- * One pane is a person saying they want the screen for it, and a narrow window has not got the room
- * for three things across whatever anyone asked for. Both answers are the same answer, so both are
- * given here: what changes is whether the rail and what sits on the other side are always there or
- * are opened when they are wanted.
+ * **The window's width decides it, and nothing else.** A drawer is what a face does when there is no
+ * room for three things across it, so the question it answers is how much room there is. The split
+ * somebody asked for is a different question: a person who puts one terminal on a wide screen wants
+ * that terminal big, not the rail gone — and a rail that closed itself over it is a thing they did
+ * not ask for and have to undo.
  */
-export function sidesAreDrawers(count: Count, width: number): boolean {
-  return count === 1 || width < NARROW_PX;
+export function sidesAreDrawers(width: number): boolean {
+  return width < NARROW_PX;
 }

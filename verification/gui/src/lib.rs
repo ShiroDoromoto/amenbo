@@ -660,6 +660,12 @@ impl Instructor {
             (Domain::Task, "opened") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
+            // The pane's own name, on the row the task draws for it. It is the line a road typed into
+            // that pane, so it is the road's own words and no part of the interface — which is what
+            // lets the absent half be read: a task with no such row has those words nowhere on it.
+            (Domain::Task, "pane") => {
+                Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
+            }
             // The value, not the card's title: what is being asked is whether the classification is
             // drawn, and a title is on the board either way. Which card carries it is the driver's to
             // see — the instruction names it — so the reading answers the half a reading can.
@@ -1290,6 +1296,16 @@ impl Instructor {
             // Which face the one window is showing. The segments are named by what each shows rather
             // than by the word drawn on them, since those words are the interface's own and the run's
             // language is whatever the machine is set to.
+            // The press that goes from a task to the pane its work is happening in. What it lands on
+            // is deliberately not promised here: the terminal face may be behind the other segment of
+            // this window or in a window of its own, and which of those is the run's business. So the
+            // step is the press and the reading of the row before it, and where it landed is read by
+            // the step after (`terminal pane`).
+            (Domain::Task, "go-to-pane") => format!(
+                "On the task \"{}\" standing open, press the row saying where the work is happening — the one carrying the pane's name \"{}\". The screen goes to the terminal, on the page that pane is on, with that pane the one being worked in. Nothing is typed into it: it is somebody's terminal, and being sent to it is not being given it.",
+                self.target_label(with),
+                req(with, "shows")?
+            ),
             (Domain::Terminal, "show-face") => match req(with, "face")? {
                 "tasks" => "In the pair of segments at the top of the window, press the one that shows the ledger — the tasks, the projects and the board."
                     .to_string(),
@@ -1748,6 +1764,24 @@ impl Instructor {
             // whatever row led here is carrying the title too — a hit, or the question the terminal face
             // puts — so a line read on it would pass over a press that opened nothing, and over one that
             // opened the wrong record just as quietly.
+            // The row that says where the work is happening. It is read on the task's own face, and
+            // what it carries is the pane's name rather than anything about the reservation — the
+            // status beside it already says that, and this says whose terminal it stands in.
+            //
+            // The absent half is not "no reservation". A move made outside a pane leaves no row, and a
+            // pane that has closed takes its row with it while the reservation stands — so the line says what is being looked for and never what it would mean.
+            (Domain::Task, "pane") => match present(with) {
+                true => format!(
+                    "On the ledger, open the task \"{}\" and confirm it draws a row saying where the work is happening, carrying the pane's own name \"{}\" — the line typed into that pane, which nothing else on this face says.",
+                    self.target_label(with),
+                    req(with, "shows")?
+                ),
+                false => format!(
+                    "On the ledger, open the task \"{}\" and confirm nothing on it says the work is happening in the pane \"{}\" — that row is not drawn at all. What the task says about itself otherwise is unchanged; this is about the row and nothing else.",
+                    self.target_label(with),
+                    req(with, "shows")?
+                ),
+            },
             (Domain::Task, "opened") => match present(with) {
                 true => format!(
                     "Confirm the record \"{}\" is the one standing open in the pane, showing \"{}\" — words the row that led here does not carry.",

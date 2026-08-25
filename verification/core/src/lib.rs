@@ -343,6 +343,14 @@ const REGISTRY: &[OpSpec] = &[
     // A screen road alone. A terminal has no standing selection to press — it writes the selection out
     // as a `--filter` each time it asks, which is what `listed` walks.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "open-view", required: &["view"], refs: &[], strings: &["view"], binds: false },
+    // Going from a task to the pane its work is happening in — the road out of the ledger, and the one
+    // the ledger has. The pane is named rather than pointed at: the row carries the
+    // pane's own name, so an operator pressing it can see it is the pane the road meant before the
+    // press moves the screen. What the press does after that is nowhere in the step: which window
+    // holds the terminal face is the run's, and the road reads where it landed with `terminal pane`.
+    //
+    // A screen road alone. A terminal has no pane to go to and no face to switch.
+    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "go-to-pane", required: &["target", "shows"], refs: &["target"], strings: &["shows"], binds: false },
     // A project's own life: its fields, where it sits in the list, and whether it is still in play.
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "create", required: &["name"], refs: &[], strings: &["name"], binds: true },
     OpSpec { kind: Kind::Action, domain: Domain::Project, op: "update", required: &["target"], refs: &["target"], strings: &["name", "notes", "view"], binds: false },
@@ -1081,6 +1089,18 @@ const REGISTRY: &[OpSpec] = &[
     // its folders). `dir` names the folder the way every `folder` step does; `present: false` is the
     // other half and needs no name, since a task holding none has nothing to name.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "worked-in", required: &["target"], refs: &["target"], strings: &["dir"], binds: false },
+    // Whether the task names a pane its work is happening in, and which one. `shows` is the pane's own
+    // name — the line a road typed into it — because that is what the row carries and what tells one
+    // pane from another.
+    //
+    // **`present: false` is the half this exists for.** The row is drawn only where a session is
+    // holding the task *and* a pane is drawing that session, so it is absent for a reservation made in
+    // somebody's own terminal and absent again once the pane has closed — while the reservation itself
+    // stands. A road pairs the absent half with a reading of the status, which is what
+    // says the ledger is answering "no pane here" rather than "nobody".
+    //
+    // A screen road alone. The row is a way to press, and a terminal has nowhere to press it to.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "pane", required: &["target", "shows"], refs: &["target"], strings: &["shows"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "listed", required: &["filter"], refs: &["target"], strings: &["filter", "position"], binds: false },
     // Whether one decision points at another, named by the side the edge is read from (`supersedes`

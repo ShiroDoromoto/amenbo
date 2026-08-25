@@ -33,9 +33,6 @@ fn statement(sub: &SessionCmd) -> Statement {
         SessionCmd::Note { text } => Statement::Note(text.clone()),
         SessionCmd::Waiting { text } => Statement::Waiting(text.clone()),
         SessionCmd::Finished { text } => Statement::Finished(text.clone()),
-        SessionCmd::Point { target, why } => {
-            Statement::Point { target: target.clone(), why: why.clone() }
-        }
     }
 }
 
@@ -62,7 +59,6 @@ fn said(statement: &Statement) -> String {
         Statement::Note(text) => format!("note: {text}"),
         Statement::Waiting(text) => format!("waiting for a person: {text}"),
         Statement::Finished(text) => format!("finished: {text}"),
-        Statement::Point { target, why } => format!("pointed at {target} — {why}"),
     }
 }
 

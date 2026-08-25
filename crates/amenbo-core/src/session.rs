@@ -118,8 +118,6 @@ pub enum Statement {
     Waiting(String),
     /// The work is done, and what came of it. Owed, for the same reason.
     Finished(String),
-    /// Point at something worth opening — a file, a task, a decision, a URL — and say why.
-    Point { target: String, why: String },
 }
 
 /// How much of the pane's label the reason for a person's turn may take, in the columns a terminal
@@ -205,7 +203,6 @@ impl Statement {
             Statement::Note(_) => "note",
             Statement::Waiting(_) => "waiting",
             Statement::Finished(_) => "finished",
-            Statement::Point { .. } => "point",
         }
     }
 
@@ -216,7 +213,6 @@ impl Statement {
             | Statement::Note(text)
             | Statement::Waiting(text)
             | Statement::Finished(text) => json!({ "text": text }),
-            Statement::Point { target, why } => json!({ "target": target, "why": why }),
         }
     }
 }
@@ -319,10 +315,6 @@ impl Said {
             "note" => Statement::Note(text()?),
             "waiting" => Statement::Waiting(text()?),
             "finished" => Statement::Finished(text()?),
-            "point" => Statement::Point {
-                target: v["target"].as_str()?.to_string(),
-                why: v["why"].as_str()?.to_string(),
-            },
             _ => return None,
         };
         Some(Said {
@@ -389,8 +381,7 @@ pub fn spec() -> Value {
         ],
         "offered": [
             "`name` and `note` label the pane. Say nothing and it is labelled by its folder, which \
-             misleads no one.",
-            "`point` puts something in the window's own list, for the person to open when they look."
+             misleads no one."
         ],
         "promises": "A statement is information, never a promise. Say what has happened, not what you \
                      will do — a person who believes a promise stops checking, and this layer cannot \
@@ -399,8 +390,7 @@ pub fn spec() -> Value {
             { "command": "session name", "args": "<text>", "summary": "Name this pane. The name sticks to the frame, so it survives what runs in it." },
             { "command": "session note", "args": "<text>", "summary": "A line about what you are doing now, shown on the pane's label." },
             { "command": "session waiting", "args": "<text>", "summary": format!("A person's turn has come. Say why in the same breath — the reason is what they read. It goes on one line of the label: up to {WAITING_LIMIT} columns — {WAITING_LIMIT} characters of English or half that of Japanese — and a longer one is refused rather than cut.") },
-            { "command": "session finished", "args": "<text>", "summary": "The work is done. Say what came of it." },
-            { "command": "session point", "args": "<target> --why <text>", "summary": "Point at a file, a task, a decision or a URL worth opening, and say why it is worth it." }
+            { "command": "session finished", "args": "<text>", "summary": "The work is done. Say what came of it." }
         ],
         // Columns rather than characters, so the bound means the same room in every language it is
         // written in. A reader that wants to check before speaking can, and a reader that does not
@@ -472,25 +462,9 @@ mod tests {
             Statement::Name("x".repeat(WAITING_LIMIT * 3)),
             Statement::Note("x".repeat(WAITING_LIMIT * 3)),
             Statement::Finished("x".repeat(WAITING_LIMIT * 3)),
-            Statement::Point { target: "AMB-T-1".into(), why: "x".repeat(WAITING_LIMIT * 3) },
         ] {
             assert_eq!(other.overlong(), None, "only the reason is bounded: {other:?}");
         }
-    }
-
-    #[test]
-    fn point_carries_its_target_and_its_reason() {
-        let dir = amenbo_scratch::scratch("session-point");
-        let path = say(
-            &surface_at(&dir),
-            &Statement::Point { target: "AMB-T-3592".into(), why: "the vocabulary lands here".into() },
-        )
-        .expect("the statement is written");
-
-        let v: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).expect("valid JSON");
-        assert_eq!(v["verb"], "point");
-        assert_eq!(v["target"], "AMB-T-3592");
-        assert_eq!(v["why"], "the vocabulary lands here");
     }
 
     /// The text of every statement read back, in the order it came.
@@ -501,7 +475,6 @@ mod tests {
                 | Statement::Note(t)
                 | Statement::Waiting(t)
                 | Statement::Finished(t) => t.clone(),
-                Statement::Point { target, .. } => target.clone(),
             })
             .collect()
     }
@@ -546,21 +519,6 @@ mod tests {
             texts(&said_after(&dir, Some(&last)).expect("read back")),
             vec!["three"],
             "and what was said since comes back on its own",
-        );
-    }
-
-    /// Every field of the two-part verb survives the round trip. `point` is the one statement whose body
-    /// is not a single line, so it is the one a reader can drop half of without noticing.
-    #[test]
-    fn a_pointer_comes_back_with_both_halves() {
-        let dir = amenbo_scratch::scratch("session-read-point");
-        let s = surface_at(&dir);
-        say(&s, &Statement::Point { target: "AMB-T-3597".into(), why: "here".into() })
-            .expect("written");
-        let said = said_after(&dir, None).expect("read back");
-        assert_eq!(
-            said[0].statement,
-            Statement::Point { target: "AMB-T-3597".into(), why: "here".into() },
         );
     }
 
@@ -659,7 +617,7 @@ mod tests {
             .iter()
             .map(|c| c["command"].as_str().unwrap_or_default())
             .collect();
-        for verb in ["name", "note", "waiting", "finished", "point"] {
+        for verb in ["name", "note", "waiting", "finished"] {
             assert!(
                 named.contains(&format!("session {verb}").as_str()),
                 "the canon is missing `session {verb}`: {named:?}",

@@ -115,8 +115,8 @@ export function said(sessions: Sessions, statement: SessionSaidDto): Sessions {
       // is nobody's turn any more.
       return withEntry(sessions, { ...entry, folder, note: statement.text ?? null, waiting: null });
     default:
-      // `name` moves the frame's name and `point` fills the window's own list — neither is anything
-      // about the session, but both say where the agent is.
+      // `name` moves the frame's name, which is nothing about the session — but it still says where
+      // the agent is.
       return withEntry(sessions, { ...entry, folder });
   }
 }

@@ -530,22 +530,13 @@ impl SessionSaidDto {
     fn of(session: &str, said: amenbo_core::session::Said) -> Self {
         use amenbo_core::session::Statement;
         let verb = said.statement.verb();
-        let (text, target, why) = match said.statement {
+        let text = match said.statement {
             Statement::Name(text)
             | Statement::Note(text)
             | Statement::Waiting(text)
-            | Statement::Finished(text) => (Some(text), None, None),
-            Statement::Point { target, why } => (None, Some(target), Some(why)),
+            | Statement::Finished(text) => Some(text),
         };
-        SessionSaidDto {
-            session: session.to_string(),
-            verb,
-            at: said.at,
-            cwd: said.cwd,
-            text,
-            target,
-            why,
-        }
+        SessionSaidDto { session: session.to_string(), verb, at: said.at, cwd: said.cwd, text }
     }
 }
 

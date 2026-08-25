@@ -589,9 +589,6 @@ const ui = {
   // The file face beside the terminal's pane: what changed in the project's folder lately, and
   // the folder itself, folded. What a file turns out not to be is said in its own words — a
   // binary is not a failure, it is simply not something a panel can show.
-  "files.pointed": "Pointed at",
-  "files.nothingPointed": "Nothing has been pointed at yet.",
-  "files.unopened": "{n} of these were never opened.",
   "files.tab": "Files",
   "files.memo": "The page",
   "files.memoWide": "Write it wide",

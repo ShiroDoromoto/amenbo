@@ -94,20 +94,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1.6;
 }
 .termface__action:hover { color: var(--c-text); }
-/* Something an agent pointed at, waiting on the half that is not up (`shell/TerminalFace.tsx`).
-
-   **A dot and not a count.** How many there are is the panel's own to say, and a number here would
-   be read as how many are worth crossing over for, which this side cannot know. It is pinned to the
-   corner rather than set inline for the same reason the page's badge is: the row it is in is pushed
-   against the far end, so a button that grew by a dot would shove its neighbours along.
-
-   The colour is the one the page badge wears a few controls away, so the signal from across the face
-   and the signal on the control itself read as the same thing being said. */
-.termface__pointed {
-  position: absolute; top: -4px; right: -4px;
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--c-heed); box-shadow: 0 0 0 2px var(--c-surface-2);
-}
 /* A toggle whose side is on the screen. It is the same button either way — what it says is whether
    pressing it opens something or puts it away. */
 .termface__action--on { color: var(--c-text); border-color: var(--c-border-strong); }

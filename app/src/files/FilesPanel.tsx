@@ -1,11 +1,9 @@
 // The file face: the right side of the terminal face, where what the agent in the pane is doing to
 // the folder can be seen without leaving the window (`AMB-T-3602`).
 //
-// **Two of the rows belong to the project and one to the pane.** What changed lately and the folder
-// itself are rooted at a folder the project is bound to, so switching panes does not move them — what
-// changed in the repository is the same question whichever terminal is in front of it. The top row is
-// the other way round: it is what the focused pane's agent pointed at, and it follows the focus
-// (`AMB-T-3603`). Mixing the two would leave a reader unable to say what happened where.
+// **Both rows belong to the project.** What changed lately and the folder itself are rooted at a
+// folder the project is bound to, so switching panes does not move them — what changed in the
+// repository is the same question whichever terminal is in front of it.
 //
 // **What changed lately is watched, not asked for.** The host lays a watch over the folder and
 // says what is in it as it moves (`crate::folder_watch`), so the row is right while a person is
@@ -23,21 +21,19 @@ import type { FolderAppDto, FolderChangesDto } from "../bindings/bindings";
 import { Markdown } from "../components/Markdown";
 import { useBoundFolders } from "../core/boundFolders";
 import { t, tf, whenLabel } from "../core/i18n";
-import { openExternalUrl } from "../core/mutations";
-import { resolveRef } from "../core/reads";
 import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
 import {
   folderEntries, folderOpenFile, folderOpenFileWith, folderOpenWith, folderRead, folderRevealFile,
   folderUnwatch, folderWatch, onFolderChanged,
 } from "./folder";
 import { MemoPage } from "./MemoPage";
-import { fileUnder, isRef, isUrl, unread, type Pointed } from "./pointed";
+import { fileUnder } from "./fileUnder";
 import { Icon } from "../components/Icon";
 
 /** The names a file's text is drawn as Markdown under. The one thing here the name decides. */
 const MARKDOWN = [".md", ".markdown"];
 
-export function FilesPanel({ projectId, onOpenLedger, pointed, show, tab, onTab, onClose }: {
+export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose }: {
   /** The project whose folder the face is rooted at; nothing is drawn without one. */
   projectId: number | null;
   /** Leave the terminal face for the ledger — what a reference or a record means when it is clicked. */
@@ -48,17 +44,6 @@ export function FilesPanel({ projectId, onOpenLedger, pointed, show, tab, onTab,
    * (`AMB-T-3630`).
    */
   show?: { target: string; cwd: string | null; nth: number } | null;
-  /** What the focused pane's agent has pointed at, and whose pane it is (`AMB-T-3603`). */
-  pointed?: {
-    /** The rows, newest first. */
-    points: readonly Pointed[];
-    /** What that pane is called, where anybody has named it. */
-    name: string | null;
-    /** Whether the session that said these has ended. */
-    ended: boolean;
-    /** Somebody opened one of them. */
-    onRead: (at: string) => void;
-  };
   /**
    * Which of the two halves is up, and how to ask for one.
    *
@@ -86,9 +71,9 @@ export function FilesPanel({ projectId, onOpenLedger, pointed, show, tab, onTab,
   // under it (`AMB-T-3605`).
   const [menu, setMenu] = useState<{ path: string[]; x: number; y: number } | null>(null);
   // A path clicked in a pane. It opens only where it lands inside the folder this face is rooted at
-  // — the same rule a pointed-at file is held to, and the same fence the host applies. One that
-  // lands outside opens nothing: the pane keeps the characters it drew, and no reader is shown a
-  // file from somewhere this face cannot answer for (`AMB-D-747`).
+  // — the same fence the host applies. One that lands outside opens nothing: the pane keeps the
+  // characters it drew, and no reader is shown a file from somewhere this face cannot answer for
+  // (`AMB-D-747`).
   useEffect(() => {
     if (show === undefined || show === null || root === null) return;
     const path = fileUnder(root, show.cwd, show.target);
@@ -169,15 +154,6 @@ export function FilesPanel({ projectId, onOpenLedger, pointed, show, tab, onTab,
   return (
     <div className="files">
       {top}
-      {pointed !== undefined && (
-        <PointedRow
-          root={root}
-          pointed={pointed}
-          onRead={(at) => pointed.onRead(at)}
-          onOpenFile={setReading}
-          onOpenLedger={onOpenLedger}
-        />
-      )}
       <section className="files__row">
         <h3 className="files__head">{t("files.changed")}</h3>
         {changes.changed.length === 0
@@ -342,86 +318,6 @@ function FileMenu({ projectId, root, path, at, onClose }: {
 }
 
 /**
- * What the focused pane's agent pointed at.
- *
- * Nothing is announced while the agent is working — the count beside the heading is the whole of
- * what this row says during a run, because an agent at work is not the moment to interrupt. When the
- * session ends, anything nobody opened is said once, and nothing is held up over it: a reader who
- * ignores the line has still finished (`AMB-T-3603`).
- */
-function PointedRow({ root, pointed, onRead, onOpenFile, onOpenLedger }: {
-  root: string | null;
-  pointed: { points: readonly Pointed[]; name: string | null; ended: boolean };
-  onRead: (at: string) => void;
-  onOpenFile: (path: string[]) => void;
-  onOpenLedger?: () => void;
-}) {
-  const nav = useLedgerNav(onOpenLedger);
-  const left = unread(pointed.points);
-
-  const open = (one: Pointed) => {
-    onRead(one.at);
-    if (isRef(one.target)) {
-      void resolveRef(one.target).then((target) => {
-        if (!target) return;
-        onOpenLedger?.();
-        if (target.kind === "task") nav.selectTask?.(target.id);
-        else nav.selectDecision?.(target.id);
-      });
-      return;
-    }
-    if (isUrl(one.target)) {
-      void openExternalUrl(one.target);
-      return;
-    }
-    const path = root === null ? null : fileUnder(root, one.cwd, one.target);
-    if (path) onOpenFile(path);
-  };
-
-  return (
-    <section className="files__row">
-      <h3 className="files__head">
-        {t("files.pointed")}
-        {/* The count, and nothing else, while the agent is at work. */}
-        {left > 0 && <span className="files__when">{left}</span>}
-      </h3>
-      {pointed.name !== null && <span className="files__where">{pointed.name}</span>}
-      {pointed.points.length === 0
-        ? <p className="files__none">{t("files.nothingPointed")}</p>
-        : (
-          <ul className="files__list">
-            {pointed.points.map((one) => {
-              // A row that opens nothing is not drawn as one that does: a path outside the folder
-              // the face is rooted at has nowhere here to go (`AMB-D-747`).
-              const reachable = isRef(one.target) || isUrl(one.target)
-                || (root !== null && fileUnder(root, one.cwd, one.target) !== null);
-              return (
-                <li key={one.at}>
-                  {reachable
-                    ? (
-                      <button
-                        className={`files__file${one.read ? " files__file--read" : ""}`}
-                        onClick={() => open(one)}
-                      >
-                        <span className="files__name">{one.target}</span>
-                      </button>
-                    )
-                    : <span className="files__name files__none">{one.target}</span>}
-                  {one.why !== "" && <span className="files__where">{one.why}</span>}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      {/* Said once, at the end, and only about what is still unopened. */}
-      {pointed.ended && left > 0 && (
-        <p className="files__none">{tf("files.unopened", { n: left })}</p>
-      )}
-    </section>
-  );
-}
-
-/**
  * Following something from this face means leaving it: what a record opens on is the ledger, and a
  * click that selected it behind this face would look like a link that did nothing (`AMB-D-747`).
  */
@@ -524,7 +420,7 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
   }, [projectId, root, path.join("/")]);
 
   // A reference in a file is a live link or it is nothing at all (`AMB-D-747`), and following one
-  // leaves this face for the same reason a pointed-at record does.
+  // leaves this face: what a record opens on is the ledger.
   const nav = useLedgerNav(onOpenLedger);
 
   return (

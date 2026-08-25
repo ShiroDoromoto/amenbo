@@ -1403,8 +1403,7 @@ impl Instructor {
             // literally what an agent types — and because the layer refuses to be said anywhere else,
             // so an operator improvising it from a description would be turned away.
             //
-            // `point` is not among the verbs here: it carries a thing and a reason rather than one
-            // line, so it has an op of its own below. An unknown word is refused loudly.
+            // The layer's four verbs are the four accepted here. An unknown word is refused loudly.
             (Domain::Terminal, "say") => {
                 let text = req(with, "text")?;
                 let verb = req(with, "verb")?;
@@ -1448,13 +1447,6 @@ impl Instructor {
             (Domain::Terminal, "remove-pane") => format!(
                 "On the pane showing \"{}\", press the cross at the end of its own row — the control beside what is said about that pane, and not the one on any other. A question comes up before anything happens: read it, then answer it yes. The terminal in that pane ends, the pane goes, and the page closes up behind it.",
                 req(with, "shows")?
-            ),
-            // Pointing, which is the same seam as `say` and the same one door — but what it leaves is
-            // read on the file face rather than on the pane's label, so the road goes on somewhere else.
-            (Domain::Terminal, "point") => format!(
-                "In the pane that has a terminal running in it, run: amenbo session point \"{}\" --why \"{}\" — this is the agent pointing at something worth opening, and saying why.",
-                req(with, "target")?,
-                req(with, "why")?
             ),
             // Moving the whole face to another project. The row is named by the project's own name,
             // and the step says where the press leaves the screen rather than what the press looks
@@ -1620,7 +1612,7 @@ impl Instructor {
                 req(with, "name")?
             ),
             (Domain::Files, "back") =>
-                "Press the way back out of the file. The column returns to its three sections."
+                "Press the way back out of the file. The column returns to its two sections."
                     .to_string(),
             // Handing the file to the machine. The menu is a right-click and is drawn on files alone —
             // a folder's row opens a level — so the step names a row the way every other one here
@@ -2603,25 +2595,6 @@ impl Instructor {
                 true => format!("Confirm the column says {}.", note(with)?),
                 false => format!("Confirm the column does not say {}.", note(with)?),
             },
-            (Domain::Files, "openable") => match present(with) {
-                true => format!(
-                    "Confirm the row \"{}\" is something to press — it takes the pointer and opens.",
-                    req(with, "name")?
-                ),
-                false => format!(
-                    "Confirm the row \"{}\" is drawn and is not something to press: it does not take the pointer, and nothing opens. It is outside the folder the project answers for, and the row says what the agent said all the same.",
-                    req(with, "name")?
-                ),
-            },
-            // The mark on the files half's own switch. It is read on the top row rather than in the
-            // panel, that being the whole of what it is for: it is what the half says while it is not
-            // the one on the screen.
-            (Domain::Files, "pointed-badge") => match present(with) {
-                true => "At the top of the terminal face, at the far end of the row, confirm the one that shows the folder's files is wearing a small mark — a dot, with no number and no words on it. It says an agent pointed at something while you were somewhere else."
-                    .to_string(),
-                false => "At the top of the terminal face, at the far end of the row, confirm the one that shows the folder's files is wearing no mark at all."
-                    .to_string(),
-            },
             // What the hand-over left. Every one of the three is a `Review`, and for the same reason:
             // what settles it is not on Amenbo's window, which is the window the run shoots. The
             // operator standing at the screen is the one who saw it, so the line asks them for it.
@@ -2889,16 +2862,15 @@ fn side(with: &Args) -> Result<Side, String> {
     }
 }
 
-/// Which of the file face's three sections a row is being looked for in, as a phrase an instruction
+/// Which of the file face's two sections a row is being looked for in, as a phrase an instruction
 /// can be built around. They are named by what each is about because their headings are the
 /// interface's own words, and the run's language is whatever the machine is set to.
 fn section(with: &Args) -> Result<&'static str, String> {
     match with.get("section").and_then(|v| v.as_str()) {
-        Some("pointed") => Ok("the section for what an agent pointed at"),
         Some("changed") => Ok("the section for what has changed lately"),
         Some("tree") => Ok("the folder's own section"),
-        Some(other) => Err(format!("`section` does not know `{other}` — it is pointed, changed or tree")),
-        None => Err("arg `section` must say which of the three sections".to_string()),
+        Some(other) => Err(format!("`section` does not know `{other}` — it is changed or tree")),
+        None => Err("arg `section` must say which of the two sections".to_string()),
     }
 }
 
@@ -2923,11 +2895,6 @@ fn note(with: &Args) -> Result<&'static str, String> {
         Some("cut") => Ok("that only the beginning of the file is shown"),
         Some("unreadable") => Ok("that the file could not be read"),
         Some("partial") => Ok("that some of the folder is not being watched"),
-        Some("nothing-pointed") => Ok("that nothing has been pointed at yet"),
-        // Said only once the pane has ended. While one runs, what is left unopened is a count and
-        // nothing more — there is still time; once the session is over there is not, and the whole map
-        // goes with it, so this is the one moment a reader can be told what they never got to.
-        Some("unopened") => Ok("that some of what was pointed at was never opened"),
         Some("nothing-changed") => Ok("that nothing has changed yet"),
         Some("no-folder") => Ok("that this project has no folder yet"),
         Some(other) => Err(format!("`note` does not know `{other}`")),

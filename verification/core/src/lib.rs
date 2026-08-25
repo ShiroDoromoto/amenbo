@@ -223,11 +223,10 @@ pub enum Domain {
     /// is settled before the app comes up and is no more a screen than a project already on the board
     /// is.
     Terminal,
-    /// The file face: the folder a project is bound to, read from inside Amenbo — the tree folded
-    /// down it, what has changed in it lately, and what an agent pointed at. A domain of its own
-    /// rather than part of `Terminal`, because none of it is about the pane it is drawn beside: two
-    /// of its three sections belong to the **project**, and what they say does not change when the
-    /// pane beside them does.
+    /// The file face: the folder a project is bound to, read from inside Amenbo — what has changed
+    /// in it lately, and the tree folded down it. A domain of its own rather than part of
+    /// `Terminal`, because none of it is about the pane it is drawn beside: both of its sections
+    /// belong to the **project**, and what they say does not change when the pane beside them does.
     ///
     /// The screen's alone. Reading a file at a shell is `cat`, and there is nothing about that
     /// Amenbo is the subject of.
@@ -2017,10 +2016,6 @@ const REGISTRY: &[OpSpec] = &[
     // spent by crossing to it: a badge still up after the person has looked would be a light saying
     // "something is standing" rather than a knock saying "something came up while you were away".
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "face-badge", required: &[], refs: &[], strings: &[], binds: false },
-    // What an agent pointed at, said from inside its own pane. It is not a `say` verb even though it
-    // is the same layer and the same seam: the other four carry one line, and this carries a thing and
-    // a reason for it — a shape of its own, and one the file face reads rather than the pane's label.
-    OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "point", required: &["target", "why"], refs: &[], strings: &["target", "why"], binds: false },
     // Which project's panes the face is drawing. The rail is not a grouping laid over a list of
     // panes: a pane belongs to a project and can work in no folder outside it, so pressing a project
     // is the division itself being moved. What is beside the rail afterwards is that project's, and
@@ -2170,10 +2165,10 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "dot", required: &["face"], refs: &[], strings: &["face"], binds: false },
 
     // ── the file face ─────────────────────────────────────────────────────────────────────────────
-    // The folder a project is bound to, read from inside Amenbo. Three sections in one column: what an
-    // agent pointed at, what has changed lately, and the folder itself folded down. Every op is the
-    // screen's — `cat` is not Amenbo doing anything — and `section` says which of the three a row is
-    // being looked for in, because the same file can stand in more than one of them at once.
+    // The folder a project is bound to, read from inside Amenbo. Two sections in one column: what has
+    // changed lately, and the folder itself folded down. Every op is the screen's — `cat` is not
+    // Amenbo doing anything — and `section` says which of the two a row is being looked for in,
+    // because the same file can stand in both of them at once.
     //
     // Unfolding the folder. It is a value and not two ops because it is one control that opens and
     // shuts, unlike the two windows' way out and way back, which are pressed in different places.
@@ -2182,14 +2177,12 @@ const REGISTRY: &[OpSpec] = &[
     // fetched when it is asked for — so a road reaching something deep names each step of the way.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "enter", required: &["name"], refs: &[], strings: &["name"], binds: false },
     // A file opened, from whichever section it is being pressed in. The row is named by the words it
-    // draws: a file by its name, and a pointed row by the target the agent typed, which is not always
-    // a file name at all.
+    // draws, which is the file's own name.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "open", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
     // And back out of it, which is the only way back: opening a file replaces the column.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "back", required: &[], refs: &[], strings: &[], binds: false },
     // Whether a row is standing in a section. `present: false` is the half several of these roads are
-    // about — a file the folder holds but the face must not offer, because it is ignored, or because
-    // what it points at is outside the folder the project answers for.
+    // about — a file the folder holds but the face must not offer, because it is ignored.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "listed", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
     // What an opened file draws. `shows` is words the road itself put in the file, so a reading finds
     // them because the bytes reached the screen and for no other reason.
@@ -2197,26 +2190,6 @@ const REGISTRY: &[OpSpec] = &[
     // One of the face's standing lines, named by what it says rather than by its wording: the words are
     // the interface's own, and which language the run's machine is in is not a road's to know.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "says", required: &["note"], refs: &[], strings: &["note"], binds: false },
-    // Whether a row is something to press. It is a different question from `listed` and the difference
-    // is the whole of the fence: what an agent pointed at is drawn whether or not the folder reaches
-    // it — the app does not edit what was said — and only what the folder reaches is opened. A row
-    // that is one and not the other is the state this asks about, and it cannot be read off a shot,
-    // so it is settled by an eye.
-    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "openable", required: &["name"], refs: &[], strings: &["name"], binds: false },
-    // The mark the files half's own switch wears while something pointed at is waiting behind it. It
-    // is the one way this face can call: a person goes to the files when they want them, and an agent
-    // that pointed at something cannot send anybody there — so the switch knocks, rather than the
-    // panel standing open on the chance something arrives.
-    //
-    // It takes no argument. There is one badge on that row and nothing in it to quote — a dot, with
-    // no number and no words — so what a road says is that it is there, or that it is not. `present:
-    // false` carries two different claims and both are worth walking: nothing has been pointed at
-    // yet, and the person has since been on the half, which spends the mark for good. A badge still
-    // up after they have looked would be a light saying "something is over there" rather than a knock
-    // saying "something came up while you were somewhere else" — and one that is always up says
-    // nothing at all. **Being pointed at is the only thing that raises it**: a file changing is what a
-    // running agent does all day.
-    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "pointed-badge", required: &[], refs: &[], strings: &[], binds: false },
 
     // ── handing a file to the machine ─────────────────────────────────────────────────────────────
     // The three ways out of this face that are not reading the file here, and all three are the

@@ -188,7 +188,7 @@ const PATH_MAX = 300;
  * tries to open something that is not there and is told so, and a miss leaves characters that were
  * never clickable anyway. What it must not do is claim more than it found — where the path leads is
  * resolved against the pane's own folder by whoever opens it, and a path outside the folder the file
- * face is rooted at is not drawn as a link at all (`app/src/files/pointed.ts`).
+ * face is rooted at is not drawn as a link at all (`app/src/files/fileUnder.ts`).
  */
 export function pathsOnRow(rows: Rows, y: number): TerminalPath[] {
   if (y < 0 || y >= rows.length) return [];

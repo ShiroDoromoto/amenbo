@@ -3,11 +3,34 @@ import { mountAgentFrame } from "../talk/agent";
 import { endTerminal } from "../talk/terminal";
 import { mountPlate, type Plate } from "../talk/plate";
 import { confirmDialog } from "../core/dialog";
+import { PaneDropAsk } from "./PaneDropAsk";
 import type { FrameNames, NamedBy } from "../talk/frames";
 import type { PaneStart } from "../talk/terminal";
-import type { SessionSaidDto } from "../bindings/bindings";
+import type { SessionSaidDto, SessionWorkDto } from "../bindings/bindings";
 import { currentLang, t } from "../core/i18n";
+import { invoke } from "../core/ipc";
+import { setStatus } from "../core/mutations";
 import { Icon } from "../components/Icon";
+
+/**
+ * What the volatile area says this session is holding, asked at the moment the way out is pressed
+ * (`commands.rs::session_work`).
+ *
+ * **Read at the press and not kept.** The answer is only worth having about the instant it is acted
+ * on — a reservation made in this pane a second ago is exactly the one nobody would think to look
+ * for.
+ *
+ * **Silence is no reservations, and that is the honest answer.** A pane with nothing running in it,
+ * a window not running under Tauri, a read that failed: what none of them can say is that something
+ * is being left behind, and a question raised on a guess would be a question about nothing
+ * (`AMB-D-758` — a move made outside a pane is not written here at all, and may not be guessed back).
+ */
+async function heldHere(session: string | null): Promise<readonly number[]> {
+  if (session === null) return [];
+  return invoke<SessionWorkDto>("session_work", { session })
+    .then((work) => work.holding)
+    .catch(() => []);
+}
 
 /**
  * One slot of the terminal face: a frame, and the terminal in it when there is one.
@@ -72,6 +95,10 @@ export function TerminalPane({
   // The session running here, while one is. It is what the way out names, and it is null at exactly
   // the two moments there is nothing to end: before a terminal has opened, and after one has closed.
   const [live, setLive] = useState<string | null>(null);
+  // The reservations the way out is asking about, while it is asking. Null is nobody being asked
+  // anything — what is held is read at the press and not before, so there is nothing here to keep
+  // true between one and the next.
+  const [asking, setAsking] = useState<readonly number[] | null>(null);
 
   // What the face wants done with what happens here, read at the moment it happens. The pane is put up
   // once and lives longer than any one render, so the effect below must not be re-run to see a newer
@@ -81,10 +108,23 @@ export function TerminalPane({
 
   /** Take the place away, once the person has said so. The terminal in it is ended first: a session
    *  whose pane has gone is one nobody can get back to. */
-  const drop = async () => {
-    if (!await confirmDialog(t("face.dropConfirm"))) return;
+  const goDrop = async () => {
     if (live !== null) await endTerminal(live).catch(() => {});
     onDrop(frame);
+  };
+
+  /** The way out was pressed. What is asked depends on what stands to be lost: a pane holding
+   *  nothing is the plain confirmation it has always been, and one holding reservations is asked
+   *  about them by name (`./PaneDropAsk`). **Nothing is named where nothing is held** — a second
+   *  box over the same press, saying a session had no work on it, is a box about nothing. */
+  const drop = async () => {
+    const holding = await heldHere(live);
+    if (holding.length > 0) {
+      setAsking(holding);
+      return;
+    }
+    if (!await confirmDialog(t("face.dropConfirm"))) return;
+    await goDrop();
   };
 
   useEffect(() => {
@@ -194,6 +234,19 @@ export function TerminalPane({
           <Icon name="close" />
         </button>
       </div>
+      {asking !== null && (
+        <PaneDropAsk
+          holding={asking}
+          onHandBack={async () => {
+            // One at a time, so a refusal stops at the one it refused: the tasks after it are still
+            // held, and saying otherwise is the mistake this whole box exists to prevent.
+            for (const id of asking) await setStatus(id, "todo");
+            await goDrop();
+          }}
+          onLeave={goDrop}
+          onCancel={() => setAsking(null)}
+        />
+      )}
       {running
         ? (
           <>

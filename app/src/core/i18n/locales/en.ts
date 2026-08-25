@@ -556,6 +556,10 @@ const ui = {
   // program exits with is on the screen to be read (`AMB-T-3666`).
   "face.drop": "Remove this pane",
   "face.dropConfirm": "Remove this pane? The terminal in it ends, and the place does not come back on the next run.",
+  "face.dropHolding": "This pane's session is still holding:",
+  "face.dropHandBack": "Hand back and remove",
+  "face.dropAnyway": "Remove as it is",
+  "face.dropCancel": "Cancel",
   // The OS notification a pane raises when its turn has come and nobody is looking at the terminal
   // (`AMB-T-3611`). It says a turn is standing and not whose: which pane it was is drawn where it
   // happened, and a toast that named one would answer in the one place a person cannot act on it.

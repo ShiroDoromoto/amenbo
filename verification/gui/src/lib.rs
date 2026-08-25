@@ -912,6 +912,20 @@ impl Instructor {
                 "In that card, choose \"{}\" among the projects this device holds.",
                 req(with, "project")?
             ),
+            // The first loop's one press. It is named by what it does rather than by what is written
+            // on it, the way every other control on these roads is, and the folder it opens in is
+            // deliberately not said: the card names that folder above the press, so an operator told
+            // which one to expect could not tell a card that named the wrong one from a card that
+            // named the right one.
+            //
+            // What follows the press is said, because it is the press landing: the screen goes to the
+            // terminal by itself and a pane is already open there. An operator left to find the
+            // terminal for themselves would walk a road that passed whether or not the press did
+            // anything at all.
+            (Domain::Folder, "start-terminal") => {
+                "In the first loop, press the one move it offers — the one that starts a terminal in the folder the card names above it. The screen goes to the terminal face on its own, with a pane already open there and nothing asked."
+                    .to_string()
+            }
             // Two ops the CLI drives as one command apiece, and the screen as one form apiece. They
             // are the domain's own ops and not moves invented for the screen: what a road on screen
             // needs of its own is a card to open, never a project to raise.

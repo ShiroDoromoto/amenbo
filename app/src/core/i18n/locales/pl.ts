@@ -176,6 +176,7 @@ export const pl: Translation = {
     "detail.unassign": "Zdejmij przypisanie", "detail.assignAi": "Przekaż SI",
     "detail.assignee": "Odpowiedzialny", "detail.unassigned": "Bez przypisania",
     "detail.project": "Projekt", "detail.none": "Brak",
+    "detail.workingIn": "Praca trwa w", "detail.goToPane": "Przejdź do tego panelu",
     "detail.blockedBy": "Czeka na", "detail.blockedByHint": "zablokowane (zależność)",
     "detail.notStarted": "Start",
     "detail.draft": "Tworzenie", "detail.finishCreating": "Zakończ tworzenie",

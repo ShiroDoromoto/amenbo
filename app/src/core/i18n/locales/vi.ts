@@ -176,6 +176,7 @@ export const vi: Translation = {
     "detail.unassign": "Bỏ người phụ trách", "detail.assignAi": "Giao cho AI",
     "detail.assignee": "Người phụ trách", "detail.unassigned": "Chưa giao",
     "detail.project": "Dự án", "detail.none": "Không có",
+    "detail.workingIn": "Đang làm ở", "detail.goToPane": "Đến khung này",
     "detail.blockedBy": "Đang chờ", "detail.blockedByHint": "bị chặn (phụ thuộc)",
     "detail.notStarted": "Bắt đầu từ",
     "detail.draft": "Tạo", "detail.finishCreating": "Hoàn tất việc tạo",

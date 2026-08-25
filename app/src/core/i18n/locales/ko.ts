@@ -173,6 +173,7 @@ export const ko: Translation = {
     "detail.unassign": "담당 해제", "detail.assignAi": "AI에게 맡기기",
     "detail.assignee": "담당", "detail.unassigned": "담당 없음",
     "detail.project": "프로젝트", "detail.none": "없음",
+    "detail.workingIn": "작업 중인 곳", "detail.goToPane": "이 페인으로 가기",
     "detail.blockedBy": "기다리는 대상", "detail.blockedByHint": "막힘(의존)",
     "detail.notStarted": "시작일",
     "detail.draft": "작성", "detail.finishCreating": "작성 마치기",

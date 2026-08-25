@@ -290,6 +290,9 @@ fn beside_the_board(app: &tauri::AppHandle) -> Option<(f64, f64)> {
 /// The event the board navigates on when a record is asked for from outside its own webview.
 const SHOW_REF_EVENT: &str = "ref-activated";
 
+/// The event the terminal face goes to a pane on, when one is asked for from the ledger.
+const SHOW_PANE_EVENT: &str = "pane-activated";
+
 /// Which of the two spaces a ref clicked in a pane names.
 ///
 /// An enum and not a string: only a task and a decision are destinations — `amenbo_core::idref::url`
@@ -335,5 +338,35 @@ pub fn show_ref(app: tauri::AppHandle, kind: RefSpace, id: i64) {
     // there would reach a click that has no way to report one.
     if let Err(e) = app.emit(SHOW_REF_EVENT, RefTargetDto { kind: kind.as_str().into(), id }) {
         log::warn!("failed to emit {SHOW_REF_EVENT}: {e}");
+    }
+}
+
+/// Go to the pane a task is being worked in, asked for from the ledger.
+///
+/// **It is [`show_ref`] the other way round**, and it is here for the same reason: the two faces can be
+/// in two windows, and a window cannot raise its sibling. So the road out of one and into the other
+/// runs through the process that owns them both.
+///
+/// Which window is told is which window has the face. Split out, that is the talk window, and it is
+/// brought forward — the reader asked to see the pane, and a window behind other work is a pane they
+/// cannot see. In one window the board already has the keyboard: what has to change there is the face,
+/// which is the board's own to change (`app/src/shell/AppShell.tsx`).
+///
+/// **What travels is the session and nothing else.** Where that session is drawn is the face's
+/// (`crate::frames::panes_drawn`), and a place named out here would be a second answer free to go stale
+/// against the one the face is drawing from.
+#[tauri::command]
+pub fn show_pane(app: tauri::AppHandle, session: String) {
+    let face = match app.get_webview_window(TALK) {
+        Some(win) => {
+            raise_window(&win);
+            TALK
+        }
+        None => BOARD,
+    };
+    // Logged rather than returned, as `show_ref` does: by now the window is already in front, and a
+    // refusal handed back would reach a press with no way to report one.
+    if let Err(e) = app.emit_to(face, SHOW_PANE_EVENT, session) {
+        log::warn!("failed to emit {SHOW_PANE_EVENT}: {e}");
     }
 }

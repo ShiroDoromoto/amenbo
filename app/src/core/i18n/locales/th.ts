@@ -176,6 +176,7 @@ export const th: Translation = {
     "detail.unassign": "ปลดผู้รับผิดชอบ", "detail.assignAi": "มอบให้ AI",
     "detail.assignee": "ผู้รับผิดชอบ", "detail.unassigned": "ยังไม่มอบหมาย",
     "detail.project": "โปรเจกต์", "detail.none": "ไม่มี",
+    "detail.workingIn": "กำลังทำงานใน", "detail.goToPane": "ไปที่บานหน้าต่างนี้",
     "detail.blockedBy": "กำลังรอ", "detail.blockedByHint": "ติดขัด (การพึ่งพา)",
     "detail.notStarted": "เริ่มวันที่",
     "detail.draft": "การสร้าง", "detail.finishCreating": "สร้างให้เสร็จ",

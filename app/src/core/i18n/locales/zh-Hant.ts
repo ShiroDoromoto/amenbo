@@ -174,6 +174,7 @@ export const zhHant: Translation = {
     "detail.unassign": "取消指派", "detail.assignAi": "委派給 AI",
     "detail.assignee": "負責人", "detail.unassigned": "未指派",
     "detail.project": "專案", "detail.none": "無",
+    "detail.workingIn": "正在此處進行", "detail.goToPane": "前往此窗格",
     "detail.blockedBy": "等待", "detail.blockedByHint": "受阻（相依）",
     "detail.notStarted": "開始於",
     "detail.draft": "建立", "detail.finishCreating": "完成建立",

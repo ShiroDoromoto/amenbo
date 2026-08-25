@@ -173,6 +173,7 @@ export const de: Translation = {
     "detail.unassign": "Zuständigkeit aufheben", "detail.assignAi": "An die KI übergeben",
     "detail.assignee": "Zuständig", "detail.unassigned": "Niemand",
     "detail.project": "Projekt", "detail.none": "Keins",
+    "detail.workingIn": "Wird bearbeitet in", "detail.goToPane": "Zu diesem Bereich gehen",
     "detail.blockedBy": "Wartet auf", "detail.blockedByHint": "blockiert (Abhängigkeit)",
     "detail.notStarted": "Beginnt am",
     "detail.draft": "Erstellung", "detail.finishCreating": "Erstellung abschließen",

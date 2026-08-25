@@ -176,6 +176,7 @@ export const es: Translation = {
     "detail.unassign": "Quitar responsable", "detail.assignAi": "Delegar en la IA",
     "detail.assignee": "Responsable", "detail.unassigned": "Sin asignar",
     "detail.project": "Proyecto", "detail.none": "Ninguna",
+    "detail.workingIn": "Se trabaja en", "detail.goToPane": "Ir a este panel",
     "detail.blockedBy": "Esperando a", "detail.blockedByHint": "bloqueada (dependencia)",
     "detail.notStarted": "Empieza el",
     "detail.draft": "Creación", "detail.finishCreating": "Terminar de crear",

@@ -5,12 +5,12 @@ import { FolderChoice } from "./FolderChoice";
 import { TerminalPane } from "./TerminalPane";
 import { PaneRail } from "./PaneRail";
 import {
-  frameNames, keepLayout, nameFrame, savedLayout, type FrameNames, type NamedBy,
+  frameNames, keepLayout, nameFrame, paneLabels, savedLayout, type FrameNames, type NamedBy,
 } from "../talk/frames";
 import {
-  addPane, closedFrame, closedIn, COUNTS, EMPTY_LAYOUT, focusOn, goPage, goProject, laidOut, MAX_PAGES,
-  movedTo, openedFrame, openedIn, pageCount, pageOfFrame, paneIn, restored, roomOnPage, setCount,
-  slotsOf, type Count, type Layout,
+  addPane, closedFrame, closedIn, COUNTS, EMPTY_LAYOUT, focusOn, frameOfSession, goPage, goProject,
+  laidOut, MAX_PAGES, movedTo, openedFrame, openedIn, pageCount, pageOfFrame, paneIn, panesOf,
+  restored, roomOnPage, setCount, slotsOf, type Count, type Layout,
 } from "../talk/layout";
 import {
   clampRailWidth, clampSideWidth, getRailShown, getRailWidth, getSideShown, getSideTab, getSideWidth,
@@ -23,7 +23,7 @@ import { useBoundFolders } from "../core/boundFolders";
 import { chooseFolderFor, fetchBoundFolders } from "../core/mutations";
 import { dataAdapter } from "../mock/adapter";
 import { invoke } from "../core/ipc";
-import type { PtySessionDto } from "../bindings/bindings";
+import type { PaneDrawnDto, PtySessionDto } from "../bindings/bindings";
 import { inTauri } from "../core/snapshot";
 import { errText, t, tf, tn } from "../core/i18n";
 
@@ -102,6 +102,7 @@ export function TerminalFace({
   projectId,
   onOpenLedger,
   openIn,
+  goPane,
 }: {
   /** The one button that changes how many windows the app is: on the board it takes the terminal
    *  into a window of its own, and in that window it folds the app back. It is handed nothing,
@@ -138,6 +139,16 @@ export function TerminalFace({
    * (`AMB-T-3708`).
    */
   openIn?: { project: number; dir: string; nth: number } | null;
+  /**
+   * A pane the ledger asked to be taken to — the session running in it, and a count of the asking, the
+   * same shape `openIn` takes and for the same reason.
+   *
+   * It is the session rather than the place, because the ledger has no places: what the task on the
+   * board knows is which session is holding it (`AMB-D-758`), and where that session is drawn is this
+   * face's own answer. A session no frame here is drawing is one that has ended, or one the other
+   * window has — either way there is nothing to go to, and nothing is what happens.
+   */
+  goPane?: { session: string; nth: number } | null;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   // Nothing is open until somebody opens something: a pane is made by opening one (`../talk/layout`),
@@ -337,6 +348,49 @@ export function TerminalFace({
     if (!settled || !inTauri()) return;
     void keepLayout(JSON.parse(shape) as ReturnType<typeof laidOut>).catch(() => {});
   }, [settled, shape]);
+
+  // And which place each running terminal is drawn in, told to the host as it changes — the half of
+  // the way back from the ledger that only the face can supply (`crate::frames::panes_drawn`). The
+  // arrangement above deliberately carries no sessions: what is written there is a shape for the
+  // other window to draw from, and this is a fact about what is running right now.
+  //
+  // The label goes with it rather than the place, because what a pane is called is worked out from
+  // the panes around it (`../talk/frames`) — the board has neither the arrangement nor the names, and
+  // a second copy of the rules over there would be free to go stale against this one.
+  const drawn = useMemo(() => {
+    const shown: PaneDrawnDto[] = [];
+    for (const project of new Set(layout.frames.map((frame) => frame.project))) {
+      const panes = panesOf(layout, project);
+      const labels = paneLabels(panes, names, layout.count);
+      for (const pane of panes) {
+        if (pane.session === null) continue;
+        shown.push({ session: pane.session, frame: pane.id, label: labels.get(pane.id) ?? pane.id });
+      }
+    }
+    return shown;
+  }, [layout, names]);
+  const drawnKey = JSON.stringify(drawn);
+  useEffect(() => {
+    if (!inTauri()) return;
+    void invoke("panes_drawn", { panes: JSON.parse(drawnKey) as PaneDrawnDto[] }).catch(() => {});
+  }, [drawnKey]);
+
+  // The ledger asking to be taken to the pane a task is being worked in. Where that session is drawn
+  // is looked up here and nowhere else, and a session no frame is drawing is one there is nothing to
+  // do about: it ended, or it is in the window this face is not.
+  //
+  // **It waits for the arrangement to be answered for.** The ask can arrive on the very render that
+  // puts this face up — pressing on the ledger is one of the ways the terminal is first asked for
+  // (`../shell/AppShell`) — and until the restore has landed there are no places to find the session
+  // among. Asked before then, every ask would be one this face had nothing to say about.
+  useEffect(() => {
+    if (!goPane || !settled) return;
+    const session = goPane.session;
+    setLayout((was) => {
+      const frame = frameOfSession(was, session);
+      return frame === null ? was : focusOn(was, frame.id);
+    });
+  }, [goPane, settled]);
 
   // How wide the face actually is, which is half of whether the columns beside the panes are columns.
   useEffect(() => {

@@ -173,6 +173,7 @@ export const hi: Translation = {
     "detail.unassign": "ज़िम्मेदारी हटाएँ", "detail.assignAi": "AI को सौंपें",
     "detail.assignee": "ज़िम्मेदार", "detail.unassigned": "किसी को नहीं सौंपा",
     "detail.project": "प्रोजेक्ट", "detail.none": "कोई नहीं",
+    "detail.workingIn": "यहाँ काम हो रहा है", "detail.goToPane": "इस पैन पर जाएँ",
     "detail.blockedBy": "इसकी प्रतीक्षा", "detail.blockedByHint": "रुका हुआ (निर्भरता)",
     "detail.notStarted": "आरंभ",
     "detail.draft": "निर्माण", "detail.finishCreating": "बनाना पूरा करें",

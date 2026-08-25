@@ -450,6 +450,14 @@
 .detail__actions { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
 .detail__field { display: flex; gap: var(--s-3); font-size: var(--fs-md); align-items: baseline; }
 .detail__flabel { width: 64px; flex: none; color: var(--c-text-faint); font-size: var(--fs-sm); }
+/* The pane a task is being worked in: the way back from the ledger to the terminal, drawn as a link
+   rather than a control because what it does is go somewhere. */
+.detail__pane {
+  display: inline-flex; align-items: center; gap: var(--s-1);
+  border: 0; background: none; padding: 0; cursor: pointer;
+  color: var(--c-accent-text); font-size: inherit; text-align: left;
+}
+.detail__pane:hover { text-decoration: underline; }
 .detail__sep { height: 1px; background: var(--c-border); }
 .detail__section-h { font-size: var(--fs-sm); font-weight: var(--fw-bold); color: var(--c-text-muted); }
 

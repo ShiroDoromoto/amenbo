@@ -1,6 +1,10 @@
 //! The **surface layer** of Amenbo's vocabulary: what an AI says about the session it is running in,
 //! inside the talk window's terminal (`AMB-D-749`).
 //!
+//! **It is spoken as `amenbo talk <verb>`** (`AMB-D-757`) — the window's own name, so the boundary and
+//! the namespace are the same word. This module keeps the layer's own name because it also holds the
+//! session id a write is stamped with (`id`), which is not of the surface at all.
+//!
 //! Everything else Amenbo does lands in the store, means the same wherever it is typed, and is still
 //! true tomorrow. Nothing here is. A session is the terminal it runs in — it has no existence outside
 //! that rectangle — so what is said about one is written to the running window and to nowhere else,
@@ -360,7 +364,7 @@ pub fn said_after(dir: &Path, after: Option<&str>) -> Result<Vec<Said>> {
         .collect())
 }
 
-/// The surface layer's own canon (`amenbo session --json`), for the AI that is inside the window and can
+/// The surface layer's own canon (`amenbo talk --json`), for the AI that is inside the window and can
 /// therefore use it. It is deliberately absent from `amenbo agent --json`, which is read everywhere:
 /// teaching a vocabulary in a place most readers cannot run it would invite exactly the silent failure
 /// this layer exists to prevent (`AMB-D-749`).
@@ -387,10 +391,10 @@ pub fn spec() -> Value {
                      will do — a person who believes a promise stops checking, and this layer cannot \
                      make one hold.",
         "commands": [
-            { "command": "session name", "args": "<text>", "summary": "Name this pane. The name sticks to the frame, so it survives what runs in it." },
-            { "command": "session note", "args": "<text>", "summary": "A line about what you are doing now, shown on the pane's label." },
-            { "command": "session waiting", "args": "<text>", "summary": format!("A person's turn has come. Say why in the same breath — the reason is what they read. It goes on one line of the label: up to {WAITING_LIMIT} columns — {WAITING_LIMIT} characters of English or half that of Japanese — and a longer one is refused rather than cut.") },
-            { "command": "session finished", "args": "<text>", "summary": "The work is done. Say what came of it." }
+            { "command": "talk name", "args": "<text>", "summary": "Name this pane. The name sticks to the frame, so it survives what runs in it." },
+            { "command": "talk note", "args": "<text>", "summary": "A line about what you are doing now, shown on the pane's label." },
+            { "command": "talk waiting", "args": "<text>", "summary": format!("A person's turn has come. Say why in the same breath — the reason is what they read. It goes on one line of the label: up to {WAITING_LIMIT} columns — {WAITING_LIMIT} characters of English or half that of Japanese — and a longer one is refused rather than cut.") },
+            { "command": "talk finished", "args": "<text>", "summary": "The work is done. Say what came of it." }
         ],
         // Columns rather than characters, so the bound means the same room in every language it is
         // written in. A reader that wants to check before speaking can, and a reader that does not
@@ -619,8 +623,8 @@ mod tests {
             .collect();
         for verb in ["name", "note", "waiting", "finished"] {
             assert!(
-                named.contains(&format!("session {verb}").as_str()),
-                "the canon is missing `session {verb}`: {named:?}",
+                named.contains(&format!("talk {verb}").as_str()),
+                "the canon is missing `talk {verb}`: {named:?}",
             );
         }
         assert!(

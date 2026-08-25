@@ -26,7 +26,7 @@
 #
 # The pane is named before the turn is handed over, which is the order an agent works in and not a
 # flourish: the first line sent into a pane names its frame, so a road that only ran the one command
-# would have the pane called `amenbo session waiting …` for the rest of its life. Naming it first is
+# would have the pane called `amenbo talk waiting …` for the rest of its life. Naming it first is
 # also the smaller half of the same seam, read on the same row.
 #
 # The world is empty on purpose. What the label says here is the session's, not the ledger's: a

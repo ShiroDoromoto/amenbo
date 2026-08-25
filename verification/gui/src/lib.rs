@@ -1421,11 +1421,11 @@ impl Instructor {
                 // needs to press one segment is the driver's business, not the goal's.
                 if flagged(with, "away") {
                     format!(
-                        "In the pane that has a terminal running in it, run: sleep {SAY_AWAY_SECONDS} && amenbo session {command} \"{text}\" — then press the segment that shows the ledger before those seconds are up. What lands is {what}, and it lands while the terminal is the face nobody is looking at, which is the only shape it ever reaches the other face in."
+                        "In the pane that has a terminal running in it, run: sleep {SAY_AWAY_SECONDS} && amenbo talk {command} \"{text}\" — then press the segment that shows the ledger before those seconds are up. What lands is {what}, and it lands while the terminal is the face nobody is looking at, which is the only shape it ever reaches the other face in."
                     )
                 } else {
                     format!(
-                        "In the pane that has a terminal running in it, run: amenbo session {command} \"{text}\" — this is {what}."
+                        "In the pane that has a terminal running in it, run: amenbo talk {command} \"{text}\" — this is {what}."
                     )
                 }
             }

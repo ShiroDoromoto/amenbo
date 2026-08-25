@@ -1181,7 +1181,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
    The width is what is asked rather than the count, because a count does not name a width: two
    across and four across are the same width in this grid (`.termface__page-grid--*` above), six and
    eight are narrower again, and the split-out window is one pane at whatever size its window is. What a reason has to be short enough
-   for is settled at the other end — `session waiting` refuses one past the length of a label
+   for is settled at the other end — `talk waiting` refuses one past the length of a label
    (`amenbo_core::session::WAITING_LIMIT`), so this is the row's last resort rather than its plan. */
 @container (max-width: 360px) {
   .plate__now,

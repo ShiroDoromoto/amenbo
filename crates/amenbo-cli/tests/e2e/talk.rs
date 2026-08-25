@@ -1,5 +1,5 @@
-//! `session`, the surface layer (`AMB-D-749`): what it does inside a pane of the talk window, and what
-//! it refuses everywhere else.
+//! `talk`, the surface layer (`AMB-D-749`), named for the window it reaches (`AMB-D-757`): what it does
+//! inside a pane of the talk window, and what it refuses everywhere else.
 //!
 //! Driven as a process because the whole of the layer's line is drawn by what the process was launched
 //! with — the window names a session in the environment, and an agent runs `amenbo` several levels deep
@@ -43,11 +43,11 @@ fn statements(dir: &std::path::Path) -> Vec<serde_json::Value> {
 fn outside_the_talk_window_every_verb_is_refused_rather_than_quietly_accepted() {
     let cli = Cli::new();
     for verb in [
-        vec!["session", "name", "the top fix"],
-        vec!["session", "note", "reading the migration"],
-        vec!["session", "waiting", "a decision is needed"],
-        vec!["session", "finished", "it landed"],
-        vec!["session"],
+        vec!["talk", "name", "the top fix"],
+        vec!["talk", "note", "reading the migration"],
+        vec!["talk", "waiting", "a decision is needed"],
+        vec!["talk", "finished", "it landed"],
+        vec!["talk"],
     ] {
         let (stderr, code) = cli.run_err(&verb);
         assert_eq!(code, 1, "{verb:?} exits non-zero outside the window: {stderr}");
@@ -61,7 +61,7 @@ fn outside_the_talk_window_every_verb_is_refused_rather_than_quietly_accepted() 
         let (stderr, code) = cli.run_err(&machine);
         assert_eq!(code, 1, "{machine:?} exits non-zero too: {stderr}");
         assert!(
-            stderr.contains("session_outside_surface"),
+            stderr.contains("talk_outside_surface"),
             "{machine:?} says which refusal it is, in a code a caller can branch on: {stderr}",
         );
     }
@@ -73,14 +73,14 @@ fn outside_the_talk_window_every_verb_is_refused_rather_than_quietly_accepted() 
 #[test]
 fn a_session_named_without_a_drop_box_is_still_outside_the_window() {
     let cli = Cli::new();
-    let dir = amenbo_scratch::scratch("session-half");
+    let dir = amenbo_scratch::scratch("talk-half");
     let path = dir.to_string_lossy().into_owned();
     for half in [
         vec![("AMENBO_SESSION", "pane-1")],
         vec![("AMENBO_SESSION_DIR", path.as_str())],
         vec![("AMENBO_SESSION", " "), ("AMENBO_SESSION_DIR", path.as_str())],
     ] {
-        let (_, code) = cli.run_env(&half, &["session", "note", "half"]);
+        let (_, code) = cli.run_env(&half, &["talk", "note", "half"]);
         assert_eq!(code, 1, "half a window is not a window: {half:?}");
     }
     assert!(
@@ -94,14 +94,14 @@ fn a_session_named_without_a_drop_box_is_still_outside_the_window() {
 #[test]
 fn inside_a_pane_each_statement_is_left_whole_for_the_window() {
     let cli = Cli::new();
-    let dir = amenbo_scratch::scratch("session-drop");
+    let dir = amenbo_scratch::scratch("talk-drop");
     let pane = in_a_pane(&dir);
 
     for (args, _) in [
-        (vec!["session", "name", "the top fix"], ()),
-        (vec!["session", "note", "reading the migration"], ()),
-        (vec!["session", "waiting", "a decision is needed"], ()),
-        (vec!["session", "finished", "it landed"], ()),
+        (vec!["talk", "name", "the top fix"], ()),
+        (vec!["talk", "note", "reading the migration"], ()),
+        (vec!["talk", "waiting", "a decision is needed"], ()),
+        (vec!["talk", "finished", "it landed"], ()),
     ] {
         let (stdout, code) = cli.run_env(&pane_env(&pane), &args);
         assert_eq!(code, 0, "{args:?} is accepted inside a pane: {stdout}");
@@ -131,14 +131,14 @@ fn inside_a_pane_each_statement_is_left_whole_for_the_window() {
 #[test]
 fn a_reason_too_long_for_the_label_is_refused_at_the_door_and_leaves_nothing_behind() {
     let cli = Cli::new();
-    let dir = amenbo_scratch::scratch("session-long-reason");
+    let dir = amenbo_scratch::scratch("talk-long-reason");
     let pane = in_a_pane(&dir);
     let limit = amenbo_core::session::WAITING_LIMIT;
     // Japanese, where the bound is half the characters it is columns: this is one past it, and the
     // refusal has to say so in columns or the two numbers in it do not compare.
     let past = "あ".repeat(limit / 2 + 1);
 
-    let (stderr, code) = cli.run_env_err(&pane_env(&pane), &["session", "waiting", &past]);
+    let (stderr, code) = cli.run_env_err(&pane_env(&pane), &["talk", "waiting", &past]);
     assert_eq!(code, 1, "a reason past the bound exits non-zero: {stderr}");
     assert!(
         stderr.contains(&(limit + 2).to_string()) && stderr.contains(&limit.to_string()),
@@ -150,10 +150,10 @@ fn a_reason_too_long_for_the_label_is_refused_at_the_door_and_leaves_nothing_beh
     );
 
     let (stderr, code) =
-        cli.run_env_err(&pane_env(&pane), &["session", "waiting", &past, "--json"]);
+        cli.run_env_err(&pane_env(&pane), &["talk", "waiting", &past, "--json"]);
     assert_eq!(code, 1, "the machine face refuses it too: {stderr}");
     assert!(
-        stderr.contains("session_reason_too_long"),
+        stderr.contains("talk_reason_too_long"),
         "in a code a caller can branch on: {stderr}",
     );
 
@@ -165,9 +165,9 @@ fn a_reason_too_long_for_the_label_is_refused_at_the_door_and_leaves_nothing_beh
     // The bound itself is within it, and the other verbs are not held to it: what they say does not
     // share the row three ways.
     let (stdout, code) =
-        cli.run_env(&pane_env(&pane), &["session", "waiting", &"あ".repeat(limit / 2)]);
+        cli.run_env(&pane_env(&pane), &["talk", "waiting", &"あ".repeat(limit / 2)]);
     assert_eq!(code, 0, "a reason of exactly the bound is accepted: {stdout}");
-    let (stdout, code) = cli.run_env(&pane_env(&pane), &["session", "note", &past]);
+    let (stdout, code) = cli.run_env(&pane_env(&pane), &["talk", "note", &past]);
     assert_eq!(code, 0, "and a note of the same length is nobody's business but the row's: {stdout}");
     assert_eq!(statements(&dir).len(), 2, "the two that were accepted are the two that were left");
 }
@@ -178,23 +178,23 @@ fn a_reason_too_long_for_the_label_is_refused_at_the_door_and_leaves_nothing_beh
 #[test]
 fn the_layer_answers_in_a_folder_amenbo_was_never_bound_to() {
     let cli = Cli::new();
-    let dir = amenbo_scratch::scratch("session-unbound");
+    let dir = amenbo_scratch::scratch("talk-unbound");
     let pane = in_a_pane(&dir);
 
-    let (stdout, code) = cli.run_env(&pane_env(&pane), &["session", "waiting", "a decision is needed"]);
+    let (stdout, code) = cli.run_env(&pane_env(&pane), &["talk", "waiting", "a decision is needed"]);
     assert_eq!(code, 0, "no pointer is needed to say what this terminal is doing: {stdout}");
     assert_eq!(statements(&dir).len(), 1, "and the statement was left for the window");
 }
 
-/// `session --json` is the layer's canon, and it is served inside the window alone — the one place a
+/// `talk --json` is the layer's canon, and it is served inside the window alone — the one place a
 /// reader can act on it. Nothing outside is taught a vocabulary it cannot run.
 #[test]
 fn the_canon_is_served_inside_the_window_and_names_what_is_owed() {
     let cli = Cli::new();
-    let dir = amenbo_scratch::scratch("session-canon");
+    let dir = amenbo_scratch::scratch("talk-canon");
     let pane = in_a_pane(&dir);
 
-    let (stdout, code) = cli.run_env(&pane_env(&pane), &["session", "--json"]);
+    let (stdout, code) = cli.run_env(&pane_env(&pane), &["talk", "--json"]);
     assert_eq!(code, 0, "the canon is served inside the window: {stdout}");
     let spec: serde_json::Value = serde_json::from_str(&stdout).expect("the canon is JSON");
     let owed = spec["owed"].as_array().expect("what is owed is a list").len();
@@ -220,6 +220,26 @@ fn the_agent_entry_point_does_not_teach_a_vocabulary_most_readers_cannot_run() {
         .iter()
         .map(|c| c["command"].as_str().unwrap_or_default().to_string())
         .collect();
-    let surface: Vec<&String> = indexed.iter().filter(|n| n.starts_with("session")).collect();
+    let surface: Vec<&String> = indexed.iter().filter(|n| n.starts_with("talk")).collect();
     assert!(surface.is_empty(), "the surface layer is indexed where it cannot be run: {surface:?}");
+}
+
+/// A bare word under `talk` is not something to say — it is refused, and nothing is left for the window.
+///
+/// The risk the name carries is that `talk <text>` reads as a mouth that talks to the agent, and an AI
+/// that believed it had one would send a person's answer into a drop box nobody speaks from
+/// (`AMB-D-757`). So the layer answers to its four verbs and to nothing else: a word that is not one of
+/// them fails at the door, where the mistake is still visible.
+#[test]
+fn a_bare_word_under_talk_is_refused_rather_than_taken_as_something_to_say() {
+    let cli = Cli::new();
+    let dir = amenbo_scratch::scratch("talk-bare-word");
+    let pane = in_a_pane(&dir);
+
+    let (stderr, code) = cli.run_env_err(&pane_env(&pane), &["talk", "carry on then"]);
+    assert_ne!(code, 0, "a bare word is not a verb of the layer: {stderr}");
+    assert!(
+        !dir.exists() || statements(&dir).is_empty(),
+        "and nothing was left for the window to read",
+    );
 }

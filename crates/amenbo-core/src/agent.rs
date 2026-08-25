@@ -2238,8 +2238,8 @@ fn index(in_a_pane: bool) -> Value {
         // reader could not tell that from a road they had simply not tried yet.
         if in_a_pane {
             map.insert(
-                "session".to_string(),
-                json!(format!("You are running in a pane of Amenbo's talk window, and there is a second vocabulary here: what you say about **this session** — the pane on the person's screen. It writes to no store and exists in this terminal alone, which is why `agent` does not carry it. Read `{cli} session --json` and follow it; two of its words are owed, and the person sees only what you say.")),
+                "talk".to_string(),
+                json!(format!("You are running in a pane of Amenbo's talk window, and there is a second vocabulary here: what you say about **this session** — the pane on the person's screen. It writes to no store and exists in this terminal alone, which is why `agent` does not carry it. Read `{cli} talk --json` and follow it; two of its words are owed, and the person sees only what you say.")),
             );
         }
     }
@@ -2588,21 +2588,21 @@ mod tests {
     }
 
     /// The entry names the second vocabulary only where it can be used. Inside a pane it points at
-    /// `session --json` and says the words are owed; outside one it says nothing about it at all, which
+    /// `talk --json` and says the words are owed; outside one it says nothing about it at all, which
     /// is the whole of `AMB-D-749` as the entry point sees it — a reader outside cannot tell a road they
     /// have not tried from one that is closed, so they are not shown a closed one.
     #[test]
     fn the_entry_names_the_surface_layer_only_inside_a_pane() {
         let outside = index(false);
-        assert!(outside.get("session").is_none(), "outside a pane the entry says nothing of it: {outside:#}");
+        assert!(outside.get("talk").is_none(), "outside a pane the entry says nothing of it: {outside:#}");
         assert!(
-            !outside.to_string().contains("session --json"),
+            !outside.to_string().contains("talk --json"),
             "and points at it nowhere else either",
         );
 
         let inside = index(true);
-        let said = inside["session"].as_str().expect("inside a pane the entry names it");
-        assert!(said.contains("session --json"), "it names the canon to read: {said}");
+        let said = inside["talk"].as_str().expect("inside a pane the entry names it");
+        assert!(said.contains("talk --json"), "it names the canon to read: {said}");
         assert!(said.contains("owed"), "and says the layer asks something of the reader: {said}");
         assert_eq!(
             index(false).as_object().map(|m| m.len() + 1),

@@ -1496,6 +1496,16 @@ const REGISTRY: &[OpSpec] = &[
     // a `Review` — and is written down for exactly that reason: an arrangement is what a build
     // reorders without a single assert going red.
     OpSpec { kind: Kind::Assert, domain: Domain::Folder, op: "first-loop-order", required: &["order"], refs: &[], strings: &["order"], binds: false },
+    // The press itself — the one move the loop offers, taken rather than read. It goes to the
+    // terminal face with a pane already open in the linked folder, which is the whole of what the
+    // loop promises and the one part of it no reading of the card reaches.
+    //
+    // It carries nothing. Which folder the pane works in and which project it belongs to are both
+    // the card's own to know — the card is a project's, and the folder is the one it names above the
+    // press — so a step that named either would be handing the screen an answer it is under test for
+    // having. What the pane landed under is read afterwards, from the rail, by the roads that read
+    // any other pane (`terminal go-project`, `terminal pane`).
+    OpSpec { kind: Kind::Action, domain: Domain::Folder, op: "start-terminal", required: &[], refs: &[], strings: &[], binds: false },
     // The ways in a reader is offered before there is a folder to work in: raise a project, or open
     // one this device already holds. Both are the interface's own to carry out, and what says so is
     // that neither hands over anything to type — `absent` names the words a card pointing at a

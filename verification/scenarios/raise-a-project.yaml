@@ -28,6 +28,11 @@
 # the loop is what a linked folder buys, and the screen says so in its place. Stand on the getting
 # started screen when the run hands its first step over.
 #
+# ── What this road does not walk ─────────────────────────────────────────────────────────────────
+# The press itself. What the loop's one move opens — a pane, under the project whose card it was
+# pressed on — is `start-a-terminal-in-the-project-whose-loop-was-pressed`, which needs a second
+# project with a terminal already running in it to say the second half of that at all.
+#
 # Clear the notices along the top of the window before shooting. One of them — the one that says the
 # AI guidance in a folder is an old version — names the very file the request names, and a reading
 # says which words are on a shot, not which part of it they came from: left up, it answers for the

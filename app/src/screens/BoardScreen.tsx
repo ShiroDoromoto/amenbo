@@ -105,9 +105,9 @@ export function BoardScreen({
   onSelectDecision: (id: number | null) => void;
   onComposeTask: (target: ComposeTarget) => void;
   onOpenSettings: () => void;
-  /** Work in this folder in the terminal — the first loop's one move, carried out by the shell
-   *  (`../shell/AppShell`). */
-  onStartTerminal: (dir: string) => void;
+  /** Work in this folder, in this project, in the terminal — the first loop's one move, carried out
+   *  by the shell (`../shell/AppShell`). */
+  onStartTerminal: (project: number, dir: string) => void;
 }) {
   const store = useStore();
   const [view, setView] = useState<View>(() => dataAdapter.getProject(projectId)?.view ?? "board");
@@ -333,7 +333,7 @@ export function BoardScreen({
           is one to speak about. */}
       {tab === "tasks" && notice === "firstLoop" && folders.live[0] && (
         <div className="board__firstloop">
-          <FirstLoop dir={folders.live[0].path} onStart={onStartTerminal} />
+          <FirstLoop dir={folders.live[0].path} onStart={(where) => onStartTerminal(projectId, where)} />
         </div>
       )}
 

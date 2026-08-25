@@ -249,25 +249,26 @@ export function AppShell() {
     if (next === "terminal") setTerminalAsked(true);
     setFace(next);
   }, [shape, goToTalkWindow, foldBackToTerminal]);
-  // The folder the ledger has asked the terminal to work in, and a count of the asking: the face is a
-  // component, so what it is handed is where to work rather than a call to make (`./TerminalFace`).
-  const [openIn, setOpenIn] = useState<{ project: number | null; dir: string; nth: number } | null>(null);
+  // The folder the ledger has asked the terminal to work in, whose project it is, and a count of the
+  // asking: the face is a component, so what it is handed is where to work rather than a call to make
+  // (`./TerminalFace`).
+  const [openIn, setOpenIn] = useState<{ project: number; dir: string; nth: number } | null>(null);
   /**
    * "Start in the terminal" — the one move the first loop offers (`../components/FirstLoop`).
    *
    * With the terminal split out into a window of its own, this window has no face to hand the folder
    * to. What the press does then is raise that window: the terminal is where the reader is being sent
    * either way, and the folder is asked for there rather than promised here (`AMB-D-749`).
+   *
+   * **The project comes from the screen that was pressed on, and is not worked out here.** A pane
+   * belongs to a project (`../talk/layout`), and the screens the button is on each know which one
+   * they are about — the board from the project it draws, the completion step from the project it
+   * has just made. Reading it off the navigation instead would be right on the board and wrong on
+   * that step, where what is being looked at is a view and not a project at all (`AMB-T-3708`).
    */
-  const startTerminalIn = useCallback((dir: string) => {
-    // Whose project it is travels with it: a pane belongs to a project (`../talk/layout`), and the
-    // only screen this button is on is that project's own.
+  const startTerminalIn = useCallback((project: number, dir: string) => {
     const here = () => {
-      setOpenIn((asked) => ({
-        project: nav.type === "project" ? Number(nav.id) : null,
-        dir,
-        nth: (asked?.nth ?? 0) + 1,
-      }));
+      setOpenIn((asked) => ({ project, dir, nth: (asked?.nth ?? 0) + 1 }));
       setTerminalAsked(true);
       setFace("terminal");
     };
@@ -278,7 +279,7 @@ export function AppShell() {
       return;
     }
     here();
-  }, [shape, nav, goToTalkWindow, foldBackToTerminal]);
+  }, [shape, goToTalkWindow, foldBackToTerminal]);
 
   // "Open in a separate window". The face comes down as the shape changes, leaving the terminals in
   // its panes running for the window that is about to draw them, and this window goes back to the

@@ -17,8 +17,8 @@ npm run dev        # http://localhost:5180 — browser, on mock fixtures
 `npm run dev` runs the front end **in a plain browser on mock fixtures**, so the UI
 can be iterated without building the native shell — outside Tauri, the wiring seams
 below fall back to `src/mock/`. To run the real app, build the native Tauri `.app`:
-that is **macOS-only** (it links WKWebView) — see the root README's Toolchain
-section and the `make gui` / `make gui-dev` targets.
+that is **macOS-only** (it links WKWebView) — see
+[Toolchain](../CONTRIBUTING.md#toolchain) and the `make gui` / `make gui-dev` targets.
 
 Use the pinned Node (24 — see `.nvmrc` at the repo root; `mise install` or `nvm use`
 picks it up). Other scripts: `npm run build`, `npm run typecheck`,

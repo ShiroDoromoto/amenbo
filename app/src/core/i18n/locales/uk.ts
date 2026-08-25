@@ -176,6 +176,7 @@ export const uk: Translation = {
     "detail.unassign": "Зняти відповідального", "detail.assignAi": "Передати ШІ",
     "detail.assignee": "Відповідальний", "detail.unassigned": "Без відповідального",
     "detail.project": "Проєкт", "detail.none": "Немає",
+    "detail.workingIn": "Робота триває в", "detail.goToPane": "Перейти до цієї панелі",
     "detail.blockedBy": "Чекає на", "detail.blockedByHint": "заблоковано (залежність)",
     "detail.notStarted": "Початок",
     "detail.draft": "Створення", "detail.finishCreating": "Завершити створення",

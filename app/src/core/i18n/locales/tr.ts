@@ -173,6 +173,7 @@ export const tr: Translation = {
     "detail.unassign": "Sorumluyu kaldır", "detail.assignAi": "Yapay zekâya devret",
     "detail.assignee": "Sorumlu", "detail.unassigned": "Sorumlusuz",
     "detail.project": "Proje", "detail.none": "Yok",
+    "detail.workingIn": "Şurada çalışılıyor", "detail.goToPane": "Bu bölmeye git",
     "detail.blockedBy": "Şunu bekliyor", "detail.blockedByHint": "engelli (bağımlılık)",
     "detail.notStarted": "Başlangıç günü",
     "detail.draft": "Oluşturma", "detail.finishCreating": "Oluşturmayı bitir",

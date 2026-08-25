@@ -76,6 +76,30 @@ function retitle(): void {
  */
 function TalkWindow() {
   const [elevated, setElevated] = useState(false);
+  // The pane a task on the ledger is being worked in, asked for from the other window. There is no
+  // face to put up here — this window *is* the face — so the whole of what arrives is which session
+  // to go to, and the host has already brought this window forward (`crate::windows::show_pane`).
+  const [goPane, setGoPane] = useState<{ session: string; nth: number } | null>(null);
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen<string>("pane-activated", (e) => {
+          setGoPane((asked) => ({ session: e.payload, nth: (asked?.nth ?? 0) + 1 }));
+        }),
+      )
+      .then((un) => {
+        if (disposed) un();
+        else unlisten = un;
+      })
+      // Outside Tauri (`npm run dev` in a browser) there is no other window to be asked by.
+      .catch(() => {});
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
   useEffect(() => {
     // Asked once, and answered for the life of the process: a token is inherited at launch and
     // cannot be handed back (`./talk/elevation`). Nothing answering is nothing established to warn
@@ -108,6 +132,7 @@ function TalkWindow() {
           onWaiting={(waiting) => {
             if (waiting && !document.hasFocus()) void notifyTurn();
           }}
+          goPane={goPane}
         />
       </div>
     </RefNavProvider>

@@ -173,6 +173,7 @@ export const nl: Translation = {
     "detail.unassign": "Toewijzing opheffen", "detail.assignAi": "Aan AI overdragen",
     "detail.assignee": "Verantwoordelijke", "detail.unassigned": "Niet toegewezen",
     "detail.project": "Project", "detail.none": "Geen",
+    "detail.workingIn": "Wordt gewerkt in", "detail.goToPane": "Naar dit deelvenster",
     "detail.blockedBy": "Wacht op", "detail.blockedByHint": "geblokkeerd (afhankelijkheid)",
     "detail.notStarted": "Begint op",
     "detail.draft": "Aanmaken", "detail.finishCreating": "Aanmaken afronden",

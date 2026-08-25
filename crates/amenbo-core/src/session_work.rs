@@ -8,7 +8,8 @@
 //!
 //! **It is read, never inferred.** Every status move made from inside a pane is written here under the
 //! session's id ([`crate::session::id`]), so which pane reserved a task is a record rather than a
-//! guess. The one attempt to guess it — from the folder a session was started in and the time it wrote
+//! guess — asked of a pane ([`work`], for the label above it) or of a task ([`holder`], for the way
+//! back from the ledger to the pane the work is happening in). The one attempt to guess it — from the folder a session was started in and the time it wrote
 //! — was right in none of fifteen cases (`AMB-T-3549`).
 //!
 //! **Nothing here outlives the run that wrote it, and that is the point.** A session id is a throwaway
@@ -22,7 +23,7 @@
 //! | | |
 //! |---|---|
 //! | writes | **core**, at the status move, when a session id is there to write ([`record`]) |
-//! | reads | **the talk window**, and nothing else ([`work`]) |
+//! | reads | **the talk window**, and nothing else ([`work`], [`holder`]) |
 //! | empties | **the talk window** — all of it as it starts, one session's as its pane closes |
 //!
 //! **No judgement of core's reads this.** Reserving, `ready`, `task list` — none of them answers
@@ -108,34 +109,13 @@ pub fn record(dir: &Path, entry: &Entry) {
 
 /// Read what `session` has on its hands.
 ///
-/// **Only the newest move of a task counts, whoever made it.** A task another pane has since reserved
-/// is theirs, however it started here, so every session's rows are read and each task is decided by the
-/// highest sequence anything wrote about it.
-///
-/// A directory that is not there is a window in which nothing has been moved yet, which is silence and
-/// not a failure.
+/// **Only the newest move of a task counts, whoever made it** ([`newest`]). A task another pane has
+/// since reserved is theirs, however it started here.
 pub fn work(dir: &Path, session: &str) -> Work {
-    // Every task the area knows about, against the newest row about it and whose row that was.
-    let mut newest: HashMap<i64, (i64, bool, String)> = HashMap::new();
-    let Ok(entries) = std::fs::read_dir(dir) else { return Work::default() };
-    for entry in entries.filter_map(Result::ok) {
-        let path = entry.path();
-        let Some(owner) = session_of(&path) else { continue };
-        let mine = owner == session;
-        for row in rows(&path) {
-            match newest.get(&row.task) {
-                Some((seq, _, _)) if *seq >= row.seq => {}
-                _ => {
-                    newest.insert(row.task, (row.seq, mine, row.to));
-                }
-            }
-        }
-    }
-
     let mut holding: Vec<(i64, i64)> = Vec::new();
     let mut finished: Vec<(i64, i64)> = Vec::new();
-    for (task, (seq, mine, to)) in newest {
-        if !mine {
+    for (task, Move { seq, owner, to }) in newest(dir) {
+        if owner != session {
             continue;
         }
         match to.as_str() {
@@ -155,6 +135,44 @@ pub fn work(dir: &Path, session: &str) -> Work {
     }
 }
 
+/// The session holding `task`, or `None` where nothing in the area is holding it.
+///
+/// It is [`work`] read the other way round, and it answers the one question the ledger cannot: a task
+/// says it is `in_progress`, and this says **whose pane** made it so. The same rule decides it — the
+/// newest row about the task, whoever wrote it — so a task passed from one pane to another names the
+/// pane that has it now.
+///
+/// `None` is not "nobody is working on it". A move made outside a pane leaves no row at all, and a
+/// window that has just started has emptied the area ([`clear`]): both are the area saying nothing,
+/// and nothing is what may be said back (`AMB-D-758`).
+pub fn holder(dir: &Path, task: i64) -> Option<String> {
+    let Move { owner, to, .. } = newest(dir).remove(&task)?;
+    matches!(to.as_str(), "in_progress" | "blocked").then_some(owner)
+}
+
+/// The newest row about each task the area knows of, whoever wrote it.
+///
+/// **One counter orders the whole area** ([`Entry::id`]), so rows from different sessions compare
+/// directly — which is what decides who is holding a task two panes have both had. A directory that is
+/// not there is a window in which nothing has been moved yet.
+fn newest(dir: &Path) -> HashMap<i64, Move> {
+    let mut newest: HashMap<i64, Move> = HashMap::new();
+    let Ok(entries) = std::fs::read_dir(dir) else { return newest };
+    for entry in entries.filter_map(Result::ok) {
+        let path = entry.path();
+        let Some(owner) = session_of(&path) else { continue };
+        for row in rows(&path) {
+            match newest.get(&row.task) {
+                Some(held) if held.seq >= row.seq => {}
+                _ => {
+                    newest.insert(row.task, Move { seq: row.seq, owner: owner.clone(), to: row.to });
+                }
+            }
+        }
+    }
+    newest
+}
+
 /// Empty the whole area. The talk window calls this **as it comes up**, and the emptying is total
 /// because at that moment it is true: no session this process opened is running yet, so every row in
 /// there was left by a run that has ended.
@@ -170,6 +188,14 @@ pub fn clear(dir: &Path) {
 pub fn forget(dir: &Path, session: &str) {
     let Some(path) = file_of(dir, session) else { return };
     let _ = std::fs::remove_file(path);
+}
+
+/// The last thing anything did to one task: when it was done, in which pane, and what it was.
+struct Move {
+    seq: i64,
+    /// The session whose file the row was in — the pane the move was made in.
+    owner: String,
+    to: String,
 }
 
 /// The status a ledger event moved a task to, or `None` where the event did not move one.
@@ -290,6 +316,46 @@ mod tests {
         let mut line = serde_json::to_vec(&serde_json::json!({ "seq": entry.id, "task": task, "to": to })).unwrap();
         line.push(b'\n');
         append(&path, &line).expect("the scratch directory is writable");
+    }
+
+    /// The way back: a task naming the pane that has it. Read off the same rows the label is, so the
+    /// two can never disagree about whose a task is.
+    #[test]
+    fn a_task_names_the_pane_holding_it() {
+        let dir = amenbo_scratch::scratch("session-work-holder");
+        record_as(&dir, "pane-1", &moved(1, 11, "todo", "in_progress"));
+        record_as(&dir, "pane-2", &moved(2, 12, "todo", "in_progress"));
+        record_as(&dir, "pane-2", &moved(3, 12, "in_progress", "blocked"));
+
+        assert_eq!(holder(&dir, 11).as_deref(), Some("pane-1"));
+        assert_eq!(holder(&dir, 12).as_deref(), Some("pane-2"), "a pane that has stopped still holds it");
+        assert_eq!(holder(&dir, 13), None, "a task the area has never heard of");
+    }
+
+    /// Ended and handed back are both "no pane has this", and neither may name the pane it was last
+    /// touched in: the row is a record of a move, not a claim on the task.
+    #[test]
+    fn a_task_nobody_is_holding_names_no_pane() {
+        let dir = amenbo_scratch::scratch("session-work-holder-ended");
+        record_as(&dir, "pane-1", &moved(1, 11, "todo", "in_progress"));
+        record_as(&dir, "pane-1", &moved(2, 11, "in_progress", "done"));
+        record_as(&dir, "pane-1", &moved(3, 12, "todo", "in_progress"));
+        record_as(&dir, "pane-1", &moved(4, 12, "in_progress", "todo"));
+
+        assert_eq!(holder(&dir, 11), None);
+        assert_eq!(holder(&dir, 12), None);
+    }
+
+    /// And a task two panes have both had names the one that has it now — the same rule the label
+    /// reads by, from the other end.
+    #[test]
+    fn a_task_taken_over_names_the_pane_that_took_it() {
+        let dir = amenbo_scratch::scratch("session-work-holder-taken");
+        record_as(&dir, "pane-1", &moved(1, 11, "todo", "in_progress"));
+        record_as(&dir, "pane-1", &moved(2, 11, "in_progress", "todo"));
+        record_as(&dir, "pane-2", &moved(3, 11, "todo", "in_progress"));
+
+        assert_eq!(holder(&dir, 11).as_deref(), Some("pane-2"));
     }
 
     #[test]

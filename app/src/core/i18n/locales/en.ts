@@ -187,6 +187,7 @@ const ui = {
   "detail.unassign": "Unassign", "detail.assignAi": "Delegate to AI",
   "detail.assignee": "Assignee", "detail.unassigned": "Unassigned",
   "detail.project": "Project", "detail.none": "None",
+  "detail.workingIn": "Worked in", "detail.goToPane": "Go to this pane",
   "detail.blockedBy": "Waiting on", "detail.blockedByHint": "blocked (dependency)",
   "detail.notStarted": "Starts on",
   // The fourth premise, and the move that ends it. Never "publish" or "approve": the one who created the

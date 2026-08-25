@@ -281,6 +281,41 @@ export function AppShell() {
     here();
   }, [shape, goToTalkWindow, foldBackToTerminal]);
 
+  /**
+   * The pane a task on the ledger is being worked in, asked for from the task itself.
+   *
+   * It arrives from the host rather than from a press in this tree, because the two faces can be in
+   * two windows: the task is read here and the pane may be over there, so what raises the right
+   * window is the process that owns them both (`crate::windows::show_pane`). This window is told only
+   * when it is the one holding the face — so what is left to do here is put that face up, and the
+   * session goes down to it to be found among the places (`./TerminalFace`).
+   *
+   * `terminalAsked` is set for the same reason `foldBackToTerminal` sets it: the face is only hosted
+   * once it has been asked for, and a reader on their way to a pane is asking.
+   */
+  const [goPane, setGoPane] = useState<{ session: string; nth: number } | null>(null);
+  useEffect(() => {
+    if (!inTauri()) return;
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen<string>("pane-activated", (e) => {
+          setTerminalAsked(true);
+          setFace("terminal");
+          setGoPane((asked) => ({ session: e.payload, nth: (asked?.nth ?? 0) + 1 }));
+        }),
+      )
+      .then((un) => {
+        if (disposed) un();
+        else unlisten = un;
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
   // "Open in a separate window". The face comes down as the shape changes, leaving the terminals in
   // its panes running for the window that is about to draw them, and this window goes back to the
   // ledger — the face it is now the only one of.
@@ -583,6 +618,7 @@ export function AppShell() {
             projectId={nav.type === "project" ? Number(nav.id) : (dataAdapter.listProjects()[0]?.id ?? null)}
             onOpenLedger={() => setFace("tasks")}
             openIn={openIn}
+            goPane={goPane}
           />
         </div>
       )}

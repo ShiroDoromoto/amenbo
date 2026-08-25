@@ -771,6 +771,33 @@ report: MigrationDoneDto | null,
 error: { code: string; message_en: string; fields: Record<string, unknown> | null } | null, };
 
 /**
+ * One session, and the place the talk window's face is drawing it in — as the face says it
+ * ([`crate::frames::panes_drawn`]).
+ *
+ * **The face is the only thing that knows this pairing.** A session belongs to the process
+ * (`crate::pty`) and a place belongs to the arrangement, which lives in whichever window is drawing
+ * the face — so the host is told rather than working it out. It is held for the length of the run and
+ * no longer: what it pairs are two things that both go when the app does (`crate::frames`).
+ *
+ * `label` is what that pane is called on the screen, worked out where the naming rules are
+ * (`app/src/talk/frames.ts`) rather than rebuilt here — so a pane reads the same on the rail, above
+ * its own terminal, and on the task it is holding.
+ */
+export type PaneDrawnDto = { 
+/**
+ * The terminal running in it — the id it was opened under.
+ */
+session: string, 
+/**
+ * The place it is drawn in (`FrameNameDto`).
+ */
+frame: string, 
+/**
+ * What that place is called on the screen.
+ */
+label: string, };
+
+/**
  * Where one task sits (project only — classification lives on the dimension axes). The real data
  * behind the project row in the task detail view.
  */
@@ -2242,6 +2269,25 @@ offset: number,
  * The limit that was applied (page size). None means no cap — everything from `offset` on.
  */
 limit: number | null, };
+
+/**
+ * The pane a task is being worked in, for the row on the task that goes there
+ * ([`crate::frames::task_pane`]).
+ *
+ * It is two answers joined: the volatile area says which session holds the task
+ * ([`amenbo_core::session_work::holder`]), and the face says where that session is drawn
+ * ([`PaneDrawnDto`]). **Absent unless both speak** — a task held by a session no pane is drawing is a
+ * task with nowhere to send the reader, and a row that led nowhere would be worse than no row.
+ */
+export type TaskPaneDto = { 
+/**
+ * The session holding the task — what [`crate::windows::show_pane`] is asked for.
+ */
+session: string, 
+/**
+ * What the pane is called on the screen.
+ */
+label: string, };
 
 /**
  * A reference to a task (id + title). The id is an integer key.

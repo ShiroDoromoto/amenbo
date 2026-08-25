@@ -176,6 +176,7 @@ export const id: Translation = {
     "detail.unassign": "Lepaskan penanggung jawab", "detail.assignAi": "Serahkan ke AI",
     "detail.assignee": "Penanggung jawab", "detail.unassigned": "Belum ada penanggung jawab",
     "detail.project": "Proyek", "detail.none": "Tidak ada",
+    "detail.workingIn": "Dikerjakan di", "detail.goToPane": "Buka panel ini",
     "detail.blockedBy": "Menunggu", "detail.blockedByHint": "terhambat (ketergantungan)",
     "detail.notStarted": "Mulai pada",
     "detail.draft": "Pembuatan", "detail.finishCreating": "Selesaikan pembuatan",

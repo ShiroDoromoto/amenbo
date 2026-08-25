@@ -27,7 +27,7 @@
 
 import type { FrameNameDto, TalkLayoutDto } from "../bindings/bindings";
 import { invoke } from "../core/ipc";
-import type { SavedLayout } from "./layout";
+import type { Frame, SavedLayout } from "./layout";
 
 /** Who is naming a frame. Ranked in the store, lowest first. */
 export type NamedBy = "typed" | "session" | "person";
@@ -176,4 +176,40 @@ export async function savedLayout(): Promise<SavedLayout | null> {
  */
 export async function keepLayout(layout: SavedLayout): Promise<void> {
   await invoke<void>("save_talk_layout", { layout });
+}
+
+/**
+ * What each of a project's panes is called on the screen, in the order they were opened.
+ *
+ * A pane nobody has named is called after the folder it works in (`frameLabel`), and one that has not
+ * been opened in a folder either is called where it is — the page it is on and its place on it,
+ * counted the way the pages are.
+ *
+ * **Two panes in one folder keep their places beside them.** A folder is not a name anybody chose, so
+ * two panes working in the same one read the same — and a label a reader cannot tell from another is
+ * no use for going to a pane. A name that repeats is left alone: two panes a person called the same
+ * thing is a person's own business.
+ *
+ * It is here rather than in the rail because the rail is not the only place a pane is named any more:
+ * the ledger names one on the task it is holding (`../screens/TaskDetailPane`), and the two saying
+ * different things about the same pane would be two panes as far as the reader is concerned.
+ */
+export function paneLabels(
+  panes: readonly Frame[],
+  names: FrameNames,
+  count: number,
+): Map<string, string> {
+  const folders = panes.map((frame) => (names.has(frame.id) ? null : folderName(frame.folder)));
+  const shared = new Set(folders.filter((one, at) => one !== null && folders.indexOf(one) !== at));
+  return new Map(
+    panes.map((frame, at) => {
+      const place = `${Math.floor(at / count) + 1}.${(at % count) + 1}`;
+      const folder = folders[at];
+      return [
+        frame.id,
+        names.get(frame.id)
+          ?? (folder === null ? place : shared.has(folder) ? `${folder} ${place}` : folder),
+      ];
+    }),
+  );
 }

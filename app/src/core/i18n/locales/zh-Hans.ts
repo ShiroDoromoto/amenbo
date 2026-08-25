@@ -174,6 +174,7 @@ export const zhHans: Translation = {
     "detail.unassign": "取消分配", "detail.assignAi": "委派给 AI",
     "detail.assignee": "负责人", "detail.unassigned": "未分配",
     "detail.project": "项目", "detail.none": "无",
+    "detail.workingIn": "正在此处进行", "detail.goToPane": "前往此窗格",
     "detail.blockedBy": "等待", "detail.blockedByHint": "受阻（依赖）",
     "detail.notStarted": "开始于",
     "detail.draft": "创建", "detail.finishCreating": "完成创建",

@@ -177,6 +177,7 @@ export const ptBR: Translation = {
     "detail.unassign": "Tirar o responsável", "detail.assignAi": "Delegar à IA",
     "detail.assignee": "Responsável", "detail.unassigned": "Sem responsável",
     "detail.project": "Projeto", "detail.none": "Nenhum",
+    "detail.workingIn": "Trabalhado em", "detail.goToPane": "Ir para este painel",
     "detail.blockedBy": "Esperando", "detail.blockedByHint": "bloqueada (dependência)",
     "detail.notStarted": "Começa em",
     "detail.draft": "Criação", "detail.finishCreating": "Terminar a criação",

@@ -175,6 +175,7 @@ export const ja: Translation = {
     "detail.unassign": "委任を解除", "detail.assignAi": "に任せる",
     "detail.assignee": "担当", "detail.unassigned": "担当者なし",
     "detail.project": "プロジェクト", "detail.none": "なし",
+    "detail.workingIn": "作業", "detail.goToPane": "このペインへ行く",
     "detail.blockedBy": "待ち", "detail.blockedByHint": "着手不可（依存）",
     "detail.notStarted": "着手日待ち",
     "detail.draft": "作成", "detail.finishCreating": "作成を終える",

@@ -11,7 +11,7 @@
 // name belongs to the place wherever it is being drawn.
 //
 // **Three things name a frame and they are ranked** — the first line the person typed into it, then
-// `session name` from the agent running in it, then the person saying so, which is the last word for
+// `talk name` from the agent running in it, then the person saying so, which is the last word for
 // good. The ranking itself is the store's (`amenbo_core::frames`), so this file never decides whether a
 // name takes: it says who is naming and draws what comes back.
 //
@@ -52,7 +52,7 @@ export async function frameNames(): Promise<FrameNames> {
  * Name a frame, and answer with the names as they now stand.
  *
  * What comes back is the whole set rather than an acknowledgement, because a naming can be refused —
- * an agent's `session name` does not take a person's name back off a frame. Drawing what was asked for
+ * an agent's `talk name` does not take a person's name back off a frame. Drawing what was asked for
  * would show a name that is not the frame's.
  */
 export async function nameFrame(frame: string, name: string, by: NamedBy): Promise<FrameNames> {

@@ -20,9 +20,9 @@
 //! (`AMB-D-434`).
 //!
 //! **Three things name a frame, and they are ranked** ([`NamedBy`]). The first line a person types into
-//! a new pane names it, so a pane is not called "3" until somebody gets round to it; `session name`
+//! a new pane names it, so a pane is not called "3" until somebody gets round to it; `talk name`
 //! from the agent running in it improves on that; and a person renaming it outranks both, for good —
-//! an agent that says `session name` afterwards does not take a person's word back off the frame.
+//! an agent that says `talk name` afterwards does not take a person's word back off the frame.
 
 use std::collections::BTreeMap;
 
@@ -44,7 +44,7 @@ const RETIRED_NAMES_META: &str = "talk.frame_names";
 /// How long a frame's name may be, in characters.
 ///
 /// **A name is a label and not a sentence.** All three of the things that name a frame can run long —
-/// a first line typed at an agent is a request, and `session name` is whatever the agent thought of —
+/// a first line typed at an agent is a request, and `talk name` is whatever the agent thought of —
 /// and the row it is drawn on has the rest of what is happening to fit on it beside the name. The
 /// bound is here rather than at the three doors because it is one rule about names, and the window
 /// gives what is left of a long one an ellipsis rather than the room.
@@ -58,7 +58,7 @@ pub enum NamedBy {
     /// The first line the person typed into the pane. It names a frame that has none and never
     /// replaces one — it is the *first* line, and a second is just more typing.
     Typed,
-    /// The agent, through `session name`. It knows what it is doing better than the first line did.
+    /// The agent, through `talk name`. It knows what it is doing better than the first line did.
     Session,
     /// The person, saying so. The last word, and it stays the last word.
     Person,
@@ -271,7 +271,7 @@ mod tests {
     #[test]
     fn a_person_outranks_the_agent_and_keeps_outranking_it() {
         let person = FrameName { name: "the migration".into(), by: Person };
-        assert!(!accepts(Some(&person), Session), "`session name` does not take a person's word back");
+        assert!(!accepts(Some(&person), Session), "`talk name` does not take a person's word back");
         assert!(!accepts(Some(&person), Typed));
         assert!(accepts(Some(&person), Person), "and a person may change their mind");
         let session = FrameName { name: "reading the store".into(), by: Session };

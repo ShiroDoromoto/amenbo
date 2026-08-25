@@ -304,6 +304,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .slot__pick {
   flex: 0 0 auto;
   display: flex; flex-direction: column; align-items: center; gap: var(--s-2);
+  /* The grid below fills this box, so this is what decides how wide the row of pills gets. It takes
+     the frame and then stops: across a wide pane a single row stretched end to end reads as a band
+     rather than as things to press. */
+  width: 100%; max-width: 34rem;
 }
 /* The words over the row. Quiet and small — it is a question about the pills, not a heading over the
    frame, and one that shouts would take the eye before the thing it is asking about. */
@@ -314,17 +318,31 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* What the terminal is opened with: one pill each, and the one in force filled with the accent. They
    are pressable and a reader has to see that they are — words alone read as a caption, and a caption
-   is not something anybody tries. Each pill holds its name on one line and the row wraps instead:
-   a name broken across two lines stops looking like one thing to press. It is not drawn at all where
-   the shell is the only thing this machine can start: a row of one says nothing a reader can act on. */
-.slot__starts { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-2); }
+   is not something anybody tries. Each pill holds its name on one line: a name broken across two
+   lines stops looking like one thing to press. It is not drawn at all where the shell is the only
+   thing this machine can start: a row of one says nothing a reader can act on.
+
+   Even cells, because a pill's width is its name — "Plain shell" and "GitHub Copilot CLI" differ by
+   more than double. Wrapping ragged pills and centring the rows leaves no edge lined up and strands
+   the remainder in the middle, and the split changes with every width the pane takes. On even cells
+   as many go across as fit, and what does not fit starts another row. */
+.slot__starts {
+  display: grid; gap: var(--s-2); width: 100%;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+}
+/* A name too long for its cell is cut with an ellipsis rather than widening the cell, which would
+   take the evenness back. That is why the pill lays its content out as a line of text and not as a
+   flex row: the cut belongs to text, and a bare name inside a flex box is not text the rule reaches.
+   The mark takes its step from a margin for the same reason — there is no `gap` in a line. */
 .slot__start {
-  display: inline-flex; align-items: center; gap: var(--s-1);
+  display: block;
   padding: var(--s-1) var(--s-3);
   border: 1px solid var(--c-border); border-radius: 999px;
   background: var(--c-surface); color: var(--c-text-muted);
-  font-size: var(--fs-sm); line-height: 1.6; white-space: nowrap;
+  font-size: var(--fs-sm); line-height: 1.6; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.slot__start .icon { margin-right: var(--s-1); }
 .slot__start:hover { color: var(--c-text); border-color: var(--c-border-strong); }
 .slot__start--on {
   background: var(--c-accent-weak); border-color: var(--c-accent);

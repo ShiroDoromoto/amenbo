@@ -106,9 +106,6 @@ export function invalidateScopes(scopes: ReadonlySet<string>): void {
       case "decision": return touchesScope("decisions");
       case "decisionComments": return touchesScope("decisions");
       case "attachments": return touchesScope("attachments");
-      // What nothing is working on moves when a reservation is handed back or a proposal is settled,
-      // and those are the two scopes those writes land in.
-      case "adrift": return touchesScope("tasks") || touchesScope("decisions");
       // A page of hits is drawn from every face at once — a task's words, a decision's, a comment on
       // either, an axis label, an attachment's name — so it goes stale on any of the scopes those sit in.
       case "search": return touchesScope("tasks") || touchesScope("decisions") || touchesScope("attachments");

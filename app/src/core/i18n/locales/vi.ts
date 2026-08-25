@@ -658,8 +658,6 @@ export const vi: Translation = {
     "block.draft": "Chưa khởi động được (vẫn đang được tạo): hãy hoàn tất việc tạo trước",
     "chip.draft": "Đang được tạo",
     "premise.changed": "Tiền đề đã đổi sau khi bạn nhận việc: {detail}",
-    "adrift.mark": "Không ai làm",
-    "adrift.tip": "Bên trong Amenbo không còn gì đang làm việc này. Nó có thể vẫn chạy ở một terminal Amenbo không thấy — hãy xem trước khi di chuyển.",
     "premise.warn": "Tiền đề đã đổi sau khi bạn nhận việc (AMB-D-366): {detail}. Chỉ hoàn tất phần tự nó đứng vững, hoặc trả lại bằng cách đặt về todo.",
     "premise.noLongerSettled": "không còn ngã ngũ",
     "detail.premiseChanged": "Đã đổi từ khi nhận việc",

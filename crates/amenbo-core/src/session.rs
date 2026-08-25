@@ -72,19 +72,18 @@ pub fn surface() -> Option<Surface> {
     from_parts(crate::env::session(), crate::env::session_dir())
 }
 
-/// The longest session id a write will carry into the ledger. The window mints 32 hex characters
+/// The longest session id a write will record itself under. The window mints 32 hex characters
 /// ([`SESSION_VAR`]); the cap is here because the variable is inherited from an environment anything
-/// can set, and a ledger line above its own size limit is dropped rather than written — a stray value
-/// would take the event down with it. A longer id is refused whole rather than cut: a shortened one
-/// names a session that does not exist, and naming the wrong session is worse than naming none.
+/// can set, and what is written under it is a file name ([`crate::session_work`]) — a stray value
+/// would be a stray name on disk. A longer id is refused whole rather than cut: a shortened one names
+/// a session that does not exist, and naming the wrong session is worse than naming none.
 pub const MAX_ID_BYTES: usize = 128;
 
-/// The session a write records itself as coming from, or `None` when the process is running outside the
-/// talk window's terminal.
+/// The session a status move records itself as coming from, or `None` when the process is running
+/// outside the talk window's terminal ([`crate::session_work`]).
 ///
 /// This is not the surface layer ([`surface`]) and asks for less. A statement needs somewhere to be
-/// left, so half an environment is no window at all; a name tag needs nothing but the name — it rides a
-/// write that was going to the ledger regardless, and stamping it costs nothing when nobody reads it.
+/// left, so half an environment is no window at all; a name tag needs nothing but the name.
 ///
 /// Blank, whitespace, or past [`MAX_ID_BYTES`]: `None`. An empty author is allowed to mean "unknown";
 /// a guess is not.

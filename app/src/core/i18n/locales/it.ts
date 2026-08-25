@@ -684,8 +684,6 @@ export const it: Translation = {
     "block.draft": "Non può partire (è ancora in fase di creazione): completa prima la creazione",
     "chip.draft": "In creazione",
     "premise.changed": "Le premesse sono cambiate dopo che l'hai prenotata: {detail}",
-    "adrift.mark": "Nessuno ci lavora",
-    "adrift.tip": "Dentro Amenbo non c'è più nulla che ci stia lavorando. Potrebbe proseguire in un terminale che Amenbo non vede: guarda prima di spostarlo.",
     "premise.warn": "Le premesse sono cambiate dopo che l'hai prenotata (AMB-D-366): {detail}. Finisci solo la parte che sta in piedi da sola, oppure restituiscila rimettendola su da fare.",
     "premise.noLongerSettled": "non è più risolta",
     "detail.premiseChanged": "Cambiata dopo la prenotazione",

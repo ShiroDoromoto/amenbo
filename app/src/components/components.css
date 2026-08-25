@@ -436,7 +436,6 @@
    which the row has been sitting in — and every reservation a pane ever made carries it from the moment
    the app comes up, so a coloured one would be an alarm ringing over a standing inventory
    (`components/atoms.tsx`). */
-.chip--adrift { white-space: nowrap; cursor: default; color: var(--c-text-muted); }
 /* The mark-only form of the same block, for dense surfaces (a calendar chip, a timeline's
    row label). It shares a line with the title, so it drops the chip background and the
    count and stands on the icon's own width. */

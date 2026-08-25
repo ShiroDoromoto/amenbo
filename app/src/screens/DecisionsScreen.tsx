@@ -2,7 +2,6 @@ import { useState } from "react";
 import { type Decision, type DecisionStatus } from "../core/snapshot";
 import { addDecision } from "../core/mutations";
 import { useDecisionPage, useDecisionSearchIds } from "../core/reads";
-import { useAdrift } from "../core/adrift";
 import { Pager, usePager } from "../components/Pager";
 import { errText, formatDay, t, tf } from "../core/i18n";
 import { decisionRef } from "../core/idref";
@@ -10,7 +9,6 @@ import { parseRefQuery } from "../core/filters";
 import { asTyped } from "../core/keys";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
-import { AdriftChip } from "../components/atoms";
 
 // The list of decision records. A decision is a first-class entity that keeps "why we went with X"
 // (edited in place to refine, superseded to overturn), and it lives on a plane of its own, apart from
@@ -56,9 +54,6 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
   onSelectDecision?: (id: number) => void;
 }) {
   const decisions = useDecisionPage(projectId);
-  // The proposals nothing is bringing to a close. Asked for the same project the board asks for, which is the
-  // same query and so the same one answer (`core/reads`'s `useAdrift`).
-  const adrift = useAdrift(projectId);
   const [filter, setFilter] = useState<DecisionFilterKey>("all");
   const [sort, setSort] = useState<DecisionSort>("numberDesc");
   const [search, setSearch] = useState("");
@@ -131,7 +126,6 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
           <DecisionCard
             key={d.id}
             d={d}
-            adrift={adrift.decisions.has(Number(d.id))}
             selected={d.id === selectedDecisionId}
             onSelect={onSelectDecision}
           />
@@ -169,10 +163,8 @@ function decidedLabel(d: Decision): string {
 // The list is a compact overview: a row carries the ref, the title, the status and the decision date,
 // and nothing else. The body, the supersession chain, the related tasks and accept/reject are the
 // detail pane's business (DecisionDetailPane).
-function DecisionCard({ d, adrift, selected, onSelect }: {
+function DecisionCard({ d, selected, onSelect }: {
   d: Decision;
-  /** Whether the pane that put it up has gone and nobody has settled it since. */
-  adrift?: boolean;
   selected?: boolean;
   onSelect?: (id: number) => void;
 }) {
@@ -195,9 +187,6 @@ function DecisionCard({ d, adrift, selected, onSelect }: {
         fontSize: "var(--fs-xs)", padding: "1px 8px", borderRadius: 10, color: "#fff", whiteSpace: "nowrap",
         background: statusColor(d.status),
       }}>{t(`dec.status.${d.status}`)}</span>
-      {/* Beside the status rather than instead of it: `proposed` says it is open, and this says nothing is
-          bringing it to a close — the second is only readable against the first. */}
-      {adrift && <AdriftChip />}
       {/* The edge, said in the row: which decision overturned this one. It sits beside the status rather
           than instead of it — a rejected decision that was later superseded is both, and a badge that
           picked one of the two would be hiding the other. */}

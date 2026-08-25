@@ -54,63 +54,35 @@ fn activity_records_system_events_and_comments() {
     assert_eq!(p_end["count"], 0);
 }
 
-/// Two AI sessions are one facet, so `author.kind` says the same of both. What separates them is the
-/// pane each write was made in — carried in on the environment, from a window several processes away
-/// (`AMB-T-3549`: folder and clock were measured and separate nothing).
+/// The timeline names the facet and stops there. Two AI sessions are one facet, so every row an AI
+/// wrote reads the same on it — and the ledger says nothing else about who wrote one, in particular
+/// nothing about the pane it was written in. That belongs to a place that is emptied when the window
+/// closes (`AMB-D-758`, `crates/amenbo-cli/tests/e2e/talk.rs`), because a session id means nothing
+/// once its window has gone, and a permanent row is exactly where it must not be kept.
 #[test]
-fn a_reservation_says_which_pane_it_was_made_in_and_a_write_from_outside_says_nothing() {
+fn the_timeline_names_the_facet_and_says_nothing_about_the_pane_a_write_came_from() {
     let cli = Cli::new();
     cli.run(&["init", "--name", "tester"]);
 
-    let pane = |id: &str, args: &[&str]| {
-        let (stdout, code) = cli.run_env(&[("AMENBO_SESSION", id)], args);
-        assert_eq!(code, 0, "{args:?} in {id}: {stdout}");
-        stdout
-    };
+    let t = id_str(&cli.json(&["task", "add", "--title", "first", "--actor", "ai", "--json"])["task"]["id"]);
+    cli.finish_creating(&t);
+    let (stdout, code) = cli.run_env(
+        &[("AMENBO_SESSION", "pane-a")],
+        &["task", "status", &t, "in_progress", "--actor", "ai"],
+    );
+    assert_eq!(code, 0, "reserving inside a pane: {stdout}");
+    cli.run(&["comment", "add", &t, "--actor", "ai", "--text", "on it"]);
+    cli.run(&["task", "status", &t, "blocked", "--actor", "ai"]);
 
-    let mut ids = Vec::new();
-    for title in ["first", "second"] {
-        let t = id_str(&cli.json(&["task", "add", "--title", title, "--actor", "ai", "--json"])["task"]["id"]);
-        cli.finish_creating(&t);
-        ids.push(t);
-    }
-    // The same facet, from two panes — and one reservation from no pane at all.
-    pane("pane-a", &["task", "status", &ids[0], "in_progress", "--actor", "ai"]);
-    pane("pane-b", &["task", "status", &ids[1], "in_progress", "--actor", "ai"]);
-    pane("pane-a", &["comment", "add", &ids[0], "--actor", "ai", "--text", "on it"]);
-    cli.run(&["task", "status", &ids[0], "blocked", "--actor", "ai"]);
-
-    let reserved_in = |task: &str| -> Vec<Option<String>> {
-        let act = cli.json(&["activity", "--task", task, "--kind", "system", "--json"]);
-        act["items"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .filter(|i| i["event"]["kind"] == "task.status_changed" && i["event"]["new"] == "in_progress")
-            .map(|i| i["author"]["session"].as_str().map(str::to_string))
-            .collect()
-    };
-    assert_eq!(reserved_in(&ids[0]), vec![Some("pane-a".to_string())], "the pane that took it is on the row");
-    assert_eq!(reserved_in(&ids[1]), vec![Some("pane-b".to_string())], "and the other reservation is not it");
-
-    let rows = cli.json(&["activity", "--task", &ids[0], "--json"]);
+    let rows = cli.json(&["activity", "--task", &t, "--json"]);
     let rows = rows["items"].as_array().unwrap();
     assert!(
         rows.iter().all(|i| i["author"]["kind"] == "ai"),
-        "the facet says the same of every one of them, which is the whole problem: {rows:?}",
+        "the facet says the same of every one of them: {rows:?}",
     );
-    let blocked = rows
-        .iter()
-        .find(|i| i["event"]["new"] == "blocked")
-        .expect("the write made outside any window is on the timeline");
     assert!(
-        blocked["author"].get("session").is_none(),
-        "outside a window the key is absent — unknown, never guessed: {blocked}",
-    );
-    let comment = rows.iter().find(|i| i["type"] == "comment").expect("the comment is on the timeline");
-    assert!(
-        comment["author"].get("session").is_none(),
-        "a comment is a table row with no such column, so it answers nothing: {comment}",
+        rows.iter().all(|i| i["author"].get("session").is_none()),
+        "and no row names a pane, the one made inside one included: {rows:?}",
     );
 }
 

@@ -552,7 +552,6 @@ impl Store {
                 id: activity_id,
                 at: now,
                 actor: Some(actor),
-                session: crate::session::id(),
                 project,
                 task: Some(id),
                 decision: None,
@@ -828,7 +827,6 @@ impl Store {
                 id: activity_id,
                 at: now,
                 actor: Some(actor),
-                session: crate::session::id(),
                 project: Some(id),
                 task: None,
                 decision: None,
@@ -1010,7 +1008,6 @@ impl Store {
                 id: mint_activity_id(tx)?,
                 at: crate::time::Timestamp::now(),
                 actor: Some(author_kind),
-                session: crate::session::id(),
                 // A ledger line carries its own project — a file cannot be joined against the DB.
                 project: crate::store_engine::read::task_project_id(tx.conn(), target_id)?,
                 task: Some(target_id),
@@ -1019,6 +1016,10 @@ impl Store {
             })
         })?;
         crate::activity_log::append(&self.paths.activity_file, &entry);
+        // And, when this process is inside a pane and the event is a status move, one row in the
+        // volatile area — which is where a session id lives now (`AMB-D-758`). It goes here rather than
+        // onto the line above so that nothing permanent carries a token nothing can resolve later.
+        crate::session_work::record(&self.paths.sessions_dir, &entry);
         Ok(entry)
     }
 
@@ -1039,7 +1040,6 @@ impl Store {
                 id: mint_activity_id(tx)?,
                 at: crate::time::Timestamp::now(),
                 actor: Some(author_kind),
-                session: crate::session::id(),
                 // A ledger line carries its own project — a file cannot be joined against the DB.
                 project: crate::store_engine::read::decision_project_id(tx.conn(), decision_id)?,
                 task: None,
@@ -1222,7 +1222,6 @@ impl Store {
                 id: activity_id,
                 at: crate::time::Timestamp::now(),
                 actor: Some(actor),
-                session: crate::session::id(),
                 project,
                 task: None,
                 decision: Some(id),

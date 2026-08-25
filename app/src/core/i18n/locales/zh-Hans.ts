@@ -655,8 +655,6 @@ export const zhHans: Translation = {
     "block.draft": "无法开始（还在创建中）：请先完成创建",
     "chip.draft": "创建中",
     "premise.changed": "你预约之后前提发生了变化：{detail}",
-    "adrift.mark": "无人在做",
-    "adrift.tip": "Amenbo 里已经没有东西在做这件事了。它可能仍在 Amenbo 看不到的终端里继续，移动之前先看一眼。",
     "premise.warn": "你预约之后前提发生了变化（AMB-D-366）：{detail}。只完成能独立成立的那部分，或者把它设回待办交还回去。",
     "premise.noLongerSettled": "不再是定论",
     "detail.premiseChanged": "预约后有变动",

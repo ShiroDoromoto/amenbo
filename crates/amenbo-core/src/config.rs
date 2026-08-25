@@ -133,6 +133,12 @@ pub struct Paths {
     /// of truth, one per machine, and `backup` / `export` do not copy it — it is a machine-local
     /// viewing stream.
     pub activity_file: PathBuf,
+    /// The volatile area ([`crate::session_work`]): which talk-window session is holding which task,
+    /// for as long as that window is running. It sits beside the store for the one reason app-data
+    /// does — a directory per identifier, so a dev build and production never read each other's — and
+    /// it is nothing like the store otherwise. Nothing in it is true past the run that wrote it, and
+    /// the window that owns it empties it as it comes up (`AMB-D-758`).
+    pub sessions_dir: PathBuf,
 }
 
 impl Paths {
@@ -145,6 +151,7 @@ impl Paths {
             config_file: base.join("config.json"),
             identity_file: base.join(IDENTITY_FILE_NAME),
             activity_file: base.join(crate::activity_log::FILE_NAME),
+            sessions_dir: base.join(crate::session_work::DIR_NAME),
             base_dir: base,
         }
     }

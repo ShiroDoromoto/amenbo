@@ -152,7 +152,7 @@ fn facet_actor(config: &amenbo_core::config::Config, kind: Option<ActorKind>) ->
         ActorKind::Ai => config.ai_display_name(),
         ActorKind::Human => config.human_display_name(),
     };
-    ActorDto { name, kind: kind.as_str(), avatar: None, session: None }
+    ActorDto { name, kind: kind.as_str(), avatar: None }
 }
 
 fn date_iso(d: NaiveDate) -> String {
@@ -471,8 +471,6 @@ fn build_snapshot() -> Result<Snapshot, CmdError> {
                 name,
                 kind: kind.as_str(),
                 avatar: config.avatar_for(kind),
-                // The roster names the two facets, not an act: no session wrote it.
-                session: None,
             })
             .collect(),
         projects: acc.projects,
@@ -870,8 +868,7 @@ fn activity_dto(it: amenbo_core::activity::Item, config: &amenbo_core::config::C
     // Read before `it` is taken apart below: the sequence is derived from the whole row.
     let seq = it.seq().rank();
     let event = it.event.as_ref().map(event_dto);
-    // The session rides on the author, where the facet it cannot separate already is.
-    let author = ActorDto { session: it.author_session, ..facet_actor(config, it.author_kind) };
+    let author = facet_actor(config, it.author_kind);
     ActivityItemDto {
         id: it.id,
         seq,
@@ -3715,97 +3712,26 @@ pub fn tick_banner_later() -> Result<(), CmdError> {
     Ok(())
 }
 
-/// What the ledger says the session in one pane has been doing.
+/// What the volatile area says the session in one pane has been doing.
 ///
-/// **Read, never inferred.** A write made inside a pane carries the session's id, so which pane holds a
-/// task is a column rather than a guess — and a task whose newest move was made somewhere else is not
-/// this pane's, however it started here (`amenbo_core::session_work`).
+/// **Read, never inferred.** A status move made inside a pane is written under the session that made it
+/// (`AMB-D-758`), so which pane holds a task is a record rather than a guess — and a task whose newest
+/// move was made in another pane is not this one's, however it started here
+/// (`amenbo_core::session_work`).
+///
+/// **The window is the only reader of that area**, and this command is the door. Nothing in core asks
+/// it anything: a reservation, a `ready` and a `task list` answer the same on a machine that has never
+/// opened this window.
 #[tauri::command]
 pub fn session_work(session: String) -> Result<SessionWorkDto, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("session_work");
     let mut out = SessionWorkDto { holding: Vec::new(), finished: 0 };
     with_store_read(|store| {
-        let work = amenbo_core::session_work::work(&store.paths.activity_file, &session);
+        let work = amenbo_core::session_work::work(&store.paths.sessions_dir, &session);
         out = SessionWorkDto { holding: work.holding, finished: work.finished.len() };
         Ok(())
     })?;
     Ok(out)
-}
-
-/// What in `project` nothing is working on any more.
-///
-/// A process can die and the ledger not hear about it, so a task can sit reserved with nobody at it. It
-/// is out of everybody's mailbox while it does, which is the whole of why it goes unnoticed. What makes
-/// it noticeable is that a reservation made inside a pane carries the session that made it, and this
-/// process knows which sessions are still running (`crate::pty::live`). A reservation whose session has
-/// gone is a fact, not a guess.
-///
-/// A decision put up for discussion and never settled is the same shape and is asked about the same
-/// way: the ledger says which pane put it up (`decision.proposed`), the store says it is still
-/// proposed, and a proposal open under a pane that has gone is a proposal nobody is bringing to a
-/// close. The two are kept apart in the answer because opening one is not opening the other.
-///
-/// **Nothing here decides anything.** The answer is what to put to a person, and moving a task or
-/// settling a decision is theirs or their AI's (`AMB-D-748`). Two kinds are deliberately left out:
-///
-/// - one begun at somebody's own terminal, which carries no session id — Amenbo cannot see whether that
-///   terminal is still open, and saying the work had stopped would be saying something it does not know;
-/// - one held by a session that is running, which is work in hand.
-///
-/// **The question belongs to a project, and the answer is only ever ids.** It is asked by the ledger,
-/// which is already holding the rows it is asking about — the reader is looking at a board of this
-/// project's work, and what they cannot see in it is which of it nothing is at. A project outside this
-/// store's reach answers with nothing rather than with the device.
-///
-/// **That the answer is a standing inventory is why it is asked here and not on the terminal face.**
-/// Just after the app comes up no session is alive, so every reservation ever made in a pane comes
-/// back — which is true, and is news nowhere. An empty frame is a place for news; a ledger is where a
-/// person goes to read stock, and it never interrupts to say so.
-#[tauri::command]
-pub fn adrift(app: tauri::AppHandle, project: i64) -> Result<AdriftDto, CmdError> {
-    use amenbo_core::store_engine::{self, TaskQuery};
-
-    let _perf = amenbo_core::perf::Timer::start("adrift");
-    let project_id = project;
-
-    let live = crate::pty::live(&app);
-    let store = open_store_read()?;
-    let today = amenbo_core::time::today();
-    let read_model = store.read_model();
-
-    let mut reserved = query::Filter::parse("status:in_progress", today)?;
-    reserved.resolve(read_model.conn())?;
-    let page = store_engine::list_task_ids(
-        read_model.conn(),
-        &TaskQuery {
-            reach: store.reach(),
-            project_id: Some(project_id),
-            filter: &reserved,
-            sort: "order",
-            today,
-            limit: None,
-            offset: None,
-        },
-    )?;
-
-    let ledger = &store.paths.activity_file;
-    let tasks = amenbo_core::session_work::adrift(ledger, &page.ids, &live);
-
-    // The proposals, read the same way round: which are still proposed is the store's, and which pane
-    // put one up is the ledger's. A project holds tens of decisions at most, so the whole listing is
-    // taken and narrowed here rather than asked for by status — there is no read that asks by one.
-    let listed = store_engine::decision_page(read_model.conn(), store.reach(), project_id, None, 0)?;
-    let mut open = Vec::new();
-    for id in &listed.ids {
-        if let Some(row) = amenbo_core::store_engine::read::decision_card_row(read_model.conn(), *id)? {
-            if row.status == "proposed" {
-                open.push(row.id);
-            }
-        }
-    }
-    let decisions = amenbo_core::session_work::adrift_decisions(ledger, &open, &live);
-
-    Ok(AdriftDto { tasks, decisions })
 }
 
 /// What is written on this project's draft page ([`amenbo_core::memo`]).
@@ -5312,7 +5238,6 @@ mod tests {
             at: Timestamp::now(),
             kind: amenbo_core::activity::Kind::System,
             author_kind: Some(ActorKind::Ai),
-            author_session: None,
             target_type: amenbo_core::activity::TargetType::Task,
             target_id: 42,
             title: title.to_string(),

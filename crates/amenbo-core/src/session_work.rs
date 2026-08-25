@@ -1,37 +1,63 @@
-//! What the ledger says one talk-window session has been doing: the tasks it reserved and has not
-//! ended, and the ones it ended.
+//! Which talk-window session is holding which task — the **volatile area** beside the store
+//! (`AMB-D-758`).
 //!
 //! This is the other half of [`crate::session`]. That one is what an AI *says* about the session it is
 //! in; this is what the session *did*, read back off the record it left while doing it. Both end up on
 //! the same pane's label, and the difference between them is the whole of why both exist — a statement
-//! is a claim, and a reservation is a fact the ledger already holds.
+//! is a claim, and a reservation is a fact.
 //!
-//! **It is read, never inferred.** Every write from inside a pane carries the session's id
-//! ([`crate::activity_log::Line::session`]), so which pane reserved a task is a column rather than a
+//! **It is read, never inferred.** Every status move made from inside a pane is written here under the
+//! session's id ([`crate::session::id`]), so which pane reserved a task is a record rather than a
 //! guess. The one attempt to guess it — from the folder a session was started in and the time it wrote
-//! — was right in none of fifteen cases (`AMB-T-3549`), and a line with no session reads as unknown and
-//! belongs to nobody.
+//! — was right in none of fifteen cases (`AMB-T-3549`).
 //!
-//! **Only the newest move of a task counts, whoever made it.** A task somebody else has since reserved
-//! is theirs, however it started here, so the walk records the first move it meets for each task and
-//! ignores everything older about it.
+//! **Nothing here outlives the run that wrote it, and that is the point.** A session id is a throwaway
+//! token minted per process ([`crate::session::SESSION_VAR`]) with nothing to resolve it against
+//! afterwards, so a permanent record of one is a value that stops meaning anything the moment its
+//! window closes. This area is emptied as the window comes up ([`clear`]) and taken away with the pane
+//! that made it ([`forget`]), which is why nothing kept for good has to carry one.
 //!
-//! The same walk answers the question from the other end ([`adrift`]): which reservations are held by a
-//! session that is gone. A pane can only be asked about the work it is doing; a window can be asked
-//! about work nothing is doing any more.
+//! **Three parties, and none of them does two of the jobs** (`AMB-D-758`):
+//!
+//! | | |
+//! |---|---|
+//! | writes | **core**, at the status move, when a session id is there to write ([`record`]) |
+//! | reads | **the talk window**, and nothing else ([`work`]) |
+//! | empties | **the talk window** — all of it as it starts, one session's as its pane closes |
+//!
+//! **No judgement of core's reads this.** Reserving, `ready`, `task list` — none of them answers
+//! differently for a window being open, and the test of that is a machine that has never started the
+//! talk window at all: not one of core's answers changes.
+//!
+//! **A move made outside a pane is not written at all**, which is not an error case. Somebody's own
+//! terminal, an editor that is not the talk window, a person typing at a shell — all of them go through
+//! the same path and leave one thing off it. What the label loses is one row, and what nobody may do is
+//! guess it back.
 
-use std::collections::HashSet;
-use std::path::Path;
+use std::collections::HashMap;
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Seek, SeekFrom, Write};
+use std::path::{Path, PathBuf};
 
-use crate::activity_log::{self, Line};
+use serde_json::Value;
 
-/// How much of the ledger one read may pull in before it stops asking.
+use crate::activity_log::Entry;
+
+/// The volatile area's directory name, beside the store in app-data
+/// ([`crate::config::Paths::sessions_dir`]).
+pub const DIR_NAME: &str = "sessions";
+
+/// What a session's file is named beyond its id. Only so that a person who opens the directory can see
+/// what they are looking at — nothing reads the extension.
+const FILE_EXT: &str = "jsonl";
+
+/// How much of one session's file a read may pull in, counted back from its end.
 ///
-/// The walk cannot bound itself by what it finds — a session that reserved nothing has nothing to stop
-/// on — so it is bounded by the file instead. At the ~200 B a line runs to this is some thousands of
-/// lines, which is far more than a session's own work sits within: the answer is about what *this*
-/// session is doing now, and a session whose reservations are that far back in a shared ledger has not
-/// been the one writing.
+/// The area is emptied on every start and every close, so what accumulates is one pane's status moves
+/// during one run of the window — some tens of rows in a working day, at the ~50 B a row runs to. The
+/// bound is here for the run that is not that, and it is taken **from the end** because only the newest
+/// row about a task decides anything. What can be lost off the front is a row something newer has
+/// already answered for, or one so old the pane has long since moved on.
 const SCAN_BUDGET: u64 = 256 * 1024;
 
 /// What one session has on its hands.
@@ -46,157 +72,208 @@ pub struct Work {
     pub finished: Vec<i64>,
 }
 
-/// Read what `session` has been doing off the ledger at `path`.
+/// One row: a status move made inside a pane.
+struct Row {
+    /// The activity sequence the move was minted under ([`Entry::id`]). It is one counter for the whole
+    /// store, so it orders rows across sessions as well as within one — which is what decides who is
+    /// holding a task two panes have both had.
+    seq: i64,
+    task: i64,
+    /// The status it moved to, as the ledger's event words it.
+    to: String,
+}
+
+/// Record one status move, if it was made inside a pane and the entry is one.
 ///
-/// A ledger that is not there is a store nothing has happened in yet, which is silence and not a
-/// failure — the same as a session that has written nothing.
-pub fn work(path: &Path, session: &str) -> Work {
-    let mut seen: HashSet<i64> = HashSet::new();
-    let mut work = Work::default();
-    let mut lines = activity_log::rev_lines(path);
-    while let Some(line) = lines.next() {
-        if lines.read_bytes() > SCAN_BUDGET {
-            break;
+/// Called by core straight after the ledger line ([`crate::store::Store::add_system_event`]), and
+/// infallible for the same reason that append is: this is a label's raw material, not a system of
+/// record, so a full disk costs a row on a nameplate and nothing else.
+///
+/// The session id is read **here, at the write point**, never carried on the entry: an entry is also
+/// re-encoded elsewhere, and an id taken at that moment would stamp this session onto somebody else's
+/// work.
+pub fn record(dir: &Path, entry: &Entry) {
+    let Some(session) = crate::session::id() else { return };
+    let (Some(task), Some(to)) = (entry.task, moved_to(&entry.event)) else { return };
+    let Some(path) = file_of(dir, &session) else { return };
+    let mut line = match serde_json::to_vec(&serde_json::json!({ "seq": entry.id, "task": task, "to": to })) {
+        Ok(line) => line,
+        Err(_) => return,
+    };
+    line.push(b'\n');
+    if let Err(e) = append(&path, &line) {
+        tracing::warn!(task, error = %e, "session work: the move was not recorded; a pane's label may be short a row");
+    }
+}
+
+/// Read what `session` has on its hands.
+///
+/// **Only the newest move of a task counts, whoever made it.** A task another pane has since reserved
+/// is theirs, however it started here, so every session's rows are read and each task is decided by the
+/// highest sequence anything wrote about it.
+///
+/// A directory that is not there is a window in which nothing has been moved yet, which is silence and
+/// not a failure.
+pub fn work(dir: &Path, session: &str) -> Work {
+    // Every task the area knows about, against the newest row about it and whose row that was.
+    let mut newest: HashMap<i64, (i64, bool, String)> = HashMap::new();
+    let Ok(entries) = std::fs::read_dir(dir) else { return Work::default() };
+    for entry in entries.filter_map(Result::ok) {
+        let path = entry.path();
+        let Some(owner) = session_of(&path) else { continue };
+        let mine = owner == session;
+        for row in rows(&path) {
+            match newest.get(&row.task) {
+                Some((seq, _, _)) if *seq >= row.seq => {}
+                _ => {
+                    newest.insert(row.task, (row.seq, mine, row.to));
+                }
+            }
         }
-        let (Some(task), Some(moved_to)) = (line.task, moved_to(&line)) else { continue };
-        if !seen.insert(task) {
+    }
+
+    let mut holding: Vec<(i64, i64)> = Vec::new();
+    let mut finished: Vec<(i64, i64)> = Vec::new();
+    for (task, (seq, mine, to)) in newest {
+        if !mine {
             continue;
         }
-        if line.session.as_deref() != Some(session) {
-            continue;
-        }
-        match moved_to {
-            "in_progress" | "blocked" => work.holding.push(task),
-            "done" | "rejected" => work.finished.push(task),
+        match to.as_str() {
+            "in_progress" | "blocked" => holding.push((seq, task)),
+            "done" | "rejected" => finished.push((seq, task)),
             // Handing a task back (`→ todo`) is the newest thing this session did to it, and what it
             // says is that the task is nobody's.
             _ => {}
         }
     }
-    work
-}
-
-/// Which of `reserved` are held by a session that is gone.
-///
-/// A task is adrift when the newest thing that moved it was moved by a session this app started, and
-/// that session is no longer among `live`. Nothing else counts as adrift, and the two exclusions are
-/// the whole of what keeps this honest:
-///
-/// - **A line with no session belongs to nobody.** A reservation made at somebody's own terminal has
-///   no session id on it ([`crate::activity_log::Line::session`]), and Amenbo cannot see whether that
-///   terminal is still open. Calling it adrift would be telling a person their own work had stopped.
-/// - **The newest move is the one that counts.** A task somebody else has since taken is theirs,
-///   however it started here — the same rule [`work`] walks by.
-///
-/// `reserved` is what the store says is reserved *now*; this only answers who is holding it. The two
-/// are read apart on purpose: the status is a column and the holder is a line, and a walk that decided
-/// both would be re-deriving what the store already knows.
-///
-/// The answer keeps `reserved`'s order — the caller's, which is the store's — because the order tasks
-/// are shown in is not this walk's to choose.
-pub fn adrift(path: &Path, reserved: &[i64], live: &HashSet<String>) -> Vec<i64> {
-    let want: HashSet<i64> = reserved.iter().copied().collect();
-    let mut seen: HashSet<i64> = HashSet::new();
-    let mut gone: HashSet<i64> = HashSet::new();
-    let mut lines = activity_log::rev_lines(path);
-    while let Some(line) = lines.next() {
-        // Bounded by the file for the same reason `work` is, and stopping early for a better one: once
-        // every reserved task has had its newest move read, there is nothing older that can change an
-        // answer.
-        if lines.read_bytes() > SCAN_BUDGET || seen.len() == want.len() {
-            break;
-        }
-        let (Some(task), Some(_)) = (line.task, moved_to(&line)) else { continue };
-        if !want.contains(&task) || !seen.insert(task) {
-            continue;
-        }
-        if let Some(session) = line.session.as_deref() {
-            if !live.contains(session) {
-                gone.insert(task);
-            }
-        }
+    // Newest first, on the one order the whole area shares.
+    holding.sort_unstable_by(|a, b| b.cmp(a));
+    finished.sort_unstable_by(|a, b| b.cmp(a));
+    Work {
+        holding: holding.into_iter().map(|(_, task)| task).collect(),
+        finished: finished.into_iter().map(|(_, task)| task).collect(),
     }
-    reserved.iter().copied().filter(|task| gone.contains(task)).collect()
 }
 
-/// Which of `proposed` were put up by a session that is gone.
-///
-/// The decision half of [`adrift`], and it reads the same way: the ledger says who put a decision up
-/// and which pane they were in ([`crate::activity_log::event::decision_proposed`]), and this process
-/// says which of its sessions are still running. A proposal is adrift when the pane that made it has
-/// gone and nobody has settled it since.
-///
-/// `proposed` is what the store says is still proposed *now*; the walk only answers who put it there.
-/// The status is a column and the author is a line, and neither can be read off the other.
-///
-/// **A proposal made outside a pane is never among them**, for the same reason a reservation made at
-/// somebody's own terminal is not: the line carries no session, and Amenbo cannot see that terminal.
-///
-/// A decision that was accepted and later reopened keeps its one line, because a reopen is not a
-/// decision being put up — it is one coming back. So a reopened proposal is asked about under its
-/// author's pane, which is what it is: a proposal that is open, put up by a pane that has gone.
-pub fn adrift_decisions(path: &Path, proposed: &[i64], live: &HashSet<String>) -> Vec<i64> {
-    let want: HashSet<i64> = proposed.iter().copied().collect();
-    let mut seen: HashSet<i64> = HashSet::new();
-    let mut gone: HashSet<i64> = HashSet::new();
-    let mut lines = activity_log::rev_lines(path);
-    while let Some(line) = lines.next() {
-        if lines.read_bytes() > SCAN_BUDGET || seen.len() == want.len() {
-            break;
-        }
-        if line.event["kind"] != "decision.proposed" {
-            continue;
-        }
-        let Some(decision) = line.decision else { continue };
-        if !want.contains(&decision) || !seen.insert(decision) {
-            continue;
-        }
-        if let Some(session) = line.session.as_deref() {
-            if !live.contains(session) {
-                gone.insert(decision);
-            }
-        }
-    }
-    proposed.iter().copied().filter(|id| gone.contains(id)).collect()
+/// Empty the whole area. The talk window calls this **as it comes up**, and the emptying is total
+/// because at that moment it is true: no session this process opened is running yet, so every row in
+/// there was left by a run that has ended.
+pub fn clear(dir: &Path) {
+    let _ = std::fs::remove_dir_all(dir);
 }
 
-/// The status a line moved a task to, or `None` where the line did not move one.
-fn moved_to(line: &Line) -> Option<&str> {
-    if line.event["kind"] != "task.status_changed" {
+/// Take away what one session left, when its terminal closes (`pty://closed`).
+///
+/// **Only the window can do this.** Whether a session is still running is known to the process holding
+/// its pseudo-terminal and to nothing else; the CLI that wrote the rows is a short-lived process that
+/// was gone before the question could be asked.
+pub fn forget(dir: &Path, session: &str) {
+    let Some(path) = file_of(dir, session) else { return };
+    let _ = std::fs::remove_file(path);
+}
+
+/// The status a ledger event moved a task to, or `None` where the event did not move one.
+fn moved_to(event: &Value) -> Option<&str> {
+    if event["kind"] != "task.status_changed" {
         return None;
     }
-    line.event["new"].as_str()
+    event["new"].as_str()
+}
+
+/// Where `session`'s rows go, or `None` when its id cannot be a file name.
+///
+/// The id is inherited from an environment anything can set ([`crate::session::SESSION_VAR`]), so it is
+/// held to a name a directory entry can be rather than trusted: letters, digits, `-` and `_`. The
+/// window mints thirty-two hex characters, so nothing real is turned away — and a value that is not
+/// that is refused whole rather than mangled into shape, because a mangled id names a session that does
+/// not exist.
+fn file_of(dir: &Path, session: &str) -> Option<PathBuf> {
+    if session.is_empty() || !session.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_') {
+        return None;
+    }
+    Some(dir.join(format!("{session}.{FILE_EXT}")))
+}
+
+/// Whose file this is, or `None` when it is not one of ours.
+fn session_of(path: &Path) -> Option<String> {
+    if path.extension()? != FILE_EXT {
+        return None;
+    }
+    Some(path.file_stem()?.to_str()?.to_string())
+}
+
+/// Append one row with a single atomic `write`, making the directory on the way if this is the first
+/// row of the run.
+///
+/// The atomicity is the ledger's ([`crate::activity_log`]) and for the same reason: one pane can have
+/// several `amenbo` processes in it at once, and `O_APPEND` is what keeps two rows from landing inside
+/// each other. Deliberately `write` and never `write_all` — the latter retries a short write as a
+/// second syscall, and another process's row can land between the halves.
+fn append(path: &Path, line: &[u8]) -> std::io::Result<()> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let mut file = OpenOptions::new().append(true).create(true).open(path)?;
+    let written = file.write(line)?;
+    if written < line.len() {
+        tracing::warn!(written, len = line.len(), "session work: short write; the row is left truncated");
+    }
+    Ok(())
+}
+
+/// The rows in one session's file, oldest first — the tail of it, and only the whole rows in that tail.
+fn rows(path: &Path) -> Vec<Row> {
+    tail(path)
+        .lines()
+        .filter_map(|line| {
+            let v: Value = serde_json::from_str(line).ok()?;
+            Some(Row {
+                seq: v.get("seq")?.as_i64()?,
+                task: v.get("task")?.as_i64()?,
+                to: v.get("to")?.as_str()?.to_string(),
+            })
+        })
+        .collect()
+}
+
+/// The last [`SCAN_BUDGET`] bytes of `path`, cut back to a row boundary. Anything that cannot be read
+/// is silence: a file removed by a close that raced this read is a session that is gone, which is what
+/// no rows says.
+fn tail(path: &Path) -> String {
+    let Ok(mut file) = File::open(path) else { return String::new() };
+    let len = file.metadata().map(|m| m.len()).unwrap_or(0);
+    let from = len.saturating_sub(SCAN_BUDGET);
+    if from > 0 && file.seek(SeekFrom::Start(from)).is_err() {
+        return String::new();
+    }
+    let mut bytes = Vec::new();
+    if file.read_to_end(&mut bytes).is_err() {
+        return String::new();
+    }
+    if from > 0 {
+        // The first row in the window is half a row. Drop it rather than parse it.
+        match bytes.iter().position(|b| *b == b'\n') {
+            Some(i) => bytes.drain(..=i),
+            None => bytes.drain(..),
+        };
+    }
+    String::from_utf8_lossy(&bytes).into_owned()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use crate::activity_log::{append, event, Entry};
+    use crate::activity_log::event;
     use crate::model::ActorKind;
     use crate::time::Timestamp;
 
-    /// One decision put up, as the ledger holds it.
-    fn proposed(id: i64, decision: i64, session: Option<&str>) -> Entry {
+    /// One status move, as core hands it over.
+    fn moved(id: i64, task: i64, old: &str, new: &str) -> Entry {
         Entry {
             id,
             at: Timestamp::now(),
             actor: Some(ActorKind::Ai),
-            session: session.map(str::to_string),
-            project: None,
-            task: None,
-            decision: Some(decision),
-            event: event::decision_proposed("a decision"),
-        }
-    }
-
-    /// One status move, as the ledger holds it.
-    fn moved(id: i64, task: i64, session: Option<&str>, old: &str, new: &str) -> Entry {
-        Entry {
-            id,
-            at: Timestamp::now(),
-            actor: Some(ActorKind::Ai),
-            session: session.map(str::to_string),
             project: None,
             task: Some(task),
             decision: None,
@@ -204,138 +281,120 @@ mod tests {
         }
     }
 
+    /// Write `entry` as `session` — the environment variable core reads is process-wide, so the rows a
+    /// test needs from several sessions are written through the same door [`record`] uses, one below
+    /// the read of it.
+    fn record_as(dir: &Path, session: &str, entry: &Entry) {
+        let (task, to) = (entry.task.unwrap(), moved_to(&entry.event).unwrap());
+        let path = file_of(dir, session).expect("a test names its sessions plainly");
+        let mut line = serde_json::to_vec(&serde_json::json!({ "seq": entry.id, "task": task, "to": to })).unwrap();
+        line.push(b'\n');
+        append(&path, &line).expect("the scratch directory is writable");
+    }
+
     #[test]
     fn a_session_is_holding_what_it_reserved_and_has_not_ended() {
         let dir = amenbo_scratch::scratch("session-work");
-        let ledger = dir.join("activity.jsonl");
         for entry in [
-            moved(1, 11, Some("pane-1"), "todo", "in_progress"),
-            moved(2, 12, Some("pane-1"), "todo", "in_progress"),
-            moved(3, 12, Some("pane-1"), "in_progress", "done"),
-            moved(4, 13, Some("pane-1"), "todo", "in_progress"),
-            moved(5, 13, Some("pane-1"), "in_progress", "blocked"),
+            moved(1, 11, "todo", "in_progress"),
+            moved(2, 12, "todo", "in_progress"),
+            moved(3, 12, "in_progress", "done"),
+            moved(4, 13, "todo", "in_progress"),
+            moved(5, 13, "in_progress", "blocked"),
         ] {
-            append(&ledger, &entry);
+            record_as(&dir, "pane-1", &entry);
         }
 
-        let work = work(&ledger, "pane-1");
+        let work = work(&dir, "pane-1");
         assert_eq!(work.holding, vec![13, 11], "newest reservation first, and a stopped one stays");
         assert_eq!(work.finished, vec![12]);
     }
 
     #[test]
-    fn another_sessions_work_is_not_this_ones_and_neither_is_an_unnamed_write() {
+    fn another_sessions_work_is_not_this_ones() {
         let dir = amenbo_scratch::scratch("session-work-others");
-        let ledger = dir.join("activity.jsonl");
-        for entry in [
-            moved(1, 11, Some("pane-2"), "todo", "in_progress"),
-            moved(2, 12, None, "todo", "in_progress"),
-            moved(3, 13, Some("pane-1"), "todo", "in_progress"),
-        ] {
-            append(&ledger, &entry);
-        }
+        record_as(&dir, "pane-2", &moved(1, 11, "todo", "in_progress"));
+        record_as(&dir, "pane-1", &moved(2, 13, "todo", "in_progress"));
 
-        let work = work(&ledger, "pane-1");
-        assert_eq!(work.holding, vec![13], "a line with no session belongs to nobody: {work:?}");
+        let work = work(&dir, "pane-1");
+        assert_eq!(work.holding, vec![13], "pane-2's reservation is pane-2's: {work:?}");
     }
 
+    /// A task taken over by another pane is theirs, however it started here — the newest move is what
+    /// says whose it is, and reading only our own rows would have this pane still claiming it.
     #[test]
-    fn a_reservation_whose_session_is_gone_is_adrift_and_one_nobody_named_is_not() {
-        let dir = amenbo_scratch::scratch("session-work-adrift");
-        let ledger = dir.join("activity.jsonl");
-        for entry in [
-            moved(1, 11, Some("pane-gone"), "todo", "in_progress"),
-            moved(2, 12, Some("pane-live"), "todo", "in_progress"),
-            // Reserved at somebody's own terminal: Amenbo cannot see whether that terminal is open.
-            moved(3, 13, None, "todo", "in_progress"),
-        ] {
-            append(&ledger, &entry);
-        }
-
-        let live: HashSet<String> = ["pane-live".to_string()].into_iter().collect();
-        assert_eq!(adrift(&ledger, &[11, 12, 13], &live), vec![11]);
-    }
-
-    #[test]
-    fn a_reservation_somebody_still_here_has_taken_over_is_not_adrift() {
-        let dir = amenbo_scratch::scratch("session-work-adrift-taken");
-        let ledger = dir.join("activity.jsonl");
-        for entry in [
-            moved(1, 11, Some("pane-gone"), "todo", "in_progress"),
-            // Handed back and taken again by a pane that is still here. The newest move is what counts.
-            moved(2, 11, Some("pane-gone"), "in_progress", "todo"),
-            moved(3, 11, Some("pane-live"), "todo", "in_progress"),
-        ] {
-            append(&ledger, &entry);
-        }
-
-        let live: HashSet<String> = ["pane-live".to_string()].into_iter().collect();
-        assert!(adrift(&ledger, &[11], &live).is_empty());
-    }
-
-    #[test]
-    fn a_proposal_whose_session_is_gone_is_adrift_and_one_nobody_named_is_not() {
-        let dir = amenbo_scratch::scratch("session-work-adrift-decisions");
-        let ledger = dir.join("activity.jsonl");
-        for entry in [
-            proposed(1, 21, Some("pane-gone")),
-            proposed(2, 22, Some("pane-live")),
-            // Put up at somebody's own terminal: Amenbo cannot see whether that terminal is open.
-            proposed(3, 23, None),
-        ] {
-            append(&ledger, &entry);
-        }
-
-        let live: HashSet<String> = ["pane-live".to_string()].into_iter().collect();
-        assert_eq!(adrift_decisions(&ledger, &[21, 22, 23], &live), vec![21]);
-    }
-
-    #[test]
-    fn a_reservation_and_a_proposal_do_not_answer_for_each_other() {
-        let dir = amenbo_scratch::scratch("session-work-adrift-kinds");
-        let ledger = dir.join("activity.jsonl");
-        // The same number on both sides: task 11 and decision 11 are different records, and a walk
-        // that read the id without the kind would answer for the wrong one.
-        append(&ledger, &moved(1, 11, Some("pane-gone"), "todo", "in_progress"));
-        append(&ledger, &proposed(2, 11, Some("pane-live")));
-
-        let live: HashSet<String> = ["pane-live".to_string()].into_iter().collect();
-        assert_eq!(adrift(&ledger, &[11], &live), vec![11], "the reservation is the gone pane's");
-        assert!(adrift_decisions(&ledger, &[11], &live).is_empty(), "the proposal is not");
-    }
-
-    #[test]
-    fn a_task_the_ledger_says_nothing_about_is_not_adrift() {
-        let dir = amenbo_scratch::scratch("session-work-adrift-silent");
-        let ledger = dir.join("activity.jsonl");
-        append(&ledger, &moved(1, 11, Some("pane-gone"), "todo", "in_progress"));
-
-        // 12 was never moved through a pane — reserved before the ledger carried sessions, say. Silence
-        // is not evidence that nothing is holding it.
-        assert_eq!(adrift(&ledger, &[11, 12], &HashSet::new()), vec![11]);
-    }
-
-    /// A task taken over by somebody else is theirs, however it started here — the newest move is what
-    /// says whose it is, and reading only our own lines would have this pane still claiming it.
-    #[test]
-    fn a_task_somebody_else_has_since_reserved_is_no_longer_held_here() {
+    fn a_task_another_pane_has_since_reserved_is_no_longer_held_here() {
         let dir = amenbo_scratch::scratch("session-work-taken");
-        let ledger = dir.join("activity.jsonl");
-        for entry in [
-            moved(1, 11, Some("pane-1"), "todo", "in_progress"),
-            moved(2, 11, Some("pane-1"), "in_progress", "todo"),
-            moved(3, 11, Some("pane-2"), "todo", "in_progress"),
-        ] {
-            append(&ledger, &entry);
-        }
+        record_as(&dir, "pane-1", &moved(1, 11, "todo", "in_progress"));
+        record_as(&dir, "pane-1", &moved(2, 11, "in_progress", "todo"));
+        record_as(&dir, "pane-2", &moved(3, 11, "todo", "in_progress"));
 
-        assert_eq!(work(&ledger, "pane-1"), Work::default(), "it is pane-2's now");
-        assert_eq!(work(&ledger, "pane-2").holding, vec![11]);
+        assert_eq!(work(&dir, "pane-1"), Work::default(), "it is pane-2's now");
+        assert_eq!(work(&dir, "pane-2").holding, vec![11]);
     }
 
     #[test]
-    fn a_ledger_nothing_has_happened_in_is_silence() {
+    fn a_task_handed_back_is_nobodys() {
+        let dir = amenbo_scratch::scratch("session-work-handed-back");
+        record_as(&dir, "pane-1", &moved(1, 11, "todo", "in_progress"));
+        record_as(&dir, "pane-1", &moved(2, 11, "in_progress", "todo"));
+
+        assert_eq!(work(&dir, "pane-1"), Work::default());
+    }
+
+    /// An id reaches core through an environment anything can set, so it is held to a name a directory
+    /// entry can be. One that is not is refused whole — a mangled id names a session that does not
+    /// exist, and no session at all is the honest answer. Outside a pane there is no id to begin with,
+    /// which is the same refusal one step earlier.
+    #[test]
+    fn a_session_id_that_could_not_be_a_file_name_is_refused() {
+        let dir = amenbo_scratch::scratch("session-work-names");
+        assert!(file_of(&dir, "").is_none(), "an empty id names no file");
+        assert!(file_of(&dir, "../../etc/passwd").is_none(), "and one that would climb out of the area");
+        assert!(file_of(&dir, "pane 1").is_none());
+        assert!(file_of(&dir, "0f1e2d3c4b5a69788796a5b4c3d2e1f0").is_some(), "what the window mints");
+    }
+
+    #[test]
+    fn closing_a_pane_takes_away_what_it_held_and_leaves_the_others() {
+        let dir = amenbo_scratch::scratch("session-work-forget");
+        record_as(&dir, "pane-1", &moved(1, 11, "todo", "in_progress"));
+        record_as(&dir, "pane-2", &moved(2, 12, "todo", "in_progress"));
+
+        forget(&dir, "pane-1");
+
+        assert_eq!(work(&dir, "pane-1"), Work::default());
+        assert_eq!(work(&dir, "pane-2").holding, vec![12]);
+    }
+
+    #[test]
+    fn starting_up_empties_the_whole_area() {
+        let dir = amenbo_scratch::scratch("session-work-clear");
+        record_as(&dir, "pane-1", &moved(1, 11, "todo", "in_progress"));
+        record_as(&dir, "pane-2", &moved(2, 12, "todo", "in_progress"));
+
+        clear(&dir);
+
+        assert_eq!(work(&dir, "pane-1"), Work::default());
+        assert_eq!(work(&dir, "pane-2"), Work::default());
+    }
+
+    #[test]
+    fn an_area_nothing_has_been_moved_in_is_silence() {
         let dir = amenbo_scratch::scratch("session-work-empty");
-        assert_eq!(work(&dir.join("never-written.jsonl"), "pane-1"), Work::default());
+        assert_eq!(work(&dir.join("never-written"), "pane-1"), Work::default());
+    }
+
+    /// A row torn by a full disk, or one from a build that wrote something else, costs its own row and
+    /// no more — the same contract the ledger's reader holds.
+    #[test]
+    fn a_row_that_cannot_be_read_costs_only_itself() {
+        let dir = amenbo_scratch::scratch("session-work-torn");
+        record_as(&dir, "pane-1", &moved(1, 11, "todo", "in_progress"));
+        let path = file_of(&dir, "pane-1").unwrap();
+        append(&path, b"{\"seq\":2,\"task\":\n").unwrap();
+        record_as(&dir, "pane-1", &moved(3, 13, "todo", "in_progress"));
+
+        assert_eq!(work(&dir, "pane-1").holding, vec![13, 11]);
     }
 }

@@ -241,22 +241,6 @@ impl<'a> Driver<'a> {
     /// — the pointer that decides what a run reaches is found by walking up from the CWD — so those
     /// steps ask their question from inside the folder they are asking about.
     fn invoke_in(&self, cwd: &Path, args: &[&str]) -> Result<std::process::Output, String> {
-        self.invoke_as(cwd, None, args)
-    }
-
-    /// The same, optionally **as a talk window's pane would have run it**.
-    ///
-    /// A write made inside a pane carries the id of the session it was made in, and there is one way
-    /// for one to: the environment variable the app sets when it opens the terminal. It is what lets a
-    /// reservation be told from a reservation somebody made at their own terminal, so a world that has
-    /// to stand up the first kind sets it here. No driver has a pane and none will — a pane is the
-    /// app's to make, and a world is stood up before the app opens.
-    fn invoke_as(
-        &self,
-        cwd: &Path,
-        pane: Option<&str>,
-        args: &[&str],
-    ) -> Result<std::process::Output, String> {
         // The facet goes on the command line, which is the one input Amenbo is to take it by; a call
         // that names its own is left alone.
         let mut with_facet = args.to_vec();
@@ -269,9 +253,6 @@ impl<'a> Driver<'a> {
             .env("AMENBO_HOME", &self.session.home)
             .env("AMENBO_UPDATE_CHECK", "0")
             .env("NO_COLOR", "1");
-        if let Some(id) = pane {
-            cmd.env("AMENBO_SESSION", id);
-        }
         cmd.output().map_err(|e| format!("could not run `{}`: {e}", self.bin.display()))
     }
 
@@ -285,12 +266,6 @@ impl<'a> Driver<'a> {
     /// distinct from an assert that ran cleanly and came out false.
     fn run_json(&self, args: &[&str]) -> Result<serde_json::Value, String> {
         self.run_json_in(&self.session.cwd, args)
-    }
-
-    /// The same, as a pane called `pane` would have run it (see [`Driver::invoke_as`]).
-    fn run_json_as(&self, pane: &str, args: &[&str]) -> Result<serde_json::Value, String> {
-        let out = self.invoke_as(&self.session.cwd, Some(pane), args)?;
-        self.judge_json(args, out)
     }
 
     /// The same, from a chosen folder.

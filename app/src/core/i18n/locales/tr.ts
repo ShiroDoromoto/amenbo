@@ -656,8 +656,6 @@ export const tr: Translation = {
     "block.draft": "Başlayamaz (hâlâ oluşturuluyor): önce oluşturmayı bitirin",
     "chip.draft": "Oluşturuluyor",
     "premise.changed": "Bunu üstlendikten sonra dayanaklar değişti: {detail}",
-    "adrift.mark": "Kimse ilgilenmiyor",
-    "adrift.tip": "Amenbo'nun içinde bunu sürdüren bir şey kalmadı. Amenbo'nun göremediği bir terminalde devam ediyor olabilir; taşımadan önce bakın.",
     "premise.warn": "Bunu üstlendikten sonra dayanaklar değişti (AMB-D-366): {detail}. Yalnızca kendi başına ayakta duran kısmı bitirin ya da todo'ya alarak geri bırakın.",
     "premise.noLongerSettled": "artık karara bağlı değil",
     "detail.premiseChanged": "Üstlenildiğinden beri değişti",

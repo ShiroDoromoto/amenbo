@@ -39,12 +39,21 @@
 # and they refuse to guess: no run yet means wait and say so, more than one means
 # stop rather than pick.
 #
+# Waiting for something to appear is open-ended on purpose. How long GitHub takes to
+# register a run, and how long a check takes to be created, are GitHub's to decide, and
+# a threshold placed on a distribution the caller cannot see reads slowness as absence.
+# So a wait ends on evidence that the thing is not coming — a commit or a tag that is
+# not on the remote, a workflow that is not there, every run on the head commit finished
+# without the check — and not on a clock. Until then it waits, and says so as it waits.
+#
 # Progress and diagnostics go to stderr throughout. Stdout carries the id under
 # --print-id and the emitted events otherwise, so a caller may read either.
 #
 #   AMENBO_CI_REPO — OWNER/REPO to watch (default: the repository of the CWD)
-#   AMENBO_CI_POLL, AMENBO_CI_APPEAR, AMENBO_CI_APPEAR_LIMIT, AMENBO_CI_MISS_LIMIT
-#                  — the waits, in seconds and in tries (see their defaults below)
+#   AMENBO_CI_POLL, AMENBO_CI_APPEAR — how often it reads what it watches, in seconds
+#   AMENBO_CI_MISS_LIMIT — consecutive failed calls before the watch is called broken
+#   AMENBO_CI_APPEAR_LIMIT — rounds to wait for something to appear before giving up.
+#                  Unset, there is no deadline and the evidence above is what ends it
 #
 # The repository is resolved once, up front, and passed to every call afterwards, so
 # nothing in the loop reads the filesystem. A watch that outlives the directory it
@@ -55,12 +64,37 @@ set -euo pipefail
 # without sitting out the real intervals.
 POLL_SECONDS="${AMENBO_CI_POLL:-45}"       # between checks of something already found
 APPEAR_SECONDS="${AMENBO_CI_APPEAR:-10}"   # between checks for a run not registered yet
-APPEAR_LIMIT="${AMENBO_CI_APPEAR_LIMIT:-30}"  # give up waiting for it to appear after this many
+APPEAR_LIMIT="${AMENBO_CI_APPEAR_LIMIT:-}" # rounds before giving up on it; empty = no deadline
 MISS_LIMIT="${AMENBO_CI_MISS_LIMIT:-3}"    # consecutive failed calls before calling the watch broken
+
+# How many rounds of the appear wait fit in a minute, so an open-ended one repeats what
+# it is waiting for about that often. A watch that has gone quiet for ten minutes cannot
+# be told from one that died, and saying it once at the start is that.
+SAY_EVERY=$(( APPEAR_SECONDS > 0 ? (60 + APPEAR_SECONDS - 1) / APPEAR_SECONDS : 1 ))
 
 usage() { awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; }
 
 die() { echo "✗ $*" >&2; exit 1; }
+
+# One round of waiting for something that has not appeared yet: say what is being waited
+# for, then sleep. Deciding whether it is still coming belongs to the caller, which has
+# the evidence; all this holds is the deadline a caller asked for by hand.
+appear_wait() {
+    local tries="$1" what="$2"
+    [ -n "$APPEAR_LIMIT" ] && [ "$tries" -ge "$APPEAR_LIMIT" ] &&
+        die "gave up waiting for $what after $((APPEAR_LIMIT * APPEAR_SECONDS))s"
+    [ $(( (tries - 1) % SAY_EVERY )) -eq 0 ] && echo "waiting for $what" >&2
+    sleep "$APPEAR_SECONDS"
+}
+
+# The commit a ref points at on the remote, or nothing and a non-zero exit. The commits
+# endpoint resolves a sha, a branch and a tag alike, so one question covers what every
+# mode below waits on, and asking it is what tells a ref that was mistyped from one
+# whose run is merely slow to register — the difference a clock was standing in for.
+#
+# It answers with the full sha, which is also what `gh run list --commit` wants: a short
+# one matches no run there, and would have been waited out as if none had started.
+remote_ref_sha() { gh api "repos/$repo/commits/$1" --jq .sha 2>/dev/null; }
 
 print_id=""
 if [ "${1:-}" = "--print-id" ]; then print_id=yes; shift; fi
@@ -81,20 +115,26 @@ else
         die "no repository: run this inside a checkout, or set AMENBO_CI_REPO=OWNER/REPO"
 fi
 
-# Find the one run matching a set of `gh run list` filters, and print its id.
+# Find the one run a push to a commit started under a workflow, and print its id.
 # Its stdout carries the id and nothing else — the caller reads it through a command
 # substitution, so a stray progress line there would be taken for part of the id.
 #
 # The two ways this can fail to be one run are opposite, so they are answered
 # differently. None yet is normal right after a push — the run is registered a moment
-# later — so it waits, out loud. More than one means the filters do not name a single
-# run, and no rule for picking among them would be better than saying so: watching
-# the wrong one reports a verdict that was never about this change.
+# later — so it waits, out loud, for as long as that takes. More than one means the
+# filters do not name a single run, and no rule for picking among them would be better
+# than saying so: watching the wrong one reports a verdict that was never about this
+# change.
+#
+# The wait has no deadline, so the caller resolves the commit on the remote first and
+# hands the sha in — that answer, and not a clock, is what rules out a run that is never
+# coming. Here the commit is known to exist, so nothing left is worth giving up on.
 resolve_one() {
-    local label="$1"; shift
+    local label="$1" sha="$2" workflow="$3"
     local tries=0 rows count
     while :; do
-        rows=$(gh run list -R "$repo" "$@" --json databaseId,name,event,createdAt) ||
+        rows=$(gh run list -R "$repo" --commit "$sha" --event push --workflow "$workflow" \
+            --json databaseId,name,event,createdAt) ||
             die "could not list runs for $label"
         count=$(jq 'length' <<< "$rows")
         if [ "$count" = 1 ]; then
@@ -107,10 +147,7 @@ resolve_one() {
             exit 1
         fi
         tries=$((tries + 1))
-        [ "$tries" -ge "$APPEAR_LIMIT" ] &&
-            die "$label has started no run after $((APPEAR_LIMIT * APPEAR_SECONDS))s"
-        [ "$tries" = 1 ] && echo "waiting for $label to start a run" >&2
-        sleep "$APPEAR_SECONDS"
+        appear_wait "$tries" "$label to start a run"
     done
 }
 
@@ -127,6 +164,13 @@ resolve_one() {
 # newest is taken as-is, and its start time is printed for the caller to judge.
 dispatch_newest() {
     local workflow="$1" ref="$2" not_before="$3" tries=0 row id created
+    # Both halves of what was named are asked about before the wait, for the reason
+    # resolve_one gives: a workflow that is not on the remote and a ref that is not
+    # either are the two ways this waits on a run nobody is ever going to start.
+    gh workflow view "$workflow" -R "$repo" >/dev/null 2>&1 ||
+        die "no workflow \"$workflow\" on $repo — nothing there will be dispatched"
+    remote_ref_sha "$ref" >/dev/null ||
+        die "no ref \"$ref\" on $repo — nothing there will be dispatched"
     while :; do
         row=$(gh run list -R "$repo" --workflow "$workflow" --branch "$ref" \
             --event workflow_dispatch --limit 1 --json databaseId,createdAt \
@@ -139,10 +183,7 @@ dispatch_newest() {
             return $?
         fi
         tries=$((tries + 1))
-        [ "$tries" -ge "$APPEAR_LIMIT" ] &&
-            die "$workflow on $ref started no run after $((APPEAR_LIMIT * APPEAR_SECONDS))s"
-        [ "$tries" = 1 ] && echo "waiting for $workflow on $ref to start a run" >&2
-        sleep "$APPEAR_SECONDS"
+        appear_wait "$tries" "$workflow on $ref to start a run"
     done
 }
 
@@ -236,6 +277,30 @@ watch_pr() {
     done
 }
 
+# Whether every run on a pull request's head commit has finished, printing why on the
+# way out: the caller's message is about the check that is missing, not about the runs.
+#
+# Three answers, and only one of them ends a wait. Runs that have all completed mean the
+# check is not coming — a check run is created by the job that reports it, so no job
+# left to run is no check left to create. A run still going means it may yet arrive. No
+# runs at all means the push was accepted and GitHub has registered nothing yet, which
+# is the window a watch is most often started in, so that waits too. A call that fails
+# answers nothing, and waiting is the safe way to be wrong about it.
+#
+# It reads Actions alone. A check reported by some other app is outside what this can
+# see, and would be called absent while it was merely slow — no such check is required
+# in this repository, and one would be a reason to widen this rather than to widen the
+# wait it replaced.
+head_runs_settled() {
+    local pr="$1" sha rows
+    sha=$(gh pr view "$pr" -R "$repo" --json headRefOid --jq .headRefOid 2>/dev/null) || return 1
+    [ -n "$sha" ] || return 1
+    rows=$(gh run list -R "$repo" --commit "$sha" --json status 2>/dev/null) || return 1
+    [ "$(jq 'length' <<< "$rows")" -gt 0 ] || return 1
+    [ "$(jq '[.[] | select(.status != "completed")] | length' <<< "$rows")" = 0 ] || return 1
+    echo "every run on $sha has finished without it"
+}
+
 # Watch one named check on a pull request until it settles, and report what it settled
 # as. The pull request is only where the check is read from: it may be a draft, it may
 # be waiting on a decision nobody has made, and neither ends this watch.
@@ -252,8 +317,12 @@ watch_pr() {
 #
 # Naming a check that matches more than one is refused rather than guessed, as an
 # ambiguous run is. A verdict from the wrong check is worse than no verdict.
+#
+# A name that has not appeared yet is the hard case, because slowness and absence look
+# alike from here and only one of them is worth waiting out. What tells them apart is
+# below: the runs on the pull request's head commit, which is where a check comes from.
 watch_check() {
-    local pr="$1" name="$2" tries=0 prev="" checks rows count bucket
+    local pr="$1" name="$2" tries=0 prev="" checks rows count bucket verdict
     echo "watching check \"$name\" on pull request $pr  https://github.com/$repo/pull/$pr"
     while :; do
         # `gh pr checks` reports a red check by exiting non-zero, and refuses outright
@@ -285,13 +354,16 @@ watch_check() {
             prev=$checks
         fi
         # Not there yet — either the checks could not be read, or none of them carries
-        # this name. Both are the same wait as a run that has not registered, and both
-        # end the same way: a name that never appears is a typo, not a slow check.
+        # this name. Whether that is slowness or absence is not for a clock to say, so
+        # the runs on the head commit are asked instead: while one of them is going the
+        # check may yet be created, and `ci / all green` is not a check at all until
+        # every job it waits on has finished. Once they have all finished without it,
+        # nothing is going to create it, and that is what ends the wait.
         tries=$((tries + 1))
-        [ "$tries" -ge "$APPEAR_LIMIT" ] &&
-            die "no check named \"$name\" on pull request $pr after $((APPEAR_LIMIT * APPEAR_SECONDS))s"
-        [ "$tries" = 1 ] && echo "waiting for check \"$name\" to appear on pull request $pr" >&2
-        sleep "$APPEAR_SECONDS"
+        if verdict=$(head_runs_settled "$pr"); then
+            die "no check named \"$name\" on pull request $pr: $verdict"
+        fi
+        appear_wait "$tries" "check \"$name\" to appear on pull request $pr"
     done
 }
 
@@ -313,13 +385,19 @@ case "$mode" in
         # Assigned, then watched. resolve_one runs in a command substitution, so its
         # own exit ends only that subshell — inlined as an argument, a refusal to guess
         # would be passed on as if it were an id.
-        id=$(resolve_one "main $1" --commit "$1" --event push --workflow ci-change.yml)
+        sha=$(remote_ref_sha "$1") ||
+            die "main $1: no such commit on $repo — nothing there will start a run"
+        id=$(resolve_one "main $1" "$sha" ci-change.yml)
         deliver "$id"
         ;;
     tag)
         [ $# -eq 1 ] || die "usage: watch-ci.sh tag <tag>"
-        sha=$(git rev-parse "$1^{commit}" 2>/dev/null) || die "no such tag here: $1"
-        id=$(resolve_one "tag $1" --commit "$sha" --event push --workflow release-tag.yml)
+        # The tag is what starts the run, so the remote's copy of it is the one the run
+        # belongs to. Reading it there rather than here also settles the two cases a
+        # local read cannot see: a tag never pushed, and one moved since it was.
+        sha=$(remote_ref_sha "$1") ||
+            die "tag $1 is not on $repo — push it, or nothing will start a run"
+        id=$(resolve_one "tag $1" "$sha" release-tag.yml)
         deliver "$id"
         ;;
     dispatch)

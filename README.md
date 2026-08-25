@@ -63,179 +63,16 @@ which an agent writes through the CLI and you read in the desktop app.
 
 ## Contents
 
-- [Layout](#layout)
-- [Toolchain](#toolchain)
-- [Build and run](#build-and-run)
 - [Installing and updating](#installing-and-updating)
 - [Commands](#commands)
 - [Making your AI agent read the spec](#making-your-ai-agent-read-the-spec-optional)
 - [Reaching Amenbo from an AI that cannot open a folder](#reaching-amenbo-from-an-ai-that-cannot-open-a-folder)
 - [Encryption at rest](#encryption-at-rest)
+- [Layout](#layout)
+- [Toolchain](#toolchain)
+- [Build and run](#build-and-run)
 - [Contributing](#contributing)
 - [License](#license)
-
-## Layout
-
-```
-crates/
-  amenbo-core/        domain model, persistence, operations, queries, export
-  amenbo-cli/         the `amenbo` binary (clap; human + --json output; `agent --json`)
-  amenbo-scratch/     test support: the throwaway directory a test works in
-  amenbo-static-host/ test support: a loopback host, for what is reached by URL
-app/                  the desktop GUI shown above (React + Vite front end; Tauri shell
-                      in `app/src-tauri`, calling amenbo-core directly — no server)
-assets/               the CLI demo and its script, the GUI screenshot
-  brand/              the mark: the origin SVGs — the delivered drawing, and the redraw that
-                      keeps a whole-pixel stroke at 32px and below — and the icons and
-                      rasters `make brand` bakes from them (the only place a coordinate
-                      is written)
-verification/         black-box checks of an installed build, run before a release
-                      (its own cargo workspace, so `make test` never pulls it in)
-devtool/              optional Go helper: a throwaway dev GUI per task, the VM it is driven
-                      in, and a fake outside world
-guards/               one invariant apiece, asserted over the tree by `make test` and CI
-scripts/              what the Makefile calls out to — build, sign, notarise, verify,
-                      bake the brand set — and a few meant to be typed by hand, such as
-                      watch-ci.sh, which watches one CI run and prints only what changes
-  windows/            drive a real Windows desktop from here, for the roads out of the
-                      app that only a physical machine can walk
-```
-
-Design points:
-
-- **Persistence**: the local store is a single SQLite file — the single source of
-  truth the queries run against. JSON is an export format you can produce anytime
-  (`amenbo export`).
-- **IDs**: the id **is** the conversational number — a task whose id is `<n>` is shown
-  as `AMB-T-<n>`, a decision whose id is `<n>` as `AMB-D-<n>`. Numbers are device-global
-  (one number names one task anywhere, no project context needed) and come from two
-  sibling spaces, which the kind code disjoins. Every ref Amenbo shows carries the
-  `AMB-` namespace, so it is self-declaring: another tracker's `T-<n>` is never
-  mistaken for one of these. Reading is looser than writing — the bare forms
-  (`<n>` / `#<n>` / `T-<n>` / `D-<n>`) still parse, so a ref pastes straight back.
-- **Ordering**: fractional index; a task's placement (project, order) lives on the
-  task itself. Classification (categories, phases, or any axis you define) is
-  expressed with user-defined **dimensions**, not a fixed hierarchy.
-- **Relationships**: a single dependency edge (`task depend`). There are no
-  subtasks — decompose larger work into separate tasks linked by dependencies.
-- **Deletes**: physical and irreversible. Deleting a project deletes the tasks,
-  decisions and dimensions under it. To keep something without seeing it, archive
-  it (`project archive`) instead.
-- **One task, one project**: a task belongs to exactly one project; `task move`
-  re-homes it — a row changing hands inside one database, not a copy.
-
-## Toolchain
-
-<details>
-<summary>Pinned Node + Rust, one-shot setup, and the macOS-only GUI note</summary>
-
-Node and Rust versions are pinned in the repo so everyone builds with the same
-toolchain (no OS-global change needed). The pin files — `.nvmrc` / `.node-version`
-(Node 24, Active LTS), `rust-toolchain.toml` (Rust 1.96.0 + rustfmt/clippy), and
-`.tool-versions` (both) — are read by the common per-project version managers, so
-no single tool is forced.
-
-```bash
-# Recommended: mise installs Node + Rust from the pin files in one shot
-mise install
-
-# Alternative: nvm + rustup (each reads its own pin file)
-nvm use            # picks up .nvmrc
-rustup show        # rust-toolchain.toml is applied on the next cargo command
-```
-
-`app/package.json` declares `engines.node >= 22.12` (the build deps' floor); the
-pin files select the exact version above that. There is no `package.json` at the
-repository root — the JavaScript side lives entirely under `app/`.
-
-Go appears in the tree, but it is not a third toolchain to install: it builds only
-`devtool/`, the optional helper that gives a task its own throwaway dev GUI and
-raises the VM that GUI is driven in (see
-[devtool/README.md](devtool/README.md)). Nothing else reads it, so Amenbo builds,
-tests and ships without Go — `make devtool` is the only target that asks for it.
-
-**Building the GUI is macOS-only.** The Tauri `.app` links the native WebKit
-(WKWebView), so it can't be built or run in a Linux container — Docker /
-devcontainers only suit the headless side (core / CLI / tests / CI on Linux).
-The `make gui` / `install-gui` targets (and their `-dev` variants) require host
-macOS; the CLI builds anywhere Rust does (`make install-dev` for a local dev
-build — the prod CLI ships inside the unified installer, so `make install` is
-retired).
-
-</details>
-
-## Build and run
-
-<details>
-<summary>Build, the fast/full test split, the nextest + shell gates, and where data lives</summary>
-
-```bash
-cargo build
-cargo test                              # fast: unit + light integration suites
-cargo test --features scale,e2e         # full: also the scaling guard and the real-binary cli_e2e_* suites
-cargo run -p amenbo-cli -- agent --json   # the single source of truth for the CLI
-```
-
-The heaviest tests are gated behind cargo features so the everyday `cargo test`
-stays sub-second: the read-hotpath scaling guard behind `scale`, the real-binary
-`cli_e2e_*` suites behind `e2e`. CI enables both (`--features scale,e2e`).
-
-For the full run, [`cargo-nextest`](https://nexte.st) is faster (per-test process
-isolation + parallelism) and prints per-test timings so the slow tests are easy to
-spot — `make test` wraps it (and runs the doctests nextest skips). It also gates the
-out-of-workspace Tauri host crate (`app/src-tauri`), the GUI front-end, and the shell
-scripts that drive the release and the on-hardware checks, mirroring CI's `app-rust` +
-`gui-web` + `shell` jobs, so a core change that only breaks the GUI — or a quoting slip
-in a release script — is caught locally. `make gate` runs the same stages, minus the ones
-your change cannot have moved: which layer a path belongs to is declared in
-`.github/paths-filters.yml`, the file CI gates its own jobs on, and a path on no layer falls
-back to the whole of `make test`:
-
-```bash
-cargo install cargo-nextest            # one-time (or https://get.nexte.st)
-brew install shellcheck actionlint     # one-time (the shell gate; any package manager will do)
-make test                              # shell gate + core/cli (scale,e2e + doctests) + app crate clippy/test + GUI typecheck/build/test
-make gate                              # the same, narrowed to the layers your change touched (a path on no layer falls back to the whole of make test)
-make shell-gate                        # the shell leg on its own (every tracked *.sh and git hook, plus the shell embedded in each workflow's run:)
-cargo nextest run --features scale,e2e # core/cli only, without the doctest + GUI legs
-```
-
-The Tauri host crate and the verification harness each sit outside the workspace with a
-lockfile of their own, but both reach core through a path dependency — so a workspace bump
-moves what those locks resolve to without touching the files. CI's `out-of-workspace-locks`
-job fails a pull request whose copies are behind; `make lock` re-resolves both (seconds,
-nothing is compiled) and the result is yours to commit.
-Dependabot's own bumps are repaired for it, ahead of the merge — see `lockstep` in
-`.github/workflows/_dependabot-automerge.yml`. That repair pushes with the workflow's own
-token, which starts no run, so on the bumps that do move a lock the same workflow dispatches
-the full gate against the branch: the head it just made gets a verdict of its own, and the
-merge it armed lands on that.
-
-The DB layer is [rusqlite](https://docs.rs/rusqlite) and nothing else: the change feed rides
-SQLite's update hook, which belongs to the connection, and reads are issued from inside the
-write transaction — both are lost the moment a second library opens a connection of its own.
-The schema is declared once, in the `store_engine::schema` registry, and the `CREATE TABLE`
-DDL and the per-column write whitelist are derived from it, so they cannot drift apart.
-
-A gate only ever compiles the cfg branches of the OS it runs on, so `#[cfg(target_os =
-"linux")]` code (the store-watch network-FS path, for one) is invisible to a green run on a
-mac. `make lint-linux` builds the tree for Linux inside the container the Linux bundles are
-built in, running the same two clippy invocations as CI's `lint` + `app-rust` jobs. Cross-
-compiling won't do: the Tauri gtk/glib sys crates need their system deps at build time, so
-a real Linux is the only way to reach that code. It needs Docker and takes a few minutes,
-which is why it is not part of `make test` — reach for it when you touch an OS-gated branch.
-
-Plain `cargo test` still works everywhere; nextest is an optional accelerator.
-Thresholds and the `ci` profile live in `.config/nextest.toml`.
-
-Data is stored under the OS-standard location (on macOS,
-`~/Library/Application Support/work.amenbo.amenbo/store.sqlite`). The directory
-name comes from the build-time `AMENBO_APP_NAME`, which is what keeps a dev build's
-data (`work.amenbo.amenbo-dev`) off the production store. `amenbo config` prints the
-path this build actually opened on its first line. Set `AMENBO_HOME` to override the
-location (useful for tests and explicit setups).
-
-</details>
 
 ## Installing and updating
 
@@ -816,6 +653,169 @@ already-plaintext store needs nothing.
 Concurrent writers to the same store are serialized by an exclusive file lock, so
 nothing is lost. Different stores (different `AMENBO_HOME`) never contend, which is
 what makes single-machine multi-store isolation safe.
+
+</details>
+
+## Layout
+
+```
+crates/
+  amenbo-core/        domain model, persistence, operations, queries, export
+  amenbo-cli/         the `amenbo` binary (clap; human + --json output; `agent --json`)
+  amenbo-scratch/     test support: the throwaway directory a test works in
+  amenbo-static-host/ test support: a loopback host, for what is reached by URL
+app/                  the desktop GUI shown above (React + Vite front end; Tauri shell
+                      in `app/src-tauri`, calling amenbo-core directly — no server)
+assets/               the CLI demo and its script, the GUI screenshot
+  brand/              the mark: the origin SVGs — the delivered drawing, and the redraw that
+                      keeps a whole-pixel stroke at 32px and below — and the icons and
+                      rasters `make brand` bakes from them (the only place a coordinate
+                      is written)
+verification/         black-box checks of an installed build, run before a release
+                      (its own cargo workspace, so `make test` never pulls it in)
+devtool/              optional Go helper: a throwaway dev GUI per task, the VM it is driven
+                      in, and a fake outside world
+guards/               one invariant apiece, asserted over the tree by `make test` and CI
+scripts/              what the Makefile calls out to — build, sign, notarise, verify,
+                      bake the brand set — and a few meant to be typed by hand, such as
+                      watch-ci.sh, which watches one CI run and prints only what changes
+  windows/            drive a real Windows desktop from here, for the roads out of the
+                      app that only a physical machine can walk
+```
+
+Design points:
+
+- **Persistence**: the local store is a single SQLite file — the single source of
+  truth the queries run against. JSON is an export format you can produce anytime
+  (`amenbo export`).
+- **IDs**: the id **is** the conversational number — a task whose id is `<n>` is shown
+  as `AMB-T-<n>`, a decision whose id is `<n>` as `AMB-D-<n>`. Numbers are device-global
+  (one number names one task anywhere, no project context needed) and come from two
+  sibling spaces, which the kind code disjoins. Every ref Amenbo shows carries the
+  `AMB-` namespace, so it is self-declaring: another tracker's `T-<n>` is never
+  mistaken for one of these. Reading is looser than writing — the bare forms
+  (`<n>` / `#<n>` / `T-<n>` / `D-<n>`) still parse, so a ref pastes straight back.
+- **Ordering**: fractional index; a task's placement (project, order) lives on the
+  task itself. Classification (categories, phases, or any axis you define) is
+  expressed with user-defined **dimensions**, not a fixed hierarchy.
+- **Relationships**: a single dependency edge (`task depend`). There are no
+  subtasks — decompose larger work into separate tasks linked by dependencies.
+- **Deletes**: physical and irreversible. Deleting a project deletes the tasks,
+  decisions and dimensions under it. To keep something without seeing it, archive
+  it (`project archive`) instead.
+- **One task, one project**: a task belongs to exactly one project; `task move`
+  re-homes it — a row changing hands inside one database, not a copy.
+
+## Toolchain
+
+<details>
+<summary>Pinned Node + Rust, one-shot setup, and the macOS-only GUI note</summary>
+
+Node and Rust versions are pinned in the repo so everyone builds with the same
+toolchain (no OS-global change needed). The pin files — `.nvmrc` / `.node-version`
+(Node 24, Active LTS), `rust-toolchain.toml` (Rust 1.96.0 + rustfmt/clippy), and
+`.tool-versions` (both) — are read by the common per-project version managers, so
+no single tool is forced.
+
+```bash
+# Recommended: mise installs Node + Rust from the pin files in one shot
+mise install
+
+# Alternative: nvm + rustup (each reads its own pin file)
+nvm use            # picks up .nvmrc
+rustup show        # rust-toolchain.toml is applied on the next cargo command
+```
+
+`app/package.json` declares `engines.node >= 22.12` (the build deps' floor); the
+pin files select the exact version above that. There is no `package.json` at the
+repository root — the JavaScript side lives entirely under `app/`.
+
+Go appears in the tree, but it is not a third toolchain to install: it builds only
+`devtool/`, the optional helper that gives a task its own throwaway dev GUI and
+raises the VM that GUI is driven in (see
+[devtool/README.md](devtool/README.md)). Nothing else reads it, so Amenbo builds,
+tests and ships without Go — `make devtool` is the only target that asks for it.
+
+**Building the GUI is macOS-only.** The Tauri `.app` links the native WebKit
+(WKWebView), so it can't be built or run in a Linux container — Docker /
+devcontainers only suit the headless side (core / CLI / tests / CI on Linux).
+The `make gui` / `install-gui` targets (and their `-dev` variants) require host
+macOS; the CLI builds anywhere Rust does (`make install-dev` for a local dev
+build — the prod CLI ships inside the unified installer, so `make install` is
+retired).
+
+</details>
+
+## Build and run
+
+<details>
+<summary>Build, the fast/full test split, the nextest + shell gates, and where data lives</summary>
+
+```bash
+cargo build
+cargo test                              # fast: unit + light integration suites
+cargo test --features scale,e2e         # full: also the scaling guard and the real-binary cli_e2e_* suites
+cargo run -p amenbo-cli -- agent --json   # the single source of truth for the CLI
+```
+
+The heaviest tests are gated behind cargo features so the everyday `cargo test`
+stays sub-second: the read-hotpath scaling guard behind `scale`, the real-binary
+`cli_e2e_*` suites behind `e2e`. CI enables both (`--features scale,e2e`).
+
+For the full run, [`cargo-nextest`](https://nexte.st) is faster (per-test process
+isolation + parallelism) and prints per-test timings so the slow tests are easy to
+spot — `make test` wraps it (and runs the doctests nextest skips). It also gates the
+out-of-workspace Tauri host crate (`app/src-tauri`), the GUI front-end, and the shell
+scripts that drive the release and the on-hardware checks, mirroring CI's `app-rust` +
+`gui-web` + `shell` jobs, so a core change that only breaks the GUI — or a quoting slip
+in a release script — is caught locally. `make gate` runs the same stages, minus the ones
+your change cannot have moved: which layer a path belongs to is declared in
+`.github/paths-filters.yml`, the file CI gates its own jobs on, and a path on no layer falls
+back to the whole of `make test`:
+
+```bash
+cargo install cargo-nextest            # one-time (or https://get.nexte.st)
+brew install shellcheck actionlint     # one-time (the shell gate; any package manager will do)
+make test                              # shell gate + core/cli (scale,e2e + doctests) + app crate clippy/test + GUI typecheck/build/test
+make gate                              # the same, narrowed to the layers your change touched (a path on no layer falls back to the whole of make test)
+make shell-gate                        # the shell leg on its own (every tracked *.sh and git hook, plus the shell embedded in each workflow's run:)
+cargo nextest run --features scale,e2e # core/cli only, without the doctest + GUI legs
+```
+
+The Tauri host crate and the verification harness each sit outside the workspace with a
+lockfile of their own, but both reach core through a path dependency — so a workspace bump
+moves what those locks resolve to without touching the files. CI's `out-of-workspace-locks`
+job fails a pull request whose copies are behind; `make lock` re-resolves both (seconds,
+nothing is compiled) and the result is yours to commit.
+Dependabot's own bumps are repaired for it, ahead of the merge — see `lockstep` in
+`.github/workflows/_dependabot-automerge.yml`. That repair pushes with the workflow's own
+token, which starts no run, so on the bumps that do move a lock the same workflow dispatches
+the full gate against the branch: the head it just made gets a verdict of its own, and the
+merge it armed lands on that.
+
+The DB layer is [rusqlite](https://docs.rs/rusqlite) and nothing else: the change feed rides
+SQLite's update hook, which belongs to the connection, and reads are issued from inside the
+write transaction — both are lost the moment a second library opens a connection of its own.
+The schema is declared once, in the `store_engine::schema` registry, and the `CREATE TABLE`
+DDL and the per-column write whitelist are derived from it, so they cannot drift apart.
+
+A gate only ever compiles the cfg branches of the OS it runs on, so `#[cfg(target_os =
+"linux")]` code (the store-watch network-FS path, for one) is invisible to a green run on a
+mac. `make lint-linux` builds the tree for Linux inside the container the Linux bundles are
+built in, running the same two clippy invocations as CI's `lint` + `app-rust` jobs. Cross-
+compiling won't do: the Tauri gtk/glib sys crates need their system deps at build time, so
+a real Linux is the only way to reach that code. It needs Docker and takes a few minutes,
+which is why it is not part of `make test` — reach for it when you touch an OS-gated branch.
+
+Plain `cargo test` still works everywhere; nextest is an optional accelerator.
+Thresholds and the `ci` profile live in `.config/nextest.toml`.
+
+Data is stored under the OS-standard location (on macOS,
+`~/Library/Application Support/work.amenbo.amenbo/store.sqlite`). The directory
+name comes from the build-time `AMENBO_APP_NAME`, which is what keeps a dev build's
+data (`work.amenbo.amenbo-dev`) off the production store. `amenbo config` prints the
+path this build actually opened on its first line. Set `AMENBO_HOME` to override the
+location (useful for tests and explicit setups).
 
 </details>
 

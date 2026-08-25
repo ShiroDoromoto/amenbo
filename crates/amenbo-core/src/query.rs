@@ -1210,12 +1210,6 @@ pub fn resolve_project_ref(conn: &rusqlite::Connection, reference: &str) -> Resu
 pub struct ActivityAuthor {
     pub name: String,
     pub kind: Option<ActorKind>,
-    /// The talk window session the row was written from, when it records one. A store has one AI facet,
-    /// so `kind` never separates two sessions of it; this does, and it is the only thing that can —
-    /// folder and clock were measured and answer nothing (`AMB-T-3549`). Omitted when absent, which is
-    /// every comment, every write made outside a window, and every line older than the field.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub session: Option<String>,
 }
 
 /// What an activity row is about (a task, a decision, or a project).
@@ -1425,7 +1419,6 @@ fn activity_item(it: crate::activity::Item) -> ActivityItem {
         author: ActivityAuthor {
             name: facet_label(it.author_kind),
             kind: it.author_kind,
-            session: it.author_session,
         },
         target: ActivityTarget {
             target_type: it.target_type.as_str().to_string(),

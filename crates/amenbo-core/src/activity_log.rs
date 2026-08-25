@@ -66,15 +66,6 @@ pub struct Entry {
     pub at: Timestamp,
     /// The facet that caused the event. `None` = unknown.
     pub actor: Option<ActorKind>,
-    /// The talk window session the write came from ([`crate::session::id`]), or `None` when it came from
-    /// anywhere else. The facet alone cannot tell two of the same apart — every AI write is the same
-    /// author — so without this nothing in the store says *which* AI reserved a task, and a reader is
-    /// left guessing from folders and clocks, which does not answer (`AMB-T-3549`).
-    ///
-    /// **Read at the write point, never at encode time.** [`rewrite`] re-encodes lines that were written
-    /// in other sessions, and an id taken from the environment there would stamp this session onto all
-    /// of them.
-    pub session: Option<String>,
     pub project: Option<i64>,
     pub task: Option<i64>,
     pub decision: Option<i64>,
@@ -158,7 +149,7 @@ impl Entry {
 }
 
 fn encode(entry: &Entry, event: &Value) -> Vec<u8> {
-    let mut obj = json!({
+    let obj = json!({
         "v": LINE_VERSION,
         "id": entry.id,
         "at": entry.at.to_rfc3339_z(),
@@ -168,12 +159,6 @@ fn encode(entry: &Entry, event: &Value) -> Vec<u8> {
         "decision": entry.decision,
         "event": event,
     });
-    // Written only when there is one. Most lines are not made from inside a window, and a `null` on
-    // every one of them would cost the ledger bytes to say what its absence already says. An additive
-    // key keeps the line at its version: a build that does not know it reads it back as `None`.
-    if let (Some(session), Some(obj)) = (entry.session.as_deref(), obj.as_object_mut()) {
-        obj.insert("session".to_string(), Value::String(session.to_string()));
-    }
     let mut line = serde_json::to_vec(&obj).unwrap_or_default();
     line.push(b'\n');
     line
@@ -190,9 +175,6 @@ pub struct Line {
     pub id: i64,
     pub at: Timestamp,
     pub actor: Option<ActorKind>,
-    /// The session the write came from ([`Entry::session`]), or `None` — which every line written before
-    /// the key existed reads back as, and so does every write made outside a talk window.
-    pub session: Option<String>,
     pub project: Option<i64>,
     pub task: Option<i64>,
     pub decision: Option<i64>,
@@ -317,7 +299,6 @@ fn parse_line(line: &str) -> Option<Line> {
         id,
         at,
         actor: v.get("actor").and_then(Value::as_str).and_then(ActorKind::parse),
-        session: v.get("session").and_then(Value::as_str).map(str::to_string),
         project: key("project"),
         task: key("task"),
         decision: key("decision"),
@@ -457,7 +438,7 @@ mod tests {
     }
 
     fn entry(id: i64, event: Value) -> Entry {
-        Entry { id, at: Timestamp::now(), actor: Some(ActorKind::Ai), session: None, project: Some(7), task: Some(990), decision: None, event }
+        Entry { id, at: Timestamp::now(), actor: Some(ActorKind::Ai), project: Some(7), task: Some(990), decision: None, event }
     }
 
     fn lines(path: &Path) -> Vec<Value> {
@@ -484,34 +465,6 @@ mod tests {
         assert_eq!(lines[0]["task"], json!(990));
         assert_eq!(lines[0]["event"]["kind"], json!("task.created"));
         assert!(lines[0]["at"].as_str().unwrap().ends_with('Z'));
-
-        std::fs::remove_dir_all(&dir).ok();
-    }
-
-    /// The one thing a facet cannot say: *which* AI wrote the line. Both facets are shared by every
-    /// session of them, so without this the ledger's 200 rows all read the same (`AMB-T-3549`).
-    #[test]
-    fn a_line_written_inside_a_pane_names_the_pane_and_one_written_outside_names_none() {
-        let dir = dir("session");
-        let path = dir.join(FILE_NAME);
-
-        let mut inside = entry(1, json!({ "kind": "task.created", "title": "inside" }));
-        inside.session = Some("pane-1".to_string());
-        append(&path, &inside);
-        append(&path, &entry(2, json!({ "kind": "task.created", "title": "outside" })));
-
-        let lines = lines(&path);
-        assert_eq!(lines[0]["session"], json!("pane-1"), "the pane it was written in rides with it");
-        assert_eq!(
-            lines[1].get("session"),
-            None,
-            "and a write from outside any window writes no key at all, rather than a null: {}",
-            lines[1],
-        );
-
-        let read = read(&path);
-        assert_eq!(read[0].session.as_deref(), Some("pane-1"), "it survives the round trip");
-        assert_eq!(read[1].session, None, "an absent key reads back as unknown — as every older line does");
 
         std::fs::remove_dir_all(&dir).ok();
     }

@@ -289,23 +289,6 @@ const REGISTRY: &[OpSpec] = &[
     // (and the reserve), `done` / `reopen` / `block` are the three the CLI gives their own verb.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "status", required: &["target", "status"], refs: &["target"], strings: &["status"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "done", required: &["target"], refs: &["target"], strings: &[], binds: false },
-    // Reserved, and by a pane that is no longer running — the state a process dying leaves behind, and
-    // the one thing about a reservation Amenbo can find out for itself.
-    //
-    // It is one op and not two moves because the second one cannot be written: what makes a
-    // reservation a pane's is the session id the app puts in the environment when it opens the
-    // terminal, and no driver has a pane. A world is stood up before the app opens, and even after it
-    // does, a pane is the app's to make. So the reservation is made *as* a pane would have made it, and
-    // it is adrift from the first moment anything looks — which is the state under test.
-    //
-    // It is deliberately not the only way to reserve. A road that means to show what is **not** adrift
-    // uses `status` and gets a reservation with no session on it, which is what a person's own terminal
-    // leaves and what Amenbo must never read as abandoned.
-    //
-    // **No road stands on it at the moment.** The one that did read the question the terminal face drew,
-    // and that question is gone; where the state is put to a person next is the ledger's to answer. The
-    // premise stays because it is the store state itself, not the screen that read it.
-    OpSpec { kind: Kind::Action, domain: Domain::Task, op: "adrift", required: &["target"], refs: &["target"], strings: &[], binds: false },
     // The other terminal. A reason is required by the command, so it is required here: what separates
     // work decided against from work carried out is why, and it is recorded rather than remembered.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "reject", required: &["target", "reason"], refs: &["target"], strings: &["reason"], binds: false },
@@ -432,16 +415,6 @@ const REGISTRY: &[OpSpec] = &[
     // `project` names the shelf it is filed on, for a scenario about where a record ends up; left
     // out, it is the run's own project like everything else.
     OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "create", required: &["title"], refs: &["project"], strings: &["title"], binds: true },
-    // The same, put up **in a pane that is no longer running** — a proposal nobody will bring to a
-    // close, which is the decision twin of `task adrift`.
-    //
-    // It creates rather than transforming one that is already there, because a decision is born
-    // proposed and that birth is the only moment the ledger records who put it up: nothing said later
-    // can put a session on it. As with the task, no driver has a pane, so it is adrift from the first
-    // moment anything looks — and a road that wants a proposal Amenbo may **not** speak for uses
-    // `create`, which leaves no session on the line at all. No road stands on it at the moment, for the
-    // same reason its task twin does not.
-    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "adrift", required: &["title"], refs: &["project"], strings: &["title"], binds: true },
     // Onto the face a project's decisions are read on, which sits beside the views its tasks are read
     // on rather than under them: a decision is not a task drawn another way. A road that wants to read
     // a row of that list has to press it, and pressing it is the only way there.
@@ -1108,21 +1081,6 @@ const REGISTRY: &[OpSpec] = &[
     // its folders). `dir` names the folder the way every `folder` step does; `present: false` is the
     // other half and needs no name, since a task holding none has nothing to name.
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "worked-in", required: &["target"], refs: &["target"], strings: &["dir"], binds: false },
-    // The mark the ledger puts on a row nothing is working on, read on each of the two faces that
-    // draws one: a reservation on the board, a proposal on the decision list. What sets the state up
-    // is the `adrift` action of the same name in each domain, and the two are deliberately spelled
-    // alike — one makes the store say it, the other reads the screen saying it back.
-    //
-    // **Both are `Review`s**, for the reason `tick banner` is: the mark is a glyph and a word of the
-    // interface, so a reading of the word would hold this gate to the one language the run was set up
-    // in. It carries no colour to read instead — it is drawn muted on purpose, being an absence of
-    // movement rather than news — so what settles it is an eye on the shot.
-    //
-    // `present: false` is the half that carries the claim: work begun at somebody's own terminal
-    // leaves no session on the line, and a mark on that row would be Amenbo telling a person their
-    // own work had stopped.
-    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "adrift", required: &["target"], refs: &["target"], strings: &[], binds: false },
-    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "adrift", required: &["target"], refs: &["target"], strings: &[], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "listed", required: &["filter"], refs: &["target"], strings: &["filter", "position"], binds: false },
     // Whether one decision points at another, named by the side the edge is read from (`supersedes`
@@ -2240,12 +2198,6 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     (Domain::Task, "finish-creating"),
     (Domain::Task, "assign"),
     (Domain::Task, "status"),
-    // A reservation made in a pane that is no longer running. It is here for the reason `store
-    // worn-in` is: **no road reaches this world.** What makes a reservation a pane's is the session id
-    // the app puts in the environment when it opens the terminal, and a driver has no pane to be given
-    // one by — nor could a road make one and then end it, since ending a terminal is not something the
-    // interface offers. A road that reads the question has to open on the state.
-    (Domain::Task, "adrift"),
     (Domain::Task, "update"),
     // How that work is classified: the axes a project declares, the values they offer, the filing of
     // a task under one, and whether the axis goes on the card. A screen road about what the board
@@ -2260,7 +2212,6 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // project has to have a decision standing in another to leave out, and which project a decision
     // was filed under is nothing such a road proves — recording one is a road of its own.
     (Domain::Decision, "create"),
-    (Domain::Decision, "adrift"),
     // A device that has been used for a while. It is the one premise no amount of doing reaches: what
     // it stands up is the passage of time itself — launches tallied across days written on — which a
     // road can only be given, never earn.

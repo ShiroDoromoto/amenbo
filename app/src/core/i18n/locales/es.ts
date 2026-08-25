@@ -684,8 +684,6 @@ export const es: Translation = {
     "block.draft": "No puede empezar (todavía se está creando): termina de crearla primero",
     "chip.draft": "En creación",
     "premise.changed": "Las premisas cambiaron después de que la reservaras: {detail}",
-    "adrift.mark": "Nadie en ello",
-    "adrift.tip": "Dentro de Amenbo ya no hay nada trabajando en esto. Puede seguir en una terminal que Amenbo no ve: mira antes de moverlo.",
     "premise.warn": "Las premisas cambiaron después de que la reservaras (AMB-D-366): {detail}. Termina solo la parte que se sostiene por sí sola, o devuélvela poniéndola en pendiente.",
     "premise.noLongerSettled": "ya no está resuelta",
     "detail.premiseChanged": "Cambió tras la reserva",

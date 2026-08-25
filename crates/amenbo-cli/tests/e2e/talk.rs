@@ -243,3 +243,57 @@ fn a_bare_word_under_talk_is_refused_rather_than_taken_as_something_to_say() {
         "and nothing was left for the window to read",
     );
 }
+
+/// The other thing a pane's environment reaches, and it is not the surface layer: a status move made
+/// inside a pane is recorded under that pane in the **volatile area** beside the store, which is what
+/// puts a task on the pane's label (`AMB-D-758`).
+///
+/// Driven as a process for the same reason every test here is — a session id arrives on the
+/// environment and nowhere else — and read off disk, because the one reader is the window and there is
+/// no command that answers for it.
+///
+/// **The two halves are one claim.** A move made at somebody's own terminal has no session to be
+/// recorded under, so nothing is written and nothing may be guessed; a move made in a pane is written
+/// under it, so the label reads rather than infers.
+#[test]
+fn a_status_move_made_inside_a_pane_is_recorded_under_it_and_one_made_outside_is_not() {
+    let cli = Cli::new();
+    cli.run(&["init", "--name", "tester"]);
+    let area = cli.home.join(amenbo_core::session_work::DIR_NAME);
+
+    let mut ids = Vec::new();
+    for title in ["first", "second"] {
+        let t = id_str(&cli.json(&["task", "add", "--title", title, "--actor", "ai", "--json"])["task"]["id"]);
+        cli.finish_creating(&t);
+        ids.push(t);
+    }
+
+    // One task reserved in a pane, and one at a terminal Amenbo cannot see.
+    let (stdout, code) = cli.run_env(
+        &[("AMENBO_SESSION", "pane-a")],
+        &["task", "status", &ids[0], "in_progress", "--actor", "ai"],
+    );
+    assert_eq!(code, 0, "reserving inside a pane: {stdout}");
+    cli.run(&["task", "status", &ids[1], "in_progress", "--actor", "ai"]);
+
+    let work = amenbo_core::session_work::work(&area, "pane-a");
+    assert_eq!(
+        work.holding,
+        vec![ids[0].parse::<i64>().unwrap()],
+        "the pane holds what it reserved, and nothing it did not: {work:?}",
+    );
+
+    // Ended in the same pane: off its hands, and still its own doing.
+    cli.run_env(&[("AMENBO_SESSION", "pane-a")], &["task", "done", &ids[0], "--actor", "ai"]);
+    let work = amenbo_core::session_work::work(&area, "pane-a");
+    assert!(work.holding.is_empty(), "nothing is left on its hands: {work:?}");
+    assert_eq!(work.finished, vec![ids[0].parse::<i64>().unwrap()]);
+
+    // And the area knows of no other pane, because the second reservation named none.
+    let files: Vec<String> = std::fs::read_dir(&area)
+        .expect("the area exists once something has been recorded in it")
+        .filter_map(Result::ok)
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(files, vec!["pane-a.jsonl".to_string()], "a move from outside a pane writes nothing: {files:?}");
+}

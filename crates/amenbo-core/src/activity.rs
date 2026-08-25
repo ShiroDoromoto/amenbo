@@ -125,10 +125,6 @@ pub struct Item {
     pub kind: Kind,
     /// The facet that caused it. `None` on a row that records none.
     pub author_kind: Option<ActorKind>,
-    /// The talk window session the row was written from ([`activity_log::Entry::session`]), when the
-    /// row records one. **System rows only** — a comment is a row in a table that has no such column,
-    /// so a comment answers `None` rather than being guessed at.
-    pub author_session: Option<String>,
     pub target_type: TargetType,
     pub target_id: i64,
     /// The subject's live title, or — when the subject is gone — the name the event carried with it
@@ -298,7 +294,6 @@ fn system_rows(ledger: &Ledger, f: &Filter, tasks: Option<&TaskIndex>, need: Opt
                 at: l.at,
                 kind: Kind::System,
                 author_kind: l.actor,
-                author_session: l.session,
                 target_type,
                 target_id,
                 title: String::new(),
@@ -426,7 +421,6 @@ fn task_comment_rows(conn: &Connection, f: &Filter, need: Option<usize>) -> Resu
                 kind: Kind::Comment,
                 author_kind: author.get(r)?.as_deref().and_then(ActorKind::parse),
                 // A comment table has no session column: absent, never inferred.
-                author_session: None,
                 target_type: TargetType::Task,
                 target_id: task_id.get(r)?,
                 title: String::new(),
@@ -512,7 +506,6 @@ fn decision_comment_rows(conn: &Connection, f: &Filter, need: Option<usize>) -> 
                 kind: Kind::Comment,
                 author_kind: author.get(r)?.as_deref().and_then(ActorKind::parse),
                 // A comment table has no session column: absent, never inferred.
-                author_session: None,
                 target_type: TargetType::Decision,
                 target_id: decision_id.get(r)?,
                 title: String::new(),
@@ -798,7 +791,6 @@ mod tests {
                 id,
                 at: at(sec),
                 actor: Some(ActorKind::Ai),
-                session: None,
                 project: Some(7),
                 task,
                 decision: None,
@@ -935,7 +927,6 @@ mod tests {
                 id: 2,
                 at: at(2),
                 actor: Some(ActorKind::Human),
-                session: None,
                 project: Some(7),
                 task: None,
                 decision: Some(9),
@@ -1083,7 +1074,6 @@ mod tests {
                 id: 4,
                 at: at(4),
                 actor: Some(ActorKind::Human),
-                session: None,
                 project: Some(8),
                 task: None,
                 decision: None,

@@ -60,17 +60,6 @@ impl Driver<'_> {
                 self.run_json(&["task", "status", &target.to_string(), status, "--json"])?;
                 Ok(Outcome::action(format!("moved task {target} to {status}")))
             }
-            "adrift" => {
-                let target = self.resolve(with)?;
-                // Reserved the way a pane reserves — the id goes in the environment, which is the one
-                // input a session id travels by. The name is the driver's own and is never run: what
-                // makes the reservation adrift is that nothing is at it, and nothing here has a pane.
-                self.run_json_as(
-                    "verify-pane-that-has-gone",
-                    &["task", "status", &target.to_string(), "in_progress", "--json"],
-                )?;
-                Ok(Outcome::action(format!("reserved task {target} in a pane that is not running")))
-            }
             "done" => {
                 let target = self.resolve(with)?;
                 self.run_json(&["task", "done", &target.to_string(), "--json"])?;

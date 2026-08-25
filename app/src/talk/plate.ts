@@ -190,7 +190,7 @@ export function mountPlate(
     }
   }
 
-  /** Ask the ledger what this pane's session is on, then draw it. */
+  /** Ask what this pane's session is on, then draw it (`commands.rs::session_work`). */
   function readWork(): void {
     const session = running;
     if (session === null) return;

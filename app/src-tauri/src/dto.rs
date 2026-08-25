@@ -24,13 +24,6 @@ pub struct ActorDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) avatar: Option<String>,
-    /// The talk window session this write came from, when the row records one. Set only where an
-    /// ActorDto is an activity row's **author**; a roster entry or an assignee names a facet, not an
-    /// act, and leaves it unset. Two AI sessions share one facet, so this is the only thing that tells
-    /// them apart — and it is read, never inferred: absent means unknown (`AMB-T-3549`).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub(crate) session: Option<String>,
 }
 
 /// One value of a dimension (a choice on the axis). Ordered dimensions arrive in `order_key` order.
@@ -2116,12 +2109,12 @@ pub struct SessionSaidDto {
     pub(crate) text: Option<String>,
 }
 
-/// What the ledger says the session in one pane has been doing — the reservations it is on, and how
-/// many it has ended ([`amenbo_core::session_work`]).
+/// What the volatile area says the session in one pane has been doing — the reservations it is on, and
+/// how many it has ended ([`amenbo_core::session_work`]).
 ///
 /// The tasks come back as ids rather than rows: the pane draws one of them at most, and the same
 /// [`crate::commands::tasks_by_ids`] every other screen hydrates with can say the rest. What is being
-/// answered here is *whose* they are, which nothing but the ledger knows.
+/// answered here is *whose* they are, which nothing but that area knows.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -2134,28 +2127,6 @@ pub struct SessionWorkDto {
     /// what the label says about them.
     #[ts(type = "number")]
     pub(crate) finished: usize,
-}
-
-/// What in a project nothing is working on any more.
-///
-/// Two kinds, kept apart because looking at one is not looking at the other: a reservation is on the
-/// ledger's task face and a proposal on its decision face. What they have in common is that Amenbo is
-/// asking rather than concluding — it can see that nothing of its own is at either, and not that
-/// nobody anywhere is (`AMB-D-748`).
-///
-/// **Ids alone.** This is read by the face already holding the rows, so the question it answers is
-/// which of the rows in front of the reader are the ones nothing is at. Handing back the titles as
-/// well would be answering with what the screen has.
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/bindings/bindings.ts")]
-#[serde(rename_all = "camelCase")]
-pub struct AdriftDto {
-    /// Reservations nothing is working on any more.
-    #[ts(type = "Array<number>")]
-    pub(crate) tasks: Vec<i64>,
-    /// Proposals nobody is bringing to a close.
-    #[ts(type = "Array<number>")]
-    pub(crate) decisions: Vec<i64>,
 }
 
 /// What one frame of the talk window is called, and who called it that — which is what says whether

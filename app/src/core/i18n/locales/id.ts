@@ -658,8 +658,6 @@ export const id: Translation = {
     "block.draft": "Tidak bisa mulai (masih dibuat): selesaikan pembuatannya dulu",
     "chip.draft": "Sedang dibuat",
     "premise.changed": "Premisnya berubah setelah Anda memesan ini: {detail}",
-    "adrift.mark": "Tak ada yang mengerjakan",
-    "adrift.tip": "Di dalam Amenbo tidak ada lagi yang mengerjakan ini. Bisa jadi masih berjalan di terminal yang tak terlihat Amenbo — periksa dulu sebelum memindahkannya.",
     "premise.warn": "Premisnya berubah setelah Anda memesan ini (AMB-D-366): {detail}. Selesaikan hanya bagian yang berdiri sendiri, atau kembalikan dengan menyetelnya ke todo.",
     "premise.noLongerSettled": "tidak lagi selesai",
     "detail.premiseChanged": "Berubah sejak dipesan",

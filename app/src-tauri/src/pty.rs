@@ -32,7 +32,7 @@
 //! is only the terminal itself.
 
 use std::borrow::Cow;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -58,8 +58,8 @@ const OUTPUT_EVENT: &str = "pty://output";
 const CLOSED_EVENT: &str = "pty://closed";
 
 /// The variable a session's id is carried in, into the terminal and everything started inside it.
-/// A process that writes to the store while this is set says which session it wrote from
-/// ([`amenbo_core::session::id`], stamped on the ledger line), which is the one thing no amount of
+/// A process that moves a task's status while this is set says which session it moved it from
+/// ([`amenbo_core::session::id`], written to the volatile area), which is the one thing no amount of
 /// watching from outside can establish — folder and clock were measured and separate nothing
 /// (`AMB-T-3549`).
 ///
@@ -375,6 +375,7 @@ pub fn pty_open(
             .lock()
             .expect("terminals lock")
             .remove(&id);
+        forget_work(&id);
         let _ = app.emit_to(pane.target().as_str(), CLOSED_EVENT, &id);
     });
 
@@ -697,23 +698,20 @@ pub fn pty_close(terminals: tauri::State<'_, Terminals>, session: String) -> Res
     terminal.killer.kill().map_err(failed)
 }
 
-/// The sessions this process has open, as a set of ids.
+/// Take away what a session left in the volatile area, now its terminal has ended
+/// ([`amenbo_core::session_work::forget`]).
 ///
-/// It is what says a session is **still there**, and it is the only thing that can: a terminal lives
-/// inside this process, so the registry is the whole of the answer and a session missing from it has
-/// ended. That is what lets work nothing is doing any more be told from work somebody is still at
-/// ([`amenbo_core::session_work::adrift`]).
+/// **Only this process can do it.** Whether a session is still running is known to whoever holds its
+/// pseudo-terminal and to nobody else — the `amenbo` that wrote the rows was a short-lived process,
+/// gone long before the question could be put to it. So the rows are a window's to keep and a window's
+/// to take away, and this is the moment they stop being true.
 ///
-/// It says nothing about a terminal somebody has open outside Amenbo. No Amenbo can see one, which is
-/// why a reservation made without a session id is never read as abandoned.
-pub fn live(app: &tauri::AppHandle) -> HashSet<String> {
-    app.state::<Terminals>()
-        .0
-        .lock()
-        .expect("terminals lock")
-        .keys()
-        .cloned()
-        .collect()
+/// Best-effort, like the drop box beside it: what is left behind is read by nothing (the session id
+/// names a terminal that has ended) and goes with the next start ([`amenbo_core::session_work::clear`]).
+fn forget_work(session: &str) {
+    if let Ok(paths) = amenbo_core::config::Paths::resolve() {
+        amenbo_core::session_work::forget(&paths.sessions_dir, session);
+    }
 }
 
 /// Send what was typed into the pane to the terminal. `data` is the text the emulator produced for

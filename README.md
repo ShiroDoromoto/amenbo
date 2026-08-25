@@ -135,8 +135,9 @@ nvm use            # picks up .nvmrc
 rustup show        # rust-toolchain.toml is applied on the next cargo command
 ```
 
-`package.json` declares `engines.node >= 22.12` (the build deps' floor); the pin
-files select the exact version above that.
+`app/package.json` declares `engines.node >= 22.12` (the build deps' floor); the
+pin files select the exact version above that. There is no `package.json` at the
+repository root — the JavaScript side lives entirely under `app/`.
 
 Go appears in the tree, but it is not a third toolchain to install: it builds only
 `devtool/`, the optional helper that gives a task its own throwaway dev GUI and
@@ -219,8 +220,11 @@ Plain `cargo test` still works everywhere; nextest is an optional accelerator.
 Thresholds and the `ci` profile live in `.config/nextest.toml`.
 
 Data is stored under the OS-standard location (on macOS,
-`~/Library/Application Support/amenbo/store.sqlite`). Set `AMENBO_HOME` to
-override the location (useful for tests and explicit setups).
+`~/Library/Application Support/work.amenbo.amenbo/store.sqlite`). The directory
+name comes from the build-time `AMENBO_APP_NAME`, which is what keeps a dev build's
+data (`work.amenbo.amenbo-dev`) off the production store. `amenbo config` prints the
+path this build actually opened on its first line. Set `AMENBO_HOME` to override the
+location (useful for tests and explicit setups).
 
 </details>
 

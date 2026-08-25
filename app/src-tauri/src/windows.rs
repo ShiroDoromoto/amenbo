@@ -98,8 +98,18 @@ fn failed(e: tauri::Error) -> CmdError {
 /// running — the same two questions it answers when the app folds back into one window. A split that
 /// also passed a pane along would be a second, shorter-lived copy of an answer the process already
 /// has.
+///
+/// **It is `async` because building a window on Windows cannot be done anywhere else.** A
+/// synchronous command runs on the thread the event loop is on, and building a webview there waits
+/// for a loop that is inside this call and so cannot answer — WebView2 hangs, and the app hangs with
+/// it: the window appears with nothing drawn in it and nothing in the app responds again, including
+/// the board behind it (`AMB-T-3701` measured it; tauri says so at
+/// `WebviewWindowBuilder::new`, from <https://github.com/tauri-apps/wry/issues/583>). An `async`
+/// command is run off that thread, which leaves the loop free to answer. macOS does not hang, so
+/// nothing here reads as broken until it is run on Windows — the reason the word `async` is worth a
+/// paragraph.
 #[tauri::command]
-pub fn talk_open(app: tauri::AppHandle, raise: bool) -> Result<(), CmdError> {
+pub async fn talk_open(app: tauri::AppHandle, raise: bool) -> Result<(), CmdError> {
     if let Some(win) = app.get_webview_window(TALK) {
         if raise {
             let _ = win.unminimize();

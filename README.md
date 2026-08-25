@@ -21,9 +21,10 @@
 
 **[amenbo.work](https://amenbo.work/en/)** — the site: what this is for, and the installers.
 
-The context you build up with an AI is locked inside that AI. Amenbo keeps it on your
-machine instead: tasks and decisions as connected records in one SQLite store, which an
-agent writes through the CLI and you read in the desktop app.
+The context you build up with an AI goes down with it: the session ends, or you move to
+another agent, and none of what you worked out is written down anywhere. Amenbo keeps it
+on your machine instead — tasks and decisions as connected records in one SQLite store,
+which an agent writes through the CLI and you read in the desktop app.
 
 - **Outside the agent** — the record belongs to the store, not to a session, so it does
   not reset when the agent you are working with changes. It is one SQLite file on your
@@ -33,6 +34,12 @@ agent writes through the CLI and you read in the desktop app.
 - **The spec is in the binary** — `amenbo agent --json` is what an agent reads to work
   here: how to work in this folder, plus every command's flags, arguments and examples.
   It ships with the build, so there is no command reference to drift out of date.
+
+<!-- Folded, not dropped: these three say how the store is built rather than what it is for,
+     and the opening screen is for the latter. -->
+<details>
+<summary>Three more, on how the store holds up</summary>
+
 - **The folder is the boundary** — an agent started in a folder you bound operates that
   folder's project, and reading or writing another project's tasks, decisions or comments
   is refused with `out_of_reach`. One machine holds every project you have.
@@ -40,9 +47,11 @@ agent writes through the CLI and you read in the desktop app.
   serialized by an exclusive file lock, and the database runs in WAL mode.
 - **CLI-first** — a Rust core library does the domain work; the CLI is a thin shell on top of it.
 
-> Status: the core, the CLI, and a desktop GUI are implemented. The store is a
-> local SQLite database — the single source of truth. There is no server and
-> nothing leaves your machine.
+</details>
+
+> Status: the core, the CLI, and a desktop GUI are implemented. The store is a local
+> SQLite database — the single source of truth. There is no server, and nothing leaves
+> your machine.
 
 <div align="center">
 

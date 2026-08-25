@@ -312,7 +312,7 @@ yourself (`amenbo plugin update <name>`, or the button on the banner).
 </div>
 
 <details>
-<summary>The full command tour — projects, tasks, dimensions, decisions, attachments, backup/restore, hooks</summary>
+<summary>The full command tour — projects, tasks, dimensions, decisions, attachments, backup/restore, plugins, hooks</summary>
 
 The CLI surface is self-documenting: `amenbo <cmd> --help` and `amenbo agent --json`
 are the authoritative spec (there is no separate command reference to drift out of date).
@@ -479,6 +479,42 @@ amenbo export --out ./amenbo-export         # everything: a directory — export
 amenbo export > ./amenbo-export.json        # ...or the same JSON on stdout (records only — a stream cannot carry files)
 amenbo backup ./everything.amenbo-backup      # archive: the store plus its attachments (disaster recovery)
 amenbo restore ./everything.amenbo-backup --yes # destructively restore this device from the archive
+
+# Plugins: extend Amenbo with an executable somebody else wrote. Installing puts one on
+# disk and nothing more — `enable` is the separate, deliberate act that lets it run, and it
+# opens the gate of the project you are standing in, so a plugin fires where you turned it
+# on and nowhere else. Every install goes through one door: the asset's signature against
+# the key the catalog that served it answers for, then the checksum its manifest published.
+amenbo plugin list                          # what is installed, whose gate is open, what this build can still speak to
+amenbo plugin install worktree              # from the catalogs — the one command in this group that touches the network
+amenbo plugin enable worktree               # let it run, here (refused while a setting its author marked required is empty)
+amenbo plugin disable worktree              # stop it firing, keeping the install and everything it holds
+amenbo plugin update --check                # which installs the catalog has moved past (a cache under an hour old may answer; --fresh asks now)
+amenbo plugin update worktree               # ...and bring one onto the build the catalog publishes (--all for every one)
+amenbo plugin rollback worktree             # undo that update — the build it replaced was retained (offline, and one generation only)
+amenbo plugin uninstall worktree --yes      # remove it and all it left behind: the gates, its secrets, its settings in every project, the binary
+
+# Call an enabled plugin's command face. Everything after the name is the plugin's own —
+# Amenbo hands the words through untouched — and what comes back is that plugin's stdout
+# verbatim, which is what lets one return a line your shell runs directly.
+eval "$(amenbo plugin run worktree start 123)"   # ...or `iex (amenbo plugin run worktree start 123)` in PowerShell
+amenbo plugin log slack                     # the last runs: how each ended, and what it wrote to stderr — the other face fires unwatched, so this is where 'it did nothing' is answered
+amenbo plugin flush                         # deliver what is waiting on the queues now, rather than on whatever you do next
+
+# Settings: the keys the plugin's author declared, held per project. What the author
+# marked secret goes to a table of its own and never comes back out this door.
+amenbo plugin config set slack events task.done,task.rejected
+printf %s "$TOKEN" | amenbo plugin config set slack webhook_url -   # `-` reads it from stdin, keeping it off argv and out of shell history
+amenbo plugin config get slack events       # the value in force, the candidates the author declared, and what they wrote about the field
+
+# Third-party catalogs, browsed alongside the official one — the usual reason is a closed
+# shelf: plugins handed to people inside your own company. Registering one pins the key it
+# publishes, so it is a trust decision, not a bookmark: the fingerprint is shown and
+# confirmed before anything is written.
+amenbo plugin catalog add https://example.com/plugins/catalog.json --name "the works catalog"
+amenbo plugin catalog list                  # every source, its key's fingerprint, how many plugins it offers, whether it answered
+amenbo plugin catalog remove https://example.com/plugins/catalog.json
+amenbo plugin validate ./manifest.yaml      # an author's self-check, against the rules the install door enforces (see Contributing)
 
 # The road a plugin carries your data outward on — a viewer, an audit trail, a mirror
 # elsewhere. Ask the version, and take a snapshot only when it moved; what comes back is

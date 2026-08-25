@@ -75,7 +75,6 @@ vi.mock("../core/reads", async (importOriginal) => ({
 }));
 
 import { FilesPanel } from "./FilesPanel";
-import type { Pointed } from "./pointed";
 import { t, tf } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -100,11 +99,6 @@ async function draw(props: Partial<Props> = {}) {
     }));
   });
   await settle();
-}
-
-/** One thing an agent pointed at, with the parts a row is drawn from. */
-function point(over: Partial<Pointed> & Pick<Pointed, "target">): Pointed {
-  return { at: over.target, why: "", cwd: ROOT, read: false, ...over };
 }
 
 /**
@@ -198,57 +192,6 @@ describe("the file face", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
-  });
-
-  it("draws what the focused pane pointed at, and opens the file it names", async () => {
-    hoisted.file = { text: "# pointed", truncated: false };
-    const read: string[] = [];
-    await draw({
-      pointed: {
-        points: [point({ target: "notes/a.md", why: "the one that broke" })],
-        name: "トップの直し",
-        ended: false,
-        onRead: (at) => read.push(at),
-      },
-    });
-    expect(container.textContent).toContain("the one that broke");
-    // The heading carries whose pane it is: the row below it belongs to the project, this one does
-    // not (`AMB-T-3603`).
-    expect(container.textContent).toContain("トップの直し");
-
-    await click(button("notes/a.md"));
-    await settle();
-    expect(hoisted.asked).toContain(`read:${ROOT}:notes/a.md`);
-    // Opened is the only reading of "read" this side can honestly make.
-    expect(read).toEqual(["notes/a.md"]);
-  });
-
-  it("does not draw a target it cannot open as something that opens", async () => {
-    await draw({
-      pointed: {
-        points: [point({ target: "/etc/passwd", why: "outside the folder" })],
-        name: null,
-        ended: false,
-        onRead: () => {},
-      },
-    });
-    expect(container.textContent).toContain("/etc/passwd");
-    expect(button("/etc/passwd")).toBeUndefined();
-  });
-
-  it("says nothing while the agent works, and says the count once it stops", async () => {
-    const running = {
-      points: [point({ target: "a.md" }), point({ target: "b.md" })],
-      name: null,
-      ended: false,
-      onRead: () => {},
-    };
-    await draw({ pointed: running });
-    // The count, and not a word more: an agent at work is not the moment to interrupt.
-    expect(container.textContent).not.toContain(t("files.unopened").replace("{n}", "2"));
-
-    await draw({ pointed: { ...running, ended: true } });
-    expect(container.textContent).toContain(tf("files.unopened", { n: 2 }));
   });
 
   it("hands a file to the machine rather than trying to be one", async () => {

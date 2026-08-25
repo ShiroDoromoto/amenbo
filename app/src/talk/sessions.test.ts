@@ -37,8 +37,8 @@ describe("the sessions the window is running", () => {
     let map = said(NO_SESSIONS, statement({ verb: "note", text: "started", cwd: "/work/a" }));
     expect(map.get("pane-1")).toMatchObject({ folder: "/work/a", startedAt: AT, note: "started" });
 
-    // `point` moves the folder and nothing else: it says where the agent is, not what it is doing.
-    map = said(map, statement({ verb: "point", target: "AMB-T-3597", why: "here", cwd: "/work/b" }));
+    // `name` moves the folder and nothing else: it says where the agent is, not what it is doing.
+    map = said(map, statement({ verb: "name", text: "the top fix", cwd: "/work/b" }));
     expect(map.get("pane-1")).toMatchObject({ folder: "/work/b", note: "started" });
   });
 

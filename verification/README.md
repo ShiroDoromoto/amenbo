@@ -709,20 +709,11 @@ is drawn on the other side of the switch, so the operator arms the word and cros
 lands. `be-told-on-the-board-that-the-terminal-wants-you` is the road.
 
 And the last is the column beside those panes. **`files`** is the folder a project answers for, read
-from inside Amenbo: three sections in one column — what an agent pointed at, what has changed lately,
-and the folder itself folded down — so every op takes a `section` saying which of the three a row is
-being looked for in, the same file being able to stand in more than one at once. `tree` unfolds the
-folder's section, `enter` opens one folder a level, `open` presses a file and `back` leaves it;
-`listed`, `reading`, `says` and `openable` read what a row is, what an opened file draws, one of the
-face's standing lines, and whether a row is something to press at all.
-
-`pointed-badge` reads the one thing that half says from outside itself: the mark its switch wears
-while something pointed at is waiting behind it. The panel opens on the page a person writes on, so
-the files are not what a reader is on by default — and an agent that pointed at something cannot send
-anybody there, which is what the switch is knocking for. Like `face-badge` it carries no number and no
-words, and the absent half is half the goal: being on the half is being told, so coming to it spends
-the mark for good. Raising one takes nothing but `terminal point` said while that half is not up.
-`open-what-the-agent-pointed-at` is the road.
+from inside Amenbo: two sections in one column — what has changed lately, and the folder itself
+folded down — so every op takes a `section` saying which of the two a row is being looked for in, the
+same file being able to stand in both at once. `tree` unfolds the folder's section, `enter` opens one
+folder a level, `open` presses a file and `back` leaves it; `listed`, `reading` and `says` read what a
+row is, what an opened file draws, and one of the face's standing lines.
 
 The other three are the file going the other way — out of Amenbo, to the machine. `menu` right-clicks
 a row, `hand-over` presses one of the three items on the menu that comes up, and `handed-over` reads

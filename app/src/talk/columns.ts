@@ -132,7 +132,7 @@ export function setSideShown(want: boolean): boolean {
   return keepShown(SIDE_SHOWN, want);
 }
 
-/** Which half of the file face is up: the memo a person writes on, or the files an agent points at. */
+/** Which half of the file face is up: the memo a person writes on, or the folder's own files. */
 export type SideTab = "files" | "memo";
 
 /**
@@ -140,11 +140,10 @@ export type SideTab = "files" | "memo";
  *
  * **It opens on the memo**, and the reason is not which of the two is used more. It is who starts:
  * the memo is opened by a person who wants it, and nothing is lost by its being closed — it is there
- * the moment they ask. The files are pointed at by an agent (`../files/pointed`), and a person
- * cannot be sent there, so what that half needs is a way to call — which is the badge on its own
- * switch (`../shell/TerminalFace`), not a panel standing open on the chance something arrives. The
- * memo also has something in it the moment it is opened, where the files half opens saying nothing
- * has been pointed at yet.
+ * the moment they ask. The files half is a reading of what the folder has been doing
+ * (`../files/FilesPanel`), which is there to be gone to whenever a person wants it and asks for
+ * nothing while they are away. The memo also has something in it the moment it is opened — their own
+ * words — where the files half opens on whatever happened to move last.
  *
  * Anything else kept reads as the memo: the value is one of two words, and a word from an older
  * build or a hand-edited store is not an answer.

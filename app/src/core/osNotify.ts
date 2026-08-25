@@ -48,8 +48,8 @@ export async function notifyOs(kind: NotifyKind, title: string, body: string): P
  *
  * **It is the only thing the terminal knocks for.** A turn is by definition the one state that does
  * not move until somebody comes — everything else the face has to say waits without cost, and a
- * notification nobody needed is what makes the next one ignored. So a finished session, a premise that
- * came unsettled and a thing an agent pointed at all stay on the screen and off the OS.
+ * notification nobody needed is what makes the next one ignored. So a finished session and a premise
+ * that came unsettled both stay on the screen and off the OS.
  *
  * It says a turn is standing and not whose. Which pane it was is drawn where it happened — the rail,
  * the pages, the label above the pane — and a toast that named one would be answering a question the

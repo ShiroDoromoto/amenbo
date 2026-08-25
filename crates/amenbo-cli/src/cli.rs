@@ -1003,14 +1003,6 @@ pub enum SessionCmd {
         /// what came of it
         text: String,
     },
-    /// Point at something worth opening — a file, a task, a decision, a URL — and say why
-    Point {
-        /// what to point at (a path, an `AMB-` ref, or a URL)
-        target: String,
-        /// why it is worth opening
-        #[arg(long)]
-        why: String,
-    },
 }
 
 #[derive(Subcommand, Debug)]

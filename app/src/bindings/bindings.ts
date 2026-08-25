@@ -1933,14 +1933,13 @@ labels: Array<SearchLabelDto>, };
  * One thing an AI said about the session it is running in, on its way to the pane drawing it.
  *
  * It is the surface layer's record ([`amenbo_core::session::Said`]) in the shape the webview reads.
- * The verbs each carry their own body, so the fields below are one verb's or another's: `text` is
- * every verb but `point`, and `target` with `why` is `point` alone.
+ * Every verb carries one line, which is `text`.
  */
 export type SessionSaidDto = { 
 /**
  * The pane it was said in — the same id the terminal was opened under.
  */
-session: string, verb: "name" | "note" | "waiting" | "finished" | "point", 
+session: string, verb: "name" | "note" | "waiting" | "finished", 
 /**
  * When it was said (RFC3339 UTC).
  */
@@ -1951,17 +1950,9 @@ at: string,
  */
 cwd?: string, 
 /**
- * The line said. Absent on `point`.
+ * The line said.
  */
-text?: string, 
-/**
- * What `point` pointed at. Absent on every other verb.
- */
-target?: string, 
-/**
- * Why it is worth opening. Absent on every other verb.
- */
-why?: string, };
+text?: string, };
 
 /**
  * What the ledger says the session in one pane has been doing — the reservations it is on, and how

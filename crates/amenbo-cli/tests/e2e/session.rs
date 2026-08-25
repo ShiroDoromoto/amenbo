@@ -47,7 +47,6 @@ fn outside_the_talk_window_every_verb_is_refused_rather_than_quietly_accepted() 
         vec!["session", "note", "reading the migration"],
         vec!["session", "waiting", "a decision is needed"],
         vec!["session", "finished", "it landed"],
-        vec!["session", "point", "AMB-T-1", "--why", "here"],
         vec!["session"],
     ] {
         let (stderr, code) = cli.run_err(&verb);
@@ -102,7 +101,6 @@ fn inside_a_pane_each_statement_is_left_whole_for_the_window() {
         (vec!["session", "name", "the top fix"], ()),
         (vec!["session", "note", "reading the migration"], ()),
         (vec!["session", "waiting", "a decision is needed"], ()),
-        (vec!["session", "point", "AMB-T-3592", "--why", "the vocabulary lands here"], ()),
         (vec!["session", "finished", "it landed"], ()),
     ] {
         let (stdout, code) = cli.run_env(&pane_env(&pane), &args);
@@ -113,16 +111,17 @@ fn inside_a_pane_each_statement_is_left_whole_for_the_window() {
     let verbs: Vec<&str> = said.iter().map(|s| s["verb"].as_str().unwrap_or_default()).collect();
     assert_eq!(
         verbs,
-        vec!["name", "note", "waiting", "point", "finished"],
+        vec!["name", "note", "waiting", "finished"],
         "the window reads them in the order they were said",
     );
     assert!(
         said.iter().all(|s| s["session"] == "pane-1"),
         "every statement says which pane it came from: {said:?}",
     );
-    let point = said.iter().find(|s| s["verb"] == "point").expect("the point is among them");
-    assert_eq!(point["target"], "AMB-T-3592");
-    assert_eq!(point["why"], "the vocabulary lands here", "a point carries its reason, not just its target");
+    assert!(
+        said.iter().all(|s| s["text"].is_string()),
+        "and what was said in it, which is the whole of a statement's own body: {said:?}",
+    );
 }
 
 /// The reason for a person's turn is bounded, and a longer one is turned away rather than cut. The row

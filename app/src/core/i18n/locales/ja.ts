@@ -510,6 +510,7 @@ export const ja: Translation = {
     "face.terminal": "ターミナル",
     "face.splitOut": "別ウィンドウで開く",
     "face.merge": "1つの窓に戻す",
+    "face.opening": "ターミナルを別ウィンドウで開いています…",
     "face.drop": "このペインを消す",
     "face.dropConfirm": "このペインを消しますか？中の端末は終わり、次に起動してもこの場所は戻りません。",
     "face.turnTitle": "Amenbo — あなたの番です",
@@ -711,6 +712,7 @@ export const ja: Translation = {
     wake_no_config: "Amenbo が自分のファイルを見つけられませんでした。",
     wake_not_kept: "選んだ内容を保存できませんでした。",
     window_failed: "その窓を開けませんでした: {reason}",
+    talk_blank: "別ウィンドウは開きましたが何も描かれなかったので、ターミナルをこの窓に戻しました。",
 
     already_reserved: "{ref} は「未着手」ではないため予約できません。別のセッションが着手済みかもしれません。",
     not_ready: "{ref} はまだ予約できません: {reasons}",

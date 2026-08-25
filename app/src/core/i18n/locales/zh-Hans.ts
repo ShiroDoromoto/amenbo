@@ -498,6 +498,7 @@ export const zhHans: Translation = {
     "face.terminal": "终端",
     "face.splitOut": "在单独窗口中打开",
     "face.merge": "合并回一个窗口",
+    "face.opening": "正在单独的窗口中打开终端…",
     "face.drop": "移除此窗格",
     "face.dropConfirm": "要移除此窗格吗？里面的终端会结束，下次启动时这个位置不会回来。",
     "face.turnTitle": "Amenbo — 轮到你了",
@@ -688,6 +689,7 @@ export const zhHans: Translation = {
     wake_no_config: "Amenbo 找不到自己的文件。",
     wake_not_kept: "没能保存这个选择。",
     window_failed: "无法打开该窗口：{reason}",
+    talk_blank: "那个窗口已打开，但始终没有绘制任何内容，因此终端已放回这个窗口。",
 
     already_reserved: "{ref} 不是“待办”，无法认领；可能已有另一个会话在处理。",
     not_ready: "{ref} 还不能认领：{reasons}",

@@ -508,6 +508,7 @@ export const de: Translation = {
     "face.terminal": "Terminal",
     "face.splitOut": "In einem eigenen Fenster öffnen",
     "face.merge": "Zurück zu einem Fenster",
+    "face.opening": "Das Terminal wird in einem eigenen Fenster geöffnet…",
     "face.drop": "Diesen Bereich entfernen",
     "face.dropConfirm": "Diesen Bereich entfernen? Das Terminal darin wird beendet, und der Platz kommt beim nächsten Start nicht zurück.",
     "face.turnTitle": "Amenbo — Sie sind dran",
@@ -702,6 +703,7 @@ export const de: Translation = {
     wake_no_config: "Amenbo konnte seine eigenen Dateien nicht finden.",
     wake_not_kept: "Die Auswahl ließ sich nicht speichern.",
     window_failed: "Dieses Fenster konnte nicht geöffnet werden: {reason}",
+    talk_blank: "Das Fenster wurde geöffnet, hat aber nie etwas gezeichnet — das Terminal ist wieder in diesem Fenster.",
 
     already_reserved:
       "{ref} ist nicht „Offen“ und lässt sich deshalb nicht übernehmen — vielleicht hat eine andere Sitzung sie schon.",

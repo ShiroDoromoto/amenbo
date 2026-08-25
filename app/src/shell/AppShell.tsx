@@ -151,9 +151,44 @@ export function AppShell() {
   // shape: the window is opened and closed by the effect below, so every way into two windows — the
   // button, and a launch that remembers being two — arrives at the same place.
   const setShape = useCallback((next: WindowShape) => setShapeState(setWindowShape(next)), []);
-  // The platform refusing to build the window. It is the one failure here a person has to be told
-  // about, because they asked for the window and would otherwise watch the button do nothing.
+  // The window the terminal was split out into failing to become one. It is the one failure here a
+  // person has to be told about, because they asked for the window and would otherwise watch the
+  // button do nothing — and it is told on the face they are put back on, which is where they were
+  // going. Two things can fail: the platform refusing to build the window at all, and a window that
+  // was built around a page that never drew (`crate::windows::talk_open`).
   const [windowError, setWindowError] = useState<string | null>(null);
+  // Whether an open is still out. The window is not this window's to watch, so what says the app is
+  // doing something is the request not having come back yet — and the wait is real, since the host
+  // holds the answer until the other window says it drew.
+  const [opening, setOpening] = useState(false);
+  /**
+   * One window again, with the terminal as its face — and `note` to say why, where there is a why.
+   *
+   * Every way the second window can fail to be there ends here: it was refused, it drew nothing, or
+   * it went without this window hearing. The reader was on their way to the terminal in all three,
+   * so this is where they are put, and `terminalAsked` is set because the face is only hosted once
+   * it has been asked for — a launch that came up believing it was two windows never asked.
+   */
+  const foldBackToTerminal = useCallback((note: string | null) => {
+    setWindowError(note);
+    setShapeState(setWindowShape("one"));
+    setTerminalAsked(true);
+    setFace("terminal");
+  }, []);
+  /**
+   * A press meant for the terminal, made while this window believes the terminal is in the other one.
+   *
+   * It asks for that window rather than opening one, because opening is what a press means only when
+   * the reader asked for two windows — and here they are asking to *see* the terminal. A `false`
+   * means the belief was wrong and there is no window: the reader is put back on the face here
+   * rather than left pressing at nothing, which is what a raise of a window that is not there
+   * silently was (`crate::windows::talk_raise`).
+   */
+  const goToTalkWindow = useCallback((instead: () => void) => {
+    void invoke<boolean>("talk_raise")
+      .then((there) => { if (!there) instead(); })
+      .catch(instead);
+  }, []);
   // Whether the window the shape is about to open was asked for by a press, and so comes to the
   // front. A launch restoring the shape was not asking for anything, and the window the user is
   // looking at is this one — "nothing comes forward but what somebody pressed" (`AMB-D-753`).
@@ -169,14 +204,16 @@ export function AppShell() {
     }
     const raise = raiseTalk.current;
     raiseTalk.current = false;
-    void invoke("talk_open", { raise }).catch((e: unknown) => {
-      // Back to one window, where the terminal still is: what was split out is put back rather than
-      // left pointing at a window that was never built.
-      setWindowError(errLabel(e as CmdError));
-      setShapeState(setWindowShape("one"));
-      setFace("terminal");
-    });
-  }, [shape]);
+    setOpening(true);
+    void invoke("talk_open", { raise })
+      .catch((e: unknown) => {
+        // Back to one window, where the terminal still is: what was split out is put back rather
+        // than left pointing at a window that was never built, or at one that was built and drew
+        // nothing.
+        foldBackToTerminal(errLabel(e as CmdError));
+      })
+      .finally(() => setOpening(false));
+  }, [shape, foldBackToTerminal]);
   // The talk window going away, however it went: the button that folds the app back, and the title
   // bar's close, which is the one an app that only watched its own button would miss. Either way the
   // terminal is still running and is now nobody's to draw, so this window takes it and shows it —
@@ -206,12 +243,12 @@ export function AppShell() {
   // so the press raises that window instead — and never opens a second one (`windows::talk_open`).
   const selectFace = useCallback((next: Face) => {
     if (next === "terminal" && shape === "two") {
-      void invoke("talk_open", { raise: true }).catch(() => {});
+      goToTalkWindow(() => foldBackToTerminal(null));
       return;
     }
     if (next === "terminal") setTerminalAsked(true);
     setFace(next);
-  }, [shape]);
+  }, [shape, goToTalkWindow, foldBackToTerminal]);
   // The folder the ledger has asked the terminal to work in, and a count of the asking: the face is a
   // component, so what it is handed is where to work rather than a call to make (`./TerminalFace`).
   const [openIn, setOpenIn] = useState<{ project: number | null; dir: string; nth: number } | null>(null);
@@ -223,20 +260,25 @@ export function AppShell() {
    * either way, and the folder is asked for there rather than promised here (`AMB-D-749`).
    */
   const startTerminalIn = useCallback((dir: string) => {
-    if (shape === "two") {
-      void invoke("talk_open", { raise: true }).catch(() => {});
-      return;
-    }
     // Whose project it is travels with it: a pane belongs to a project (`../talk/layout`), and the
     // only screen this button is on is that project's own.
-    setOpenIn((asked) => ({
-      project: nav.type === "project" ? Number(nav.id) : null,
-      dir,
-      nth: (asked?.nth ?? 0) + 1,
-    }));
-    setTerminalAsked(true);
-    setFace("terminal");
-  }, [shape, nav]);
+    const here = () => {
+      setOpenIn((asked) => ({
+        project: nav.type === "project" ? Number(nav.id) : null,
+        dir,
+        nth: (asked?.nth ?? 0) + 1,
+      }));
+      setTerminalAsked(true);
+      setFace("terminal");
+    };
+    if (shape === "two") {
+      // And where that window turns out not to exist, the folder is not dropped along with the
+      // belief: the reader asked to work in it, and this window can now host the face that does.
+      goToTalkWindow(() => { foldBackToTerminal(null); here(); });
+      return;
+    }
+    here();
+  }, [shape, nav, goToTalkWindow, foldBackToTerminal]);
 
   // "Open in a separate window". The face comes down as the shape changes, leaving the terminals in
   // its panes running for the window that is about to draw them, and this window goes back to the
@@ -516,6 +558,17 @@ export function AppShell() {
         <OrphanBindingBanner />
         <HookSetupBanner asked={hooksAsked} />
         <TickBanner />
+        {/* The open that is still out. It is a band rather than something on the terminal segment
+            because the face has already come down by now — the shape changed as the press landed —
+            so the only place left to say anything is the board the reader is looking at. */}
+        {opening && (
+          <div className="healthbanner" role="status">
+            <Icon name="newWindow" size="lg" />
+            <div className="healthbanner__body">
+              <div className="healthbanner__title">{t("face.opening")}</div>
+            </div>
+          </div>
+        )}
       </div>
       {/* The terminal face, kept up from the moment it is first asked for. `hidden` is what the
           other face being up means here: taking this down would take the emulator with it, and the

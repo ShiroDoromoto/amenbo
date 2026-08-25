@@ -524,6 +524,7 @@ export const pl: Translation = {
     "face.terminal": "Terminal",
     "face.splitOut": "Otwórz w osobnym oknie",
     "face.merge": "Wróć do jednego okna",
+    "face.opening": "Otwieranie terminala w osobnym oknie…",
     "face.drop": "Usuń ten panel",
     "face.dropConfirm": "Usunąć ten panel? Terminal w nim zostanie zakończony, a miejsce nie wróci przy następnym uruchomieniu.",
     "face.turnTitle": "Amenbo — twoja kolej",
@@ -726,6 +727,7 @@ export const pl: Translation = {
     wake_no_config: "Amenbo nie znalazło własnych plików.",
     wake_not_kept: "Nie udało się zapisać wyboru.",
     window_failed: "Nie udało się otworzyć tego okna: {reason}",
+    talk_blank: "Tamto okno otworzyło się, ale nic w nim nie narysowano, więc terminal wrócił do tego okna.",
 
     already_reserved:
       "{ref} nie ma statusu „Do zrobienia”, więc nie można go zarezerwować — być może trzyma go już inna sesja.",

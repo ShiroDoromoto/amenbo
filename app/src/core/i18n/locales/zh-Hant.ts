@@ -498,6 +498,7 @@ export const zhHant: Translation = {
     "face.terminal": "終端機",
     "face.splitOut": "在另一個視窗開啟",
     "face.merge": "合併回單一視窗",
+    "face.opening": "正在單獨的視窗中開啟終端機…",
     "face.drop": "移除此窗格",
     "face.dropConfirm": "要移除此窗格嗎？裡面的終端機會結束，下次啟動時這個位置不會回來。",
     "face.turnTitle": "Amenbo — 輪到你了",
@@ -688,6 +689,7 @@ export const zhHant: Translation = {
     wake_no_config: "Amenbo 找不到自己的檔案。",
     wake_not_kept: "沒能保存這個選擇。",
     window_failed: "無法開啟該視窗：{reason}",
+    talk_blank: "那個視窗已開啟，但始終沒有繪製任何內容，因此終端機已放回這個視窗。",
 
     already_reserved: "{ref} 不是「待辦」，無法認領；可能已有另一個工作階段在處理。",
     not_ready: "{ref} 還不能認領：{reasons}",

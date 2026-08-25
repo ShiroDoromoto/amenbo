@@ -501,6 +501,7 @@ export const id: Translation = {
     "face.terminal": "Terminal",
     "face.splitOut": "Buka di jendela terpisah",
     "face.merge": "Kembali ke satu jendela",
+    "face.opening": "Membuka terminal di jendelanya sendiri…",
     "face.drop": "Hapus panel ini",
     "face.dropConfirm": "Hapus panel ini? Terminal di dalamnya berakhir, dan tempatnya tidak kembali saat dijalankan lagi.",
     "face.turnTitle": "Amenbo — giliran Anda",
@@ -691,6 +692,7 @@ export const id: Translation = {
     wake_no_config: "Amenbo tidak menemukan berkasnya sendiri.",
     wake_not_kept: "Pilihan tidak bisa disimpan.",
     window_failed: "Jendela itu tidak dapat dibuka: {reason}",
+    talk_blank: "Jendela itu terbuka tetapi tidak menggambar apa pun, jadi terminal dikembalikan ke jendela ini.",
 
     already_reserved:
       "{ref} tidak berstatus “Akan dikerjakan”, jadi tidak bisa diambil — mungkin sesi lain sudah memegangnya.",

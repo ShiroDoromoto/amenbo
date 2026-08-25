@@ -13,6 +13,12 @@
 //! away, and what is in it — the terminal — is not restarted by either, because a session belongs to
 //! the process rather than to a window (`crate::pty`).
 //!
+//! **The window speaks twice, and both times about itself.** It says it drew
+//! ([`talk_ready`](crate::windows::talk_ready)), which is what finishes the open, and it says it has gone
+//! ([`TALK_CLOSED_EVENT`](crate::windows::TALK_CLOSED_EVENT)), which is what folds the app back. Between
+//! them the board never has to guess at a window it cannot see, and that guessing is what left a reader
+//! with a blank window and no way back to the terminal (`AMB-T-3701`, `AMB-T-3702`).
+//!
 //! **What is split out is the face and not a pane of it.** The window holds what the board's own
 //! terminal face holds — the rail, the pages, the split, the files beside them — because the point
 //! of the second window is to put the terminal on another display, and a face that lost its rail on
@@ -28,7 +34,11 @@
 //! A launch at login is the ordinary launch (`autostart`), so it comes up exactly as opening the app
 //! does: the board, in whichever shape this machine was last used in.
 
-use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use std::sync::mpsc::{sync_channel, SyncSender};
+use std::sync::Mutex;
+use std::time::Duration;
+
+use tauri::{Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 use crate::dto::RefTargetDto;
 use crate::error::CmdError;
@@ -68,6 +78,31 @@ const TALK_MIN_SIZE: (f64, f64) = (960.0, 640.0);
 /// fix: the user can see there are two, and drag the top one wherever they meant to put it.
 const TALK_OFFSET: f64 = 48.0;
 
+/// How long a newly built talk window is given to say it drew its face before it is taken away
+/// again.
+///
+/// It is the wait for a page to load rather than for anybody to do anything, so it is long by the
+/// standards of the thing it measures and short by the standards of the person watching: a webview
+/// coming up cold on a slow machine takes a second or two, and ten leaves room for several of those
+/// without stranding a reader in front of an empty window for as long as it takes to wonder whether
+/// the app is broken.
+const TALK_DRAW_GRACE: Duration = Duration::from_secs(10);
+
+/// The talk window's promise that it drew, kept for as long as the promise is outstanding.
+///
+/// **A window is not a face.** [`WebviewWindowBuilder::build`] answers when the OS has a window, and
+/// says nothing about the page in it: a webview that never ran a line still leaves a window on the
+/// screen, with the platform's own furniture on it and nothing else. Answering the board with `Ok`
+/// there is how one blank window turned into an app the reader could not get the terminal back out
+/// of — the board went on believing it was two windows, and every press meant for the face went to a
+/// window that had nothing to show (`AMB-T-3701`).
+///
+/// So the window says so itself ([`talk_ready`], called by `app/src/talk.tsx`), and this is where the
+/// half-built open waits to hear it. One sender, put here before the window is built and taken by
+/// whichever comes first — the page saying it drew, or the wait running out.
+#[derive(Default)]
+pub struct TalkDrawn(Mutex<Option<SyncSender<()>>>);
+
 /// Turn a window that could not be built or closed into the refusal the webview is given. There is
 /// nothing for the caller to do about it beyond saying so, so what it says is what tauri said.
 fn failed(e: tauri::Error) -> CmdError {
@@ -89,10 +124,6 @@ fn failed(e: tauri::Error) -> CmdError {
 /// "terminal" is asking, and wants the window in front. Coming up in the shape this machine was last
 /// used in is arranging, and must not take the front away from the board the user is looking at.
 ///
-/// Raising is spelled out the way a notification click spells it (`crate::macos_notify`) —
-/// unminimize, show, focus — because a window that is merely unfocused and a window that is
-/// minimized both look, to the user, like the terminal not being there.
-///
 /// **Nothing is handed over with it.** What the window draws is the whole terminal face, which reads
 /// the arrangement this run holds (`crate::frames`) and takes up the terminals that are still
 /// running — the same two questions it answers when the app folds back into one window. A split that
@@ -108,16 +139,30 @@ fn failed(e: tauri::Error) -> CmdError {
 /// command is run off that thread, which leaves the loop free to answer. macOS does not hang, so
 /// nothing here reads as broken until it is run on Windows — the reason the word `async` is worth a
 /// paragraph.
+///
+/// **What it answers `Ok` to is a face, not a window.** A window built around a page that never ran
+/// is the failure the caller most needs told about and the one the builder cannot report, so this
+/// waits for the page to say it drew ([`TalkDrawn`]) and takes the window away again if it does not.
+/// The refusal then goes back the way a refused build does, and the board folds itself into one
+/// window on the path it already had for that (`app/src/shell/AppShell.tsx`).
 #[tauri::command]
-pub async fn talk_open(app: tauri::AppHandle, raise: bool) -> Result<(), CmdError> {
+pub async fn talk_open(
+    app: tauri::AppHandle,
+    drawn: tauri::State<'_, TalkDrawn>,
+    raise: bool,
+) -> Result<(), CmdError> {
     if let Some(win) = app.get_webview_window(TALK) {
+        // A window that is there has already been through the wait below, so there is nothing left
+        // to establish about it.
         if raise {
-            let _ = win.unminimize();
-            let _ = win.show();
-            let _ = win.set_focus();
+            raise_window(&win);
         }
         return Ok(());
     }
+    // Put the ear out before there is anything that could speak into it: the page is built by the
+    // line below, so nothing can announce itself earlier than this.
+    let (tx, rx) = sync_channel::<()>(1);
+    *drawn.0.lock().expect("talk drawn lock") = Some(tx);
     let mut builder = WebviewWindowBuilder::new(&app, TALK, WebviewUrl::App(TALK_URL.into()))
         // The product name, which is what shows for the moment before the page names itself in the
         // reader's own language (`app/src/talk.tsx`).
@@ -149,7 +194,72 @@ pub async fn talk_open(app: tauri::AppHandle, raise: bool) -> Result<(), CmdErro
             let _ = raised.emit_to(BOARD, TALK_CLOSED_EVENT, ());
         }
     });
+    // Waited for off this thread. The wait is seconds long where it is a wait at all, and the runtime
+    // this command was given has other commands to answer in the meantime — including the ones the
+    // page being waited for makes as it comes up.
+    let heard = tauri::async_runtime::spawn_blocking(move || rx.recv_timeout(TALK_DRAW_GRACE).is_ok())
+        .await
+        .unwrap_or(false);
+    if !heard {
+        // Nothing was drawn, so there is nothing for the reader in this window — and leaving it up
+        // would leave the board pressing "terminal" at it forever. Taking it away is also what tells
+        // the board, which is listening for exactly that (`TALK_CLOSED_EVENT`).
+        let _ = talk_close(app);
+        return Err(blank());
+    }
     Ok(())
+}
+
+/// The talk window saying it drew its face, which is the only thing that makes it a face rather than
+/// a window (`app/src/talk.tsx` calls it once the page has something on it).
+///
+/// Nothing happens when nobody is waiting — a reload of a window that is already up says it again,
+/// and the second saying has no open to finish.
+#[tauri::command]
+pub fn talk_ready(drawn: tauri::State<'_, TalkDrawn>) {
+    if let Some(tx) = drawn.0.lock().expect("talk drawn lock").take() {
+        let _ = tx.try_send(());
+    }
+}
+
+/// Bring the talk window forward, and say whether there was one to bring.
+///
+/// The board asks this instead of [`talk_open`] when it already believes it is two windows: what it
+/// wants then is the window it thinks it has, and building a second one behind a belief that turned
+/// out to be wrong would open a window nobody pressed for. `false` is the board's cue to fold itself
+/// back and put the terminal on a face of its own, which is where the reader was trying to get.
+#[tauri::command]
+pub fn talk_raise(app: tauri::AppHandle) -> bool {
+    match app.get_webview_window(TALK) {
+        Some(win) => {
+            raise_window(&win);
+            true
+        }
+        None => false,
+    }
+}
+
+/// Bring a window forward, spelled the way a notification click spells it (`crate::macos_notify`):
+/// a window that is merely unfocused and a window that is minimized both look, to the user, like the
+/// terminal not being there.
+fn raise_window(win: &WebviewWindow) {
+    let _ = win.unminimize();
+    let _ = win.show();
+    let _ = win.set_focus();
+}
+
+/// A window that was built and then drew nothing, turned into the refusal the board is given.
+///
+/// It is a code of its own rather than a [`failed`] with a reason in it, because it is not the
+/// platform refusing anything: everything worked and the result is still an empty window, and the
+/// sentence a reader gets has to say that rather than quote an error nobody produced.
+fn blank() -> CmdError {
+    CmdError::coded(
+        "talk_blank",
+        "That window opened but never drew anything, so the terminal was put back in this one."
+            .to_string(),
+        serde_json::json!({}),
+    )
 }
 
 /// Take the talk window away. Opening it again is [`talk_open`], and the terminal that was in it is

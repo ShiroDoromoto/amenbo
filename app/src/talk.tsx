@@ -138,6 +138,16 @@ function TalkPage() {
 
   useEffect(retitle, [lang, ready]);
 
+  // Say so, once there is something on the page — the host is holding the open until it hears this,
+  // and takes the window away again if it never does (`crate::windows::talk_ready`). An error is as
+  // much of an answer as the face is: the reader can see what happened and close the window, which
+  // is not true of a window that drew nothing at all. Announced from here rather than from the face
+  // below, because the face is what is missing in the case this guards.
+  const drawn = ready || error !== null;
+  useEffect(() => {
+    if (drawn) void invoke("talk_ready").catch(() => {});
+  }, [drawn]);
+
   if (error !== null) {
     return (
       <div style={{ padding: 24, fontFamily: "system-ui", color: "#c0392b" }}>

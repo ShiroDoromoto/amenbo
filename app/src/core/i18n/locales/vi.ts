@@ -501,6 +501,7 @@ export const vi: Translation = {
     "face.terminal": "Terminal",
     "face.splitOut": "Mở trong cửa sổ riêng",
     "face.merge": "Trở lại một cửa sổ",
+    "face.opening": "Đang mở terminal trong cửa sổ riêng…",
     "face.drop": "Bỏ khung này",
     "face.dropConfirm": "Bỏ khung này? Terminal trong đó sẽ kết thúc, và chỗ này không trở lại ở lần chạy sau.",
     "face.turnTitle": "Amenbo — đến lượt bạn",
@@ -691,6 +692,7 @@ export const vi: Translation = {
     wake_no_config: "Amenbo không tìm thấy tệp của chính nó.",
     wake_not_kept: "Không lưu được lựa chọn.",
     window_failed: "Không thể mở cửa sổ đó: {reason}",
+    talk_blank: "Cửa sổ đó đã mở nhưng không vẽ gì cả, nên terminal được đưa về cửa sổ này.",
 
     already_reserved: "{ref} không ở trạng thái “Cần làm” nên không thể nhận — có thể một phiên khác đã giữ nó.",
     not_ready: "{ref} chưa thể nhận: {reasons}",

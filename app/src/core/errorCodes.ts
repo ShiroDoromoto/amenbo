@@ -191,8 +191,9 @@ export const CORE_ERROR_CODES = [
  * boundary between showing a fingerprint and agreeing to it, so the pin that is written has to be the one
  * that was on screen (`AMB-D-389`); and the two the terminal in a pane answers with, which are the
  * operating system refusing to open one (`pty_failed`) and a session whose terminal has already
- * closed (`pty_gone`); the one a window refuses with, which is the terminal being split out into a
- * window of its own and the platform not building it (`window_failed`); and the ones settling which
+ * closed (`pty_gone`); the two a window refuses with, which is the terminal being split out into a
+ * window of its own and the platform not building it (`window_failed`) or the window it built never
+ * drawing anything (`talk_blank`); and the ones settling which
  * agent a folder opens with (`crate::wake`) — a folder that cannot be read (`wake_no_folder`), an
  * install that cannot find its own config (`wake_no_config`), a choice that could not be written down
  * (`wake_not_kept`), and an agent id the catalog does not list (`wake_unknown_agent`), refused the
@@ -207,6 +208,7 @@ export const TAURI_ERROR_CODES = [
   "plugin_catalog_key_changed",
   "pty_failed",
   "pty_gone",
+  "talk_blank",
   "wake_no_config",
   "wake_no_folder",
   "wake_not_kept",

@@ -33,9 +33,9 @@ export function NewProjectScreen({ onCreated, onCancel, onOpenMcp, onStartTermin
   onCreated: (nav: Nav) => void;
   onCancel: () => void;
   onOpenMcp: (projectId: number) => void;
-  /** Work in this folder in the terminal — the first loop's one move, carried out by the shell
-   *  (`../shell/AppShell`). */
-  onStartTerminal: (dir: string) => void;
+  /** Work in this folder, in this project, in the terminal — the first loop's one move, carried out
+   *  by the shell (`../shell/AppShell`). */
+  onStartTerminal: (project: number, dir: string) => void;
 }) {
   const [name, setName] = useState("");
   const [dir, setDir] = useState<string | null>(null);
@@ -138,7 +138,7 @@ function DoneStep({ created, onOpenProject, onOpenMcp, onStartTerminal }: {
   created: Created;
   onOpenProject: () => void;
   onOpenMcp: (projectId: number) => void;
-  onStartTerminal: (dir: string) => void;
+  onStartTerminal: (project: number, dir: string) => void;
 }) {
   const { id, name, dir } = created;
   const [copied, setCopied] = useState(false);
@@ -175,7 +175,10 @@ function DoneStep({ created, onOpenProject, onOpenMcp, onStartTerminal }: {
 
         {inTauri() && dir && (
           <>
-            <FirstLoop dir={dir} onStart={onStartTerminal} />
+            {/* The project the loop opens in is the one just made, and not the one the navigation is
+                on — this step is a view, so nothing about it names a project except `created`
+                (`AMB-T-3708`). */}
+            <FirstLoop dir={dir} onStart={(where) => onStartTerminal(id, where)} />
             <div className="newproj__next">
               <span className="fieldlabel">{t("newproj.moreTitle")}</span>
               <div className="buttonrow">

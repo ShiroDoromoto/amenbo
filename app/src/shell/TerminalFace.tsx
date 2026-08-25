@@ -24,7 +24,7 @@ import {
   type PointedBySession, type ShownBySession,
 } from "../files/pointed";
 import { useBoundFolders } from "../core/boundFolders";
-import { chooseFolderFor } from "../core/mutations";
+import { chooseFolderFor, fetchBoundFolders } from "../core/mutations";
 import { dataAdapter } from "../mock/adapter";
 import { invoke } from "../core/ipc";
 import type { PtySessionDto } from "../bindings/bindings";
@@ -83,9 +83,9 @@ import { errText, t, tf, tn } from "../core/i18n";
  * reader has to go and check.
  *
  * `openIn` is the ledger asking for a folder to be worked in — the first loop's one button
- * (`app/src/components/FirstLoop.tsx`). It is where to work and not what to do about it: the project
- * it belongs to is the one the ledger was on, and whether a pane is made or an open one reached for
- * is this face's own (`../talk/layout`).
+ * (`app/src/components/FirstLoop.tsx`). It is where to work and whose project that is, and not what
+ * to do about it: whether a pane is made or an open one reached for is this face's own
+ * (`../talk/layout`).
  *
  * **Both columns beside the panes can be put away, and each carries the way back.** The rail's is on
  * the top row and the file face's is on the panel itself, opened again from the same row; either can
@@ -135,8 +135,13 @@ export function TerminalFace({
    * A folder the ledger asked this face to work in, whose project it is, and a count of the asking —
    * the same shape the file face's `show` takes, and for the same reason: pressing the button twice
    * is a reader saying it again, not a state that has not moved.
+   *
+   * **The project is named, never absent.** A pane belongs to a project and cannot be moved to
+   * another one afterwards, so an ask that did not say which project it is about is one this face
+   * would have to guess at — and a guess here is a pane put under the wrong project for good
+   * (`AMB-T-3708`).
    */
-  openIn?: { project: number | null; dir: string; nth: number } | null;
+  openIn?: { project: number; dir: string; nth: number } | null;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   // Nothing is open until somebody opens something: a pane is made by opening one (`../talk/layout`),
@@ -479,29 +484,41 @@ export function TerminalFace({
     setLayout(addPane);
   }, []);
 
-  // A folder the ledger handed in. Nothing is done with it before the restore has been answered for:
-  // the panes that come back are what an already-open one is found among, and seeding one first would
-  // put a terminal in a frame the restore was about to take away.
+  // A folder the ledger handed in, and the project it named. Nothing is done with it before the
+  // restore has been answered for: the panes that come back are what an already-open one is found
+  // among, and seeding one first would put a terminal in a frame the restore was about to take away.
   //
-  // The project is the one the ledger was on when the button was pressed: the first loop is a
-  // project's own card, and a pane belongs to a project (`../talk/layout`).
+  // **The pair is checked before a pane is made, and nothing here fills a gap in it.** A pane belongs
+  // to a project and can never be moved to another, so a folder opened under a project it is not
+  // bound to is a mistake nobody can undo from the screen — the pane has to be closed and opened
+  // again. Falling back on the project the face happened to be showing is what put one there: the
+  // ask carried a folder from a project nobody was looking at (`AMB-T-3708`).
+  //
+  // A read that does not come back is not a pairing either. Nothing opens on it, for the same reason
+  // nothing is drawn from an unanswered one (`../core/boundFolders`).
   //
   // The press is honoured once. `nth` is what says a second press is a second answer, so pressing the
   // button again on a folder already open goes to that pane rather than opening a second terminal in
   // it.
   useEffect(() => {
     if (!settled || !openIn) return;
-    const project = openIn.project ?? layout.project;
-    if (project === null) return;
-    setLayout((was) => {
-      const open = paneIn(was, project, openIn.dir);
-      if (open) return focusOn(was, open.id);
-      const made = openedFrame(was, project, openIn.dir);
-      // The same mark a press on the empty frame leaves (`openPane`): this frame is one a person
-      // pressed for, so the pane opens rather than offering to.
-      startNow.current.add(made.frame.id);
-      return made.layout;
-    });
+    const { project, dir } = openIn;
+    let alive = true;
+    void fetchBoundFolders(project)
+      .then((folders) => {
+        if (!alive || !folders.some((one) => one.path === dir)) return;
+        setLayout((was) => {
+          const open = paneIn(was, project, dir);
+          if (open) return focusOn(was, open.id);
+          const made = openedFrame(was, project, dir);
+          // The same mark a press on the empty frame leaves (`openPane`): this frame is one a person
+          // pressed for, so the pane opens rather than offering to.
+          startNow.current.add(made.frame.id);
+          return made.layout;
+        });
+      })
+      .catch(() => {});
+    return () => { alive = false; };
     // `nth` is what makes the same folder asked for twice two answers.
   }, [openIn?.nth, settled]);
 

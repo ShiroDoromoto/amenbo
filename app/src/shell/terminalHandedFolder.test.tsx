@@ -4,14 +4,19 @@
 //
 // It has a frame of its own rather than riding in `terminalLayout.test.tsx` because the question is
 // about the press arriving from the *other* face: what it has to do is put a pane where there was
-// none, go to the one that is already there rather than opening a second, and land in the project the
-// ledger named rather than the one the rail happened to be on.
+// none, go to the one that is already there, land in the project the ledger named rather than the one
+// the rail happened to be on, and refuse a folder that project is not bound to.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { BoundFolderDto } from "../bindings/bindings";
 import type { PaneStart } from "../talk/terminal";
 
-const hoisted = vi.hoisted(() => ({ mounts: [] as { cwd?: string }[] }));
+const hoisted = vi.hoisted(() => ({
+  mounts: [] as { cwd?: string }[],
+  // Which folders each project is bound to, as the face reads them back when a press arrives.
+  bound: new Map<number, string[]>(),
+}));
 
 vi.mock("../talk/agent", () => ({
   mountAgentFrame: (
@@ -39,6 +44,17 @@ vi.mock("../core/boundFolders", () => ({
   }),
 }));
 
+const folder = (path: string): BoundFolderDto =>
+  ({ path, exists: true, mismatch: null, legacy: false, pointerMissing: false, foreign: null });
+
+// The bindings the face checks the handed pair against — the one thing standing between a folder and
+// a pane under a project it does not belong to.
+vi.mock("../core/mutations", async (original) => ({
+  ...(await original<Record<string, unknown>>()),
+  fetchBoundFolders: (projectId: number) =>
+    Promise.resolve((hoisted.bound.get(projectId) ?? []).map(folder)),
+}));
+
 import { TerminalFace } from "./TerminalFace";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -46,7 +62,7 @@ import { TerminalFace } from "./TerminalFace";
 let container: HTMLDivElement;
 let root: Root;
 
-const draw = (openIn: { project: number | null; dir: string; nth: number } | null) =>
+const draw = (openIn: { project: number; dir: string; nth: number } | null) =>
   act(async () => {
     root.render(createElement(TerminalFace, {
       onWindow: () => {}, note: null, onWaiting: () => {}, openIn,
@@ -62,6 +78,7 @@ beforeEach(() => {
   // columns — so a test about what is drawn beside the panes says it is on a wide screen.
   window.innerWidth = 1600;
   hoisted.mounts = [];
+  hoisted.bound = new Map([[1, ["/work/one", "/work/handed"]], [2, ["/work/two"]]]);
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -102,5 +119,14 @@ describe("a folder handed in from the ledger", () => {
     // The other project's pane is not on this screen: what is shown is one project's panes.
     expect(shownProject()).toBe("two");
     expect(container.querySelectorAll(".rail__row")).toHaveLength(1);
+  });
+
+  it("opens nothing where the folder is not one the named project is bound to", async () => {
+    await draw({ project: 2, dir: "/work/one", nth: 1 });
+
+    expect(hoisted.mounts, "a pane was made under a project the folder does not belong to").toEqual([]);
+    // And not under the folder's own project either: what was asked for is a pair, and there is no
+    // half of it to fall back on.
+    expect(container.querySelector(".slot--empty")).not.toBeNull();
   });
 });

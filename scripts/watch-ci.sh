@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# watch-ci.sh — watch one CI run (or one pull request) and print only what changes.
+# watch-ci.sh — watch one CI run, one pull request, or one check of one, and print
+# only what changes.
 #
 # Emits a line when a check fails, when a pull request needs a hand, and when the
 # thing being watched reaches a verdict — then exits. Otherwise it speaks only to say
@@ -11,6 +12,7 @@
 # Usage — one mode per KIND of CI, so the caller names the thing and not the filter:
 #
 #   watch-ci.sh pr <number>                  a pull request: its checks, and its landing
+#   watch-ci.sh check <pr> <name>            one named check on a pull request, on its own
 #   watch-ci.sh main <sha>                   the run a merge into main started
 #   watch-ci.sh tag <tag>                    the run a release tag started
 #   watch-ci.sh dispatch <workflow> <ref> [not-before]
@@ -21,7 +23,13 @@
 #
 # --print-id is for the caller that needs the run itself and not only its verdict —
 # downloading its artifacts, say. Resolving it here rather than there is the point:
-# an id picked by hand is picked from the same ambiguity described below.
+# an id picked by hand is picked from the same ambiguity described below. Neither `pr`
+# nor `check` resolves a run, so neither takes it.
+#
+# `pr` and `check` differ in what they call the end. `pr` ends when the pull request
+# lands, so one held open on purpose — a theme branch collecting its checks before
+# anyone decides to merge it — can never satisfy it. `check` ends when the single check
+# it was given settles, and leaves the pull request where it found it.
 #
 # The mode is what carries the filter. A run is NOT addressed by id from the outside,
 # because choosing the id is the part that goes wrong: one commit carries runs from
@@ -228,12 +236,77 @@ watch_pr() {
     done
 }
 
+# Watch one named check on a pull request until it settles, and report what it settled
+# as. The pull request is only where the check is read from: it may be a draft, it may
+# be waiting on a decision nobody has made, and neither ends this watch.
+#
+# What is read is `bucket`, not the check's own state. `gh` normalises every forge's
+# spelling into pass / fail / pending / skipping / cancel, so there is no in-progress
+# word left that could be mistaken for a conclusion — the mistake this mode exists to
+# make unavailable.
+#
+# `skipping` is green here, for the reason `watch_run` gives skipped jobs: a path
+# filter deciding a check has nothing to do is the normal shape of a run in this
+# repository. `cancel` is red, for the reason `watch_pr` gives it: a cancelled check is
+# not going to arrive later.
+#
+# Naming a check that matches more than one is refused rather than guessed, as an
+# ambiguous run is. A verdict from the wrong check is worse than no verdict.
+watch_check() {
+    local pr="$1" name="$2" tries=0 prev="" checks rows count bucket
+    echo "watching check \"$name\" on pull request $pr  https://github.com/$repo/pull/$pr"
+    while :; do
+        # `gh pr checks` reports a red check by exiting non-zero, and refuses outright
+        # in the window before the head commit carries any check at all. So its exit is
+        # no signal, and its output is read for what it is: a JSON array is an answer,
+        # anything else is nothing to go on this round.
+        checks=$(gh pr checks "$pr" -R "$repo" --json name,bucket 2>&1) || :
+        if rows=$(jq -ec --arg n "$name" 'map(select(.name == $n))' <<< "$checks" 2>/dev/null); then
+            count=$(jq 'length' <<< "$rows")
+            if [ "$count" -gt 1 ]; then
+                echo "✗ \"$name\" names $count checks on pull request $pr — they cannot be told apart:" >&2
+                jq -r '.[] | "    \(.name)  \(.bucket)"' <<< "$rows" >&2
+                exit 1
+            fi
+            if [ "$count" = 1 ]; then
+                bucket=$(jq -r '.[0].bucket' <<< "$rows")
+                if [ "$bucket" != pending ]; then
+                    echo "check \"$name\" on pull request $pr: $bucket"
+                    # A re-run settles the check again under the same name, which this
+                    # watch has already left. Start another one, as `run` asks.
+                    case "$bucket" in pass | skipping) return 0 ;; *) return 1 ;; esac
+                fi
+                tries=0
+                sleep "$POLL_SECONDS"
+                continue
+            fi
+        else
+            [ "$checks" != "$prev" ] && echo "checks not read: ${checks:-no output}" >&2
+            prev=$checks
+        fi
+        # Not there yet — either the checks could not be read, or none of them carries
+        # this name. Both are the same wait as a run that has not registered, and both
+        # end the same way: a name that never appears is a typo, not a slow check.
+        tries=$((tries + 1))
+        [ "$tries" -ge "$APPEAR_LIMIT" ] &&
+            die "no check named \"$name\" on pull request $pr after $((APPEAR_LIMIT * APPEAR_SECONDS))s"
+        [ "$tries" = 1 ] && echo "waiting for check \"$name\" to appear on pull request $pr" >&2
+        sleep "$APPEAR_SECONDS"
+    done
+}
+
 case "$mode" in
     pr)
         [ $# -eq 1 ] || die "usage: watch-ci.sh pr <number>"
         # A pull request is not a run, so there is no id to hand back.
         [ -z "$print_id" ] || die "--print-id takes a run, not a pull request"
         watch_pr "$1"
+        ;;
+    check)
+        [ $# -eq 2 ] || die "usage: watch-ci.sh check <pr> <name>"
+        # A check is not a run either, and the run behind it is not what was asked for.
+        [ -z "$print_id" ] || die "--print-id takes a run, not a check"
+        watch_check "$1" "$2"
         ;;
     main)
         [ $# -eq 1 ] || die "usage: watch-ci.sh main <sha>"

@@ -550,6 +550,7 @@ const ui = {
   "face.terminal": "Terminal",
   "face.splitOut": "Open in a separate window",
   "face.merge": "Back to one window",
+  "face.opening": "Opening the terminal in a window of its own…",
   // The one control a pane has: it takes the place away, and the terminal in it with it
   // (`app/src/shell/TerminalPane.tsx`). It asks first — nothing brings the frame back, and what a
   // program exits with is on the screen to be read (`AMB-T-3666`).
@@ -792,6 +793,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   wake_no_config: "Amenbo could not find its own files.",
   wake_not_kept: "The choice could not be saved.",
   window_failed: "That window could not be opened: {reason}",
+  talk_blank: "That window opened but never drew anything, so the terminal was put back in this one.",
 
   // The sentences the GUI shows a person, named one at a time (`AMB-D-413`). Which refusals get a code of
   // their own was settled by measuring what the front end actually surfaces: a form the screen already

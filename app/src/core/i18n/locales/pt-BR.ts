@@ -520,6 +520,7 @@ export const ptBR: Translation = {
     "face.terminal": "Terminal",
     "face.splitOut": "Abrir em uma janela separada",
     "face.merge": "Voltar para uma única janela",
+    "face.opening": "Abrindo o terminal em uma janela própria…",
     "face.drop": "Remover este painel",
     "face.dropConfirm": "Remover este painel? O terminal nele é encerrado, e o lugar não volta na próxima execução.",
     "face.turnTitle": "Amenbo — é a sua vez",
@@ -718,6 +719,7 @@ export const ptBR: Translation = {
     wake_no_config: "O Amenbo não encontrou os próprios arquivos.",
     wake_not_kept: "Não foi possível salvar a escolha.",
     window_failed: "Não foi possível abrir essa janela: {reason}",
+    talk_blank: "Aquela janela abriu, mas nunca desenhou nada, então o terminal voltou para esta.",
 
     already_reserved: "{ref} não está em “A fazer”, então não dá para reservar — outra sessão pode já estar com ela.",
     not_ready: "{ref} ainda não dá para reservar: {reasons}",

@@ -205,6 +205,7 @@ pub fn run() {
     // two windows hand the arrangement between themselves through it, and none of it is kept
     // (`frames`).
     .manage(frames::TalkFace::default())
+    .manage(windows::TalkDrawn::default())
     .menu(menu::build)
     .on_menu_event(|app, event| {
       if event.id() == menu::CHECK_UPDATES_ID {
@@ -482,6 +483,8 @@ pub fn run() {
       pty::pty_resize,
       windows::talk_open,
       windows::talk_close,
+      windows::talk_ready,
+      windows::talk_raise,
     ])
     .run(context)
     .expect("error while running tauri application");

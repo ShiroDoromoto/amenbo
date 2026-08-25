@@ -498,6 +498,7 @@ export const nl: Translation = {
     "face.terminal": "Terminal",
     "face.splitOut": "In een apart venster openen",
     "face.merge": "Terug naar één venster",
+    "face.opening": "De terminal wordt in een eigen venster geopend…",
     "face.drop": "Dit deelvenster verwijderen",
     "face.dropConfirm": "Dit deelvenster verwijderen? De terminal erin wordt beëindigd en de plek komt bij de volgende start niet terug.",
     "face.turnTitle": "Amenbo — jij bent",
@@ -689,6 +690,7 @@ export const nl: Translation = {
     wake_no_config: "Amenbo kon zijn eigen bestanden niet vinden.",
     wake_not_kept: "De keuze kon niet opgeslagen worden.",
     window_failed: "Dat venster kon niet worden geopend: {reason}",
+    talk_blank: "Dat venster ging open maar tekende niets, dus de terminal staat weer in dit venster.",
 
     already_reserved:
       "{ref} staat niet op “Te doen” en kan dus niet worden opgepakt — een andere sessie heeft hem misschien al.",

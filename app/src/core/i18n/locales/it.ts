@@ -519,6 +519,7 @@ export const it: Translation = {
     "face.terminal": "Terminale",
     "face.splitOut": "Apri in una finestra separata",
     "face.merge": "Torna a una sola finestra",
+    "face.opening": "Apertura del terminale in una finestra propria…",
     "face.drop": "Rimuovi questo riquadro",
     "face.dropConfirm": "Rimuovere questo riquadro? Il terminale al suo interno termina e il posto non torna al prossimo avvio.",
     "face.turnTitle": "Amenbo — tocca a te",
@@ -717,6 +718,7 @@ export const it: Translation = {
     wake_no_config: "Amenbo non ha trovato i propri file.",
     wake_not_kept: "Non è stato possibile salvare la scelta.",
     window_failed: "Non è stato possibile aprire quella finestra: {reason}",
+    talk_blank: "Quella finestra si è aperta senza disegnare nulla, quindi il terminale è tornato in questa.",
 
     already_reserved:
       "{ref} non è in “Da fare”, quindi non si può prendere in carico — forse un'altra sessione la tiene già.",

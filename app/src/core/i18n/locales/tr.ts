@@ -498,6 +498,7 @@ export const tr: Translation = {
     "face.terminal": "Terminal",
     "face.splitOut": "Ayrı pencerede aç",
     "face.merge": "Tek pencereye dön",
+    "face.opening": "Terminal kendi penceresinde açılıyor…",
     "face.drop": "Bu bölmeyi kaldır",
     "face.dropConfirm": "Bu bölme kaldırılsın mı? İçindeki terminal sonlandırılır ve bu yer bir dahaki açılışta geri gelmez.",
     "face.turnTitle": "Amenbo — sıra sizde",
@@ -689,6 +690,7 @@ export const tr: Translation = {
     wake_no_config: "Amenbo kendi dosyalarını bulamadı.",
     wake_not_kept: "Seçim kaydedilemedi.",
     window_failed: "O pencere açılamadı: {reason}",
+    talk_blank: "O pencere açıldı ama içine hiçbir şey çizilmedi; terminal yeniden bu pencereye alındı.",
 
     already_reserved:
       "{ref} “Yapılacak” durumunda değil, bu yüzden üstlenilemez — başka bir oturum onu çoktan almış olabilir.",

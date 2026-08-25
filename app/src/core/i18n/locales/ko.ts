@@ -497,6 +497,7 @@ export const ko: Translation = {
     "face.terminal": "터미널",
     "face.splitOut": "별도 창으로 열기",
     "face.merge": "하나의 창으로 되돌리기",
+    "face.opening": "터미널을 별도의 창에서 여는 중…",
     "face.drop": "이 페인 지우기",
     "face.dropConfirm": "이 페인을 지울까요? 안에서 돌던 터미널은 끝나고, 다음에 켜도 이 자리는 돌아오지 않습니다.",
     "face.turnTitle": "Amenbo — 당신 차례입니다",
@@ -687,6 +688,7 @@ export const ko: Translation = {
     wake_no_config: "Amenbo가 자신의 파일을 찾지 못했습니다.",
     wake_not_kept: "선택한 내용을 저장하지 못했습니다.",
     window_failed: "그 창을 열 수 없습니다: {reason}",
+    talk_blank: "그 창은 열렸지만 아무것도 그려지지 않아, 터미널을 이 창으로 되돌렸습니다.",
 
     already_reserved: "{ref}은(는) ‘할 일’이 아니어서 맡을 수 없습니다. 다른 세션이 이미 진행 중일 수 있습니다.",
     not_ready: "{ref}은(는) 아직 맡을 수 없습니다: {reasons}",

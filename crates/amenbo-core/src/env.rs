@@ -84,12 +84,6 @@ pub fn mcp_dirs() -> Option<String> {
     var(MCP_DIRS_VAR)
 }
 
-/// `AMENBO_PROJECT_DIR` — where the search for the `.amenbo` pointer starts, so the GUI and friends
-/// can name a directory other than the CWD.
-pub fn project_dir() -> Option<OsString> {
-    var_os("AMENBO_PROJECT_DIR")
-}
-
 /// `AMENBO_HW_ID` — override the machine UUID, to pose as a different machine during development.
 pub fn hw_id() -> Option<OsString> {
     var_os("AMENBO_HW_ID")

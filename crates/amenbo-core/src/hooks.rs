@@ -303,8 +303,11 @@ pub fn guidance_line(slot: HookSlot, cmd: &str) -> String {
 /// of git rather than assembled from `.git/hooks`, because that guess is wrong in the two cases that
 /// matter: `core.hooksPath` moves the directory wholesale, and in a linked worktree `.git` is a file.
 /// `--git-path hooks` honours both and answers relative to `dir`.
+///
+/// A machine with no runnable git ([`crate::sys::git`]) answers `None` too: with no way to ask where the
+/// hooks live, there are no hooks to have, which is the same nothing a folder outside a repository gets.
 pub fn hooks_dir(dir: &Path) -> Option<PathBuf> {
-    let out = crate::sys::command("git")
+    let out = crate::sys::git()?
         .current_dir(dir)
         .args(["rev-parse", "--git-path", "hooks"])
         .output()
@@ -363,10 +366,11 @@ fn worktree_root(dir: &Path) -> Option<PathBuf> {
     std::fs::canonicalize(root).ok()
 }
 
-/// The first line of a git command's output, or `None` when git has nothing to say (not a repository, or
-/// the call failed). Trimmed, because git terminates its answers with a newline.
+/// The first line of a git command's output, or `None` when git has nothing to say (not a repository, no
+/// runnable git on the machine, or the call failed). Trimmed, because git terminates its answers with a
+/// newline.
 fn git_line(dir: &Path, args: &[&str]) -> Option<String> {
-    let out = crate::sys::command("git").current_dir(dir).args(args).output().ok()?;
+    let out = crate::sys::git()?.current_dir(dir).args(args).output().ok()?;
     if !out.status.success() {
         return None;
     }
@@ -376,9 +380,10 @@ fn git_line(dir: &Path, args: &[&str]) -> Option<String> {
 
 /// Whether git already ignores `path`. `check-ignore` answers by exit code: 0 is ignored, 1 is not, and
 /// anything else is an error we read as "not ignored" — guessing "ignored" there would hide a shared write.
+/// No runnable git is one of those errors, and reads the same way.
 fn is_ignored(dir: &Path, path: &Path) -> bool {
-    crate::sys::command("git")
-        .current_dir(dir)
+    let Some(mut git) = crate::sys::git() else { return false };
+    git.current_dir(dir)
         .args(["check-ignore", "-q"])
         .arg(path)
         .status()
@@ -393,10 +398,11 @@ fn is_ignored(dir: &Path, path: &Path) -> bool {
 /// change, so it would be leaving Amenbo's lines in the user's versioned tree to be committed by mistake.
 /// A hook under `.git/hooks` is never tracked (it is inside the git dir, outside the working tree), so this
 /// only ever fires for a hook a `core.hooksPath` puts in the tree — `.githooks`, `.husky` — that the
-/// repository has committed.
+/// repository has committed. With no runnable git nothing is tracked, for the same reason nothing is
+/// ignored: there is no index to be in.
 fn is_tracked(dir: &Path, path: &Path) -> bool {
-    crate::sys::command("git")
-        .current_dir(dir)
+    let Some(mut git) = crate::sys::git() else { return false };
+    git.current_dir(dir)
         .args(["ls-files", "--error-unmatch"])
         .arg(path)
         .stdout(std::process::Stdio::null())

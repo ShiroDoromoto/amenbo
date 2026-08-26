@@ -88,10 +88,14 @@
 
 /* ---------- board ---------- */
 .board { display: flex; gap: var(--s-4); padding: var(--s-5); align-items: flex-start; overflow-x: auto; flex: 1; }
+/* Every toolbar row folds rather than crushes. A row that has lost width — any of them, once the detail
+   pane opens beside it — would otherwise squeeze whatever is still shrinkable until it breaks a
+   character at a time. The label that names the chips beside it is a name, so it holds its line too. */
 .board__toolbar {
-  display: flex; align-items: center; gap: var(--s-3);
+  display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; row-gap: var(--s-2);
   padding: var(--s-3) var(--s-5); border-bottom: 1px solid var(--c-border); background: var(--c-surface-2);
 }
+.board__toolbar > .faint { white-space: nowrap; }
 .board__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); margin-right: var(--s-3); }
 .viewtabs { display: inline-flex; background: var(--c-surface-sunken); border-radius: var(--r-md); padding: 2px; }
 .viewtab { border: none; background: none; padding: var(--s-1) var(--s-3); border-radius: var(--r-sm); font-size: var(--fs-sm); color: var(--c-text-muted); }
@@ -105,7 +109,11 @@
 .decisionsbtn__count { font-size: var(--fs-xs); color: var(--c-text-faint); background: var(--c-surface-sunken); border-radius: 10px; padding: 0 var(--s-2); min-width: 18px; text-align: center; }
 .decisionsbtn--active .decisionsbtn__count { background: var(--c-surface); }
 .filterbar { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-2) var(--s-5); border-bottom: 1px solid var(--c-border); flex-wrap: wrap; }
-.filterchip { font-size: var(--fs-xs); border: 1px solid var(--c-border); background: var(--c-surface); border-radius: 20px; padding: 2px var(--s-3); color: var(--c-text-muted); }
+/* A chip is a name, so it is never squeezed: it keeps its own size (`flex: none`) and its label stays on
+   one line. Left to shrink, a chip in a row that has lost width — the board's group row once the detail
+   pane opens beside it — breaks its label a character at a time and reads as nothing. The rows that hold
+   chips wrap instead. */
+.filterchip { font-size: var(--fs-xs); border: 1px solid var(--c-border); background: var(--c-surface); border-radius: 20px; padding: 2px var(--s-3); color: var(--c-text-muted); flex: none; white-space: nowrap; }
 .filterchip--on { border-color: var(--c-accent); color: var(--c-accent-text); background: var(--c-accent-weak); }
 /* The filters, opened under the bar. One axis per line: a row of values is as wide as it needs to be,
    and axes read down the panel rather than running into one another. */
@@ -194,7 +202,11 @@
   font-size: var(--fs-xs); color: var(--c-text); background: var(--c-surface);
   border: 1px solid var(--c-border-strong); border-radius: var(--r-sm); padding: 0 2px; cursor: pointer;
 }
-.groupby { display: flex; align-items: center; gap: var(--s-2); }
+/* The axis the board is grouped by. Its row is what the detail pane takes width from (the toolbar above
+   spans the pane, this does not), so it folds onto a second line rather than crushing the buttons — the
+   heading beside them holds its line for the same reason. */
+.groupby { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.groupby > .faint { flex: none; white-space: nowrap; }
 
 /* The chip a task's ref is shown in; clicking it copies that same ref. */
 .idchip {
@@ -563,11 +575,9 @@ button.feed__target:hover { color: var(--c-accent); }
 .cmdcat__example { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--c-text-faint); }
 
 /* ---------- search (where a word is written) ---------- */
-/* This toolbar has to survive the detail pane opening beside it, which takes a third of the width away.
-   It wraps to a second row rather than squeezing: every control keeps its size, and the note — the one
-   thing on the row nobody presses — is what gives way first. */
-.board__toolbar--search { flex-wrap: wrap; row-gap: var(--s-2); }
-.board__toolbar--search .filterchip, .board__toolbar--search .btn { flex: none; }
+/* Every control on this row keeps its size, and the note — the one thing on the row nobody presses —
+   is what gives way first. The wrapping itself is the toolbar's own (above). */
+.board__toolbar--search .btn { flex: none; }
 .srch__input { flex: 1 1 220px; min-width: 140px; max-width: 320px; margin: 0; font-size: var(--fs-md); }
 .srch__filter { flex: 1 1 140px; min-width: 100px; max-width: 200px; margin: 0; font-size: var(--fs-sm); font-family: var(--font-mono); }
 .srch__label { flex: none; font-size: var(--fs-xs); }

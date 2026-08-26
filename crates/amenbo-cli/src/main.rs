@@ -760,8 +760,8 @@ fn pointer_store_guard_target(cmd: &Option<Command>) -> Option<std::path::PathBu
     (!out_of_reach).then(|| std::env::current_dir().ok()).flatten()
 }
 
-/// Is there a `.amenbo` pointer in the current directory (or above it)? An explicit AMENBO_HOME /
-/// AMENBO_PROJECT_DIR is the caller's business to allow for; this is nothing but the pointer search.
+/// Is there a `.amenbo` pointer in the current directory (or above it)? An explicit AMENBO_HOME is the
+/// caller's business to allow for; this is nothing but the pointer search.
 fn pointer_present() -> bool {
     std::env::current_dir()
         .ok()
@@ -780,14 +780,16 @@ fn bound_dir_is_under_git() -> bool {
         .is_some_and(|(dir, _)| worktree::under_git(&dir))
 }
 
-/// Can this invocation reach a store at all — is one named, by a pointer or by env (AMENBO_HOME /
-/// AMENBO_PROJECT_DIR)? If not, `Store::open()` would quietly create a new one, so "may we open?" is asked
-/// in exactly one place: both the exec guard and the faces that answer without opening (version/update)
-/// consult this.
+/// Can this invocation reach a store at all — is one named, by a pointer or by `AMENBO_HOME`? If not,
+/// `Store::open()` would quietly create a new one, so "may we open?" is asked in exactly one place: both the
+/// exec guard and the faces that answer without opening (version/update) consult this.
+///
+/// `AMENBO_PROJECT_DIR` used to count here too, back when it named where the pointer search began and the
+/// `.amenbo` it found chose a store (`AMB-D-155` retired that: a pointer names a project, never a store).
+/// Once it stopped naming anywhere, a run that set it was let past this guard without anything being named
+/// at all — so it is gone rather than kept as a word that only widens the door.
 fn store_reachable() -> bool {
-    amenbo_core::env::home().is_some()
-        || amenbo_core::env::project_dir().is_some()
-        || pointer_present()
+    amenbo_core::env::home().is_some() || pointer_present()
 }
 
 /// Nudge a Linux user off an older *system-wide* install. The retired `.deb`/`.rpm` left the GUI and CLI
@@ -890,9 +892,8 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
 
     // Exec guard (strict). Reaching here means the command neither places the marker (init) nor removes it
     // (unbind), and is not one of the faces that answer without opening a store (version/update, handled
-    // above). In a bare directory — no pointer (.amenbo), no AMENBO_HOME/AMENBO_PROJECT_DIR — do not quietly
-    // create the single store; tell the user to run init. bind is the exception (it is what places a
-    // pointer). `agent` still requires a pointer: the AI's entry point is stopped by location, on purpose.
+    // above). In a bare directory — no pointer (.amenbo), no AMENBO_HOME — do not quietly create the single
+    // store; tell the user to run init. bind is the exception (it is what places a pointer). `agent` still requires a pointer: the AI's entry point is stopped by location, on purpose.
     // `--project <name or id>` is no side door around this: it names which project a command works in, and
     // still needs a location that reaches a store (this guard runs whether or not it was passed).
     if requires_pointer(&cli.command) && !store_reachable() {

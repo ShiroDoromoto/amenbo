@@ -123,17 +123,16 @@ fn a_task_added_in_a_bound_folder_lands_there_without_naming_it() {
     );
 }
 
-/// Strict execution guard: in a bare directory with no `.amenbo` pointer and no AMENBO_HOME /
-/// AMENBO_PROJECT_DIR, the CLI does not quietly create a default root store — it stops and tells you to
-/// init. It covers every surface that opens a store (here, status); version and update open none, an
-/// exception pinned by `version_and_update_answer_without_a_pointer`. app-data is never touched.
+/// Strict execution guard: in a bare directory with no `.amenbo` pointer and no AMENBO_HOME, the CLI does
+/// not quietly create a default root store — it stops and tells you to init. It covers every surface that
+/// opens a store (here, status); version and update open none, an exception pinned by
+/// `version_and_update_answer_without_a_pointer`. app-data is never touched.
 #[test]
 fn execution_guard_requires_pointer_when_unbound() {
     let dir = temp_home();
     std::fs::create_dir_all(&dir).unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
         .env_remove("AMENBO_HOME")
-        .env_remove("AMENBO_PROJECT_DIR")
         .env("AMENBO_UPDATE_CHECK", "0") // no update check (hermetic)
         .current_dir(&dir)
         // Declare the facet too: this watches the human-side guard, and as `ai` the run would instead trip
@@ -157,7 +156,6 @@ fn execution_guard_requires_pointer_when_unbound() {
     std::fs::create_dir_all(&home).unwrap();
     let out2 = Command::new(env!("CARGO_BIN_EXE_amenbo"))
         .env("AMENBO_HOME", &home)
-        .env_remove("AMENBO_PROJECT_DIR")
         .env("AMENBO_UPDATE_CHECK", "0") // no update check (hermetic)
         .current_dir(&dir)
         // As above (an AI would be cut off for want of a binding — a different guard).

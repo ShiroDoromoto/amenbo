@@ -352,7 +352,6 @@ fn version_and_update_answer_without_a_pointer() {
     let run = |args: &[&str]| {
         let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
             .env_remove("AMENBO_HOME")
-            .env_remove("AMENBO_PROJECT_DIR")
             .env("AMENBO_UPDATE_CHECK", "0") // no upstream lookup (hermetic)
             .env("AMENBO_UPDATE_JSON_URL", "http://127.0.0.1:1/latest.json") // a shipped build's road, without the endpoint
             .current_dir(&dir)
@@ -391,7 +390,6 @@ fn update_apply_declines_gracefully_without_manifest() {
     let run = |args: &[&str], check_off: bool| {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_amenbo"));
         cmd.env_remove("AMENBO_HOME")
-            .env_remove("AMENBO_PROJECT_DIR")
             // A test binary is unstamped, which is its own refusal; the override puts it on the road a
             // shipped build takes, so what is exercised here is the unreachable manifest and nothing else.
             .env("AMENBO_UPDATE_JSON_URL", "http://127.0.0.1:1/latest.json")
@@ -428,7 +426,6 @@ fn an_unstamped_build_declines_to_check_for_updates() {
     let run = |args: &[&str]| {
         let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
             .env_remove("AMENBO_HOME")
-            .env_remove("AMENBO_PROJECT_DIR")
             // Nothing is set here on purpose: no kill switch, no override.
             .env_remove("AMENBO_UPDATE_CHECK")
             .env_remove("AMENBO_UPDATE_JSON_URL")
@@ -474,7 +471,6 @@ fn update_rollback_declines_gracefully_without_a_retained_binary() {
     let run = |args: &[&str]| {
         let out = Command::new(env!("CARGO_BIN_EXE_amenbo"))
             .env_remove("AMENBO_HOME")
-            .env_remove("AMENBO_PROJECT_DIR")
             .env("AMENBO_UPDATE_CHECK", "0")
             .current_dir(&dir)
             .args(with_defaults(args, "ai"))

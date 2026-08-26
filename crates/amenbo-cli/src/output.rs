@@ -156,9 +156,8 @@ impl CliError {
     }
 
     /// Execution guard: an operating command was run in a bare directory with no pointer (`.amenbo`)
-    /// and no `AMENBO_HOME` / `AMENBO_PROJECT_DIR`. Rather than silently creating a store, point the
-    /// user at `amenbo init`. The commands that create or name the pointer (init / join / bind) are the
-    /// only exceptions.
+    /// and no `AMENBO_HOME`. Rather than silently creating a store, point the user at `amenbo init`. The
+    /// commands that create or name the pointer (init / join / bind) are the only exceptions.
     /// What we hand back is not an explanation of the machinery but a **fork in the road** — the two
     /// things they can do (init a new project / bind to an existing one) — plus, when
     /// `candidate_projects` is non-empty, the projects that actually exist on this machine. Enumerating

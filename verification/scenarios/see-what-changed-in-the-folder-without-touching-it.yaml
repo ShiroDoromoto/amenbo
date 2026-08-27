@@ -16,13 +16,17 @@
 # that Amenbo can redraw what Amenbo just did, which nobody doubted.
 #
 # ── The ignored file, and why it is the half worth defending ─────────────────────────────────────
-# The section is laid over the same pruned walk the tree is, and the pruning follows the folder's own
-# `.gitignore`. That is not tidiness: a build directory rewrites thousands of files a second, and a
-# section that showed them would be a section nobody could read, in exactly the folders people work
-# in. So the road writes a second file that the folder has said to ignore, and reads that the section
-# did **not** move for it.
+# The watch behind the section follows the folder's own `.gitignore`. That is not tidiness: a build
+# directory rewrites thousands of files a second, and a section that showed them would be a section
+# nobody could read, in exactly the folders people work in. So the road writes a second file that the
+# folder has said to ignore, and reads that the section did **not** move for it.
 #
-# The world writes the `.gitignore` before anything else, because what is pruned is decided as the
+# **The tree is where the same file is expected to appear.** `.gitignore` says what git does not
+# record, not what a reader may not look at — the files a person goes to after an agent has been at
+# work, `.env` and `.amenbo`, are ignored in most repositories. So the two halves of this road are
+# read against each other: out of what changed lately, and down there in the tree.
+#
+# The world writes the `.gitignore` before anything else, because what is left out is decided as the
 # walk runs and a rule that arrived later would be a rule for the next walk.
 id: see-what-changed-in-the-folder-without-touching-it
 title: A file written outside Amenbo shows up in what changed lately, and one the folder ignores does not
@@ -30,8 +34,8 @@ description: >
   Open the terminal face on a project whose folder is being watched, then leave Amenbo and put a file
   in that folder from outside. Come back to a screen nothing was pressed on: the file is in the
   section for what changed lately. Write a second file the folder's own ignore rules cover, and that
-  section does not move — the watch is laid over the same pruned walk the tree is, so what a build
-  directory does every second never reaches it.
+  section does not move — what a build directory does every second never reaches it — while the tree
+  below still shows the folder it is in.
 
 given:
   - type: action
@@ -126,7 +130,8 @@ steps_gui:
       section: changed
       present: false
 
-  # The pruning reaches the tree by the same walk, so the ignored file is not down there either.
+  # The tree is the other half of the same sentence: the folder the section left out is down there,
+  # because being ignored by git is not being hidden from a reader.
   - type: action
     domain: files
     op: tree
@@ -139,4 +144,3 @@ steps_gui:
     with:
       name: compost
       section: tree
-      present: false

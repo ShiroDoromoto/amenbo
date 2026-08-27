@@ -511,6 +511,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* One that has been opened. It stays on the list — what was pointed at was pointed at — and says
    for itself that it has been seen (`app/src/files/pointed.ts`). */
 .files__file--read .files__name { color: var(--c-text-muted); }
+/* A name the repository's ignore rules cover. It is on the list because what git does not record is
+   still something somebody wrote, and it is faint because that is the whole of what the mark says
+   (`AMB-D-786`). Not the muted colour above: that one means a file has been read. */
+.files__file--ignored, .files__dir--ignored { opacity: 0.55; }
+/* The folder a file dragged in from the desktop would land in. The host says where the pointer is
+   and nothing more, so this highlight is the panel's own answer, redrawn on every move it is told
+   about (`app/src/core/hostDrop.ts`). */
+.files__into, .files__row--into {
+  outline: 1px solid var(--c-accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
 .files__dir::before { content: "▸ "; color: var(--c-text-muted); }
 .files__dir[aria-expanded="true"]::before { content: "▾ "; }
 .files__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -10,6 +10,9 @@ mod blobproto;
 mod commands;
 mod diag;
 mod dto;
+/// Whether a drop was a copy or a move: the keys held as it landed, read off the keyboard because no
+/// operating system puts them on the drag event (`AMB-T-3740`).
+mod dropped;
 /// What a file's bytes say, and how to say it back the same way: the encoding a file is really in,
 /// read off a mark, the standard library, or a guess — because reading everything as UTF-8 wrote a
 /// `?` over every byte it could not read (`AMB-D-773`).
@@ -22,6 +25,9 @@ mod fileproto;
 /// What a folder holds, which the door above refuses to say: the names inside it, what changed in it
 /// lately, and what one file has to show. Rooted at a folder the project is bound to (`AMB-T-3602`).
 mod folder;
+/// What git says about that folder, for the colour of a tree row and for nothing else: one status
+/// per bound folder, and the front git puts on every path taken back off (`AMB-D-774`).
+mod folder_git;
 /// Being told what changed in that folder instead of going to look: one watch where the OS covers a
 /// tree with one and a watch per pruned folder where it does not (`AMB-D-779`), and a scan to say
 /// what actually moved (`AMB-T-3604`).
@@ -501,9 +507,11 @@ pub fn run() {
       windows::show_ref,
       windows::show_pane,
       folder::folder_entries,
+      folder_git::folder_git_status,
       folder::folder_read,
       folder::folder_open_file,
       folder::folder_reveal_file,
+      dropped::drop_effect,
       open_with::folder_open_with,
       open_with::folder_open_file_with,
       folder_watch::folder_watch,

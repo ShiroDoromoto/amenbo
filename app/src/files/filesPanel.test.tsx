@@ -27,7 +27,7 @@ const aFile = (about: Partial<FolderFileDto> = {}): FolderFileDto => ({
 
 const hoisted = vi.hoisted(() => ({
   asked: [] as string[],
-  entries: {} as Record<string, { name: string; isDir: boolean }[]>,
+  entries: {} as Record<string, FolderEntryDto[]>,
   // Spelled out rather than built by `aFile`: `vi.hoisted` runs before this module's own bindings
   // exist. Every test replaces it in `beforeEach` anyway.
   file: { truncated: false, bom: false, lineEnding: "lf", clean: true } as FolderFileDto,
@@ -38,6 +38,19 @@ const hoisted = vi.hoisted(() => ({
   apps: [] as FolderAppDto[],
   /** The folders the project is bound to. Empty is a project nobody has bound one to yet. */
   bound: [] as { path: string; exists: boolean }[],
+  /** The host's side of the drag-and-drop subscription (`../core/hostDrop`). */
+  dragging: null as null | ((event: { payload: unknown }) => void),
+}));
+
+// A file dragged in from the desktop reaches the application, and the page hears about it through
+// this one event (`AMB-D-775`). It is the host's, so the test plays the host.
+vi.mock("@tauri-apps/api/webview", () => ({
+  getCurrentWebview: () => ({
+    onDragDropEvent: async (take: (event: { payload: unknown }) => void) => {
+      hoisted.dragging = take;
+      return () => { hoisted.dragging = null; };
+    },
+  }),
 }));
 
 vi.mock("./folder", () => ({
@@ -145,6 +158,9 @@ beforeEach(() => {
     gone: false,
   };
   hoisted.bound = [{ path: ROOT, exists: true }];
+  hoisted.dragging = null;
+  // Inside Tauri as far as the panel is concerned; without it there is no host to hear a drop from.
+  (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = {};
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -153,6 +169,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  delete (window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
 });
 
 describe("the file face", () => {
@@ -347,8 +364,11 @@ describe("the file face", () => {
   });
 
   it("leaves the tree folded, and opens it one level at a time", async () => {
-    hoisted.entries[""] = [{ name: "src", isDir: true }, { name: "README.md", isDir: false }];
-    hoisted.entries["src"] = [{ name: "main.rs", isDir: false }];
+    hoisted.entries[""] = [
+      { name: "src", isDir: true, ignored: false },
+      { name: "README.md", isDir: false, ignored: false },
+    ];
+    hoisted.entries["src"] = [{ name: "main.rs", isDir: false, ignored: false }];
     await draw();
     // Folded: nothing has been read about the folder itself yet.
     expect(hoisted.asked.filter((one) => one.startsWith("entries:"))).toEqual([]);
@@ -366,6 +386,49 @@ describe("the file face", () => {
     expect(container.textContent).toContain("main.rs");
   });
 
+  // The host says where the pointer is and nothing else, so which folder a file would land in is
+  // the panel's own answer — and the answer a reader can see before they let go (`AMB-D-775`).
+  it("marks the folder a file dragged in from the desktop would land in", async () => {
+    hoisted.entries[""] = [
+      { name: "src", isDir: true, ignored: false },
+      { name: "README.md", isDir: false, ignored: false },
+    ];
+    hoisted.entries["src"] = [{ name: "main.rs", isDir: false, ignored: false }];
+    await draw();
+    await click(button(t("files.tree")));
+    await settle();
+    await click(button("src"));
+    await settle();
+
+    // jsdom lays nothing out, so what is under the point is stated. What is being read is the walk
+    // up from it: a file row belongs to the folder holding it, so hanging over `main.rs` is hanging
+    // over `src` — the same folder as hanging over its name.
+    // Each move is at a point of its own: a move that repeats the last one is dropped on the way in,
+    // because macOS sends the same point twice while the drag stands still (`../core/hostDrop`).
+    let step = 0;
+    const over = (el: Element | null | undefined) => act(async () => {
+      (document as unknown as { elementFromPoint: () => Element | null }).elementFromPoint =
+        () => el ?? null;
+      step += 1;
+      hoisted.dragging?.({ payload: { type: "over", position: { x: step, y: 1 } } });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    const marked = () => container.querySelector(".files__into")?.getAttribute("data-into");
+
+    await over(button("main.rs"));
+    expect(marked()).toBe("src");
+
+    // A row belonging to no folder in the tree belongs to the tree, which is the root itself.
+    await over(button("README.md"));
+    expect(marked()).toBeUndefined();
+    expect(container.querySelector(".files__row--into")?.getAttribute("data-into")).toBe("");
+
+    // Nothing under the pointer is nothing marked: a highlight left standing would name a folder
+    // the reader had already dragged away from.
+    await over(null);
+    expect(container.querySelector(".files__into, .files__row--into")).toBeNull();
+  });
+
   it("draws a Markdown file as Markdown", async () => {
     hoisted.file = aFile({ text: "# A heading" });
     await draw();
@@ -375,8 +438,27 @@ describe("the file face", () => {
     expect(container.querySelector("h1")?.textContent).toBe("A heading");
   });
 
+  it("draws a name the repository ignores, and draws it faintly", async () => {
+    hoisted.entries[""] = [
+      { name: "src", isDir: true, ignored: false },
+      { name: ".env", isDir: false, ignored: true },
+      { name: ".next", isDir: true, ignored: true },
+    ];
+    await draw();
+    await click(button(t("files.tree")));
+    await settle();
+    // On the list, because what git does not record is still somebody's file — and faint, because
+    // that is the whole of what being ignored says about it (`AMB-D-786`).
+    expect(container.textContent).toContain(".env");
+    expect(container.querySelector(".files__file--ignored")?.textContent).toContain(".env");
+    expect(container.querySelector(".files__dir--ignored")?.textContent).toContain(".next");
+    // The one nothing ignores is drawn as it always was.
+    expect(container.querySelector(".files__dir:not(.files__dir--ignored)")?.textContent)
+      .toContain("src");
+  });
+
   it("draws text that is not Markdown as it was written", async () => {
-    hoisted.entries[""] = [{ name: "run.sh", isDir: false }];
+    hoisted.entries[""] = [{ name: "run.sh", isDir: false, ignored: false }];
     hoisted.file = aFile({ text: "#!/bin/sh\necho hi" });
     await draw();
     await click(button(t("files.tree")));

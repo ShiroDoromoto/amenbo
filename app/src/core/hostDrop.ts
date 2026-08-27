@@ -149,10 +149,21 @@ export function scrollAtEdge(box: Element, y: number): void {
  *
  * Outside Tauri there is no host to hear from and nothing is subscribed: a browser `npm run dev`
  * draws the same panel and simply never sees a drop.
+ *
+ * **A host that is there but cannot be reached is the same answer.** Asking the API which webview
+ * this is throws where there is no window behind it, and every face that watches for a drop watches
+ * from inside its own render — so a throw here is one nobody catches, on a road whose whole subject
+ * is a convenience. Not hearing about drops is what a page with no host does anyway.
  */
 export async function watchHostDrop(watch: HostDropWatch): Promise<() => void> {
   if (!inTauri()) return () => {};
-  const { getCurrentWebview } = await import("@tauri-apps/api/webview");
+  let getCurrentWebview: typeof import("@tauri-apps/api/webview").getCurrentWebview;
+  try {
+    ({ getCurrentWebview } = await import("@tauri-apps/api/webview"));
+    getCurrentWebview();
+  } catch {
+    return () => {};
+  }
   // macOS repeats the same point twice while the drag stands still, so the last one is remembered
   // and a repeat is dropped: a highlight redrawn from an identical move is work nobody asked for
   // (`AMB-T-3740`).

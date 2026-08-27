@@ -108,6 +108,18 @@ pub struct DecisionDimensionAssignmentDto {
     pub(crate) value_id: i64,
 }
 
+/// The per-decision assigned value for one project × dimension (`decisionId`→`valueId`) — the decision
+/// side of [`DimensionTaskValueDto`]. The decisions tab uses it to narrow its list by classification.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct DimensionDecisionValueDto {
+    #[ts(type = "number")]
+    pub(crate) decision_id: i64,
+    #[ts(type = "number")]
+    pub(crate) value_id: i64,
+}
+
 /// The per-task assigned value for one project × dimension (`taskId`→`valueId`). The board uses it
 /// to bundle tasks by value on the chosen dimension (browsing/grouping).
 #[derive(Serialize, TS)]

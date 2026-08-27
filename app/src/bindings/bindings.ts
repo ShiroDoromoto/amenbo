@@ -270,6 +270,12 @@ export type DecisionRefDto = { id: number,
 name: string | null, ref?: string, };
 
 /**
+ * The per-decision assigned value for one project × dimension (`decisionId`→`valueId`) — the decision
+ * side of [`DimensionTaskValueDto`]. The decisions tab uses it to narrow its list by classification.
+ */
+export type DimensionDecisionValueDto = { decisionId: number, valueId: number, };
+
+/**
  * One unified dimension (classification axis), values included, so the GUI's dimension editor and
  * assignment selects render from real data. `role` is `none` or `time_axis` (phase); `ordered`
  * says whether the values have an order; `showOnCard` says whether a task's value on this axis

@@ -550,6 +550,10 @@ export const de: Translation = {
     "files.chooseApp": "Mit einer ausgewählten App öffnen",
     "files.appUsual": "{name} (die übliche)",
     "files.reveal": "Im Dateimanager zeigen",
+    "files.newFile": "Neue Datei",
+    "files.newFolder": "Neuer Ordner",
+    "files.rename": "Umbenennen",
+    "files.name": "Name",
     "files.notText": "Das ist kein Text und lässt sich hier nicht anzeigen.",
     "files.cut": "Es wird nur der Anfang angezeigt.",
     "files.unreadable": "Diese Datei konnte nicht gelesen werden.",
@@ -707,6 +711,10 @@ export const de: Translation = {
     wake_not_kept: "Die Auswahl ließ sich nicht speichern.",
     window_failed: "Dieses Fenster konnte nicht geöffnet werden: {reason}",
     talk_blank: "Das Fenster wurde geöffnet, hat aber nie etwas gezeichnet — das Terminal ist wieder in diesem Fenster.",
+    folder_taken: "{name} ist schon da.",
+    folder_name: "Dieser Rechner nimmt {name} nicht als Namen an.",
+    folder_make: "{name} konnte nicht angelegt werden: {reason}",
+    folder_rename: "Umbenennen in {name} ist fehlgeschlagen: {reason}",
 
     already_reserved:
       "{ref} ist nicht „Offen“ und lässt sich deshalb nicht übernehmen — vielleicht hat eine andere Sitzung sie schon.",

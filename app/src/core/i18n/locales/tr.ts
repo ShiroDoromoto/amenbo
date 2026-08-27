@@ -540,6 +540,10 @@ export const tr: Translation = {
     "files.chooseApp": "Seçtiğim uygulamayla aç",
     "files.appUsual": "{name} (her zamanki)",
     "files.reveal": "Dosya yöneticisinde göster",
+    "files.newFile": "Yeni dosya",
+    "files.newFolder": "Yeni klasör",
+    "files.rename": "Yeniden adlandır",
+    "files.name": "Ad",
     "files.notText": "Bu metin değil, burada gösterilemez.",
     "files.cut": "Yalnızca başı gösteriliyor.",
     "files.unreadable": "Bu dosya okunamadı.",
@@ -694,6 +698,10 @@ export const tr: Translation = {
     wake_not_kept: "Seçim kaydedilemedi.",
     window_failed: "O pencere açılamadı: {reason}",
     talk_blank: "O pencere açıldı ama içine hiçbir şey çizilmedi; terminal yeniden bu pencereye alındı.",
+    folder_taken: "{name} zaten var.",
+    folder_name: "Bu makine {name} adını kabul etmiyor.",
+    folder_make: "{name} oluşturulamadı: {reason}",
+    folder_rename: "{name} olarak yeniden adlandırılamadı: {reason}",
 
     already_reserved:
       "{ref} “Yapılacak” durumunda değil, bu yüzden üstlenilemez — başka bir oturum onu çoktan almış olabilir.",

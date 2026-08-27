@@ -535,6 +535,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
   outline-offset: 2px;
   border-radius: var(--r-sm);
 }
+/* A name being typed, in the row it will become. It is a line of the list rather than a box over it:
+   what is being named sits among names, and the ones already there are what a person is choosing
+   against (`app/src/files/FilesPanel.tsx`). */
+.files__namebox {
+  width: 100%; padding: 0; border: 0; background: none;
+  color: var(--c-text); font: inherit;
+}
+.files__namebox:focus-visible, .files__namebox:focus {
+  outline: 1px solid var(--c-accent); outline-offset: 2px; border-radius: var(--r-sm);
+}
 .files__dir::before { content: "▸ "; color: var(--c-text-muted); }
 .files__dir[aria-expanded="true"]::before { content: "▾ "; }
 .files__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

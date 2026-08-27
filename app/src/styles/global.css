@@ -377,6 +377,69 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .slot__more:hover { color: var(--c-text); }
 
+/* The reader's own commands, under the choices (`AMB-D-794`). It is a quiet block: what the frame is
+   for is opening a terminal, and registering one is the rarer errand of somebody whose tool the
+   catalog does not name. It takes the width the row takes, so the lines below line up with the pills
+   above them. */
+.slot__own {
+  flex: 0 0 auto;
+  display: flex; flex-direction: column; align-items: center; gap: var(--s-1);
+  width: 100%;
+}
+.slot__ownlist {
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: var(--s-1);
+  width: 100%;
+}
+/* Name, line, and the two presses on one row. The line takes what is left and is cut rather than
+   wrapped: what a reader checks at a glance is which line it is, and the whole of it is in the form
+   the moment they press to correct it. */
+.slot__ownrow {
+  display: flex; align-items: baseline; gap: var(--s-2);
+  min-width: 0;
+  font-size: var(--fs-xs);
+}
+.slot__ownname { flex: 0 0 auto; color: var(--c-text); }
+.slot__ownline {
+  flex: 1 1 auto; min-width: 0;
+  color: var(--c-text-muted); font-family: var(--font-mono);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* The two fields. Stacked rather than side by side: a command line is long and a name is short, and
+   a row that gave them the same width would leave the line reading in a box it does not fit. */
+.slot__form {
+  display: flex; flex-direction: column; gap: var(--s-2);
+  width: 100%;
+}
+.slot__field { display: flex; flex-direction: column; gap: var(--s-1); }
+.slot__field > span { color: var(--c-text-muted); font-size: var(--fs-xs); }
+.slot__field > input {
+  padding: var(--s-1) var(--s-2);
+  border: 1px solid var(--c-border); border-radius: var(--r-md);
+  background: var(--c-surface); color: var(--c-text);
+  font-size: var(--fs-sm);
+}
+.slot__field > input:focus-visible { border-color: var(--c-accent); outline: none; }
+/* What will run, said before it is saved. Monospaced because it is a command and not prose, and it
+   wraps rather than being cut: this is the one place the whole of it has to be readable. */
+.slot__runs {
+  margin: 0;
+  color: var(--c-text-muted); font-size: var(--fs-xs);
+}
+.slot__runs > code { font-family: var(--font-mono); color: var(--c-text); overflow-wrap: anywhere; }
+.slot__failed { margin: 0; color: var(--c-stop); font-size: var(--fs-xs); }
+.slot__formrow { display: flex; align-items: center; gap: var(--s-3); }
+/* Smaller than the press that opens a terminal, and outlined rather than filled: saving a line is
+   not what the frame is for, and two filled buttons in one frame read as two ways in. */
+.slot__save {
+  padding: var(--s-1) var(--s-3);
+  border: 1px solid var(--c-accent); border-radius: var(--r-md);
+  background: transparent; color: var(--c-accent-text);
+  font-size: var(--fs-xs); font-weight: 600;
+}
+.slot__save:disabled { border-color: var(--c-border); color: var(--c-text-faint); cursor: default; }
+
 /* Where the pane being opened will work, asked in the place the pane is about to take (`./FolderChoice`).
    It is the same dashed box the way in is, because it is the same place one step further on. */
 .slot--asking {

@@ -117,6 +117,18 @@ export async function mountEditor(
             color: "var(--c-text-muted)",
             border: "none",
           },
+          // The line the caret is on, in both halves of the row. CodeMirror's own is a fixed pale
+          // blue, which is a colour and not a token: under the dark theme it puts light text on a
+          // light band and the one line a reader is looking at is the one they cannot read
+          // (`AMB-T-3786` met it). The token flips with the theme, so the band is a shade of the
+          // surface either way rather than a colour of its own.
+          ".cm-activeLine": { backgroundColor: "var(--c-surface-sunken)" },
+          ".cm-activeLineGutter": {
+            backgroundColor: "var(--c-surface-sunken)",
+            // And its number is the one number worth reading: the rest of the gutter is muted so
+            // that the text beside it reads first, which leaves nothing to tell this one apart.
+            color: "var(--c-text)",
+          },
           // The fold arrows are drawn faintly and come up on hover: they sit beside every line of
           // the file and would otherwise be a second column of marks competing with the numbers.
           ".cm-foldGutter .cm-gutterElement": { color: "var(--c-text-faint)", cursor: "pointer" },

@@ -946,6 +946,14 @@ written as the CLI writes it, since the chips carrying them are in the reader's 
 `filters-folded` reads what the fold leaves: the values off the screen, and the count of narrowing
 axes on the control they folded into.
 
+The decisions tab has that same panel over its own list, and its own entries for it —
+`decision open-filters` / `choose-filter` / `close-filters` / `filters-folded` / `narrowed`. They are
+separate from the board's rather than shared with them because a road has to say which of the two
+tabs it is standing on: a step that named neither could be walked on either and would prove whichever
+the operator happened to be looking at. On the decision side `narrowed` is the screen's answer to what
+`listed` asks the terminal — the terminal carries the whole narrowing as one `--filter` line, where
+the screen composes it press by press and reads what is left.
+
 ### `given:` — the world a road starts from
 
 Some roads stand on records the road itself never makes: a plugin already installed, a catalog

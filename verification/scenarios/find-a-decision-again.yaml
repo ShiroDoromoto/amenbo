@@ -1,16 +1,50 @@
 # Finding a decision again. A store's decisions are read by narrowing, never by dumping the corpus,
 # so this is not a convenience on top of the listing — it is how anyone reaches a decision they did
-# not just write. This line holds both arms a reader actually types: the keyword, which is `search`'s
-# alone, and the status, which is the listing's.
+# not just write. This line holds the arms a reader actually reaches for: the keyword, which is
+# `search`'s alone, and the two the listing narrows by — what a decision is, and what it is filed
+# under.
+#
+# The two drivers ask the same thing and get there differently, which is what a terminal and a screen
+# are. A terminal writes the whole narrowing as one line of grammar and reads the answer back; a
+# screen has the values standing in front of it, so the set is composed press by press and the shot
+# between two presses is where a set is told from an axis that simply kept the last one. Only the
+# screen half can be asked that, which is why it is the longer road.
 id: find-a-decision-again
-title: A decision is found by keyword and by status, and the ones that do not match stay out
+title: A decision is found by keyword, by what it is, and by what it is filed under — and the ones that do not match stay out
 description: >
-  Record two decisions on different subjects and settle one of them, then ask for each by keyword and
-  by status. What is under test is the narrowing itself: an answer that returned everything, or that
-  quietly returned nothing, reads as green either way, so every arm is asserted from both sides — the
-  decision that matches is present, the one that does not is absent. The two arms are two commands:
-  words go to `search`, and the listing's filter narrows by status.
-steps_cli:
+  Record decisions on different subjects, settle one of them, and file two under different values of
+  an axis, then ask for each by keyword, by status and by classification. What is under test is the
+  narrowing itself: an answer that returned everything, or that quietly returned nothing, reads as
+  green either way, so every arm is asserted from both sides — the decision that matches is present,
+  the one that does not is absent. On screen the same narrowing is composed in the panel the values
+  stand in, which adds the two questions only a screen has: that an axis takes a set rather than the
+  last press, and that folding the values away keeps the narrowing while giving back the room.
+given:
+  # The world both drivers open on: a corpus already worth separating — a standing policy, somebody's
+  # open suggestion, and a third record that only the axis tells from the first. Recording, settling
+  # and filing are roads of their own (`record-a-decision`, `read-whether-a-decision-still-holds`,
+  # `classify-work-along-an-axis`); walking any of them to arrange this world would prove that road
+  # twice and this one not at all.
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: theme
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: theme
+      value: main
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: theme
+      value: window
+
   - type: action
     domain: decision
     op: create
@@ -25,12 +59,52 @@ steps_cli:
       title: SCENARIO DECISION — the installer layout
     as: installer
 
+  # The third: settled like the first, so the status axis keeps it, and filed under the other value,
+  # so only the classification axis can take it away.
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO DECISION — the sidebar width
+    as: sidebar
+
   - type: action
     domain: decision
     op: accept
     with:
       target: retention
 
+  - type: action
+    domain: decision
+    op: accept
+    with:
+      target: sidebar
+
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: retention
+      dimension: theme
+      value: main
+
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: installer
+      dimension: theme
+      value: window
+
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: sidebar
+      dimension: theme
+      value: window
+
+steps_cli:
   # By keyword: `search` reads over title and body, and the subject that was not asked for stays out.
   - type: assert
     domain: decision
@@ -73,3 +147,156 @@ steps_cli:
       filter: "status:proposed"
       target: installer
       present: true
+
+  # And by what it is filed under, which is the arm neither of the two above reaches: the record it
+  # leaves out is settled like the one it keeps, so nothing but the axis separates them.
+  - type: assert
+    domain: decision
+    op: listed
+    with:
+      filter: "dim:theme=main"
+      target: retention
+      present: true
+
+  - type: assert
+    domain: decision
+    op: listed
+    with:
+      filter: "dim:theme=main"
+      target: sidebar
+      present: false
+
+  # The two narrowings together, which is what a reader actually types: they AND, so the record that
+  # answers one of them and not the other is out.
+  - type: assert
+    domain: decision
+    op: listed
+    with:
+      filter: "status:accepted dim:theme=window"
+      target: sidebar
+      present: true
+
+  - type: assert
+    domain: decision
+    op: listed
+    with:
+      filter: "status:accepted dim:theme=window"
+      target: installer
+      present: false
+
+steps_gui:
+  - type: action
+    domain: decision
+    op: open-filters
+
+  # Read with nothing chosen yet, which is what makes every "gone" below mean anything: a row the
+  # list never drew would be absent from every shot of this road, and each of those steps would pass
+  # on a list that had lost it before the narrowing began.
+  - type: assert
+    domain: decision
+    op: narrowed
+    with:
+      target: installer
+      present: true
+
+  - type: assert
+    domain: decision
+    op: narrowed
+    with:
+      target: retention
+      present: true
+
+  - type: action
+    domain: decision
+    op: choose-filter
+    with:
+      axis: status
+      value: accepted
+
+  # One value in, and the record in the other state is gone. This is the shot the set is proved
+  # against: it has to be taken before the second value goes in, or nothing tells a set from an axis
+  # that simply kept the last press.
+  - type: assert
+    domain: decision
+    op: narrowed
+    with:
+      target: installer
+      present: false
+
+  - type: action
+    domain: decision
+    op: choose-filter
+    with:
+      axis: status
+      value: proposed
+
+  - type: assert
+    domain: decision
+    op: narrowed
+    with:
+      target: installer
+      present: true
+
+  - type: assert
+    domain: decision
+    op: narrowed
+    with:
+      target: retention
+      present: true
+
+  # The second axis, which the first one cannot stand in for: the record it takes away is settled, so
+  # the status axis chose it and it is standing until this press. Both halves are read, or what the
+  # press is credited with is a row the status axis had already taken.
+  - type: assert
+    domain: decision
+    op: narrowed
+    with:
+      target: sidebar
+      present: true
+
+  - type: action
+    domain: decision
+    op: choose-filter
+    with:
+      axis: dim:theme
+      value: main
+
+  - type: assert
+    domain: decision
+    op: narrowed
+    with:
+      target: sidebar
+      present: false
+
+  - type: assert
+    domain: decision
+    op: narrowed
+    with:
+      target: retention
+      present: true
+
+  - type: action
+    domain: decision
+    op: close-filters
+
+  - type: assert
+    domain: decision
+    op: filters-folded
+    with:
+      axes: 2
+
+  # And the narrowing outlives the values it was composed in. Both halves are read, because a fold
+  # that dropped the selection and one that kept it look alike on the row that was standing anyway.
+  - type: assert
+    domain: decision
+    op: narrowed
+    with:
+      target: retention
+      present: true
+
+  - type: assert
+    domain: decision
+    op: narrowed
+    with:
+      target: sidebar
+      present: false

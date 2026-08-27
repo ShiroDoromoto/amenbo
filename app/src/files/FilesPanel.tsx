@@ -39,7 +39,7 @@
 // the tree itself; a file row belongs to the folder holding it, which is what makes dropping on the
 // name of a file mean the same as dropping just beside it.
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import type {
   FolderAppDto, FolderCarriedDto, FolderChangesDto, FolderEntryDto, FolderFileDto, FolderStoppedDto,
   GitEntryDto,
@@ -54,8 +54,10 @@ import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
 import {
   folderEncodings, folderEntries, folderGitStatus, folderImport, folderMake, folderOpenFile,
   folderOpenFileWith, folderOpenWith, folderRead, folderRename, folderRevealFile, folderSave,
-  folderUnwatch, folderWatch, onFolderChanged,
+  folderTrash, folderUnwatch, folderUntrash, folderWatch, onFolderChanged,
 } from "./folder";
+import { asksBeforeTrash } from "./askBeforeTrash";
+import { TrashAsk } from "./TrashAsk";
 import { FileEditor } from "./FileEditor";
 import { MemoPage } from "./MemoPage";
 import { fileUnderAny } from "./fileUnder";
@@ -144,6 +146,10 @@ function whyStopped(stopped: FolderStoppedDto): string {
       return t("files.stoppedInside");
     case "nameless":
       return t("files.stoppedNameless");
+    case "nobin":
+      return t("files.stoppedNoBin");
+    case "emptied":
+      return t("files.stoppedEmptied");
     default:
       return stopped.why;
   }
@@ -215,6 +221,15 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
   // the bound folder itself). Null while nothing is over the panel. The folder is half of it because
   // every section has a row for its own root, and the same path inside two of them is two places.
   const [landing, setLanding] = useState<Landing | null>(null);
+  // The row a question about the bin is standing over, or nothing while none is up.
+  const [asking, setAsking] = useState<{ root: string; path: string[] } | null>(null);
+  // What the machine said about the last row that would not go — kept until the next press, because
+  // the row it is about is no longer on the list to say it for itself.
+  const [stopped, setStopped] = useState<string | null>(null);
+  // How many times this side has changed a folder. What redraws the rows is not this but the host's
+  // word that the folder moved, which each section counts for itself; this is only how the focus
+  // knows a press has landed.
+  const [acted, setActed] = useState(0);
   const box = useRef<HTMLDivElement | null>(null);
   // A path clicked in a pane. It opens only where it lands inside one of the folders this face is
   // rooted at — the same fence the host applies. One that lands outside opens nothing: the pane
@@ -276,6 +291,80 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
     };
   }, [projectId, roots, tab]);
 
+  // The panel takes the focus once it has changed a folder, so that undo is the next thing a reader
+  // can press. What did the changing was a menu item that is gone by the time the answer lands, and
+  // a key nothing is focused on reaches nothing (`AMB-D-780`).
+  //
+  // After the state has settled rather than inside it: the list is only mounted again once the
+  // reading state has cleared, so the element to focus does not exist yet where the row was binned
+  // from the reader.
+  useEffect(() => {
+    if (acted > 0) box.current?.focus();
+  }, [acted]);
+
+  // Put one row in the machine's bin. Nothing here deletes: what the host offers is the bin, and a
+  // machine that cannot offer one refuses rather than deleting instead (`./folder`).
+  const bin = (root: string, path: string[]) => {
+    if (projectId === null) return;
+    setStopped(null);
+    void folderTrash(projectId, root, [path])
+      .then((done) => {
+        setActed((n) => n + 1);
+        setStopped(done.stopped === null ? null : whyStopped(done.stopped));
+        // A file being read that has just gone is not a file to go on reading.
+        if (done.gone.length > 0) {
+          setReading((now) =>
+            now !== null && now.root === root && now.path.join("/") === path.join("/") ? null : now
+          );
+        }
+      })
+      .catch((e: unknown) => setStopped(errText(e)));
+  };
+
+  // The question first, unless this reader has said they do not want it (`./askBeforeTrash`).
+  const askTrash = (root: string, path: string[]) => {
+    if (asksBeforeTrash()) setAsking({ root, path });
+    else bin(root, path);
+  };
+
+  // Undo, which here means the last press of the bin and nothing else. It is the OS's own key rather
+  // than one Amenbo invented, and it is heard on the panel rather than on the window: the terminal
+  // beside it has its own idea of what the key means, and the boundary between the two is which of
+  // them the reader is in (`AMB-D-780`).
+  const undo = () => {
+    setStopped(null);
+    void folderUntrash()
+      .then((done) => {
+        if (done === null) return;
+        setActed((n) => n + 1);
+        setStopped(done.stopped === null ? null : whyStopped(done.stopped));
+      })
+      .catch((e: unknown) => setStopped(errText(e)));
+  };
+
+  const onKey = (e: ReactKeyboardEvent) => {
+    if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
+    if (e.key.toLowerCase() !== "z") return;
+    e.preventDefault();
+    undo();
+  };
+
+  // The question, and the line the last refusal left. Both are drawn in whichever state the panel is
+  // in: a file can be sent to the bin from the list and from the reader, so neither of them is the
+  // one place an answer about it belongs.
+  const aside = (
+    <>
+      {stopped !== null && <p className="files__stopped">{stopped}</p>}
+      {asking !== null && (
+        <TrashAsk
+          name={asking.path[asking.path.length - 1] ?? ""}
+          onGo={() => { const one = asking; setAsking(null); bin(one.root, one.path); }}
+          onCancel={() => setAsking(null)}
+        />
+      )}
+    </>
+  );
+
   // The way to put the panel away, and the whole of the row it sits on. It is drawn in every state
   // the panel can be in — reading a file included — because a panel that could only be closed from
   // one of its states is one a reader has to find their way back out of.
@@ -319,7 +408,10 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
         path={reading.path}
         onBack={() => setReading(null)}
         onOpenLedger={onOpenLedger}
+        onTrash={() => askTrash(reading.root, reading.path)}
+        onKey={onKey}
         close={close}
+        aside={aside}
       />
     );
   }
@@ -327,8 +419,11 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
   const top = <div className="files__top">{close}</div>;
 
   return (
-    <div className="files" ref={box}>
+    // Focusable so the panel can hold the key it hears, and taken off the tab order so that being
+    // able to hold it costs nobody a stop on the way past (`AMB-D-780`).
+    <div className="files" ref={box} tabIndex={-1} onKeyDown={onKey}>
       {top}
+      {aside}
       {sections.map((one) => (
         <FolderSection
           key={one.path}
@@ -362,6 +457,7 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
               : () => setEdit({ kind: "rename", root: menu.root, path: menu.path }),
           }}
           onClose={() => setMenu(null)}
+          onTrash={() => askTrash(menu.root, menu.path)}
         />
       )}
     </div>
@@ -591,7 +687,7 @@ function FolderSection({
  * are about a file's own kind, and a menu that offered them over a folder would be offering to open a
  * directory in a text editor. What is left over a folder is what can be written into it.
  */
-function FileMenu({ projectId, root, path, dir, at, naming, onClose }: {
+function FileMenu({ projectId, root, path, dir, at, naming, onClose, onTrash }: {
   projectId: number;
   root: string;
   path: string[];
@@ -605,6 +701,8 @@ function FileMenu({ projectId, root, path, dir, at, naming, onClose }: {
    */
   naming?: { onMake: (dir: boolean) => void; onRename: (() => void) | null };
   onClose: () => void;
+  /** Send this row to the machine's bin — asked about first, unless the reader turned that off. */
+  onTrash: () => void;
 }) {
   // The applications to pick from, once they have been asked for and there are any — the second
   // face of this one menu, drawn where the OS has no chooser to draw it for us.
@@ -700,6 +798,22 @@ function FileMenu({ projectId, root, path, dir, at, naming, onClose }: {
               </button>
             </>
           )}
+          {/* Over a folder as much as over a file: the bin takes one whole, and the undo brings it
+              back whole. The bound folder is the one row it is not offered over — that row is the
+              binding, and what a binding is changed from is the project's own settings.
+
+              Set apart from the doors above it, because it is the one item that changes the folder
+              rather than handing it to something else: a press meant for the row above must not be
+              able to land on this one by half a pixel. */}
+          {path.length > 0 && (
+            <button
+              className="files__menuitem files__menuitem--apart"
+              role="menuitem"
+              onClick={() => { onClose(); onTrash(); }}
+            >
+              {t("files.trash")}
+            </button>
+          )}
         </>
       ) : (
         apps.map((app) => (
@@ -769,7 +883,8 @@ function Level({
    *  folder standing folded — which is the one case that answers for what is under it (`./gitMark`). */
   marks: (path: string[], folded?: boolean) => GitMark | null;
   /** How many times the folder has moved. The names are read again on each — a file the agent just
-   *  wrote is a row that has to appear without anybody folding the tree and opening it again. */
+   *  wrote is a row that has to appear without anybody folding the tree and opening it again, and a
+   *  row that just went to the bin is one that has to stop being drawn. */
   moved: number;
   /** Which folders of the whole section are unfolded, as their paths joined. The section holds it
    *  (`FolderSection`) because opening one is also something it does on a reader's behalf. */
@@ -983,15 +1098,22 @@ function NameBox({ initial, onName, onEnd }: {
 }
 
 /** One file, as far as a panel can show it. */
-function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
+function FileReader({ projectId, root, path, onBack, onOpenLedger, onTrash, onKey, close, aside }: {
   projectId: number;
   root: string;
   path: string[];
   onBack: () => void;
   onOpenLedger?: () => void;
+  /** Send the file being read to the machine's bin. The panel takes it off the screen from there. */
+  onTrash: () => void;
+  /** Undo, heard here for the same reason it is heard on the list: a file can go to the bin from
+   *  this state too (`./FilesPanel`). */
+  onKey: (e: ReactKeyboardEvent) => void;
   /** The panel's own way out, drawn on this row: reading a file is not a state a reader should have
    *  to leave before they can close the panel (`./FilesPanel`). */
   close: ReactNode;
+  /** The question about the bin and the last refusal, both of which outlive this state. */
+  aside: ReactNode;
 }) {
   const [file, setFile] = useState<FolderFileDto | null>(null);
   const [failed, setFailed] = useState(false);
@@ -1107,7 +1229,7 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
   const readAs = file?.text !== undefined && file.encoding !== undefined;
 
   return (
-    <div className="files files--reading">
+    <div className="files files--reading" tabIndex={-1} onKeyDown={onKey}>
       {/* **The name has a row to itself, and what to do with the file has another.** The two used to
           share one, and the name was the only thing on it that could give way — every control beside
           it is as wide as its own words — so the name is what disappeared: `run.sh` came up as
@@ -1118,10 +1240,17 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
           The split is by what a control is for, not by what fits: leaving and closing are the frame's
           and stay with the name, and the ones that act on the file stand together under it. The
           second row is drawn only where there is something to put on it, so a picture — which has
-          nothing to switch, nothing to reopen and nothing to save — costs no line at all. */}
+          nothing to switch, nothing to reopen and nothing to save — costs no line at all.
+
+          The bin stays up here though it acts on the file, because it is a mark and not a word: an
+          icon is the same narrow width whatever the reader's language, which is exactly what the
+          three that moved were not. */}
       <div className="files__bar">
         <button className="files__back" onClick={onBack}>{t("files.back")}</button>
         <span className="files__name" title={path.join("/")}>{name}</span>
+        <button className="files__trash" title={t("files.trash")} onClick={onTrash}>
+          <Icon name="trash" />
+        </button>
         {close}
       </div>
       {(switchable || readAs || savable) && (
@@ -1163,6 +1292,7 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
           )}
         </div>
       )}
+      {aside}
       <div className="files__body">
         {failed && <p className="files__none">{t("files.unreadable")}</p>}
         {/* The picture is fetched rather than carried: `folderRead` says only that there is one
@@ -1242,6 +1372,7 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
           dir={false}
           at={menu}
           onClose={() => setMenu(null)}
+          onTrash={onTrash}
         />
       )}
       {picking !== null && (

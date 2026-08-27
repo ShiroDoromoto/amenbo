@@ -1,0 +1,123 @@
+# A file put in the machine's bin from inside Amenbo, and taken straight back.
+#
+# What a person hands Amenbo is a folder they work in, and an agent writes in it while they watch.
+# Deleting from a list like that is rare and mis-pressed more often than it is meant, and the bin is
+# nowhere on the screen to reassure anybody afterwards — so the panel bins rather than deletes, and
+# undoes what it binned. This road walks the whole of that: the row goes, and the row comes back.
+#
+# ── Why the row is read twice and the bin is read never ──────────────────────────────────────────
+# Where the machine keeps what it deleted is the machine's, and it differs on every one of the three
+# operating systems. What Amenbo answers for is the list: the row is gone from it, and the row is on
+# it again. Both readings are of the same place, which is what makes the pair mean something — a
+# second reading somewhere else would be proving that two screens agree rather than that a file came
+# back.
+#
+# ── Why the question is not a step ───────────────────────────────────────────────────────────────
+# The panel asks before it bins, with a "do not ask again" beside the answer. That switch is a habit
+# of the Mac the run is walked on rather than anything the build decides, so a step that asserted the
+# question would read red on a machine where somebody once ticked it and green on the next machine —
+# a verdict about the operator's history, filed as a verdict about the release. The press covers both
+# endings instead, and the reading that follows is the same either way.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road here. Deleting a file at a shell is `rm`, which is not this, and Amenbo is
+# the subject of none of it.
+id: take-a-file-back-after-binning-it
+title: A file binned from the panel leaves the list, and undo puts it back
+description: >
+  Open the terminal face on a project whose folder holds a file, unfold the folder's section and
+  open the file. Press the bin: the file leaves the list. Press the key this machine undoes with,
+  and the row is on the list again.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # One ordinary file, with words in it, so the row being read is a row about something.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  # Read before it is binned, so a run that finds nothing afterwards fails on the binning rather than
+  # on a row that was never there.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: trash
+
+  # The file that was open has gone, so the column is the list again — and the list comes back folded,
+  # the way it is drawn on the way in. Unfolded here rather than left to be assumed: a reading that
+  # cannot find a name it is looking straight at passes an absent step, so a road that read a folded
+  # section would come out green over a screen nobody could have seen the answer on.
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: tree
+      present: false
+
+  - type: action
+    domain: files
+    op: undo
+
+  # The goal the road is named for: what was binned is back where it was read from.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: tree

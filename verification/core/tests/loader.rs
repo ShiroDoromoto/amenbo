@@ -32,6 +32,19 @@ fn every_real_scenario_lints() {
     }
 }
 
+/// The fixture check is the one that reads the disk, so it is worth naming what it says rather than
+/// leaving it inside the sweep above: a road can name a file that is not there and be right about
+/// everything else, which is exactly how one reached the tree.
+#[test]
+fn a_road_naming_a_fixture_nobody_put_there_is_rejected() {
+    let f = manifest_dir().join("tests").join("fixtures").join("invalid-fixture-not-there.yaml");
+    let errs = amenbo_scenario::lint_file(&f).expect_err("a fixture that is not there is refused");
+    assert!(
+        errs.iter().any(|e| e.contains("nobody-put-this-here.bin")),
+        "the line names the file that is missing: {errs:?}"
+    );
+}
+
 #[test]
 fn every_invalid_fixture_is_rejected() {
     let dir = manifest_dir().join("tests").join("fixtures");

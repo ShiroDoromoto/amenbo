@@ -743,6 +743,17 @@ one of the face's standing lines. `row-mark` reads the colour a row wears, named
 `untracked`, `added`, `modified` — rather than by the colour itself, since which colour that is
 belongs to the theme. It is a `Review` and can be nothing else: a shot is read for words, and a row
 wearing a colour says the same letters as the row beside it that wears none.
+`show-as` puts a Markdown file in one of its two forms — `rendered` for what the text says, `source`
+for the text itself — and `reading` takes an `as` saying which of them its words are standing in,
+which hands that step to an eye: both forms carry the same words, and what separates them is
+punctuation the fold throws away and a size no reading reports.
+`reopen-with` reads an open file again as an encoding the road names, and `read-as` reads back what
+the row says it was read as. The two are one control apart and stay two ops: one is about the bytes
+and what they mean, the other about the screen and what it draws — a road that named an encoding to
+change a form would be asking one question with the other's word. What the *guess* said is never asserted: it reads the machine's own
+language out of its settings, so where it lands belongs to the box the run is on rather than to the
+build. What belongs to the build is that the row follows the reader, which two namings prove and one
+cannot.
 
 Three ops make a name rather than move one. `menu-on-folder` opens the menu a folder carries — over a
 folder's row, or over the heading at the top of the tree when it names none, the heading being the
@@ -912,6 +923,11 @@ the value at a crossing of its own writes somewhere neither road then looks. Tha
 terminal's alone — on screen the row the settings are opened inside has already answered it, and the
 GUI harness turns it away — and it travels as a word rather than as a binding, so a test over the
 scenario set holds it to a project something raised, the way the one that opens a project is held.
+A `dimension listed` assert takes `side: task` / `decision` for a question its plain form cannot put:
+not whether the axis is defined but whether that side is offered it at all, which an axis narrowed with
+`dimension applies-to` stops being while staying on every listing. It takes `target:`
+beside it for the face with no listing to read the offer off — a screen reads the offer as the control a
+record's own pane keeps per axis, so the road names the record whose pane is opened.
 A `listed` assert asks whether the task is in the listing; give it
 `position: first` / `last` instead of `present:` when what is under test is the order the store
 keeps, which is the only place a reorder is visible. Its neighbour `narrowed` asks the question a

@@ -368,6 +368,23 @@ button { font: inherit; color: inherit; cursor: pointer; }
   border-style: dashed; color: var(--c-text-faint); cursor: default;
 }
 .slot__start--missing:hover { color: var(--c-text-faint); border-color: var(--c-border); }
+/* The row's place while the machine is still being asked. Two empty pills and nothing written in
+   them: what is not known yet is which of these can be started, so a name here would have to be
+   drawn as usable or as missing and both would be a guess (`AMB-D-792`). They are out of the tree a
+   screen reader walks — the sentence under them is what says what is happening. */
+.slot__starts--waiting { grid-template-columns: repeat(2, minmax(9.5rem, 1fr)); }
+.slot__start--waiting {
+  min-height: 2.2rem;
+  border-style: dashed; background: var(--c-surface-sunken);
+}
+/* What the frame has to say about the row rather than on it: that the machine is still being asked,
+   or that it could not be. Quiet like the question above it, and never in place of a pill — the row
+   says what the choices are, and this says what is known about them. */
+.slot__note {
+  margin: 0;
+  color: var(--c-text-muted); font-size: var(--fs-xs); text-align: center;
+}
+
 /* The press that unfolds them. It is quiet — the row above it is what the frame is about — and it is
    not one of the pills: what it does is show more of the row, not choose anything. */
 .slot__more {
@@ -729,6 +746,46 @@ button { font: inherit; color: inherit; cursor: pointer; }
   cursor: pointer;
 }
 .files__menuitem:hover { background: var(--c-surface-sunken); }
+/* The item that changes the folder, held off from the ones that only hand the file to something
+   else. The gap is the whole of the separation: a rule would draw a heading over a group of one. */
+.files__menuitem--apart { margin-top: var(--s-1); border-top: 1px solid var(--c-border); padding-top: var(--s-2); }
+/* The same road out of the file being read, where there is no row under the pointer to open the
+   menu on. Quiet, like the control beside it: what makes it safe to sit there is that it asks
+   (`../files/TrashAsk`) and that the bin gives it back. */
+.files__trash {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center;
+  padding: 0 var(--s-1);
+  border: 0; background: transparent;
+  color: var(--c-text-muted); font-size: var(--fs-sm); line-height: 1;
+  cursor: pointer;
+}
+.files__trash:hover { color: var(--c-text); }
+/* The name takes the room in this row, so the two controls at its end stay together. */
+.files--reading .files__bar .files__name { flex: 1; }
+/* What the machine said about a row that would not go to the bin, or would not come back out of it.
+   It stands in the panel rather than beside the row, because by then the row is either gone from the
+   list or was never on it. */
+.files__stopped { margin: 0; color: var(--c-stop); font-size: var(--fs-xs); }
+
+/* The question before a row goes to the bin (`../files/TrashAsk`). Its own block rather than a share
+   of another feature's modal, for the reason the terminal face's is its own: a modal borrowing
+   another's class names cannot be restyled without touching that feature. The backdrop is the
+   exception — `.modal__overlay` is every modal's in this app. */
+.trashask {
+  width: min(420px, 100%);
+  padding: var(--s-5);
+  background: var(--c-surface); border: 1px solid var(--c-border);
+  border-radius: var(--r-md); box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+}
+.trashask__title { font-weight: var(--fw-bold); font-size: var(--fs-lg); margin-bottom: var(--s-2); overflow-wrap: anywhere; }
+.trashask__undoable { font-size: var(--fs-xs); color: var(--c-text-muted); margin-bottom: var(--s-4); }
+.trashask__quiet { display: flex; align-items: center; gap: var(--s-2); font-size: var(--fs-sm); margin-bottom: var(--s-4); cursor: pointer; }
+.trashask__actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+.trashask__action { padding: var(--s-2) var(--s-4); border: 1px solid var(--c-border); border-radius: var(--r-md); background: var(--c-surface-2); color: var(--c-text); cursor: pointer; }
+/* The answer the question was opened to get. It is drawn as the answer rather than argued against,
+   because the bin is where it sends the row and undo brings it back. */
+.trashask__action--go { border-color: var(--c-accent); background: var(--c-accent-weak); color: var(--c-accent-text); font-weight: var(--fw-bold); }
 
 /* ---------- the two halves of the panel ---------- */
 /* The row above whichever half is up. It holds the way out and nothing else: the switch between

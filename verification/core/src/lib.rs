@@ -456,6 +456,12 @@ const REGISTRY: &[OpSpec] = &[
     // road that needs the demand out of the way. An axis offering no values could never be answered,
     // so raising it on one is refused, which is a road of its own to walk.
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "required", required: &["dimension"], refs: &[], strings: &["dimension"], binds: false },
+    // Which of the two sides of the store the axis classifies at all. `side` is a word and not a
+    // switch — there are three answers, and unlike the two flags above it the axis starts on the wide
+    // one — so a road here narrows rather than raises, and takes `side: both` to widen back.
+    // Narrowing takes no filing away, only the offer, which is why a road that walks it reads the
+    // filings back afterwards rather than treating the narrowing as a delete.
+    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "applies-to", required: &["dimension", "side"], refs: &[], strings: &["dimension", "side"], binds: false },
     // Renaming that key afterwards — the axis's own, or one of its values' where `value` names one.
     // It is a move of its own rather than an arg on the ops above, because naming a key at birth and
     // renaming one are two different doors: the screen has only the second, so a road that wrote the
@@ -1393,7 +1399,13 @@ const REGISTRY: &[OpSpec] = &[
     // is not something the presence of text on a shot can settle.
     OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "plugin-row", required: &["project", "plugin", "state"], refs: &[], strings: &["project", "plugin", "state"], binds: false },
     // An axis as it is read back, by name: is it defined, and does it carry the value named?
-    OpSpec { kind: Kind::Assert, domain: Domain::Dimension, op: "listed", required: &["dimension"], refs: &[], strings: &["dimension", "value"], binds: false },
+    //
+    // `side` asks a different question of the same listing — not whether the axis is defined but
+    // whether the side named is offered it at all — and an axis narrowed off a side is defined exactly
+    // as much as ever, so the two answers come apart there and nowhere else. `target`
+    // rides with it for the face that has no listing to read the offer off: a screen reads it as the
+    // control a record's own pane keeps per axis, so the road names the record whose pane is opened.
+    OpSpec { kind: Kind::Assert, domain: Domain::Dimension, op: "listed", required: &["dimension"], refs: &["target"], strings: &["dimension", "value", "side"], binds: false },
     // The key an axis answers to, or one of its values where `value` names one. Read apart from
     // `listed` because it is a different question: that one asks whether the axis is defined at all,
     // and a row whose key was quietly left as its id-derived default is defined exactly as much as one
@@ -2192,6 +2204,14 @@ const REGISTRY: &[OpSpec] = &[
     // It is the fixed English Amenbo hands an agent, the same on a machine set to any language, and
     // what the operator is given to look for stops before the command name in it — so the reading
     // holds on a dev-channel build as well as on the shipped one.
+    //
+    // **The absent half is the dangerous half, and it is the half a build gets wrong quietly.** The
+    // sentence is put in whatever the program does, so a pane that never showed it is a pane the
+    // newline was withheld from — the sentence is left in the input box for the person, and nothing
+    // was answered on their behalf. A road reads that with a line the program cannot have been sent:
+    // it registers a command that swallows what it is shown but still hands back any line it is
+    // given, so the marked line appearing at all is a newline that went in blind. Where such a build
+    // would have answered the first thing the program asked, this reading is the whole of the guard.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "handed-over", required: &["given-back"], refs: &[], strings: &["given-back"], binds: false },
     // How many panes the page being shown draws. It is not `set-panes` read back: that one is the
     // ceiling on how many a page may hold, and this is how many are actually standing there. The two
@@ -2281,6 +2301,19 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "open", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
     // And back out of it, which is the only way back: opening a file replaces the column.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "back", required: &[], refs: &[], strings: &[], binds: false },
+    // Which of its two forms a Markdown file is drawn in — what the text says (`rendered`), or the
+    // text itself, hashes and all (`source`). Markdown is the only file with two, and the control is
+    // drawn for it and for nothing else.
+    //
+    // The step names the form to end in rather than the press, because the one control is a toggle:
+    // a road saying "press it" would mean the other form on a face that had already been switched,
+    // and what a road is about is where the screen ends up.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "show-as", required: &["form"], refs: &[], strings: &["form"], binds: false },
+    // The open file read again as the encoding the reader names, chosen from the control on its own
+    // row that says what it was read as. The guess reports no confidence and breaks nothing visible
+    // when it is wrong, so this door is the only thing standing between a reader and a file that
+    // quietly says something else — and a door nobody walks is a door nobody knows is shut.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "reopen-with", required: &["encoding"], refs: &[], strings: &["encoding"], binds: false },
     // Whether a row is standing in a section. `present: false` is the half several of these roads are
     // about — a file the folder holds but the face must not offer, because it is ignored.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "listed", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
@@ -2293,9 +2326,19 @@ const REGISTRY: &[OpSpec] = &[
     // it as it does bare. `present: false` is the half an ignored row is read by: git records nothing
     // about it, so it wears no colour while standing on the tree like any other.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "row-mark", required: &["name", "section", "mark"], refs: &[], strings: &["name", "section", "mark"], binds: false },
+    // What the open file says it was read as. The name is the one the build itself offers — a road
+    // that spelt an encoding its own way would be asking for a label nothing draws — and what it
+    // proves is that the row follows the reader rather than the guess.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "read-as", required: &["encoding"], refs: &[], strings: &["encoding"], binds: false },
     // What an opened file draws. `shows` is words the road itself put in the file, so a reading finds
     // them because the bytes reached the screen and for no other reason.
-    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "reading", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
+    //
+    // `as` says which of a Markdown file's two forms those words are standing in, and asking for it
+    // hands the whole step to an eye. The two forms carry the same words — that is what makes them
+    // the same file — and what tells them apart is punctuation a reading throws away and a size no
+    // reading reports. A step that judged the words alone while naming a form would pass on the form
+    // it was written to catch.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "reading", required: &["shows"], refs: &[], strings: &["shows", "as"], binds: false },
     // One of the face's standing lines, named by what it says rather than by its wording: the words are
     // the interface's own, and which language the run's machine is in is not a road's to know.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "says", required: &["note"], refs: &[], strings: &["note"], binds: false },
@@ -2318,6 +2361,23 @@ const REGISTRY: &[OpSpec] = &[
     // that means to prove the bytes landed leaves the file and opens it again, which is the app
     // reading the disk, and the only reading that could not have come from what was on the screen.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "save", required: &[], refs: &[], strings: &[], binds: false },
+
+    // ── putting a row in the bin, and taking it back ──────────────────────────────────────────────
+    // The bin pressed on the file that is open. It takes no args for the reason `save` does: what goes
+    // is the file on the screen, and where the machine keeps what it deleted is not a road's to say.
+    //
+    // **The question the panel puts first is inside this one step rather than a step of its own.**
+    // Whether it is asked at all is a habit of the machine the run is walked on — a reader who once
+    // ticked "do not ask again" turned it off there for good — so a road that pressed the bin and then
+    // asserted a question would come out red for something somebody did on that Mac months ago, and
+    // green on the next one. The instruction covers both endings, and what is read afterwards is the
+    // row.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "trash", required: &[], refs: &[], strings: &[], binds: false },
+    // And taking it back, which on this face means the last press of the bin and nothing else. What
+    // does it is the key the machine already undoes with rather than a control Amenbo drew, so the
+    // line says the key — and says where to be standing, because the column beside this one hears the
+    // same key as its own.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "undo", required: &[], refs: &[], strings: &[], binds: false },
 
     // ── bringing a file in from the machine ───────────────────────────────────────────────────────
     // A file dragged in from outside and let go over a row, which is the one way anything reaches this
@@ -2929,6 +2989,26 @@ impl Scenario {
                 }
             }
 
+            // Which side of the store a step is talking about. It is a word rather than a boolean
+            // because an axis has three answers to give — and the reading has two, `both` being a
+            // state an axis is in and not a side anything is offered on — so the set is checked
+            // against the kind of step rather than once for the key.
+            //
+            // Only where the word means that. `side` is also the terminal's word for which of its
+            // panels is up (`files`, `memo`, `rail`), which is a different vocabulary under the same
+            // key — so the domain is part of the question, not just the kind.
+            if step.domain() == Domain::Dimension {
+                if let Some(v) = step.with().get("side") {
+                    let (ok, takes) = match step.kind() {
+                        Kind::Action => (matches!(v.as_str(), Some("task" | "decision" | "both")), "`task`, `decision` or `both`"),
+                        Kind::Assert => (matches!(v.as_str(), Some("task" | "decision")), "`task` or `decision`"),
+                    };
+                    if !ok {
+                        errs.push(at(i, format!("`side` must be {takes}")));
+                    }
+                }
+            }
+
             // The shelf a stood catalog serves — the one arg written as a list of rows rather than
             // as a word. Its rows are a document's fields, not Amenbo's arguments, so the loader
             // reads them here instead of through `strings`: a row is where a typo would otherwise
@@ -2985,12 +3065,68 @@ impl Scenario {
     }
 }
 
+/// Where the files a road copies into its world are kept, resolved against this crate so it is the
+/// same folder whatever the CWD.
+///
+/// It is answered here rather than beside the driver that reads from it, because the lint below has
+/// to look in the very folder the run will: two answers to "where are the fixtures" is how a road
+/// comes to name one that is not there and nothing says so until release day.
+pub fn fixtures_dir() -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent() // verification/
+        .map(|p| p.join("fixtures"))
+        .unwrap_or_else(|| std::path::PathBuf::from("fixtures"))
+}
+
+/// Every fixture this scenario names that is not in [`fixtures_dir`].
+///
+/// **The one check in the lint that touches the disk**, and the reason it is not in
+/// [`Scenario::validate`] with the rest: validate answers about the text of a road, and this asks
+/// the filesystem. It is worth the exception because nothing else asks — `cargo test` and `--print`
+/// both read a road without ever fetching what it copies, so a `from:` naming nothing is green
+/// everywhere until the pre-distribution run walks it for real and stops.
+fn missing_fixtures(scenario: &Scenario) -> Vec<ValidationError> {
+    let dir = fixtures_dir();
+    let mut errs = Vec::new();
+    let mut look = |driver: Option<Driver>, steps: &[Step]| {
+        for (i, step) in steps.iter().enumerate() {
+            if step.domain() != Domain::Repo || step.op() != "copy-fixture" {
+                continue;
+            }
+            let Some(from) = step.with().get("from").and_then(|v| v.as_str()) else { continue };
+            if dir.join(from).is_file() {
+                continue;
+            }
+            errs.push(ValidationError {
+                driver,
+                step: Some(i),
+                message: format!(
+                    "there is no fixture at `{from}` — the path is read from {}",
+                    dir.display()
+                ),
+            });
+        }
+    };
+    look(None, &scenario.given);
+    for driver in Driver::ALL {
+        look(Some(driver), scenario.steps(driver));
+    }
+    errs
+}
+
 /// Load and validate in one call — the check a `lint` run performs on each file.
 pub fn lint_file(path: impl AsRef<Path>) -> Result<Scenario, Vec<String>> {
     let scenario = load_file(path).map_err(|e| vec![e.to_string()])?;
-    match scenario.validate() {
-        Ok(()) => Ok(scenario),
-        Err(errs) => Err(errs.into_iter().map(|e| e.to_string()).collect()),
+    let mut errs = scenario.validate().err().unwrap_or_default();
+    // Only once the road itself reads: a `copy-fixture` whose op or args are wrong has already been
+    // named, and a second line about the file it points at would be noise on top of the real fault.
+    if errs.is_empty() {
+        errs = missing_fixtures(&scenario);
+    }
+    if errs.is_empty() {
+        Ok(scenario)
+    } else {
+        Err(errs.into_iter().map(|e| e.to_string()).collect())
     }
 }
 

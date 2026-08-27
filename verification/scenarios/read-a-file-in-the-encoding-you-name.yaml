@@ -1,0 +1,112 @@
+# The guess about a file's bytes, and the reader putting it right.
+#
+# A file has no field saying what its bytes mean. Amenbo guesses, and the guess is right almost
+# always — but it reports no confidence, and a wrong one breaks nothing a reader can see: the text
+# comes out in perfectly ordinary characters that simply are not the ones somebody wrote. So the row
+# the file is named on says what it was read as, and pressing that says it again as something else.
+#
+# ── Why this road is worth its cost ──────────────────────────────────────────────────────────────
+# **A door nobody walks is a door nobody knows is shut.** Nothing else on the face reports a wrong
+# guess, so a reader who cannot reopen a file has no second move at all — and the failure would ship
+# looking exactly like a screen that works.
+#
+# ── Why the guess itself is not read ─────────────────────────────────────────────────────────────
+# What the guess says about the file below is not asserted, and deliberately: the guess reads the
+# machine's own language out of its settings, so what it lands on is a property of the box the run is
+# on rather than of the build under test. What *is* the build's is that the row follows the reader —
+# so the road names an encoding, reads the row back, names another, and reads it back again.
+#
+# ── Why the bytes come out of a fixture ──────────────────────────────────────────────────────────
+# A file that is not UTF-8 cannot be written down in a scenario: YAML is text, and what is under test
+# here is bytes that mean different things read two ways.
+id: read-a-file-in-the-encoding-you-name
+title: A file whose bytes were guessed at is read again in the encoding the reader names
+description: >
+  Open a file the folder holds and read, on the row it is named on, what its bytes were read as.
+  Press that, name an encoding, and the row says the file was read as that one instead. Name another
+  and it follows again — what the row reports is the reader's answer, not the guess's.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # Bytes that are not UTF-8, and are text all the same: a note written the way a machine in Japan
+  # still writes one. What it means depends entirely on which encoding it is read as.
+  - type: action
+    domain: repo
+    op: copy-fixture
+    with:
+      dir: greenhouse
+      from: files/shift-jis.txt
+      path: notes/watering.txt
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: enter
+    with:
+      name: notes
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.txt
+      section: tree
+
+  # The reader names the encoding the bytes were actually written in. What the guess had said is not
+  # read here — see the head of this file.
+  - type: action
+    domain: files
+    op: reopen-with
+    with:
+      encoding: Shift_JIS
+
+  - type: assert
+    domain: files
+    op: read-as
+    with:
+      encoding: Shift_JIS
+
+  # And again, at something else. One reading could be the guess having said so all along; two say
+  # the row is following the reader.
+  - type: action
+    domain: files
+    op: reopen-with
+    with:
+      encoding: UTF-8
+
+  - type: assert
+    domain: files
+    op: read-as
+    with:
+      encoding: UTF-8

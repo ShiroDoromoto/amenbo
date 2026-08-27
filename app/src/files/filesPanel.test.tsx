@@ -58,6 +58,10 @@ const hoisted = vi.hoisted(() => ({
   dragging: null as null | ((event: { payload: unknown }) => void),
   /** What the editor was asked to draw, and whether it was allowed to be typed into. */
   editing: [] as { text: string; editable: boolean; name: string }[],
+  /** What the host answers about a row it was asked to bin — a test makes one stop by filling it. */
+  trashed: null as null | { gone: string[]; stopped: { name: string; why: string } | null },
+  /** What comes back out of the bin. `null` is the host saying there is nothing left to undo. */
+  restored: null as null | { back: string[]; stopped: { name: string; why: string } | null },
   /** Every carry the panel asked the host for, as it asked for it. */
   imported: [] as
     { paths: string[]; toRoot: string; to: string[]; effect: DropEffectDto }[],
@@ -154,6 +158,14 @@ vi.mock("./folder", () => ({
   },
   folderOpenFileWith: async (_projectId: number, root: string, path: string[], app: string) => {
     hoisted.asked.push(`with:${root}:${path.join("/")}:${app}`);
+  },
+  folderTrash: async (_projectId: number, root: string, paths: string[][]) => {
+    hoisted.asked.push(`trash:${root}:${paths.map((one) => one.join("/")).join(",")}`);
+    return hoisted.trashed ?? { gone: paths.map((one) => one[one.length - 1] ?? ""), stopped: null };
+  },
+  folderUntrash: async () => {
+    hoisted.asked.push("untrash");
+    return hoisted.restored;
   },
   folderImport: async (
     _projectId: number,
@@ -275,6 +287,18 @@ const megabytes = (n: number) =>
 const button = (text: string) =>
   [...container.querySelectorAll("button")].find((b) => b.textContent?.includes(text));
 
+/** The same, over the whole page: the question before the bin is drawn onto `document.body`. */
+const anyButton = (text: string) =>
+  [...document.querySelectorAll("button")].find((b) => b.textContent?.includes(text));
+
+/** Press undo where the panel hears it: on the panel, not on the window (`AMB-D-780`). */
+const undo = () => act(async () => {
+  container.querySelector(".files")!.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "z", metaKey: true, bubbles: true }),
+  );
+  await new Promise((r) => setTimeout(r, 0));
+});
+
 /** The menu, opened on a row the way a person opens it. */
 const menuOn = (el: Element | null | undefined) => act(async () => {
   el?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 5, clientY: 5 }));
@@ -338,6 +362,11 @@ beforeEach(() => {
   hoisted.watching = { root: ROOT, capped: false, unwatched: false, gone: false };
   hoisted.bound = [{ path: ROOT, exists: true }];
   hoisted.dragging = null;
+  hoisted.trashed = null;
+  hoisted.restored = { back: ["a.md"], stopped: null };
+  // The question before a row goes to the bin is remembered per device, so a test that turns it off
+  // would turn it off for the next one (`./askBeforeTrash`).
+  localStorage.clear();
   hoisted.imported = [];
   hoisted.carried = { arrived: [], stopped: null };
   // Inside Tauri as far as the panel is concerned; without it there is no host to hear a drop from.
@@ -1235,6 +1264,67 @@ describe("the file face", () => {
     await click(ref);
     expect(left).toEqual([1]);
   });
+  it("asks before it puts a row in the bin, and bins it on yes", async () => {
+    await drawOpen();
+    await menuOn(button("a.md"));
+    await click(button(t("files.trash")));
+    // Nothing has gone yet: the item opens the question, and the question is where the answer is.
+    expect(hoisted.asked.some((one) => one.startsWith("trash:"))).toBe(false);
+    expect(document.body.textContent).toContain(tf("files.trashAsk", { name: "a.md" }));
+
+    await click(anyButton(t("files.trashGo")));
+    expect(hoisted.asked).toContain(`trash:${ROOT}:a.md`);
+  });
+
+  it("bins nothing when the answer is no", async () => {
+    await drawOpen();
+    await menuOn(button("a.md"));
+    await click(button(t("files.trash")));
+    await click(anyButton(t("files.trashKeep")));
+    expect(hoisted.asked.some((one) => one.startsWith("trash:"))).toBe(false);
+    expect(document.body.textContent).not.toContain(tf("files.trashAsk", { name: "a.md" }));
+  });
+
+  it("stops asking once the reader says not to, and only then", async () => {
+    await drawOpen();
+    await menuOn(button("a.md"));
+    await click(button(t("files.trash")));
+    // The checkbox takes effect on the answer, not on the tick: a reader who ticks it and cancels
+    // has agreed to nothing.
+    const quiet = document.querySelector<HTMLInputElement>(".trashask__quiet input")!;
+    await act(async () => { quiet.click(); });
+    await click(anyButton(t("files.trashGo")));
+    expect(hoisted.asked).toContain(`trash:${ROOT}:a.md`);
+
+    hoisted.asked = [];
+    await menuOn(button("a.md"));
+    await click(button(t("files.trash")));
+    // No question this time, and the row is in the bin.
+    expect(anyButton(t("files.trashGo"))).toBeUndefined();
+    expect(hoisted.asked).toContain(`trash:${ROOT}:a.md`);
+  });
+
+  it("puts back what the last press binned, on the machine's own key", async () => {
+    await drawOpen();
+    await undo();
+    expect(hoisted.asked).toContain("untrash");
+  });
+
+  it("says what the machine said about a row that would not go", async () => {
+    hoisted.trashed = {
+      gone: [],
+      stopped: { name: "a.md", why: "the volume \u201cAMBRO\u201d does not have one" },
+    };
+    await drawOpen();
+    await menuOn(button("a.md"));
+    await click(button(t("files.trash")));
+    await click(anyButton(t("files.trashGo")));
+    // The row it is about is gone from the list either way, so the sentence stands in the panel —
+    // and it is the machine's own words, not a code with a template behind it.
+    expect(container.querySelector(".files__stopped")?.textContent)
+      .toContain("does not have one");
+  });
+
 });
 
 describe("a project bound to several folders", () => {

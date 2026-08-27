@@ -111,6 +111,19 @@ impl Driver<'_> {
                 };
                 Ok(Outcome::action(note))
             }
+            // Which side of the store the axis classifies at all. The answer is a word and not a
+            // switch — there are three of them, and `both` is where every axis starts — so a road
+            // takes this door to narrow, and takes it again with `both` to widen back.
+            "applies-to" => {
+                let dimension = req_str(with, "dimension")?;
+                let side = side(with)?;
+                self.run_json(&["dimension", "update", dimension, "--applies-to", side, "--json"])?;
+                let note = match side {
+                    "both" => format!("offered `{dimension}` on both sides again"),
+                    one => format!("narrowed `{dimension}` to {one}s alone"),
+                };
+                Ok(Outcome::action(note))
+            }
             // Filing a task or a decision under an axis, and taking it back off. The axis and value go
             // by name, which is what the command takes — a bare number there would be read as a name,
             // not an id. The target goes as a reference: the command takes either kind on that argument,
@@ -134,6 +147,7 @@ impl Driver<'_> {
             "listed" => {
                 let dimension = req_str(with, "dimension")?;
                 let value = with.get("value").and_then(|v| v.as_str());
+                let side = with.get("side").and_then(|v| v.as_str());
                 let present = opt_bool(with, "present").unwrap_or(true);
                 let v = self.run_json(&["dimension", "list", "--json"])?;
                 let axis = v["dimensions"]
@@ -144,7 +158,7 @@ impl Driver<'_> {
                     .find(|d| d["dimension"]["name"].as_str() == Some(dimension));
                 // Without a `value` the question is whether the axis is defined at all; with one it is
                 // whether the axis carries that value, since a value is only ever read through its axis.
-                let found = match (axis, value) {
+                let defined = match (axis, value) {
                     (None, _) => false,
                     (Some(_), None) => true,
                     (Some(a), Some(want)) => a["values"]
@@ -152,14 +166,20 @@ impl Driver<'_> {
                         .map(|vs| vs.iter().any(|v| v["name"].as_str() == Some(want)))
                         .unwrap_or(false),
                 };
+                // A `side` narrows the question to whether that side is offered the axis at all. An
+                // axis narrowed off a side stays on this listing — being defined is not being offered —
+                // so the answer folds the axis's own `applies_to` into the row it was read from rather
+                // than taking the row's presence for it.
+                let found = defined && axis.is_some_and(|a| classifies(a, side));
                 let pass = found == present;
                 Ok(Outcome::assert(
                     pass,
                     format!(
-                        "axis `{dimension}`{} {} defined (expected {}, {})",
+                        "axis `{dimension}`{} {} {} (expected {}, {})",
                         value.map(|v| format!(" value `{v}`")).unwrap_or_default(),
                         if found { "is" } else { "is not" },
-                        if present { "defined" } else { "gone" },
+                        side.map(|s| format!("offered to {s}s")).unwrap_or_else(|| "defined".to_string()),
+                        if present { "it to be" } else { "it not to be" },
                         if pass { "as expected" } else { "MISMATCH" }
                     ),
                 ))
@@ -207,6 +227,24 @@ impl Driver<'_> {
             _ => Err(unmapped(Domain::Dimension, op)),
         }
     }
+}
+
+/// Which side of the store a step is talking about, checked against what the flag takes rather than
+/// passed through: the loader already holds the word to this set, and a driver that let a fourth one
+/// past would hand the command a value it would refuse for a reason the road never meant.
+fn side(with: &Args) -> Result<&str, String> {
+    match req_str(with, "side")? {
+        s @ ("task" | "decision" | "both") => Ok(s),
+        other => Err(format!("`side` must be `task`, `decision` or `both`, not `{other}`")),
+    }
+}
+
+/// Whether the axis on this row classifies the side a step named — `both` covering either. No side
+/// named is no question asked, which is every road written before an axis could say which side it
+/// classifies at all.
+fn classifies(axis: &serde_json::Value, side: Option<&str>) -> bool {
+    let Some(want) = side else { return true };
+    matches!(axis["dimension"]["applies_to"].as_str(), Some(a) if a == want || a == "both")
 }
 
 /// The key a step named, where it named one. Absent is not the same as empty: a row created without

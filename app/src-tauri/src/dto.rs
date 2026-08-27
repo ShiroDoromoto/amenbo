@@ -76,6 +76,11 @@ pub struct DimensionDto {
     pub(crate) ordered: bool,
     pub(crate) show_on_card: bool,
     pub(crate) required: bool,
+    /// Which of the two entities this axis classifies (`AMB-D-789`). The screens read it to decide
+    /// which of them offer the axis at all — the board and the task card the task side, the decision
+    /// pane the decision side — while the manager, which is where it is set, offers every axis.
+    #[ts(type = "\"task\" | \"decision\" | \"both\"")]
+    pub(crate) applies_to: String,
     pub(crate) values: Vec<DimensionValueDto>,
 }
 

@@ -17,6 +17,7 @@ import { pickBoardNotice } from "./boardNotice";
 import { DROP_ATTR, splitColumn, useCardDrag } from "./boardDrag";
 import { useBoundFolders } from "../core/boundFolders";
 import { inTauri } from "../core/snapshot";
+import { axesFor } from "../core/appliesTo";
 import { DecisionsScreen } from "./DecisionsScreen";
 import { CalendarView } from "./CalendarView";
 import { TimelineView } from "./TimelineView";
@@ -185,7 +186,10 @@ export function BoardScreen({
   // for. `null` back from the hook is "nothing was asked", which is not the same as "nothing matched".
   const { hits, error: searchError } = useTaskSearchIds(projectId, ref ? "" : rawQ);
   const { tasks: all } = useTaskPage({ projectId, sort: "order" });
-  const projectDims = project?.dimensions ?? [];
+  // The board is the task side, so an axis narrowed to decisions is not one of its axes at all
+  // (`AMB-D-789`) — filtered once, here, and everything downstream follows: the filter chips, the
+  // grouping select, the cards' own chips and the assignments read for them.
+  const projectDims = axesFor("task", project?.dimensions ?? []);
   // If the grouping axis names a dimension id, that is what splits the columns ("status", or a deleted id, → null).
   const groupingDimId =
     typeof group === "number" && projectDims.some((d) => d.id === group) ? group : null;
@@ -257,7 +261,7 @@ export function BoardScreen({
   // change. usePager is a Hook, so it has to sit above the early-return guard below: if the open project is
   // deleted and `project` flips defined→undefined, the number of Hooks must stay the same (Rules of Hooks — a
   // violation throws during render and blacks out the screen). groupingDim/dims/tasks above are null-safe through
-  // `project?.dimensions ?? []`, so they come out empty and reach no JSX before the guard returns the placeholder.
+  // `axesFor("task", project?.dimensions ?? [])`, so they come out empty and reach no JSX before the guard returns the placeholder.
   const listPager = usePager(tasks, `${view}|${selectionKey(sel)}|${rawQ}`);
   // The one standing notice this board carries (`AMB-D-535`). Every candidate answers for itself whether
   // it has something to say, and the ordering — which of them wins when more than one does — is

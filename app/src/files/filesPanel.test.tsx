@@ -42,7 +42,7 @@ const hoisted = vi.hoisted(() => ({
    *  what names its own folder, so a stand-in that kept only the last would answer for one section
    *  and drop the news of every other. */
   takers: [] as ((changes: FolderChangesDto) => void)[],
-  watching: { root: "", partial: false, gone: false } as FolderChangesDto,
+  watching: { root: "", capped: false, unwatched: false, gone: false } as FolderChangesDto,
   /** What one named folder answers with, where a test gives several folders different news. */
   perRoot: {} as Record<string, FolderChangesDto>,
   /** What git says about each folder, by the folder it is about. */
@@ -215,7 +215,7 @@ beforeEach(() => {
   hoisted.takers = [];
   hoisted.perRoot = {};
   hoisted.git = {};
-  hoisted.watching = { root: ROOT, partial: false, gone: false };
+  hoisted.watching = { root: ROOT, capped: false, unwatched: false, gone: false };
   hoisted.bound = [{ path: ROOT, exists: true }];
   hoisted.dragging = null;
   // Inside Tauri as far as the panel is concerned; without it there is no host to hear a drop from.
@@ -260,7 +260,7 @@ describe("the file face", () => {
     hoisted.asked = [];
 
     await act(async () => {
-      tell({ root: ROOT, partial: false, gone: false });
+      tell({ root: ROOT, capped: false, unwatched: false, gone: false });
       await new Promise((r) => setTimeout(r, 0));
     });
     // The word carries nothing, so both readers go back to the host: the names of the level that is
@@ -272,12 +272,34 @@ describe("the file face", () => {
     expect(container.querySelector(".files__file--git-modified")?.textContent).toContain("main.rs");
   });
 
-  it("says out loud when only part of the folder is watched", async () => {
-    hoisted.watching = { root: ROOT, partial: true, gone: false };
+  it("says out loud when the folder was too big to look through all of", async () => {
+    hoisted.watching = { root: ROOT, capped: true, unwatched: false, gone: false };
     await draw();
     // An unwatched half looks exactly like a half where nothing happened, so it is said rather
     // than left to be assumed (`AMB-T-3604`).
-    expect(container.textContent).toContain(t("files.partial"));
+    expect(container.textContent).toContain(t("files.capped"));
+    // And it is not the other reason: the folder's size is what stopped the walk, and the machine
+    // has watches to spare (`AMB-D-778`).
+    expect(container.textContent).not.toContain(t("files.unwatched"));
+  });
+
+  it("says out loud when the machine ran out of watches, and how to get more", async () => {
+    hoisted.watching = { root: ROOT, capped: false, unwatched: true, gone: false };
+    await draw();
+    expect(container.textContent).toContain(t("files.unwatched"));
+    // The fact alone reads as something the reader did to their own project. What they can act on
+    // is the machine's supply, so the way out is drawn with it.
+    expect(container.textContent).toContain(t("files.unwatchedHow"));
+    expect(container.textContent).not.toContain(t("files.capped"));
+  });
+
+  it("says both when both are true", async () => {
+    hoisted.watching = { root: ROOT, capped: true, unwatched: true, gone: false };
+    await draw();
+    // Two separate things have happened to one folder, and folding them into whichever was noticed
+    // first would leave the other half of the story untold.
+    expect(container.textContent).toContain(t("files.capped"));
+    expect(container.textContent).toContain(t("files.unwatched"));
   });
 
   it("leaves another folder's news alone", async () => {
@@ -285,7 +307,7 @@ describe("the file face", () => {
     hoisted.entries[""] = [{ name: "main.rs", isDir: false, ignored: false }];
     hoisted.asked = [];
     await act(async () => {
-      tell({ root: "/work/other", partial: false, gone: false });
+      tell({ root: "/work/other", capped: false, unwatched: false, gone: false });
       await new Promise((r) => setTimeout(r, 0));
     });
     // Every watched folder is told about through the one listener, so a section that asked again on
@@ -819,7 +841,7 @@ describe("a project bound to several folders", () => {
     await draw();
     expect(container.textContent).not.toContain(t("files.folderGone"));
     await act(async () => {
-      tell({ root: OTHER, partial: false, gone: true });
+      tell({ root: OTHER, capped: false, unwatched: false, gone: true });
       await new Promise((r) => setTimeout(r, 0));
     });
     expect(container.textContent).toContain(t("files.folderGone"));

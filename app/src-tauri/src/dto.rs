@@ -1230,6 +1230,9 @@ pub struct PointerRepairDto {
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct DoctorFixDto {
+    /// Attachment rows swept because the record they hung off is gone. Counted apart from
+    /// `reclaimed_blobs`: that counts **files**, and a `url`-mode orphan frees none.
+    pub(crate) swept_attachments: usize,
     pub(crate) reclaimed_blobs: usize,
     pub(crate) freed_bytes: usize,
     pub(crate) forgotten_bindings: usize,

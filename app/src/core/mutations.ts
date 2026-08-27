@@ -908,7 +908,7 @@ export async function fetchDoctorReport(): Promise<DoctorReportDto> {
  * for a snapshot or a query to refetch either, which is why no ack comes back. Outside Tauri it does nothing.
  */
 export async function runDoctorFix(): Promise<DoctorFixDto> {
-  if (!inTauri()) return { reclaimedBlobs: 0, freedBytes: 0, forgottenBindings: 0 };
+  if (!inTauri()) return { sweptAttachments: 0, reclaimedBlobs: 0, freedBytes: 0, forgottenBindings: 0 };
   return await invoke<DoctorFixDto>("doctor_fix");
 }
 

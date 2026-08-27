@@ -290,7 +290,7 @@ export const ko: Translation = {
     "settings.doctorRebind": "다시 연결",
     "settings.doctorRepairing": "처리 중…",
     "settings.doctorRepairDone": "고쳤습니다.",
-    "settings.doctorFixDone": "복구했습니다(첨부 파일 {blobs}개 · 폴더 연결 {bindings}개)",
+    "settings.doctorFixDone": "복구했습니다(첨부 행 {attachments}개 · 첨부 파일 {blobs}개 · 폴더 연결 {bindings}개)",
     "settings.doctorFixNothing": "복구할 것이 없습니다.",
     "settings.dataOpPreparing": "준비 중…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -720,6 +720,10 @@ export const ko: Translation = {
     duplicate_order_key: {
       message: "프로젝트 {project}에 같은 정렬 키({order_key})를 쓰는 작업들이 있습니다.",
       fix: "작업 순서를 다시 잡으면 저절로 풀립니다.",
+    },
+    orphan_attachment: {
+      message: "{attachment}이(가) {target}에 달려 있는데, 그런 기록은 없습니다. 달려 있던 것보다 오래 남은 행이고, 아무도 닿을 수 없는 곳에 자기 파일을 붙들고 있습니다.",
+      fix: "“복구”가 그 행을 지우고 파일을 놓아줍니다. 먼저 열어볼 것은 없습니다. 달려 있던 대상은 이미 사라졌습니다.",
     },
     stale_managed_block: {
       message: "{path}의 AI 안내서(Amenbo 관리 블록)가 낡았습니다(v{version} → v{current}).",

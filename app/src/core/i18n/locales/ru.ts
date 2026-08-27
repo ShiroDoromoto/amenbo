@@ -300,7 +300,7 @@ export const ru: Translation = {
     "settings.doctorRebind": "Связать заново",
     "settings.doctorRepairing": "Идёт работа…",
     "settings.doctorRepairDone": "Исправлено.",
-    "settings.doctorFixDone": "Починено (файлов вложений: {blobs} · привязок папок: {bindings})",
+    "settings.doctorFixDone": "Починено (строк вложений: {attachments} · файлов вложений: {blobs} · привязок папок: {bindings})",
     "settings.doctorFixNothing": "Чинить нечего.",
     "settings.dataOpPreparing": "Подготовка…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -764,6 +764,10 @@ export const ru: Translation = {
     duplicate_order_key: {
       message: "В проекте {project} есть задачи с одинаковым ключом сортировки ({order_key}).",
       fix: "Переставьте задачи — и это разрешится само.",
+    },
+    orphan_attachment: {
+      message: "{attachment} висит на {target}, а такой записи нет: строка пережила то, к чему была приложена, и держит свой файл там, куда уже никто не доберётся.",
+      fix: "«Починить» удаляет строку и отпускает её файл. Открывать заранее нечего: того, к чему она была приложена, уже нет.",
     },
     stale_managed_block: {
       message: "Руководство для ИИ (блок, которым управляет Amenbo) в {path} устарело (v{version} → v{current}).",

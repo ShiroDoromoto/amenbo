@@ -290,7 +290,7 @@ export const tr: Translation = {
     "settings.doctorRebind": "Yeniden bağla",
     "settings.doctorRepairing": "Çalışıyor…",
     "settings.doctorRepairDone": "Onarıldı.",
-    "settings.doctorFixDone": "Onarıldı ({blobs} ek dosyası · {bindings} klasör bağı)",
+    "settings.doctorFixDone": "Onarıldı ({attachments} ek satırı · {blobs} ek dosyası · {bindings} klasör bağı)",
     "settings.doctorFixNothing": "Onarılacak bir şey yok.",
     "settings.dataOpPreparing": "Hazırlanıyor…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -724,6 +724,10 @@ export const tr: Translation = {
     duplicate_order_key: {
       message: "{project} projesinde aynı sıralama anahtarını paylaşan işler var ({order_key}).",
       fix: "İşleri yeniden sıralayın, kendiliğinden çözülür.",
+    },
+    orphan_attachment: {
+      message: "{attachment} {target} üzerinde duruyor ama böyle bir kayıt yok: satır, iliştirildiği şeyden uzun yaşadı ve dosyasını kimsenin erişemediği yerde tutuyor.",
+      fix: "“Onar” satırı siler ve dosyasını serbest bırakır. Önce açılacak bir şey yok: iliştirildiği şey zaten gitti.",
     },
     stale_managed_block: {
       message: "{path} içindeki yapay zekâ kılavuzu (Amenbo'nun yönettiği blok) güncelliğini yitirmiş (v{version} → v{current}).",

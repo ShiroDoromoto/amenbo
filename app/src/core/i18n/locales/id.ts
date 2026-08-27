@@ -293,7 +293,7 @@ export const id: Translation = {
     "settings.doctorRebind": "Tautkan ulang",
     "settings.doctorRepairing": "Sedang bekerja…",
     "settings.doctorRepairDone": "Sudah diperbaiki.",
-    "settings.doctorFixDone": "Diperbaiki ({blobs} berkas lampiran · {bindings} tautan folder)",
+    "settings.doctorFixDone": "Diperbaiki ({attachments} baris lampiran · {blobs} berkas lampiran · {bindings} tautan folder)",
     "settings.doctorFixNothing": "Tidak ada yang perlu diperbaiki.",
     "settings.dataOpPreparing": "Bersiap…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -726,6 +726,10 @@ export const id: Translation = {
     duplicate_order_key: {
       message: "Proyek {project} punya tugas-tugas dengan kunci urutan yang sama ({order_key}).",
       fix: "Susun ulang tugasnya dan ini beres dengan sendirinya.",
+    },
+    orphan_attachment: {
+      message: "{attachment} menempel pada {target}, dan catatan itu tidak ada: barisnya hidup lebih lama dari tempat menempelnya, dan menahan berkasnya di tempat yang tak terjangkau siapa pun.",
+      fix: "“Perbaiki” menghapus barisnya dan melepaskan berkasnya. Tidak ada yang perlu dibuka lebih dulu: tempat menempelnya sudah tiada.",
     },
     stale_managed_block: {
       message: "Panduan AI (blok yang dikelola Amenbo) di {path} sudah usang (v{version} → v{current}).",

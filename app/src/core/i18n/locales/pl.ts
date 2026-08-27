@@ -300,7 +300,7 @@ export const pl: Translation = {
     "settings.doctorRebind": "Podepnij ponownie",
     "settings.doctorRepairing": "Pracuję…",
     "settings.doctorRepairDone": "Naprawione.",
-    "settings.doctorFixDone": "Naprawiono (pliki załączników: {blobs} · powiązania folderów: {bindings})",
+    "settings.doctorFixDone": "Naprawiono (wiersze załączników: {attachments} · pliki załączników: {blobs} · powiązania folderów: {bindings})",
     "settings.doctorFixNothing": "Nie było czego naprawiać.",
     "settings.dataOpPreparing": "Przygotowywanie…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -761,6 +761,10 @@ export const pl: Translation = {
     duplicate_order_key: {
       message: "W projekcie {project} są zadania z tym samym kluczem porządkowym ({order_key}).",
       fix: "Przestaw zadania, a rozwiąże się samo.",
+    },
+    orphan_attachment: {
+      message: "{attachment} wisi przy {target}, a takiego wpisu nie ma — wiersz przeżył to, do czego był dołączony, i trzyma swój plik tam, gdzie już nikt nie sięgnie.",
+      fix: "„Napraw” usuwa wiersz i wypuszcza jego plik. Nie ma czego wcześniej otwierać: tego, przy czym wisiał, już nie ma.",
     },
     stale_managed_block: {
       message: "Przewodnik dla SI (blok zarządzany przez Amenbo) w {path} jest nieaktualny (v{version} → v{current}).",

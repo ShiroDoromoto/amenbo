@@ -311,7 +311,7 @@ const ui = {
   "settings.doctorRebind": "Re-bind",
   "settings.doctorRepairing": "Working…",
   "settings.doctorRepairDone": "Fixed.",
-  "settings.doctorFixDone": "Repaired ({blobs} attachment file(s) · {bindings} folder binding(s))",
+  "settings.doctorFixDone": "Repaired ({attachments} attachment row(s) · {blobs} attachment file(s) · {bindings} folder binding(s))",
   "settings.doctorFixNothing": "Nothing to repair.",
   "settings.dataOpPreparing": "Preparing…",
   "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -841,6 +841,10 @@ const doctor = {
   duplicate_order_key: {
     message: "Project {project} has tasks sharing the same ordering key ({order_key}).",
     fix: "Re-order the tasks and it resolves itself.",
+  },
+  orphan_attachment: {
+    message: "{attachment} hangs off {target}, and there is no such record — the row outlived what it was attached to, and its file is held out of reach while nothing can get to it.",
+    fix: "“Repair” drops the row and lets its file go. There is nothing to open first: what it hung off is already gone.",
   },
   stale_managed_block: {
     message: "The AI guidance (Amenbo managed block) in {path} is stale (v{version} → v{current}).",

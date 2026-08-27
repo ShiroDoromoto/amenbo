@@ -308,7 +308,12 @@ endOn?: string, };
 /**
  * What `doctor_fix` returns: what was cleaned up, and how much of it.
  */
-export type DoctorFixDto = { reclaimedBlobs: number, freedBytes: number, forgottenBindings: number, };
+export type DoctorFixDto = { 
+/**
+ * Attachment rows swept because the record they hung off is gone. Counted apart from
+ * `reclaimed_blobs`: that counts **files**, and a `url`-mode orphan frees none.
+ */
+sweptAttachments: number, reclaimedBlobs: number, freedBytes: number, forgottenBindings: number, };
 
 /**
  * One issue on the doctor screen (the same shape as core's

@@ -2378,6 +2378,14 @@ const REGISTRY: &[OpSpec] = &[
     // that means to prove the bytes landed leaves the file and opens it again, which is the app
     // reading the disk, and the only reading that could not have come from what was on the screen.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "save", required: &[], refs: &[], strings: &[], binds: false },
+    // The offer beside the line about the file having moved: take what is on the disk now, and lose
+    // what was typed. It is the panel's whole answer to a file written under a reader — lining two
+    // texts up is the pane's agent's work and not this face's — so it is one press and takes no args.
+    //
+    // **What it proves is the disk.** The editor holds what somebody typed until this is pressed, so
+    // a reading taken after it is a reading of the bytes, and it is how a road tells a save that was
+    // refused from one that went through without leaving the file and opening it again.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "read-again", required: &[], refs: &[], strings: &[], binds: false },
 
     // ── putting a row in the bin, and taking it back ──────────────────────────────────────────────
     // Where the file face's own settings row stands: whether the panel asks before it bins a row.

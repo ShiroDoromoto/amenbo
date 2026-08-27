@@ -1698,8 +1698,11 @@ impl Instructor {
             // by their headings, for the reason the segments are: the headings are the interface's
             // own words and the run's language is whatever the machine is set to.
             (Domain::Files, "tree") => match flag(with, "open")? {
-                true => "In the column beside the panes, unfold the section that draws the folder itself.".to_string(),
-                false => "Fold that section back up.".to_string(),
+                // Every one of them: a project bound to several folders draws a section each, and a
+                // row can only be read in the section it belongs to now that the tree is the only
+                // place rows are.
+                true => "In the column beside the panes, unfold the section that draws the folder itself — each of them where there is more than one.".to_string(),
+                false => "Fold those sections back up.".to_string(),
             },
             (Domain::Files, "enter") => format!(
                 "In the folder's section, open the folder \"{}\" one level.",

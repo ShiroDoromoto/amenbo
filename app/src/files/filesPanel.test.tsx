@@ -1291,7 +1291,7 @@ describe("the file face", () => {
       expect(container.querySelector(".cm-editor")?.textContent).toContain("theirs");
       expect(container.textContent).not.toContain(t("files.changedUnderneath"));
       // And there is nothing of theirs left unsaved, so the control says so.
-      expect(button(t("files.saved"))?.disabled).toBe(true);
+      expect(pressable(t("files.saved"))?.disabled).toBe(true);
     });
 
     /** The belt behind the watch: a move the panel never heard about is still refused at the door,
@@ -1309,7 +1309,7 @@ describe("the file face", () => {
 
       expect(container.textContent).toContain(t("files.changedUnderneath"));
       expect(hoisted.saved).toEqual([]);
-      expect(button(t("files.save"))?.disabled).toBe(false);
+      expect(pressable(t("files.save"))?.disabled).toBe(false);
     });
 
     /** A save answers with the mark of what it wrote, and the panel takes it: without that, the

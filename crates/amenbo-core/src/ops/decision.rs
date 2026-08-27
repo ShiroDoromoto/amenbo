@@ -1461,6 +1461,107 @@ mod tests {
         .is_err());
     }
 
+    /// Classification is queryable on the decision side too (`AMB-D-781`), in the grammar the task side
+    /// already reads: different axes AND, the same axis ORs (`AMB-D-655`), and `=none` is "no live value
+    /// on that axis". The axes and their values are one shared set, so what is pinned here is that the
+    /// decision's own link is what the filter walks — a value on a task does not classify the decision
+    /// that task rests on.
+    #[test]
+    fn decision_list_filters_by_classification() {
+        use crate::ops::dimension::set_on_decision;
+        use crate::ops::test_support::mk_value;
+        use crate::query::{decision_list, DecisionListParams};
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pid = mk_project(tx, "amenbo 開発");
+        let theme_main = mk_value(tx, pid, "テーマ", "メイン");
+        let theme_talk = crate::ops::dimension::value_add(
+            tx,
+            read::dimension_id_of_value(tx.conn(), theme_main).unwrap().unwrap(),
+            "会話の窓",
+            None,
+        )
+        .unwrap()
+        .id;
+        let era_ops = mk_value(tx, pid, "フェーズ", "運用第2期");
+
+        let on_main = new_decision(tx, pid, "メインで決めたこと");
+        let on_talk = new_decision(tx, pid, "テーマで決めたこと");
+        let unclassified = new_decision(tx, pid, "分類していない決定");
+        set_on_decision(tx, on_main.id, theme_main).unwrap();
+        set_on_decision(tx, on_main.id, era_ops).unwrap();
+        set_on_decision(tx, on_talk.id, theme_talk).unwrap();
+
+        let list = |expr: &str| -> Vec<i64> {
+            decision_list(tx.conn(), crate::reach::Reach::All, DecisionListParams {
+                project_id: Some(pid),
+                filter_expr: Some(expr.to_string()),
+                sort: "number".to_string(),
+                ..Default::default()
+            })
+            .unwrap()
+            .decisions
+            .into_iter()
+            .map(|d| d.id)
+            .collect()
+        };
+
+        assert_eq!(list("dim:テーマ=メイン"), vec![on_main.id]);
+        assert_eq!(list("dim:テーマ=会話の窓"), vec![on_talk.id]);
+        // The same axis twice is one question about that axis, so its values OR.
+        assert_eq!(list("dim:テーマ=メイン dim:テーマ=会話の窓"), vec![on_main.id, on_talk.id]);
+        // Different axes are separate questions, so they AND.
+        assert_eq!(list("dim:テーマ=メイン dim:フェーズ=運用第2期"), vec![on_main.id]);
+        assert!(list("dim:テーマ=会話の窓 dim:フェーズ=運用第2期").is_empty(), "an AND nobody satisfies");
+        // `=none` is no live value on the axis — and it is an element of the same per-axis selection.
+        assert_eq!(list("dim:テーマ=none"), vec![unclassified.id]);
+        assert_eq!(
+            list("dim:フェーズ=none"),
+            vec![on_talk.id, unclassified.id],
+            "the one classified only on another axis is unclassified on this one"
+        );
+        assert_eq!(list("dim:テーマ=メイン dim:テーマ=none"), vec![on_main.id, unclassified.id]);
+        // It composes with the keys that were already there.
+        // `search --kind decision` cuts its page in SQL and so restates the same keys as predicates.
+        // The two must answer alike, which is what this asks of the axis arm.
+        let found = |expr: &str| -> Vec<String> {
+            crate::query::search(
+                tx.conn(),
+                crate::reach::Reach::All,
+                crate::query::SearchParams {
+                    text: "決めたこと".to_string(),
+                    kind: Some(crate::query::SearchKind::Decision),
+                    filter_expr: Some(expr.to_string()),
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .hits
+            .into_iter()
+            .map(|h| h.r#ref)
+            .collect()
+        };
+        assert_eq!(found("dim:テーマ=メイン"), vec![format!("AMB-D-{}", on_main.id)]);
+        assert_eq!(found("dim:テーマ=会話の窓"), vec![format!("AMB-D-{}", on_talk.id)]);
+        assert!(found("dim:テーマ=none").is_empty(), "neither of the two the words reach is unclassified");
+        assert_eq!(list("dim:テーマ=メイン status:proposed"), vec![on_main.id]);
+        assert!(list("dim:テーマ=メイン status:accepted").is_empty());
+        // A name that resolves to nothing is an error, not a silent zero — and on the `=none` arm a
+        // silent pass would answer with *every* decision.
+        for expr in ["dim:無い軸=メイン", "dim:テーマ=無い値", "dim:無い軸=none"] {
+            assert!(
+                decision_list(tx.conn(), crate::reach::Reach::All, DecisionListParams {
+                    project_id: Some(pid),
+                    filter_expr: Some(expr.to_string()),
+                    sort: "number".to_string(),
+                    ..Default::default()
+                })
+                .is_err(),
+                "{expr} names nothing, so it is refused"
+            );
+        }
+    }
+
     /// One decision can draw edges to **several** old ones: supersede and amend alike take as many
     /// edges of a kind as you draw.
     #[test]

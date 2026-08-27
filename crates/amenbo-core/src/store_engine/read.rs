@@ -24,7 +24,7 @@ use super::search;
 use super::search::HitFace;
 use super::sql::{
     id_union, same, Col, Count, Exists, Expr, IdSet, Int, NotNull, Nullability, Nullable, Pred, Select,
-    Slot, Sort, Sql, Text as SqlText, Union,
+    Slot, Sort, Sql, Table, Text as SqlText, Union,
 };
 use super::{StoreEngineError, Result};
 use crate::model::{ActorKind, AttachmentTarget, DecisionStatus, Priority, TaskStatus};
@@ -372,6 +372,8 @@ pub fn list_task_ids(conn: &Connection, q: &TaskQuery) -> Result<TaskPage> {
 const T: col::task::Cols = col::task::of("t");
 /// The task↔dimension-value link's columns, as [`AxisSelection::pred`]'s subquery aliases them.
 const TDV: col::task_dimension_value::Cols = col::task_dimension_value::of("tdv");
+/// The decision's side of the same link, aliased the same way (`AMB-D-781`).
+const DDV: col::decision_dimension_value::Cols = col::decision_dimension_value::of("ddv");
 /// The change feed's columns, and the store's scalars — plain tables, named the same way.
 const FEED: col::change_feed::Cols = col::change_feed::ALL;
 const META: col::store_meta::Cols = col::store_meta::ALL;
@@ -566,7 +568,7 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
     if let Some(sha) = &f.commit {
         preds.push(commit_pred(sha));
     }
-    preds.extend(dimension_preds(&f.dimensions));
+    preds.extend(dimension_preds(&f.dimensions, TASK_AXIS_LINK, T.id));
     preds
 }
 
@@ -706,7 +708,15 @@ fn commit_pred(sha: &str) -> Pred {
 ///
 /// Sameness is judged on the resolved axis ids, not on what was typed: `time_axis:` and the axis's own
 /// name are two ways of naming one axis, and an axis name two projects share resolves to both ids alike.
-fn dimension_preds(filters: &[crate::query::DimensionFilter]) -> Vec<Pred> {
+///
+/// `link` and `record_id` say which side is being asked — a task's link table and `task.id`, or a
+/// decision's and `decision.id`. The folding above is the grammar's, and the grammar is one
+/// (`AMB-D-781`), so only the two columns the predicate lands on differ.
+fn dimension_preds(
+    filters: &[crate::query::DimensionFilter],
+    link: AxisLink,
+    record_id: Col<Int, NotNull>,
+) -> Vec<Pred> {
     let mut axes: Vec<AxisSelection> = Vec::new();
     for f in filters {
         debug_assert!(f.resolved.is_some(), "Filter::resolve was not run (`dim:` is silently dropped)");
@@ -735,8 +745,34 @@ fn dimension_preds(filters: &[crate::query::DimensionFilter]) -> Vec<Pred> {
             }
         }
     }
-    axes.into_iter().map(AxisSelection::pred).collect()
+    axes.into_iter().map(|a| a.pred(link, record_id)).collect()
 }
+
+/// Where one side's link table names the axis, the value, and the record the row hangs off.
+/// `task_dimension_value` and `decision_dimension_value` say the same three things and differ only in
+/// that last column, so the selection below is written once and asked of either (`AMB-D-781`).
+#[derive(Clone, Copy)]
+struct AxisLink {
+    table: Table,
+    dimension_id: Col<Int, NotNull>,
+    value_id: Col<Int, NotNull>,
+    /// The link's own reference back to the record — `task_id` on one side, `decision_id` on the other.
+    owner_id: Col<Int, NotNull>,
+}
+
+const TASK_AXIS_LINK: AxisLink = AxisLink {
+    table: TDV.table,
+    dimension_id: TDV.dimension_id,
+    value_id: TDV.value_id,
+    owner_id: TDV.task_id,
+};
+
+const DECISION_AXIS_LINK: AxisLink = AxisLink {
+    table: DDV.table,
+    dimension_id: DDV.dimension_id,
+    value_id: DDV.value_id,
+    owner_id: DDV.decision_id,
+};
 
 /// What one axis was asked for, folded from every token that named it.
 struct AxisSelection {
@@ -749,30 +785,30 @@ struct AxisSelection {
 }
 
 impl AxisSelection {
-    /// The selection as an EXISTS over the task's own assignment rows. It seeks by
-    /// `task_dimension_value_by_task` and matches the axis/value by primary key, so the filter stays
-    /// O(result) instead of scanning the link table once per task — and folding an axis's values into
-    /// one `IN` list keeps it a single EXISTS however many values were named. Only resolved ids reach
-    /// here: the read entry point turned the axis/value names into ids and refused the ones that name
-    /// nothing, so a typo is an error rather than a silent zero — or, on the `=none` arm, a silent
-    /// *everything* (a `NOT EXISTS` over an axis that does not exist is true of every task). The
-    /// `dimension_value` join still matters though the ids are live by construction: an assignment can
-    /// point at a value that was deleted, and that assignment must read as *unassigned*.
-    fn pred(self) -> Pred {
+    /// The selection as an EXISTS over the record's own assignment rows. It seeks by the link's
+    /// by-record index and matches the axis/value by primary key, so the filter stays O(result) instead
+    /// of scanning the link table once per record — and folding an axis's values into one `IN` list
+    /// keeps it a single EXISTS however many values were named. Only resolved ids reach here: the read
+    /// entry point turned the axis/value names into ids and refused the ones that name nothing, so a
+    /// typo is an error rather than a silent zero — or, on the `=none` arm, a silent *everything* (a
+    /// `NOT EXISTS` over an axis that does not exist is true of every record). The `dimension_value`
+    /// join still matters though the ids are live by construction: an assignment can point at a value
+    /// that was deleted, and that assignment must read as *unassigned*.
+    fn pred(self, link: AxisLink, record_id: Col<Int, NotNull>) -> Pred {
         let Some(axis_ids) = self.axis_ids else { return Pred::never() };
         const DV: col::dimension_value::Cols = col::dimension_value::of("dv");
         // The axis (and, where values were named, the values) as an `IN` list — one placeholder per id,
         // each carrying its own bind.
-        let on_axis = Pred::is_in(TDV.dimension_id, axis_ids);
+        let on_axis = Pred::is_in(link.dimension_id, axis_ids);
         let holds = |inner: Pred| {
-            Exists::over(TDV.table)
-                .join(DV.table, same(DV.id, TDV.value_id))
-                .filter(same(TDV.task_id, T.id))
+            Exists::over(link.table)
+                .join(DV.table, same(DV.id, link.value_id))
+                .filter(same(link.owner_id, record_id))
                 .filter(inner)
                 .pred()
         };
         let named = (!self.value_ids.is_empty())
-            .then(|| holds(on_axis.clone().and(Pred::is_in(TDV.value_id, self.value_ids))));
+            .then(|| holds(on_axis.clone().and(Pred::is_in(link.value_id, self.value_ids))));
         // `=none` = *no* live value on that axis, so it constrains the axis alone and negates.
         let unassigned = self.unassigned.then(|| !holds(on_axis));
         match (named, unassigned) {
@@ -821,6 +857,10 @@ fn decision_filter_preds(f: &crate::query::DecisionFilter) -> Vec<Pred> {
             Pred::eq(DEC.id, nf.number as i64)
         });
     }
+    // `dim:` / `time_axis:` — the same grammar the task side reads, over the decision's own link
+    // (`AMB-D-781`). Mirrors the `dim_hits` line of `matches`, which asks the id set this predicate
+    // selects.
+    preds.extend(dimension_preds(&f.dimensions, DECISION_AXIS_LINK, DEC.id));
     if let Some(task) = f.task {
         // `task:` — the decisions a task rests on, walked through the link (live link, live task), as an
         // EXISTS so it seeks the link index rather than scanning the links per decision. The mirror of
@@ -4106,6 +4146,19 @@ pub fn task_classification(conn: &Connection, task_id: i64) -> Result<Vec<(Strin
         .collect::<rusqlite::Result<Vec<(String, String)>>>()
         .map_err(StoreEngineError::from)?;
     Ok(rows)
+}
+
+/// The decisions the `dim:` / `time_axis:` tokens select, read whole in one query — the shape `task:`
+/// and the words already take on this side (`decision list` matches in Rust over a page it has already
+/// read, so what it wants is a set to test membership against, not a predicate). Every token must hold,
+/// so the per-axis predicates AND. An empty `filters` selects every decision, which is the caller's cue
+/// not to ask at all.
+pub fn decisions_matching_dimensions(
+    conn: &Connection,
+    filters: &[crate::query::DimensionFilter],
+) -> Result<Vec<i64>> {
+    let pred = dimension_preds(filters, DECISION_AXIS_LINK, DEC.id).into_iter().reduce(Pred::and);
+    select_ids(conn, DEC.id, pred.as_ref())
 }
 
 /// The `(dimension_id, value_id)` assignments a single **decision** carries — [`task_dimension_assignments`]'s

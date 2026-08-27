@@ -126,6 +126,28 @@ pub(crate) mod test_support {
         StoreEngine::open_in_memory().expect("in-memory engine")
     }
 
+    /// One axis carrying one value, in the given project. Returns the value's id — what a classification
+    /// names.
+    pub(crate) fn mk_value(tx: &WriteTx<'_>, project_id: i64, axis: &str, value: &str) -> i64 {
+        let dimension = crate::ops::dimension::add(
+            tx,
+            project_id,
+            crate::ops::dimension::NewDimension {
+                name: axis.to_string(),
+                notes: String::new(),
+                cardinality: crate::model::DimensionCardinality::Single,
+                ordered: false,
+                role: crate::model::DimensionRole::None,
+                show_on_card: false,
+                required: false,
+                slug: None,
+            },
+        )
+        .expect("add dimension")
+        .id;
+        crate::ops::dimension::value_add(tx, dimension, value, None).expect("add value").id
+    }
+
     /// Create one inbox task (no project) and return its id.
     pub(crate) fn mk_task(tx: &WriteTx<'_>, title: &str) -> i64 {
         mk_task_in(tx, title, None)
@@ -190,7 +212,7 @@ pub(crate) mod test_support {
 /// No edge may cross a project boundary — from any entry point.
 #[cfg(test)]
 mod cross_project_tests {
-    use super::test_support::{mk_project, mk_task_in, with_tx};
+    use super::test_support::{mk_project, mk_task_in, mk_value, with_tx};
     use crate::store_engine::WriteTx;
 
     fn mk_decision(tx: &WriteTx<'_>, project_id: i64, title: &str) -> i64 {
@@ -200,28 +222,6 @@ mod cross_project_tests {
         )
         .expect("add decision")
         .id
-    }
-
-    /// One axis carrying one value, in the given project. Returns the value's id — what a classification
-    /// names.
-    fn mk_value(tx: &WriteTx<'_>, project_id: i64, axis: &str, value: &str) -> i64 {
-        let dimension = super::dimension::add(
-            tx,
-            project_id,
-            super::dimension::NewDimension {
-                name: axis.to_string(),
-                notes: String::new(),
-                cardinality: crate::model::DimensionCardinality::Single,
-                ordered: false,
-                role: crate::model::DimensionRole::None,
-                show_on_card: false,
-                required: false,
-                slug: None,
-            },
-        )
-        .expect("add dimension")
-        .id;
-        super::dimension::value_add(tx, dimension, value, None).expect("add value").id
     }
 
     /// Decision↔decision (supersede / amend / builds_on all funnel into `put_edge`).

@@ -1774,6 +1774,19 @@ impl Instructor {
             (Domain::Files, "back") =>
                 "Press the way back out of the file. The column returns to its two sections."
                     .to_string(),
+            // The typing, put where it cannot land on top of what is already there: a road that reads the
+            // file afterwards reads it for both, and an operator who typed over the middle of it would
+            // leave one of the two readings answering for nothing.
+            (Domain::Files, "edit") => format!(
+                "Click into the text of the file, put the caret at the very end of it, press Enter and type \"{}\" on the new line.",
+                req(with, "types")?
+            ),
+            // And the keeping. The control is named by what it does rather than quoted, the same as
+            // every other item on this face — and the line says where it is, since a reader who has just
+            // been typing is looking at the text and not at the row above it.
+            (Domain::Files, "save") =>
+                "In the row above the text — beside the file's name — press the way the panel offers to keep what was typed."
+                    .to_string(),
             // A file brought in from outside and let go over a folder's row. The instruction names where it
             // is dragged from as loosely as it can — anywhere on the machine that is not this folder —
             // because what would go wrong is dragging a row out of the panel and back into it, which is a

@@ -2279,6 +2279,25 @@ const REGISTRY: &[OpSpec] = &[
     // the interface's own, and which language the run's machine is in is not a road's to know.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "says", required: &["note"], refs: &[], strings: &["note"], binds: false },
 
+    // ── changing what is in a file ────────────────────────────────────────────────────────────────
+    // The words typed into the editor an opened file draws. They go on the end and on a line of their
+    // own, which is what lets a road read the file afterwards for **both** what it already held and
+    // what was added: a save that wrote only the typing would pass a reading of the new words and
+    // have thrown the file away.
+    //
+    // It is one op and not two — the caret put where it goes, and then the typing — because on this
+    // face they are one move, the same reasoning `name` is one op for.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "edit", required: &["types"], refs: &[], strings: &["types"], binds: false },
+    // And the typing kept. It takes no args: what is saved is the file that is open, and where the
+    // bytes go is not a road's to say.
+    //
+    // **Nothing is asserted here**, and that is deliberate. What the panel draws once a save is
+    // through is that there is nothing left to save, which is a reading of the control rather than of
+    // the file — a face that drew it having written nothing would read exactly the same. So a road
+    // that means to prove the bytes landed leaves the file and opens it again, which is the app
+    // reading the disk, and the only reading that could not have come from what was on the screen.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "save", required: &[], refs: &[], strings: &[], binds: false },
+
     // ── bringing a file in from the machine ───────────────────────────────────────────────────────
     // A file dragged in from outside and let go over a row, which is the one way anything reaches this
     // folder that does not go through the folder itself. What is under test is the landing rather than

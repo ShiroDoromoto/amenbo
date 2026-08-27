@@ -784,6 +784,7 @@ export const uk: Translation = {
     wake_not_registered: "Для зареєстрованої команди потрібні і назва, і командний рядок.",
     window_failed: "Не вдалося відкрити це вікно: {reason}",
     talk_blank: "Те вікно відкрилося, але нічого в ньому так і не з’явилося, тому термінал повернувся в це вікно.",
+    clip_refused: "Не вдалося помістити файли в буфер обміну: {reason}",
     folder_taken: "{name} уже є.",
     folder_name: "Ця машина не приймає {name} як ім’я.",
     folder_make: "Не вдалося створити {name}: {reason}",

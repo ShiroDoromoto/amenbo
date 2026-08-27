@@ -170,6 +170,49 @@ pub fn folder_import(
     Ok(carried(&from, &into, one))
 }
 
+/// Put these rows on the machine's clipboard, as the files they are (`AMB-D-796`).
+///
+/// The rows are named the way every other door here names them — segments under one of the
+/// project's folders — and they are resolved through the same fence, so what goes on the clipboard
+/// is a path this project answers for and never one a caller made up.
+#[tauri::command]
+pub fn folder_clip_copy(
+    project_id: i64,
+    root: String,
+    paths: Vec<Vec<String>>,
+) -> Result<(), CmdError> {
+    let (roots, base) = rooted(project_id, &root)?;
+    let mut files = Vec::with_capacity(paths.len());
+    for path in paths {
+        let (_, one) = under(&roots, base, &path).ok_or_else(gone)?;
+        files.push(one);
+    }
+    crate::clipboard::put(&files).map_err(|why| {
+        CmdError::coded("clip_refused", why.clone(), serde_json::json!({ "reason": why }))
+    })
+}
+
+/// Bring what is on the machine's clipboard into this folder (`AMB-D-796`).
+///
+/// **It is the same carry a drop makes**, and deliberately so: what arrives is paths from outside,
+/// the landing is fenced the same way, and a name already in the way stops the carry and says where
+/// it got to. A reader who copied in their file manager and pasted here has done what a reader who
+/// dragged has done, and the two answers being one is what makes either of them explainable.
+///
+/// A clipboard holding no files is not a failure — it is a paste of something this folder cannot
+/// hold — so it answers with a carry that carried nothing rather than a refusal.
+#[tauri::command]
+pub fn folder_clip_paste(
+    project_id: i64,
+    to_root: String,
+    to: Vec<String>,
+) -> Result<FolderCarriedDto, CmdError> {
+    let (roots, base) = rooted(project_id, &to_root)?;
+    let into = landing(&roots, base, &to)?;
+    let from: Vec<PathBuf> = crate::clipboard::take().iter().map(|path| levelled(path)).collect();
+    Ok(carried(&from, &into, copy_one))
+}
+
 /// A dropped path in the spelling the landing is in, so the two can be compared.
 ///
 /// Everything but the last name is resolved, and the last name is left alone — the same shape

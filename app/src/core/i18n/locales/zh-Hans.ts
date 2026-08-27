@@ -746,6 +746,7 @@ export const zhHans: Translation = {
     wake_not_registered: "登记的命令需要名称和命令行两者。",
     window_failed: "无法打开该窗口：{reason}",
     talk_blank: "那个窗口已打开，但始终没有绘制任何内容，因此终端已放回这个窗口。",
+    clip_refused: "无法把文件放到剪贴板：{reason}",
     folder_taken: "{name} 已经存在。",
     folder_name: "这台机器不接受 {name} 作为名称。",
     folder_make: "无法创建 {name}：{reason}",

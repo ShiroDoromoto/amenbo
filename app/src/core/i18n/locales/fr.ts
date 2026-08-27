@@ -775,6 +775,7 @@ export const fr: Translation = {
     wake_not_registered: "Une commande enregistrée a besoin d'un nom et d'une ligne de commande.",
     window_failed: "Cette fenêtre n'a pas pu être ouverte : {reason}",
     talk_blank: "Cette fenêtre s'est ouverte sans rien afficher : le terminal a été remis dans celle-ci.",
+    clip_refused: "Les fichiers n’ont pas pu être placés dans le presse-papiers : {reason}",
     folder_taken: "{name} existe déjà.",
     folder_name: "Cette machine n’accepte pas {name} comme nom.",
     folder_make: "{name} n’a pas pu être créé : {reason}",

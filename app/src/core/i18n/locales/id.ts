@@ -749,6 +749,7 @@ export const id: Translation = {
     wake_not_registered: "Perintah yang didaftarkan memerlukan nama dan baris perintah.",
     window_failed: "Jendela itu tidak dapat dibuka: {reason}",
     talk_blank: "Jendela itu terbuka tetapi tidak menggambar apa pun, jadi terminal dikembalikan ke jendela ini.",
+    clip_refused: "Berkasnya tidak bisa ditaruh di papan klip: {reason}",
     folder_taken: "{name} sudah ada.",
     folder_name: "Mesin ini tidak menerima {name} sebagai nama.",
     folder_make: "{name} tidak bisa dibuat: {reason}",

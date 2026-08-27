@@ -776,6 +776,7 @@ export const ptBR: Translation = {
     wake_not_registered: "Um comando registrado precisa de um nome e de uma linha de comando.",
     window_failed: "Não foi possível abrir essa janela: {reason}",
     talk_blank: "Aquela janela abriu, mas nunca desenhou nada, então o terminal voltou para esta.",
+    clip_refused: "Não foi possível colocar os arquivos na área de transferência: {reason}",
     folder_taken: "{name} já existe.",
     folder_name: "Esta máquina não aceita {name} como nome.",
     folder_make: "Não foi possível criar {name}: {reason}",

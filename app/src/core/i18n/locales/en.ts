@@ -863,6 +863,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   wake_not_registered: "A registered command needs both a name and a command line.",
   window_failed: "That window could not be opened: {reason}",
   talk_blank: "That window opened but never drew anything, so the terminal was put back in this one.",
+  clip_refused: "The files could not be put on the clipboard: {reason}",
   folder_taken: "{name} is already there.",
   folder_name: "This machine will not take {name} as a name.",
   folder_make: "{name} could not be made: {reason}",

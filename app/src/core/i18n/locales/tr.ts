@@ -747,6 +747,7 @@ export const tr: Translation = {
     wake_not_registered: "Kaydedilen bir komut hem ad hem de komut satırı gerektirir.",
     window_failed: "O pencere açılamadı: {reason}",
     talk_blank: "O pencere açıldı ama içine hiçbir şey çizilmedi; terminal yeniden bu pencereye alındı.",
+    clip_refused: "Dosyalar panoya konulamadı: {reason}",
     folder_taken: "{name} zaten var.",
     folder_name: "Bu makine {name} adını kabul etmiyor.",
     folder_make: "{name} oluşturulamadı: {reason}",

@@ -746,6 +746,7 @@ export const zhHant: Translation = {
     wake_not_registered: "登錄的命令需要名稱和命令列兩者。",
     window_failed: "無法開啟該視窗：{reason}",
     talk_blank: "那個視窗已開啟，但始終沒有繪製任何內容，因此終端機已放回這個視窗。",
+    clip_refused: "無法把檔案放到剪貼簿：{reason}",
     folder_taken: "{name} 已經存在。",
     folder_name: "這台機器不接受 {name} 作為名稱。",
     folder_make: "無法建立 {name}：{reason}",

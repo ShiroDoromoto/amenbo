@@ -209,6 +209,7 @@ export const CORE_ERROR_CODES = [
  * (`folder_unwritable_character` — a `✓` typed into a Shift_JIS file, named rather than mangled into
  * it) and everything else the filesystem said (`folder_not_saved`). */
 export const TAURI_ERROR_CODES = [
+  "clip_refused",
   "folder_make",
   "folder_name",
   "folder_not_saved",

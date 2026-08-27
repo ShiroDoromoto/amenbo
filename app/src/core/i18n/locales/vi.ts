@@ -749,6 +749,7 @@ export const vi: Translation = {
     wake_not_registered: "Lệnh đã đăng ký cần cả tên và dòng lệnh.",
     window_failed: "Không thể mở cửa sổ đó: {reason}",
     talk_blank: "Cửa sổ đó đã mở nhưng không vẽ gì cả, nên terminal được đưa về cửa sổ này.",
+    clip_refused: "Không đưa được tệp lên khay nhớ tạm: {reason}",
     folder_taken: "{name} đã có ở đó.",
     folder_name: "Máy này không nhận {name} làm tên.",
     folder_make: "Không tạo được {name}: {reason}",

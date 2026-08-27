@@ -150,7 +150,9 @@ objc2-service-management = "0.3"
 # it is wanted in a process whose windows belong to Tauri.
 # `NSEvent` is taken for its class method alone: it reports the modifier keys as they are right now,
 # which is the only way to know whether a drop that just landed was a copy or a move (`crate::dropped`).
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWorkspace", "NSEvent"] }
+# `NSPasteboard` is the machine's own clipboard, which is where a copied file goes: the webview
+# cannot carry a file, so both the writing and the reading are this side's (`crate::clipboard`).
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWorkspace", "NSEvent", "NSPasteboard"] }
 # Names the user's home directory, which is where a login registration written by an older version of
 # this app sits. Same crate core resolves the app-data base with.
 directories = "6"
@@ -191,4 +193,9 @@ windows-sys = { version = "0.61", features = [
   # `GetAsyncKeyState` reads Ctrl and Shift as they are right now — whether a drop that just landed
   # was a copy or a move, which the drag event does not carry (`crate::dropped`).
   "Win32_UI_Input_KeyboardAndMouse",
+  # The clipboard, which on this OS holds files as `CF_HDROP` — a block this side writes and reads
+  # (`crate::clipboard`). The memory it is written into is the clipboard's once it has been handed
+  # over, which is why the allocation is named here too.
+  "Win32_System_DataExchange",
+  "Win32_System_Memory",
 ] }

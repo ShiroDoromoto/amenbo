@@ -769,6 +769,7 @@ export const ja: Translation = {
     wake_not_registered: "登録するコマンドには、名前と起動行の両方が要ります。",
     window_failed: "その窓を開けませんでした: {reason}",
     talk_blank: "別ウィンドウは開きましたが何も描かれなかったので、ターミナルをこの窓に戻しました。",
+    clip_refused: "クリップボードに載せられませんでした: {reason}",
     folder_taken: "{name} は既にあります。",
     folder_name: "この機械は {name} という名前を受け付けません。",
     folder_make: "{name} を作れませんでした: {reason}",

@@ -747,6 +747,7 @@ export const nl: Translation = {
     wake_not_registered: "Een geregistreerde opdracht heeft zowel een naam als een opdrachtregel nodig.",
     window_failed: "Dat venster kon niet worden geopend: {reason}",
     talk_blank: "Dat venster ging open maar tekende niets, dus de terminal staat weer in dit venster.",
+    clip_refused: "De bestanden konden niet op het klembord worden gezet: {reason}",
     folder_taken: "{name} bestaat al.",
     folder_name: "Deze machine accepteert {name} niet als naam.",
     folder_make: "{name} kon niet worden aangemaakt: {reason}",

@@ -775,6 +775,7 @@ export const it: Translation = {
     wake_not_registered: "Un comando registrato ha bisogno di un nome e di una riga di comando.",
     window_failed: "Non è stato possibile aprire quella finestra: {reason}",
     talk_blank: "Quella finestra si è aperta senza disegnare nulla, quindi il terminale è tornato in questa.",
+    clip_refused: "Non è stato possibile mettere i file negli appunti: {reason}",
     folder_taken: "{name} c’è già.",
     folder_name: "Questa macchina non accetta {name} come nome.",
     folder_make: "Non è stato possibile creare {name}: {reason}",

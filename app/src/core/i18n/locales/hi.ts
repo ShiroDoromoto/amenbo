@@ -747,6 +747,7 @@ export const hi: Translation = {
     wake_not_registered: "पंजीकृत कमांड के लिए नाम और कमांड लाइन दोनों चाहिए।",
     window_failed: "वह विंडो नहीं खोली जा सकी: {reason}",
     talk_blank: "वह विंडो खुली तो सही, पर उसमें कुछ भी नहीं आया, इसलिए टर्मिनल को इसी विंडो में लौटा दिया गया।",
+    clip_refused: "फ़ाइलें क्लिपबोर्ड पर नहीं रखी जा सकीं: {reason}",
     folder_taken: "{name} पहले से मौजूद है।",
     folder_name: "यह मशीन {name} को नाम के रूप में स्वीकार नहीं करती।",
     folder_make: "{name} नहीं बनाया जा सका: {reason}",

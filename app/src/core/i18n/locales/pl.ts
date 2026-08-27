@@ -784,6 +784,7 @@ export const pl: Translation = {
     wake_not_registered: "Zarejestrowane polecenie wymaga zarówno nazwy, jak i wiersza polecenia.",
     window_failed: "Nie udało się otworzyć tego okna: {reason}",
     talk_blank: "Tamto okno otworzyło się, ale nic w nim nie narysowano, więc terminal wrócił do tego okna.",
+    clip_refused: "Nie udało się umieścić plików w schowku: {reason}",
     folder_taken: "{name} już tam jest.",
     folder_name: "Ta maszyna nie przyjmuje nazwy {name}.",
     folder_make: "Nie udało się utworzyć {name}: {reason}",

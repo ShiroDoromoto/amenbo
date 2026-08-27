@@ -749,6 +749,7 @@ export const th: Translation = {
     wake_not_registered: "คำสั่งที่ลงทะเบียนต้องมีทั้งชื่อและบรรทัดคำสั่ง",
     window_failed: "ไม่สามารถเปิดหน้าต่างนั้นได้: {reason}",
     talk_blank: "หน้าต่างนั้นเปิดขึ้นแต่ไม่มีอะไรถูกวาดเลย จึงนำเทอร์มินัลกลับมาไว้ที่หน้าต่างนี้",
+    clip_refused: "วางไฟล์ลงคลิปบอร์ดไม่ได้: {reason}",
     folder_taken: "มี {name} อยู่แล้ว",
     folder_name: "เครื่องนี้ไม่รับ {name} เป็นชื่อ",
     folder_make: "สร้าง {name} ไม่ได้: {reason}",

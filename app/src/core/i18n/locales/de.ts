@@ -760,6 +760,7 @@ export const de: Translation = {
     wake_not_registered: "Ein registrierter Befehl braucht sowohl einen Namen als auch eine Befehlszeile.",
     window_failed: "Dieses Fenster konnte nicht geöffnet werden: {reason}",
     talk_blank: "Das Fenster wurde geöffnet, hat aber nie etwas gezeichnet — das Terminal ist wieder in diesem Fenster.",
+    clip_refused: "Die Dateien konnten nicht in die Zwischenablage gelegt werden: {reason}",
     folder_taken: "{name} ist schon da.",
     folder_name: "Dieser Rechner nimmt {name} nicht als Namen an.",
     folder_make: "{name} konnte nicht angelegt werden: {reason}",

@@ -615,6 +615,11 @@ export const es: Translation = {
     "files.save": "Guardar",
     "files.saving": "Guardando…",
     "files.saved": "Guardado",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "Alguien escribió en este archivo después de abrirlo aquí.",
+    "files.readAgain": "Volver a leerlo",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "Este archivo tiene los dos tipos de salto de línea. Al guardarlo, todos quedarán iguales.",
@@ -792,6 +797,9 @@ export const es: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "No se pudo guardar este archivo: {reason}",
     folder_unwritable_character: "«{character}» no se puede escribir en {encoding}, así que no se guardó nada.",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "Alguien escribió en este archivo después de leerlo aquí, así que no se guardó nada.",
 
     already_reserved:
       "{ref} no está en “Pendiente”, así que no se puede reservar: puede que otra sesión ya la tenga.",

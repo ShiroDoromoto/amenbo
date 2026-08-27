@@ -597,6 +597,11 @@ export const th: Translation = {
     "files.save": "บันทึก",
     "files.saving": "กำลังบันทึก…",
     "files.saved": "บันทึกแล้ว",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "มีคนเขียนทับไฟล์นี้หลังจากที่เปิดไว้ตรงนี้",
+    "files.readAgain": "อ่านใหม่อีกครั้ง",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "ไฟล์นี้มีการขึ้นบรรทัดใหม่ทั้งสองแบบ ถ้าบันทึกจะกลายเป็นแบบเดียวกันทั้งหมด",
@@ -766,6 +771,9 @@ export const th: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "บันทึกไฟล์นี้ไม่ได้: {reason}",
     folder_unwritable_character: "“{character}” เขียนใน {encoding} ไม่ได้ จึงไม่ได้บันทึกอะไรเลย",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "มีคนเขียนทับไฟล์นี้หลังจากที่อ่านไว้ตรงนี้ จึงไม่ได้บันทึกอะไรเลย",
 
     already_reserved: "{ref} ไม่ได้อยู่ในสถานะ “รอทำ” จึงจองไม่ได้ — อาจมีเซสชันอื่นถืออยู่แล้ว",
     not_ready: "{ref} ยังจองไม่ได้: {reasons}",

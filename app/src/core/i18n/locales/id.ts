@@ -597,6 +597,11 @@ export const id: Translation = {
     "files.save": "Simpan",
     "files.saving": "Menyimpan…",
     "files.saved": "Tersimpan",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "Seseorang menulis ke berkas ini setelah dibuka di sini.",
+    "files.readAgain": "Baca ulang",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "Berkas ini memuat dua macam pemisah baris. Menyimpannya akan menyamakan semuanya.",
@@ -766,6 +771,9 @@ export const id: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Berkas ini tidak bisa disimpan: {reason}",
     folder_unwritable_character: "“{character}” tidak bisa ditulis dalam {encoding}, jadi tidak ada yang disimpan.",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "Seseorang menulis ke berkas ini setelah dibaca di sini, jadi tidak ada yang disimpan.",
 
     already_reserved:
       "{ref} tidak berstatus “Akan dikerjakan”, jadi tidak bisa diambil — mungkin sesi lain sudah memegangnya.",

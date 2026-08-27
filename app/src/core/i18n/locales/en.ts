@@ -676,6 +676,11 @@ const ui = {
   "files.save": "Save",
   "files.saving": "Saving…",
   "files.saved": "Saved",
+  // The file moving under a reader who has typed into it. What is said is the fact and
+  // nothing else — which of the two texts is right is the pane's agent's to settle, not
+  // this panel's (`AMB-D-784`).
+  "files.changedUnderneath": "Somebody wrote to this file after it was opened here.",
+  "files.readAgain": "Read it again",
   // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
   // line of the other, so the reader is told and asked (`AMB-D-773`).
   "files.newlinesMixed": "This file has both kinds of line break. Saving makes them all the same.",
@@ -882,6 +887,9 @@ const err: Partial<Record<ErrorCode, string>> = {
   // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
   folder_not_saved: "This file could not be saved: {reason}",
   folder_unwritable_character: "“{character}” cannot be written in {encoding}, so nothing was saved.",
+  // And the save the panel does not make: the file moved between the read and the save,
+  // so what the editor holds is older than the file (`AMB-D-784`).
+  folder_changed_underneath: "Somebody wrote to this file after it was read here, so nothing was saved.",
 
   // The sentences the GUI shows a person, named one at a time (`AMB-D-413`). Which refusals get a code of
   // their own was settled by measuring what the front end actually surfaces: a form the screen already

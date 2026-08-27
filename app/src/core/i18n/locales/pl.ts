@@ -620,6 +620,11 @@ export const pl: Translation = {
     "files.save": "Zapisz",
     "files.saving": "Zapisywanie…",
     "files.saved": "Zapisano",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "Ktoś zapisał ten plik po tym, jak został tutaj otwarty.",
+    "files.readAgain": "Wczytaj ponownie",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "Ten plik ma oba rodzaje końca wiersza. Po zapisaniu wszystkie będą takie same.",
@@ -801,6 +806,9 @@ export const pl: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Nie udało się zapisać tego pliku: {reason}",
     folder_unwritable_character: "„{character}” nie da się zapisać w {encoding}, więc nic nie zostało zapisane.",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "Ktoś zapisał ten plik po tym, jak został tutaj odczytany, więc nic nie zostało zapisane.",
 
     already_reserved:
       "{ref} nie ma statusu „Do zrobienia”, więc nie można go zarezerwować — być może trzyma go już inna sesja.",

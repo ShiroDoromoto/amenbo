@@ -680,6 +680,9 @@ pub fn folder_read(
             bom: read.bom,
             line_ending: line_ending(read.line_ending),
             clean: read.clean,
+            // Over the bytes, not over the text: what the panel holds has been through a decoder
+            // and a truncation, and what a save is weighed against is the file (`AMB-D-784`).
+            digest: Some(digest(&bytes)),
         });
     }
 
@@ -693,6 +696,7 @@ pub fn folder_read(
             bom: false,
             line_ending: FolderLineEndingDto::Lf,
             clean: false,
+            digest: None,
         });
     };
 
@@ -719,6 +723,7 @@ pub fn folder_read(
             bom: false,
             line_ending: FolderLineEndingDto::Lf,
             clean: false,
+            digest: None,
         });
     }
     Ok(FolderFileDto {
@@ -729,6 +734,7 @@ pub fn folder_read(
         bom: false,
         line_ending: FolderLineEndingDto::Lf,
         clean: false,
+        digest: None,
         oversize: Some(FolderOversizeDto {
             bytes: size,
             width: pixels.map(|(width, _)| width),
@@ -926,6 +932,39 @@ fn language_tld() -> Option<&'static [u8]> {
     crate::encoding::tld_for(Some(&language))
 }
 
+/// The mark that says which bytes a reader was handed: blake3 of them, in hex.
+///
+/// **A mark and not a time or a length**, because neither of those answers the question. A FAT32
+/// volume — a USB stick, a card — records modification times to the nearest two seconds, and 38 of
+/// 40 writes made 120 ms apart came back with the same one; a length says nothing at all about a
+/// file edited in place to the same size (`AMB-T-3739` measured both). The mark costs 106 µs for
+/// 256 KB, and is taken once when a file is read and once more when it is saved — never on a walk,
+/// where marking every name costs 22 times what looking at every name costs.
+///
+/// **It stops at [`TEXT_CAP`]**, which is where [`folder_read`] stops reading, so a mark taken over
+/// what was read and one taken over what was written are marks of the same stretch of the file. Only
+/// a save can hand this more than the cap — a reader who pasted six megabytes into a file that was
+/// under it — and hashing all of that would give the file a mark no read of it could ever match.
+pub fn digest(bytes: &[u8]) -> String {
+    blake3::hash(&bytes[..bytes.len().min(TEXT_CAP)]).to_hex().to_string()
+}
+
+/// The same mark for a file already open, over the bytes the panel's own read would have taken.
+///
+/// **The handle rather than the name**: what is weighed has to be the file this call goes on to
+/// act on, and a name is only a name until it is opened ([`open_no_follow`] is where a link at the
+/// end is refused).
+///
+/// It reads to [`TEXT_CAP`] and no further, which is what [`digest`] marks. Past that cut a file is
+/// drawn read-only and there is no save to weigh; and a file that grew past the cut since it was
+/// read is a different set of bytes at the cut anyway.
+pub fn digest_of(file: &std::fs::File) -> std::io::Result<String> {
+    use std::io::Read as _;
+    let mut bytes = Vec::new();
+    file.take(TEXT_CAP as u64).read_to_end(&mut bytes)?;
+    Ok(digest(&bytes))
+}
+
 /// At most `cap` bytes from the front of a file. A short file comes back short; a long one comes
 /// back cut, which is what `truncated` is then read from.
 fn read_head(path: &Path, cap: usize) -> std::io::Result<Vec<u8>> {
@@ -949,6 +988,25 @@ mod tests {
         std::fs::write(root.join("node_modules/x.js"), b"built").expect("the machine's file");
         std::fs::write(dir.path().join("secret.txt"), b"no").expect("the secret");
         (dir, vec![canonical_dir(&root).expect("the folder is there")])
+    }
+
+    /// The mark is what the panel knows an open file by, and it answers where the two cheaper
+    /// questions do not: an edit that leaves the file the same length changes it, and a
+    /// modification time on a FAT32 volume would not have moved at all (`AMB-D-784`).
+    #[test]
+    fn a_file_edited_to_the_same_length_has_a_different_mark() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let file = dir.path().join("note.md");
+        std::fs::write(&file, b"before").expect("a file");
+        let was = digest_of(&open_no_follow(&file).expect("the file")).expect("the mark");
+
+        std::fs::write(&file, b"BEFORE").expect("somebody else writing");
+        let now = digest_of(&open_no_follow(&file).expect("the file")).expect("the mark");
+
+        assert_eq!(std::fs::metadata(&file).expect("the file").len(), 6, "the same length");
+        assert_ne!(was, now, "the same length, and not the same file");
+        // And a file standing still is the same mark read twice, which is what silence rests on.
+        assert_eq!(now, digest(b"BEFORE"));
     }
 
     /// The fence, which is the whole of what this module has to get right: every spelling of

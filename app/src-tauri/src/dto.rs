@@ -2545,6 +2545,20 @@ pub struct FolderFileDto {
     /// clean — cut at the cap, not wholly decodable, or in an encoding nothing here writes — is one
     /// to read and not to save.
     pub(crate) clean: bool,
+    /// The short mark of the bytes this was read from, for a file that is text
+    /// (`crate::folder::digest`).
+    ///
+    /// **It is what the panel knows the file by while it has it open** (`AMB-D-784`). The folder
+    /// says it moved and the panel reads again: a mark that came back the same is this file
+    /// standing still, and one that came back different is somebody having written to it. The same
+    /// mark travels back into the save, which refuses to write over a file that moved since — this
+    /// side remembers nothing between the two calls, so what remembers is the panel.
+    ///
+    /// Absent where there are no text bytes to mark: a picture is drawn from a door of its own and
+    /// a binary is not drawn at all.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) digest: Option<String>,
 }
 
 /// A picture the panel would not carry, and what it was measured against (`AMB-D-783`).

@@ -594,6 +594,11 @@ export const hi: Translation = {
     "files.save": "सहेजें",
     "files.saving": "सहेजा जा रहा है…",
     "files.saved": "सहेज लिया",
+    // The file moving under a reader who has typed into it. What is said is the fact and
+    // nothing else — which of the two texts is right is the pane's agent's to settle, not
+    // this panel's (`AMB-D-784`).
+    "files.changedUnderneath": "इस फ़ाइल को यहाँ खोलने के बाद किसी ने बदल दिया।",
+    "files.readAgain": "फिर से पढ़ें",
     // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
     // line of the other, so the reader is told and asked (`AMB-D-773`).
     "files.newlinesMixed": "इस फ़ाइल में दोनों तरह के लाइन ब्रेक हैं। सहेजने पर सब एक जैसे हो जाएँगे।",
@@ -764,6 +769,9 @@ export const hi: Translation = {
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "यह फ़ाइल सहेजी नहीं जा सकी: {reason}",
     folder_unwritable_character: "“{character}” को {encoding} में नहीं लिखा जा सकता, इसलिए कुछ भी नहीं सहेजा गया।",
+    // And the save the panel does not make: the file moved between the read and the save,
+    // so what the editor holds is older than the file (`AMB-D-784`).
+    folder_changed_underneath: "इस फ़ाइल को यहाँ पढ़ने के बाद किसी ने बदल दिया, इसलिए कुछ भी सहेजा नहीं गया।",
 
     already_reserved:
       "{ref} “करना है” में नहीं है, इसलिए इसे लिया नहीं जा सकता — शायद कोई दूसरा सत्र इसे पहले ही ले चुका है।",

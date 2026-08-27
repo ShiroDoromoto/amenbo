@@ -723,6 +723,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--c-text); font-size: var(--fs-xs);
   background: none; border: 1px solid var(--c-border); border-radius: var(--r-sm);
 }
+/* The file having moved under a reader who has typed in it, and the one thing the panel can do
+   about it. Drawn as a sentence with its own next step under it, the same shape the refused picture
+   takes — it is news to read and act on, not a state the face is in (`AMB-D-784`). */
+.files__changed { display: flex; flex-direction: column; gap: var(--s-1); }
+.files__reread {
+  align-self: start; padding: 0; border: 0; background: none;
+  color: var(--c-accent-text); cursor: pointer;
+}
+.files__reread:hover { text-decoration: underline; }
 .files__body { min-height: 0; overflow-y: auto; }
 .files__text { margin: 0; font-family: var(--font-mono); font-size: var(--fs-xs); white-space: pre-wrap; word-break: break-word; }
 /* The editor a file's text is drawn in (`../files/FileEditor`). It brings its own type and colours

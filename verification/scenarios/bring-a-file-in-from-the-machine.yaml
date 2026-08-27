@@ -87,7 +87,8 @@ steps_gui:
     domain: files
     op: drop-in
     with:
-      file: seedlings.csv
+      as: file
+      brings: seedlings.csv
       name: notes
       section: tree
 

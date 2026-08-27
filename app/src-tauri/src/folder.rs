@@ -143,13 +143,63 @@ pub fn under(
     };
 
     // Of two nested folders, one spelling is a prefix of the other, so the longer one is the deeper.
+    // Both sides are levelled first: on Windows one folder has two spellings, and which one a path
+    // comes back in depends on how long it is (see `levelled`).
+    let compared = levelled(&path);
     let owner = roots
         .iter()
         .enumerate()
-        .filter(|(_, root)| path.starts_with(root))
+        .filter(|(_, root)| compared.starts_with(levelled(root)))
         .max_by_key(|(_, root)| root.as_os_str().len())?
         .0;
     Some((owner, path))
+}
+
+/// One spelling to compare two paths by, where a machine keeps more than one for the same folder.
+///
+/// **Windows answers in whichever of two spellings a path's length falls into.** [`canonical_dir`]
+/// takes the verbatim front off what the system hands back, but only up to 260 characters — past
+/// that it stays on, because that is the only spelling a path that long works in. So a folder bound
+/// at 249 characters comes back plain and a file 289 characters deep inside it comes back verbatim,
+/// and asking whether the second starts with the first is asking whether a path that begins with
+/// the verbatim front begins with a drive letter: it does not. The fence then turns away a file the
+/// tree is drawing and the filesystem opens without complaint, and the shape that does it is the
+/// most ordinary there is — a folder of ordinary length with one long branch (`AMB-T-3749`
+/// measured it; the reading in `AMB-D-771` had it the other way round).
+///
+/// Nothing is levelled anywhere but here. What leaves the fence is the spelling it arrived in,
+/// because the shell takes one of the two and refuses the other (`AMB-T-3651`).
+#[cfg(windows)]
+fn levelled(path: &Path) -> std::borrow::Cow<'_, Path> {
+    match without_verbatim(&path.as_os_str().to_string_lossy()) {
+        Some(plain) => std::borrow::Cow::Owned(PathBuf::from(plain)),
+        None => std::borrow::Cow::Borrowed(path),
+    }
+}
+
+/// Everywhere else a folder has one spelling, and a name that really holds those characters is a
+/// name somebody wrote.
+#[cfg(not(windows))]
+fn levelled(path: &Path) -> std::borrow::Cow<'_, Path> {
+    std::borrow::Cow::Borrowed(path)
+}
+
+/// The plain spelling of a verbatim Windows path, or nothing when it is not one.
+///
+/// **The network form is not the disk form with something else in front.** A verbatim path to a
+/// share spells it `\\?\UNC\server\share`, so taking the front off and stopping there leaves
+/// `UNC\server\share` — which is not the folder, and no longer resembles the `\\server\share` it
+/// has to be compared with. That case is read first for exactly that reason.
+///
+/// Written against a string rather than a path so that the one part of this with two cases in it
+/// can be read on every machine — which is also why it is compiled into a test build anywhere and
+/// into an ordinary build only where something calls it.
+#[cfg(any(windows, test))]
+fn without_verbatim(text: &str) -> Option<String> {
+    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        return Some(format!(r"\\{rest}"));
+    }
+    text.strip_prefix(r"\\?\").map(str::to_string)
 }
 
 /// Open one file for reading **without following a link at the last name**.
@@ -1015,6 +1065,22 @@ mod tests {
         for gone in [".env", "build/out.js", "node_modules/x.js"] {
             assert!(!names.contains(&gone.to_string()), "{gone} is not what changed: {names:?}");
         }
+    }
+
+    /// The two spellings Windows keeps for one folder are levelled before they are compared — and
+    /// the network one is not the disk one, so taking the front off a share has to leave a path
+    /// that still names the server.
+    #[test]
+    fn one_folder_is_compared_by_one_spelling() {
+        assert_eq!(without_verbatim(r"\\?\C:\work\repo").as_deref(), Some(r"C:\work\repo"));
+        assert_eq!(
+            without_verbatim(r"\\?\UNC\server\share\repo").as_deref(),
+            Some(r"\\server\share\repo"),
+        );
+        // Already plain, in either shape: nothing to level.
+        assert_eq!(without_verbatim(r"C:\work\repo"), None);
+        assert_eq!(without_verbatim(r"\\server\share\repo"), None);
+        assert_eq!(without_verbatim("/work/repo"), None);
     }
 
     /// The floor is read off a path the same way it is walked — and only below the root, since the

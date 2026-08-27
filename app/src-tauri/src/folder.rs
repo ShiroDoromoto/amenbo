@@ -113,7 +113,12 @@ const VISIT_CAP: usize = 20_000;
 /// `std::fs::canonicalize`'s. On Windows that call answers in the verbatim `\\?\C:\…` form, and a
 /// path in that form is not a path every Win32 entry point takes: `SHOpenWithDialog` rejects it
 /// outright with `E_INVALIDARG` and draws nothing (`AMB-T-3651` measured it on a real machine).
-/// What leaves this fence is handed to the shell, so it leaves in the form the shell accepts.
+///
+/// **That spelling is not guaranteed past 260 characters**, which is where [`canonical_dir`] stops
+/// taking the verbatim front off — a folder bound at 582 characters is answered for in the verbatim
+/// form and so is everything under it (`AMB-T-3749` measured it). A door handing a path to the shell
+/// therefore spells it with [`plain`] rather than trusting what it was given; below 260 that changes
+/// nothing, because what arrives here is already plain.
 pub fn under(
     roots: &[PathBuf],
     base: usize,
@@ -144,43 +149,55 @@ pub fn under(
 
     // Of two nested folders, one spelling is a prefix of the other, so the longer one is the deeper.
     // Both sides are levelled first: on Windows one folder has two spellings, and which one a path
-    // comes back in depends on how long it is (see `levelled`).
-    let compared = levelled(&path);
+    // comes back in depends on how long it is (see `plain`).
+    let compared = plain(&path);
     let owner = roots
         .iter()
         .enumerate()
-        .filter(|(_, root)| compared.starts_with(levelled(root)))
+        .filter(|(_, root)| compared.starts_with(plain(root)))
         .max_by_key(|(_, root)| root.as_os_str().len())?
         .0;
     Some((owner, path))
 }
 
-/// One spelling to compare two paths by, where a machine keeps more than one for the same folder.
+/// The one spelling of a path that both halves of Windows agree on — what two paths are compared
+/// by, and what is handed to anything outside this process.
 ///
 /// **Windows answers in whichever of two spellings a path's length falls into.** [`canonical_dir`]
 /// takes the verbatim front off what the system hands back, but only up to 260 characters — past
-/// that it stays on, because that is the only spelling a path that long works in. So a folder bound
-/// at 249 characters comes back plain and a file 289 characters deep inside it comes back verbatim,
-/// and asking whether the second starts with the first is asking whether a path that begins with
-/// the verbatim front begins with a drive letter: it does not. The fence then turns away a file the
-/// tree is drawing and the filesystem opens without complaint, and the shape that does it is the
-/// most ordinary there is — a folder of ordinary length with one long branch (`AMB-T-3749`
-/// measured it; the reading in `AMB-D-771` had it the other way round).
+/// that it stays on, because that is the only spelling a path that long works in. Two things follow
+/// from the same fact:
 ///
-/// Nothing is levelled anywhere but here. What leaves the fence is the spelling it arrived in,
-/// because the shell takes one of the two and refuses the other (`AMB-T-3651`).
+/// - **Comparing.** A folder bound at 249 characters comes back plain and a file 289 characters deep
+///   inside it comes back verbatim, and asking whether the second starts with the first is asking
+///   whether a path that begins with the verbatim front begins with a drive letter: it does not. The
+///   fence would then turn away a file the tree is drawing and the filesystem opens without
+///   complaint, and the shape that does it is the most ordinary there is — a folder of ordinary
+///   length with one long branch (`AMB-T-3749` measured it; the reading in `AMB-D-771` had it the
+///   other way round).
+/// - **Handing over.** A folder bound *past* 260 characters comes back verbatim itself, and so does
+///   every path [`under`] answers with beneath it. `SHOpenWithDialog` refuses that form with
+///   `E_INVALIDARG` and draws nothing at all (`AMB-T-3651`), so a root long enough kills every door
+///   that goes out to the shell, while the fence itself is perfectly happy.
+///
+/// **Below 260 this is the identity**, since what [`canonical_dir`] handed back was already plain —
+/// which is why spelling a path here changes nothing for an ordinary folder.
+///
+/// What it does not do is ask whether the plain spelling names the same file. [`canonical_dir`] does
+/// ask, and keeps the verbatim front on for a name Win32 reserves; here there is nothing to be
+/// gained by keeping it, because the form the shell refuses is not a form a door can hand over.
 #[cfg(windows)]
-fn levelled(path: &Path) -> std::borrow::Cow<'_, Path> {
+pub fn plain(path: &Path) -> std::borrow::Cow<'_, Path> {
     match without_verbatim(&path.as_os_str().to_string_lossy()) {
-        Some(plain) => std::borrow::Cow::Owned(PathBuf::from(plain)),
+        Some(text) => std::borrow::Cow::Owned(PathBuf::from(text)),
         None => std::borrow::Cow::Borrowed(path),
     }
 }
 
-/// Everywhere else a folder has one spelling, and a name that really holds those characters is a
+/// Everywhere else a path has one spelling, and a name that really holds those characters is a
 /// name somebody wrote.
 #[cfg(not(windows))]
-fn levelled(path: &Path) -> std::borrow::Cow<'_, Path> {
+pub fn plain(path: &Path) -> std::borrow::Cow<'_, Path> {
     std::borrow::Cow::Borrowed(path)
 }
 
@@ -486,11 +503,15 @@ pub fn folder_entries(
 /// The face has an editor of its own, and this is still worth having: what it opens a file in is
 /// whatever the person already opens that kind of file with. The OS decides what that is, and Amenbo
 /// does not keep an opinion about it.
+///
+/// The path goes out through [`plain`] because this is a door out of the process: past 260
+/// characters the fence answers in Windows's internal spelling, and what is on the other side of
+/// this call is the shell (`AMB-T-3749`).
 #[tauri::command]
 pub fn folder_open_file(project_id: i64, root: String, path: Vec<String>) -> Result<(), CmdError> {
     let (roots, base) = rooted(project_id, &root)?;
     let (_owner, file) = under(&roots, base, &path).ok_or_else(gone)?;
-    tauri_plugin_opener::open_path(&file, None::<&str>)
+    tauri_plugin_opener::open_path(plain(&file).as_ref(), None::<&str>)
         .map_err(|e| CmdError::coded("folder.open", e.to_string(), serde_json::Value::Null))
 }
 
@@ -499,11 +520,15 @@ pub fn folder_open_file(project_id: i64, root: String, path: Vec<String>) -> Res
 /// It is the other half of opening: what a person wants of a file is as often "where is this" as
 /// "what is in it", and a panel that could only read would leave them hunting for a path they can
 /// already see.
+///
+/// Spelled with [`plain`] for the same reason as [`folder_open_file`]: the file manager is outside
+/// this process, and the plugin's own levelling stops at 260 characters where ours does not
+/// (`dunce::simplified`, which it calls, keeps the verbatim front on past that).
 #[tauri::command]
 pub fn folder_reveal_file(project_id: i64, root: String, path: Vec<String>) -> Result<(), CmdError> {
     let (roots, base) = rooted(project_id, &root)?;
     let (_owner, file) = under(&roots, base, &path).ok_or_else(gone)?;
-    tauri_plugin_opener::reveal_item_in_dir(&file)
+    tauri_plugin_opener::reveal_item_in_dir(plain(&file).as_ref())
         .map_err(|e| CmdError::coded("folder.reveal", e.to_string(), serde_json::Value::Null))
 }
 
@@ -1067,7 +1092,26 @@ mod tests {
         }
     }
 
-    /// The two spellings Windows keeps for one folder are levelled before they are compared — and
+    /// Past 260 characters the verbatim front is not a spelling Windows is offering as one of two —
+    /// it is the only one `canonicalize` will answer in, and `dunce` leaves it on for that reason
+    /// (`is_safe_to_strip_unc` refuses anything longer). A door out to the shell has to take it off
+    /// anyway: `SHOpenWithDialog` refuses the verbatim form outright and draws nothing at all
+    /// (`AMB-T-3651`), so keeping it means every door under a folder bound that long is dead while
+    /// the fence itself reports no trouble.
+    ///
+    /// So this is deliberately not `dunce::simplified`: length is not a reason to keep it here.
+    #[test]
+    fn a_path_too_long_for_dunce_is_still_spelled_plainly_for_the_shell() {
+        let root = format!(r"\\?\C:\{}", "folder-with-a-long-name\\".repeat(12));
+        assert!(root.len() > 260, "the shape this is about is one dunce refuses: {}", root.len());
+        assert_eq!(
+            without_verbatim(&root).as_deref(),
+            Some(root.trim_start_matches(r"\\?\")),
+            "the front comes off however long the path is",
+        );
+    }
+
+    /// The two spellings Windows keeps for one folder are levelled to one before they are compared —
     /// the network one is not the disk one, so taking the front off a share has to leave a path
     /// that still names the server.
     #[test]

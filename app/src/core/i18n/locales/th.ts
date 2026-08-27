@@ -526,7 +526,6 @@ export const th: Translation = {
     "face.whichFolder": "บานหน้าต่างนี้ทำงานในโฟลเดอร์ใด",
     "face.rename": "เปลี่ยนชื่อบานหน้าต่างนี้",
     "face.needsYou": "กำลังรอคุณอยู่",
-    "face.nothingNeedsYou": "เท่าที่บันทึกรู้ ยังไม่มีอะไรต้องให้คุณจัดการ",
     "files.tab": "ไฟล์",
     "files.memo": "หน้าบันทึก",
     "files.memoWide": "เขียนแบบกว้าง",

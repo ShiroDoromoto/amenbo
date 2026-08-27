@@ -522,7 +522,6 @@ export const ko: Translation = {
     "face.whichFolder": "이 페인은 어느 폴더에서 작업하나요?",
     "face.rename": "이 페인 이름 바꾸기",
     "face.needsYou": "사용자를 기다리는 중",
-    "face.nothingNeedsYou": "장부에 있는 것 중에는 손이 필요한 것이 없습니다.",
     "files.tab": "파일",
     "files.memo": "메모",
     "files.memoWide": "넓게 쓰기",

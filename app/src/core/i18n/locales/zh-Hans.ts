@@ -523,7 +523,6 @@ export const zhHans: Translation = {
     "face.whichFolder": "这个窗格在哪个文件夹里工作？",
     "face.rename": "重命名此窗格",
     "face.needsYou": "在等你",
-    "face.nothingNeedsYou": "就账本所知，没有需要你的地方。",
     "files.tab": "文件",
     "files.memo": "便笺",
     "files.memoWide": "写得宽一些",

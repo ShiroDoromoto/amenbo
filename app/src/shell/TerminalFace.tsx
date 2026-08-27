@@ -9,7 +9,7 @@ import {
 } from "../talk/frames";
 import {
   addPane, closedFrame, closedIn, COUNTS, EMPTY_LAYOUT, focusOn, frameOfSession, goPage, goProject,
-  laidOut, MAX_PAGES, movedTo, openedFrame, openedIn, pageCount, pageOfFrame, paneIn, panesOf,
+  laidOut, movedTo, openedFrame, openedIn, pageCount, pageOfFrame, paneIn, panesOf,
   restored, roomOnPage, setCount, slotsOf, type Count, type Layout,
 } from "../talk/layout";
 import {
@@ -243,13 +243,6 @@ export function TerminalFace({
     }
     return pages;
   }, [needy, layout]);
-
-  /** The pane to go to when a person asks for the one that needs them. It may be in another project,
-   *  and going to it takes the screen there — which is the whole of what being told means. */
-  const needsYou = useMemo(
-    () => layout.frames.find((frame) => needy.has(frame.id))?.id ?? null,
-    [needy, layout],
-  );
 
   useEffect(() => {
     let alive = true;
@@ -669,36 +662,6 @@ export function TerminalFace({
   // answer appears: a question drawn anywhere else is one the reader has to go and find.
   const room = roomOnPage(layout, page);
 
-  // ⌘1〜9 for the pages. It is caught on the document because the pane below has the keys — a
-  // terminal is given every keystroke that is a character, and a page is reached with the ones that
-  // are not. The face is kept mounted while the ledger is up (see above), so a face nobody is looking
-  // at must not answer: `hidden` on a container above is what says so.
-  // What ⌘J says when it was pressed and there was nowhere to go. It is put up by the press and taken
-  // down by the next one, because it is an answer to a question rather than a state of the face.
-  const [nothingNeedsYou, setNothingNeedsYou] = useState(false);
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (!e.metaKey && !e.ctrlKey) return;
-      if (e.altKey || e.shiftKey) return;
-      if (rootRef.current?.closest("[hidden]")) return;
-      // ⌘J goes to the pane whose turn is standing. **It moves and sends nothing** — the pane is
-      // somebody's terminal, and typing into it on their behalf is not what being told means.
-      if (e.key === "j" || e.key === "J") {
-        e.preventDefault();
-        setNothingNeedsYou(needsYou === null);
-        if (needsYou !== null) setLayout((was) => focusOn(was, needsYou));
-        return;
-      }
-      const digit = Number(e.key);
-      if (!Number.isInteger(digit) || digit < 1 || digit > MAX_PAGES) return;
-      e.preventDefault();
-      setLayout((was) => goPage(was, digit));
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [needsYou]);
-
   const rail = (
     <PaneRail
       layout={layout}
@@ -805,9 +768,6 @@ export function TerminalFace({
           </nav>
         )}
         {note !== null && <span className="termface__note">{note}</span>}
-        {/* Said only when it was asked for. "As far as the ledger knows" is the whole of the claim:
-            a pane nobody has heard from is not a pane where all is well (`AMB-D-748`). */}
-        {nothingNeedsYou && <span className="termface__note">{t("face.nothingNeedsYou")}</span>}
         {/* The file face's two halves, and the way to open it again once it has been closed. They
             sit at the far end because they are about the other side of the screen. Pressing the one
             already up puts the panel away, so the row says which half is open as well as opening

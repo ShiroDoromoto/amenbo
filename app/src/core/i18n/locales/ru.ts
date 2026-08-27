@@ -552,7 +552,6 @@ export const ru: Translation = {
     "face.whichFolder": "В какой папке работает эта панель?",
     "face.rename": "Переименовать эту панель",
     "face.needsYou": "ждёт вас",
-    "face.nothingNeedsYou": "Насколько известно журналу, вы нигде не нужны.",
     "files.tab": "Файлы",
     "files.memo": "Страница",
     "files.memoWide": "Писать широко",

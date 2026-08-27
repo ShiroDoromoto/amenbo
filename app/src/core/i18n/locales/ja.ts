@@ -535,7 +535,6 @@ export const ja: Translation = {
     "face.whichFolder": "このペインはどのフォルダで作業しますか？",
     "face.rename": "このペインの名前を変える",
     "face.needsYou": "手が要ります",
-    "face.nothingNeedsYou": "台帳の上では、手が要るものはありません。",
     "files.tab": "ファイル",
     "files.memo": "メモ",
     "files.memoWide": "広く書く",

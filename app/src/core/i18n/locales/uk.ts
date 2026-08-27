@@ -549,7 +549,6 @@ export const uk: Translation = {
     "face.whichFolder": "У якій теці працює ця панель?",
     "face.rename": "Перейменувати цю панель",
     "face.needsYou": "чекає на вас",
-    "face.nothingNeedsYou": "Наскільки відомо журналу, ви ніде не потрібні.",
     "files.tab": "Файли",
     "files.memo": "Сторінка",
     "files.memoWide": "Писати широко",

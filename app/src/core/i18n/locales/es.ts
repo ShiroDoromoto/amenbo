@@ -544,7 +544,6 @@ export const es: Translation = {
     "face.whichFolder": "¿En qué carpeta trabaja este panel?",
     "face.rename": "Cambiar el nombre de este panel",
     "face.needsYou": "te está esperando",
-    "face.nothingNeedsYou": "Que el registro sepa, nada te necesita.",
     "files.tab": "Archivos",
     "files.memo": "La página",
     "files.memoWide": "Escribir en grande",

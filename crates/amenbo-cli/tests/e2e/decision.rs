@@ -419,7 +419,7 @@ fn search_reaches_every_face_of_a_decision_and_folds_the_spellings() {
 }
 
 /// A decision's word faces reach what is attached to it, and to its comments (`AMB-D-450`) — the same
-/// join the task side makes, bar the labels, which only a task carries.
+/// join the task side makes.
 #[test]
 fn search_reaches_what_is_attached_to_a_decision() {
     let cli = Cli::new();

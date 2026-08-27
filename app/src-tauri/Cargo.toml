@@ -111,6 +111,17 @@ tauri-plugin-single-instance = "2"
 # named here only so it can be called directly; `gio` comes with it as `gtk::gio`.
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk = "0.18"
+# The freedesktop bin, which is a format rather than a folder: a row put in it is a pair of files,
+# one of them a record of where the row came from, and putting the row back means deleting that
+# record with it (`crate::trash`). This crate owns both halves and is the only one of the three
+# operating systems where it is taken — macOS throws away the answer this side needs, and the
+# restore this crate offers on Windows silently drops a file's extension (measured).
+trash = "5"
+# The lockfile is written for every target at once, so this crate's own Windows backend puts a
+# second `windows` (0.56) in it. Nothing builds it: the dependency above is Linux's alone, so on
+# Windows this crate is not compiled and neither is anything under it. The two `windows` versions
+# cannot be mixed in one crate, which is the other half of why the Windows recycle bin below is
+# written here rather than taken from this one.
 
 # The store-watch tests (`tests/store_watch.rs`) dig real directories on a real filesystem.
 [dev-dependencies]
@@ -160,6 +171,18 @@ directories = "6"
 # in transitively (4.18), so it costs no extra build. Linux stays on the plugin (D-Bus).
 [target.'cfg(target_os = "windows")'.dependencies]
 notify-rust = "4"
+# The shell's own file operation, which is how a row is put in the recycle bin with a sink attached
+# to report where it landed — the only door on this OS that says (`crate::trash`). The typed crate
+# rather than `windows-sys` beside it, because a sink is a COM object this side implements and only
+# `#[implement]` writes one; it is the same 0.61.3 tauri already links, so nothing new is compiled.
+# `windows-core` is named outright because that is what `#[implement]` expands to, and `windows` 0.61
+# carries no feature that would re-export it under its own name.
+windows = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_System_Com",
+  "Win32_UI_Shell",
+] }
+windows-core = "0.61"
 # Asks whether the drive is remote (a network drive) (`store_watch`), and whether this process holds an
 # administrator's token (`launch`) — elevation is what stops a terminal reaching anything scoop installed.
 # Same version tauri already pulls in.

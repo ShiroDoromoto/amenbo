@@ -25,6 +25,22 @@ const hoisted = vi.hoisted(() => ({
   wakeAfter: null as unknown,
   /** Set to refuse a registration, the way a host with an empty half does. */
   keepFails: false,
+  /** Set to leave the read out for good, the way a host still starting a login shell does. */
+  wakeHangs: false,
+  /** What `wake_rescan` answers: whether the machine could be reached this time. */
+  reached: true,
+}));
+
+// Asking this machine again is a Tauri call and is gated on being inside Tauri, which a jsdom run is
+// not — so the pair around the read is stubbed rather than the transport under it. What the frame
+// owes is the order: ask the machine again, then put the question again (`AMB-D-792`).
+vi.mock("./wake", () => ({
+  onAgentsInstalled: async () => () => {},
+  wakeRescan: async () => {
+    hoisted.asked.push("wake_rescan");
+    if (hoisted.wakeAfter !== null) hoisted.wake = hoisted.wakeAfter;
+    return hoisted.reached;
+  },
 }));
 
 vi.mock("../core/ipc", () => ({
@@ -32,6 +48,7 @@ vi.mock("../core/ipc", () => ({
     hoisted.asked.push(cmd);
     hoisted.args.push(args);
     if (cmd === "wake_choices") {
+      if (hoisted.wakeHangs) return await new Promise(() => {});
       if (hoisted.wakeFails) throw new Error("the host could not say");
       return hoisted.wake;
     }
@@ -49,6 +66,7 @@ function startable(ids: string[], settled?: string): WakeDto {
   return {
     candidates: ids.map((id) => ({ id, label: id, command: id, traced: false, installed: true })),
     offered: ids,
+    reach: "answered",
     ...(settled === undefined ? {} : { settled }),
   };
 }
@@ -63,6 +81,7 @@ function partly(has: string[], lacks: string[], settled?: string): WakeDto {
   return {
     candidates: row,
     offered: row.map((one) => one.id),
+    reach: "answered",
     ...(settled === undefined ? {} : { settled }),
   };
 }
@@ -90,8 +109,16 @@ function withOwn(
   return {
     candidates: row,
     offered: row.map((one) => one.id),
+    reach: "answered",
     ...(settled === undefined ? {} : { settled }),
   };
+}
+
+/** A machine that could not be asked at all (`AMB-D-792`). Every row says it is not installed —
+ *  which is what a machine with nothing on it says too, and the reason `reach` has to travel. */
+function unreached(ids: string[]): WakeDto {
+  const row = ids.map((id) => ({ id, label: id, command: id, traced: false, installed: false }));
+  return { candidates: row, offered: ids, reach: "unreachable" };
 }
 
 let container: HTMLDivElement;
@@ -109,6 +136,8 @@ beforeEach(() => {
   hoisted.args = [];
   hoisted.wakeAfter = null;
   hoisted.keepFails = false;
+  hoisted.wakeHangs = false;
+  hoisted.reached = true;
   started.length = 0;
   container = document.createElement("div");
   document.body.append(container);
@@ -354,6 +383,43 @@ describe("what a terminal opened here is opened with", () => {
     await press("Open a terminal here");
 
     expect(started).toEqual(["shell"]);
+  });
+});
+
+describe("what is known about the row", () => {
+  it("says it is still asking rather than drawing a row nobody has answered for", async () => {
+    hoisted.wakeHangs = true;
+    await draw("/work/here");
+
+    expect(container.querySelector(".slot__note")?.textContent)
+      .toBe("Checking what this machine can start…");
+    // Nothing to press while it is unknown which of them can be started: a pill drawn now would
+    // have to be drawn usable or missing, and both are guesses.
+    expect(container.querySelectorAll("button.slot__start")).toHaveLength(0);
+  });
+
+  it("says the machine could not be asked, and never that nothing is installed", async () => {
+    hoisted.wake = unreached(["claude-code", "codex-cli"]);
+    await draw("/work/here");
+
+    expect(container.querySelector(".slot__note")?.textContent)
+      .toBe("Amenbo could not check what this machine can start.");
+    // The whole catalogue is "not installed" in this state, so the fold that says how many is the
+    // one thing that must not be drawn: it would report a number nobody measured.
+    expect(buttons().some((b) => b.textContent?.includes("Not installed"))).toBe(false);
+    expect(container.querySelectorAll(".slot__start--missing")).toHaveLength(0);
+  });
+
+  it("asks the machine again when the reader presses, and draws what it then says", async () => {
+    hoisted.wake = unreached(["claude-code", "codex-cli"]);
+    hoisted.wakeAfter = startable(["claude-code", "codex-cli"], "claude-code");
+    await draw("/work/here");
+
+    await press("Check again");
+
+    expect(hoisted.asked).toContain("wake_rescan");
+    expect(container.querySelector(".slot__note")).toBeNull();
+    expect(on()).toBe("claude-code");
   });
 });
 

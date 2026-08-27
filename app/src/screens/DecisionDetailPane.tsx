@@ -3,6 +3,7 @@ import { Markdown } from "../components/Markdown";
 import { Attachments } from "../components/Attachments";
 import { CommentRow } from "../components/CommentRow";
 import { getSnapshot, inTauri, type Decision, type DecisionStatus } from "../core/snapshot";
+import { axesFor } from "../core/appliesTo";
 import type { Actor } from "../mock/types";
 import {
   acceptDecision, addDecisionComment, amendDecision, buildsOnDecision, editDecision, editDecisionComment,
@@ -404,8 +405,9 @@ function DecisionStamps({ d }: { d: Decision }) {
 // The classification axes a decision sits on (`AMB-D-781`) — the decision side of the task pane's
 // selects, and the same optimistic move: the select goes first and a refusal takes it back. The axes
 // belong to the project, so a project carrying none draws nothing at all, which is the common case for
-// the decisions recorded before this existed. No axis is required here — `required` bites where a
-// creation is finished, and a decision has none.
+// the decisions recorded before this existed. A required axis is not enforced in this control: the flag
+// bites where a record is settled (`AMB-D-790`), which on this side is the accept below — so an axis
+// left blank here comes back as a refusal from that press, not as a select this component holds.
 function DecisionDimensions({ d }: { d: Decision }) {
   const [values, setValues] = useState<Record<number, number>>({});
   const [error, setError] = useState<string | null>(null);
@@ -421,7 +423,13 @@ function DecisionDimensions({ d }: { d: Decision }) {
     }).catch(() => {});
     return () => { alive = false; };
   }, [d.id]);
-  const axes = (d.project ? getSnapshot().projects.find((p) => p.id === d.project?.id) : undefined)?.dimensions ?? [];
+  // The pane is the decision side, so an axis narrowed to tasks is not offered here at all
+  // (`AMB-D-789`) — which is the leak the decision was written about: a work-shaped axis like an
+  // exclusive lane on a real device had a select on every decision, and a decision occupies no device.
+  const axes = axesFor(
+    "decision",
+    (d.project ? getSnapshot().projects.find((p) => p.id === d.project?.id) : undefined)?.dimensions ?? [],
+  );
   if (axes.length === 0) return null;
   // What the select shows for one axis — the value, or nothing where the decision is on no value of it.
   // Drawing an assignment and taking a refused one back go through here alike, so the two can never

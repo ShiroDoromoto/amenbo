@@ -179,7 +179,9 @@ pub fn accept(tx: &WriteTx<'_>, id: i64, decided_by: Option<String>) -> Result<(
         }
     }
     // Every arm above either returned or left `Proposed`, so reaching here *is* the transition — the
-    // idempotent re-accept never gets this far, and so never moves the clock.
+    // idempotent re-accept never gets this far, and so never moves the clock. Which is exactly where a
+    // required classification is read (`AMB-D-790`): the transition, once, on the way through.
+    refuse_unmet_required_axes(tx, &before)?;
     let after = Decision {
         status: DecisionStatus::Accepted,
         status_changed_at: Some(now),
@@ -190,6 +192,38 @@ pub fn accept(tx: &WriteTx<'_>, id: i64, decided_by: Option<String>) -> Result<(
     };
     emit_update(tx, record::decision(&before), record::decision(&after))?;
     Ok((after, true))
+}
+
+/// Refuse the settling of a decision that carries no value on an axis its project requires
+/// (`AMB-D-790`). The decision twin of `ops::task::finish_creating`'s door, and the same shape: the
+/// axes are read in the caller's transaction, only those that classify decisions are asked
+/// (`AMB-D-789`), and the refusal names what to fill in rather than merely saying no.
+///
+/// **The check is the transition, not the state.** Only `Proposed → Accepted` passes through here, so
+/// the decisions a project settled before it raised the flag are left alone — raising one does not
+/// reach back and unsettle anything, and no other operation asks again.
+fn refuse_unmet_required_axes(tx: &WriteTx<'_>, decision: &Decision) -> Result<()> {
+    let mut empty = Vec::new();
+    for (axis_id, name) in read::required_dimensions(
+        tx.conn(),
+        decision.project_id,
+        crate::model::ClassifiedSide::Decision,
+    )? {
+        if read::decision_assignment_ids_on_axis(tx.conn(), decision.id, axis_id)?.is_empty() {
+            empty.push(name);
+        }
+    }
+    if empty.is_empty() {
+        return Ok(());
+    }
+    Err(Error::Invalid(
+        Msg::new(format!(
+            "this decision carries no value on {}, which this project requires",
+            empty.join(", ")
+        ))
+        .coded(ErrorCode::InvalidDecisionRequiredDimension)
+        .with("names", empty.join(", ")),
+    ))
 }
 
 /// Reject a decision (`Proposed` → `Rejected`). Idempotent when it is already `Rejected`.
@@ -292,6 +326,14 @@ pub fn supersede(
     let new_before = live_before(tx, new_id)?;
     let now = Timestamp::now();
     let decided_by = decided_by.map(|t| t.trim().to_string());
+
+    // The same door `accept` reads (`AMB-D-790`), asked before anything is written: this call settles
+    // the new side too, so a classification the project requires of a settled decision is required of
+    // this one. Asked only where a promotion is actually coming — drawing the edge over an
+    // already-accepted side settles nothing, and re-running it must not start refusing.
+    if new_before.status == DecisionStatus::Proposed {
+        refuse_unmet_required_axes(tx, &new_before)?;
+    }
 
     let edge_changed = put_edge(tx, new_id, old_id, DecisionEdgeKind::Supersedes)?;
 
@@ -610,6 +652,88 @@ mod tests {
         assert!(d.decided_at.is_none());
         assert!(edge_count(tx, d.id) == 0);
         assert_eq!(crate::view::decision_display_ref(&d), "AMB-D-1");
+    }
+
+    /// The decision side of the required-classification door (`AMB-D-790`): settling is what a required
+    /// axis holds, the refusal names what to fill in, and answering it lets the same call through.
+    #[test]
+    fn a_required_axis_holds_the_acceptance_until_it_is_answered() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pid = mk_project(tx, "amenbo 開発");
+        let axis = crate::ops::dimension::add(
+            tx,
+            pid,
+            crate::ops::dimension::NewDimension { name: "影響半径".to_string(), ..Default::default() },
+        )
+        .unwrap();
+        let value = crate::ops::dimension::value_add(tx, axis.id, "この一箇所", None).unwrap();
+
+        // Settled before the flag went up: the decisions a project already ruled on are not reached back
+        // for, which is what "the check is the transition" means.
+        let settled = new_decision(tx, pid, "先に採択した決定");
+        accept(tx, settled.id, None).unwrap();
+
+        crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, Some(true), None, None)
+            .unwrap();
+        assert!(
+            !accept(tx, settled.id, None).unwrap().1,
+            "the settled one is still an idempotent no-op rather than a fresh refusal",
+        );
+
+        let d = new_decision(tx, pid, "分類のない決定");
+        let err = accept(tx, d.id, None).unwrap_err();
+        assert!(
+            err.message_en().contains("影響半径"),
+            "the refusal names the axis to fill in: {}",
+            err.message_en()
+        );
+        assert_eq!(
+            live_before(tx, d.id).unwrap().status,
+            DecisionStatus::Proposed,
+            "and nothing was settled",
+        );
+
+        crate::ops::dimension::set_on_decision(tx, d.id, value.id).unwrap();
+        assert_eq!(accept(tx, d.id, None).unwrap().0.status, DecisionStatus::Accepted);
+    }
+
+    /// `supersede` settles the new side too, so it reads the same door — but only where a promotion is
+    /// actually coming (`AMB-D-790`). Drawing the edge over an already-accepted side settles nothing and
+    /// must not start refusing.
+    #[test]
+    fn supersede_reads_the_same_door_only_where_it_promotes() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pid = mk_project(tx, "amenbo 開発");
+        let old = new_decision(tx, pid, "覆される決定");
+        accept(tx, old.id, None).unwrap();
+        let already = new_decision(tx, pid, "先に採択した新側");
+        accept(tx, already.id, None).unwrap();
+
+        let axis = crate::ops::dimension::add(
+            tx,
+            pid,
+            crate::ops::dimension::NewDimension { name: "影響半径".to_string(), ..Default::default() },
+        )
+        .unwrap();
+        let value = crate::ops::dimension::value_add(tx, axis.id, "この一箇所", None).unwrap();
+        crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, Some(true), None, None)
+            .unwrap();
+
+        // A proposed new side is a promotion, so it is asked — and refused before any edge is drawn.
+        let fresh = new_decision(tx, pid, "分類のない新側");
+        let err = supersede(tx, fresh.id, old.id, None).unwrap_err();
+        assert!(err.message_en().contains("影響半径"), "{}", err.message_en());
+        assert!(targets(tx, fresh.id, DecisionEdgeKind::Supersedes).is_empty(), "and no edge was left behind");
+
+        // An already-accepted new side is not a promotion, so the door is not read at all.
+        assert!(supersede(tx, already.id, old.id, None).is_ok(), "drawing the edge alone settles nothing");
+
+        crate::ops::dimension::set_on_decision(tx, fresh.id, value.id).unwrap();
+        let (d, _, promoted) = supersede(tx, fresh.id, old.id, None).unwrap();
+        assert!(promoted);
+        assert_eq!(d.status, DecisionStatus::Accepted);
     }
 
     #[test]

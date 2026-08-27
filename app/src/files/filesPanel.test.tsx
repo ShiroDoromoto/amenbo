@@ -50,6 +50,8 @@ const hoisted = vi.hoisted(() => ({
   git: {} as Record<string, GitEntryDto[]>,
   /** What the host answers when asked what to open a file with — empty where the OS drew it. */
   apps: [] as FolderAppDto[],
+  /** The encodings the host says a file may be reopened in. */
+  encodings: [] as string[],
   /** The folders the project is bound to. Empty is a project nobody has bound one to yet. */
   bound: [] as { path: string; exists: boolean }[],
   /** The host's side of the drag-and-drop subscription (`../core/hostDrop`). */
@@ -59,6 +61,10 @@ const hoisted = vi.hoisted(() => ({
   /** Every text the panel replaced the standing editor's document with — a file read again is one
    *  of the two ways this happens, and "nothing was replaced" is a thing to assert (`AMB-D-784`). */
   shown: [] as string[],
+  /** What the host answers about a row it was asked to bin — a test makes one stop by filling it. */
+  trashed: null as null | { gone: string[]; stopped: { name: string; why: string } | null },
+  /** What comes back out of the bin. `null` is the host saying there is nothing left to undo. */
+  restored: null as null | { back: string[]; stopped: { name: string; why: string } | null },
   /** Every carry the panel asked the host for, as it asked for it. */
   imported: [] as
     { paths: string[]; toRoot: string; to: string[]; effect: DropEffectDto }[],
@@ -81,6 +87,9 @@ const hoisted = vi.hoisted(() => ({
   /** What the next save is refused with. Its own field: a name and a save are refused for different
    *  reasons, and a test about one must not arm the other. */
   refuseSave: null as unknown,
+  /** What the next read is refused with. Its own field for the same reason a save has one: a read
+   *  and a save are turned away for different reasons. */
+  refuseRead: null as unknown,
 }));
 
 // The editor is loaded on demand and lays itself out by measuring, which jsdom cannot do — so what
@@ -135,9 +144,19 @@ vi.mock("./folder", () => ({
     hoisted.asked.push(`entries:${root}:${path.join("/")}`);
     return hoisted.entries[path.join("/")] ?? [];
   },
-  folderRead: async (_projectId: number, root: string, path: string[]): Promise<FolderFileDto> => {
-    hoisted.asked.push(`read:${root}:${path.join("/")}`);
+  folderRead: async (
+    _projectId: number,
+    root: string,
+    path: string[],
+    encoding?: string,
+  ): Promise<FolderFileDto> => {
+    hoisted.asked.push(`read:${root}:${path.join("/")}${encoding === undefined ? "" : `:${encoding}`}`);
+    if (hoisted.refuseRead !== null) throw hoisted.refuseRead;
     return hoisted.file;
+  },
+  folderEncodings: async (): Promise<string[]> => {
+    hoisted.asked.push("encodings");
+    return hoisted.encodings;
   },
   folderOpenFile: async (_projectId: number, root: string, path: string[]) => {
     hoisted.asked.push(`open:${root}:${path.join("/")}`);
@@ -151,6 +170,14 @@ vi.mock("./folder", () => ({
   },
   folderOpenFileWith: async (_projectId: number, root: string, path: string[], app: string) => {
     hoisted.asked.push(`with:${root}:${path.join("/")}:${app}`);
+  },
+  folderTrash: async (_projectId: number, root: string, paths: string[][]) => {
+    hoisted.asked.push(`trash:${root}:${paths.map((one) => one.join("/")).join(",")}`);
+    return hoisted.trashed ?? { gone: paths.map((one) => one[one.length - 1] ?? ""), stopped: null };
+  },
+  folderUntrash: async () => {
+    hoisted.asked.push("untrash");
+    return hoisted.restored;
   },
   folderImport: async (
     _projectId: number,
@@ -273,6 +300,18 @@ const megabytes = (n: number) =>
 const button = (text: string) =>
   [...container.querySelectorAll("button")].find((b) => b.textContent?.includes(text));
 
+/** The same, over the whole page: the question before the bin is drawn onto `document.body`. */
+const anyButton = (text: string) =>
+  [...document.querySelectorAll("button")].find((b) => b.textContent?.includes(text));
+
+/** Press undo where the panel hears it: on the panel, not on the window (`AMB-D-780`). */
+const undo = () => act(async () => {
+  container.querySelector(".files")!.dispatchEvent(
+    new KeyboardEvent("keydown", { key: "z", metaKey: true, bubbles: true }),
+  );
+  await new Promise((r) => setTimeout(r, 0));
+});
+
 /** The menu, opened on a row the way a person opens it. */
 const menuOn = (el: Element | null | undefined) => act(async () => {
   el?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 5, clientY: 5 }));
@@ -325,10 +364,12 @@ beforeEach(() => {
   hoisted.saved = [];
   hoisted.keptDigest = "after";
   hoisted.refuseSave = null;
+  hoisted.refuseRead = null;
   // One file in the folder, so a test that only wants a row to press has one without saying so.
   hoisted.entries = { "": [{ name: "a.md", isDir: false, ignored: false }] };
   hoisted.file = aFile();
   hoisted.apps = [];
+  hoisted.encodings = ["UTF-8", "Shift_JIS", "EUC-JP", "windows-1252", "ISO-2022-JP"];
   hoisted.refuse = null;
   hoisted.slowRefusal = false;
   hoisted.takers = [];
@@ -337,6 +378,11 @@ beforeEach(() => {
   hoisted.watching = { root: ROOT, capped: false, unwatched: false, gone: false };
   hoisted.bound = [{ path: ROOT, exists: true }];
   hoisted.dragging = null;
+  hoisted.trashed = null;
+  hoisted.restored = { back: ["a.md"], stopped: null };
+  // The question before a row goes to the bin is remembered per device, so a test that turns it off
+  // would turn it off for the next one (`./askBeforeTrash`).
+  localStorage.clear();
   hoisted.imported = [];
   hoisted.carried = { arrived: [], stopped: null };
   // Inside Tauri as far as the panel is concerned; without it there is no host to hear a drop from.
@@ -681,11 +727,15 @@ describe("the file face", () => {
       await new Promise((r) => setTimeout(r, 0));
     });
 
-    hoisted.carried = { arrived: [], stopped: { name: "note.md", why: "no room left" } };
+    // The machine's own words, carried through as they came: no code, so nothing here rewrites them.
+    hoisted.carried = { arrived: [], stopped: { name: "note.md", code: null, why: "no room left" } };
     await drop(["/a/note.md"]);
     expect(said).toEqual([tf("files.dropStopped", { name: "note.md", why: "no room left" })]);
 
-    hoisted.carried = { arrived: ["one.md"], stopped: { name: "note.md", why: "no room left" } };
+    hoisted.carried = {
+      arrived: ["one.md"],
+      stopped: { name: "note.md", code: null, why: "no room left" },
+    };
     await drop(["/a/one.md", "/a/note.md"]);
     expect(said[1]).toBe(
       tf("files.dropPartly", { name: "note.md", why: "no room left", count: formatNumber(1) }),
@@ -698,12 +748,88 @@ describe("the file face", () => {
     stop();
   });
 
+  // What Amenbo itself refused. The host sends the sentence as well as the code, in English, and the
+  // face is asked to draw the code — a reader whose screen is in another language would otherwise be
+  // handed the one sentence on it that was never translated.
+  it("says a refusal of its own in the reader's language, not in the host's English", async () => {
+    await draw();
+    const said: string[] = [];
+    const stop = subscribeNotice((line) => said.push(line));
+    const drop = (paths: string[]) => act(async () => {
+      (document as unknown as { elementFromPoint: () => Element | null }).elementFromPoint =
+        () => container.querySelector("[data-into]");
+      hoisted.dragging?.({ payload: { type: "drop", position: { x: 1, y: 1 }, paths } });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    hoisted.carried = {
+      arrived: [],
+      stopped: { name: "note.md", code: "taken", why: "note.md is already there" },
+    };
+    await drop(["/a/note.md"]);
+    expect(said).toEqual([
+      tf("files.dropStopped", { name: "note.md", why: t("files.stoppedTaken") }),
+    ]);
+    stop();
+  });
+
   it("draws a Markdown file as Markdown", async () => {
     hoisted.file = aFile({ text: "# A heading" });
     await drawOpen();
     await click(button("a.md"));
     await settle();
     expect(hoisted.asked).toContain(`read:${ROOT}:a.md`);
+    expect(container.querySelector("h1")?.textContent).toBe("A heading");
+  });
+
+  /** The text is what the file holds and the rendering is a view of it (`AMB-D-41`). Until now the
+   *  one kind of file an agent writes most was the one kind nobody could correct: `.md` went to the
+   *  renderer and never to the editor. */
+  it("switches a Markdown file between what it draws and the text it is", async () => {
+    hoisted.file = aFile({ text: "# A heading" });
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+    // It opens on the rendering: what a person opens a Markdown file for is to read it.
+    expect(container.querySelector("h1")?.textContent).toBe("A heading");
+    expect(hoisted.editing).toHaveLength(0);
+
+    await click(button(t("files.edit")));
+    await settle();
+    expect(container.querySelector("h1")).toBeNull();
+    expect(last(hoisted.editing)).toEqual({ text: "# A heading", editable: true, name: "a.md" });
+
+    await click(button(t("files.read")));
+    await settle();
+    expect(container.querySelector("h1")?.textContent).toBe("A heading");
+  });
+
+  it("draws no switch on a file there is only one way to show", async () => {
+    hoisted.entries[""] = [{ name: "run.sh", isDir: false, ignored: false }];
+    hoisted.file = aFile({ text: "echo hi" });
+    await drawOpen();
+    await click(button("run.sh"));
+    await settle();
+    // A switch with nowhere to switch to is a control that answers nothing.
+    expect(button(t("files.edit"))).toBeUndefined();
+    expect(button(t("files.read"))).toBeUndefined();
+  });
+
+  /** A choice that outlived the file would be a setting nobody set: one edit, and every Markdown
+   *  file afterwards opens as source — the ones they only wanted to read included.
+   *
+   *  Driven through a path clicked in a pane, which is the one road that changes the file under a
+   *  reader that stays on the screen. Going back to the list and picking another row takes the
+   *  reader off the page and would prove only that a fresh one starts fresh. */
+  it("opens the next Markdown file on the rendering, whatever the last one was left on", async () => {
+    hoisted.file = aFile({ text: "# A heading" });
+    await draw({ show: { target: "notes/a.md", cwd: ROOT, nth: 1 } });
+    await click(button(t("files.edit")));
+    await settle();
+    expect(container.querySelector("h1")).toBeNull();
+
+    await draw({ show: { target: "notes/b.md", cwd: ROOT, nth: 2 } });
+    expect(hoisted.asked).toContain(`read:${ROOT}:notes/b.md`);
     expect(container.querySelector("h1")?.textContent).toBe("A heading");
   });
 
@@ -828,6 +954,69 @@ describe("the file face", () => {
     expect(last(hoisted.editing)?.editable).toBe(false);
   });
 
+  /** The guess reports no confidence and breaks nothing visible when it is wrong — 46 files were
+   *  misread with not one damaged character between them — so the reader is the only one who can
+   *  catch it, and only if they are told what was guessed (`AMB-D-773`). */
+  it("says on the file's own row what the bytes were read as, and how the lines end", async () => {
+    hoisted.file = aFile({ text: "a", encoding: "Shift_JIS", lineEnding: "crlf" });
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+    expect(button("Shift_JIS")?.textContent).toContain("CRLF");
+  });
+
+  it("says in words that a file's newlines are mixed, rather than in a token nobody reads", async () => {
+    hoisted.file = aFile({ text: "a", encoding: "UTF-8", lineEnding: "mixed" });
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+    expect(container.textContent).toContain(t("files.lineEndingMixed"));
+  });
+
+  it("asks the host to read the file again in the encoding the reader named", async () => {
+    hoisted.file = aFile({ text: "a", encoding: "windows-1252" });
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+    expect(hoisted.asked).toContain(`read:${ROOT}:a.md`);
+
+    await click(button("windows-1252"));
+    await settle();
+    // The list is the host's, not a copy kept here: what may be offered is what can be written back.
+    expect(hoisted.asked).toContain("encodings");
+
+    hoisted.asked = [];
+    hoisted.file = aFile({ text: "あ", encoding: "Shift_JIS" });
+    await click(button("Shift_JIS"));
+    await settle();
+    expect(hoisted.asked).toContain(`read:${ROOT}:a.md:Shift_JIS`);
+    expect(container.textContent).toContain("あ");
+  });
+
+  /** A file whose bytes and text no longer say the same thing is exactly the file a wrong guess
+   *  produces, so the road out of a wrong guess has to be open on it. */
+  it("offers the encodings on a file it could not save", async () => {
+    // Not Markdown: a file drawn as a document never reaches the editor, and what is under test
+    // here is that the road out is open on the very file the editor has locked.
+    hoisted.entries[""] = [{ name: "guessed.txt", isDir: false, ignored: false }];
+    hoisted.file = aFile({ text: "?????", encoding: "windows-1252", clean: false });
+    await drawOpen();
+    await click(button("guessed.txt"));
+    await settle();
+    expect(last(hoisted.editing)?.editable).toBe(false);
+    expect(button("windows-1252")).toBeDefined();
+  });
+
+  it("says nothing about the encoding of a picture", async () => {
+    hoisted.file = aFile({ image: { mime: "image/png" } });
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+    // A picture has no encoding to be wrong about, and a control that asked about one would be
+    // asking a question the file cannot answer.
+    expect(container.querySelector(".files__encoding")).toBeNull();
+  });
+
   /** Opening a file the panel can write back and typing into it: the one door that changes what is
    *  in the folder rather than what is on the screen (`AMB-D-776`). */
   describe("saving what was typed", () => {
@@ -932,23 +1121,33 @@ describe("the file face", () => {
     });
 
     /** A file the panel could never write back has no way to save it at all — not a control that
-     *  refuses, which would be a promise it cannot keep. Markdown is drawn rather than edited, so
-     *  it has none either (`AMB-T-3807`). */
+     *  refuses, which would be a promise it cannot keep. */
     it("offers no way to save a file it could not write back", async () => {
       await open({ truncated: true, clean: false });
       expect(button(t("files.saved"))).toBeUndefined();
       expect(button(t("files.save"))).toBeUndefined();
+    });
 
-      await click(button(t("files.back")));
-      await settle();
+    /** A Markdown file being drawn is not a file that cannot be written back — it is one whose text
+     *  is not on the screen. There is no editor on the rendering, so a save there would have nothing
+     *  to write; the switch beside the name is what puts the text up, and the save with it. */
+    it("offers the save on a Markdown file once its text is the thing on the screen", async () => {
       hoisted.entries[""] = [{ name: "notes.md", isDir: false, ignored: false }];
       hoisted.file = aFile({ text: "# a heading", encoding: "UTF-8" });
-      await draw();
-      await click(button(t("files.tree")));
-      await settle();
+      await drawOpen();
       await click(button("notes.md"));
       await settle();
       expect(container.querySelector("h1")).not.toBeNull();
+      expect(button(t("files.saved"))).toBeUndefined();
+
+      await click(button(t("files.edit")));
+      await settle();
+      expect(button(t("files.saved"))).toBeDefined();
+
+      // And it goes again with the rendering, rather than standing over a document nobody can type
+      // into.
+      await click(button(t("files.read")));
+      await settle();
       expect(button(t("files.saved"))).toBeUndefined();
     });
   });
@@ -1085,6 +1284,41 @@ describe("the file face", () => {
     expect(container.textContent).toContain(t("files.notText"));
   });
 
+  /** A link is refused on purpose (`AMB-D-782`), and answering it with the sentence every other
+   *  refusal gets told the person most likely to meet it — somebody sharing one `CLAUDE.md` between
+   *  projects — that their file was broken. */
+  it("says a name it would not follow is a link, rather than a file it could not read", async () => {
+    const link: CmdError = {
+      code: "folder_link",
+      message_en: "this name is a link, and a link is not followed here",
+      fields: null,
+    };
+    hoisted.refuseRead = link;
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+    expect(container.textContent).toContain(errLabel(link));
+    expect(container.textContent).not.toContain(t("files.unreadable"));
+    // The sentence is the reader's, not the English one that came with the refusal.
+    expect(container.textContent).not.toContain(link.message_en);
+  });
+
+  /** Everything else keeps the one sentence, because everything else is what the host had nothing
+   *  finer to say about — and core's own English would name this project's folders at a reader who
+   *  asked about a file. */
+  it("says only that a file could not be read where that is all the host said", async () => {
+    hoisted.refuseRead = {
+      code: "not_found",
+      message_en: "no such file in this project's folder",
+      fields: null,
+    };
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+    expect(container.textContent).toContain(t("files.unreadable"));
+    expect(container.textContent).not.toContain("no such file");
+  });
+
   it("points a picture at the door that hands out a file, not at bytes of its own", async () => {
     hoisted.file = aFile({ image: { mime: "image/png" } });
     await drawOpen();
@@ -1175,6 +1409,67 @@ describe("the file face", () => {
     await click(ref);
     expect(left).toEqual([1]);
   });
+  it("asks before it puts a row in the bin, and bins it on yes", async () => {
+    await drawOpen();
+    await menuOn(button("a.md"));
+    await click(button(t("files.trash")));
+    // Nothing has gone yet: the item opens the question, and the question is where the answer is.
+    expect(hoisted.asked.some((one) => one.startsWith("trash:"))).toBe(false);
+    expect(document.body.textContent).toContain(tf("files.trashAsk", { name: "a.md" }));
+
+    await click(anyButton(t("files.trashGo")));
+    expect(hoisted.asked).toContain(`trash:${ROOT}:a.md`);
+  });
+
+  it("bins nothing when the answer is no", async () => {
+    await drawOpen();
+    await menuOn(button("a.md"));
+    await click(button(t("files.trash")));
+    await click(anyButton(t("files.trashKeep")));
+    expect(hoisted.asked.some((one) => one.startsWith("trash:"))).toBe(false);
+    expect(document.body.textContent).not.toContain(tf("files.trashAsk", { name: "a.md" }));
+  });
+
+  it("stops asking once the reader says not to, and only then", async () => {
+    await drawOpen();
+    await menuOn(button("a.md"));
+    await click(button(t("files.trash")));
+    // The checkbox takes effect on the answer, not on the tick: a reader who ticks it and cancels
+    // has agreed to nothing.
+    const quiet = document.querySelector<HTMLInputElement>(".trashask__quiet input")!;
+    await act(async () => { quiet.click(); });
+    await click(anyButton(t("files.trashGo")));
+    expect(hoisted.asked).toContain(`trash:${ROOT}:a.md`);
+
+    hoisted.asked = [];
+    await menuOn(button("a.md"));
+    await click(button(t("files.trash")));
+    // No question this time, and the row is in the bin.
+    expect(anyButton(t("files.trashGo"))).toBeUndefined();
+    expect(hoisted.asked).toContain(`trash:${ROOT}:a.md`);
+  });
+
+  it("puts back what the last press binned, on the machine's own key", async () => {
+    await drawOpen();
+    await undo();
+    expect(hoisted.asked).toContain("untrash");
+  });
+
+  it("says what the machine said about a row that would not go", async () => {
+    hoisted.trashed = {
+      gone: [],
+      stopped: { name: "a.md", why: "the volume \u201cAMBRO\u201d does not have one" },
+    };
+    await drawOpen();
+    await menuOn(button("a.md"));
+    await click(button(t("files.trash")));
+    await click(anyButton(t("files.trashGo")));
+    // The row it is about is gone from the list either way, so the sentence stands in the panel —
+    // and it is the machine's own words, not a code with a template behind it.
+    expect(container.querySelector(".files__stopped")?.textContent)
+      .toContain("does not have one");
+  });
+
 });
 
 describe("a project bound to several folders", () => {

@@ -283,7 +283,13 @@ export type DimensionDto = { id: number, name: string,
  * The axis's readable key (`AMB-D-735`), the counterpart of a value's. Omitted only for a row
  * still being written; every saved axis carries one.
  */
-slug?: string, notes: string, role: "none" | "time_axis", ordered: boolean, showOnCard: boolean, required: boolean, values: Array<DimensionValueDto>, };
+slug?: string, notes: string, role: "none" | "time_axis", ordered: boolean, showOnCard: boolean, required: boolean, 
+/**
+ * Which of the two entities this axis classifies (`AMB-D-789`). The screens read it to decide
+ * which of them offer the axis at all — the board and the task card the task side, the decision
+ * pane the decision side — while the manager, which is where it is set, offers every axis.
+ */
+appliesTo: "task" | "decision" | "both", values: Array<DimensionValueDto>, };
 
 /**
  * The per-task assigned value for one project × dimension (`taskId`→`valueId`). The board uses it
@@ -628,19 +634,73 @@ width?: number,
 height?: number, };
 
 /**
- * The row a carry stopped on, and what stopped it (`crate::folder_write`).
+ * What came back out of the bin, and what it stopped on (`crate::trash`).
+ *
+ * The names are in the order they were put back, which is the reverse of the order they went in:
+ * undoing a press retraces it rather than replaying it, so a folder is back before what was inside
+ * it.
+ */
+export type FolderRestoredDto = { 
+/**
+ * The names that are where they were again.
+ */
+back: Array<string>, 
+/**
+ * The one it stopped on. What is still in the bin stays undoable, so pressing undo again
+ * carries on from here.
+ */
+stopped: FolderStoppedDto | null, };
+
+/**
+ * Why a run stopped, where it was Amenbo that stopped it (`crate::folder_write`, `crate::trash`).
+ *
+ * **Only Amenbo's own refusals are named.** They are decided before anything is written and they
+ * are the same few every time, so a screen can put them in the reader's language — which the
+ * machine's own sentences cannot be, and are not asked to be. Each of these was Amenbo's English
+ * standing on a Japanese screen until it had a name.
+ */
+export type FolderStopDto = "taken" | "inside" | "nameless" | "nobin" | "emptied";
+
+/**
+ * The row a run over several of them stopped on, and what stopped it (`crate::folder_write`,
+ * `crate::trash`).
  */
 export type FolderStoppedDto = { 
 /**
- * The name that was being carried.
+ * The name the run was on when it stopped.
  */
 name: string, 
+/**
+ * What stopped it, where what stopped it was Amenbo. Absent where the machine did, and then
+ * `why` is the whole of the answer.
+ */
+code: FolderStopDto | null, 
 /**
  * What the machine said, in the machine's own words. It is not a code with a template behind
  * it: what a disk that filled up or a permission that was not there has to say is its own, and
  * a sentence written here would be a guess at which of them it was.
+ *
+ * Amenbo's own refusals fill it too, in English, and a face that knows the `code` draws from
+ * its own words instead. Keeping the sentence here is what leaves a face that does not know a
+ * code something to say rather than nothing.
  */
 why: string, };
+
+/**
+ * What went to the machine's bin, and what it stopped on (`crate::trash`).
+ *
+ * The same line through the list a carry answers with, for the same reason: the rows go one at a
+ * time, and once one of them is in the bin no single word covers the press.
+ */
+export type FolderTrashedDto = { 
+/**
+ * The names that are in the bin now, in the order they went there.
+ */
+gone: Array<string>, 
+/**
+ * The one it stopped on. Absent when the whole list went.
+ */
+stopped: FolderStoppedDto | null, };
 
 /**
  * That folder's `.amenbo` was written by a build of another channel
@@ -2584,4 +2644,19 @@ settled?: string,
  * kept" and "kept the only one there is" read the same off `settled` and are different answers
  * to the question being put.
  */
-kept?: string, };
+kept?: string, 
+/**
+ * Whether this machine was reached at all, which is what every row's `installed` stands or
+ * falls on ([`WakeReachDto`]).
+ */
+reach: WakeReachDto, };
+
+/**
+ * Whether what a row says about being installed was got from this machine at all (`AMB-D-792`).
+ *
+ * **It is not `candidates` being empty, and it cannot be read off one.** The row is the whole
+ * catalog whatever this machine has on it, so nothing in the list moves when the probe fails —
+ * every row simply says `installed: false`, which is the same shape as a machine that really has
+ * none. Drawn as that, a machine with four agents on it tells its owner they installed nothing.
+ */
+export type WakeReachDto = "answered" | "unreachable";

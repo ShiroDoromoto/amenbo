@@ -73,6 +73,9 @@ export const CORE_SENTENCE_ERROR_CODES = [
   "invalid_dimension_slug_shape",
   "invalid_dimension_slug_taken",
   "invalid_task_required_dimension",
+  // Its decision twin: the same flag, read at the other door a record passes through once
+  // (`decision accept`), and the decision pane is where that button is.
+  "invalid_decision_required_dimension",
   "invalid_decision_edit_rejected",
   "invalid_decision_accept_rejected",
   "invalid_decision_reject_accepted",
@@ -206,9 +209,13 @@ export const CORE_ERROR_CODES = [
  * (`folder_unwritable_character` — a `✓` typed into a Shift_JIS file, named rather than mangled into
  * it), the file having moved between the read and the save
  * (`folder_changed_underneath` — an agent in the pane wrote to it while the editor held what was
- * there before), and everything else the filesystem said (`folder_not_saved`). */
+ * there before), and everything else the filesystem said (`folder_not_saved`); and the one a read is
+ * turned away with when the name is a link (`folder_link` — `AMB-D-782` refuses it on purpose, and
+ * answering that with the same "not there" every other rule uses told the reader their file was
+ * broken). */
 export const TAURI_ERROR_CODES = [
   "folder_changed_underneath",
+  "folder_link",
   "folder_make",
   "folder_name",
   "folder_not_saved",

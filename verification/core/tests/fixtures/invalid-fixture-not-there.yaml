@@ -1,0 +1,13 @@
+# Rejected: `copy-fixture` names a file that is not under `verification/fixtures/`. The road reads
+# clean — the op is known, the args are the ones it takes — so nothing but a look at the disk
+# catches it, and without that look it stays green until the pre-distribution run walks it for real
+# and stops.
+id: invalid-fixture-not-there
+title: a fixture nobody put there
+steps_cli:
+  - type: action
+    domain: repo
+    op: copy-fixture
+    with:
+      from: files/nobody-put-this-here.bin
+      path: notes/almanac.md

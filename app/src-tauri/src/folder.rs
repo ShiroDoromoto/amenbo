@@ -358,6 +358,40 @@ pub fn gone() -> CmdError {
     ))
 }
 
+/// The other refusal a name can earn: it is there, and it is a link.
+///
+/// [`gone`] answers for every rule that turns a caller away, and answering a link with it too made
+/// the panel say the file could not be read — which is not what happened. The file is whole, the
+/// link is deliberate, and the refusal is `AMB-D-782`'s: a person who linked their `CLAUDE.md` into
+/// several projects meets this first, and "could not be read" sends them looking for damage that is
+/// not there.
+///
+/// Only the read answers this way. The refusal is the same wherever a link is met, but this is the
+/// one door with a reader in front of it to tell.
+fn link() -> CmdError {
+    CmdError::coded(
+        "folder_link",
+        "this name is a link, and a link is not followed here",
+        serde_json::Value::Null,
+    )
+}
+
+/// The file one name answers for, or why it does not — the two refusals told apart.
+///
+/// Read off the name itself and not off what it leads to: a link is not a file to read here
+/// (`AMB-D-782`). What is neither a link nor a file — a folder named where a file was asked for —
+/// is nothing this door hands out, and says so the way a name that is not there does.
+fn readable(file: &Path) -> Result<std::fs::Metadata, CmdError> {
+    let meta = std::fs::symlink_metadata(file).map_err(|_| gone())?;
+    if meta.is_symlink() {
+        return Err(link());
+    }
+    if !meta.is_file() {
+        return Err(gone());
+    }
+    Ok(meta)
+}
+
 /// What both walks below agree on: the floor is pruned outright, and a dotfile is not noise.
 ///
 /// Hidden files are **not** skipped, which is where this parts company with the ignore crate's
@@ -570,6 +604,16 @@ pub fn folder_reveal_file(project_id: i64, root: String, path: Vec<String>) -> R
         .map_err(|e| CmdError::coded("folder.reveal", e.to_string(), serde_json::Value::Null))
 }
 
+/// The encodings a file may be reopened in, in the order to offer them.
+///
+/// It is asked for rather than written on the panel's own side because the list is one fact with
+/// one owner: which encodings this can write back ([`crate::encoding::writable_names`]). A copy
+/// kept over there would go on offering an encoding the day it stopped being written.
+#[tauri::command]
+pub fn folder_encodings() -> Vec<String> {
+    crate::encoding::writable_names().into_iter().map(str::to_owned).collect()
+}
+
 /// What one file has to show: its text, or that it is a picture and of what type, or why the
 /// picture is not drawn, or none of those.
 ///
@@ -581,19 +625,33 @@ pub fn folder_reveal_file(project_id: i64, root: String, path: Vec<String>) -> R
 /// **A picture is never read whole here.** Its bytes reach the webview through
 /// [`crate::fileproto`], which the caller can address because it named this file by the same
 /// project, folder and path (`AMB-D-783`).
+///
+/// `encoding` is the reader putting the guess right. Left out, the bytes are guessed at as usual;
+/// named, that encoding is what they are decoded as and nothing is guessed (`AMB-D-773`). A name
+/// this cannot write back is refused rather than honoured — offering to open a file in an encoding
+/// that could never be saved would be handing back a file to look at and not to keep — and a name
+/// on a file that is not text is simply not reached, the encoding question never being asked of a
+/// picture.
 #[tauri::command]
 pub fn folder_read(
     project_id: i64,
     root: String,
     path: Vec<String>,
+    encoding: Option<String>,
 ) -> Result<FolderFileDto, CmdError> {
+    let asked = match encoding.as_deref() {
+        None => None,
+        Some(name) => Some(crate::encoding::writable(name).ok_or_else(|| {
+            CmdError::coded(
+                "folder.encoding",
+                format!("not an encoding this writes back: {name}"),
+                serde_json::Value::Null,
+            )
+        })?),
+    };
     let (roots, base) = rooted(project_id, &root)?;
     let (_owner, file) = under(&roots, base, &path).ok_or_else(gone)?;
-    // The name's own answer, not the one it leads to: a link is not a file to read here.
-    let meta = std::fs::symlink_metadata(&file).map_err(|_| gone())?;
-    if !meta.is_file() {
-        return Err(gone());
-    }
+    let meta = readable(&file)?;
     let size = meta.len();
     let head = read_head(&file, HEAD).map_err(|_| gone())?;
 
@@ -609,7 +667,10 @@ pub fn folder_read(
         let truncated = (bytes.len() as u64) < size;
         // The reader's own language is the guess's only hint, and it is fetched here rather than
         // held because only a file that is not UTF-8 is ever guessed at — one in 645 of them.
-        let read = crate::encoding::read(&bytes, truncated, language_tld());
+        let read = match asked {
+            Some(encoding) => crate::encoding::read_as(&bytes, truncated, encoding),
+            None => crate::encoding::read(&bytes, truncated, language_tld()),
+        };
         return Ok(FolderFileDto {
             truncated,
             text: Some(read.text),
@@ -1063,6 +1124,34 @@ mod tests {
         // A file that is really a file still opens.
         let (_, real) = under(&roots, 0, ["notes", "a.md"]).expect("a real file");
         assert_eq!(read_head(&real, TEXT_CAP).unwrap(), b"hello");
+        drop(dir);
+    }
+
+    /// A link and a name that is not there are both refused, and the refusals are not the same one.
+    /// The read is the door a person is standing at, and "could not be read" told somebody who
+    /// linked a file in on purpose that their file was broken (`AMB-D-782`).
+    #[cfg(unix)]
+    #[test]
+    fn a_link_is_refused_as_a_link_and_not_as_a_file_that_is_not_there() {
+        let (dir, roots) = folders();
+        std::os::unix::fs::symlink(dir.path().join("secret.txt"), roots[0].join("escape"))
+            .expect("the link");
+
+        let (_, link) = under(&roots, 0, ["escape"]).expect("the fence lets the name through");
+        assert_eq!(readable(&link).expect_err("a link is refused").code, "folder_link");
+
+        // What it points at is never asked about, so a link leading nowhere is refused as a link
+        // and not as the file that is not on the other side of it.
+        std::os::unix::fs::symlink(dir.path().join("nowhere.txt"), roots[0].join("dangling"))
+            .expect("the link");
+        let (_, dangling) = under(&roots, 0, ["dangling"]).expect("the fence lets the name through");
+        assert_eq!(readable(&dangling).expect_err("a link is refused").code, "folder_link");
+
+        let (_, missing) = under(&roots, 0, ["notes", "nope.md"]).expect("a name that is not there");
+        assert_eq!(readable(&missing).expect_err("nothing is there").code, "not_found");
+
+        let (_, real) = under(&roots, 0, ["notes", "a.md"]).expect("a real file");
+        assert!(readable(&real).is_ok());
         drop(dir);
     }
 

@@ -39,23 +39,25 @@
 // the tree itself; a file row belongs to the folder holding it, which is what makes dropping on the
 // name of a file mean the same as dropping just beside it.
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from "react";
 import type {
-  FolderAppDto, FolderCarriedDto, FolderChangesDto, FolderEntryDto, FolderFileDto, GitEntryDto,
+  FolderAppDto, FolderCarriedDto, FolderChangesDto, FolderEntryDto, FolderFileDto, FolderStoppedDto,
+  GitEntryDto,
 } from "../bindings/bindings";
 import { Markdown } from "../components/Markdown";
 import { useBoundFolders } from "../core/boundFolders";
 import { watchHostDrop } from "../core/hostDrop";
 import { fileUrl } from "../core/fileUrl";
-import { errText, formatNumber, t, tf } from "../core/i18n";
+import { errText, formatNumber, isErr, t, tf } from "../core/i18n";
 import { pushNotice } from "../core/notice";
 import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
 import {
-  folderEntries, folderGitStatus, folderImport, folderMake, folderOpenFile, folderOpenFileWith,
-  folderOpenWith, folderRead, folderRename, folderRevealFile, folderSave, folderUnwatch,
-  folderWatch,
-  onFolderChanged,
+  folderEncodings, folderEntries, folderGitStatus, folderImport, folderMake, folderOpenFile,
+  folderOpenFileWith, folderOpenWith, folderRead, folderRename, folderRevealFile, folderSave,
+  folderTrash, folderUnwatch, folderUntrash, folderWatch, onFolderChanged,
 } from "./folder";
+import { asksBeforeTrash } from "./askBeforeTrash";
+import { TrashAsk } from "./TrashAsk";
 import { FileEditor } from "./FileEditor";
 import { MemoPage } from "./MemoPage";
 import { fileUnderAny } from "./fileUnder";
@@ -129,6 +131,31 @@ function segmentsOf(into: string): string[] {
 }
 
 /**
+ * Why the carry stopped, in the reader's language where the answer is Amenbo's own.
+ *
+ * The host names its own three refusals and sends the sentence with them (`crate::dto`); everything
+ * else it stops on is the machine's, and the machine's words go through as they came. Which is the
+ * whole of the split: what Amenbo decided means the same thing every time and can be said in any
+ * language, and what a filesystem said is one sentence in whatever language it was built with.
+ */
+function whyStopped(stopped: FolderStoppedDto): string {
+  switch (stopped.code) {
+    case "taken":
+      return t("files.stoppedTaken");
+    case "inside":
+      return t("files.stoppedInside");
+    case "nameless":
+      return t("files.stoppedNameless");
+    case "nobin":
+      return t("files.stoppedNoBin");
+    case "emptied":
+      return t("files.stoppedEmptied");
+    default:
+      return stopped.why;
+  }
+}
+
+/**
  * What to say about a carry that stopped, or nothing where the whole of it arrived.
  *
  * The count is in the sentence because a carry is not one act: stopping on the second of three
@@ -138,7 +165,7 @@ function segmentsOf(into: string): string[] {
 function stoppedLine(carried: FolderCarriedDto): string | null {
   const stopped = carried.stopped;
   if (stopped === null) return null;
-  const about = { name: stopped.name, why: stopped.why };
+  const about = { name: stopped.name, why: whyStopped(stopped) };
   return carried.arrived.length === 0
     ? tf("files.dropStopped", about)
     : tf("files.dropPartly", { ...about, count: formatNumber(carried.arrived.length) });
@@ -194,6 +221,15 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
   // the bound folder itself). Null while nothing is over the panel. The folder is half of it because
   // every section has a row for its own root, and the same path inside two of them is two places.
   const [landing, setLanding] = useState<Landing | null>(null);
+  // The row a question about the bin is standing over, or nothing while none is up.
+  const [asking, setAsking] = useState<{ root: string; path: string[] } | null>(null);
+  // What the machine said about the last row that would not go — kept until the next press, because
+  // the row it is about is no longer on the list to say it for itself.
+  const [stopped, setStopped] = useState<string | null>(null);
+  // How many times this side has changed a folder. What redraws the rows is not this but the host's
+  // word that the folder moved, which each section counts for itself; this is only how the focus
+  // knows a press has landed.
+  const [acted, setActed] = useState(0);
   const box = useRef<HTMLDivElement | null>(null);
   // A path clicked in a pane. It opens only where it lands inside one of the folders this face is
   // rooted at — the same fence the host applies. One that lands outside opens nothing: the pane
@@ -255,6 +291,80 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
     };
   }, [projectId, roots, tab]);
 
+  // The panel takes the focus once it has changed a folder, so that undo is the next thing a reader
+  // can press. What did the changing was a menu item that is gone by the time the answer lands, and
+  // a key nothing is focused on reaches nothing (`AMB-D-780`).
+  //
+  // After the state has settled rather than inside it: the list is only mounted again once the
+  // reading state has cleared, so the element to focus does not exist yet where the row was binned
+  // from the reader.
+  useEffect(() => {
+    if (acted > 0) box.current?.focus();
+  }, [acted]);
+
+  // Put one row in the machine's bin. Nothing here deletes: what the host offers is the bin, and a
+  // machine that cannot offer one refuses rather than deleting instead (`./folder`).
+  const bin = (root: string, path: string[]) => {
+    if (projectId === null) return;
+    setStopped(null);
+    void folderTrash(projectId, root, [path])
+      .then((done) => {
+        setActed((n) => n + 1);
+        setStopped(done.stopped === null ? null : whyStopped(done.stopped));
+        // A file being read that has just gone is not a file to go on reading.
+        if (done.gone.length > 0) {
+          setReading((now) =>
+            now !== null && now.root === root && now.path.join("/") === path.join("/") ? null : now
+          );
+        }
+      })
+      .catch((e: unknown) => setStopped(errText(e)));
+  };
+
+  // The question first, unless this reader has said they do not want it (`./askBeforeTrash`).
+  const askTrash = (root: string, path: string[]) => {
+    if (asksBeforeTrash()) setAsking({ root, path });
+    else bin(root, path);
+  };
+
+  // Undo, which here means the last press of the bin and nothing else. It is the OS's own key rather
+  // than one Amenbo invented, and it is heard on the panel rather than on the window: the terminal
+  // beside it has its own idea of what the key means, and the boundary between the two is which of
+  // them the reader is in (`AMB-D-780`).
+  const undo = () => {
+    setStopped(null);
+    void folderUntrash()
+      .then((done) => {
+        if (done === null) return;
+        setActed((n) => n + 1);
+        setStopped(done.stopped === null ? null : whyStopped(done.stopped));
+      })
+      .catch((e: unknown) => setStopped(errText(e)));
+  };
+
+  const onKey = (e: ReactKeyboardEvent) => {
+    if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
+    if (e.key.toLowerCase() !== "z") return;
+    e.preventDefault();
+    undo();
+  };
+
+  // The question, and the line the last refusal left. Both are drawn in whichever state the panel is
+  // in: a file can be sent to the bin from the list and from the reader, so neither of them is the
+  // one place an answer about it belongs.
+  const aside = (
+    <>
+      {stopped !== null && <p className="files__stopped">{stopped}</p>}
+      {asking !== null && (
+        <TrashAsk
+          name={asking.path[asking.path.length - 1] ?? ""}
+          onGo={() => { const one = asking; setAsking(null); bin(one.root, one.path); }}
+          onCancel={() => setAsking(null)}
+        />
+      )}
+    </>
+  );
+
   // The way to put the panel away, and the whole of the row it sits on. It is drawn in every state
   // the panel can be in — reading a file included — because a panel that could only be closed from
   // one of its states is one a reader has to find their way back out of.
@@ -298,7 +408,10 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
         path={reading.path}
         onBack={() => setReading(null)}
         onOpenLedger={onOpenLedger}
+        onTrash={() => askTrash(reading.root, reading.path)}
+        onKey={onKey}
         close={close}
+        aside={aside}
       />
     );
   }
@@ -306,8 +419,11 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
   const top = <div className="files__top">{close}</div>;
 
   return (
-    <div className="files" ref={box}>
+    // Focusable so the panel can hold the key it hears, and taken off the tab order so that being
+    // able to hold it costs nobody a stop on the way past (`AMB-D-780`).
+    <div className="files" ref={box} tabIndex={-1} onKeyDown={onKey}>
       {top}
+      {aside}
       {sections.map((one) => (
         <FolderSection
           key={one.path}
@@ -341,6 +457,7 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
               : () => setEdit({ kind: "rename", root: menu.root, path: menu.path }),
           }}
           onClose={() => setMenu(null)}
+          onTrash={() => askTrash(menu.root, menu.path)}
         />
       )}
     </div>
@@ -570,7 +687,7 @@ function FolderSection({
  * are about a file's own kind, and a menu that offered them over a folder would be offering to open a
  * directory in a text editor. What is left over a folder is what can be written into it.
  */
-function FileMenu({ projectId, root, path, dir, at, naming, onClose }: {
+function FileMenu({ projectId, root, path, dir, at, naming, onClose, onTrash }: {
   projectId: number;
   root: string;
   path: string[];
@@ -584,6 +701,8 @@ function FileMenu({ projectId, root, path, dir, at, naming, onClose }: {
    */
   naming?: { onMake: (dir: boolean) => void; onRename: (() => void) | null };
   onClose: () => void;
+  /** Send this row to the machine's bin — asked about first, unless the reader turned that off. */
+  onTrash: () => void;
 }) {
   // The applications to pick from, once they have been asked for and there are any — the second
   // face of this one menu, drawn where the OS has no chooser to draw it for us.
@@ -679,6 +798,22 @@ function FileMenu({ projectId, root, path, dir, at, naming, onClose }: {
               </button>
             </>
           )}
+          {/* Over a folder as much as over a file: the bin takes one whole, and the undo brings it
+              back whole. The bound folder is the one row it is not offered over — that row is the
+              binding, and what a binding is changed from is the project's own settings.
+
+              Set apart from the doors above it, because it is the one item that changes the folder
+              rather than handing it to something else: a press meant for the row above must not be
+              able to land on this one by half a pixel. */}
+          {path.length > 0 && (
+            <button
+              className="files__menuitem files__menuitem--apart"
+              role="menuitem"
+              onClick={() => { onClose(); onTrash(); }}
+            >
+              {t("files.trash")}
+            </button>
+          )}
         </>
       ) : (
         apps.map((app) => (
@@ -748,7 +883,8 @@ function Level({
    *  folder standing folded — which is the one case that answers for what is under it (`./gitMark`). */
   marks: (path: string[], folded?: boolean) => GitMark | null;
   /** How many times the folder has moved. The names are read again on each — a file the agent just
-   *  wrote is a row that has to appear without anybody folding the tree and opening it again. */
+   *  wrote is a row that has to appear without anybody folding the tree and opening it again, and a
+   *  row that just went to the bin is one that has to stop being drawn. */
   moved: number;
   /** Which folders of the whole section are unfolded, as their paths joined. The section holds it
    *  (`FolderSection`) because opening one is also something it does on a reader's behalf. */
@@ -973,18 +1109,36 @@ function changedUnderneath(e: unknown): boolean {
 }
 
 /** One file, as far as a panel can show it. */
-function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
+function FileReader({ projectId, root, path, onBack, onOpenLedger, onTrash, onKey, close, aside }: {
   projectId: number;
   root: string;
   path: string[];
   onBack: () => void;
   onOpenLedger?: () => void;
+  /** Send the file being read to the machine's bin. The panel takes it off the screen from there. */
+  onTrash: () => void;
+  /** Undo, heard here for the same reason it is heard on the list: a file can go to the bin from
+   *  this state too (`./FilesPanel`). */
+  onKey: (e: ReactKeyboardEvent) => void;
   /** The panel's own way out, drawn on this row: reading a file is not a state a reader should have
    *  to leave before they can close the panel (`./FilesPanel`). */
   close: ReactNode;
+  /** The question about the bin and the last refusal, both of which outlive this state. */
+  aside: ReactNode;
 }) {
   const [file, setFile] = useState<FolderFileDto | null>(null);
-  const [failed, setFailed] = useState(false);
+  // Why the file did not open, in the reader's own language. A link is not a broken file: the host
+  // refuses one on purpose (`AMB-D-782`), and a person sharing a `CLAUDE.md` between projects that
+  // way is the first to meet it — so that refusal is drawn in its own words and everything else
+  // keeps the one sentence there is nothing finer to say than.
+  const [failed, setFailed] = useState<string | null>(null);
+  // The encoding the reader named, once they have. Nothing until then: the host's guess is right
+  // for 644 files in 645, and asking for one up front would be putting the question to everybody
+  // to catch the one (`AMB-D-773`).
+  const [asked, setAsked] = useState<string | undefined>(undefined);
+  // Where the list of encodings was opened from, drawn like the file menu because it is the same
+  // kind of thing: a short list of answers to one question, at the control that asked it.
+  const [picking, setPicking] = useState<{ x: number; y: number } | null>(null);
   // The way to read what is in the editor, handed over once it is up. Nothing is saved before that:
   // the editor is where the text is (`./FileEditor`).
   const typed = useRef<(() => string) | null>(null);
@@ -1005,7 +1159,18 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
   // rows open, opened here because this is the one state a reader reaches it from with no row under
   // the pointer.
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  // Whether a Markdown file is being shown as the text it is rather than as what that text draws.
+  // **It goes back with every file opened**, deliberately: what a person opens a Markdown file for
+  // is to read it, and a choice that outlived the file would be a setting nobody set — one edit and
+  // every Markdown file afterwards opens as source, the ones they only wanted to read included.
+  const [asText, setAsText] = useState(false);
   const name = path[path.length - 1];
+  // The one thing the name decides, and the only file there are two ways to show (`MARKDOWN`).
+  const markdown = MARKDOWN.some((ext) => name.toLowerCase().endsWith(ext));
+
+  // A different file is a different question: what the reader named was this file's encoding, and
+  // carrying it to the next one would open that one in an encoding nobody chose for it.
+  useEffect(() => setAsked(undefined), [projectId, root, path.join("/")]);
 
   // What the file was as it was last read, and whether there is anything of the reader's to lose by
   // replacing it. Held in a ref rather than read out of the effect below: that effect is subscribed
@@ -1025,16 +1190,19 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
   useEffect(() => {
     let alive = true;
     setFile(null);
-    setFailed(false);
+    setFailed(null);
+    setAsText(false);
     setEdited(false);
     setRefused(null);
     setNewline(null);
     setStale(false);
-    void folderRead(projectId, root, path)
+    void folderRead(projectId, root, path, asked)
       .then((one) => { if (alive) take(one); })
-      .catch(() => { if (alive) setFailed(true); });
+      .catch((e) => {
+        if (alive) setFailed(isErr(e, "folder_link") ? errText(e) : t("files.unreadable"));
+      });
     return () => { alive = false; };
-  }, [projectId, root, path.join("/")]);
+  }, [projectId, root, path.join("/"), asked]);
 
   // The file moving under the reader while they have it open.
   //
@@ -1052,7 +1220,9 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
     if (!tracked) return;
     let alive = true;
     const look = () => {
-      void folderRead(projectId, root, path)
+      // In the encoding the reader named, where they named one: a file read again in a guess they
+      // had already overruled would put the panel back where they started (`AMB-D-773`).
+      void folderRead(projectId, root, path, asked)
         .then((fresh) => {
           if (!alive || fresh.digest === undefined || fresh.digest === held.current.digest) return;
           if (held.current.edited) setStale(true);
@@ -1073,25 +1243,28 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
       void listening.then((stop) => stop());
       void folderUnwatch(root);
     };
-  }, [projectId, root, path.join("/"), tracked]);
+  }, [projectId, root, path.join("/"), tracked, asked]);
 
   // Taking what is on the disk now, over what the reader has typed. It is the one thing here that
   // loses somebody's work, which is why nothing does it on their behalf (`AMB-D-784`).
   const readAgain = () => {
-    void folderRead(projectId, root, path)
+    void folderRead(projectId, root, path, asked)
       .then((fresh) => { take(fresh); setEdited(false); setStale(false); setRefused(null); })
-      .catch(() => setFailed(true));
+      .catch((e) => setFailed(isErr(e, "folder_link") ? errText(e) : t("files.unreadable")));
   };
 
   // Whether this file is one the panel can write back at all. The host says so before a reader has
   // typed a character: a file cut at the read cap, or one whose bytes and text do not round-trip,
-  // is drawn read-only from the start (`AMB-D-773`). Markdown is drawn rather than edited, so there
-  // is nothing to save there either (`AMB-T-3807` is where that changes).
+  // is drawn read-only from the start (`AMB-D-773`).
+  //
+  // **A Markdown file being drawn is not one of them.** There is no editor on the rendering, so
+  // there is no text to write and nothing a save could mean — the switch beside the name is what
+  // makes it savable, by putting the text on the screen.
   const savable = file?.text !== undefined
     && file.encoding !== undefined
     && !file.truncated
     && file.clean
-    && !MARKDOWN.some((ext) => name.toLowerCase().endsWith(ext));
+    && (!markdown || asText);
 
   const save = async () => {
     const read = typed.current;
@@ -1139,10 +1312,34 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
   const nav = useLedgerNav(onOpenLedger);
 
   return (
-    <div className="files files--reading">
+    <div className="files files--reading" tabIndex={-1} onKeyDown={onKey}>
       <div className="files__bar">
         <button className="files__back" onClick={onBack}>{t("files.back")}</button>
         <span className="files__name" title={path.join("/")}>{name}</span>
+        {/* Drawn for a Markdown file and for nothing else: every other file has one way to be shown,
+            and a switch with nowhere to switch to is a control that answers nothing. What it says is
+            where it goes rather than where it is — the reader can see where they are, and the name
+            beside it is what has to stay legible on a panel this narrow. */}
+        {file?.text !== undefined && markdown && (
+          <button className="files__view" onClick={() => setAsText((was) => !was)}>
+            {t(asText ? "files.read" : "files.edit")}
+          </button>
+        )}
+        {/* What the bytes were read as, said on the row the file is named on. The guess reports no
+            confidence and breaks nothing visible when it is wrong, so the reader is the only one
+            who can catch it — and they can only catch it if they are told what was guessed
+            (`AMB-D-773`). Text only: a picture has no encoding to be wrong about. */}
+        {file?.text !== undefined && file.encoding !== undefined && (
+          <button
+            className="files__encoding"
+            title={t("files.reopenWith")}
+            onClick={(e) => setPicking({ x: e.clientX, y: e.clientY })}
+          >
+            {file.encoding}
+            {" · "}
+            {file.lineEnding === "mixed" ? t("files.lineEndingMixed") : file.lineEnding.toUpperCase()}
+          </button>
+        )}
         {/* One control saying which of three things is true, rather than a button and a word
             somewhere else for a reader to find the answer in. */}
         {savable && (
@@ -1154,10 +1351,14 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
             {keeping ? t("files.saving") : edited ? t("files.save") : t("files.saved")}
           </button>
         )}
+        <button className="files__trash" title={t("files.trash")} onClick={onTrash}>
+          <Icon name="trash" />
+        </button>
         {close}
       </div>
+      {aside}
       <div className="files__body">
-        {failed && <p className="files__none">{t("files.unreadable")}</p>}
+        {failed !== null && <p className="files__none">{failed}</p>}
         {/* The picture is fetched rather than carried: `folderRead` says only that there is one
             and what type it is, and the door that hands out a file by its path is addressed with
             the same project, folder and path this reader was opened on (`AMB-D-783`). It draws
@@ -1169,8 +1370,11 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
             src={fileUrl(projectId, root, path, file.image.mime)}
           />
         )}
+        {/* The text is what the file holds and the rendering is a view of it (`AMB-D-41`), so the
+            editor is reachable for a Markdown file too — otherwise the one kind of file an agent
+            writes most is the one kind nobody could correct. */}
         {file?.text !== undefined && (
-          MARKDOWN.some((ext) => name.toLowerCase().endsWith(ext))
+          markdown && !asText
             ? <RefNavProvider value={nav}><Markdown>{file.text}</Markdown></RefNavProvider>
             : (
               <FileEditor
@@ -1241,8 +1445,75 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
           dir={false}
           at={menu}
           onClose={() => setMenu(null)}
+          onTrash={onTrash}
         />
       )}
+      {picking !== null && (
+        <EncodingMenu
+          at={picking}
+          onPick={(one) => { setPicking(null); setAsked(one); }}
+          onClose={() => setPicking(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The encodings a file can be reopened in, as a list to pick from.
+ *
+ * **The list comes from the host.** Which encodings may be offered is which ones can be written
+ * back, and that is `crate::encoding`'s to say — a copy kept here would go on offering one the day
+ * it stopped being written (`AMB-D-773`).
+ *
+ * A file that is not clean is still on this road, and is the road's whole point: a guess that went
+ * wrong is exactly the file whose bytes and text no longer say the same thing.
+ */
+function EncodingMenu({ at, onPick, onClose }: {
+  at: { x: number; y: number };
+  onPick: (encoding: string) => void;
+  onClose: () => void;
+}) {
+  const [names, setNames] = useState<string[]>([]);
+  const box = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void folderEncodings()
+      .then((found) => { if (alive) setNames(found); })
+      .catch(() => { if (alive) onClose(); });
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    // The same rule the file menu is closed by: anything outside it is the reader moving on, and
+    // anything inside is the first half of choosing (`FileMenu`).
+    const close = (event: Event) => {
+      if (event.target instanceof Node && box.current?.contains(event.target)) return;
+      onClose();
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", close);
+    window.addEventListener("blur", close);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", close);
+      window.removeEventListener("blur", close);
+    };
+  }, [onClose]);
+
+  return (
+    <div className="files__menu" style={{ left: at.x, top: at.y }} role="menu" ref={box}>
+      {names.map((one) => (
+        <button
+          key={one}
+          className="files__menuitem"
+          role="menuitem"
+          onClick={() => onPick(one)}
+        >
+          {one}
+        </button>
+      ))}
     </div>
   );
 }

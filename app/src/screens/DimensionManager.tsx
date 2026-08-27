@@ -120,6 +120,22 @@ function DimensionRow({ dim, projectId, store }: { dim: DimensionDto; projectId:
           />
           {t("dimmgr.required")}
         </label>
+        {/* Which of the two entities this axis classifies (`AMB-D-789`). A select rather than a box,
+            because unlike the four beside it this answer has three states and starts on the wide one:
+            an axis nobody narrowed classifies tasks and decisions alike. Narrowing it takes the axis
+            off a side and takes no assignment away — what was answered there stays, meaning nothing. */}
+        <label className="dimmgr__ordered" title={t("dimmgr.appliesToHint")}>
+          {t("dimmgr.appliesTo")}
+          <select
+            className="inlineselect"
+            value={dim.appliesTo}
+            onChange={(e) => store.setDimensionAppliesTo(dim.id, e.target.value as DimensionDto["appliesTo"])}
+          >
+            <option value="both">{t("dimmgr.appliesTo.both")}</option>
+            <option value="task">{t("dimmgr.appliesTo.task")}</option>
+            <option value="decision">{t("dimmgr.appliesTo.decision")}</option>
+          </select>
+        </label>
         <button className="feed__action dimmgr__danger" onClick={removeDim}>{t("dimmgr.removeDim")}</button>
       </div>
       <InlineText

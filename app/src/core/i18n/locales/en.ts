@@ -156,6 +156,11 @@ const ui = {
   "dimmgr.required": "Required",
   "dimmgr.requiredHint": "Hold a task's creation until this category is answered. Tasks already created stay as they are",
   "dimmgr.requiredNoValuesHint": "Add a value first — a category with no values could never be answered",
+  "dimmgr.appliesTo": "Applies to",
+  "dimmgr.appliesToHint": "Which of the two this category is offered on. The category carries the answer, so it changes for everyone. Narrowing it takes nothing already answered away — it just stops meaning anything there",
+  "dimmgr.appliesTo.both": "Tasks and decisions",
+  "dimmgr.appliesTo.task": "Tasks",
+  "dimmgr.appliesTo.decision": "Decisions",
   "dimmgr.slug": "Category key", "dimmgr.valueSlug": "Value key",
   "dimmgr.slugPh": "key",
   "dimmgr.slugHint": "The readable key this answers to outside Amenbo. Lower-case letters, digits and hyphens, starting with a letter. Unique, and never empty.",
@@ -587,6 +592,15 @@ const ui = {
   // reader would press, so there is no refusal to explain afterwards (`AMB-T-3686`).
   "face.openPick": "Choose one",
   "face.moreStarts": "Not installed ({n})",
+  // The row while the machine is still being asked what it can start. It says what is
+  // happening rather than leaving an empty row to be read as an answer (`AMB-D-792`).
+  "face.startsChecking": "Checking what this machine can start…",
+  // The machine could not be asked at all — the probe's shell would not start, or was still
+  // reading the profile when the deadline ran out. It must not say "not installed" in either
+  // direction: on a machine with four agents on it, that would be a lie about their own
+  // machine.
+  "face.startsUnchecked": "Amenbo could not check what this machine can start.",
+  "face.startsRecheck": "Check again",
   "face.startsOwn": "Commands you registered",
   "face.startAdd": "Register a command",
   "face.startName": "Name",
@@ -619,10 +633,23 @@ const ui = {
   "files.noFolder": "This project has no folder yet.",
   "files.folderGone": "This folder is not there any more.",
   "files.back": "Back to the list",
+  "files.edit": "Edit",
+  "files.read": "Read",
+  "files.reopenWith": "Reopen with an encoding",
+  "files.lineEndingMixed": "Mixed newlines",
   "files.openWith": "Open with the usual application",
   "files.chooseApp": "Open with an application I pick",
   "files.appUsual": "{name} (the usual one)",
   "files.reveal": "Show in the file manager",
+  // Taking a file out of the folder, which here means the machine's own bin and nothing further: a
+  // press that was a slip costs a trip to the bin rather than the file (`AMB-D-777`). The question
+  // says so, because what makes "yes" cheap to press is knowing where the file goes.
+  "files.trash": "Move to the bin",
+  "files.trashAsk": "Move {name} to the bin?",
+  "files.trashUndoable": "It goes where this machine's deleted files go, and undo brings it back.",
+  "files.trashQuiet": "Do not ask again",
+  "files.trashGo": "Move it",
+  "files.trashKeep": "Cancel",
   "files.newFile": "New file",
   "files.newFolder": "New folder",
   "files.rename": "Rename",
@@ -632,6 +659,11 @@ const ui = {
   "files.unreadable": "This file could not be read.",
   "files.dropStopped": "{name} could not be brought in: {why}",
   "files.dropPartly": "{count} came in. {name} did not: {why}",
+  "files.stoppedTaken": "something with that name is already there",
+  "files.stoppedInside": "a folder cannot be moved inside itself",
+  "files.stoppedNameless": "it has no name to be brought in under",
+  "files.stoppedNoBin": "that drive has no bin, so nothing would have been left to bring back",
+  "files.stoppedEmptied": "it is not in the bin any more",
   // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
   // of the three it is, so there is no separate place for a reader to look for the answer.
   "files.save": "Save",
@@ -836,6 +868,10 @@ const err: Partial<Record<ErrorCode, string>> = {
   wake_not_registered: "A registered command needs both a name and a command line.",
   window_failed: "That window could not be opened: {reason}",
   talk_blank: "That window opened but never drew anything, so the terminal was put back in this one.",
+  // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+  // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+  // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+  folder_link: "This is a link to another file, and Amenbo does not follow one — what it points at can be outside this project's folders.",
   folder_taken: "{name} is already there.",
   folder_name: "This machine will not take {name} as a name.",
   folder_make: "{name} could not be made: {reason}",
@@ -886,6 +922,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   invalid_dimension_slug_shape: "“{slug}” cannot be a key — use at most {max} lower-case letters, digits and hyphens, starting with a letter.",
   invalid_dimension_slug_taken: "“{slug}” is already the key of something else here — pick another.",
   invalid_task_required_dimension: "This task carries no value on {names}, which this project requires.",
+  invalid_decision_required_dimension: "This decision carries no value on {names}, which this project requires.",
   invalid_dimension_values_unordered: "This category's values carry no order, so they cannot be re-ordered.",
   invalid_decision_edit_rejected: "{ref} was rejected, and a rejected decision cannot be edited.",
   invalid_decision_accept_rejected: "{ref} was rejected, and a rejected decision cannot be accepted.",

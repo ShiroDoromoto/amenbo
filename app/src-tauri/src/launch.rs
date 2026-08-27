@@ -320,8 +320,9 @@ fn on_path(name: &str) -> Option<OsString> {
 /// A login shell reads the user's profile, and a profile is arbitrary code — one that blocks on a
 /// network call or waits for something on a terminal that is not there would otherwise hold the pane
 /// shut for good. What a timeout costs is the truthful answer for a machine that really is that
-/// slow, which shows as "not installed" and a **search again** button; what it buys is that the
-/// window always comes up.
+/// slow; what it buys is that the window always comes up. Running out is [`Probe::Unreachable`] and
+/// never an empty answer, so what the reader is shown is "could not check" and a **search again**,
+/// rather than a machine of theirs reported bare (`AMB-D-792`).
 const PROBE: Duration = Duration::from_secs(15);
 
 /// The line a probe answers with, one per program it found.
@@ -342,12 +343,16 @@ const FOUND: &str = "amenbo-has ";
 /// is the seam — a registered line may hold anything the reader can type, and the part of it that
 /// reaches this script is the one word that names a program.
 ///
-/// A probe that could not be started, or that ran past [`PROBE`], answers with what it had — for
-/// this question an empty answer is "nothing found", which is a state the face already draws.
-pub fn installed(names: &[&str]) -> Vec<String> {
+/// **A probe that could not be run says so, rather than answering nothing.** Starting the shell can
+/// fail and reading the profile can run past [`PROBE`], and in both cases nothing was learned —
+/// which is a different thing from learning that nothing is installed, and drawn differently
+/// (`AMB-D-792`). Flattening the two is how a machine with four agents on it reports none.
+pub fn installed(names: &[&str]) -> Probe {
     let names: Vec<&str> = names.iter().copied().filter(|n| plain(n)).collect();
     if names.is_empty() {
-        return Vec::new();
+        // Nothing was asked about, which is answered rather than unreachable: no shell had to run
+        // for this to be true.
+        return Probe::Found(Vec::new());
     }
     let (program, login) = shell();
     let mut cmd = std::process::Command::new(program);
@@ -369,31 +374,48 @@ pub fn installed(names: &[&str]) -> Vec<String> {
     }
 
     let Ok(mut child) = cmd.spawn() else {
-        return Vec::new();
+        return Probe::Unreachable;
     };
-    let text = child
-        .stdout
-        .take()
-        .map(|mut out| {
-            let (tx, rx) = mpsc::channel();
-            std::thread::spawn(move || {
-                let mut read = String::new();
-                let _ = out.read_to_string(&mut read);
-                let _ = tx.send(read);
-            });
-            rx.recv_timeout(PROBE).unwrap_or_default()
-        })
-        .unwrap_or_default();
+    let text = child.stdout.take().and_then(|mut out| {
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let mut read = String::new();
+            let _ = out.read_to_string(&mut read);
+            let _ = tx.send(read);
+        });
+        // Both ways this fails are the same thing: the deadline ran out, or the reader hung up
+        // without ever sending. Neither is an answer about what is installed.
+        rx.recv_timeout(PROBE).ok()
+    });
     // A shell that has already exited is not killed by this, and one that ran past the deadline is —
     // either way the child is reaped here rather than left behind for the length of the session.
     let _ = child.kill();
     let _ = child.wait();
 
-    text.lines()
-        .filter_map(|line| line.trim().strip_prefix(FOUND))
-        .map(str::to_string)
-        .filter(|found| names.contains(&found.as_str()))
-        .collect()
+    let Some(text) = text else {
+        return Probe::Unreachable;
+    };
+    Probe::Found(
+        text.lines()
+            .filter_map(|line| line.trim().strip_prefix(FOUND))
+            .map(str::to_string)
+            .filter(|found| names.contains(&found.as_str()))
+            .collect(),
+    )
+}
+
+/// What asking this machine came to (`AMB-D-792`).
+///
+/// The two are kept apart everywhere they travel, because the only cost of confusing them falls on
+/// the reader: an answer nobody got, drawn as an answer, says a tool they installed is not there.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Probe {
+    /// The shell answered, and this is what it found. **An empty list is an answer** — nothing
+    /// catalogued is on this machine.
+    Found(Vec<String>),
+    /// The shell could not be started, or was still reading the profile when [`PROBE`] ran out.
+    /// Nothing was learned, and nothing may be written down.
+    Unreachable,
 }
 
 /// Whether a name is a plain program name — letters, digits, and the three separators the agents'
@@ -551,7 +573,11 @@ mod tests {
     /// asked about, and never one it was not.
     #[test]
     fn the_probe_answers_only_about_what_it_was_asked() {
-        let found = installed(&["sh", "definitely-not-a-real-program-9x8"]);
+        // A machine whose profile ran past the deadline has said nothing, which is not a claim to
+        // hold to anything — the assertion is about an answer, where there is one.
+        let Probe::Found(found) = installed(&["sh", "definitely-not-a-real-program-9x8"]) else {
+            return;
+        };
         assert!(
             !found.iter().any(|f| f == "definitely-not-a-real-program-9x8"),
             "the probe claimed a program that is not there: {found:?}"
@@ -563,10 +589,13 @@ mod tests {
 
     /// Nothing to ask about is answered without starting a shell at all — the expensive part of a
     /// probe is the profile, and there is no reason to read it to answer about nobody.
+    ///
+    /// It is [`Probe::Found`] and not [`Probe::Unreachable`]: no shell had to run for it to be
+    /// true, so nothing about this machine went unlearned (`AMB-D-792`).
     #[test]
     fn an_empty_ask_starts_nothing() {
-        assert_eq!(installed(&[]), Vec::<String>::new());
-        assert_eq!(installed(&["not a name; rm -rf /"]), Vec::<String>::new());
+        assert_eq!(installed(&[]), Probe::Found(Vec::new()));
+        assert_eq!(installed(&["not a name; rm -rf /"]), Probe::Found(Vec::new()));
     }
 
     /// Only a plain program name reaches the script. The names are the catalog's, so this is a

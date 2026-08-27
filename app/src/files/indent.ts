@@ -16,10 +16,10 @@
 // inside `"}}}"` is not read as one that opened a block.
 
 import { indentService, indentUnit, type IndentContext } from "@codemirror/language";
-import { EditorSelection, Prec, type Extension } from "@codemirror/state";
+import { EditorSelection, Prec, type Extension, type Text } from "@codemirror/state";
 import { keymap, type EditorView } from "@codemirror/view";
 import type { Rules } from "./langconfig";
-import type { TmField } from "./tmdoc";
+import type { TmDoc, TmField } from "./tmdoc";
 
 /** How far the line's text is pushed in, in columns. A line with nothing on it is pushed in none. */
 function indentOf(text: string, tabSize: number): number {
@@ -32,46 +32,59 @@ function indentOf(text: string, tabSize: number): number {
   return 0;
 }
 
-/** The nearest line above `n` with something other than whitespace on it, or 0 for none. */
-function previousContentLine(context: IndentContext, n: number): number {
-  for (let i = n - 1; i >= 1; i--) {
-    if (context.state.doc.line(i).text.trim() !== "") return i;
+/**
+ * The text of the line above `from`, as far as the caret has got, or null for none.
+ *
+ * "Above" is measured against a line break that may not exist yet: pressing Enter asks where the
+ * new line goes **before** inserting it, so the line the answer depends on is the one the caret is
+ * still sitting in, cut at the caret. Reading the document alone would look one line too far up.
+ *
+ * `bare` is what comes back — the line with its strings and comments blanked — because what this is
+ * read for is the patterns. Where the line sits is read off the line as written.
+ */
+function above(
+  doc: Text,
+  tokens: TmDoc,
+  from: number,
+  tabSize: number,
+): { text: string; column: number; from: number } | null {
+  for (let at = from; at > 0;) {
+    const line = doc.lineAt(at - 1);
+    const text = tokens.bare(doc, line.number).slice(0, Math.min(at - line.from, line.length));
+    if (text.trim() !== "") return { text, column: indentOf(line.text, tabSize), from: line.from };
+    at = line.from;
   }
-  return 0;
+  return null;
 }
 
 /** Build the indentation for one language: the rules, and what pressing Enter does. */
 export function indenting(field: TmField, rules: Rules): Extension {
   return [onEnter(field, rules), indentService.of((context: IndentContext, pos: number): number => {
     const doc = context.state.doc;
-    const line = doc.lineAt(pos);
-    const tabSize = context.state.tabSize;
-    const unit = context.state.facet(indentUnit).length || tabSize;
     const tokens = context.state.field(field);
+    const unit = context.state.facet(indentUnit).length || context.state.tabSize;
 
-    const above = previousContentLine(context, line.number);
-    if (above === 0) return 0;
+    // The line the text will start on, which is not always a line the document has yet.
+    const tabSize = context.state.tabSize;
+    const here = context.lineAt(pos, 1);
+    const before = above(doc, tokens, here.from, tabSize);
+    if (before === null) return 0;
 
-    // Two readings of the same line, and the difference matters. **Where it sits** is read off the
-    // line as written, because that is where it sits. **What it says** is read off the line with its
-    // strings and comments blanked, so a brace inside one is not read as a brace that opened a
-    // block — and so a line that is nothing but a comment says nothing at all.
-    let indent = indentOf(doc.line(above).text, tabSize);
-    const aboveText = tokens.bare(doc, above);
+    let indent = before.column;
 
-    // A line the language says stands outside the block structure — a label, a preprocessor line —
-    // tells nothing about where the next one goes, so its own column is not inherited.
-    if (rules.unIndented?.test(aboveText) === true) {
-      const further = previousContentLine(context, above);
-      indent = indentOf(doc.line(further === 0 ? above : further).text, tabSize);
+    // A line the language says stands outside the block structure — the middle of a doc comment, a
+    // label — tells nothing about where the next one goes, so its own column is not inherited.
+    if (rules.unIndented?.test(before.text) === true) {
+      indent = above(doc, tokens, before.from, tabSize)?.column ?? indent;
     }
 
-    if (rules.increase?.test(aboveText) === true) indent += unit;
-    else if (rules.indentNext?.test(aboveText) === true) indent += unit;
+    if (rules.increase?.test(before.text) === true) indent += unit;
+    else if (rules.indentNext?.test(before.text) === true) indent += unit;
 
-    // The only rule that reads the line being typed rather than the one above it: `}` and `else`
-    // pull themselves back out as they are written.
-    if (rules.decrease?.test(tokens.bare(doc, line.number)) === true) indent -= unit;
+    // The only rule that reads the line being written rather than the one above it: `}` and `else`
+    // pull themselves back out as they are typed. A line that does not exist yet has nothing on it,
+    // so this cannot fire on the way out of pressing Enter — only on the way through a re-indent.
+    if (rules.decrease?.test(here.text) === true) indent -= unit;
 
     return Math.max(0, indent);
   })];

@@ -700,6 +700,14 @@ impl Instructor {
     /// `dimension key` is read, and it is the cleanest reading on these roads. A key is neither a word
     /// of the interface nor a title drawn twice over — it is what a reader types for somewhere outside
     /// Amenbo — so it stands on the shot in the one field it was typed into, and nowhere else.
+    ///
+    /// `dimension listed` is read for nearly that reason: what its control on a pane is labelled with is
+    /// the category's own name, which a reader gave it. The shot is the record's pane and nothing else,
+    /// so the name is on it only where the control is — which is what makes the `present: false` half
+    /// worth reading rather than an absence nobody can answer for.
+    ///
+    /// `decision field` is a `Review` for the reason the task's own is: what a pane says of a state is
+    /// a word of the interface's, so an eye closes it.
     fn expectation(&self, step: &Step) -> Option<Expectation> {
         let Step::Assert { domain, op, with, .. } = step else { return None };
         match (*domain, op.as_str()) {
@@ -728,6 +736,12 @@ impl Instructor {
             // lets the absent half be read: a task with no such row has those words nowhere on it.
             (Domain::Task, "pane") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
+            }
+            // The category's own name, which is what its control on the pane is labelled with. The
+            // reader gave that name, so it is not a word of the interface's — and on the `present:
+            // false` side its absence from the pane is the whole of the claim.
+            (Domain::Dimension, "listed") => {
+                Some(Expectation { text: arg_str(with, "dimension")?.to_string(), present: present(with) })
             }
             // The value, not the card's title: what is being asked is whether the classification is
             // drawn, and a title is on the board either way. Which card carries it is the driver's to
@@ -824,6 +838,15 @@ impl Instructor {
             (Domain::Files, "listed") => {
                 Some(Expectation { text: arg_str(with, "name")?.to_string(), present: present(with) })
             }
+            // The encoding the row names. It is drawn as words and read as words, and the fold takes
+            // the punctuation with it — `Shift_JIS` and `UTF-8` come back as their letters and digits
+            // either way, which is the whole of what is being compared.
+            (Domain::Files, "read-as") => {
+                Some(Expectation { text: arg_str(with, "encoding")?.to_string(), present: present(with) })
+            }
+            // A form named takes this away from the reading: both forms carry the same words, and
+            // what separates them is punctuation the fold throws away and a size no reading reports.
+            (Domain::Files, "reading") if with.contains_key("as") => None,
             (Domain::Files, "reading") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
             }
@@ -906,6 +929,19 @@ impl Instructor {
             (Domain::Decision, "create") => {
                 format!("Create a decision titled \"{}\".", req(with, "title")?)
             }
+            // Settling a decision, from its own pane. Unlike the creation the task pane holds shut, this
+            // button is live and the refusal comes back from the press — so the line sends a reader to
+            // press it, and what the road reads is the sentence that comes back and the decision left
+            // where it was. A line that had them hunting for a shut button would describe a screen that
+            // is not there.
+            (Domain::Decision, "accept") if with.contains_key("refused") => format!(
+                "Open the decision \"{}\", press the button that settles it, and confirm. The pane refuses the confirmation and names the categories still to answer, in the box the confirmation was made in.",
+                self.target_label(with)
+            ),
+            (Domain::Decision, "accept") => format!(
+                "Open the decision \"{}\", press the button that settles it, and confirm.",
+                self.target_label(with)
+            ),
             // The same move on the other side. It is written out rather than shared with the task's,
             // because the pane it is made in is the decision's own and the road has to say which screen
             // the operator is standing on.
@@ -1041,6 +1077,22 @@ impl Instructor {
                         "Above the board, open the way into managing the project's categories, find the row for \"{dimension}\", and turn off the box that makes the category demand an answer.",
                     ),
                 }
+            }
+            // Which side of the store the category classifies, set in that same manager. It is a pick
+            // and not a box, unlike the two flags beside it: there are three answers, and the one every
+            // category starts on is the wide one — so the line names the answer by what it leaves the
+            // category classifying rather than by the word drawn on the control.
+            (Domain::Dimension, "applies-to") => {
+                let dimension = req(with, "dimension")?;
+                let tail = match req(with, "side")? {
+                    "task" => "to tasks alone",
+                    "decision" => "to decisions alone",
+                    "both" => "to both tasks and decisions",
+                    other => return Err(format!("action `applies-to` does not know the side `{other}`")),
+                };
+                format!(
+                    "Above the board, open the way into managing the project's categories, find the row for \"{dimension}\", and set the control that says what it classifies {tail}.",
+                )
             }
             // The value taken out of that same manager. A required category asks where the tasks
             // classified as it are to go before it lets one go, so the line says that too where a road
@@ -1771,8 +1823,49 @@ impl Instructor {
                 section(with)?,
                 req(with, "name")?
             ),
+            // The one control with two ends and one press, so the step names the end. What it is
+            // called on screen is the form it is *not* in — a switch says where it goes — which is
+            // why the instruction describes the offer rather than quoting the word on it.
+            (Domain::Files, "show-as") => match form(with, "form")? {
+                "source" => "On the row the open file is named on, have it drawn as the text it is rather than as what that text says: press the control offering to edit it, if it is not already showing the text. The hashes and the brackets are then on the screen as characters."
+                    .to_string(),
+                _ => "On the row the open file is named on, have it drawn as what its text says rather than as the text itself: press the control offering to read it, if it is not already drawn that way. The hashes and the brackets are then gone, and what they marked is drawn."
+                    .to_string(),
+            },
+            // The control is named by what it says rather than by where it is: it draws the encoding
+            // and the newline with a dot between them, and those words are the file's rather than the
+            // interface's — so an operator can find it on a screen in any language.
+            (Domain::Files, "reopen-with") => format!(
+                "On the row the open file is named on, press what says how it was read — an encoding and a newline with a dot between them — and choose \"{}\" from the list that comes up. The file is read again from its bytes as that.",
+                req(with, "encoding")?
+            ),
             (Domain::Files, "back") =>
                 "Press the way back out of the file. The column returns to its two sections."
+                    .to_string(),
+            // The typing, put where it cannot land on top of what is already there: a road that reads the
+            // file afterwards reads it for both, and an operator who typed over the middle of it would
+            // leave one of the two readings answering for nothing.
+            (Domain::Files, "edit") => format!(
+                "Click into the text of the file, put the caret at the very end of it, press Enter and type \"{}\" on the new line.",
+                req(with, "types")?
+            ),
+            // And the keeping. The control is named by what it does rather than quoted, the same as
+            // every other item on this face — and the line says where it is, since a reader who has just
+            // been typing is looking at the text and not at the row above it.
+            (Domain::Files, "save") =>
+                "In the row above the text — beside the file's name — press the way the panel offers to keep what was typed."
+                    .to_string(),
+            // The bin, and the question that may or may not stand between the press and the row going.
+            // Which of the two happens is a habit of this machine rather than anything about the build,
+            // so the line covers both — and it says to leave the checkbox alone, because ticking it
+            // would change that habit for every run walked here afterwards.
+            (Domain::Files, "trash") =>
+                "In the row above the file — at its right-hand end, past the file's name — press the bin. If the panel asks whether to move the file to the bin, agree; leave the box about not asking again unticked."
+                    .to_string(),
+            // And taking it back. The key is the machine's own, and the line says where to be standing:
+            // the terminal beside this column hears the same key as meaning something of its own.
+            (Domain::Files, "undo") =>
+                "With the file column in front of you — click once on an empty part of it if something else has the keyboard — press the key this machine undoes with."
                     .to_string(),
             // A file brought in from outside and let go over a folder's row. The instruction names where it
             // is dragged from as loosely as it can — anywhere on the machine that is not this folder —
@@ -2016,14 +2109,33 @@ impl Instructor {
                 req(with, "field")?,
                 show(with.get("equals").ok_or("assert `field` needs `equals`")?)
             ),
-            // The same reading for a decision, off the face that reads decisions. It is the one thing a
-            // road can say about a proposal after asking about it: that asking did not settle it.
+            // The same reading on the record the other side of the store keeps. A `Review` like the
+            // task's own, and for the same reason once more: what a decision's pane says of its state is
+            // a word of the interface's, so an eye closes it. It is also the one thing a road can say
+            // about a proposal after asking about it: that asking did not settle it.
             (Domain::Decision, "field") => format!(
                 "Confirm the decision \"{}\" shows {} = {}.",
                 self.target_label(with),
                 req(with, "field")?,
                 show(with.get("equals").ok_or("assert `field` needs `equals`")?)
             ),
+            // Whether a side is offered the category at all, read where the offer actually stands: the
+            // control a record's own pane keeps per category. The manager lists a narrowed category
+            // like any other — being defined is not being offered — so the manager is the one screen
+            // this cannot be read on, and the road names the record whose pane is opened instead.
+            (Domain::Dimension, "listed") => {
+                let dimension = req(with, "dimension")?;
+                let noun = self.target_noun(with);
+                let label = self.target_label(with);
+                match present(with) {
+                    true => format!(
+                        "Open the {noun} \"{label}\" and confirm its pane keeps a control for the category \"{dimension}\"."
+                    ),
+                    false => format!(
+                        "Open the {noun} \"{label}\" and confirm its pane keeps no control for the category \"{dimension}\" — the category is still in the manager, it is simply not offered here."
+                    ),
+                }
+            }
             // The same reading, one level up: a field a project keeps for itself, read off the face it
             // keeps it on. It is a `Review` like the task's own — what stands on that face is a
             // pull-down, and which of four is standing in it is a thing an eye settles and OCR does not.
@@ -2723,6 +2835,30 @@ impl Instructor {
                 req(with, "name")?,
                 req(with, "line")?,
             ),
+            // The opening sentence, arrived in a pane whose launch line Amenbo did not compose, and
+            // sent. It is written as a wait as much as a reading: the sentence goes in after the
+            // program has drawn something and is submitted a moment later, so an operator who looked
+            // the instant the pane opened would be reading a screen the app has not finished with.
+            //
+            // The marked line is the whole of it, and the instruction says why: what the pane echoes
+            // proves only that Amenbo wrote into it, and the road's registered line is what puts the
+            // sentence back on the screen with a word of the road's own in front of it.
+            //
+            // The absent half is a wait and nothing else, and how long is said out loud: the app
+            // gives up after a minute, and an operator who looked away sooner would be reading a
+            // screen that is still being tried. What it must not find is written as a line rather
+            // than as a state, because the fault it catches leaves a mark and does not take one
+            // away.
+            (Domain::Terminal, "handed-over") => match present(with) {
+                true => format!(
+                    "In the pane the registered command is running in, wait a few seconds and then confirm Amenbo's opening sentence — the fixed English one, beginning \"Before you act on any request in this directory\" — is on a line the program gave back: the one marked \"{}\". Nothing is typed here; the sentence is put in and sent by Amenbo itself. The marked line is the reading — the pane shows the sentence as it goes in whether or not it was ever sent, and only the program giving it back says it was.",
+                    req(with, "given-back")?
+                ),
+                false => format!(
+                    "In the pane the registered command is running in, wait a full minute — that is how long Amenbo goes on trying — and then confirm no line marked \"{}\" is anywhere on it. The program hands back every line it is given, so a marked line would be a newline Amenbo sent into a pane that had shown it nothing, which is the one thing being read here. Nothing is typed during the wait, and the pane looking untouched apart from what the command printed at the start is the pass.",
+                    req(with, "given-back")?
+                ),
+            },
             // How many panes are standing on the page. Counted rather than read: the boxes carry no
             // words of the road's, and the whole of what this asks is how many of them there are.
             //
@@ -2782,6 +2918,26 @@ impl Instructor {
                     "In {}, confirm \"{}\" is not among the rows — the section is drawn, and this is not on it.",
                     section(with)?,
                     req(with, "name")?
+                ),
+            },
+            (Domain::Files, "read-as") => match present(with) {
+                true => format!(
+                    "On the row the open file is named on, confirm what says how it was read now names \"{}\".",
+                    req(with, "encoding")?
+                ),
+                false => format!(
+                    "On the row the open file is named on, confirm what says how it was read does not name \"{}\".",
+                    req(with, "encoding")?
+                ),
+            },
+            (Domain::Files, "reading") if with.contains_key("as") => match form(with, "as")? {
+                "source" => format!(
+                    "Confirm the opened file shows \"{}\" as the text it is: the words stand in one plain size with the marks around them — a hash before a heading, and whatever else the file was written with — visible as characters.",
+                    req(with, "shows")?
+                ),
+                _ => format!(
+                    "Confirm the opened file shows \"{}\" as what the text says: no hash before it, and drawn as the heading it marks rather than in the size of the lines below.",
+                    req(with, "shows")?
                 ),
             },
             (Domain::Files, "reading") => match present(with) {
@@ -3094,6 +3250,21 @@ fn section(with: &Args) -> Result<&'static str, String> {
         Some("tree") => Ok("the folder's own section"),
         Some(other) => Err(format!("`section` does not know `{other}` — it is tree")),
         None => Err("arg `section` must say which section".to_string()),
+    }
+}
+
+/// Which of a Markdown file's two forms a step is about — what the text says, or the text itself.
+/// Named by the form and not by the word on the control, for the reason `section` and `note` are: the
+/// switch says where it goes rather than where it is, and the run's language is the machine's.
+///
+/// The key is the caller's because the two sides of the same question read differently: the move says
+/// the `form` to end in, and the reading says what the words are standing `as`.
+fn form(with: &Args, key: &str) -> Result<&'static str, String> {
+    match with.get(key).and_then(|v| v.as_str()) {
+        Some("rendered") => Ok("rendered"),
+        Some("source") => Ok("source"),
+        Some(other) => Err(format!("`{key}` does not know `{other}` — it is rendered or source")),
+        None => Err(format!("arg `{key}` must say which of the two forms")),
     }
 }
 

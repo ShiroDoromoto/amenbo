@@ -32,7 +32,7 @@ use std::path::Path;
 
 use crate::dto::FolderAppDto;
 use crate::error::CmdError;
-use crate::folder::{root_of, under};
+use crate::folder::{rooted, under};
 
 /// Ask what to open a file with.
 ///
@@ -50,7 +50,8 @@ pub fn folder_open_with(
     root: String,
     path: Vec<String>,
 ) -> Result<Vec<FolderAppDto>, CmdError> {
-    let file = under(&root_of(project_id, &root)?, &path).ok_or_else(crate::folder::gone)?;
+    let (roots, base) = rooted(project_id, &root)?;
+    let (_owner, file) = under(&roots, base, &path).ok_or_else(crate::folder::gone)?;
     ask(&window, &file)
 }
 
@@ -68,7 +69,8 @@ pub fn folder_open_file_with(
     path: Vec<String>,
     app: String,
 ) -> Result<(), CmdError> {
-    let file = under(&root_of(project_id, &root)?, &path).ok_or_else(crate::folder::gone)?;
+    let (roots, base) = rooted(project_id, &root)?;
+    let (_owner, file) = under(&roots, base, &path).ok_or_else(crate::folder::gone)?;
     if !offered(&file).iter().any(|one| one.path == app) {
         return Err(crate::folder::gone());
     }

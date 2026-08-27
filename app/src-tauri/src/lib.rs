@@ -42,6 +42,10 @@ mod frames;
 /// operating systems have a chooser of their own and one has none, so it is three implementations
 /// rather than one behind a `cfg` (`AMB-T-3642`).
 mod open_with;
+/// Giving an agent its opening instruction after its pane is already open — pasted, watched for on
+/// the screen, and submitted only once it is there. The route for a launch line with nowhere to put
+/// an argument in (`AMB-D-793`).
+mod handover;
 /// What a terminal is started as on each operating system — the shell the user signed in with, and
 /// what a terminal owes the program in it. Detecting a tool and starting it go through here
 /// together, so a probe cannot find what the pane could not have started (`AMB-D-747`).

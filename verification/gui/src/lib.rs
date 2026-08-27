@@ -629,6 +629,14 @@ impl Instructor {
     /// `dimension key` is read, and it is the cleanest reading on these roads. A key is neither a word
     /// of the interface nor a title drawn twice over — it is what a reader types for somewhere outside
     /// Amenbo — so it stands on the shot in the one field it was typed into, and nowhere else.
+    ///
+    /// `dimension listed` is read for nearly that reason: what its control on a pane is labelled with is
+    /// the category's own name, which a reader gave it. The shot is the record's pane and nothing else,
+    /// so the name is on it only where the control is — which is what makes the `present: false` half
+    /// worth reading rather than an absence nobody can answer for.
+    ///
+    /// `decision field` is a `Review` for the reason the task's own is: what a pane says of a state is
+    /// a word of the interface's, so an eye closes it.
     fn expectation(&self, step: &Step) -> Option<Expectation> {
         let Step::Assert { domain, op, with } = step else { return None };
         match (*domain, op.as_str()) {
@@ -651,6 +659,12 @@ impl Instructor {
             }
             (Domain::Task, "opened") => {
                 Some(Expectation { text: arg_str(with, "shows")?.to_string(), present: present(with) })
+            }
+            // The category's own name, which is what its control on the pane is labelled with. The
+            // reader gave that name, so it is not a word of the interface's — and on the `present:
+            // false` side its absence from the pane is the whole of the claim.
+            (Domain::Dimension, "listed") => {
+                Some(Expectation { text: arg_str(with, "dimension")?.to_string(), present: present(with) })
             }
             // The value, not the card's title: what is being asked is whether the classification is
             // drawn, and a title is on the board either way. Which card carries it is the driver's to
@@ -805,6 +819,19 @@ impl Instructor {
             (Domain::Decision, "create") => {
                 format!("Create a decision titled \"{}\".", req(with, "title")?)
             }
+            // Settling a decision, from its own pane. Unlike the creation the task pane holds shut, this
+            // button is live and the refusal comes back from the press — so the line sends a reader to
+            // press it, and what the road reads is the sentence that comes back and the decision left
+            // where it was. A line that had them hunting for a shut button would describe a screen that
+            // is not there.
+            (Domain::Decision, "accept") if with.contains_key("refused") => format!(
+                "Open the decision \"{}\", press the button that settles it, and confirm. The pane refuses the confirmation and names the categories still to answer, in the box the confirmation was made in.",
+                self.target_label(with)
+            ),
+            (Domain::Decision, "accept") => format!(
+                "Open the decision \"{}\", press the button that settles it, and confirm.",
+                self.target_label(with)
+            ),
             // The same move on the other side. It is written out rather than shared with the task's,
             // because the pane it is made in is the decision's own and the road has to say which screen
             // the operator is standing on.
@@ -922,6 +949,22 @@ impl Instructor {
                         "Above the board, open the way into managing the project's categories, find the row for \"{dimension}\", and turn off the box that makes the category demand an answer.",
                     ),
                 }
+            }
+            // Which side of the store the category classifies, set in that same manager. It is a pick
+            // and not a box, unlike the two flags beside it: there are three answers, and the one every
+            // category starts on is the wide one — so the line names the answer by what it leaves the
+            // category classifying rather than by the word drawn on the control.
+            (Domain::Dimension, "applies-to") => {
+                let dimension = req(with, "dimension")?;
+                let tail = match req(with, "side")? {
+                    "task" => "to tasks alone",
+                    "decision" => "to decisions alone",
+                    "both" => "to both tasks and decisions",
+                    other => return Err(format!("action `applies-to` does not know the side `{other}`")),
+                };
+                format!(
+                    "Above the board, open the way into managing the project's categories, find the row for \"{dimension}\", and set the control that says what it classifies {tail}.",
+                )
             }
             // The value taken out of that same manager. A required category asks where the tasks
             // classified as it are to go before it lets one go, so the line says that too where a road
@@ -1390,6 +1433,32 @@ impl Instructor {
                 req(with, "field")?,
                 show(with.get("equals").ok_or("assert `field` needs `equals`")?)
             ),
+            // The same reading on the record the other side of the store keeps. A `Review` like the
+            // task's own, and for the same reason once more: what a decision's pane says of its state is
+            // a word of the interface's, so an eye closes it.
+            (Domain::Decision, "field") => format!(
+                "Confirm the decision \"{}\" shows {} = {}.",
+                self.target_label(with),
+                req(with, "field")?,
+                show(with.get("equals").ok_or("assert `field` needs `equals`")?)
+            ),
+            // Whether a side is offered the category at all, read where the offer actually stands: the
+            // control a record's own pane keeps per category. The manager lists a narrowed category
+            // like any other — being defined is not being offered — so the manager is the one screen
+            // this cannot be read on, and the road names the record whose pane is opened instead.
+            (Domain::Dimension, "listed") => {
+                let dimension = req(with, "dimension")?;
+                let noun = self.target_noun(with);
+                let label = self.target_label(with);
+                match present(with) {
+                    true => format!(
+                        "Open the {noun} \"{label}\" and confirm its pane keeps a control for the category \"{dimension}\"."
+                    ),
+                    false => format!(
+                        "Open the {noun} \"{label}\" and confirm its pane keeps no control for the category \"{dimension}\" — the category is still in the manager, it is simply not offered here."
+                    ),
+                }
+            }
             // The same reading, one level up: a field a project keeps for itself, read off the face it
             // keeps it on. It is a `Review` like the task's own — what stands on that face is a
             // pull-down, and which of four is standing in it is a thing an eye settles and OCR does not.

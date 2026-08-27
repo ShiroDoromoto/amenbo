@@ -407,6 +407,12 @@ const REGISTRY: &[OpSpec] = &[
     // road that needs the demand out of the way. An axis offering no values could never be answered,
     // so raising it on one is refused, which is a road of its own to walk.
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "required", required: &["dimension"], refs: &[], strings: &["dimension"], binds: false },
+    // Which of the two sides of the store the axis classifies at all. `side` is a word and not a
+    // switch — there are three answers, and unlike the two flags above it the axis starts on the wide
+    // one — so a road here narrows rather than raises, and takes `side: both` to widen back.
+    // Narrowing takes no filing away, only the offer, which is why a road that walks it reads the
+    // filings back afterwards rather than treating the narrowing as a delete.
+    OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "applies-to", required: &["dimension", "side"], refs: &[], strings: &["dimension", "side"], binds: false },
     // Renaming that key afterwards — the axis's own, or one of its values' where `value` names one.
     // It is a move of its own rather than an arg on the ops above, because naming a key at birth and
     // renaming one are two different doors: the screen has only the second, so a road that wrote the
@@ -1296,7 +1302,13 @@ const REGISTRY: &[OpSpec] = &[
     // is not something the presence of text on a shot can settle.
     OpSpec { kind: Kind::Assert, domain: Domain::Project, op: "plugin-row", required: &["project", "plugin", "state"], refs: &[], strings: &["project", "plugin", "state"], binds: false },
     // An axis as it is read back, by name: is it defined, and does it carry the value named?
-    OpSpec { kind: Kind::Assert, domain: Domain::Dimension, op: "listed", required: &["dimension"], refs: &[], strings: &["dimension", "value"], binds: false },
+    //
+    // `side` asks a different question of the same listing — not whether the axis is defined but
+    // whether the side named is offered it at all — and an axis narrowed off a side is defined exactly
+    // as much as ever, so the two answers come apart there and nowhere else. `target`
+    // rides with it for the face that has no listing to read the offer off: a screen reads it as the
+    // control a record's own pane keeps per axis, so the road names the record whose pane is opened.
+    OpSpec { kind: Kind::Assert, domain: Domain::Dimension, op: "listed", required: &["dimension"], refs: &["target"], strings: &["dimension", "value", "side"], binds: false },
     // The key an axis answers to, or one of its values where `value` names one. Read apart from
     // `listed` because it is a different question: that one asks whether the axis is defined at all,
     // and a row whose key was quietly left as its id-derived default is defined exactly as much as one
@@ -2276,6 +2288,20 @@ impl Scenario {
                     if v.as_bool().is_none() {
                         errs.push(at(i, format!("`{key}` must be a boolean")));
                     }
+                }
+            }
+
+            // Which side of the store a step is talking about. It is a word rather than a boolean
+            // because an axis has three answers to give — and the reading has two, `both` being a
+            // state an axis is in and not a side anything is offered on — so the set is checked
+            // against the kind of step rather than once for the key.
+            if let Some(v) = step.with().get("side") {
+                let (ok, takes) = match step.kind() {
+                    Kind::Action => (matches!(v.as_str(), Some("task" | "decision" | "both")), "`task`, `decision` or `both`"),
+                    Kind::Assert => (matches!(v.as_str(), Some("task" | "decision")), "`task` or `decision`"),
+                };
+                if !ok {
+                    errs.push(at(i, format!("`side` must be {takes}")));
                 }
             }
 

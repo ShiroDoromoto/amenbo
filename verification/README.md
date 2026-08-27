@@ -664,6 +664,11 @@ the value at a crossing of its own writes somewhere neither road then looks. Tha
 terminal's alone — on screen the row the settings are opened inside has already answered it, and the
 GUI harness turns it away — and it travels as a word rather than as a binding, so a test over the
 scenario set holds it to a project something raised, the way the one that opens a project is held.
+A `dimension listed` assert takes `side: task` / `decision` for a question its plain form cannot put:
+not whether the axis is defined but whether that side is offered it at all, which an axis narrowed with
+`dimension applies-to` stops being while staying on every listing. It takes `target:`
+beside it for the face with no listing to read the offer off — a screen reads the offer as the control a
+record's own pane keeps per axis, so the road names the record whose pane is opened.
 A `listed` assert asks whether the task is in the listing; give it
 `position: first` / `last` instead of `present:` when what is under test is the order the store
 keeps, which is the only place a reorder is visible. Its neighbour `narrowed` asks the question a

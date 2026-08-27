@@ -149,6 +149,49 @@ impl Step {
 /// only inspects the few keys it validates (`target`, `present`, `ok`, `refused`).
 pub type Args = std::collections::BTreeMap<String, serde_yaml::Value>;
 
+/// Which of Amenbo's two number spaces a binding's id lives in — the answer a driver needs before it
+/// can hand that id back to Amenbo. Tasks and decisions number independently, so `dimension set` takes
+/// the kind code and refuses a bare number; a driver that spelled every binding `AMB-T-n` would file a
+/// decision onto whatever task happened to carry the same digits.
+///
+/// Only the two kinds a road classifies are here. A binding may stand for a project, a folder or an
+/// attachment as well, and none of those is a thing an axis is set on, so [`BoundKind::of_domain`]
+/// answers `None` for them rather than inventing a third arm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoundKind {
+    Task,
+    Decision,
+}
+
+impl BoundKind {
+    /// The kind an action of this domain binds, or `None` where what it binds is neither. Read off the
+    /// domain rather than off the op: every op that binds in `task` binds a task, and the same in
+    /// `decision`, so the domain is the whole of the answer and both drivers can take it here.
+    pub fn of_domain(domain: Domain) -> Option<BoundKind> {
+        match domain {
+            Domain::Task => Some(BoundKind::Task),
+            Domain::Decision => Some(BoundKind::Decision),
+            _ => None,
+        }
+    }
+
+    /// The id spelled as the reference Amenbo reads it back by (`AMB-T-n` / `AMB-D-n`).
+    pub fn spell(self, id: i64) -> String {
+        match self {
+            BoundKind::Task => format!("AMB-T-{id}"),
+            BoundKind::Decision => format!("AMB-D-{id}"),
+        }
+    }
+
+    /// What an instruction written for a person calls it.
+    pub fn noun(self) -> &'static str {
+        match self {
+            BoundKind::Task => "task",
+            BoundKind::Decision => "decision",
+        }
+    }
+}
+
 /// The domain object a step touches. Kept small and closed on purpose — an unknown domain
 /// is a scenario bug, not an extension point.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -348,6 +391,9 @@ const REGISTRY: &[OpSpec] = &[
     // creation premise's back. Left out where the demand is up, and on the last value of such an axis,
     // the removal is turned away, which is what a road walks it for.
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "value-rm", required: &["dimension", "value"], refs: &[], strings: &["dimension", "value", "to"], binds: false },
+    // Filing something under one of the axis's values. `target` is a task **or** a decision — one axis
+    // and one set of values, whichever kind is being filed — so the driver spells the binding with its
+    // kind code (BoundKind, above) rather than handing back a number the command would refuse.
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "set", required: &["target", "dimension", "value"], refs: &["target"], strings: &["dimension", "value"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Dimension, op: "unset", required: &["target", "dimension", "value"], refs: &["target"], strings: &["dimension", "value"], binds: false },
     // Whether the axis belongs on the board's task cards. The answer is the axis's own rather than a
@@ -2988,5 +3034,21 @@ steps_cli:
 "#;
         let errs = load_str(yaml).unwrap().validate().unwrap_err();
         assert!(errs.iter().any(|e| e.message.contains("`offers` must be a list")), "{errs:?}");
+    }
+
+    /// The kind a binding carries, and the spelling it turns into. A driver that got this backwards
+    /// would file a decision onto whatever task happens to carry the same digits — and be told
+    /// nothing, both refs resolving to a live row. The domains that bind neither answer `None`
+    /// rather than falling through to a default.
+    #[test]
+    fn a_binding_is_spelled_by_the_kind_the_domain_binds() {
+        assert_eq!(BoundKind::of_domain(Domain::Task), Some(BoundKind::Task));
+        assert_eq!(BoundKind::of_domain(Domain::Decision), Some(BoundKind::Decision));
+        assert_eq!(BoundKind::of_domain(Domain::Project), None);
+        assert_eq!(BoundKind::of_domain(Domain::Attachment), None);
+        assert_eq!(BoundKind::Task.spell(42), "AMB-T-42");
+        assert_eq!(BoundKind::Decision.spell(42), "AMB-D-42");
+        assert_eq!(BoundKind::Task.noun(), "task");
+        assert_eq!(BoundKind::Decision.noun(), "decision");
     }
 }

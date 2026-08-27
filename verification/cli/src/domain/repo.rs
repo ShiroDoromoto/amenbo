@@ -61,6 +61,28 @@ impl Driver<'_> {
                 std::fs::write(&full, &bytes).map_err(|e| format!("could not write {path}: {e}"))?;
                 Ok(Outcome::action(format!("copied the fixture {from} to {path} ({} bytes)", bytes.len())))
             }
+            // A name in that folder that is a link rather than a file. `path` is the name and `to`
+            // is what it points at, read in the run's own folder — outside every folder a `folder`
+            // step binds, which is the shape a person really has: one file kept in one place, and a
+            // project pointing at it.
+            //
+            // Nothing has to be lying at `to`. A link is what its own name is and never what it
+            // leads to, and a face that refuses to follow one refuses it either way — so a road
+            // about the refusal is not made to stand up the far side of the link as well.
+            "symlink" => {
+                let path = req_str(with, "path")?;
+                let to = req_str(with, "to")?;
+                let target = self.in_session(to)?;
+                let full = match with.get("dir") {
+                    Some(_) => self.folder(with)?.join(self.inside(path)?),
+                    None => self.in_session(path)?,
+                };
+                if let Some(dir) = full.parent() {
+                    std::fs::create_dir_all(dir).map_err(|e| format!("could not make {}: {e}", dir.display()))?;
+                }
+                symlink(&target, &full)?;
+                Ok(Outcome::action(format!("linked {} at {path}", target.display())))
+            }
             // The hooks are written into a git repository, so the scenario has to stand one up first.
             // This is the one step that is not Amenbo — everything it proves is about what Amenbo
             // then does to a repository that is really there.
@@ -380,4 +402,26 @@ impl Driver<'_> {
             _ => Err(unmapped(Domain::Repo, op)),
         }
     }
+}
+
+/// Make `at` a link pointing at `target`.
+///
+/// The two platforms name the call differently — and on Windows a file link is a privilege rather
+/// than an ordinary write, so what comes back when the machine has not granted it is said here
+/// rather than left as a bare error number.
+#[cfg(unix)]
+fn symlink(target: &Path, at: &Path) -> Result<(), String> {
+    std::os::unix::fs::symlink(target, at)
+        .map_err(|e| format!("could not link {} at {}: {e}", target.display(), at.display()))
+}
+
+#[cfg(windows)]
+fn symlink(target: &Path, at: &Path) -> Result<(), String> {
+    std::os::windows::fs::symlink_file(target, at).map_err(|e| {
+        format!(
+            "could not link {} at {}: {e} — making one here needs the privilege developer mode grants",
+            target.display(),
+            at.display(),
+        )
+    })
 }

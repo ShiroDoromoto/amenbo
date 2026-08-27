@@ -663,6 +663,12 @@ const REGISTRY: &[OpSpec] = &[
     // reachable by writing inside it. Left out, the file lands in the run's own folder.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "write-file", required: &["path", "content"], refs: &[], strings: &["path", "content", "dir"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "copy-fixture", required: &["from", "path"], refs: &[], strings: &["from", "path", "dir"], binds: false },
+    // And a name in that folder that is a link rather than a file. `path` is the name, `to` is what
+    // it points at, read in the run's own folder — which is outside every folder a `folder` step
+    // binds, so the link a road makes is the one people really make: a file kept in one place and
+    // pointed at from a project. A link is what its own name is, not what it leads to, so nothing
+    // has to be lying at `to` for the road to walk.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "symlink", required: &["path", "to"], refs: &[], strings: &["path", "to", "dir"], binds: false },
     // `git-init` takes the same `dir`, and for a reason of its own: what git says about a folder is
     // drawn on the file face of the folder a project is *bound* to, so a road reading those colours
     // needs the repository to be that folder and not the one the run stands in.
@@ -2526,6 +2532,10 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // And the same file when its bytes cannot be written down in a scenario — one that is
     // deliberately not text, which is a world no amount of YAML reaches.
     (Domain::Repo, "copy-fixture"),
+    // And one of those names being a link instead of a file. Amenbo makes no link and has no command
+    // that would — a face that refuses to follow one is all it ever does about them — so the world a
+    // road about that refusal opens on is one no face reaches.
+    (Domain::Repo, "symlink"),
     // And the folder being a git repository, which is the world every road about what git says has to
     // open on. Amenbo makes no repository and has no command that would — it only ever reads one — so
     // no road reaches this state whichever face is walking it. It is a step as well, on the roads where

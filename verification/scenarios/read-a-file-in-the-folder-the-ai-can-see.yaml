@@ -9,7 +9,7 @@
 # There is no second road here and no gap in one. Reading a file at a shell is `cat`, and Amenbo is
 # the subject of none of it.
 #
-# ── Why three files and not one ──────────────────────────────────────────────────────────────────
+# ── Why four names and not one ───────────────────────────────────────────────────────────────────
 # One file proves the bytes reach the screen. The second proves the **host decides from the bytes**,
 # and it is the half that can quietly rot: the verdict is taken from what is in the file and never
 # from its name, so a build that started trusting the name would draw a picture's bytes as text and
@@ -17,13 +17,19 @@
 # the face does treat specially, choosing between rendered Markdown and an editor with it — and puts
 # bytes in it that are not text. What has to come back is the refusal, not a rendering.
 #
-# The third is a picture the face **will** recognise and still will not draw, and it is here because
-# the two refusals are not the same refusal. One says there is nothing to show; this one says there
-# is, and that it is too large — and it says how large, because a reader shown nothing at all reads a
+# The third is not a file at all. The two above are what the face **cannot** show; a link is what it
+# **will not**, and the point of walking it is that the two must not read alike. The refusal is
+# meant, and the reader who meets it first is somebody keeping one `CLAUDE.md` in one place and
+# pointing several projects at it — for whom "could not be read" is a hunt for damage that is not
+# there. Nothing is put on the far side of the link: what a name is, is read off the name.
+#
+# The fourth is a picture the face **will** recognise and still will not draw, and it is here because
+# these refusals are not one refusal. One says there is nothing to show; this one says there is, and
+# that it is too large — and it says how large, because a reader shown nothing at all reads a
 # refused picture as a damaged file. The road then takes the way on it offers, because a refusal that
 # only refuses leaves the reader holding a file they still want opened.
 #
-# ── Why the third file is thirty kilobytes and a hundred and forty megapixels ─────────────────────
+# ── Why the picture is thirty kilobytes and a hundred and forty megapixels ────────────────────────
 # The extreme is what the line is about. What the face refuses is measured twice, in bytes and in
 # pixels, and a fixture large in both would not say which of the two answered. This one is small
 # enough to sit in the tree and large enough that no screen would survive drawing it — which is the
@@ -40,9 +46,11 @@ description: >
   section and open it one level at a time, then press a file and read the words that are in it. Come
   back out and press a second file, named as Markdown but holding bytes that are not text: what comes
   back is the line saying it cannot be shown, because the verdict is taken from the bytes and never
-  from the name. Come back out once more and press a picture the face does recognise and still will
-  not draw: what comes back is that it is too large, together with how large it was measured to be — and the way on
-  it offers hands the file to the machine, out of the same menu the rows carry.
+  from the name. Come back out once more and press a name that is a link out of the folder: what comes back says
+  it is a link, which is not the answer either file above got — that one is whole and the refusal is meant. Then
+  press a picture the face does recognise and still will not draw: what comes back is that it is too large,
+  together with how large it was measured to be — and the way on it offers hands the file to the machine, out of
+  the same menu the rows carry.
 
 given:
   - type: action
@@ -88,6 +96,16 @@ given:
       dir: greenhouse
       from: files/too-many-pixels.png
       path: notes/glasshouse-plan.png
+
+  # And a name in the folder that is a link out of it, pointing at a file kept where more than one
+  # project could share it.
+  - type: action
+    domain: repo
+    op: symlink
+    with:
+      dir: greenhouse
+      path: notes/shared-notes.md
+      to: shared/watering-rules.md
 
 steps_gui:
   - type: action
@@ -195,8 +213,28 @@ steps_gui:
     domain: files
     op: back
 
-  # The third file. The face knows it is a picture and refuses it anyway, which is a different answer
-  # from the one above — and it says what it measured, so the refusal cannot be read as a broken file.
+  # The third name is not a file at all. It is a link out of the folder, and what comes back says so
+  # rather than saying the file could not be read — the file on the other side is whole, and it is
+  # the refusal that is deliberate.
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: shared-notes.md
+      section: tree
+
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: link
+
+  - type: action
+    domain: files
+    op: back
+
+  # The fourth file. The face knows it is a picture and refuses it anyway, which is a different answer
+  # from the ones above — and it says what it measured, so the refusal cannot be read as a broken file.
   - type: action
     domain: files
     op: open

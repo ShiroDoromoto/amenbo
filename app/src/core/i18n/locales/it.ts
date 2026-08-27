@@ -799,6 +799,7 @@ export const it: Translation = {
     invalid_dimension_slug_shape: "«{slug}» non va bene come chiave: al massimo {max} lettere minuscole, cifre e trattini, a partire da una lettera.",
     invalid_dimension_slug_taken: "«{slug}» è già la chiave di qualcos'altro qui: scegline un'altra.",
     invalid_task_required_dimension: "Questa attività non porta alcun valore su {names}, che questo progetto richiede.",
+    invalid_decision_required_dimension: "Questa decisione non porta alcun valore su {names}, che questo progetto richiede.",
     invalid_dimension_values_unordered:
       "I valori di questa categoria non hanno un ordine, quindi non si possono riordinare.",
     invalid_decision_edit_rejected: "{ref} è stata respinta, e una decisione respinta non si può modificare.",

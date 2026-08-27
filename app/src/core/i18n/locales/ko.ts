@@ -767,6 +767,7 @@ export const ko: Translation = {
     invalid_dimension_slug_shape: "「{slug}」은(는) 키로 쓸 수 없습니다. 소문자·숫자·하이픈으로 {max}자 이내, 첫 글자는 소문자로 적으세요.",
     invalid_dimension_slug_taken: "「{slug}」은(는) 여기서 이미 다른 것이 쓰고 있습니다. 다른 키를 고르세요.",
     invalid_task_required_dimension: "이 작업은 {names}에 값이 없습니다. 이 프로젝트가 필수로 두는 분류입니다.",
+    invalid_decision_required_dimension: "이 결정은 {names}에 값이 없습니다. 이 프로젝트가 필수로 두는 분류입니다.",
     invalid_dimension_values_unordered: "이 분류의 값에는 순서가 없어 재정렬할 수 없습니다.",
     invalid_decision_edit_rejected: "{ref}은(는) 기각되었습니다. 기각된 결정은 편집할 수 없습니다.",
     invalid_decision_accept_rejected: "{ref}은(는) 기각되었습니다. 기각된 결정은 채택할 수 없습니다.",

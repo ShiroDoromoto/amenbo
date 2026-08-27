@@ -768,6 +768,7 @@ export const zhHant: Translation = {
     invalid_dimension_slug_shape: "「{slug}」不能作為鍵：最多 {max} 個小寫字母、數字和連字號，且以字母開頭。",
     invalid_dimension_slug_taken: "「{slug}」在這裡已經是別的東西的鍵了，請另選一個。",
     invalid_task_required_dimension: "這個任務在 {names} 上沒有值，而本專案要求填寫。",
+    invalid_decision_required_dimension: "這個決定在 {names} 上沒有值，而本專案要求填寫。",
     invalid_dimension_values_unordered: "此分類的值沒有順序，無法重新排列。",
     invalid_decision_edit_rejected: "{ref} 已遭否決，遭否決的決策無法編輯。",
     invalid_decision_accept_rejected: "{ref} 已遭否決，遭否決的決策無法採納。",

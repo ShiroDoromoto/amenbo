@@ -2380,16 +2380,35 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "save", required: &[], refs: &[], strings: &[], binds: false },
 
     // ── putting a row in the bin, and taking it back ──────────────────────────────────────────────
+    // Where the file face's own settings row stands: whether the panel asks before it bins a row.
+    // The face has one setting, so the row is not named — the way the tick's is not.
+    //
+    // **This is what lets the question be walked at all.** Whether it is asked is a habit of the
+    // machine the run is on, and the checkbox that turns it off is drawn inside the question it
+    // silences — so the settings row is the only thing that puts the question back. A road that can
+    // move it can put the machine where it needs it and then walk the question, instead of pressing
+    // the bin and covering both endings.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "setting", required: &["position"], refs: &[], strings: &["position"], binds: false },
+    // And moving it. `asks` puts the question back, `quiet` takes it away. The positions are named by
+    // what each does rather than by the word drawn on the row, since the words are the interface's own
+    // and the run's language is whatever the machine is set to.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "set", required: &["position"], refs: &[], strings: &["position"], binds: false },
     // The bin pressed on the file that is open. It takes no args for the reason `save` does: what goes
     // is the file on the screen, and where the machine keeps what it deleted is not a road's to say.
     //
-    // **The question the panel puts first is inside this one step rather than a step of its own.**
-    // Whether it is asked at all is a habit of the machine the run is walked on — a reader who once
-    // ticked "do not ask again" turned it off there for good — so a road that pressed the bin and then
-    // asserted a question would come out red for something somebody did on that Mac months ago, and
-    // green on the next one. The instruction covers both endings, and what is read afterwards is the
-    // row.
+    // **The press is the whole of this step, and the question is the next one.** Where a road put the
+    // row in `asks`, the panel puts a question here and this step leaves it standing; `answer` is what
+    // decides it. Where the row is in `quiet` there is no question and the row goes on the press. Both
+    // are the same press, which is why they are the same op — what differs is whether a road wrote a
+    // step after it.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "trash", required: &[], refs: &[], strings: &[], binds: false },
+    // The question the bin put, answered. `yes` bins the file and `no` leaves it where it is — and
+    // both are a road's to walk, since what the question is for is the second one.
+    //
+    // **The checkbox in it is not this op's.** Ticking it would turn the question off for every run
+    // walked on this machine afterwards, which is the state this pair exists to stop being permanent;
+    // a road that wants the panel quiet says so with `set`.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "answer", required: &["answer"], refs: &[], strings: &["answer"], binds: false },
     // And taking it back, which on this face means the last press of the bin and nothing else. What
     // does it is the key the machine already undoes with rather than a control Amenbo drew, so the
     // line says the key — and says where to be standing, because the column beside this one hears the

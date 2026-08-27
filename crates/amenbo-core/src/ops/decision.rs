@@ -449,7 +449,10 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
 /// and only then the decision row — each of them a row a person can point at, and so one whose deletion
 /// belongs in code rather than in a constraint (`AMB-D-403`). The polymorphic children come first: the
 /// decision's own attachments, plus the attachments hanging off each comment, swept before that comment
-/// goes. Returns the blob hashes this subtree let go of (candidates for collection after commit).
+/// goes. The classifications go with them (`AMB-D-781`): the assignment references the decision
+/// `RESTRICT`, so leaving one behind does not orphan a row — it stops the delete, this one and
+/// `project::delete`'s, which clears a project's decisions before its axes.
+/// Returns the blob hashes this subtree let go of (candidates for collection after commit).
 pub(crate) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     let mut orphaned = Vec::new();
     for comment_id in read::decision_comment_ids(tx.conn(), id)? {
@@ -461,6 +464,9 @@ pub(crate) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     }
     for link_id in read::decision_task_link_ids_of_decision(tx.conn(), id)? {
         tx.delete_record("decision_task_link", link_id)?;
+    }
+    for assignment_id in read::decision_assignment_ids_of_decision(tx.conn(), id)? {
+        tx.delete_record("decision_dimension_value", assignment_id)?;
     }
     orphaned.extend(crate::ops::sweep_polymorphic(tx, AttachmentTarget::Decision, id)?);
     tx.delete_record("decision", id)?;
@@ -1674,6 +1680,36 @@ mod tests {
         );
         // It drops out of the reverse query as well.
         assert!(decisions_for_task(tx, t).is_empty());
+    }
+
+    /// A decision's classifications go with it (`AMB-D-781`). The assignment references the decision
+    /// `RESTRICT`, so a sweep left out here would not orphan the row — it would stop the delete.
+    #[test]
+    fn delete_takes_the_classifications_it_carried() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pid = mk_project(tx, "amenbo 開発");
+        let d = new_decision(tx, pid, "分類のついた決定");
+        let axis = crate::ops::dimension::add(
+            tx,
+            pid,
+            crate::ops::dimension::NewDimension {
+                name: "カテゴリー".to_string(),
+                ..crate::ops::dimension::NewDimension::default()
+            },
+        )
+        .unwrap();
+        let value = crate::ops::dimension::value_add(tx, axis.id, "A", None).unwrap();
+        crate::ops::dimension::set_on_decision(tx, d.id, value.id).unwrap();
+
+        delete(tx, d.id).unwrap();
+        assert!(read::decision(tx.conn(), d.id).unwrap().is_none());
+        assert!(
+            read::decision_assignment_ids_of_decision(tx.conn(), d.id).unwrap().is_empty(),
+            "the classification goes with the decision"
+        );
+        // The axis and its value are untouched — a decision going away un-classifies nothing else.
+        assert!(read::dimension_value(tx.conn(), value.id).unwrap().is_some());
     }
 
     #[test]

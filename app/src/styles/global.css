@@ -368,6 +368,23 @@ button { font: inherit; color: inherit; cursor: pointer; }
   border-style: dashed; color: var(--c-text-faint); cursor: default;
 }
 .slot__start--missing:hover { color: var(--c-text-faint); border-color: var(--c-border); }
+/* The row's place while the machine is still being asked. Two empty pills and nothing written in
+   them: what is not known yet is which of these can be started, so a name here would have to be
+   drawn as usable or as missing and both would be a guess (`AMB-D-792`). They are out of the tree a
+   screen reader walks — the sentence under them is what says what is happening. */
+.slot__starts--waiting { grid-template-columns: repeat(2, minmax(9.5rem, 1fr)); }
+.slot__start--waiting {
+  min-height: 2.2rem;
+  border-style: dashed; background: var(--c-surface-sunken);
+}
+/* What the frame has to say about the row rather than on it: that the machine is still being asked,
+   or that it could not be. Quiet like the question above it, and never in place of a pill — the row
+   says what the choices are, and this says what is known about them. */
+.slot__note {
+  margin: 0;
+  color: var(--c-text-muted); font-size: var(--fs-xs); text-align: center;
+}
+
 /* The press that unfolds them. It is quiet — the row above it is what the frame is about — and it is
    not one of the pills: what it does is show more of the row, not choose anything. */
 .slot__more {

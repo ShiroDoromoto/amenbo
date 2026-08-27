@@ -15,7 +15,7 @@ import { type AttachTargetType } from "./reads";
 import { guessLang, t, tf, type CmdError, type CmdErrorPart, type ViewKind } from "./i18n";
 import { isClosed } from "./status";
 import type { ActivityItem, Facet, Priority, Status, TaskCard } from "../mock/types";
-import type { ActivityTargetDto, AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, McpRequestDto, McpSetupDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
+import type { ActivityTargetDto, AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, McpRequestDto, McpSetupDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, DecisionDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
 import { taskRef } from "./idref";
 import { todayStr } from "./calendar";
 
@@ -908,7 +908,7 @@ export async function fetchDoctorReport(): Promise<DoctorReportDto> {
  * for a snapshot or a query to refetch either, which is why no ack comes back. Outside Tauri it does nothing.
  */
 export async function runDoctorFix(): Promise<DoctorFixDto> {
-  if (!inTauri()) return { reclaimedBlobs: 0, freedBytes: 0, forgottenBindings: 0 };
+  if (!inTauri()) return { sweptAttachments: 0, reclaimedBlobs: 0, freedBytes: 0, forgottenBindings: 0 };
   return await invoke<DoctorFixDto>("doctor_fix");
 }
 
@@ -1755,6 +1755,24 @@ export async function unsetTaskDimensionValue(taskId: number, valueId: number): 
 export async function fetchTaskDimensions(taskId: number): Promise<TaskDimensionAssignmentDto[]> {
   if (!inTauri()) return [];
   return invoke<TaskDimensionAssignmentDto[]>("task_dimensions", { taskId });
+}
+
+/** Assign a dimension value to a decision — the decision side of `setTaskDimensionValue`. On a single-select dimension this replaces whatever that decision already had on the same axis. */
+export async function setDecisionDimensionValue(decisionId: number, valueId: number): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("decision_set_dimension_value", { decisionId, valueId });
+}
+
+/** Take one dimension-value assignment off a decision. */
+export async function unsetDecisionDimensionValue(decisionId: number, valueId: number): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("decision_unset_dimension_value", { decisionId, valueId });
+}
+
+/** The dimension assignments a decision currently carries (dimensionId → valueId), for the decision pane's current-value display. */
+export async function fetchDecisionDimensions(decisionId: number): Promise<DecisionDimensionAssignmentDto[]> {
+  if (!inTauri()) return [];
+  return invoke<DecisionDimensionAssignmentDto[]>("decision_dimensions", { decisionId });
 }
 
 /** All task assignments for one project × dimension (taskId → valueId) in a single call, so the board can group by value. */

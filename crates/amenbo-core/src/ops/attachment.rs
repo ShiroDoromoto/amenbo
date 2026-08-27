@@ -27,7 +27,7 @@ fn append_order_key(
     target_type: AttachmentTarget,
     target_id: i64,
 ) -> Result<String> {
-    let last = read::max_attachment_order_key(tx.conn(), target_type.as_str(), target_id)?;
+    let last = read::max_attachment_order_key(tx.conn(), target_type, target_id)?;
     Ok(order::key_between(last.as_deref(), None))
 }
 
@@ -149,7 +149,7 @@ mod tests {
 
     /// How many live attachments hang on that target.
     fn live_on(tx: &WriteTx<'_>, tt: AttachmentTarget, target: i64) -> usize {
-        read::attachments_for_target(tx.conn(), tt.as_str(), target).unwrap().len()
+        read::attachments_for_target(tx.conn(), tt, target).unwrap().len()
     }
 
     #[test]

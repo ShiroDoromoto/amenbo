@@ -40,7 +40,7 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use amenbo_scenario::{Args, Domain, Driver, Scenario, Step};
+use amenbo_scenario::{Args, BoundKind, Domain, Driver, Scenario, Step};
 
 /// Starting the app under test and holding it — the pid every shot is aimed at comes from here.
 pub mod launch;
@@ -282,6 +282,9 @@ pub struct Expectation {
 /// back by `target:` reads — and is judged — by name, not by id.
 struct Instructor {
     labels: HashMap<String, String>,
+    /// Which kind each binding stands for. An instruction has to name the page the operator is to
+    /// open, and "the task" is the wrong page for a decision — one axis is set from either.
+    kinds: HashMap<String, BoundKind>,
     /// The bindings whose task has **ended** — done or rejected — as of the step being rendered.
     /// The app draws such a title with a line through it wherever it draws it (`card--closed`,
     /// `row__title--closed`), and that line is what takes the title out of OCR's reach, so this is
@@ -294,7 +297,7 @@ struct Instructor {
 
 impl Instructor {
     fn new() -> Instructor {
-        Instructor { labels: HashMap::new(), ended: HashSet::new() }
+        Instructor { labels: HashMap::new(), kinds: HashMap::new(), ended: HashSet::new() }
     }
 
     /// Learn what the world a road starts from left standing, without rendering a word of it. The
@@ -310,6 +313,9 @@ impl Instructor {
                 if let Some(name) = bind {
                     if let Some(label) = label(with) {
                         self.labels.insert(name.clone(), label.to_string());
+                    }
+                    if let Some(kind) = BoundKind::of_domain(*domain) {
+                        self.kinds.insert(name.clone(), kind);
                     }
                 }
                 self.note_end(*domain, op, with);
@@ -375,6 +381,18 @@ impl Instructor {
         }
     }
 
+    /// What to call the thing a step's `target:` points at — "task" or "decision". They are opened on
+    /// different pages, so an instruction that named the wrong one would send the operator to a screen
+    /// the step cannot be walked on. Unbound, it falls back to "task", which is what every road that
+    /// existed before a decision could be classified was already saying.
+    fn target_noun(&self, with: &Args) -> &'static str {
+        with.get("target")
+            .and_then(|v| v.as_str())
+            .and_then(|name| self.kinds.get(name))
+            .map(|k| k.noun())
+            .unwrap_or("task")
+    }
+
     /// One step → one instruction. Fails closed on a registry op this harness has not mapped yet
     /// — the same contract the CLI driver keeps, so a new op surfaces loudly here too rather than
     /// walking past with a blank instruction. An action also records the label later steps read by.
@@ -409,6 +427,9 @@ impl Instructor {
                 if let Some(name) = bind {
                     if let Some(label) = label(with) {
                         self.labels.insert(name.clone(), label.to_string());
+                    }
+                    if let Some(kind) = BoundKind::of_domain(*domain) {
+                        self.kinds.insert(name.clone(), kind);
                     }
                 }
                 self.note_end(*domain, op, with);
@@ -1015,11 +1036,12 @@ impl Instructor {
                     ),
                 }
             }
-            // Filing the task under one of the axis's values, from the task's own pane. The screen keeps
-            // one control per axis there, so the axis is named as well as the value: a line naming the
-            // value alone would leave a reader hunting the pane for which control carries it.
+            // Filing a task or a decision under one of the axis's values, from its own pane. The screen
+            // keeps one control per axis there, so the axis is named as well as the value: a line naming
+            // the value alone would leave a reader hunting the pane for which control carries it.
             (Domain::Dimension, "set") => format!(
-                "Open the task \"{}\" and, in the control its pane keeps for the category \"{}\", choose \"{}\".",
+                "Open the {} \"{}\" and, in the control its pane keeps for the category \"{}\", choose \"{}\".",
+                self.target_noun(with),
                 self.target_label(with),
                 req(with, "dimension")?,
                 req(with, "value")?

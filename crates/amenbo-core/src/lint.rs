@@ -230,12 +230,20 @@ fn parse_range(s: &str) -> Option<(usize, usize)> {
 /// `git diff --cached` does not fail there in any useful way: with no repository to read an index from,
 /// git falls back to `--no-index` and answers with its entire usage text.
 pub fn staged_diff(dir: &Path) -> Result<String> {
+    // Ahead of the repository question, because the two failures are different and only one of them is the
+    // user's folder: a machine with no runnable git (`sys::git`) would otherwise be told its repository is
+    // not one.
+    let Some(mut git) = crate::sys::git() else {
+        return Err(Error::Invalid(Msg::new(
+            "No git found on this machine, so there is no staged diff to lint. Pass a file, or --stdin, to lint that text instead.",
+        )));
+    };
     if !is_git_repo(dir) {
         return Err(Error::Invalid(Msg::new(
             "Not a git repository, so there is no staged diff to lint. Pass a file, or --stdin, to lint that text instead.",
         )));
     }
-    let out = crate::sys::command("git")
+    let out = git
         .current_dir(dir)
         .args([
             // Leave a non-ASCII path as its bytes rather than as `\346\227\245` escapes, so a hit in one
@@ -265,8 +273,8 @@ pub fn staged_diff(dir: &Path) -> Result<String> {
 /// Is `dir` inside a git working tree? Asked of git itself rather than by looking for a `.git`, which is a
 /// directory in one checkout, a `gitdir:` file in a worktree, and above you in a subdirectory of either.
 fn is_git_repo(dir: &Path) -> bool {
-    crate::sys::command("git")
-        .current_dir(dir)
+    let Some(mut git) = crate::sys::git() else { return false };
+    git.current_dir(dir)
         .args(["rev-parse", "--is-inside-work-tree"])
         .output()
         .map(|o| o.status.success() && o.stdout.starts_with(b"true"))

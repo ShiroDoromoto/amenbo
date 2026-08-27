@@ -293,7 +293,7 @@ export const vi: Translation = {
     "settings.doctorRebind": "Gắn lại",
     "settings.doctorRepairing": "Đang làm…",
     "settings.doctorRepairDone": "Đã sửa.",
-    "settings.doctorFixDone": "Đã sửa ({blobs} tệp đính kèm · {bindings} mối gắn thư mục)",
+    "settings.doctorFixDone": "Đã sửa ({attachments} dòng đính kèm · {blobs} tệp đính kèm · {bindings} mối gắn thư mục)",
     "settings.doctorFixNothing": "Không có gì để sửa.",
     "settings.dataOpPreparing": "Đang chuẩn bị…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -802,6 +802,10 @@ export const vi: Translation = {
     duplicate_order_key: {
       message: "Dự án {project} có những việc dùng chung một khoá sắp xếp ({order_key}).",
       fix: "Sắp lại thứ tự các việc là nó tự hết.",
+    },
+    orphan_attachment: {
+      message: "{attachment} gắn vào {target}, mà không có bản ghi nào như vậy: dòng này sống lâu hơn thứ nó gắn vào, và giữ tệp của nó ở nơi không ai với tới nữa.",
+      fix: "“Sửa” xoá dòng đó và thả tệp của nó ra. Không có gì phải mở trước: thứ nó gắn vào đã không còn.",
     },
     stale_managed_block: {
       message: "Bản hướng dẫn cho AI (khối do Amenbo quản lý) trong {path} đã cũ (v{version} → v{current}).",

@@ -298,7 +298,7 @@ export const fr: Translation = {
     "settings.doctorRebind": "Relier",
     "settings.doctorRepairing": "Traitement…",
     "settings.doctorRepairDone": "Corrigé.",
-    "settings.doctorFixDone": "Réparé ({blobs} fichier(s) joint(s) · {bindings} liaison(s) de dossier)",
+    "settings.doctorFixDone": "Réparé ({attachments} ligne(s) de pièce jointe · {blobs} fichier(s) joint(s) · {bindings} liaison(s) de dossier)",
     "settings.doctorFixNothing": "Rien à réparer.",
     "settings.dataOpPreparing": "Préparation…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -830,6 +830,10 @@ export const fr: Translation = {
     duplicate_order_key: {
       message: "Le projet {project} a des tâches qui partagent la même clé d'ordre ({order_key}).",
       fix: "Réordonnez les tâches et cela se résout de soi-même.",
+    },
+    orphan_attachment: {
+      message: "{attachment} est rattaché à {target}, et cet enregistrement n'existe pas : la ligne a survécu à ce à quoi elle tenait, et retient son fichier là où personne ne peut plus l'atteindre.",
+      fix: "« Réparer » supprime la ligne et libère son fichier. Il n'y a rien à ouvrir d'abord : ce à quoi elle tenait a déjà disparu.",
     },
     stale_managed_block: {
       message: "Le guide de l'IA (bloc géré par Amenbo) dans {path} est périmé (v{version} → v{current}).",

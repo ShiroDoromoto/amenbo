@@ -295,7 +295,7 @@ export const ja: Translation = {
     "settings.doctorRebind": "紐付け直す",
     "settings.doctorRepairing": "実行中…",
     "settings.doctorRepairDone": "直しました。",
-    "settings.doctorFixDone": "修復しました（添付ファイル {blobs} 件・フォルダ紐付け {bindings} 件）",
+    "settings.doctorFixDone": "修復しました（添付の行 {attachments} 件・添付ファイル {blobs} 件・フォルダ紐付け {bindings} 件）",
     "settings.doctorFixNothing": "修復の対象はありませんでした。",
     "settings.dataOpPreparing": "準備中…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -821,6 +821,10 @@ export const ja: Translation = {
     duplicate_order_key: {
       message: "プロジェクト {project} で並び順（{order_key}）が重複しています。",
       fix: "タスクを並べ替えると解消します。",
+    },
+    orphan_attachment: {
+      message: "{attachment} は {target} に付いていますが、その記録はありません。付いていた先より長く残ってしまった行です。誰も辿り着けないのに、ファイルだけを抱えたままになっています。",
+      fix: "「修復する」で行を消し、ファイルを解放します。付いていた先はもう無いので、先に開くものはありません。",
     },
     stale_managed_block: {
       message: "{path} の AI 手引き（Amenbo 管理ブロック）が古い版です（v{version} → v{current}）。",

@@ -29,7 +29,12 @@ describe("foldScopes — folding datasets into invalidation scopes", () => {
   });
 
   it("decision-side tables fold into decisions", () => {
-    const { scopes } = foldScopes([row("decision"), row("decision_comment"), row("decision_edge")]);
+    const { scopes } = foldScopes([
+      row("decision"),
+      row("decision_comment"),
+      row("decision_edge"),
+      row("decision_dimension_value"),
+    ]);
     expect([...scopes].sort()).toEqual(["decisions"]);
   });
 

@@ -724,6 +724,21 @@ datasets! {
         value_id: fk("dimension_value", "RESTRICT"),
     }
 
+    // The decision's side of the same mechanism (`AMB-D-781`). A table of its own rather than a
+    // `target_type` arm on `task_dimension_value`: a task and a decision are different entities, and
+    // keeping them apart is what lets each end hold a real FK instead of a polymorphic id nothing can
+    // constrain — the division `decision_comment` already draws beside `task_comment`.
+    // **The values are shared.** A decision answers an axis with one of the axis's own values, never with
+    // a value raised for decisions, so `dimension` and `dimension_value` are untouched by this and one
+    // axis reads the same on both sides.
+    decision_dimension_value => decision_dimension_value {
+        decision_id: fk("decision", "RESTRICT"),
+        // Denormalised for the reason the task side's is: the (decision,dimension) single-select
+        // constraint and the axis filters read the row without joining through `dimension_value`.
+        dimension_id: fk("dimension", "RESTRICT"),
+        value_id: fk("dimension_value", "RESTRICT"),
+    }
+
     // Two-mode attachment (`blob` ingest / `url` link). The target is polymorphic
     // (`target_type` / `target_id`). Blob bytes never land here — the truth source carries only the
     // metadata; the content-addressed bytes live out-of-band.
@@ -1180,6 +1195,10 @@ CREATE INDEX IF NOT EXISTS decision_edge_by_target ON decision_edge(target_decis
 -- task_dependency_by_task etc.). No read path consumes it yet; it is here so that moving the axes onto
 -- the link table cannot reintroduce the O(N²) scan the other FK indexes exist to prevent.
 CREATE INDEX IF NOT EXISTS task_dimension_value_by_task ON task_dimension_value(task_id);
+-- The decision side's FK index, and there for the same reason: a decision's own assignments are sought
+-- rather than found by scanning the whole link table — the sweep its delete op reads, and the axis
+-- filter the read layer grows onto it.
+CREATE INDEX IF NOT EXISTS decision_dimension_value_by_decision ON decision_dimension_value(decision_id);
 -- A task's commit SHAs. The pair is UNIQUE so the same commit cannot be recorded twice on one task
 -- (the ops layer reads this to stay idempotent, and the door normalises case so two spellings of one
 -- SHA cannot slip past it). The `by_sha` index is the reverse chain (SHA → tasks) the later filter

@@ -290,7 +290,7 @@ export const hi: Translation = {
     "settings.doctorRebind": "दोबारा जोड़ें",
     "settings.doctorRepairing": "काम चल रहा है…",
     "settings.doctorRepairDone": "ठीक हो गया।",
-    "settings.doctorFixDone": "मरम्मत हुई ({blobs} संलग्नक फ़ाइल · {bindings} फ़ोल्डर कड़ी)",
+    "settings.doctorFixDone": "मरम्मत हुई ({attachments} संलग्नक पंक्ति · {blobs} संलग्नक फ़ाइल · {bindings} फ़ोल्डर कड़ी)",
     "settings.doctorFixNothing": "मरम्मत को कुछ नहीं था।",
     "settings.dataOpPreparing": "तैयारी हो रही है…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -802,6 +802,10 @@ export const hi: Translation = {
     duplicate_order_key: {
       message: "प्रोजेक्ट {project} में कुछ कामों की क्रम-कुंजी एक ही है ({order_key})।",
       fix: "कामों का क्रम बदल दें — यह अपने आप सुलझ जाएगा।",
+    },
+    orphan_attachment: {
+      message: "{attachment} {target} से लगा है, और ऐसा कोई रिकॉर्ड है ही नहीं — यह पंक्ति उससे ज़्यादा टिकी रही जिससे लगी थी, और अपनी फ़ाइल को वहाँ थामे है जहाँ अब कोई नहीं पहुँच सकता।",
+      fix: "“मरम्मत” पंक्ति हटा देती है और उसकी फ़ाइल छोड़ देती है। पहले कुछ खोलने को नहीं है — जिससे लगी थी वह पहले ही जा चुका।",
     },
     stale_managed_block: {
       message: "{path} में AI मार्गदर्शन (Amenbo द्वारा संचालित ब्लॉक) पुराना है (v{version} → v{current})।",

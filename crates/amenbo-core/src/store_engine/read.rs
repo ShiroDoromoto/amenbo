@@ -24,10 +24,10 @@ use super::search;
 use super::search::HitFace;
 use super::sql::{
     id_union, same, Col, Count, Exists, Expr, IdSet, Int, NotNull, Nullability, Nullable, Pred, Select,
-    Slot, Sort, Sql, Text as SqlText, Union,
+    Slot, Sort, Sql, Table, Text as SqlText, Union,
 };
 use super::{StoreEngineError, Result};
-use crate::model::{ActorKind, DecisionStatus, Priority, TaskStatus};
+use crate::model::{ActorKind, AttachmentTarget, DecisionStatus, Priority, TaskStatus};
 use crate::query::{AssigneeFilter, DueFilter, Filter, StartFilter};
 use crate::view::{ProjectRef, TaskCompact};
 
@@ -372,6 +372,8 @@ pub fn list_task_ids(conn: &Connection, q: &TaskQuery) -> Result<TaskPage> {
 const T: col::task::Cols = col::task::of("t");
 /// The task↔dimension-value link's columns, as [`AxisSelection::pred`]'s subquery aliases them.
 const TDV: col::task_dimension_value::Cols = col::task_dimension_value::of("tdv");
+/// The decision's side of the same link, aliased the same way (`AMB-D-781`).
+const DDV: col::decision_dimension_value::Cols = col::decision_dimension_value::of("ddv");
 /// The change feed's columns, and the store's scalars — plain tables, named the same way.
 const FEED: col::change_feed::Cols = col::change_feed::ALL;
 const META: col::store_meta::Cols = col::store_meta::ALL;
@@ -426,11 +428,11 @@ fn task_word_sets(term: search::Term<'_>) -> [IdSet; 6] {
     let on_axis = IdSet::of(TDV.table, TDV.task_id)
         .join(SD.table, on_face(search::DATASET_DIMENSION, TDV.dimension_id))
         .filter(term.pred(SD));
-    let attached = attachment_ids(search::DATASET_TASK, term);
+    let attached = attachment_ids(AttachmentTarget::Task, term);
     // What hangs off a comment hangs off the task, by the same reading that puts the comment's own body
     // here: the timeline is the task's, and so is what was pinned to it.
     let attached_to_comment = IdSet::of(TC.table, TC.task_id)
-        .join(A.table, hangs_off(search::DATASET_TASK_COMMENT, TC.id))
+        .join(A.table, hangs_off(AttachmentTarget::TaskComment, TC.id))
         .join(SD.table, on_face(search::DATASET_ATTACHMENT, A.id))
         .filter(term.pred(SD));
     [own, in_comment, on_value, on_axis, attached, attached_to_comment]
@@ -457,9 +459,9 @@ fn decision_word_sets(term: search::Term<'_>) -> [IdSet; 4] {
     let in_comment = IdSet::of(DC.table, DC.decision_id)
         .join(SD.table, on_face(search::DATASET_DECISION_COMMENT, DC.id))
         .filter(term.pred(SD));
-    let attached = attachment_ids(search::DATASET_DECISION, term);
+    let attached = attachment_ids(AttachmentTarget::Decision, term);
     let attached_to_comment = IdSet::of(DC.table, DC.decision_id)
-        .join(A.table, hangs_off(search::DATASET_DECISION_COMMENT, DC.id))
+        .join(A.table, hangs_off(AttachmentTarget::DecisionComment, DC.id))
         .join(SD.table, on_face(search::DATASET_ATTACHMENT, A.id))
         .filter(term.pred(SD));
     [own, in_comment, attached, attached_to_comment]
@@ -477,8 +479,8 @@ fn on_face<N: Nullability>(owner_kind: &str, owner: Col<Int, N>) -> Pred {
 
 /// The join that reaches what hangs off one record — `attachment_by_target`'s two columns, the same way.
 /// Polymorphic, so the kind of the thing hung off is half of the condition.
-fn hangs_off<N: Nullability>(target_type: &str, target: Col<Int, N>) -> Pred {
-    Pred::eq(A.target_type, target_type).and(same(A.target_id, target))
+fn hangs_off<N: Nullability>(target_type: AttachmentTarget, target: Col<Int, N>) -> Pred {
+    Pred::eq(A.target_type, target_type.as_str()).and(same(A.target_id, target))
 }
 
 /// The ids of the records of `target_type` something attached to them is named by — the filename a blob
@@ -486,10 +488,10 @@ fn hangs_off<N: Nullability>(target_type: &str, target: Col<Int, N>) -> Pred {
 ///
 /// It drives from `attachment`, seeking `attachment_by_target`, and reaches the copy from there: driving
 /// from the copy instead would leave the seek with only the face key's leading column.
-fn attachment_ids(target_type: &str, term: search::Term<'_>) -> IdSet {
+fn attachment_ids(target_type: AttachmentTarget, term: search::Term<'_>) -> IdSet {
     IdSet::of(A.table, A.target_id)
         .join(SD.table, on_face(search::DATASET_ATTACHMENT, A.id))
-        .filter(Pred::eq(A.target_type, target_type))
+        .filter(Pred::eq(A.target_type, target_type.as_str()))
         .filter(term.pred(SD))
 }
 
@@ -566,7 +568,7 @@ fn filter_preds(q: &TaskQuery) -> Vec<Pred> {
     if let Some(sha) = &f.commit {
         preds.push(commit_pred(sha));
     }
-    preds.extend(dimension_preds(&f.dimensions));
+    preds.extend(dimension_preds(&f.dimensions, TASK_AXIS_LINK, T.id));
     preds
 }
 
@@ -706,7 +708,15 @@ fn commit_pred(sha: &str) -> Pred {
 ///
 /// Sameness is judged on the resolved axis ids, not on what was typed: `time_axis:` and the axis's own
 /// name are two ways of naming one axis, and an axis name two projects share resolves to both ids alike.
-fn dimension_preds(filters: &[crate::query::DimensionFilter]) -> Vec<Pred> {
+///
+/// `link` and `record_id` say which side is being asked — a task's link table and `task.id`, or a
+/// decision's and `decision.id`. The folding above is the grammar's, and the grammar is one
+/// (`AMB-D-781`), so only the two columns the predicate lands on differ.
+fn dimension_preds(
+    filters: &[crate::query::DimensionFilter],
+    link: AxisLink,
+    record_id: Col<Int, NotNull>,
+) -> Vec<Pred> {
     let mut axes: Vec<AxisSelection> = Vec::new();
     for f in filters {
         debug_assert!(f.resolved.is_some(), "Filter::resolve was not run (`dim:` is silently dropped)");
@@ -735,8 +745,34 @@ fn dimension_preds(filters: &[crate::query::DimensionFilter]) -> Vec<Pred> {
             }
         }
     }
-    axes.into_iter().map(AxisSelection::pred).collect()
+    axes.into_iter().map(|a| a.pred(link, record_id)).collect()
 }
+
+/// Where one side's link table names the axis, the value, and the record the row hangs off.
+/// `task_dimension_value` and `decision_dimension_value` say the same three things and differ only in
+/// that last column, so the selection below is written once and asked of either (`AMB-D-781`).
+#[derive(Clone, Copy)]
+struct AxisLink {
+    table: Table,
+    dimension_id: Col<Int, NotNull>,
+    value_id: Col<Int, NotNull>,
+    /// The link's own reference back to the record — `task_id` on one side, `decision_id` on the other.
+    owner_id: Col<Int, NotNull>,
+}
+
+const TASK_AXIS_LINK: AxisLink = AxisLink {
+    table: TDV.table,
+    dimension_id: TDV.dimension_id,
+    value_id: TDV.value_id,
+    owner_id: TDV.task_id,
+};
+
+const DECISION_AXIS_LINK: AxisLink = AxisLink {
+    table: DDV.table,
+    dimension_id: DDV.dimension_id,
+    value_id: DDV.value_id,
+    owner_id: DDV.decision_id,
+};
 
 /// What one axis was asked for, folded from every token that named it.
 struct AxisSelection {
@@ -749,30 +785,30 @@ struct AxisSelection {
 }
 
 impl AxisSelection {
-    /// The selection as an EXISTS over the task's own assignment rows. It seeks by
-    /// `task_dimension_value_by_task` and matches the axis/value by primary key, so the filter stays
-    /// O(result) instead of scanning the link table once per task — and folding an axis's values into
-    /// one `IN` list keeps it a single EXISTS however many values were named. Only resolved ids reach
-    /// here: the read entry point turned the axis/value names into ids and refused the ones that name
-    /// nothing, so a typo is an error rather than a silent zero — or, on the `=none` arm, a silent
-    /// *everything* (a `NOT EXISTS` over an axis that does not exist is true of every task). The
-    /// `dimension_value` join still matters though the ids are live by construction: an assignment can
-    /// point at a value that was deleted, and that assignment must read as *unassigned*.
-    fn pred(self) -> Pred {
+    /// The selection as an EXISTS over the record's own assignment rows. It seeks by the link's
+    /// by-record index and matches the axis/value by primary key, so the filter stays O(result) instead
+    /// of scanning the link table once per record — and folding an axis's values into one `IN` list
+    /// keeps it a single EXISTS however many values were named. Only resolved ids reach here: the read
+    /// entry point turned the axis/value names into ids and refused the ones that name nothing, so a
+    /// typo is an error rather than a silent zero — or, on the `=none` arm, a silent *everything* (a
+    /// `NOT EXISTS` over an axis that does not exist is true of every record). The `dimension_value`
+    /// join still matters though the ids are live by construction: an assignment can point at a value
+    /// that was deleted, and that assignment must read as *unassigned*.
+    fn pred(self, link: AxisLink, record_id: Col<Int, NotNull>) -> Pred {
         let Some(axis_ids) = self.axis_ids else { return Pred::never() };
         const DV: col::dimension_value::Cols = col::dimension_value::of("dv");
         // The axis (and, where values were named, the values) as an `IN` list — one placeholder per id,
         // each carrying its own bind.
-        let on_axis = Pred::is_in(TDV.dimension_id, axis_ids);
+        let on_axis = Pred::is_in(link.dimension_id, axis_ids);
         let holds = |inner: Pred| {
-            Exists::over(TDV.table)
-                .join(DV.table, same(DV.id, TDV.value_id))
-                .filter(same(TDV.task_id, T.id))
+            Exists::over(link.table)
+                .join(DV.table, same(DV.id, link.value_id))
+                .filter(same(link.owner_id, record_id))
                 .filter(inner)
                 .pred()
         };
         let named = (!self.value_ids.is_empty())
-            .then(|| holds(on_axis.clone().and(Pred::is_in(TDV.value_id, self.value_ids))));
+            .then(|| holds(on_axis.clone().and(Pred::is_in(link.value_id, self.value_ids))));
         // `=none` = *no* live value on that axis, so it constrains the axis alone and negates.
         let unassigned = self.unassigned.then(|| !holds(on_axis));
         match (named, unassigned) {
@@ -821,6 +857,10 @@ fn decision_filter_preds(f: &crate::query::DecisionFilter) -> Vec<Pred> {
             Pred::eq(DEC.id, nf.number as i64)
         });
     }
+    // `dim:` / `time_axis:` — the same grammar the task side reads, over the decision's own link
+    // (`AMB-D-781`). Mirrors the `dim_hits` line of `matches`, which asks the id set this predicate
+    // selects.
+    preds.extend(dimension_preds(&f.dimensions, DECISION_AXIS_LINK, DEC.id));
     if let Some(task) = f.task {
         // `task:` — the decisions a task rests on, walked through the link (live link, live task), as an
         // EXISTS so it seeks the link index rather than scanning the links per decision. The mirror of
@@ -1110,7 +1150,7 @@ fn blob_hashes<C: FromIterator<String>>(conn: &Connection, pred: &Pred) -> Resul
 /// a delete can hand its caller the exact set of blobs it may have orphaned.
 pub fn blob_hashes_for_target(
     conn: &Connection,
-    target_type: &str,
+    target_type: AttachmentTarget,
     target_id: i64,
 ) -> Result<Vec<String>> {
     blob_hashes(conn, &any_blob().and(on_target(target_type, target_id)))
@@ -1134,9 +1174,11 @@ pub fn blob_refcount(conn: &Connection, hash: &str) -> Result<i64> {
 
 /// The attachments of one polymorphic target. The target is a `(type, id)` pair rather than a foreign
 /// key — no `REFERENCES` can branch on a sibling column — so the two halves are asked for together, and
-/// an id is never matched without the type that says what it names.
-fn on_target(target_type: &str, target_id: i64) -> Pred {
-    Pred::eq(ATT.target_type, target_type).and(Pred::eq(ATT.target_id, target_id))
+/// an id is never matched without the type that says what it names. The type stays
+/// [`AttachmentTarget`] up to here and falls to text only for the
+/// parameter: what the `CHECK` on that column accepts is then what the caller is able to say.
+fn on_target(target_type: AttachmentTarget, target_id: i64) -> Pred {
+    Pred::eq(ATT.target_type, target_type.as_str()).and(Pred::eq(ATT.target_id, target_id))
 }
 
 /// One live attachment's metadata, as the store holds it. The blob bytes are
@@ -1160,7 +1202,7 @@ pub struct AttachmentRow {
 /// read-model so the GUI read path stays O(result).
 pub fn attachments_for_target(
     conn: &Connection,
-    target_type: &str,
+    target_type: AttachmentTarget,
     target_id: i64,
 ) -> Result<Vec<AttachmentRow>> {
     let mut sel = Select::new();
@@ -1367,7 +1409,7 @@ pub fn next_id(conn: &Connection, table: &str) -> Result<i64> {
 /// attachments to the same target would otherwise read the same maximum and take the same key.
 pub fn max_attachment_order_key(
     conn: &Connection,
-    target_type: &str,
+    target_type: AttachmentTarget,
     target_id: i64,
 ) -> Result<Option<String>> {
     const A: col::attachment::Cols = col::attachment::ALL;
@@ -1375,7 +1417,7 @@ pub fn max_attachment_order_key(
     // MAX over a column: an aggregate, so the registry cannot type it — an empty target has no row to
     // take the maximum of, and the aggregate answers NULL rather than nothing.
     let max = sel.expr::<Option<String>>(format!("MAX({})", A.order_key.name()));
-    let pred = Pred::eq(A.target_type, target_type).and(Pred::eq(A.target_id, target_id));
+    let pred = Pred::eq(A.target_type, target_type.as_str()).and(Pred::eq(A.target_id, target_id));
     let mut sql = Sql::from(&sel, A.table);
     sql.push_where(Some(&pred));
     conn.query_row(sql.text(), rusqlite::params_from_iter(sql.params()), |r| max.get(r))
@@ -2360,7 +2402,7 @@ fn attachment_arms(a: &HitArms, union: Union<HitSlots>) -> Union<HitSlots> {
                 attachment_name(A),
             );
             let mut tail = Sql::from_table(A.table);
-            tail.join(T.table, hangs_off(TASK, T.id)).push_where(
+            tail.join(T.table, hangs_off(AttachmentTarget::Task, T.id)).push_where(
                 a.r#where(
                     face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], a.asked),
                     HitFace::Attachment,
@@ -2383,7 +2425,7 @@ fn attachment_arms(a: &HitArms, union: Union<HitSlots>) -> Union<HitSlots> {
                 attachment_name(A),
             );
             let mut tail = Sql::from_table(A.table);
-            tail.join(DEC.table, hangs_off(DECISION, DEC.id)).push_where(
+            tail.join(DEC.table, hangs_off(AttachmentTarget::Decision, DEC.id)).push_where(
                 a.r#where(
                     face_hit(search::DATASET_ATTACHMENT, A.id, &["filename", "url"], a.asked),
                     HitFace::Attachment,
@@ -2417,7 +2459,7 @@ fn comment_attachment_arms(a: &HitArms, union: Union<HitSlots>) -> Union<HitSlot
                 attachment_name(A),
             );
             let mut tail = Sql::from_table(A.table);
-            tail.join(TC.table, hangs_off(search::DATASET_TASK_COMMENT, TC.id))
+            tail.join(TC.table, hangs_off(AttachmentTarget::TaskComment, TC.id))
                 .join(T.table, same(T.id, TC.task_id))
                 .push_where(
                     a.r#where(
@@ -2442,7 +2484,7 @@ fn comment_attachment_arms(a: &HitArms, union: Union<HitSlots>) -> Union<HitSlot
                 attachment_name(A),
             );
             let mut tail = Sql::from_table(A.table);
-            tail.join(DC.table, hangs_off(search::DATASET_DECISION_COMMENT, DC.id))
+            tail.join(DC.table, hangs_off(AttachmentTarget::DecisionComment, DC.id))
                 .join(DEC.table, same(DEC.id, DC.decision_id))
                 .push_where(
                     a.r#where(
@@ -4106,6 +4148,68 @@ pub fn task_classification(conn: &Connection, task_id: i64) -> Result<Vec<(Strin
     Ok(rows)
 }
 
+/// The decisions the `dim:` / `time_axis:` tokens select, read whole in one query — the shape `task:`
+/// and the words already take on this side (`decision list` matches in Rust over a page it has already
+/// read, so what it wants is a set to test membership against, not a predicate). Every token must hold,
+/// so the per-axis predicates AND. An empty `filters` selects every decision, which is the caller's cue
+/// not to ask at all.
+pub fn decisions_matching_dimensions(
+    conn: &Connection,
+    filters: &[crate::query::DimensionFilter],
+) -> Result<Vec<i64>> {
+    let pred = dimension_preds(filters, DECISION_AXIS_LINK, DEC.id).into_iter().reduce(Pred::and);
+    select_ids(conn, DEC.id, pred.as_ref())
+}
+
+/// The `(dimension_id, value_id)` assignments a single **decision** carries — [`task_dimension_assignments`]'s
+/// twin (`AMB-D-781`), for the pane that reflects a decision's current axis values. Live
+/// decision↔value links to live values only, in `decision_dimension_value`-`id` order.
+pub fn decision_dimension_assignments(conn: &Connection, decision_id: i64) -> Result<Vec<(i64, i64)>> {
+    const DV: col::decision_dimension_value::Cols = col::decision_dimension_value::of("dv");
+    const V: col::dimension_value::Cols = col::dimension_value::of("v");
+    let mut sel = Select::new();
+    let (dimension, value) = (sel.col(DV.dimension_id), sel.col(DV.value_id));
+    // The value is joined to drop an assignment whose value is gone, not for a column of its own.
+    let mut sql = Sql::from(&sel, DV.table);
+    sql.join(V.table, same(V.id, DV.value_id))
+        .push_where(Some(&Pred::eq(DV.decision_id, decision_id)))
+        .order_by([Sort::by(DV.id)]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+            Ok((dimension.get(r)?, value.get(r)?))
+        })
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<(i64, i64)>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(rows)
+}
+
+/// What one decision is classified as, in words — [`task_classification`]'s twin, ordered by the **axis**
+/// for the same reason, and read by the face that prints a decision rather than joins.
+pub fn decision_classification(conn: &Connection, decision_id: i64) -> Result<Vec<(String, String)>> {
+    const DV: col::decision_dimension_value::Cols = col::decision_dimension_value::of("dv");
+    const D: col::dimension::Cols = col::dimension::of("d");
+    const V: col::dimension_value::Cols = col::dimension_value::of("v");
+    let mut sel = Select::new();
+    let (dimension, value) = (sel.col(D.name), sel.col(V.name));
+    let mut sql = Sql::from(&sel, DV.table);
+    // Both joins are inner: an assignment whose axis or value is gone names nothing to print.
+    sql.join(D.table, same(D.id, DV.dimension_id))
+        .join(V.table, same(V.id, DV.value_id))
+        .push_where(Some(&Pred::eq(DV.decision_id, decision_id)))
+        .order_by([Sort::by(D.order_key), Sort::by(D.id)]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+            Ok((dimension.get(r)?, value.get(r)?))
+        })
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<(String, String)>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(rows)
+}
+
 /// The `(task_id, value_id)` assignments for one dimension across a project — lets the GUI board group a
 /// project's tasks by a chosen dimension's values in one query. Live links to live values only, scoped to
 /// live tasks of the project.
@@ -4830,6 +4934,35 @@ pub fn assignment_id(
     first_id(conn, TV.id, &Pred::eq(TV.task_id, task_id).and(Pred::eq(TV.value_id, value_id)))
 }
 
+/// The live assignment of `decision_id` on `dimension_id` — [`assignment_ids_on_axis`]'s twin, read by
+/// `ops::dimension::set_on_decision` so the outgoing assignment goes in the same transaction as the
+/// incoming one. A set for the same reason: the `(decision, dimension)` one-row invariant is only an
+/// invariant if a store that broke it is not silently left holding the extra row.
+pub fn decision_assignment_ids_on_axis(
+    conn: &Connection,
+    decision_id: i64,
+    dimension_id: i64,
+) -> Result<Vec<i64>> {
+    const DV: col::decision_dimension_value::Cols = col::decision_dimension_value::ALL;
+    let pred = Pred::eq(DV.decision_id, decision_id).and(Pred::eq(DV.dimension_id, dimension_id));
+    select_ids(conn, DV.id, Some(&pred))
+}
+
+/// The live assignment of `decision_id` to exactly `value_id`, or `None` — [`assignment_id`]'s twin,
+/// what makes `set_on_decision` idempotent and `unset_on_decision` a lookup.
+pub fn decision_assignment_id(
+    conn: &Connection,
+    decision_id: i64,
+    value_id: i64,
+) -> Result<Option<i64>> {
+    const DV: col::decision_dimension_value::Cols = col::decision_dimension_value::ALL;
+    first_id(
+        conn,
+        DV.id,
+        &Pred::eq(DV.decision_id, decision_id).and(Pred::eq(DV.value_id, value_id)),
+    )
+}
+
 /// Can `from` reach `target` by walking live dependency edges (`task_id → blocked_by_id`)? A recursive
 /// CTE whose `UNION` dedups the frontier, so an already-cyclic store terminates instead of looping; the
 /// seed is `from` itself, so `reaches(x, x)` is `true`. This is the cycle guard of
@@ -4996,6 +5129,23 @@ pub fn assignment_ids_of_value(conn: &Connection, value_id: i64) -> Result<Vec<i
     select_ids(conn, TV.id, Some(&Pred::eq(TV.value_id, value_id)))
 }
 
+/// The live dimension assignments of one decision — what the decision is classified as, on every axis at
+/// once. [`assignment_ids_of_task`]'s twin, swept by the decision's delete op.
+pub fn decision_assignment_ids_of_decision(
+    conn: &Connection,
+    decision_id: i64,
+) -> Result<Vec<i64>> {
+    const DV: col::decision_dimension_value::Cols = col::decision_dimension_value::ALL;
+    select_ids(conn, DV.id, Some(&Pred::eq(DV.decision_id, decision_id)))
+}
+
+/// The live decision assignments naming one dimension value — [`assignment_ids_of_value`]'s twin.
+/// A value's delete sweeps both sides, or its `RESTRICT` reference stops the delete outright.
+pub fn decision_assignment_ids_of_value(conn: &Connection, value_id: i64) -> Result<Vec<i64>> {
+    const DV: col::decision_dimension_value::Cols = col::decision_dimension_value::ALL;
+    select_ids(conn, DV.id, Some(&Pred::eq(DV.value_id, value_id)))
+}
+
 /// The live decision⇄task links of one task — the decisions it rests on, from the task's side.
 pub fn decision_task_link_ids_of_task(conn: &Connection, task_id: i64) -> Result<Vec<i64>> {
     const L: col::decision_task_link::Cols = col::decision_task_link::ALL;
@@ -5114,6 +5264,19 @@ pub fn task_dimension_value(
         "task_dimension_value",
         id,
         super::hydrate::task_dimension_value_row,
+    )
+}
+
+/// The `decision_dimension_value` assignment with this id.
+pub fn decision_dimension_value(
+    conn: &Connection,
+    id: i64,
+) -> Result<Option<crate::model::DecisionDimensionValue>> {
+    super::hydrate::row_by_id(
+        conn,
+        "decision_dimension_value",
+        id,
+        super::hydrate::decision_dimension_value_row,
     )
 }
 
@@ -5480,7 +5643,7 @@ pub fn attachment(conn: &Connection, id: i64) -> Result<Option<crate::model::Att
 /// with the GUI's projection row; this one hands back ids so the caller can load whole records.
 pub fn live_attachment_ids_for_target(
     conn: &Connection,
-    target_type: &str,
+    target_type: AttachmentTarget,
     target_id: i64,
 ) -> Result<Vec<i64>> {
     let mut sel = Select::new();

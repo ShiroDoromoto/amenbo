@@ -581,6 +581,7 @@ pub fn rebuild(conn: &Connection) -> rusqlite::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::AttachmentTarget;
     use crate::store_engine::StoreEngine;
 
     /// A store with one task, whose title and notes are what the tests search.
@@ -925,7 +926,7 @@ mod tests {
         tx.commit().unwrap();
         assert_eq!(hits(&e, "計測ログ"), vec![1]);
 
-        assert_eq!(e.delete_records_for_target(DATASET_TASK, 1).unwrap(), 1);
+        assert_eq!(e.delete_records_for_target(AttachmentTarget::Task, 1).unwrap(), 1);
         assert!(hits(&e, "計測ログ").is_empty(), "the swept attachment left no words behind");
         assert_eq!(hits(&e, "別のログ"), vec![2], "the one hanging off another task is untouched");
     }

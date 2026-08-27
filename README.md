@@ -200,7 +200,10 @@ amenbo task reject <n> --reason "measured it — too thin to be worth the change
 # with ordering ("don't start later work yet") enforced by dependencies, not the axis.
 amenbo dimension add --project "Website refresh" --name "Area" --ordered
 amenbo dimension value-add Area --name "Design"
-amenbo dimension set 12 Area Design           # assign a task a value on the axis
+# Files a task or a decision on the axis. Here the kind code is required, not optional:
+# the two number independently, so a bare number would not say which is meant.
+amenbo dimension set AMB-T-<n> Area Design
+amenbo dimension set AMB-D-<n> Area Design
 amenbo task add --title "Palette" --project "Website refresh" --dim "Area=Design"  # or file it as you create it
 # On a time-axis, each value spans a period; an open end means it is ongoing.
 # A new task starts on whichever value covers today — never forced, always yours
@@ -319,6 +322,7 @@ amenbo decision link AMB-D-<n> AMB-T-<n>       # cross-link a decision and its t
 amenbo task list --filter "decision:AMB-D-<n> status:todo" --json # walk the link: the open work a decision produced
 amenbo decision list --filter "task:AMB-T-<n>" --json          # ...and the other way: the decisions a task rests on
 amenbo decision list --filter "status:accepted" --json
+amenbo decision list --filter "dim:Area=Design" --json           # the same axes the tasks are filed on, folded the same way (`=none` is unclassified)
 amenbo decision list --filter "status:accepted superseded:no" --with-body --limit 20 --json # bodies too (projection; composes with filter/paging) — read a bounded slice to scan for semantic contradictions (propose only; a human confirms as supersede/amend). To narrow by keyword, `amenbo search <word> --kind decision` says which ones to read
 
 # Status and data ownership
@@ -481,7 +485,8 @@ passphrase on any machine.
 
 On every open Amenbo also runs a read-only integrity check of the store and prints a
 warning if anything looks off — it never repairs automatically (use `amenbo doctor --fix`
-for that, which also reclaims attachment files nothing references any more). Turn it off
+for that, which also sweeps attachment rows whose record is gone and reclaims the files
+nothing references any more). Turn it off
 with `amenbo config set startup_integrity_check false`. The app warns on launch too, and
 adds the bound folders whose `.amenbo` pointer is gone or still in a legacy format — an AI
 started there would not reach the project, and nothing else would have told you. The full

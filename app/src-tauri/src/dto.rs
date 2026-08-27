@@ -2050,13 +2050,25 @@ pub enum PluginUpdateReachDto {
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct WakeCandidateDto {
-    /// The catalogued id, which is what a face hands back when the reader picks this one.
+    /// The id, which is what a face hands back when the reader picks this one — a catalog row's, or
+    /// one of this device's own registrations.
     pub(crate) id: String,
-    /// The product's own name for itself.
+    /// The product's own name for itself, or what the reader called their own row.
     pub(crate) label: String,
-    /// What it is started as — shown where it is missing, because that is the word to install.
+    /// What it is started as — shown where it is missing, because that is the word to install. For a
+    /// registered row it is the first word of `line`, which is the whole of what can be looked for.
     pub(crate) command: String,
-    /// Whether this folder shows a trace of the provider being used here.
+    /// The command line as the reader wrote it — present **exactly** for a row they registered
+    /// themselves (`AMB-D-794`), and absent for a catalogued one.
+    ///
+    /// Its presence is what tells a face which rows it may correct and delete, and its text is what
+    /// the face shows before the row is pressed: a registered line runs in a terminal, so somebody
+    /// choosing it should be able to read what that starts.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) line: Option<String>,
+    /// Whether this folder shows a trace of the provider being used here. Always false for a
+    /// registered row: a trace is left against a wiring catalog row, and a registration has none.
     pub(crate) traced: bool,
     /// Whether this machine can start it. Never more than that: see `amenbo_core::wake`.
     pub(crate) installed: bool,

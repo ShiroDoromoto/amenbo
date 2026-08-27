@@ -701,6 +701,7 @@ export const id: Translation = {
     wake_no_folder: "Folder itu tidak bisa dibaca: {reason}",
     wake_no_config: "Amenbo tidak menemukan berkasnya sendiri.",
     wake_not_kept: "Pilihan tidak bisa disimpan.",
+    wake_not_registered: "Perintah yang didaftarkan memerlukan nama dan baris perintah.",
     window_failed: "Jendela itu tidak dapat dibuka: {reason}",
     talk_blank: "Jendela itu terbuka tetapi tidak menggambar apa pun, jadi terminal dikembalikan ke jendela ini.",
     folder_taken: "{name} sudah ada.",

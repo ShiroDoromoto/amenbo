@@ -806,6 +806,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   wake_no_folder: "That folder could not be read: {reason}",
   wake_no_config: "Amenbo could not find its own files.",
   wake_not_kept: "The choice could not be saved.",
+  wake_not_registered: "A registered command needs both a name and a command line.",
   window_failed: "That window could not be opened: {reason}",
   talk_blank: "That window opened but never drew anything, so the terminal was put back in this one.",
   folder_taken: "{name} is already there.",

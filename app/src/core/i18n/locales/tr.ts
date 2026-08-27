@@ -699,6 +699,7 @@ export const tr: Translation = {
     wake_no_folder: "O klasör okunamadı: {reason}",
     wake_no_config: "Amenbo kendi dosyalarını bulamadı.",
     wake_not_kept: "Seçim kaydedilemedi.",
+    wake_not_registered: "Kaydedilen bir komut hem ad hem de komut satırı gerektirir.",
     window_failed: "O pencere açılamadı: {reason}",
     talk_blank: "O pencere açıldı ama içine hiçbir şey çizilmedi; terminal yeniden bu pencereye alındı.",
     folder_taken: "{name} zaten var.",

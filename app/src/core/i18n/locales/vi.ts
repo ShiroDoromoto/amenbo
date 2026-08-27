@@ -701,6 +701,7 @@ export const vi: Translation = {
     wake_no_folder: "Không đọc được thư mục đó: {reason}",
     wake_no_config: "Amenbo không tìm thấy tệp của chính nó.",
     wake_not_kept: "Không lưu được lựa chọn.",
+    wake_not_registered: "Lệnh đã đăng ký cần cả tên và dòng lệnh.",
     window_failed: "Không thể mở cửa sổ đó: {reason}",
     talk_blank: "Cửa sổ đó đã mở nhưng không vẽ gì cả, nên terminal được đưa về cửa sổ này.",
     folder_taken: "{name} đã có ở đó.",

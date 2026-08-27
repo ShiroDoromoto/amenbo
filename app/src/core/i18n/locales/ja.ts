@@ -721,6 +721,7 @@ export const ja: Translation = {
     wake_no_folder: "そのフォルダを読めませんでした: {reason}",
     wake_no_config: "Amenbo が自分のファイルを見つけられませんでした。",
     wake_not_kept: "選んだ内容を保存できませんでした。",
+    wake_not_registered: "登録するコマンドには、名前と起動行の両方が要ります。",
     window_failed: "その窓を開けませんでした: {reason}",
     talk_blank: "別ウィンドウは開きましたが何も描かれなかったので、ターミナルをこの窓に戻しました。",
     folder_taken: "{name} は既にあります。",

@@ -43,6 +43,50 @@ fn import_is_retired() {
     assert_eq!(code, 2, "unknown subcommand = usage error: {err}");
 }
 
+/// `amenbo config` and `amenbo config --json` answer with the **same settings**. The human face used
+/// to carry three of the ten, so a value `config set` had written — the language, the display names —
+/// could be stored and never read back by the person who set it. Each line names the key alongside
+/// the value, so what a reader sees is what they would type to change it.
+#[test]
+fn the_human_face_of_config_carries_every_setting_the_json_does() {
+    let cli = Cli::new();
+
+    // The keys `--json` declares under `settings` are the contract; the human face is measured
+    // against that list rather than against a copy of it written out here.
+    let doc = cli.json(&["config", "--json"]);
+    let settings = doc["settings"].as_object().expect("--json carries a settings object");
+
+    let (out, code) = cli.run(&["config"]);
+    assert_eq!(code, 0, "{out}");
+    for key in settings.keys() {
+        // The two display names are the effect of `human_name` / `ai_name`, and are shown on those
+        // lines rather than as keys of their own — nothing sets them directly.
+        if key == "human_display_name" || key == "ai_display_name" {
+            continue;
+        }
+        assert!(out.contains(&format!("({key}):")), "the human face names `{key}`: {out}");
+    }
+
+    // Unset says what the absence means, not merely that it is absent.
+    assert!(out.contains("language (language): not set (English)"), "unset language reads as English: {out}");
+    assert!(out.contains(r#"your name (human_name): not set (shown as "Human")"#), "unset name shows what stands in: {out}");
+
+    // And what `config set` writes, `config` reads back.
+    cli.run(&["config", "set", "language", "ja"]);
+    cli.run(&["config", "set", "human_name", "山田"]);
+    let (after, _) = cli.run(&["config"]);
+    assert!(after.contains("language (language): ja"), "the language reads back: {after}");
+    assert!(after.contains("your name (human_name): 山田"), "the name reads back: {after}");
+
+    // The AI's face is untouched: `--json` answers exactly as before.
+    let doc_after = cli.json(&["config", "--json"]);
+    assert_eq!(doc_after["settings"]["language"], "ja");
+    assert_eq!(doc_after["settings"]["human_display_name"], "山田");
+    let keys_after: Vec<&String> = doc_after["settings"].as_object().unwrap().keys().collect();
+    let keys_before: Vec<&String> = settings.keys().collect();
+    assert_eq!(keys_after, keys_before, "the JSON keys did not move");
+}
+
 /// `--out <dir>` writes the whole device into an **export directory** — `export.json` (the same content
 /// as the stdout stream) plus an `attachments/` tree holding the attachment **bytes**. With nothing to
 /// read a dump back in, an export only counts as taking your data with you once the bytes come too. A

@@ -5,6 +5,7 @@ import type { TaskCard } from "../mock/types";
 describe("filters: user-defined classifications (unified dimension)", () => {
   const dim = {
     id: 1, name: "カテゴリー", notes: "", role: "none" as const, ordered: false, showOnCard: false, required: false,
+    appliesTo: "both" as const,
     values: [{ id: 11, name: "バグ" }, { id: 12, name: "機能" }],
   };
   const assign = { t1: { 1: 11 }, t2: { 1: 12 } };

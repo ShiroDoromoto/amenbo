@@ -3,6 +3,7 @@ import { Markdown } from "../components/Markdown";
 import { Attachments } from "../components/Attachments";
 import { CommentRow } from "../components/CommentRow";
 import { getSnapshot, inTauri, type Decision, type DecisionStatus } from "../core/snapshot";
+import { axesFor } from "../core/appliesTo";
 import type { Actor } from "../mock/types";
 import {
   acceptDecision, addDecisionComment, amendDecision, buildsOnDecision, editDecision, editDecisionComment,
@@ -421,7 +422,13 @@ function DecisionDimensions({ d }: { d: Decision }) {
     }).catch(() => {});
     return () => { alive = false; };
   }, [d.id]);
-  const axes = (d.project ? getSnapshot().projects.find((p) => p.id === d.project?.id) : undefined)?.dimensions ?? [];
+  // The pane is the decision side, so an axis narrowed to tasks is not offered here at all
+  // (`AMB-D-789`) — which is the leak the decision was written about: a work-shaped axis like an
+  // exclusive lane on a real device had a select on every decision, and a decision occupies no device.
+  const axes = axesFor(
+    "decision",
+    (d.project ? getSnapshot().projects.find((p) => p.id === d.project?.id) : undefined)?.dimensions ?? [],
+  );
   if (axes.length === 0) return null;
   // What the select shows for one axis — the value, or nothing where the decision is on no value of it.
   // Drawing an assignment and taking a refused one back go through here alike, so the two can never

@@ -283,7 +283,13 @@ export type DimensionDto = { id: number, name: string,
  * The axis's readable key (`AMB-D-735`), the counterpart of a value's. Omitted only for a row
  * still being written; every saved axis carries one.
  */
-slug?: string, notes: string, role: "none" | "time_axis", ordered: boolean, showOnCard: boolean, required: boolean, values: Array<DimensionValueDto>, };
+slug?: string, notes: string, role: "none" | "time_axis", ordered: boolean, showOnCard: boolean, required: boolean, 
+/**
+ * Which of the two entities this axis classifies (`AMB-D-789`). The screens read it to decide
+ * which of them offer the axis at all — the board and the task card the task side, the decision
+ * pane the decision side — while the manager, which is where it is set, offers every axis.
+ */
+appliesTo: "task" | "decision" | "both", values: Array<DimensionValueDto>, };
 
 /**
  * The per-task assigned value for one project × dimension (`taskId`→`valueId`). The board uses it
@@ -614,6 +620,16 @@ width?: number,
 height?: number, };
 
 /**
+ * Why a carry stopped, where it was Amenbo that stopped it (`crate::folder_write`).
+ *
+ * **Only Amenbo's own refusals are named.** They are decided before anything is written and they
+ * are the same three every time, so a screen can put them in the reader's language — which the
+ * machine's own sentences cannot be, and are not asked to be. Each of these was Amenbo's English
+ * standing on a Japanese screen until it had a name.
+ */
+export type FolderStopDto = "taken" | "inside" | "nameless";
+
+/**
  * The row a carry stopped on, and what stopped it (`crate::folder_write`).
  */
 export type FolderStoppedDto = { 
@@ -622,9 +638,18 @@ export type FolderStoppedDto = {
  */
 name: string, 
 /**
+ * What stopped it, where what stopped it was Amenbo. Absent where the machine did, and then
+ * `why` is the whole of the answer.
+ */
+code: FolderStopDto | null, 
+/**
  * What the machine said, in the machine's own words. It is not a code with a template behind
  * it: what a disk that filled up or a permission that was not there has to say is its own, and
  * a sentence written here would be a guess at which of them it was.
+ *
+ * Amenbo's own refusals fill it too, in English, and a face that knows the `code` draws from
+ * its own words instead. Keeping the sentence here is what leaves a face that does not know a
+ * code something to say rather than nothing.
  */
 why: string, };
 

@@ -50,6 +50,8 @@ const hoisted = vi.hoisted(() => ({
   git: {} as Record<string, GitEntryDto[]>,
   /** What the host answers when asked what to open a file with — empty where the OS drew it. */
   apps: [] as FolderAppDto[],
+  /** The encodings the host says a file may be reopened in. */
+  encodings: [] as string[],
   /** The folders the project is bound to. Empty is a project nobody has bound one to yet. */
   bound: [] as { path: string; exists: boolean }[],
   /** The host's side of the drag-and-drop subscription (`../core/hostDrop`). */
@@ -127,9 +129,18 @@ vi.mock("./folder", () => ({
     hoisted.asked.push(`entries:${root}:${path.join("/")}`);
     return hoisted.entries[path.join("/")] ?? [];
   },
-  folderRead: async (_projectId: number, root: string, path: string[]): Promise<FolderFileDto> => {
-    hoisted.asked.push(`read:${root}:${path.join("/")}`);
+  folderRead: async (
+    _projectId: number,
+    root: string,
+    path: string[],
+    encoding?: string,
+  ): Promise<FolderFileDto> => {
+    hoisted.asked.push(`read:${root}:${path.join("/")}${encoding === undefined ? "" : `:${encoding}`}`);
     return hoisted.file;
+  },
+  folderEncodings: async (): Promise<string[]> => {
+    hoisted.asked.push("encodings");
+    return hoisted.encodings;
   },
   folderOpenFile: async (_projectId: number, root: string, path: string[]) => {
     hoisted.asked.push(`open:${root}:${path.join("/")}`);
@@ -318,6 +329,7 @@ beforeEach(() => {
   hoisted.entries = { "": [{ name: "a.md", isDir: false, ignored: false }] };
   hoisted.file = aFile();
   hoisted.apps = [];
+  hoisted.encodings = ["UTF-8", "Shift_JIS", "EUC-JP", "windows-1252", "ISO-2022-JP"];
   hoisted.refuse = null;
   hoisted.slowRefusal = false;
   hoisted.takers = [];
@@ -670,11 +682,15 @@ describe("the file face", () => {
       await new Promise((r) => setTimeout(r, 0));
     });
 
-    hoisted.carried = { arrived: [], stopped: { name: "note.md", why: "no room left" } };
+    // The machine's own words, carried through as they came: no code, so nothing here rewrites them.
+    hoisted.carried = { arrived: [], stopped: { name: "note.md", code: null, why: "no room left" } };
     await drop(["/a/note.md"]);
     expect(said).toEqual([tf("files.dropStopped", { name: "note.md", why: "no room left" })]);
 
-    hoisted.carried = { arrived: ["one.md"], stopped: { name: "note.md", why: "no room left" } };
+    hoisted.carried = {
+      arrived: ["one.md"],
+      stopped: { name: "note.md", code: null, why: "no room left" },
+    };
     await drop(["/a/one.md", "/a/note.md"]);
     expect(said[1]).toBe(
       tf("files.dropPartly", { name: "note.md", why: "no room left", count: formatNumber(1) }),
@@ -684,6 +700,31 @@ describe("the file face", () => {
     hoisted.carried = { arrived: ["one.md"], stopped: null };
     await drop(["/a/one.md"]);
     expect(said).toHaveLength(2);
+    stop();
+  });
+
+  // What Amenbo itself refused. The host sends the sentence as well as the code, in English, and the
+  // face is asked to draw the code — a reader whose screen is in another language would otherwise be
+  // handed the one sentence on it that was never translated.
+  it("says a refusal of its own in the reader's language, not in the host's English", async () => {
+    await draw();
+    const said: string[] = [];
+    const stop = subscribeNotice((line) => said.push(line));
+    const drop = (paths: string[]) => act(async () => {
+      (document as unknown as { elementFromPoint: () => Element | null }).elementFromPoint =
+        () => container.querySelector("[data-into]");
+      hoisted.dragging?.({ payload: { type: "drop", position: { x: 1, y: 1 }, paths } });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    hoisted.carried = {
+      arrived: [],
+      stopped: { name: "note.md", code: "taken", why: "note.md is already there" },
+    };
+    await drop(["/a/note.md"]);
+    expect(said).toEqual([
+      tf("files.dropStopped", { name: "note.md", why: t("files.stoppedTaken") }),
+    ]);
     stop();
   });
 
@@ -815,6 +856,69 @@ describe("the file face", () => {
     await click(button("cut.txt"));
     await settle();
     expect(last(hoisted.editing)?.editable).toBe(false);
+  });
+
+  /** The guess reports no confidence and breaks nothing visible when it is wrong — 46 files were
+   *  misread with not one damaged character between them — so the reader is the only one who can
+   *  catch it, and only if they are told what was guessed (`AMB-D-773`). */
+  it("says on the file's own row what the bytes were read as, and how the lines end", async () => {
+    hoisted.file = aFile({ text: "a", encoding: "Shift_JIS", lineEnding: "crlf" });
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+    expect(button("Shift_JIS")?.textContent).toContain("CRLF");
+  });
+
+  it("says in words that a file's newlines are mixed, rather than in a token nobody reads", async () => {
+    hoisted.file = aFile({ text: "a", encoding: "UTF-8", lineEnding: "mixed" });
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+    expect(container.textContent).toContain(t("files.lineEndingMixed"));
+  });
+
+  it("asks the host to read the file again in the encoding the reader named", async () => {
+    hoisted.file = aFile({ text: "a", encoding: "windows-1252" });
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+    expect(hoisted.asked).toContain(`read:${ROOT}:a.md`);
+
+    await click(button("windows-1252"));
+    await settle();
+    // The list is the host's, not a copy kept here: what may be offered is what can be written back.
+    expect(hoisted.asked).toContain("encodings");
+
+    hoisted.asked = [];
+    hoisted.file = aFile({ text: "あ", encoding: "Shift_JIS" });
+    await click(button("Shift_JIS"));
+    await settle();
+    expect(hoisted.asked).toContain(`read:${ROOT}:a.md:Shift_JIS`);
+    expect(container.textContent).toContain("あ");
+  });
+
+  /** A file whose bytes and text no longer say the same thing is exactly the file a wrong guess
+   *  produces, so the road out of a wrong guess has to be open on it. */
+  it("offers the encodings on a file it could not save", async () => {
+    // Not Markdown: a file drawn as a document never reaches the editor, and what is under test
+    // here is that the road out is open on the very file the editor has locked.
+    hoisted.entries[""] = [{ name: "guessed.txt", isDir: false, ignored: false }];
+    hoisted.file = aFile({ text: "?????", encoding: "windows-1252", clean: false });
+    await drawOpen();
+    await click(button("guessed.txt"));
+    await settle();
+    expect(last(hoisted.editing)?.editable).toBe(false);
+    expect(button("windows-1252")).toBeDefined();
+  });
+
+  it("says nothing about the encoding of a picture", async () => {
+    hoisted.file = aFile({ image: { mime: "image/png" } });
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+    // A picture has no encoding to be wrong about, and a control that asked about one would be
+    // asking a question the file cannot answer.
+    expect(container.querySelector(".files__encoding")).toBeNull();
   });
 
   /** Opening a file the panel can write back and typing into it: the one door that changes what is

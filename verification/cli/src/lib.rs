@@ -315,6 +315,45 @@ impl<'a> Driver<'a> {
             .ok_or_else(|| format!("`amenbo {}` was turned away without an error object: {}", args.join(" "), stderr.trim()))
     }
 
+    /// Judge a **read** the scenario says Amenbo will turn away. `refused:` is an action's word,
+    /// since an assert already carries a verdict of its own — but "refused" is not one of the
+    /// verdicts a listing can come back with, and a listing turned away is not a listing with
+    /// nobody in it. So the verdict is read here: turned away with the code the step named → pass;
+    /// turned away with another → fail, since the step is about *that* guard; answered at all →
+    /// fail, which is the regression the line exists to catch.
+    fn refused_read(&self, args: &[&str], want: &str) -> Result<Outcome, String> {
+        let out = self.invoke(args)?;
+        if out.status.success() {
+            return Ok(Outcome::assert(
+                false,
+                format!(
+                    "`amenbo {}` answered where `{want}` was expected to refuse it (MISMATCH)",
+                    args.join(" ")
+                ),
+            ));
+        }
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let v: serde_json::Value = serde_json::from_str(stderr.trim()).map_err(|e| {
+            format!(
+                "`amenbo {}` was turned away without an error object ({e}): {}",
+                args.join(" "),
+                stderr.trim()
+            )
+        })?;
+        let code = v["error"]["code"].as_str().ok_or_else(|| {
+            format!("`amenbo {}` was turned away without an error code: {}", args.join(" "), stderr.trim())
+        })?;
+        let pass = code == want;
+        Ok(Outcome::assert(
+            pass,
+            format!(
+                "`amenbo {}` was refused with `{code}` (expected `{want}`, {})",
+                args.join(" "),
+                if pass { "as expected" } else { "MISMATCH" }
+            ),
+        ))
+    }
+
     /// The same, for a command whose exit code is its **verdict** rather than a report on whether
     /// it ran: `doctor` and `validate` come back non-zero when what they found is bad news, and
     /// that is a value to judge, not a driver failure. A command that could not run at all still

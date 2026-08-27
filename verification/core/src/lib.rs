@@ -1095,6 +1095,14 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Plugin, op: "press-answer", required: &["name", "label", "value"], refs: &[], strings: &["name", "label", "value"], binds: false },
     // Asserts
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "listed", required: &["filter"], refs: &["target"], strings: &["filter", "position"], binds: false },
+    // A listing that is **turned away** rather than answered. It is a verdict of its own and not a
+    // `refused:` on the line above, for the reason `refused` is an action's word: a listing already
+    // comes back with an answer, and "refused" is not one of the answers it can come back with. The
+    // two say different things — an empty page is "nobody carries that value", a refusal is "that
+    // question does not run here" — and a road that could only write the first could not tell them
+    // apart. `code` is the error code the refusal has to carry, so a line written against one guard
+    // cannot pass on another's.
+    OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "filter-refused", required: &["filter", "code"], refs: &[], strings: &["filter", "code"], binds: false },
     // Where a word is written. Separate from `listed` because the question is a different one: a
     // listing answers which records match, and this answers which *places* carry the word — so the
     // step names the face it expects to be found on, which a listing has no way to say. The side is
@@ -1164,6 +1172,9 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "pane", required: &["target", "shows"], refs: &["target"], strings: &["shows"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "listed", required: &["filter"], refs: &["target"], strings: &["filter", "position"], binds: false },
+    // The same verdict on the other face, and the one the pair is most often written for: an axis
+    // narrowed to tasks is refused here, and an axis narrowed to decisions is refused there.
+    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "filter-refused", required: &["filter", "code"], refs: &[], strings: &["filter", "code"], binds: false },
     // Whether one decision points at another, named by the side the edge is read from (`supersedes`
     // / `superseded_by` / `builds_on` / `built_on_by` / `amends` / `amended_by`). A `field` path can
     // say an edge is *there*; only this can say it is gone, which is the whole of `unlink`.

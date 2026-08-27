@@ -552,6 +552,10 @@ export const ja: Translation = {
     "files.chooseApp": "アプリを選んで開く",
     "files.appUsual": "{name}（いつものアプリ）",
     "files.reveal": "フォルダで表示",
+    "files.newFile": "新しいファイル",
+    "files.newFolder": "新しいフォルダ",
+    "files.rename": "名前を変える",
+    "files.name": "名前",
     "files.notText": "テキストではないので、ここには出せません。",
     "files.cut": "先頭だけを出しています。",
     "files.unreadable": "このファイルは読めませんでした。",
@@ -727,6 +731,10 @@ export const ja: Translation = {
     wake_not_kept: "選んだ内容を保存できませんでした。",
     window_failed: "その窓を開けませんでした: {reason}",
     talk_blank: "別ウィンドウは開きましたが何も描かれなかったので、ターミナルをこの窓に戻しました。",
+    folder_taken: "{name} は既にあります。",
+    folder_name: "この機械は {name} という名前を受け付けません。",
+    folder_make: "{name} を作れませんでした: {reason}",
+    folder_rename: "{name} に変えられませんでした: {reason}",
     // What the file panel answers a save with (`crate::folder_save`). The character is named
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "このファイルを保存できませんでした: {reason}",

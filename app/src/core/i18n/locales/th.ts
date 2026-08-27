@@ -543,6 +543,10 @@ export const th: Translation = {
     "files.chooseApp": "เปิดด้วยแอปที่เลือกเอง",
     "files.appUsual": "{name} (แอปที่ใช้ประจำ)",
     "files.reveal": "แสดงในตัวจัดการไฟล์",
+    "files.newFile": "ไฟล์ใหม่",
+    "files.newFolder": "โฟลเดอร์ใหม่",
+    "files.rename": "เปลี่ยนชื่อ",
+    "files.name": "ชื่อ",
     "files.notText": "นี่ไม่ใช่ข้อความ จึงแสดงที่นี่ไม่ได้",
     "files.cut": "แสดงเฉพาะส่วนต้นเท่านั้น",
     "files.unreadable": "อ่านไฟล์นี้ไม่ได้",
@@ -707,6 +711,10 @@ export const th: Translation = {
     wake_not_kept: "บันทึกตัวเลือกไม่ได้",
     window_failed: "ไม่สามารถเปิดหน้าต่างนั้นได้: {reason}",
     talk_blank: "หน้าต่างนั้นเปิดขึ้นแต่ไม่มีอะไรถูกวาดเลย จึงนำเทอร์มินัลกลับมาไว้ที่หน้าต่างนี้",
+    folder_taken: "มี {name} อยู่แล้ว",
+    folder_name: "เครื่องนี้ไม่รับ {name} เป็นชื่อ",
+    folder_make: "สร้าง {name} ไม่ได้: {reason}",
+    folder_rename: "เปลี่ยนชื่อเป็น {name} ไม่ได้: {reason}",
     // What the file panel answers a save with (`crate::folder_save`). The character is named
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "บันทึกไฟล์นี้ไม่ได้: {reason}",

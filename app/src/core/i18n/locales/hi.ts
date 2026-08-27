@@ -540,6 +540,10 @@ export const hi: Translation = {
     "files.chooseApp": "चुने हुए ऐप में खोलें",
     "files.appUsual": "{name} (सामान्य वाला)",
     "files.reveal": "फ़ाइल मैनेजर में दिखाएँ",
+    "files.newFile": "नई फ़ाइल",
+    "files.newFolder": "नया फ़ोल्डर",
+    "files.rename": "नाम बदलें",
+    "files.name": "नाम",
     "files.notText": "यह टेक्स्ट नहीं है, इसलिए इसे यहाँ नहीं दिखाया जा सकता।",
     "files.cut": "सिर्फ़ शुरुआत दिखाई जा रही है।",
     "files.unreadable": "यह फ़ाइल पढ़ी नहीं जा सकी।",
@@ -705,6 +709,10 @@ export const hi: Translation = {
     wake_not_kept: "चुनाव सहेजा नहीं जा सका।",
     window_failed: "वह विंडो नहीं खोली जा सकी: {reason}",
     talk_blank: "वह विंडो खुली तो सही, पर उसमें कुछ भी नहीं आया, इसलिए टर्मिनल को इसी विंडो में लौटा दिया गया।",
+    folder_taken: "{name} पहले से मौजूद है।",
+    folder_name: "यह मशीन {name} को नाम के रूप में स्वीकार नहीं करती।",
+    folder_make: "{name} नहीं बनाया जा सका: {reason}",
+    folder_rename: "नाम बदलकर {name} नहीं किया जा सका: {reason}",
     // What the file panel answers a save with (`crate::folder_save`). The character is named
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "यह फ़ाइल सहेजी नहीं जा सकी: {reason}",

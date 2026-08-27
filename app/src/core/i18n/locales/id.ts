@@ -543,6 +543,10 @@ export const id: Translation = {
     "files.chooseApp": "Buka dengan aplikasi pilihan saya",
     "files.appUsual": "{name} (yang biasa)",
     "files.reveal": "Tampilkan di pengelola berkas",
+    "files.newFile": "Berkas baru",
+    "files.newFolder": "Folder baru",
+    "files.rename": "Ganti nama",
+    "files.name": "Nama",
     "files.notText": "Ini bukan teks, jadi tidak bisa ditampilkan di sini.",
     "files.cut": "Hanya bagian awal yang ditampilkan.",
     "files.unreadable": "Berkas ini tidak bisa dibaca.",
@@ -707,6 +711,10 @@ export const id: Translation = {
     wake_not_kept: "Pilihan tidak bisa disimpan.",
     window_failed: "Jendela itu tidak dapat dibuka: {reason}",
     talk_blank: "Jendela itu terbuka tetapi tidak menggambar apa pun, jadi terminal dikembalikan ke jendela ini.",
+    folder_taken: "{name} sudah ada.",
+    folder_name: "Mesin ini tidak menerima {name} sebagai nama.",
+    folder_make: "{name} tidak bisa dibuat: {reason}",
+    folder_rename: "Namanya tidak bisa diganti menjadi {name}: {reason}",
     // What the file panel answers a save with (`crate::folder_save`). The character is named
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Berkas ini tidak bisa disimpan: {reason}",

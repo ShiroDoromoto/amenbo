@@ -539,6 +539,10 @@ export const ko: Translation = {
     "files.chooseApp": "앱을 골라서 열기",
     "files.appUsual": "{name} (늘 쓰는 앱)",
     "files.reveal": "파일 관리자에서 보기",
+    "files.newFile": "새 파일",
+    "files.newFolder": "새 폴더",
+    "files.rename": "이름 바꾸기",
+    "files.name": "이름",
     "files.notText": "텍스트가 아니라서 여기에서는 볼 수 없습니다.",
     "files.cut": "앞부분만 보여 줍니다.",
     "files.unreadable": "이 파일은 읽지 못했습니다.",
@@ -703,6 +707,10 @@ export const ko: Translation = {
     wake_not_kept: "선택한 내용을 저장하지 못했습니다.",
     window_failed: "그 창을 열 수 없습니다: {reason}",
     talk_blank: "그 창은 열렸지만 아무것도 그려지지 않아, 터미널을 이 창으로 되돌렸습니다.",
+    folder_taken: "{name}은(는) 이미 있습니다.",
+    folder_name: "이 기기는 {name}을(를) 이름으로 받지 않습니다.",
+    folder_make: "{name}을(를) 만들지 못했습니다: {reason}",
+    folder_rename: "{name}(으)로 이름을 바꾸지 못했습니다: {reason}",
     // What the file panel answers a save with (`crate::folder_save`). The character is named
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "이 파일을 저장하지 못했습니다: {reason}",

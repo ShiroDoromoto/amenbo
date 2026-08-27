@@ -566,6 +566,10 @@ export const uk: Translation = {
     "files.chooseApp": "Відкрити у вибраній програмі",
     "files.appUsual": "{name} (звична)",
     "files.reveal": "Показати у файловому менеджері",
+    "files.newFile": "Новий файл",
+    "files.newFolder": "Нова тека",
+    "files.rename": "Перейменувати",
+    "files.name": "Ім'я",
     "files.notText": "Це не текст, тому показати його тут не можна.",
     "files.cut": "Показано лише початок.",
     "files.unreadable": "Не вдалося прочитати цей файл.",
@@ -742,6 +746,10 @@ export const uk: Translation = {
     wake_not_kept: "Не вдалося зберегти вибір.",
     window_failed: "Не вдалося відкрити це вікно: {reason}",
     talk_blank: "Те вікно відкрилося, але нічого в ньому так і не з’явилося, тому термінал повернувся в це вікно.",
+    folder_taken: "{name} уже є.",
+    folder_name: "Ця машина не приймає {name} як ім’я.",
+    folder_make: "Не вдалося створити {name}: {reason}",
+    folder_rename: "Не вдалося перейменувати на {name}: {reason}",
     // What the file panel answers a save with (`crate::folder_save`). The character is named
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Не вдалося зберегти цей файл: {reason}",

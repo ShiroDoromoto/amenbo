@@ -540,6 +540,10 @@ export const zhHant: Translation = {
     "files.chooseApp": "用我選的應用程式開啟",
     "files.appUsual": "{name}（常用的）",
     "files.reveal": "在檔案管理器中顯示",
+    "files.newFile": "新增檔案",
+    "files.newFolder": "新增資料夾",
+    "files.rename": "重新命名",
+    "files.name": "名稱",
     "files.notText": "這不是文字，無法在這裡顯示。",
     "files.cut": "只顯示了開頭部分。",
     "files.unreadable": "無法讀取這個檔案。",
@@ -704,6 +708,10 @@ export const zhHant: Translation = {
     wake_not_kept: "沒能保存這個選擇。",
     window_failed: "無法開啟該視窗：{reason}",
     talk_blank: "那個視窗已開啟，但始終沒有繪製任何內容，因此終端機已放回這個視窗。",
+    folder_taken: "{name} 已經存在。",
+    folder_name: "這台機器不接受 {name} 作為名稱。",
+    folder_make: "無法建立 {name}：{reason}",
+    folder_rename: "無法重新命名為 {name}：{reason}",
     // What the file panel answers a save with (`crate::folder_save`). The character is named
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "無法儲存這個檔案：{reason}",

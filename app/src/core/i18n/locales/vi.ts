@@ -543,6 +543,10 @@ export const vi: Translation = {
     "files.chooseApp": "Mở bằng ứng dụng tôi chọn",
     "files.appUsual": "{name} (ứng dụng thường dùng)",
     "files.reveal": "Hiện trong trình quản lý tệp",
+    "files.newFile": "Tệp mới",
+    "files.newFolder": "Thư mục mới",
+    "files.rename": "Đổi tên",
+    "files.name": "Tên",
     "files.notText": "Đây không phải văn bản nên không hiển thị được ở đây.",
     "files.cut": "Chỉ hiển thị phần đầu.",
     "files.unreadable": "Không đọc được tệp này.",
@@ -707,6 +711,10 @@ export const vi: Translation = {
     wake_not_kept: "Không lưu được lựa chọn.",
     window_failed: "Không thể mở cửa sổ đó: {reason}",
     talk_blank: "Cửa sổ đó đã mở nhưng không vẽ gì cả, nên terminal được đưa về cửa sổ này.",
+    folder_taken: "{name} đã có ở đó.",
+    folder_name: "Máy này không nhận {name} làm tên.",
+    folder_make: "Không tạo được {name}: {reason}",
+    folder_rename: "Không đổi tên thành {name} được: {reason}",
     // What the file panel answers a save with (`crate::folder_save`). The character is named
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Không lưu được tệp này: {reason}",

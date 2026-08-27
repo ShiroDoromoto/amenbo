@@ -566,6 +566,10 @@ export const pl: Translation = {
     "files.chooseApp": "Otwórz w wybranej aplikacji",
     "files.appUsual": "{name} (ta zwykła)",
     "files.reveal": "Pokaż w menedżerze plików",
+    "files.newFile": "Nowy plik",
+    "files.newFolder": "Nowy folder",
+    "files.rename": "Zmień nazwę",
+    "files.name": "Nazwa",
     "files.notText": "To nie jest tekst, więc nie da się go tu pokazać.",
     "files.cut": "Pokazany jest tylko początek.",
     "files.unreadable": "Nie udało się odczytać tego pliku.",
@@ -742,6 +746,10 @@ export const pl: Translation = {
     wake_not_kept: "Nie udało się zapisać wyboru.",
     window_failed: "Nie udało się otworzyć tego okna: {reason}",
     talk_blank: "Tamto okno otworzyło się, ale nic w nim nie narysowano, więc terminal wrócił do tego okna.",
+    folder_taken: "{name} już tam jest.",
+    folder_name: "Ta maszyna nie przyjmuje nazwy {name}.",
+    folder_make: "Nie udało się utworzyć {name}: {reason}",
+    folder_rename: "Nie udało się zmienić nazwy na {name}: {reason}",
     // What the file panel answers a save with (`crate::folder_save`). The character is named
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Nie udało się zapisać tego pliku: {reason}",

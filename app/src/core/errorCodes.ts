@@ -197,12 +197,19 @@ export const CORE_ERROR_CODES = [
  * agent a folder opens with (`crate::wake`) — a folder that cannot be read (`wake_no_folder`), an
  * install that cannot find its own config (`wake_no_config`), a choice that could not be written down
  * (`wake_not_kept`), and an agent id the catalog does not list (`wake_unknown_agent`), refused the
- * same way wherever it arrives; and the two the file panel answers a save with, which are a
+ * same way wherever it arrives; the four the file panel meets when it writes a name into a folder
+ * (`crate::folder_write`) — the name is taken (`folder_taken`), the machine will not hold it
+ * (`folder_name`), or the machine refused the making or the renaming itself for a reason of its own
+ * (`folder_make`, `folder_rename`); and the two it answers a save with (`crate::folder_save`) — a
  * character the file's encoding has no room for (`folder_unwritable_character` — a `✓` typed into a
  * Shift_JIS file, named rather than mangled into it) and everything else the filesystem said
  * (`folder_not_saved`). */
 export const TAURI_ERROR_CODES = [
+  "folder_make",
+  "folder_name",
   "folder_not_saved",
+  "folder_rename",
+  "folder_taken",
   "folder_unwritable_character",
   "init_ambiguous_owners",
   "init_pointer_exists",

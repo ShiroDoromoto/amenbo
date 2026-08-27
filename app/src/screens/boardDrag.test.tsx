@@ -10,7 +10,8 @@ import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { columnUnder, DRAG_SLOP, DROP_ATTR, splitColumn, travelled, useCardDrag } from "./boardDrag";
+import { DRAG_SLOP } from "../core/pointerDrag";
+import { columnUnder, DROP_ATTR, splitColumn, useCardDrag } from "./boardDrag";
 
 /** jsdom lays nothing out, so what is under the pointer is stated rather than measured. */
 function under(el: Element | null): void {
@@ -113,8 +114,6 @@ describe("the point a card is over", () => {
 describe("telling a press from a drag", () => {
   /** Without a threshold, a press meant to move a card navigates instead. */
   it("does not begin a drag until the pointer has travelled", async () => {
-    expect(travelled({ x: 0, y: 0 }, { x: 3, y: 4 })).toBe(5);
-
     await down(100, 100);
     await to("pointermove", 100 + DRAG_SLOP - 1, 100);
     expect(dragging, "a press that barely moved took the card").toBeNull();

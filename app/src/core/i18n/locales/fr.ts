@@ -561,6 +561,10 @@ export const fr: Translation = {
     "files.chooseApp": "Ouvrir avec une application de mon choix",
     "files.appUsual": "{name} (celle habituelle)",
     "files.reveal": "Afficher dans le gestionnaire de fichiers",
+    "files.newFile": "Nouveau fichier",
+    "files.newFolder": "Nouveau dossier",
+    "files.rename": "Renommer",
+    "files.name": "Nom",
     "files.notText": "Ce n'est pas du texte : impossible de l'afficher ici.",
     "files.cut": "Seul le début est affiché.",
     "files.unreadable": "Ce fichier n'a pas pu être lu.",
@@ -733,6 +737,10 @@ export const fr: Translation = {
     wake_not_kept: "Le choix n'a pas pu être enregistré.",
     window_failed: "Cette fenêtre n'a pas pu être ouverte : {reason}",
     talk_blank: "Cette fenêtre s'est ouverte sans rien afficher : le terminal a été remis dans celle-ci.",
+    folder_taken: "{name} existe déjà.",
+    folder_name: "Cette machine n’accepte pas {name} comme nom.",
+    folder_make: "{name} n’a pas pu être créé : {reason}",
+    folder_rename: "Le renommage en {name} a échoué : {reason}",
     // What the file panel answers a save with (`crate::folder_save`). The character is named
     // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
     folder_not_saved: "Ce fichier n'a pas pu être enregistré : {reason}",

@@ -22,8 +22,8 @@
 //! (`scripts/docker/gui-e2e.sh`); each driver maps the one scenario source to its own world.
 //!
 //! The screen tool is the input primitive too, called by whoever drives the screen between steps:
-//! its `find` / `click-named` / `click` / `dblclick` / `type` / `key` carry out the action steps
-//! the checklist names.
+//! its `find` / `click-named` / `click` / `dblclick` / `drag` / `type` / `key` carry out the action
+//! steps the checklist names.
 //!
 //! One step is nobody's to carry out at the screen: `store run-again` ends this run of the app and
 //! brings another up on the same store ([`launch::Gui::run_again`]), which is how a road reads what
@@ -1651,9 +1651,10 @@ impl Instructor {
                 Side::Rail => "At the top of the terminal face, press that same control again. The list of panes comes back where it was.".to_string(),
                 Side::Files => "At the top of the terminal face, at the far end of the row, press the one that shows the folder's files — the second of the two, the first being the page written on. The panel comes up on that half, whether it was closed or showing the other one.".to_string(),
             },
-            // The one gesture on these roads. The screen tool presses and types and has no drag, so
-            // this is carried out by hand — and what the operator is told is where the edge is, since
-            // it is a line rather than a button and nothing on the screen labels it.
+            // The one gesture on these roads, and the one step aimed at something the screen does
+            // not name: the edge is a line rather than a button, so nothing reaches it the way a
+            // button is reached and what the operator is told is where the edge is. The screen tool
+            // drags between two points, but working those points out of the screen is an operator's.
             (Domain::Terminal, "drag-side") => {
                 let which = side(with)?;
                 // Said by what it does to the column rather than by left and right: which way is
@@ -1679,6 +1680,18 @@ impl Instructor {
                 req(with, "path")?,
                 req(with, "dir")?,
                 req(with, "content")?
+            ),
+            // A bound folder taken away from under the app, the same way and for the same reason: a
+            // folder is moved by whoever moves folders, and what Amenbo holds only becomes wrong
+            // afterwards. The screen road wants the move to land *while the app is watching*, which
+            // is what a premise could not do — the section it is about is drawn before it happens.
+            //
+            // Where it goes is named the way it is named everywhere else on these roads: by what the
+            // road calls it, since the run places the folders and the YAML never sees a path.
+            (Domain::Folder, "move") => format!(
+                "Outside Amenbo — in a file manager or another terminal — take the folder the road calls \"{}\" away from where it stands, moving it beside itself under the name \"{}\". Do not touch Amenbo while you do.",
+                req(with, "dir")?,
+                req(with, "to")?
             ),
             // ── the file face ─────────────────────────────────────────────────────────────────
             // The column beside the panes. Its sections are named by what each is about rather than
@@ -2985,6 +2998,7 @@ fn note(with: &Args) -> Result<&'static str, String> {
         Some("partial") => Ok("that some of the folder is not being watched"),
         Some("nothing-changed") => Ok("that nothing has changed yet"),
         Some("no-folder") => Ok("that this project has no folder yet"),
+        Some("folder-gone") => Ok("that this folder is not there any more"),
         Some(other) => Err(format!("`note` does not know `{other}`")),
         None => Err("arg `note` must say which of the face's lines".to_string()),
     }

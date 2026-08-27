@@ -10,13 +10,15 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const AXIS = { id: 900, name: "プロダクト", notes: "", role: "none", ordered: false, showOnCard: false, required: true,
-  values: [{ id: 901, name: "Amenbo本体" }, { id: 902, name: "Viewer" }] };
+  appliesTo: "both", values: [{ id: 901, name: "Amenbo本体" }, { id: 902, name: "Viewer" }] };
 
 const hoisted = vi.hoisted(() => ({
   /** Set it to make the assignment write refuse, the way core refuses to empty a required axis. */
   setFails: false,
   /** Every assignment the pane asked for, as `taskId:valueId`. */
   asked: [] as string[],
+  /** The axes hung on the task's project. A test narrows one to see the pane stop offering it. */
+  axes: [] as Array<Record<string, unknown>>,
 }));
 
 // Only the two writes the selects drive are stood in for; everything else — the snapshot, the store, the
@@ -39,7 +41,7 @@ vi.mock("../core/snapshot", async (importOriginal) => {
     ...orig,
     getSnapshot: () => {
       const snap = orig.getSnapshot();
-      return { ...snap, projects: snap.projects.map((p) => (p.id === 1 ? { ...p, dimensions: [AXIS] } : p)) };
+      return { ...snap, projects: snap.projects.map((p) => (p.id === 1 ? { ...p, dimensions: hoisted.axes } : p)) };
     },
   };
 });
@@ -77,6 +79,7 @@ beforeAll(async () => {
 beforeEach(() => {
   hoisted.setFails = false;
   hoisted.asked = [];
+  hoisted.axes = [AXIS];
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -111,5 +114,15 @@ describe("TaskDetailPane classification selects", () => {
 
     expect(hoisted.asked).toEqual(["1:901"]);
     expect(axisSelect().value).toBe("901");
+  });
+
+  // The mirror of the leak `AMB-D-789` was written about: an axis narrowed to the decision side runs on
+  // no task, so the pane neither offers it nor — this axis being required — holds anything back over it.
+  // Both read the same narrowed list, so the select being gone is the whole of it.
+  it("draws nothing for an axis narrowed to the decision side", async () => {
+    hoisted.axes = [{ ...AXIS, appliesTo: "decision" }];
+    await open();
+    expect(container.querySelector('option[value="901"]')).toBeNull();
+    expect(container.textContent).not.toContain(AXIS.name);
   });
 });

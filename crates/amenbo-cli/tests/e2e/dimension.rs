@@ -313,6 +313,79 @@ fn dimension_demands_an_answer_and_the_creation_is_held_until_it_gets_one() {
     assert!(!after.contains("required"), "and it stops saying so: {after}");
 }
 
+/// The decision side of the required-classification door (`AMB-D-790`): a decision cannot be settled
+/// while an axis the project requires of decisions is blank, `supersede` reads the same door because it
+/// settles too, and which side a required axis holds is the axis's own `applies_to` to say
+/// (`AMB-D-789`) — so a task-only one lets an acceptance through and a decision-only one lets a
+/// creation through.
+#[test]
+fn a_required_axis_holds_an_acceptance_on_the_side_it_classifies() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "決定必須PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+
+    let axis = cli.json(&["dimension", "add", "--project", &pid, "--name", "影響半径", "--json"]);
+    cli.json(&["dimension", "value-add", "影響半径", "--name", "この一箇所", "--json"]);
+    cli.json(&["dimension", "update", "影響半径", "--required", "true", "--json"]);
+    assert_eq!(axis["dimension"]["applies_to"], "both", "raised plainly, it classifies both sides");
+
+    // A decision recorded with the axis blank cannot be settled, and the refusal names the axis and
+    // the way to answer it.
+    let d = cli.json(&["decision", "add", "--project", &pid, "--title", "分類のない決定", "--json"]);
+    let did = id_str(&d["decision"]["id"]);
+    let (err, code) = cli.run_err(&["decision", "accept", &did]);
+    assert_ne!(code, 0, "the acceptance is held: {err}");
+    assert!(err.contains("影響半径"), "and the axis is named: {err}");
+    assert!(err.contains("dimension set"), "and the hint says how to answer it: {err}");
+
+    // The same refusal in --json carries the code a caller can branch on, and nothing was settled.
+    let (refused, code) = cli.run_err(&["decision", "accept", &did, "--json"]);
+    assert_ne!(code, 0);
+    let refused: serde_json::Value = serde_json::from_str(&refused).expect("the refusal is JSON");
+    assert_eq!(refused["error"]["code"], "invalid_decision_required_dimension");
+    assert_eq!(cli.json(&["decision", "show", &did, "--json"])["status"], "proposed");
+
+    // `supersede` settles the new side too, so it meets the same door.
+    let old = cli.json(&["decision", "add", "--project", &pid, "--title", "覆される決定", "--json"]);
+    let old_id = id_str(&old["decision"]["id"]);
+    cli.json(&["dimension", "set", &decision_ref(&old_id), "影響半径", "この一箇所", "--json"]);
+    cli.json(&["decision", "accept", &old_id, "--json"]);
+    let (err, code) = cli.run_err(&["decision", "supersede", &did, "--replaces", &old_id]);
+    assert_ne!(code, 0, "promoting through supersede is still settling: {err}");
+    assert!(err.contains("影響半径"), "and the same axis is named: {err}");
+
+    // Answer the axis and both roads go through.
+    cli.json(&["dimension", "set", &decision_ref(&did), "影響半径", "この一箇所", "--json"]);
+    assert_eq!(cli.json(&["decision", "accept", &did, "--json"])["decision"]["status"], "accepted");
+
+    // Which side the flag holds is the axis's own to say. A task-only required axis asks nothing of a
+    // decision...
+    let task_only =
+        cli.json(&["dimension", "add", "--project", &pid, "--name", "占有", "--applies-to", "task", "--json"]);
+    let task_only_id = id_str(&task_only["dimension"]["id"]);
+    cli.json(&["dimension", "value-add", "占有", "--name", "iOS", "--json"]);
+    cli.json(&["dimension", "update", "占有", "--required", "true", "--json"]);
+    let free = cli.json(&["decision", "add", "--project", &pid, "--title", "レーンを問われない決定", "--json"]);
+    let free_id = id_str(&free["decision"]["id"]);
+    cli.json(&["dimension", "set", &decision_ref(&free_id), "影響半径", "この一箇所", "--json"]);
+    assert_eq!(
+        cli.json(&["decision", "accept", &free_id, "--json"])["decision"]["status"],
+        "accepted",
+        "an axis that classifies only tasks holds no acceptance",
+    );
+
+    // ...and a decision-only one asks nothing of a task.
+    cli.json(&["dimension", "update", &task_only_id, "--applies-to", "decision", "--json"]);
+    let t = cli.json(&["task", "add", "--project", &pid, "--title", "レーンを問われないタスク", "--json"]);
+    let tid = id_str(&t["task"]["id"]);
+    cli.json(&["dimension", "set", &task_ref(&tid), "影響半径", "この一箇所", "--json"]);
+    assert_eq!(
+        cli.json(&["task", "finish-creating", &tid, "--json"])["task"]["draft"],
+        false,
+        "an axis that classifies only decisions holds no creation",
+    );
+}
+
 /// The readable key an axis and its values are named by outside Amenbo (`AMB-D-735`): what a row is
 /// born with when nobody names one, what `--slug` puts there instead, where both faces show it, and
 /// that a reference resolves by it — including the one case that says which tier wins, where a slug
@@ -472,10 +545,12 @@ fn a_bare_number_is_refused_where_it_could_mean_either_kind() {
     assert_ne!(code, 0, "unset asks the same question: {err}");
 }
 
-/// `required` is a demand made of a task's creation, and a decision has no creation to finish — so the
-/// flag neither demands a value of a decision nor stops one being cleared (`AMB-D-781`).
+/// What a required axis holds on the decision side is the **acceptance** (`AMB-D-790`), not the
+/// assignment — so a decision's value on one still clears, where a task's is refused. The two differ
+/// because the task's door is one-directional and would never ask again, while a decision stripped of a
+/// required value is simply one that has to answer for it the next time it is settled.
 #[test]
-fn a_required_axis_makes_no_demand_of_a_decision() {
+fn a_required_axis_still_lets_a_decisions_value_be_cleared() {
     let cli = Cli::new();
     let pid = id_str(&cli.json(&["project", "add", "--name", "分類PJ", "--json"])["project"]["id"]);
     cli.json(&["dimension", "add", "--project", &pid, "--name", "プロダクト", "--json"]);

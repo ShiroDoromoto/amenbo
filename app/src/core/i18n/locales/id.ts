@@ -650,6 +650,7 @@ export const id: Translation = {
     invalid_dimension_slug_shape: "«{slug}» tidak bisa jadi kunci — pakai maksimal {max} huruf kecil, angka, dan tanda hubung, diawali huruf.",
     invalid_dimension_slug_taken: "«{slug}» sudah jadi kunci hal lain di sini — pilih yang lain.",
     invalid_task_required_dimension: "Tugas ini tidak membawa nilai di {names}, yang diwajibkan proyek ini.",
+    invalid_decision_required_dimension: "Keputusan ini tidak membawa nilai di {names}, yang diwajibkan proyek ini.",
     invalid_dimension_values_unordered: "Nilai kategori ini tidak berurutan, jadi tidak bisa diurutkan ulang.",
     invalid_decision_edit_rejected: "{ref} sudah ditolak, dan keputusan yang ditolak tidak bisa disunting.",
     invalid_decision_accept_rejected: "{ref} sudah ditolak, dan keputusan yang ditolak tidak bisa diterima.",

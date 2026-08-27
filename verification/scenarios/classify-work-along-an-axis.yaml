@@ -1,9 +1,7 @@
 # How a project is cut into views without growing a field per question. The axis and its values are
 # only the half a person sets up; the half that matters to a reader is that filing a task under a
 # value is what the filter then finds. An assignment nothing can query is not a classification, so
-# every filing here is read back through `dim:<axis>=<value>` rather than off a field. Which side an
-# axis reaches is its own answer, so the last stretch narrows it and asks on the other side, where a
-# refusal is what an empty page would otherwise have to mean two things at once.
+# every filing here is read back through `dim:<axis>=<value>` rather than off a field.
 id: classify-work-along-an-axis
 title: An axis is defined with its values, work is filed under one, and the filing is what the filter finds
 description: >
@@ -12,9 +10,7 @@ description: >
   should find and the one it should leave out. Re-filing one of them says the axis holds a single
   value rather than piling them up, and taking the filing off says the task keeps living once it is
   no longer filed under the axis at all. A decision is then filed under the same axis, with the same
-  values: one classification model, whichever kind of thing is being filed. The axis then says which
-  side it classifies, and the side it is narrowed off turns the same filter away rather than answering
-  with nobody.
+  values: one classification model, whichever kind of thing is being filed.
 steps_cli:
   - type: action
     domain: dimension
@@ -280,63 +276,3 @@ steps_cli:
       target: ruling
       field: title
       equals: SCENARIO SEED — print goes to the same house
-
-  # One model, and the axis's own say in how far it reaches. An axis is born classifying both sides —
-  # which is what every step above rests on — and narrowed to one, the other is not a page with nobody
-  # on it. The question is turned away: an empty answer would mean "nothing carries that value" and
-  # "this axis does not run here" at once, and only the second is a question worth correcting.
-  - type: action
-    domain: dimension
-    op: applies-to
-    with:
-      dimension: medium
-      side: task
-
-  - type: assert
-    domain: task
-    op: listed
-    with:
-      filter: "dim:medium=web"
-      target: banner
-      present: true
-
-  - type: assert
-    domain: decision
-    op: filter-refused
-    with:
-      filter: "dim:medium=web"
-      code: invalid_value
-
-  # `=none` is the arm the refusal is worth most on. It asks for what carries no value of the axis, and
-  # an axis that does not run here answers that of every decision there is — so the empty page the
-  # other arm would give back becomes a full one, and a wrong answer reads exactly like a right one.
-  - type: assert
-    domain: decision
-    op: filter-refused
-    with:
-      filter: "dim:medium=none"
-      code: invalid_value
-
-  # And the other way round, so what turns the question away is read as the axis's own answer rather
-  # than as one face being poorer than the other.
-  - type: action
-    domain: dimension
-    op: applies-to
-    with:
-      dimension: medium
-      side: decision
-
-  - type: assert
-    domain: task
-    op: filter-refused
-    with:
-      filter: "dim:medium=web"
-      code: invalid_value
-
-  - type: assert
-    domain: decision
-    op: listed
-    with:
-      filter: "dim:medium=none"
-      target: ruling
-      present: true

@@ -649,6 +649,7 @@ export const vi: Translation = {
     invalid_dimension_slug_shape: "“{slug}” không dùng làm khoá được — tối đa {max} chữ thường, chữ số và dấu gạch nối, bắt đầu bằng một chữ cái.",
     invalid_dimension_slug_taken: "“{slug}” đã là khoá của thứ khác ở đây — hãy chọn khoá khác.",
     invalid_task_required_dimension: "Công việc này không mang giá trị nào ở {names}, thứ mà dự án này yêu cầu.",
+    invalid_decision_required_dimension: "Quyết định này không mang giá trị nào ở {names}, thứ mà dự án này yêu cầu.",
     invalid_dimension_values_unordered: "Các giá trị của phân loại này không có thứ tự nên không thể sắp xếp lại.",
     invalid_decision_edit_rejected: "{ref} đã bị bác bỏ, và một quyết định bị bác bỏ thì không sửa được.",
     invalid_decision_accept_rejected: "{ref} đã bị bác bỏ, và một quyết định bị bác bỏ thì không chấp nhận được.",

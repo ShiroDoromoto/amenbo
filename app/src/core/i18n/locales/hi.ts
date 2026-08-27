@@ -648,6 +648,7 @@ export const hi: Translation = {
     invalid_dimension_slug_shape: "«{slug}» कुंजी नहीं बन सकती — अधिकतम {max} छोटे अक्षर, अंक और हाइफ़न लिखें, और शुरुआत अक्षर से करें।",
     invalid_dimension_slug_taken: "«{slug}» यहाँ पहले से किसी और की कुंजी है — दूसरी चुनें।",
     invalid_task_required_dimension: "इस कार्य का {names} में कोई मान नहीं है, जो यह परियोजना अनिवार्य करती है।",
+    invalid_decision_required_dimension: "इस निर्णय का {names} में कोई मान नहीं है, जो यह परियोजना अनिवार्य करती है।",
     invalid_dimension_values_unordered:
       "इस श्रेणी के मानों का कोई क्रम नहीं है, इसलिए उन्हें दोबारा क्रमबद्ध नहीं किया जा सकता।",
     invalid_decision_edit_rejected: "{ref} अस्वीकृत है, और अस्वीकृत निर्णय संपादित नहीं किया जा सकता।",

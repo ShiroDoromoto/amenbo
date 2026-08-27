@@ -649,6 +649,7 @@ export const nl: Translation = {
     invalid_dimension_slug_shape: "„{slug}” kan geen sleutel zijn — maximaal {max} kleine letters, cijfers en koppeltekens, beginnend met een letter.",
     invalid_dimension_slug_taken: "„{slug}” is hier al de sleutel van iets anders — kies een andere.",
     invalid_task_required_dimension: "Deze taak draagt geen waarde op {names}, wat dit project vereist.",
+    invalid_decision_required_dimension: "Deze beslissing draagt geen waarde op {names}, wat dit project vereist.",
     invalid_dimension_values_unordered:
       "De waarden van deze categorie hebben geen volgorde en kunnen dus niet worden herschikt.",
     invalid_decision_edit_rejected: "{ref} is afgewezen, en een afgewezen besluit kan niet worden bewerkt.",

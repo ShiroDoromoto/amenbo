@@ -2723,6 +2723,18 @@ impl Instructor {
                 req(with, "name")?,
                 req(with, "line")?,
             ),
+            // The opening sentence, arrived in a pane whose launch line Amenbo did not compose, and
+            // sent. It is written as a wait as much as a reading: the sentence goes in after the
+            // program has drawn something and is submitted a moment later, so an operator who looked
+            // the instant the pane opened would be reading a screen the app has not finished with.
+            //
+            // The marked line is the whole of it, and the instruction says why: what the pane echoes
+            // proves only that Amenbo wrote into it, and the road's registered line is what puts the
+            // sentence back on the screen with a word of the road's own in front of it.
+            (Domain::Terminal, "handed-over") => format!(
+                "In the pane the registered command is running in, wait a few seconds and then confirm Amenbo's opening sentence — the fixed English one, beginning \"Before you act on any request in this directory\" — is on a line the program gave back: the one marked \"{}\". Nothing is typed here; the sentence is put in and sent by Amenbo itself. The marked line is the reading — the pane shows the sentence as it goes in whether or not it was ever sent, and only the program giving it back says it was.",
+                req(with, "given-back")?
+            ),
             // How many panes are standing on the page. Counted rather than read: the boxes carry no
             // words of the road's, and the whole of what this asks is how many of them there are.
             //

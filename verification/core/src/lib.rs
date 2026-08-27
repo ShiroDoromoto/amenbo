@@ -2172,6 +2172,27 @@ const REGISTRY: &[OpSpec] = &[
     // the name alone would keep that promise for nobody, and one that drew a line it had tidied up
     // would keep it falsely.
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "registered", required: &["name", "line"], refs: &[], strings: &["name", "line"], binds: false },
+    // The opening instruction, arrived in a pane Amenbo did not compose the launch line of, and sent
+    // rather than left waiting.
+    //
+    // Every pane gets that sentence, and a row off the catalog takes it as an argument before its
+    // program starts — nothing to read afterwards. A line the reader registered has nowhere to put an
+    // argument, so the sentence follows it into the pane instead: pasted once the pane has drawn
+    // something, and submitted only once the pane draws the sentence back. **That second half is what
+    // this reads.** A build that pasted and never sent leaves the reader a sentence sitting in an
+    // input box; a build that sent blind would answer whatever the program asked first.
+    //
+    // `given-back` is the mark the road's own registered line puts in front of what it is handed, and
+    // it is the road's word rather than the screen's for the reason every quoted word here is. It is
+    // also what makes the reading a reading at all: a pane echoes what is put into it, so the sentence
+    // is on the screen either way, and only a line the program gave back says it was ever sent.
+    //
+    // **The sentence itself is named in the instruction, and it is the one text here that may be.**
+    // What a screen draws is in the run machine's language, and no road quotes it; this is not that.
+    // It is the fixed English Amenbo hands an agent, the same on a machine set to any language, and
+    // what the operator is given to look for stops before the command name in it — so the reading
+    // holds on a dev-channel build as well as on the shipped one.
+    OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "handed-over", required: &["given-back"], refs: &[], strings: &["given-back"], binds: false },
     // How many panes the page being shown draws. It is not `set-panes` read back: that one is the
     // ceiling on how many a page may hold, and this is how many are actually standing there. The two
     // part company on exactly the thing worth defending — a face that filled the ceiling with empty

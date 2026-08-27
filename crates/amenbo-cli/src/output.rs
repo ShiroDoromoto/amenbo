@@ -463,6 +463,11 @@ impl From<amenbo_core::Error> for CliError {
             E::Invalid(m) if m.code() == Some(ErrorCode::InvalidTaskRequiredDimension) => Some(format!(
                 "This project requires a value on that axis before a creation can be finished. `{cmd} dimension show <axis>` lists what it offers, then `{cmd} dimension set <AMB-T-n> <axis> <value>` puts one on the task."
             )),
+            // The decision side of the same door. The way out is the same two steps, on the ref the
+            // other kind is named by — and `dimension set` takes either, so only the ref changes.
+            E::Invalid(m) if m.code() == Some(ErrorCode::InvalidDecisionRequiredDimension) => Some(format!(
+                "This project requires a value on that axis before a decision can be settled. `{cmd} dimension show <axis>` lists what it offers, then `{cmd} dimension set <AMB-D-n> <axis> <value>` puts one on the decision."
+            )),
             // Lowering the flag is the other way out, and it is the one nobody thinks of while holding a
             // task they only wanted to reclassify.
             E::Invalid(m) if m.code() == Some(ErrorCode::InvalidDimensionRequiredUnset) => Some(format!(

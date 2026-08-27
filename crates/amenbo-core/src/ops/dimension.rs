@@ -701,9 +701,11 @@ pub fn unset(tx: &WriteTx<'_>, task_id: i64, value_id: i64) -> Result<bool> {
 /// same single-select `(decision, dimension)` one-row rule and the same one-transaction replacement.
 /// A noop when the same value is already assigned. Returns (row, created).
 ///
-/// **No `required` here.** The flag bites at one point only, `task::finish_creating`, and a decision has
-/// no creation to finish — so an axis being required neither demands a value of a decision nor forbids
-/// clearing one ([`unset_on_decision`]).
+/// **No `required` here.** The flag bites at the two doors a record passes through once —
+/// `task::finish_creating` and `decision::accept` (`AMB-D-790`) — and this is neither. So an axis being
+/// required does not demand a value at the moment of assigning, and clearing one is left unconditional
+/// ([`unset_on_decision`]): what a required axis holds is the acceptance, which asks again on its way
+/// through.
 pub fn set_on_decision(
     tx: &WriteTx<'_>,
     decision_id: i64,
@@ -750,8 +752,10 @@ pub fn set_on_decision(
 }
 
 /// Remove a decision's assignment to a particular dimension value (a hard delete). A noop when it is not
-/// assigned. Returns changed. Unconditional, for the reason [`set_on_decision`] gives: `required` has no
-/// door to bite at on this side.
+/// assigned. Returns changed. Unconditional, for the reason [`set_on_decision`] gives: what a required
+/// axis holds on this side is the acceptance, not the assignment — so a settled decision can be stripped
+/// of a required value here, and only a fresh acceptance would ask for one again. The task side refuses
+/// the same move ([`unset`]) because `finish_creating` is one-directional and would never ask twice.
 pub fn unset_on_decision(tx: &WriteTx<'_>, decision_id: i64, value_id: i64) -> Result<bool> {
     let Some(id) = read::decision_assignment_id(tx.conn(), decision_id, value_id)? else {
         return Ok(false);
@@ -1599,10 +1603,11 @@ mod tests {
         assert!(!unset_on_decision(tx, k, b.id).unwrap(), "already unset is a noop");
     }
 
-    /// `required` has no door to bite at on the decision side — a decision has no creation to finish, so
-    /// it is neither demanded a value nor stopped from clearing one. The flag still holds the task side.
+    /// What a required axis holds on the decision side is the acceptance (`AMB-D-790`), not the
+    /// assignment — so a decision's value on one still clears, and removing the value itself still
+    /// counts tasks only. The task side keeps refusing both, its door being one-directional.
     #[test]
-    fn a_required_axis_makes_no_demand_of_a_decision() {
+    fn a_required_axis_still_lets_a_decisions_value_be_cleared() {
         let e = new_engine();
         let tx = &e.write().unwrap();
         let p = project_named(tx, "PJ");

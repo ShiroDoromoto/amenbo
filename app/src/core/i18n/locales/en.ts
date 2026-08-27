@@ -725,6 +725,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   invalid_dimension_slug_shape: "“{slug}” cannot be a key — use at most {max} lower-case letters, digits and hyphens, starting with a letter.",
   invalid_dimension_slug_taken: "“{slug}” is already the key of something else here — pick another.",
   invalid_task_required_dimension: "This task carries no value on {names}, which this project requires.",
+  invalid_decision_required_dimension: "This decision carries no value on {names}, which this project requires.",
   invalid_dimension_values_unordered: "This category's values carry no order, so they cannot be re-ordered.",
   invalid_decision_edit_rejected: "{ref} was rejected, and a rejected decision cannot be edited.",
   invalid_decision_accept_rejected: "{ref} was rejected, and a rejected decision cannot be accepted.",

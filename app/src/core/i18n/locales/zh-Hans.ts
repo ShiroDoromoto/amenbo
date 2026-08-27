@@ -645,6 +645,7 @@ export const zhHans: Translation = {
     invalid_dimension_slug_shape: "“{slug}”不能作为键：最多 {max} 个小写字母、数字和连字符，且以字母开头。",
     invalid_dimension_slug_taken: "“{slug}”在这里已经是别的东西的键了，请另选一个。",
     invalid_task_required_dimension: "这个任务在 {names} 上没有值，而本项目要求填写。",
+    invalid_decision_required_dimension: "这个决定在 {names} 上没有值，而本项目要求填写。",
     invalid_dimension_values_unordered: "该分类的值没有顺序，无法重新排序。",
     invalid_decision_edit_rejected: "{ref} 已被否决，被否决的决策无法编辑。",
     invalid_decision_accept_rejected: "{ref} 已被否决，被否决的决策无法采纳。",

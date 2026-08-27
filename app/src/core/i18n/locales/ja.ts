@@ -668,6 +668,7 @@ export const ja: Translation = {
     invalid_dimension_slug_shape: "「{slug}」はキーにできません。半角小文字・数字・ハイフンで{max}文字までにし、先頭は英小文字にしてください。",
     invalid_dimension_slug_taken: "「{slug}」はここで別のものが使っています。別のキーを選んでください。",
     invalid_task_required_dimension: "このタスクは {names} に値がありません。このプロジェクトが必須にしている分類です。",
+    invalid_decision_required_dimension: "この決定は {names} に値がありません。このプロジェクトが必須にしている分類です。",
     invalid_dimension_values_unordered: "この分類の値は順序を持たないため、並べ替えできません。",
     invalid_decision_edit_rejected: "{ref} は却下済みです。却下された決定は編集できません。",
     invalid_decision_accept_rejected: "{ref} は却下済みです。却下された決定は採択できません。",

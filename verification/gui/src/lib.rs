@@ -1680,6 +1680,18 @@ impl Instructor {
                 req(with, "dir")?,
                 req(with, "content")?
             ),
+            // A bound folder taken away from under the app, the same way and for the same reason: a
+            // folder is moved by whoever moves folders, and what Amenbo holds only becomes wrong
+            // afterwards. The screen road wants the move to land *while the app is watching*, which
+            // is what a premise could not do — the section it is about is drawn before it happens.
+            //
+            // Where it goes is named the way it is named everywhere else on these roads: by what the
+            // road calls it, since the run places the folders and the YAML never sees a path.
+            (Domain::Folder, "move") => format!(
+                "Outside Amenbo — in a file manager or another terminal — take the folder the road calls \"{}\" away from where it stands, moving it beside itself under the name \"{}\". Do not touch Amenbo while you do.",
+                req(with, "dir")?,
+                req(with, "to")?
+            ),
             // ── the file face ─────────────────────────────────────────────────────────────────
             // The column beside the panes. Its sections are named by what each is about rather than
             // by their headings, for the reason the segments are: the headings are the interface's
@@ -2981,6 +2993,7 @@ fn note(with: &Args) -> Result<&'static str, String> {
         Some("partial") => Ok("that some of the folder is not being watched"),
         Some("nothing-changed") => Ok("that nothing has changed yet"),
         Some("no-folder") => Ok("that this project has no folder yet"),
+        Some("folder-gone") => Ok("that this folder is not there any more"),
         Some(other) => Err(format!("`note` does not know `{other}`")),
         None => Err("arg `note` must say which of the face's lines".to_string()),
     }

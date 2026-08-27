@@ -9,6 +9,37 @@
 import type { Extension } from "@codemirror/state";
 import { langFor, type LangId } from "./grammars";
 
+/**
+ * The longest line an editor still wraps.
+ *
+ * Wrapping is what makes a long line expensive: the engine has to lay the whole line out to know
+ * where to break it, and that cost climbs faster than the line does. Measured on WKWebView — the
+ * engine the window runs on — a 1 MB file on one line takes **5.0 s** to lay out wrapped and
+ * **2 ms** unwrapped. The two costs cross at about 20,000 characters a line; under that, wrapping
+ * is the cheaper of the two, which is why this is a cap and not a switch.
+ *
+ * Files this hits are minified js, JSON squashed onto one line, and long base64 — none of which a
+ * person reads by the wrapped line anyway. They scroll sideways instead.
+ */
+const WRAP_CAP = 20_000;
+
+/**
+ * Whether `text` is short-lined enough to wrap.
+ *
+ * Answered by the longest line, not the total size: `AMB-T-3737` measured that the number of lines
+ * does not matter at all — a 5 MB file costs what a 10 KB one does, because only the lines on
+ * screen are ever drawn.
+ */
+export function wrappable(text: string): boolean {
+  let at = 0;
+  for (;;) {
+    const end = text.indexOf("\n", at);
+    if (end < 0) return text.length - at <= WRAP_CAP;
+    if (end - at > WRAP_CAP) return false;
+    at = end + 1;
+  }
+}
+
 // Colour is a second dynamic import behind the editor's own: a grammar is fetched only for a file
 // written in something this panel reads (`./grammars`), and one that fails to arrive costs colour
 // and nothing else — an uncoloured file is what the panel drew before there were grammars at all.
@@ -49,7 +80,7 @@ export async function mountEditor(
   // The grammar is fetched beside the editor, not after it: a file that appears uncoloured and then
   // repaints reads as a glitch, where one that was never coloured reads as a plain file.
   const lang = langFor(name);
-  const [{ EditorState }, view, commands, colour] = await Promise.all([
+  const [{ EditorState, Compartment }, view, commands, colour] = await Promise.all([
     import("@codemirror/state"),
     import("@codemirror/view"),
     import("@codemirror/commands"),
@@ -57,6 +88,11 @@ export async function mountEditor(
   ]);
   const { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } = view;
   const { history, defaultKeymap, historyKeymap } = commands;
+
+  // Wrapping is decided by the text, and the text changes under a panel that moved to another file
+  // without unmounting — so it goes in a compartment rather than being fixed at mount.
+  const wrapping = new Compartment();
+  const wrap = (of: string) => (wrappable(of) ? EditorView.lineWrapping : []);
 
   const editor = new EditorView({
     parent,
@@ -84,7 +120,7 @@ export async function mountEditor(
           },
           "&.cm-focused": { outline: "none" },
         }),
-        EditorView.lineWrapping,
+        wrapping.of(wrap(text)),
         ...colour,
         EditorState.readOnly.of(!editable),
         // A read-only editor still takes focus and a caret, which is what makes it selectable and
@@ -98,6 +134,7 @@ export async function mountEditor(
     show(next: string) {
       editor.dispatch({
         changes: { from: 0, to: editor.state.doc.length, insert: next },
+        effects: wrapping.reconfigure(wrap(next)),
       });
     },
     close() {

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// check-grammar-licenses.mjs — the gate that reads what is inside the packages.
+// check-grammar-licenses.mjs — the gate that reads what is inside the packages, and what was baked
+// into the tree from outside npm altogether.
 //
 // Its sibling, check-npm-licenses.mjs, reads what npm declares: one license field per package. That
 // is the right question for code, where a package is written by the people who publish it. It is
@@ -15,13 +16,18 @@
 // The allow-list is NOT repeated here: it is deny.toml's, read through the npm gate, so all three
 // license gates (cargo, npm, this) judge by the one policy.
 //
+// The editor's other borrowed data is judged here for the same reason and by the same allow-list:
+// the language configurations under `app/src/files/langconfig/` are VS Code's, baked into the tree
+// by `scripts/gen-lang-config.mjs`. They are not an npm package at all, so no dependency gate has
+// ever had a chance to see them.
+//
 // Like the npm gate, the verdict is a pure function of files in the tree — no install, no network.
 // A grammar added to the panel without a line here goes red, which is the whole point: the line is
 // where somebody has to have looked.
 //
 // Usage: node guards/check-grammar-licenses.mjs   (from the repo root)
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -29,6 +35,7 @@ import { allowed, parse, parseAllowList, tokenize } from './check-npm-licenses.m
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const CATALOG = join(ROOT, 'app', 'src', 'files', 'grammars.ts')
+const LANGCONFIG = join(ROOT, 'app', 'src', 'files', 'langconfig')
 
 // A license with no SPDX identifier to judge it by. The allow-list speaks SPDX and this text has no
 // entry in it, so the grant itself is written out — a human read it at the URL below and the words
@@ -171,6 +178,47 @@ export function judgeGrammars(bundled, allow, table = GRAMMARS, grants = GRANTS)
   return { violations, judged, usedGrants }
 }
 
+// --- the baked language configurations ----------------------------------------------------------
+
+// What the manifest the generator writes has to say before the files beside it can be trusted: one
+// licence for the lot, a revision anybody can go back and re-read it at, and a per-file record.
+export function judgeLangConfig(manifest, present, allow) {
+  const violations = []
+
+  if (typeof manifest?.licence !== 'string') {
+    violations.push('langconfig/SOURCE.json records no licence — re-run `make lang-config`')
+    return { violations, judged: 0 }
+  }
+  let ok
+  try {
+    ok = allowed(parse(tokenize(manifest.licence)), allow)
+  } catch (e) {
+    violations.push(`langconfig/SOURCE.json: cannot read the licence "${manifest.licence}" (${e.message})`)
+    return { violations, judged: 0 }
+  }
+  if (!ok) violations.push(`langconfig: ${manifest.licence} (${manifest.repository}) is not allowed`)
+  if (typeof manifest.revision !== 'string' || !/^[0-9a-f]{40}$/.test(manifest.revision)) {
+    violations.push('langconfig/SOURCE.json records no full revision — a licence read at a moving branch is one nobody can re-read')
+  }
+
+  // The manifest and the directory have to agree. A file put there by hand, or one the generator
+  // dropped, is exactly the case where nobody read anything.
+  const recorded = new Set((manifest.files ?? []).map((f) => `${f.lang}.json`))
+  for (const f of manifest.files ?? []) {
+    if (typeof f.source !== 'string' || !f.source.includes(manifest.revision)) {
+      violations.push(`langconfig: ${f.lang} is not recorded against the pinned revision`)
+    }
+  }
+  for (const file of present) {
+    if (!recorded.has(file)) violations.push(`langconfig/${file} is in the tree but not in SOURCE.json`)
+  }
+  for (const file of recorded) {
+    if (!present.includes(file)) violations.push(`langconfig/${file} is in SOURCE.json but not in the tree`)
+  }
+
+  return { violations, judged: recorded.size }
+}
+
 // --- the gate ----------------------------------------------------------------------------------
 
 function main() {
@@ -178,16 +226,22 @@ function main() {
   const bundled = bundledGrammars(readFileSync(CATALOG, 'utf8'))
   const { violations, judged, usedGrants } = judgeGrammars(bundled, allow)
 
+  const manifest = JSON.parse(readFileSync(join(LANGCONFIG, 'SOURCE.json'), 'utf8'))
+  const present = readdirSync(LANGCONFIG).filter((f) => f.endsWith('.json') && f !== 'SOURCE.json')
+  const config = judgeLangConfig(manifest, present, allow)
+  violations.push(...config.violations)
+
   if (violations.length > 0) {
     console.error('✗ grammar license gate:')
     for (const v of violations) console.error(`    ${v}`)
-    console.error('  A TextMate grammar is data amenbo ships, so it is bound by the same allow-list as')
-    console.error("  everything else: deny.toml's [licenses] allow. Read the grammar at its source, record")
-    console.error('  the verdict with that URL in GRAMMARS in this file, or take the grammar back out.')
+    console.error('  Data amenbo ships is bound by the same allow-list as everything else:')
+    console.error("  deny.toml's [licenses] allow. Read it at its source and record the verdict with that URL")
+    console.error('  — in GRAMMARS here, or by re-running `make lang-config` — or take the data back out.')
     return 1
   }
 
   console.log(`→ grammar licenses: ${judged.size} grammars in ${bundled.size} bundled modules, all within deny.toml's allow-list`)
+  console.log(`→ language configurations: ${config.judged} files, ${manifest.licence} from ${manifest.repository} at ${manifest.tag}`)
   for (const grant of usedGrants) {
     console.log(`  (${grant}: no SPDX identifier — the grant is quoted in this file, read from ${GRANTS[grant].from})`)
   }

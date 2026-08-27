@@ -1107,6 +1107,9 @@ pub enum DimensionCmd {
         /// require a value on this axis before a creation can be finished (refused here: a new axis has no values yet)
         #[arg(long)]
         required: bool,
+        /// which side this axis classifies: `task`, `decision` or `both` (default: both)
+        #[arg(long)]
+        applies_to: Option<String>,
         /// readable key for naming this axis outside Amenbo (lower-case letters, digits and hyphens, starting with a letter; defaults to `d<id>`)
         #[arg(long)]
         slug: Option<String>,
@@ -1117,12 +1120,12 @@ pub enum DimensionCmd {
         #[arg(long)]
         project: Option<String>,
     },
-    /// Show a dimension (name, notes, cardinality/ordered/role/card, values)
+    /// Show a dimension (name, notes, cardinality/ordered/role/card/applies-to, values)
     Show {
         /// dimension ref (AMB-DIM-n), slug or name
         id: String,
     },
-    /// Update a dimension's name, notes, value ordering, time-axis role, whether it goes on the task card, whether it must be answered, and/or its slug (only the given fields change)
+    /// Update a dimension's name, notes, value ordering, time-axis role, whether it goes on the task card, whether it must be answered, which side it classifies, and/or its slug (only the given fields change)
     Update {
         /// dimension ref (AMB-DIM-n), slug or name
         id: String,
@@ -1142,6 +1145,9 @@ pub enum DimensionCmd {
         /// whether a task must carry a value here before its creation can be finished (`--required true|false`)
         #[arg(long)]
         required: Option<bool>,
+        /// which side this axis classifies (`--applies-to task|decision|both`); narrowing it takes no assignment away
+        #[arg(long)]
+        applies_to: Option<String>,
         /// rename the readable key this axis is named by outside Amenbo
         #[arg(long)]
         slug: Option<String>,

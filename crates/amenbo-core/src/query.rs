@@ -5,7 +5,7 @@ use chrono::NaiveDate;
 use serde::Serialize;
 
 use crate::error::{Error, Result};
-use crate::model::{ActorKind, DecisionStatus, Priority, TaskStatus};
+use crate::model::{ActorKind, ClassifiedSide, DecisionStatus, Priority, TaskStatus};
 use crate::time::{self, Timestamp};
 use crate::view::{DecisionCompact, DecisionRef, Ref, TaskCompact};
 
@@ -197,7 +197,12 @@ impl DimensionFilter {
     /// returning zero rows would leave the caller unable to tell "nothing matched" from "I mistyped
     /// the name", and on the `=none` (unclassified) side it is worse than zero rows: it turns into
     /// **every row**, because `NOT EXISTS` against a nonexistent axis is true for everyone.
-    fn resolve(&mut self, conn: &rusqlite::Connection) -> Result<()> {
+    ///
+    /// `side` is which of the two entities is being listed, and an axis that does not classify it is
+    /// refused for the same reason a mistyped one is (`AMB-D-789`): the zero rows it would otherwise
+    /// answer with mean both "nothing carries that value" and "that axis does not run here", and only
+    /// the second is a question worth correcting.
+    fn resolve(&mut self, conn: &rusqlite::Connection, side: ClassifiedSide) -> Result<()> {
         use crate::ops::dimension::{NOUN, VALUE_NOUN};
         use crate::store_engine::read;
         let oops = crate::error::engine_on(conn);
@@ -208,7 +213,14 @@ impl DimensionFilter {
                 if hits.is_empty() {
                     return Err(NOUN.not_found(reference));
                 }
-                hits
+                let classifying = read::dimensions_classifying(conn, &hits, side).map_err(&oops)?;
+                if classifying.is_empty() {
+                    return Err(Error::invalid(format!(
+                        "dimension '{reference}' does not classify {0}, so `dim:` cannot narrow {0} by it",
+                        side.plural()
+                    )));
+                }
+                classifying
             }
             // `time_axis:` is sugar for **the axis designated by role**, not for an axis name. With
             // nothing designated, there is nothing to point at.
@@ -217,7 +229,16 @@ impl DimensionFilter {
                 if hits.is_empty() {
                     return Err(Error::not_found("no dimension is designated as the time axis"));
                 }
-                hits
+                // The role designates an axis; it does not exempt it. An axis narrowed off this side
+                // classifies nothing here whatever role it also carries.
+                let classifying = read::dimensions_classifying(conn, &hits, side).map_err(&oops)?;
+                if classifying.is_empty() {
+                    return Err(Error::invalid(format!(
+                        "the time axis does not classify {0}, so `time_axis:` cannot narrow {0} by it",
+                        side.plural()
+                    )));
+                }
+                classifying
             }
         };
 
@@ -366,7 +387,7 @@ impl Filter {
             self.project_id = Some(resolve_project_ref(conn, &reference)?);
         }
         for dimension in &mut self.dimensions {
-            dimension.resolve(conn)?;
+            dimension.resolve(conn, ClassifiedSide::Task)?;
         }
         Ok(())
     }
@@ -1525,7 +1546,7 @@ impl DecisionFilter {
         // resolves to nothing is an error, and on the `=none` arm a silently unresolved axis would
         // select *every* decision rather than none.
         for d in &mut self.dimensions {
-            d.resolve(conn)?;
+            d.resolve(conn, ClassifiedSide::Decision)?;
         }
         Ok(())
     }
@@ -2633,6 +2654,33 @@ mod filter_tests {
 
     /// The message a rejected filter expression produces — the hook for asserting that it errors
     /// rather than matching nothing.
+    /// The decision face of [`ids`] — the ids a filter selects, in a stable order.
+    fn decision_ids(tx: &WriteTx<'_>, filter: &str) -> Vec<i64> {
+        let mut v: Vec<i64> = decision_list(
+            tx.conn(),
+            crate::reach::Reach::All,
+            DecisionListParams { filter_expr: Some(filter.to_string()), ..Default::default() },
+        )
+        .expect("the filter resolves")
+        .decisions
+        .into_iter()
+        .map(|d| d.id)
+        .collect();
+        v.sort();
+        v
+    }
+
+    /// The decision face of [`err`] — the message a filter that must not resolve comes back with.
+    fn decision_err(tx: &WriteTx<'_>, filter: &str) -> String {
+        decision_list(
+            tx.conn(),
+            crate::reach::Reach::All,
+            DecisionListParams { filter_expr: Some(filter.to_string()), ..Default::default() },
+        )
+        .expect_err(&format!("`{filter}` does not resolve, so it must error"))
+        .to_string()
+    }
+
     fn err(tx: &WriteTx<'_>, filter: &str) -> String {
         list(
             tx.conn(),
@@ -3111,6 +3159,73 @@ mod filter_tests {
         proj(tx, "時間軸の無い PJ");
         assert!(err(tx, "time_axis:dev").contains("time axis"), "no axis is designated as the time axis: {}", err(tx, "time_axis:dev"));
         assert!(err(tx, "time_axis:none").contains("time axis"), "the same for `=none`");
+    }
+
+    /// An axis that classifies only one of the two entities is refused on the other, rather than
+    /// answering with the empty page that would mean two different things at once — "nothing carries
+    /// that value" and "that axis does not run here" (`AMB-D-789`). The side it *does* classify keeps
+    /// working, which is the half this must not cost.
+    #[test]
+    fn an_axis_is_refused_on_the_side_it_does_not_classify() {
+        use crate::model::{DimensionAppliesTo, DimensionCardinality, DimensionRole};
+
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let p = proj(tx, "PJ");
+        let add_axis = |name: &str, role: DimensionRole, applies_to: DimensionAppliesTo| {
+            ops::dimension::add(
+                tx,
+                p,
+                ops::dimension::NewDimension {
+                    name: name.to_string(),
+                    notes: String::new(),
+                    cardinality: DimensionCardinality::Single,
+                    ordered: true,
+                    role,
+                    show_on_card: false,
+                    required: false,
+                    applies_to,
+                    slug: None,
+                },
+            )
+            .unwrap()
+            .id
+        };
+        // A working axis (the exclusive hardware lane of `AMB-D-789`'s own example) and one that runs
+        // on both, so the refusal is shown to be the axis's doing rather than the side's.
+        let lane = add_axis("Lane", DimensionRole::None, DimensionAppliesTo::Task);
+        let era = add_axis("Era", DimensionRole::TimeAxis, DimensionAppliesTo::Both);
+        let ios = ops::dimension::value_add(tx, lane, "iOS", None).unwrap().id;
+        let dev = ops::dimension::value_add(tx, era, "dev", None).unwrap().id;
+
+        let t = task(tx, "on the lane", Some(p));
+        ops::dimension::set(tx, t, ios).unwrap();
+        let d = ops::decision::add(
+            tx,
+            ops::decision::NewDecision {
+                title: "どのレーンで焼くか".to_string(),
+                body: String::new(),
+                project_id: p,
+            },
+        )
+        .unwrap()
+        .id;
+        ops::dimension::set_on_decision(tx, d, dev).unwrap();
+
+        // The side the axis classifies is untouched.
+        assert_eq!(ids(tx, Some("dim:Lane=iOS")), vec![t], "a task axis still narrows tasks");
+
+        // The side it does not is refused, naming the axis and the side rather than the value: the
+        // value is beside the point when the axis does not run here at all.
+        let refusal = decision_err(tx, "dim:Lane=iOS");
+        assert!(refusal.contains("Lane"), "the refusal names the axis: {refusal}");
+        assert!(refusal.contains("decisions"), "and the side it does not classify: {refusal}");
+        // `=none` is the arm where an empty page would have been *every* row instead.
+        assert!(decision_err(tx, "dim:Lane=none").contains("Lane"), "`=none` is refused the same way");
+
+        // A both-sided axis is what the refusal is measured against — it narrows decisions as before.
+        assert_eq!(decision_ids(tx, "dim:Era=dev"), vec![d], "a both-sided axis narrows decisions");
+        assert_eq!(decision_ids(tx, "time_axis:dev"), vec![d], "and so does the role sugar for it");
     }
 
     /// The grammar of a filter value (`AMB-T-<n>` / `AMB-D-<n>`, or the bare `123` / `#123` / `T-123` /

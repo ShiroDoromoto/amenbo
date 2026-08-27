@@ -344,7 +344,9 @@ export type DoctorReportDto = { ok: boolean, errors: number, warnings: number, i
  * modifier keys on the drag event** (`AMB-T-3740`). The keyboard is read where it can be read — the
  * host, at the instant of the drop — and the answer is this and nothing else.
  *
- * `default` is neither key: what a plain drop means belongs to the face receiving it, not here.
+ * `default` is neither key: what a plain drop means belongs to the face receiving it, not here. It
+ * travels back the other way too — the face hands it to [`crate::folder_write::folder_import`] as
+ * the whole of what the reader asked of the drop.
  */
 export type DropEffectDto = "copy" | "move" | "default";
 
@@ -2491,19 +2493,31 @@ newerVersion: string | null, };
  */
 export type WakeCandidateDto = { 
 /**
- * The catalogued id, which is what a face hands back when the reader picks this one.
+ * The id, which is what a face hands back when the reader picks this one — a catalog row's, or
+ * one of this device's own registrations.
  */
 id: string, 
 /**
- * The product's own name for itself.
+ * The product's own name for itself, or what the reader called their own row.
  */
 label: string, 
 /**
- * What it is started as — shown where it is missing, because that is the word to install.
+ * What it is started as — shown where it is missing, because that is the word to install. For a
+ * registered row it is the first word of `line`, which is the whole of what can be looked for.
  */
 command: string, 
 /**
- * Whether this folder shows a trace of the provider being used here.
+ * The command line as the reader wrote it — present **exactly** for a row they registered
+ * themselves (`AMB-D-794`), and absent for a catalogued one.
+ *
+ * Its presence is what tells a face which rows it may correct and delete, and its text is what
+ * the face shows before the row is pressed: a registered line runs in a terminal, so somebody
+ * choosing it should be able to read what that starts.
+ */
+line?: string, 
+/**
+ * Whether this folder shows a trace of the provider being used here. Always false for a
+ * registered row: a trace is left against a wiring catalog row, and a registration has none.
  */
 traced: boolean, 
 /**

@@ -586,6 +586,7 @@ const ui = {
   // rather than being pressable and doing nothing: what is missing is written on the thing the
   // reader would press, so there is no refusal to explain afterwards (`AMB-T-3686`).
   "face.openPick": "Choose one",
+  "face.moreStarts": "Not installed ({n})",
   "face.openHere": "Room for another pane in this project",
   "face.whichFolder": "Which folder does this pane work in?",
   "face.rename": "Rename this pane",
@@ -618,6 +619,8 @@ const ui = {
   "files.notText": "This is not text, so it cannot be shown here.",
   "files.cut": "Only the beginning is shown.",
   "files.unreadable": "This file could not be read.",
+  "files.dropStopped": "{name} could not be brought in: {why}",
+  "files.dropPartly": "{count} came in. {name} did not: {why}",
   // A picture the panel would not draw. What it is refused for travels with the
   // refusal, because a reader shown nothing at all reads it as a damaged file
   // (`AMB-D-783`).
@@ -803,6 +806,7 @@ const err: Partial<Record<ErrorCode, string>> = {
   wake_no_folder: "That folder could not be read: {reason}",
   wake_no_config: "Amenbo could not find its own files.",
   wake_not_kept: "The choice could not be saved.",
+  wake_not_registered: "A registered command needs both a name and a command line.",
   window_failed: "That window could not be opened: {reason}",
   talk_blank: "That window opened but never drew anything, so the terminal was put back in this one.",
   folder_taken: "{name} is already there.",

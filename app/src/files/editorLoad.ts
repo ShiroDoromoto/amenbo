@@ -9,13 +9,44 @@
 import type { Extension } from "@codemirror/state";
 import { langFor, type LangId } from "./grammars";
 
-// Colour is a second dynamic import behind the editor's own: a grammar is fetched only for a file
-// written in something this panel reads (`./grammars`), and one that fails to arrive costs colour
-// and nothing else — an uncoloured file is what the panel drew before there were grammars at all.
-async function colourFor(lang: LangId): Promise<Extension[]> {
+/**
+ * The longest line an editor still wraps.
+ *
+ * Wrapping is what makes a long line expensive: the engine has to lay the whole line out to know
+ * where to break it, and that cost climbs faster than the line does. Measured on WKWebView — the
+ * engine the window runs on — a 1 MB file on one line takes **5.0 s** to lay out wrapped and
+ * **2 ms** unwrapped. The two costs cross at about 20,000 characters a line; under that, wrapping
+ * is the cheaper of the two, which is why this is a cap and not a switch.
+ *
+ * Files this hits are minified js, JSON squashed onto one line, and long base64 — none of which a
+ * person reads by the wrapped line anyway. They scroll sideways instead.
+ */
+const WRAP_CAP = 20_000;
+
+/**
+ * Whether `text` is short-lined enough to wrap.
+ *
+ * Answered by the longest line, not the total size: `AMB-T-3737` measured that the number of lines
+ * does not matter at all — a 5 MB file costs what a 10 KB one does, because only the lines on
+ * screen are ever drawn.
+ */
+export function wrappable(text: string): boolean {
+  let at = 0;
+  for (;;) {
+    const end = text.indexOf("\n", at);
+    if (end < 0) return text.length - at <= WRAP_CAP;
+    if (end - at > WRAP_CAP) return false;
+    at = end + 1;
+  }
+}
+
+// What the editor knows about the file is a second dynamic import behind the editor's own, and one
+// that fails to arrive costs colour and manners, not the editor — a plain editor over plain text is
+// what the panel had before either existed.
+async function mannersFor(lang: LangId | null): Promise<Extension[]> {
   try {
-    const { textmate } = await import("./highlight");
-    return [await textmate(lang)];
+    const { language } = await import("./language");
+    return [await language(lang)];
   } catch {
     return [];
   }
@@ -46,17 +77,21 @@ export async function mountEditor(
   editable: boolean,
   name: string,
 ): Promise<Mounted> {
-  // The grammar is fetched beside the editor, not after it: a file that appears uncoloured and then
-  // repaints reads as a glitch, where one that was never coloured reads as a plain file.
-  const lang = langFor(name);
-  const [{ EditorState }, view, commands, colour] = await Promise.all([
+  // Fetched beside the editor, not after it: a file that appears uncoloured and then repaints reads
+  // as a glitch, where one that was never coloured reads as a plain file.
+  const [{ EditorState, Compartment }, view, commands, manners] = await Promise.all([
     import("@codemirror/state"),
     import("@codemirror/view"),
     import("@codemirror/commands"),
-    lang === null ? Promise.resolve<Extension[]>([]) : colourFor(lang),
+    mannersFor(langFor(name)),
   ]);
   const { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } = view;
   const { history, defaultKeymap, historyKeymap } = commands;
+
+  // Wrapping is decided by the text, and the text changes under a panel that moved to another file
+  // without unmounting — so it goes in a compartment rather than being fixed at mount.
+  const wrapping = new Compartment();
+  const wrap = (of: string) => (wrappable(of) ? EditorView.lineWrapping : []);
 
   const editor = new EditorView({
     parent,
@@ -94,10 +129,23 @@ export async function mountEditor(
             // that the text beside it reads first, which leaves nothing to tell this one apart.
             color: "var(--c-text)",
           },
+          // The fold arrows are drawn faintly and come up on hover: they sit beside every line of
+          // the file and would otherwise be a second column of marks competing with the numbers.
+          ".cm-foldGutter .cm-gutterElement": { color: "var(--c-text-faint)", cursor: "pointer" },
+          ".cm-foldGutter .cm-gutterElement:hover": { color: "var(--c-text)" },
+          // What stands in for the lines that were folded away. It is a thing to click, so it is
+          // drawn as one rather than as text that happens to be there.
+          ".cm-foldPlaceholder": {
+            background: "var(--c-surface-sunken)",
+            border: "1px solid var(--c-border)",
+            borderRadius: "var(--r-sm)",
+            color: "var(--c-text-muted)",
+            padding: "0 var(--s-2)",
+          },
           "&.cm-focused": { outline: "none" },
         }),
-        EditorView.lineWrapping,
-        ...colour,
+        wrapping.of(wrap(text)),
+        ...manners,
         EditorState.readOnly.of(!editable),
         // A read-only editor still takes focus and a caret, which is what makes it selectable and
         // navigable by keyboard; what it refuses is changing the text.
@@ -110,6 +158,7 @@ export async function mountEditor(
     show(next: string) {
       editor.dispatch({
         changes: { from: 0, to: editor.state.doc.length, insert: next },
+        effects: wrapping.reconfigure(wrap(next)),
       });
     },
     close() {

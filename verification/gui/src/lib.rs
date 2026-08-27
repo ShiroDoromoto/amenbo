@@ -1855,13 +1855,36 @@ impl Instructor {
             (Domain::Files, "save") =>
                 "In the row above the text — beside the file's name — press the way the panel offers to keep what was typed."
                     .to_string(),
-            // The bin, and the question that may or may not stand between the press and the row going.
-            // Which of the two happens is a habit of this machine rather than anything about the build,
-            // so the line covers both — and it says to leave the checkbox alone, because ticking it
-            // would change that habit for every run walked here afterwards.
-            (Domain::Files, "trash") =>
-                "In the row above the file — at its right-hand end, past the file's name — press the bin. If the panel asks whether to move the file to the bin, agree; leave the box about not asking again unticked."
+            // The file face's own settings row moved. The move and what it writes are one instruction,
+            // the way the tick's is: a row read in its new position with nothing written behind it
+            // would be evidence of an answer nothing kept.
+            (Domain::Files, "set") => match req(with, "position")? {
+                "asks" => "In Amenbo's own settings, under the section about files, move the row for the question before binning to the position that has the panel ask."
                     .to_string(),
+                "quiet" => "In Amenbo's own settings, under the section about files, move the row for the question before binning to the position that has the panel not ask."
+                    .to_string(),
+                other => {
+                    return Err(format!("action `set` does not know the position `{other}`"))
+                }
+            },
+            // The bin. The press and nothing after it: where a road put the row in `asks`, the panel
+            // puts its question here and the step leaves it standing, because deciding it is
+            // `answer`'s. The line says to leave the checkbox alone whatever happens — ticking it
+            // would turn the question off on this machine for every run walked here afterwards.
+            (Domain::Files, "trash") =>
+                "In the row above the file — at its right-hand end, past the file's name — press the bin. If the panel asks whether to move the file to the bin, leave the question standing and answer nothing; leave the box about not asking again unticked."
+                    .to_string(),
+            // And answering it. The two are named by what each does rather than by the words on the
+            // buttons, which are the interface's own.
+            (Domain::Files, "answer") => match req(with, "answer")? {
+                "yes" => "In the question the panel put about binning the file, press the answer that goes ahead and bins it. Leave the box about not asking again unticked."
+                    .to_string(),
+                "no" => "In the question the panel put about binning the file, press the answer that keeps the file where it is. Leave the box about not asking again unticked."
+                    .to_string(),
+                other => {
+                    return Err(format!("action `answer` does not know the answer `{other}`"))
+                }
+            },
             // And taking it back. The key is the machine's own, and the line says where to be standing:
             // the terminal beside this column hears the same key as meaning something of its own.
             (Domain::Files, "undo") =>
@@ -2684,6 +2707,17 @@ impl Instructor {
                 "on" => "Confirm the hourly check's row in Amenbo's own settings stands in the position that has the check on — the one that holds a yes and a registered timer."
                     .to_string(),
                 "off" => "Confirm the hourly check's row in Amenbo's own settings stands in the position that has the check off — the one that holds no registration."
+                    .to_string(),
+                other => {
+                    return Err(format!("assert `setting` does not know the position `{other}`"))
+                }
+            },
+            // Where the file face's own settings row stands. The positions are named by what each
+            // does rather than by the word drawn on the row, since the words are the interface's own.
+            (Domain::Files, "setting") => match req(with, "position")? {
+                "asks" => "In Amenbo's own settings, under the section about files, confirm the row for the question before binning stands in the position that has the panel ask."
+                    .to_string(),
+                "quiet" => "In Amenbo's own settings, under the section about files, confirm the row for the question before binning stands in the position that has the panel not ask."
                     .to_string(),
                 other => {
                     return Err(format!("assert `setting` does not know the position `{other}`"))

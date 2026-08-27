@@ -12,12 +12,17 @@
 # second reading somewhere else would be proving that two screens agree rather than that a file came
 # back.
 #
-# ── Why the question is not a step ───────────────────────────────────────────────────────────────
-# The panel asks before it bins, with a "do not ask again" beside the answer. That switch is a habit
-# of the Mac the run is walked on rather than anything the build decides, so a step that asserted the
-# question would read red on a machine where somebody once ticked it and green on the next machine —
-# a verdict about the operator's history, filed as a verdict about the release. The press covers both
-# endings instead, and the reading that follows is the same either way.
+# ── Why the question is a step ───────────────────────────────────────────────────────────────────
+# The panel asks before it bins, with a "do not ask again" beside the answer. Whether it asks is a
+# habit of the Mac the run is walked on rather than anything the build decides, so a road that only
+# pressed the bin and asserted a question would read red on a machine where somebody once ticked the
+# box and green on the next one — a verdict about the operator's history, filed as a verdict about
+# the release.
+#
+# So the road puts the habit where it needs it first: the settings row moves the question back on,
+# and it is read there before anything is binned. The press and the answer are then two steps — the
+# press leaves the question standing, and the answer decides it. What is never touched is the
+# checkbox, which would take the question away from every run walked on this machine afterwards.
 #
 # ── The screen road alone ────────────────────────────────────────────────────────────────────────
 # There is no second road here. Deleting a file at a shell is `rm`, which is not this, and Amenbo is
@@ -54,6 +59,23 @@ given:
       content: SCENARIO the seedlings are watered every second morning
 
 steps_gui:
+  # Whatever this Mac's history, the question is on for this run. It is the first step because
+  # everything after the bin depends on it, and it is walked rather than assumed: a road that only
+  # asserted the row would go green on the machine that was already right.
+  - type: action
+    domain: files
+    op: set
+    with:
+      position: asks
+
+  # And it stands where it was put. This is the half that was missing until the row existed — the
+  # question could only ever be turned off before, so a machine that had it off had no way back.
+  - type: assert
+    domain: files
+    op: setting
+    with:
+      position: asks
+
   - type: action
     domain: terminal
     op: show-face
@@ -91,6 +113,14 @@ steps_gui:
   - type: action
     domain: files
     op: trash
+
+  # The question the row above put there. It is asked because the first step said so, so this is the
+  # one place the build's own promise about deleting is read rather than guessed at.
+  - type: action
+    domain: files
+    op: answer
+    with:
+      answer: yes
 
   # The file that was open has gone, so the column is the list again — and the list comes back folded,
   # the way it is drawn on the way in. Unfolded here rather than left to be assumed: a reading that

@@ -2291,6 +2291,28 @@ pub struct FolderStoppedDto {
     pub(crate) why: String,
 }
 
+/// One path git named inside the folder the file face is showing (`crate::folder_git`).
+///
+/// The two letters are git's own and are carried across as they came: the first is what the index
+/// says about the path, the second what the working tree says, and a space in either is git saying
+/// nothing about that half. Turning them into a word here would be deciding what a colour means,
+/// which is the face's to decide and not the same question on every road.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct GitEntryDto {
+    /// Where it is, as segments from the bound folder — the spelling a tree row is built from, with
+    /// the repository's own front already taken off.
+    pub(crate) path: Vec<String>,
+    /// What the index says: git's `X`, one character.
+    pub(crate) index: String,
+    /// What the working tree says: git's `Y`, read the same way.
+    pub(crate) worktree: String,
+    /// Whether git named a folder as a whole rather than what is inside it, which is what it does
+    /// with an untracked one. A folded folder is somewhere a colour still has to appear.
+    pub(crate) is_dir: bool,
+}
+
 /// One application a file could be opened with, as the file face draws a row of the chooser it has
 /// to draw itself (`crate::open_with`).
 ///
@@ -2406,6 +2428,25 @@ pub struct FolderOversizeDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) height: Option<u32>,
+}
+
+/// What a drop asked for, as the keys held at the moment it landed say it (`crate::dropped`).
+///
+/// It crosses on its own, out of a command of its own, because **no operating system puts the
+/// modifier keys on the drag event** (`AMB-T-3740`). The keyboard is read where it can be read — the
+/// host, at the instant of the drop — and the answer is this and nothing else.
+///
+/// `default` is neither key: what a plain drop means belongs to the face receiving it, not here.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum DropEffectDto {
+    /// Copy: Option on macOS, Ctrl on Windows and Linux.
+    Copy,
+    /// Move: Command on macOS, Shift on Windows and Linux.
+    Move,
+    /// Neither was held.
+    Default,
 }
 
 /// A picture out of a folder, carried whole so the webview can draw it without a URL of its own.

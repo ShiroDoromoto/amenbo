@@ -338,6 +338,17 @@ export type DoctorIssueDto = { kind: string, severity: string, target: string, p
 export type DoctorReportDto = { ok: boolean, errors: number, warnings: number, issues: Array<DoctorIssueDto>, };
 
 /**
+ * What a drop asked for, as the keys held at the moment it landed say it (`crate::dropped`).
+ *
+ * It crosses on its own, out of a command of its own, because **no operating system puts the
+ * modifier keys on the drag event** (`AMB-T-3740`). The keyboard is read where it can be read — the
+ * host, at the instant of the drop — and the answer is this and nothing else.
+ *
+ * `default` is neither key: what a plain drop means belongs to the face receiving it, not here.
+ */
+export type DropEffectDto = "copy" | "move" | "default";
+
+/**
  * A system event as the GUI needs it: the kind names the sentence template, and the rest are the
  * values that go into it. No prose — the wording lives in the GUI's dictionary, in the reader's
  * language, and the target's own name comes from [`ActivityTargetDto::title`] beside this.
@@ -607,6 +618,34 @@ export type FrameNameDto = {
  * The frame it is the name of. Names belong to frames, never to the session running in one.
  */
 frame: string, name: string, by: "typed" | "session" | "person", };
+
+/**
+ * One path git named inside the folder the file face is showing (`crate::folder_git`).
+ *
+ * The two letters are git's own and are carried across as they came: the first is what the index
+ * says about the path, the second what the working tree says, and a space in either is git saying
+ * nothing about that half. Turning them into a word here would be deciding what a colour means,
+ * which is the face's to decide and not the same question on every road.
+ */
+export type GitEntryDto = { 
+/**
+ * Where it is, as segments from the bound folder — the spelling a tree row is built from, with
+ * the repository's own front already taken off.
+ */
+path: Array<string>, 
+/**
+ * What the index says: git's `X`, one character.
+ */
+index: string, 
+/**
+ * What the working tree says: git's `Y`, read the same way.
+ */
+worktree: string, 
+/**
+ * Whether git named a folder as a whole rather than what is inside it, which is what it does
+ * with an untracked one. A folded folder is somewhere a colour still has to appear.
+ */
+isDir: boolean, };
 
 /**
  * One bound repository the banner has something to say about — the raw material for its wording, never

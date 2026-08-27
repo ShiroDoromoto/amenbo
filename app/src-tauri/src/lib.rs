@@ -497,6 +497,7 @@ pub fn run() {
       wake::wake_chose,
       wake::wake_forget,
       wake::wake_choices,
+      wake::wake_rescan,
       commands::session_work,
       frames::panes_drawn,
       frames::task_pane,

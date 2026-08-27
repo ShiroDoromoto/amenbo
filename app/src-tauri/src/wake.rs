@@ -19,10 +19,19 @@
 //! differs is only where the trace is read from — one folder, or all of them — because a preference
 //! shown in any of a project's folders is the project's ([`amenbo_core::wake`]).
 //!
-//! **Not on the perf budget, deliberately.** A probe's time is a login shell reading the reader's
-//! own profile ([`crate::launch::installed`]), so it busts a 50 ms budget on every machine and
-//! nothing in Amenbo can make it not. A WARN that fires every time a window opens and names nothing
-//! anyone can act on is noise in the one log that is meant to be read.
+//! **What this machine can start is remembered, and only the first window pays for it.** The probe
+//! is a login shell reading the reader's own profile, so it costs whatever that profile costs and is
+//! abandoned at a deadline — pay it on every window and a machine whose profile waits on a network
+//! reports itself bare. So the answer is written to the device's settings
+//! ([`amenbo_core::config::Config::installed_agents`]) and the windows after the first come up on it,
+//! while a fresh probe runs behind them and says `agents-installed` when what it found differs. A
+//! probe that could not be run writes nothing: "nobody asked" must not be recorded as "nothing is
+//! here" (`AMB-D-792`).
+//!
+//! **Not on the perf budget, deliberately.** The first probe's time is that same login shell, so it
+//! busts a 50 ms budget on every machine and nothing in Amenbo can make it not. A WARN that fires
+//! when a window opens and names nothing anyone can act on is noise in the one log that is meant to
+//! be read.
 //!
 //! **The webview never names a program.** What crosses is a catalogued id; the command it becomes is
 //! read out of [`amenbo_core::harness::LAUNCHES`] on this side. A pane is a shell with a command
@@ -32,9 +41,19 @@
 use std::path::{Path, PathBuf};
 
 use amenbo_core::wake::{self, Choice};
+use tauri::Emitter as _;
 
 use crate::dto::{WakeCandidateDto, WakeDto};
 use crate::error::CmdError;
+use crate::launch::Probe;
+
+/// Said when a fresh probe found something other than what was remembered, so a face drawing the
+/// remembered answer knows to ask again.
+///
+/// **Being told is the whole of it.** The payload carries no rows: what changed is the device's
+/// settings, and every window reads those through the question it already asks, so the one thing to
+/// do with this is put that question again (the shape `folder-changed` takes, `AMB-D-785`).
+const REFRESHED_EVENT: &str = "agents-installed";
 
 /// What a folder says, what this machine says, and the answer the two come to.
 ///
@@ -46,10 +65,14 @@ use crate::error::CmdError;
 /// before the board told it which one it was on — passes none, and gets the rank without a
 /// remembered answer on top of it.
 #[tauri::command]
-pub fn wake_probe(folder: String, project: Option<i64>) -> Result<WakeDto, CmdError> {
+pub fn wake_probe(
+    app: tauri::AppHandle,
+    folder: String,
+    project: Option<i64>,
+) -> Result<WakeDto, CmdError> {
     let folder = resolve(folder)?;
     let found = amenbo_core::harness::probe(&folder, amenbo_core::config::Paths::command_name());
-    let candidates = weighed(&found);
+    let candidates = weighed(&app, &found);
     answer(
         Some(folder.to_string_lossy().into_owned()),
         candidates,
@@ -65,24 +88,97 @@ pub fn wake_probe(folder: String, project: Option<i64>) -> Result<WakeDto, CmdEr
 /// rather than refused — the reader is choosing what to open with, and a stale binding is not a
 /// reason to put a refusal in place of the choice.
 #[tauri::command]
-pub fn wake_choices(project: Option<i64>, folders: Vec<String>) -> Result<WakeDto, CmdError> {
+pub fn wake_choices(
+    app: tauri::AppHandle,
+    project: Option<i64>,
+    folders: Vec<String>,
+) -> Result<WakeDto, CmdError> {
     let command = amenbo_core::config::Paths::command_name();
     let found: Vec<amenbo_core::harness::Wiring> = folders
         .iter()
         .filter_map(|one| std::fs::canonicalize(one).ok())
         .flat_map(|one| amenbo_core::harness::probe(&one, command))
         .collect();
-    answer(None, weighed(&found), project)
+    answer(None, weighed(&app, &found), project)
+}
+
+/// Ask this machine again, now, and keep what it says — the **search again** the face puts up where
+/// the answer could not be got (`AMB-D-792`).
+///
+/// It answers whether the machine could be reached rather than what was found: what was found has
+/// gone to the settings and out as [`REFRESHED_EVENT`], which is what every open window is already
+/// listening for, so a press that succeeded needs nothing back but the news that it did. `false` is
+/// the state to keep drawing — the shell would not start, or was still reading the profile when the
+/// deadline ran out.
+#[tauri::command]
+pub fn wake_rescan(app: tauri::AppHandle) -> Result<bool, CmdError> {
+    Ok(matches!(refresh(&app), Probe::Found(_)))
 }
 
 /// Every provider Amenbo can start, told apart by what this machine can start.
-fn weighed(found: &[amenbo_core::harness::Wiring]) -> Vec<wake::Candidate> {
+///
+/// **The remembered answer is what this draws on**, and the machine is asked again behind it. Only
+/// a machine that has never been asked is waited for — there is nothing to draw until it answers,
+/// and drawing nothing would say the machine is bare. What that first ask finds is kept, so it is
+/// the only window that ever waits.
+fn weighed(app: &tauri::AppHandle, found: &[amenbo_core::harness::Wiring]) -> Vec<wake::Candidate> {
+    let installed = match remembered() {
+        Some(kept) => {
+            // Behind the answer, not in front of it: this window is already drawn by the time the
+            // shell has finished reading the profile.
+            let app = app.clone();
+            std::thread::spawn(move || refresh(&app));
+            kept
+        }
+        // Nothing to come up on, so this one window pays for the probe. An unreachable machine is
+        // not written down and is drawn as the empty answer it has always been drawn as, until the
+        // face tells the two apart (`AMB-T-3834`).
+        None => match refresh(app) {
+            Probe::Found(fresh) => fresh,
+            Probe::Unreachable => Vec::new(),
+        },
+    };
+    wake::candidates(found, |cmd| installed.iter().any(|one| one == cmd))
+}
+
+/// What the last probe found, where this machine has been asked at all.
+fn remembered() -> Option<Vec<String>> {
+    config().ok()?.installed_agents().map(<[String]>::to_vec)
+}
+
+/// Ask this machine, keep the answer, and say so where it differs from what was kept.
+///
+/// **An unreachable machine leaves the settings alone.** Writing an empty list for it would record
+/// "nothing is installed", which is the lie the remembering exists to end
+/// ([`amenbo_core::config::Config::installed_agents`]).
+///
+/// A write is a whole-file rewrite of the device's settings, so it goes through the store for the
+/// reason [`wake_remember`]'s does. Nothing is written where nothing changed: the common case is the
+/// same answer as last time, and rewriting the file for it would put a write behind every window.
+fn refresh(app: &tauri::AppHandle) -> Probe {
     let commands: Vec<&str> = amenbo_core::harness::LAUNCHES
         .iter()
         .map(|one| one.command)
         .collect();
-    let installed = crate::launch::installed(&commands);
-    wake::candidates(found, |cmd| installed.iter().any(|one| one == cmd))
+    let probe = crate::launch::installed(&commands);
+    let Probe::Found(fresh) = &probe else {
+        return probe;
+    };
+    if remembered().as_deref() == Some(fresh.as_slice()) {
+        return probe;
+    }
+    if keep(fresh).is_ok() {
+        let _ = app.emit(REFRESHED_EVENT, ());
+    }
+    probe
+}
+
+/// Write what a probe found to the device's settings.
+fn keep(found: &[String]) -> Result<(), CmdError> {
+    crate::migrate::gate()?;
+    let mut store = amenbo_core::Store::open_at(paths()?).map_err(not_kept)?;
+    store.config.remember_installed(found);
+    store.save_config().map_err(not_kept)
 }
 
 /// The candidates and the project's answer, in the shape a face reads.

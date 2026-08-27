@@ -659,6 +659,34 @@ impl DimensionAppliesTo {
     }
 }
 
+/// Which of the two classified entities a question is being asked about — the side an axis has to
+/// classify to mean anything there (`AMB-D-789`). The same two words as [`DimensionAppliesTo`]'s narrow
+/// arms, kept a type apart because this one has no `Both`: a listing, a filter or a page is always read
+/// on exactly one side, and it is the axis, never the reader, that gets to say "both".
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ClassifiedSide {
+    Task,
+    Decision,
+}
+
+impl ClassifiedSide {
+    /// The `applies_to` values an axis may carry and still classify this side.
+    pub fn accepted(self) -> [DimensionAppliesTo; 2] {
+        match self {
+            ClassifiedSide::Task => [DimensionAppliesTo::Task, DimensionAppliesTo::Both],
+            ClassifiedSide::Decision => [DimensionAppliesTo::Decision, DimensionAppliesTo::Both],
+        }
+    }
+
+    /// What a refusal calls the records on this side ("does not classify decisions").
+    pub fn plural(self) -> &'static str {
+        match self {
+            ClassifiedSide::Task => "tasks",
+            ClassifiedSide::Decision => "decisions",
+        }
+    }
+}
+
 /// The classification axis itself — one "column". Scoped to a project; its set of values lives in
 /// [`DimensionValue`], its assignments to tasks in [`TaskDimensionValue`] and its assignments to
 /// decisions in [`DecisionDimensionValue`]. Categories, phases and any

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import type { WakeDto } from "../bindings/bindings";
 import { invoke } from "../core/ipc";
+import { onAgentsInstalled, wakeRescan } from "./wake";
 import { SHELL } from "../talk/terminal";
 import { errText, t, tf } from "../core/i18n";
 import { Icon } from "../components/Icon";
@@ -83,6 +84,11 @@ export function EmptySlot({
   // than per press: a probe is a login shell reading the reader's own profile (`crate::wake`), and a
   // frame that ran one on every render would pay for it on every keystroke elsewhere on the page.
   const [wake, setWake] = useState<WakeDto | null>(null);
+  // Whether the read is still out. It is its own flag because `wake` being null covers two things
+  // that are drawn differently — nobody has answered yet, and the answer did not arrive — and a
+  // frame that drew them the same would say "not installed" while it was still asking
+  // (`AMB-D-792`).
+  const [reading, setReading] = useState(true);
   // Which of them the next pane opens with, once the reader has said. Null until they do, because
   // what is on before that is the host's answer and that arrives with the read.
   const [chose, setChose] = useState<string | null>(null);
@@ -114,6 +120,7 @@ export function EmptySlot({
   useEffect(() => {
     let alive = true;
     setWake(null);
+    setReading(true);
     setChose(null);
     setDraft(null);
     setFailed(null);
@@ -122,8 +129,25 @@ export function EmptySlot({
       // A read that failed leaves the row off and the button alone: the frame's job is to open a
       // pane, and the agent it opens with is settled again on the other side (`../talk/agent`).
       .catch(() => { if (alive) setWake(null); })
+      .finally(() => { if (alive) setReading(false); })
     ;
     return () => { alive = false; };
+  }, [read]);
+
+  // The host asks this machine again behind the window it has already drawn, and says so when what
+  // it found differs from what was remembered (`crate::wake`). This is the half that puts the fresh
+  // answer on the screen: the news carries no rows, so what it means is ask again.
+  useEffect(() => {
+    let alive = true;
+    let stop = () => {};
+    void (async () => {
+      const off = await onAgentsInstalled(() => {
+        void read().then((said) => { if (alive) setWake(said); }).catch(() => {});
+      });
+      if (alive) stop = off;
+      else off();
+    })().catch(() => {});
+    return () => { alive = false; stop(); };
   }, [read]);
 
   // The row, in catalog order, in two groups: what this machine can start, and what it has not got
@@ -176,6 +200,11 @@ export function EmptySlot({
   // The first run, and only it: the row is drawn, nothing on it is on, and the button says so. A
   // frame that never heard from the host is not this — it opens, and the pane settles what with.
   const asking = wake !== null && on === null;
+  // **The machine was not reached**, which is not the same as it having nothing (`AMB-D-792`). Every
+  // row says `installed: false` in this state, so drawing the row as usual would grey all of them at
+  // once and tell somebody with four agents on their machine that they installed none. What is
+  // drawn instead is that it could not be checked, and the press that checks again.
+  const unreached = wake?.reach === "unreachable";
 
   /** Take what is in the form and keep it — a new registration, or a correction to one that is
    *  already there. The row is read again afterwards, because whether the line can be started is
@@ -192,6 +221,18 @@ export function EmptySlot({
     } catch (e) {
       setFailed(errText(e));
     }
+  };
+
+  /** Ask this machine again after an answer that never came. The row is read again either way: a
+   *  press that reached it has put a fresh answer in the settings, and one that did not leaves the
+   *  frame saying the same thing it already says. */
+  const recheck = async () => {
+    setReading(true);
+    await wakeRescan().catch(() => false);
+    await read()
+      .then(setWake)
+      .catch(() => setWake(null))
+      .finally(() => setReading(false));
   };
 
   /** Drop a registration. What is on the row moves off it if it was this one — the host stops
@@ -237,7 +278,20 @@ export function EmptySlot({
 
   return (
     <div className="slot slot--empty">
-      {rows.usable.length + rows.missing.length > 1 && (
+      {/* Still asking. The row's place is held and nothing in it can be pressed: what is not known
+          yet is which of these can be started, and a row drawn before the answer would have to say
+          something about that (`AMB-D-792`). */}
+      {reading && (
+        <div className="slot__pick">
+          <p className="slot__ask">{t("face.whichStart")}</p>
+          <div className="slot__starts slot__starts--waiting" aria-hidden="true">
+            <span className="slot__start slot__start--waiting" />
+            <span className="slot__start slot__start--waiting" />
+          </div>
+          <p className="slot__note" role="status">{t("face.startsChecking")}</p>
+        </div>
+      )}
+      {!reading && rows.usable.length + rows.missing.length > 1 && (
         <div className="slot__pick">
           {/* The question the row is an answer to. It is put where the row is put and nowhere else:
               a frame with one thing to open with has nothing to ask about, and asking anyway would
@@ -245,12 +299,24 @@ export function EmptySlot({
           <p className="slot__ask" id={askId}>{t("face.whichStart")}</p>
           <div className="slot__starts" role="radiogroup" aria-labelledby={askId}>
             {rows.usable.map((one) => pill(one, false))}
-            {shown && rows.missing.map((one) => pill(one, true))}
+            {!unreached && shown && rows.missing.map((one) => pill(one, true))}
           </div>
+          {/* The machine was never reached, so nothing here is "not installed" — what is said is
+              that it could not be checked, and the press that checks again. The folded group is not
+              drawn at all in this state: every row is in it, and unfolding it would grey the whole
+              catalog on a machine that may have all of it. */}
+          {unreached && (
+            <>
+              <p className="slot__note" role="status">{t("face.startsUnchecked")}</p>
+              <button className="slot__more" onClick={() => void recheck()}>
+                {t("face.startsRecheck")}
+              </button>
+            </>
+          )}
           {/* Folded away rather than always drawn: on a machine with two agents the other four would
               take more of the frame than the two that work. It is a press and not a choice, so it is
               outside the group — a button among radios is read as one of them. */}
-          {rows.missing.length > 0 && (
+          {!unreached && rows.missing.length > 0 && (
             <button className="slot__more" aria-expanded={shown} onClick={() => setShown(!shown)}>
               {tf("face.moreStarts", { n: rows.missing.length })}
             </button>

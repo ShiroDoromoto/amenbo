@@ -101,6 +101,7 @@ function wake(over: Partial<WakeDto> = {}): WakeDto {
       { id: "codex-cli", label: "Codex CLI", command: "codex", traced: true, installed: true },
     ],
     offered: ["claude-code", "codex-cli"],
+    reach: "answered",
     ...over,
   };
 }
@@ -112,7 +113,13 @@ function partly(has: string[], lacks: string[], over: Partial<WakeDto> = {}): Wa
     ...has.map((id) => ({ id, label: id, command: id, traced: false, installed: true })),
     ...lacks.map((id) => ({ id, label: id, command: id, traced: false, installed: false })),
   ];
-  return { folder: "/work/here", candidates: row, offered: row.map((one) => one.id), ...over };
+  return {
+    folder: "/work/here",
+    candidates: row,
+    offered: row.map((one) => one.id),
+    reach: "answered",
+    ...over,
+  };
 }
 
 /** What the window is told by the panes under it, counted rather than kept. */

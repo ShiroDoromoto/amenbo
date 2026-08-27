@@ -2630,4 +2630,19 @@ settled?: string,
  * kept" and "kept the only one there is" read the same off `settled` and are different answers
  * to the question being put.
  */
-kept?: string, };
+kept?: string, 
+/**
+ * Whether this machine was reached at all, which is what every row's `installed` stands or
+ * falls on ([`WakeReachDto`]).
+ */
+reach: WakeReachDto, };
+
+/**
+ * Whether what a row says about being installed was got from this machine at all (`AMB-D-792`).
+ *
+ * **It is not `candidates` being empty, and it cannot be read off one.** The row is the whole
+ * catalog whatever this machine has on it, so nothing in the list moves when the probe fails —
+ * every row simply says `installed: false`, which is the same shape as a machine that really has
+ * none. Drawn as that, a machine with four agents on it tells its owner they installed nothing.
+ */
+export type WakeReachDto = "answered" | "unreachable";

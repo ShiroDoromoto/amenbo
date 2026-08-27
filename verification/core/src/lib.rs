@@ -329,6 +329,13 @@ const REGISTRY: &[OpSpec] = &[
     // the one thing a road can be written in.
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "choose-filter", required: &["axis", "value"], refs: &[], strings: &["axis", "value"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Task, op: "close-filters", required: &[], refs: &[], strings: &[], binds: false },
+    // The same three on the decisions tab, which has the same panel over a different list. They are
+    // separate entries rather than one shared with the board's because a road has to say which of the
+    // two tabs it is standing on — a step that named neither could be walked on either and would prove
+    // whichever the operator happened to be looking at.
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "open-filters", required: &[], refs: &[], strings: &[], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "choose-filter", required: &["axis", "value"], refs: &[], strings: &["axis", "value"], binds: false },
+    OpSpec { kind: Kind::Action, domain: Domain::Decision, op: "close-filters", required: &[], refs: &[], strings: &[], binds: false },
     // Pressing a hit through to the record it points at. The excerpt beside a hit is cut to say where
     // the words are written and never to be read in place of the record, so the press is what the hit
     // is for. The words are named here because a hit has to be standing before there is one to press,
@@ -1075,6 +1082,12 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Task, op: "worked-in", required: &["target"], refs: &["target"], strings: &["dir"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "field", required: &["target", "field", "equals"], refs: &["target"], strings: &["field"], binds: false },
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "listed", required: &["filter"], refs: &["target"], strings: &["filter", "position"], binds: false },
+    // The row the panel left standing, and the fold it folded into — the decision-side twins of the
+    // board's `narrowed` / `filters-folded`, and separate for the same reason the moves are. `listed`
+    // above is the terminal's answer to the same question: it carries the narrowing as a `--filter`
+    // line, where this one is read off the list a press already narrowed.
+    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "narrowed", required: &["target"], refs: &["target"], strings: &[], binds: false },
+    OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "filters-folded", required: &["axes"], refs: &[], strings: &[], binds: false },
     // The same verdict on the other face, and the one the pair is most often written for: an axis
     // narrowed to tasks is refused here, and an axis narrowed to decisions is refused there.
     OpSpec { kind: Kind::Assert, domain: Domain::Decision, op: "filter-refused", required: &["filter", "code"], refs: &[], strings: &["filter", "code"], binds: false },
@@ -1865,6 +1878,12 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // project has to have a decision standing in another to leave out, and which project a decision
     // was filed under is nothing such a road proves — recording one is a road of its own.
     (Domain::Decision, "create"),
+    // And one of those already settled, where a road opens on a corpus a reader is separating rather
+    // than on one they are ruling over. Settling is a road of its own (`read-whether-a-decision-still-holds`),
+    // so a screen road that walked it to arrange its world would prove that road twice and its own not
+    // at all — while a store holding both a standing policy and somebody's open suggestion is exactly
+    // the world anyone narrowing decisions is standing in.
+    (Domain::Decision, "accept"),
     // A device that has been used for a while. It is the one premise no amount of doing reaches: what
     // it stands up is the passage of time itself — launches tallied across days written on — which a
     // road can only be given, never earn.

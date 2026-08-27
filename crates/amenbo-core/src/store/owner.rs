@@ -74,12 +74,9 @@ pub(super) fn attach_target(
     }
 }
 
-/// Render an attachment's target as the display ref an error message can quote.
+/// Render an attachment's target as the display ref an error message can quote. The mapping from the
+/// polymorphic pair to a ref space belongs to the target itself ([`AttachmentTarget::ref_kind`]), so the
+/// four cases are written once and every reader that has to name a target quotes the same ref.
 pub(super) fn attach_target_ref(kind: AttachmentTarget, id: i64) -> String {
-    match kind {
-        AttachmentTarget::Task => crate::idref::task(id),
-        AttachmentTarget::Decision => crate::idref::decision(id),
-        AttachmentTarget::TaskComment => crate::idref::task_comment(id),
-        AttachmentTarget::DecisionComment => crate::idref::decision_comment(id),
-    }
+    kind.target_ref(id)
 }

@@ -17,8 +17,8 @@
 
 use crate::error::{Error, ErrorCode, Msg, Result};
 use crate::model::{
-    ActorKind, Decision, DecisionComment, DecisionEdge, DecisionEdgeKind, DecisionStatus,
-    DecisionTaskLink,
+    ActorKind, AttachmentTarget, Decision, DecisionComment, DecisionEdge, DecisionEdgeKind,
+    DecisionStatus, DecisionTaskLink,
 };
 use crate::ops::{emit_create, emit_update, Noun};
 use crate::store_engine::{read, record, WriteTx};
@@ -59,7 +59,7 @@ pub fn remove_comment(tx: &WriteTx<'_>, id: i64) -> Result<bool> {
     if read::decision_comment(tx.conn(), id)?.is_none() {
         return Ok(false);
     }
-    crate::ops::sweep_polymorphic(tx, "decision_comment", id)?;
+    crate::ops::sweep_polymorphic(tx, AttachmentTarget::DecisionComment, id)?;
     tx.delete_record("decision_comment", id)?;
     Ok(true)
 }
@@ -449,11 +449,14 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
 /// and only then the decision row — each of them a row a person can point at, and so one whose deletion
 /// belongs in code rather than in a constraint (`AMB-D-403`). The polymorphic children come first: the
 /// decision's own attachments, plus the attachments hanging off each comment, swept before that comment
-/// goes. Returns the blob hashes this subtree let go of (candidates for collection after commit).
+/// goes. The classifications go with them (`AMB-D-781`): the assignment references the decision
+/// `RESTRICT`, so leaving one behind does not orphan a row — it stops the delete, this one and
+/// `project::delete`'s, which clears a project's decisions before its axes.
+/// Returns the blob hashes this subtree let go of (candidates for collection after commit).
 pub(crate) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     let mut orphaned = Vec::new();
     for comment_id in read::decision_comment_ids(tx.conn(), id)? {
-        orphaned.extend(crate::ops::sweep_polymorphic(tx, "decision_comment", comment_id)?);
+        orphaned.extend(crate::ops::sweep_polymorphic(tx, AttachmentTarget::DecisionComment, comment_id)?);
         tx.delete_record("decision_comment", comment_id)?;
     }
     for edge_id in read::decision_edge_ids(tx.conn(), id)? {
@@ -462,7 +465,10 @@ pub(crate) fn delete_subtree(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     for link_id in read::decision_task_link_ids_of_decision(tx.conn(), id)? {
         tx.delete_record("decision_task_link", link_id)?;
     }
-    orphaned.extend(crate::ops::sweep_polymorphic(tx, "decision", id)?);
+    for assignment_id in read::decision_assignment_ids_of_decision(tx.conn(), id)? {
+        tx.delete_record("decision_dimension_value", assignment_id)?;
+    }
+    orphaned.extend(crate::ops::sweep_polymorphic(tx, AttachmentTarget::Decision, id)?);
     tx.delete_record("decision", id)?;
     Ok(orphaned)
 }
@@ -676,7 +682,7 @@ mod tests {
         assert_eq!(num_comments(tx, d.id), 0);
         assert!(read::decision_comment(tx.conn(), c.id).unwrap().is_none(), "the row goes away entirely (it is not a tombstone)");
         assert!(
-            read::attachments_for_target(tx.conn(), "decision_comment", c.id).unwrap().is_empty(),
+            read::attachments_for_target(tx.conn(), AttachmentTarget::DecisionComment, c.id).unwrap().is_empty(),
             "a polymorphic attachment is swept by the delete op (no FK can be drawn)"
         );
     }
@@ -1455,6 +1461,107 @@ mod tests {
         .is_err());
     }
 
+    /// Classification is queryable on the decision side too (`AMB-D-781`), in the grammar the task side
+    /// already reads: different axes AND, the same axis ORs (`AMB-D-655`), and `=none` is "no live value
+    /// on that axis". The axes and their values are one shared set, so what is pinned here is that the
+    /// decision's own link is what the filter walks — a value on a task does not classify the decision
+    /// that task rests on.
+    #[test]
+    fn decision_list_filters_by_classification() {
+        use crate::ops::dimension::set_on_decision;
+        use crate::ops::test_support::mk_value;
+        use crate::query::{decision_list, DecisionListParams};
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pid = mk_project(tx, "amenbo 開発");
+        let theme_main = mk_value(tx, pid, "テーマ", "メイン");
+        let theme_talk = crate::ops::dimension::value_add(
+            tx,
+            read::dimension_id_of_value(tx.conn(), theme_main).unwrap().unwrap(),
+            "会話の窓",
+            None,
+        )
+        .unwrap()
+        .id;
+        let era_ops = mk_value(tx, pid, "フェーズ", "運用第2期");
+
+        let on_main = new_decision(tx, pid, "メインで決めたこと");
+        let on_talk = new_decision(tx, pid, "テーマで決めたこと");
+        let unclassified = new_decision(tx, pid, "分類していない決定");
+        set_on_decision(tx, on_main.id, theme_main).unwrap();
+        set_on_decision(tx, on_main.id, era_ops).unwrap();
+        set_on_decision(tx, on_talk.id, theme_talk).unwrap();
+
+        let list = |expr: &str| -> Vec<i64> {
+            decision_list(tx.conn(), crate::reach::Reach::All, DecisionListParams {
+                project_id: Some(pid),
+                filter_expr: Some(expr.to_string()),
+                sort: "number".to_string(),
+                ..Default::default()
+            })
+            .unwrap()
+            .decisions
+            .into_iter()
+            .map(|d| d.id)
+            .collect()
+        };
+
+        assert_eq!(list("dim:テーマ=メイン"), vec![on_main.id]);
+        assert_eq!(list("dim:テーマ=会話の窓"), vec![on_talk.id]);
+        // The same axis twice is one question about that axis, so its values OR.
+        assert_eq!(list("dim:テーマ=メイン dim:テーマ=会話の窓"), vec![on_main.id, on_talk.id]);
+        // Different axes are separate questions, so they AND.
+        assert_eq!(list("dim:テーマ=メイン dim:フェーズ=運用第2期"), vec![on_main.id]);
+        assert!(list("dim:テーマ=会話の窓 dim:フェーズ=運用第2期").is_empty(), "an AND nobody satisfies");
+        // `=none` is no live value on the axis — and it is an element of the same per-axis selection.
+        assert_eq!(list("dim:テーマ=none"), vec![unclassified.id]);
+        assert_eq!(
+            list("dim:フェーズ=none"),
+            vec![on_talk.id, unclassified.id],
+            "the one classified only on another axis is unclassified on this one"
+        );
+        assert_eq!(list("dim:テーマ=メイン dim:テーマ=none"), vec![on_main.id, unclassified.id]);
+        // It composes with the keys that were already there.
+        // `search --kind decision` cuts its page in SQL and so restates the same keys as predicates.
+        // The two must answer alike, which is what this asks of the axis arm.
+        let found = |expr: &str| -> Vec<String> {
+            crate::query::search(
+                tx.conn(),
+                crate::reach::Reach::All,
+                crate::query::SearchParams {
+                    text: "決めたこと".to_string(),
+                    kind: Some(crate::query::SearchKind::Decision),
+                    filter_expr: Some(expr.to_string()),
+                    ..Default::default()
+                },
+            )
+            .unwrap()
+            .hits
+            .into_iter()
+            .map(|h| h.r#ref)
+            .collect()
+        };
+        assert_eq!(found("dim:テーマ=メイン"), vec![format!("AMB-D-{}", on_main.id)]);
+        assert_eq!(found("dim:テーマ=会話の窓"), vec![format!("AMB-D-{}", on_talk.id)]);
+        assert!(found("dim:テーマ=none").is_empty(), "neither of the two the words reach is unclassified");
+        assert_eq!(list("dim:テーマ=メイン status:proposed"), vec![on_main.id]);
+        assert!(list("dim:テーマ=メイン status:accepted").is_empty());
+        // A name that resolves to nothing is an error, not a silent zero — and on the `=none` arm a
+        // silent pass would answer with *every* decision.
+        for expr in ["dim:無い軸=メイン", "dim:テーマ=無い値", "dim:無い軸=none"] {
+            assert!(
+                decision_list(tx.conn(), crate::reach::Reach::All, DecisionListParams {
+                    project_id: Some(pid),
+                    filter_expr: Some(expr.to_string()),
+                    sort: "number".to_string(),
+                    ..Default::default()
+                })
+                .is_err(),
+                "{expr} names nothing, so it is refused"
+            );
+        }
+    }
+
     /// One decision can draw edges to **several** old ones: supersede and amend alike take as many
     /// edges of a kind as you draw.
     #[test]
@@ -1674,6 +1781,36 @@ mod tests {
         );
         // It drops out of the reverse query as well.
         assert!(decisions_for_task(tx, t).is_empty());
+    }
+
+    /// A decision's classifications go with it (`AMB-D-781`). The assignment references the decision
+    /// `RESTRICT`, so a sweep left out here would not orphan the row — it would stop the delete.
+    #[test]
+    fn delete_takes_the_classifications_it_carried() {
+        let e = new_engine();
+        let tx = &e.write().unwrap();
+        let pid = mk_project(tx, "amenbo 開発");
+        let d = new_decision(tx, pid, "分類のついた決定");
+        let axis = crate::ops::dimension::add(
+            tx,
+            pid,
+            crate::ops::dimension::NewDimension {
+                name: "カテゴリー".to_string(),
+                ..crate::ops::dimension::NewDimension::default()
+            },
+        )
+        .unwrap();
+        let value = crate::ops::dimension::value_add(tx, axis.id, "A", None).unwrap();
+        crate::ops::dimension::set_on_decision(tx, d.id, value.id).unwrap();
+
+        delete(tx, d.id).unwrap();
+        assert!(read::decision(tx.conn(), d.id).unwrap().is_none());
+        assert!(
+            read::decision_assignment_ids_of_decision(tx.conn(), d.id).unwrap().is_empty(),
+            "the classification goes with the decision"
+        );
+        // The axis and its value are untouched — a decision going away un-classifies nothing else.
+        assert!(read::dimension_value(tx.conn(), value.id).unwrap().is_some());
     }
 
     #[test]

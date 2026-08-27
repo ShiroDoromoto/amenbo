@@ -344,9 +344,9 @@ fn a_filter_key_names_a_set_of_values() {
         cli.json(&["dimension", "value-add", "エリア", "--name", value, "--json"]);
     }
     cli.json(&["dimension", "value-add", "区分", "--name", "バグ", "--json"]);
-    cli.json(&["dimension", "set", &high, "エリア", "コア", "--json"]);
-    cli.json(&["dimension", "set", &high, "区分", "バグ", "--json"]);
-    cli.json(&["dimension", "set", &low, "エリア", "画面", "--json"]);
+    cli.json(&["dimension", "set", &task_ref(&high), "エリア", "コア", "--json"]);
+    cli.json(&["dimension", "set", &task_ref(&high), "区分", "バグ", "--json"]);
+    cli.json(&["dimension", "set", &task_ref(&low), "エリア", "画面", "--json"]);
 
     let listed = |filter: &str| -> Vec<String> {
         let mut ids: Vec<String> = cli.json(&["task", "list", "--project", &pid, "--filter", filter, "--json"])
@@ -1112,7 +1112,7 @@ fn search_reaches_the_labels_and_what_is_attached() {
     cli.json(&["dimension", "add", "--project", &pid, "--name", "エリア", "--json"]);
     cli.json(&["dimension", "value-add", "エリア", "--name", "配色", "--json"]);
     cli.json(&["dimension", "value-add", "エリア", "--name", "実装", "--json"]);
-    cli.json(&["dimension", "set", &labelled, "エリア", "配色", "--json"]);
+    cli.json(&["dimension", "set", &task_ref(&labelled), "エリア", "配色", "--json"]);
 
     let file = cli.home.join("計測ログ.md");
     std::fs::write(&file, "# body\n").unwrap();
@@ -1151,7 +1151,7 @@ fn search_reaches_the_labels_and_what_is_attached() {
     assert!(!ids_for("計測ログ").contains(&bystander));
 
     // Taking the label off, and the file with it, takes the words away too.
-    cli.json(&["dimension", "unset", &labelled, "エリア", "配色", "--json"]);
+    cli.json(&["dimension", "unset", &task_ref(&labelled), "エリア", "配色", "--json"]);
     assert!(ids_for("配色").is_empty(), "an unset label is no longer one of the task's words");
 }
 
@@ -1170,7 +1170,7 @@ fn search_says_where_each_record_stands_before_the_excerpt() {
     cli.finish_creating(&open);
     cli.json(&["dimension", "add", "--project", &pid, "--name", "エリア", "--json"]);
     cli.json(&["dimension", "value-add", "エリア", "--name", "実装", "--json"]);
-    cli.json(&["dimension", "set", &open, "エリア", "実装", "--json"]);
+    cli.json(&["dimension", "set", &task_ref(&open), "エリア", "実装", "--json"]);
 
     let over = id_str(
         &cli.json(&["task", "add", "--project", &pid, "--title", "掃引の下ごしらえ", "--json"])["task"]["id"],

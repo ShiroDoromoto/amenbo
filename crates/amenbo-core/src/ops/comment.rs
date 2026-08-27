@@ -6,7 +6,7 @@
 //! payloads from [`crate::activity_log::event`].
 
 use crate::error::{Error, ErrorCode, Result};
-use crate::model::{ActorKind, TaskComment};
+use crate::model::{ActorKind, AttachmentTarget, TaskComment};
 use crate::ops::{emit_create, emit_update, Noun};
 use crate::store_engine::{read, record, WriteTx};
 use crate::time::Timestamp;
@@ -58,7 +58,7 @@ pub fn remove_comment(tx: &WriteTx<'_>, id: i64) -> Result<bool> {
     if read::task_comment(tx.conn(), id)?.is_none() {
         return Ok(false);
     }
-    crate::ops::sweep_polymorphic(tx, "task_comment", id)?;
+    crate::ops::sweep_polymorphic(tx, AttachmentTarget::TaskComment, id)?;
     tx.delete_record("task_comment", id)?;
     Ok(true)
 }
@@ -83,7 +83,7 @@ pub fn edit_comment(tx: &WriteTx<'_>, id: i64, text: &str) -> Result<TaskComment
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{ActorKind, AttachmentTarget};
+    use crate::model::ActorKind;
     use crate::ops::test_support::{mk_task, new_engine};
 
     /// Retracting a mistaken comment is a hard delete, and its attachments go with it.
@@ -106,7 +106,7 @@ mod tests {
         assert!(remove_comment(tx, c.id).unwrap());
         assert!(read::task_comment(tx.conn(), c.id).unwrap().is_none(), "the row itself goes (not a tombstone)");
         assert!(
-            read::attachments_for_target(tx.conn(), "task_comment", c.id).unwrap().is_empty(),
+            read::attachments_for_target(tx.conn(), AttachmentTarget::TaskComment, c.id).unwrap().is_empty(),
             "polymorphic attachments are swept by the delete op (no FK can hold them)"
         );
     }

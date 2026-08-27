@@ -291,7 +291,7 @@ export const zhHant: Translation = {
     "settings.doctorRebind": "重新連結",
     "settings.doctorRepairing": "處理中…",
     "settings.doctorRepairDone": "已修復。",
-    "settings.doctorFixDone": "已修復（附件檔案 {blobs} 個 · 資料夾連結 {bindings} 個）",
+    "settings.doctorFixDone": "已修復（附件列 {attachments} 個 · 附件檔案 {blobs} 個 · 資料夾連結 {bindings} 個）",
     "settings.doctorFixNothing": "沒有需要修復的東西。",
     "settings.dataOpPreparing": "準備中…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -798,6 +798,10 @@ export const zhHant: Translation = {
     duplicate_order_key: {
       message: "專案 {project} 中有任務共用了同一個排序鍵（{order_key}）。",
       fix: "重新排一下任務順序，它就會自行解決。",
+    },
+    orphan_attachment: {
+      message: "{attachment} 掛在 {target} 上，可是並沒有這筆記錄——這一列比它所附的東西活得更久，還攥著自己的檔案，誰也搆不著。",
+      fix: "「修復」會刪掉這一列並放開它的檔案。不必先打開什麼：它所附的東西早就沒了。",
     },
     stale_managed_block: {
       message: "{path} 中的 AI 指南（Amenbo 受管區塊）已過時（v{version} → v{current}）。",

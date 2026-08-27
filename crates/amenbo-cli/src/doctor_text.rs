@@ -29,6 +29,12 @@ pub fn message(issue: &DoctorIssue) -> String {
             "Project {project} has tasks sharing the order key '{}'.",
             p(issue, "order_key")
         ),
+        DoctorIssueKind::OrphanAttachment => format!(
+            "Attachment {} hangs off {}, and there is no such record: the row outlived what it was \
+             attached to, and its file is held out of the reclaim while nothing can reach it.",
+            p(issue, "attachment"),
+            p(issue, "target"),
+        ),
         DoctorIssueKind::StaleManagedBlock => format!(
             "The Amenbo managed block in {path} is stale (v{} < v{}): a binary update changed the template.",
             p(issue, "version"),
@@ -89,6 +95,10 @@ pub fn fix_hint(issue: &DoctorIssue) -> String {
         DoctorIssueKind::SelfDependency => format!("Drop the edge with `{cmd} task undepend`."),
         DoctorIssueKind::DuplicateOrderKey => format!(
             "Re-order the tasks (`{cmd} task move <task> --top/--bottom`) and the duplicate is gone."
+        ),
+        DoctorIssueKind::OrphanAttachment => format!(
+            "`{cmd} doctor --fix` deletes the row and reclaims its file. Nothing reaches the attachment \
+             any more, so there is nothing to open first - what it hung off is already gone."
         ),
         DoctorIssueKind::StaleManagedBlock => format!(
             "Run {cmd} in that folder and the block follows this binary on its own; \

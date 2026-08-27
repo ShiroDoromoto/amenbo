@@ -250,7 +250,18 @@ steps_cli:
     with:
       count: 0
 
-# ── The third face of `--fix`, and why it is not walked here ──────────────────────────────────
+# ── The faces of `--fix` that are not walked here, and why ────────────────────────────────────
+# `--fix` also sweeps orphaned attachments: rows whose record is gone. That reference is the one no
+# foreign key can hold (`target_type` names the table, so no `REFERENCES` can branch on it), and what
+# stands in the database's place is every delete op calling `sweep_polymorphic`. So the state is not
+# reachable by using Amenbo either: every attach checks its target, and every delete takes the
+# attachments with it. A scenario driving the shipped binary has no way to leave one behind, which is
+# exactly the point — the rows this reports are the residue of a bug, not of a workflow.
+#
+# It is covered from the other side instead, at the layer that can arrange it: the doctor unit tests
+# plant an attachment on each of the four target types with the target absent, and the blob test walks
+# report → sweep → report and asserts the bytes it was holding go with the row.
+#
 # `--fix` also forgets orphan bindings: folder rows no live project claims. That state is not
 # reachable by using Amenbo, so there is nothing here for a scenario to put wrong. Deleting a project
 # releases every folder bound to it in the same breath — the pointer, the guidance block and the

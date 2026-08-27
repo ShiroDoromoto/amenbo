@@ -1725,13 +1725,13 @@ pub fn decision_comment_edit(id: i64, decision_id: i64, text: String) -> Result<
 #[tauri::command]
 pub fn attachments_for(target_type: String, target_id: i64) -> Result<Vec<AttachmentDto>, CmdError> {
     let _perf = amenbo_core::perf::Timer::start("attachments_for");
-    if amenbo_core::model::AttachmentTarget::parse(&target_type).is_none() {
+    let Some(target_type) = amenbo_core::model::AttachmentTarget::parse(&target_type) else {
         return Err(format!("attachment target '{target_type}' is not one of task / decision / task_comment / decision_comment").into());
-    }
+    };
     let found = find_in_store(|store| {
         let read_model = store.read_model();
         let conn = read_model.conn();
-        let rows = amenbo_core::store_engine::read::attachments_for_target(conn, &target_type, target_id)?;
+        let rows = amenbo_core::store_engine::read::attachments_for_target(conn, target_type, target_id)?;
         if rows.is_empty() {
             return Ok(None);
         }
@@ -2936,6 +2936,41 @@ pub fn task_dimensions(task_id: i64) -> Result<Vec<TaskDimensionAssignmentDto>, 
     Ok(rows
         .into_iter()
         .map(|(dimension_id, value_id)| TaskDimensionAssignmentDto { dimension_id, value_id })
+        .collect())
+}
+
+/// Assign a dimension value to a decision — the decision side of [`task_set_dimension_value`]
+/// (`AMB-D-781`). On a single-select dimension this replaces whatever was assigned on that axis.
+#[tauri::command]
+pub fn decision_set_dimension_value(decision_id: i64, value_id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.set_decision_dimension_value(decision_id, value_id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["decisions"]).decision(decision_id))
+}
+
+/// Take a particular dimension value off a decision (a no-op if it was not assigned). Unconditional:
+/// `required` bites where a creation is finished, and a decision has none (`AMB-D-781`).
+#[tauri::command]
+pub fn decision_unset_dimension_value(decision_id: i64, value_id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.unset_decision_dimension_value(decision_id, value_id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["decisions"]).decision(decision_id))
+}
+
+/// The dimension assignments a decision currently carries (`dimensionId`→`valueId`), straight from
+/// the read-model — [`task_dimensions`] on the decision side.
+#[tauri::command]
+pub fn decision_dimensions(decision_id: i64) -> Result<Vec<DecisionDimensionAssignmentDto>, CmdError> {
+    let store = open_store_read()?;
+    let read_model = store.read_model();
+    let rows = amenbo_core::store_engine::read::decision_dimension_assignments(read_model.conn(), decision_id)?;
+    Ok(rows
+        .into_iter()
+        .map(|(dimension_id, value_id)| DecisionDimensionAssignmentDto { dimension_id, value_id })
         .collect())
 }
 
@@ -4156,16 +4191,21 @@ pub fn doctor_report() -> Result<DoctorReportDto, CmdError> {
 }
 
 /// Run the repair from the GUI, calling **the same core cleanup entry points** as the CLI's
-/// `doctor --fix`, in the same order. Every one of them is **non-destructive** (blobs nothing
-/// references; folder rows nobody claims), so the surface may run it without asking for
+/// `doctor --fix`, in the same order. Every one of them is **non-destructive** (attachment rows whose
+/// record is gone; blobs nothing references; folder rows nobody claims), so the surface may run it
+/// without asking for
 /// confirmation. And since nothing it cleans up is referenced by a single row of any live read,
 /// there is no snapshot and no query to refetch — hence no `WriteAck`.
 #[tauri::command]
 pub fn doctor_fix() -> Result<DoctorFixDto, CmdError> {
-    let store = open_store()?;
+    let mut store = open_store()?;
+    // Ahead of the blob sweep, as on the CLI: an orphaned attachment holds its hash in the GC root set,
+    // so its bytes are not collectible until the row is.
+    let swept_attachments = store.sweep_orphan_attachments()?;
     let gc = store.gc_blobs(amenbo_core::blob::GC_MIN_AGE)?;
     let forgotten_bindings = store.forget_orphan_dirs()?;
     Ok(DoctorFixDto {
+        swept_attachments,
         reclaimed_blobs: gc.removed as usize,
         freed_bytes: gc.freed_bytes as usize,
         forgotten_bindings,

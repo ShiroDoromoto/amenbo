@@ -28,7 +28,8 @@ use super::sql::{Col, ColType, NotNull, Nullability, Nullable, Read, Text};
 use super::Result;
 use crate::model::{
     ActorKind, Attachment, AttachmentKind, AttachmentTarget, Database,
-    Decision, DecisionComment, DecisionEdge, DecisionEdgeKind, DecisionStatus, DecisionTaskLink,
+    Decision, DecisionComment, DecisionDimensionValue, DecisionEdge, DecisionEdgeKind,
+    DecisionStatus, DecisionTaskLink,
     Dimension, DimensionCardinality,
     DimensionRole, DimensionValue, PluginConfigValue, PluginEnabledProject, PluginSecret, Priority,
     Project, Subtype, Task, TaskComment, TaskCommit, TaskDependency,
@@ -325,6 +326,19 @@ pub(super) fn task_dimension_value_row(r: &Row) -> rusqlite::Result<TaskDimensio
     })
 }
 
+pub(super) fn decision_dimension_value_row(r: &Row) -> rusqlite::Result<DecisionDimensionValue> {
+    const C: col::decision_dimension_value::Cols = col::decision_dimension_value::ALL;
+    let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
+    Ok(DecisionDimensionValue {
+        id: get(r, C.id)?,
+        decision_id: get(r, C.decision_id)?,
+        dimension_id: get(r, C.dimension_id)?,
+        value_id: get(r, C.value_id)?,
+        created_at,
+        updated_at,
+    })
+}
+
 pub(super) fn task_comment_row(r: &Row) -> rusqlite::Result<TaskComment> {
     const C: col::task_comment::Cols = col::task_comment::ALL;
     let (created_at, updated_at) = audit(r, C.created_at, C.updated_at)?;
@@ -419,6 +433,8 @@ pub fn hydrate_database(conn: &Connection) -> Result<Database> {
     let dimensions = rows(conn, "dimension", dimension_row)?;
     let dimension_values = rows(conn, "dimension_value", dimension_value_row)?;
     let task_dimension_values = rows(conn, "task_dimension_value", task_dimension_value_row)?;
+    let decision_dimension_values =
+        rows(conn, "decision_dimension_value", decision_dimension_value_row)?;
     let task_comments = rows(conn, "task_comment", task_comment_row)?;
     let decision_comments = rows(conn, "decision_comment", decision_comment_row)?;
     let attachments = rows(conn, "attachment", attachment_row)?;
@@ -439,6 +455,7 @@ pub fn hydrate_database(conn: &Connection) -> Result<Database> {
         dimensions,
         dimension_values,
         task_dimension_values,
+        decision_dimension_values,
         task_comments,
         decision_comments,
         attachments,
@@ -591,6 +608,14 @@ mod tests {
                 created_at: now,
                 updated_at: now,
             }],
+            decision_dimension_values: vec![DecisionDimensionValue {
+                id: 1,
+                decision_id: 43,
+                dimension_id: 1,
+                value_id: 1,
+                created_at: now,
+                updated_at: now,
+            }],
             task_comments: vec![TaskComment {
                 id: 1,
                 task_id: 42,
@@ -641,6 +666,7 @@ mod tests {
                 && !db.dimensions.is_empty()
                 && !db.dimension_values.is_empty()
                 && !db.task_dimension_values.is_empty()
+                && !db.decision_dimension_values.is_empty()
                 && !db.task_comments.is_empty()
                 && !db.decision_comments.is_empty()
                 && !db.attachments.is_empty(),
@@ -681,6 +707,7 @@ mod tests {
             ("dimension", json(&db.dimensions[0]), json(&read::dimension(conn, 1).unwrap().unwrap())),
             ("dimension_value", json(&db.dimension_values[0]), json(&read::dimension_value(conn, 1).unwrap().unwrap())),
             ("task_dimension_value", json(&db.task_dimension_values[0]), json(&read::task_dimension_value(conn, 1).unwrap().unwrap())),
+            ("decision_dimension_value", json(&db.decision_dimension_values[0]), json(&read::decision_dimension_value(conn, 1).unwrap().unwrap())),
             ("task_dependency", json(&db.task_dependencies[0]), json(&read::task_dependency(conn, 1).unwrap().unwrap())),
             ("task_commit", json(&db.task_commits[0]), json(&read::task_commit(conn, 1).unwrap().unwrap())),
             ("decision_edge", json(&db.decision_edges[0]), json(&read::decision_edge(conn, 1).unwrap().unwrap())),

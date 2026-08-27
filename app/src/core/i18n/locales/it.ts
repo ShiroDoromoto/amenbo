@@ -298,7 +298,7 @@ export const it: Translation = {
     "settings.doctorRebind": "Ricollega",
     "settings.doctorRepairing": "In lavorazione…",
     "settings.doctorRepairDone": "Risolto.",
-    "settings.doctorFixDone": "Riparato ({blobs} file allegato/i · {bindings} collegamento/i di cartella)",
+    "settings.doctorFixDone": "Riparato ({attachments} riga/righe di allegato · {blobs} file allegato/i · {bindings} collegamento/i di cartella)",
     "settings.doctorFixNothing": "Non c'è nulla da riparare.",
     "settings.dataOpPreparing": "Preparazione…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -830,6 +830,10 @@ export const it: Translation = {
     duplicate_order_key: {
       message: "Il progetto {project} ha attività che condividono la stessa chiave di ordinamento ({order_key}).",
       fix: "Riordina le attività e si risolve da sé.",
+    },
+    orphan_attachment: {
+      message: "{attachment} è agganciato a {target}, e quel record non esiste: la riga è sopravvissuta a ciò a cui era allegata e trattiene il suo file dove nessuno arriva più.",
+      fix: "«Ripara» elimina la riga e lascia andare il suo file. Non c'è nulla da aprire prima: ciò a cui era agganciata non c'è già più.",
     },
     stale_managed_block: {
       message: "La guida per l'IA (blocco gestito da Amenbo) in {path} è superata (v{version} → v{current}).",

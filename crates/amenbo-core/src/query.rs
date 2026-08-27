@@ -1192,6 +1192,42 @@ pub fn resolve_any(conn: &rusqlite::Connection, input: &str) -> Result<crate::op
     pick(Vec::new(), s)
 }
 
+/// Resolves a reference that must **say which kind it is**: `AMB-T-n` / `T-n` for a task, `AMB-D-n` /
+/// `D-n` for a decision. A bare `#n` / `n` is refused rather than guessed at.
+///
+/// This is [`resolve_any`]'s strict sibling, and the difference is what a caller does with the answer.
+/// `resolve_any` reads a number a person wrote in conversation, where landing on the only row that
+/// carries it is the helpful reading. Here the answer decides **what gets written to** — a task's
+/// classification or a decision's — and the two number independently, so the same digits name a row on
+/// each side. Resolving to whichever one happens to exist would put the value on the wrong thing the day
+/// the other one is created, and the caller would never see it happen. So the kind code is asked for
+/// up front, the way `decision promote` asks which comment a bare number means.
+pub fn resolve_typed_ref(conn: &rusqlite::Connection, input: &str) -> Result<crate::ops::Ref> {
+    use crate::ops::task::{parse_number_ref, parse_typed_ref, TypedKind};
+    use crate::ops::Ref;
+
+    let s = input.trim();
+    if let Some((kind, _)) = parse_typed_ref(s) {
+        return match kind {
+            TypedKind::Task => resolve_task_ref(conn, s).map(Ref::Task),
+            TypedKind::Decision => resolve_decision_ref(conn, s).map(Ref::Decision),
+        };
+    }
+    if let Some(number) = parse_number_ref(s) {
+        return Err(Error::invalid(format!(
+            "'{s}' does not say whether it means a task or a decision — they number independently, so \
+             write {} or {}",
+            crate::idref::task(number as i64),
+            crate::idref::decision(number as i64)
+        )));
+    }
+    Err(Error::invalid(format!(
+        "'{s}' is not a reference — write {} for a task or {} for a decision",
+        crate::idref::task(1),
+        crate::idref::decision(1)
+    )))
+}
+
 /// Resolves a `project` reference (an id, or an exact name) to a single live project id, by indexed
 /// SQL against the read-model. Collapsing the hits (`pick_id`) and the not-found message (project's
 /// `NOUN`) are reused from ops.
@@ -1435,7 +1471,7 @@ fn activity_item(it: crate::activity::Item) -> ActivityItem {
 // ───────────────────────── decision list / search ─────────────────────────
 
 /// Search filter for decision records (`status:` / `superseded:` / `project:` / `number:` / `task:` /
-/// `decided_before:` / `decided_after:`). Decisions have no mailbox state the way tasks do, so there are
+/// `dim:` / `time_axis:` / `decided_before:` / `decided_after:`). Decisions have no mailbox state the way tasks do, so there are
 /// few keys: status, time and the edges are enough. Words are not among them — they are `search`'s
 /// ([`search`], `AMB-D-449`) — though [`DecisionFilter::text`] is still how the read carries them.
 #[derive(Clone, Debug, Default)]
@@ -1460,6 +1496,12 @@ pub struct DecisionFilter {
     /// `decision_task_link`). Symmetric with `decision:` on the `task list` side: it makes the
     /// decision ⇄ task relation **traversable by query**.
     pub task: Option<u32>,
+    /// Filtering by classification axis, over the decision's own assignments (`AMB-D-781`). The same
+    /// tokens and the same folding as [`Filter::dimensions`] — `dim:<axis>=<value>` and the
+    /// `time_axis:<value>` sugar, different axes ANDing and the same axis ORing (`AMB-D-655`) — because
+    /// the axes and their values are one set shared with the tasks, and a reader who learnt to ask for
+    /// them on one side should not have to learn a second way here.
+    pub dimensions: Vec<DimensionFilter>,
     /// `decided_before:<date>` — accepted on or before this day (the day `decided_at` fell on where
     /// the reader is ≤ date; the day itself is **included**). "What had been decided as of some point
     /// in time" is not a feature of its own: it falls out of composing this ordinary filter key with
@@ -1478,6 +1520,12 @@ impl DecisionFilter {
     pub fn resolve(&mut self, conn: &rusqlite::Connection) -> Result<()> {
         if let Some(reference) = self.project_ref.take() {
             self.project_id = Some(resolve_project_ref(conn, &reference)?);
+        }
+        // Axis and value names become ids here for the reason they do on the task side: a name that
+        // resolves to nothing is an error, and on the `=none` arm a silently unresolved axis would
+        // select *every* decision rather than none.
+        for d in &mut self.dimensions {
+            d.resolve(conn)?;
         }
         Ok(())
     }
@@ -1507,6 +1555,13 @@ impl DecisionFilter {
                 "number" | "ref" => f.number = Some(NumberFilter::parse(value)?),
                 // Traverse the decision ⇄ task link (symmetric with `decision:` on `task list`).
                 "task" => f.task = Some(parse_cross_ref(value, false)?),
+                // Classification, read exactly as on the task side — the axes are the same axes.
+                "dim" | "dimension" => f.dimensions.push(DimensionFilter::parse_axis_value(value)?),
+                "time_axis" => {
+                    let empty = || Error::invalid("time_axis must name a value (e.g. time_axis:dev)");
+                    let value = DimensionValueFilter::parse(value, empty)?;
+                    f.dimensions.push(DimensionFilter { axis: None, value, resolved: None })
+                }
                 // Filter by acceptance time. Day granularity, and the named day is included.
                 "decided_before" => f.decided_before = Some(time::parse_date(value, today)?),
                 "decided_after" => f.decided_after = Some(time::parse_date(value, today)?),
@@ -1518,7 +1573,7 @@ impl DecisionFilter {
                 }
                 other => {
                     return Err(Error::invalid(
-                        format!("unknown filter key '{other}' (status/superseded/project/number/ref/task/decided_before/decided_after)"),
+                        format!("unknown filter key '{other}' (status/superseded/project/number/ref/task/dim/time_axis/decided_before/decided_after)"),
                     ))
                 }
             }
@@ -1528,19 +1583,26 @@ impl DecisionFilter {
     }
 
     /// Whether a decision was superseded lives in the edges, not in a column on the decision, so the
-    /// caller looks it up and passes it in. Likewise the two id sets read once and passed in so nothing
+    /// caller looks it up and passes it in. Likewise the three id sets read once and passed in so nothing
     /// is re-queried per decision: `linked_to_task` = the live decisions linked to the task named by
-    /// `task:` (or `None` when `task:` was not given), and `text_hits` = the decisions the words landed on
+    /// `task:` (or `None` when `task:` was not given), `text_hits` = the decisions the words landed on
     /// (or `None` when no words were given), read whole off the word index — title, body and comment
-    /// bodies alike — so the words are folded there and not a second time here.
+    /// bodies alike — so the words are folded there and not a second time here, and `dim_hits` = the
+    /// decisions the `dim:` / `time_axis:` tokens select (or `None` when none were given).
     fn matches(
         &self,
         d: &crate::model::Decision,
         superseded: bool,
         linked_to_task: Option<&[i64]>,
         text_hits: Option<&[i64]>,
+        dim_hits: Option<&[i64]>,
     ) -> bool {
         if self.task.is_some() && !linked_to_task.is_some_and(|ids| ids.contains(&d.id)) {
+            return false;
+        }
+        if !self.dimensions.is_empty() && !dim_hits.is_some_and(|ids| ids.contains(&d.id)) {
+            // The axes are folded by the one read that selected this set (different axes AND, the same
+            // axis ORs), so all that is left here is whether this decision is in it.
             return false;
         }
         if let Some(status) = self.status {
@@ -1686,6 +1748,16 @@ pub fn decision_list(
         None => None,
     };
 
+    // The axes, folded in SQL and read once — the same shape, and for the same reason, as the two sets
+    // above. With no `dim:` token there is nothing to ask, and an empty ask would select everything.
+    let dim_hits = match filter.dimensions.is_empty() {
+        true => None,
+        false => Some(
+            read::decisions_matching_dimensions(conn, &filter.dimensions)
+                .map_err(crate::error::engine_on(conn))?,
+        ),
+    };
+
     // Row → a partial `Decision` (only the fields filter/sort need) plus what the card needs on the
     // side (the project ref and `linked_task_count`).
     struct Entry {
@@ -1723,6 +1795,7 @@ pub fn decision_list(
                 !e.superseded_by.is_empty(),
                 linked_to_task.as_deref(),
                 text_hits.as_deref(),
+                dim_hits.as_deref(),
             )
         })
         .collect();
@@ -1816,6 +1889,12 @@ pub fn decision_detail(
         })
         .collect();
     let built_on_by = reverse(row.edges.built_on_by);
+    // What the decision is filed under, in words — the same read a task's page takes (`AMB-D-781`).
+    let dimensions = read::decision_classification(conn, decision_id)
+        .map_err(crate::error::engine_on(conn))?
+        .into_iter()
+        .map(|(dimension, value)| crate::view::ClassifiedAs { dimension, value })
+        .collect();
     // `decided_by` is a TEXT token read into both id and name, so whenever the id is present the name is
     // too — the `unwrap_or_default` never fires. Core keeps no display placeholder here.
     let decided_by = row.decided_by_id.map(|id| Ref { id, name: row.decided_by_name.unwrap_or_default() });
@@ -1845,6 +1924,7 @@ pub fn decision_detail(
         amended_by,
         builds_on,
         built_on_by,
+        dimensions,
         decided_at: row.decided_at.as_deref().and_then(Timestamp::parse_rfc3339),
         decided_by,
         linked_tasks,

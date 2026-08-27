@@ -11,6 +11,8 @@ use rusqlite::types::Value;
 use rusqlite::{Connection, OptionalExtension};
 use serde::Serialize;
 
+use crate::model::AttachmentTarget;
+
 use super::schema;
 use super::schema::col;
 use super::search;
@@ -461,10 +463,15 @@ impl StoreEngine {
     /// `target_type` column. Returns how many rows went. `attachment` is the only polymorphic child the
     /// store has, so it is named here rather than taken as a dataset: its two columns are then ordinary
     /// typed identifiers, and a registry rename lands on this sweep at compile time.
-    pub fn delete_records_for_target(&self, target_type: &str, target_id: i64) -> Result<usize> {
+    pub fn delete_records_for_target(
+        &self,
+        target_type: AttachmentTarget,
+        target_id: i64,
+    ) -> Result<usize> {
         let att = col::attachment::ALL;
-        let of_target =
-            || Pred::eq(att.target_type, target_type).and(Pred::eq(att.target_id, target_id));
+        let of_target = || {
+            Pred::eq(att.target_type, target_type.as_str()).and(Pred::eq(att.target_id, target_id))
+        };
         // An attachment names itself in the word index, and this is the one delete that does not go
         // through `delete_record` — so the rows are read out first and their copies dropped by hand.
         // Without it the sweep would leave a word pointing at an attachment that no longer exists.

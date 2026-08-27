@@ -242,7 +242,7 @@ pub enum Command {
     },
     /// Data integrity check (orphan references, broken ordering, key-ledger tampering, etc.)
     Doctor {
-        /// repair fixable problems (reclaim unreferenced attachment files; forget folder bindings no live project claims) - all non-destructive
+        /// repair fixable problems (sweep attachment rows whose record is gone, reclaim unreferenced attachment files, forget folder bindings no live project claims) - all non-destructive
         #[arg(long)]
         fix: bool,
     },
@@ -1234,19 +1234,22 @@ pub enum DimensionCmd {
         #[arg(long, value_name = "VALUE")]
         reassign_to: Option<String>,
     },
-    /// Assign a task a value of a dimension (single-select replaces the task's prior value)
+    /// Assign a task or a decision a value of a dimension (single-select replaces its prior value on
+    /// that axis)
     Set {
-        /// task ref (AMB-T-n)
-        task: String,
+        /// task or decision ref (AMB-T-n / AMB-D-n). A bare number is refused: the two number
+        /// independently, so the same digits name a row on each side
+        target: String,
         /// dimension ref (AMB-DIM-n), slug or name
         dimension: String,
         /// value ref (AMB-DIMV-n), slug or name (within the dimension)
         value: String,
     },
-    /// Clear a task's value of a dimension
+    /// Clear a task's or a decision's value of a dimension
     Unset {
-        /// task ref (AMB-T-n)
-        task: String,
+        /// task or decision ref (AMB-T-n / AMB-D-n). A bare number is refused: the two number
+        /// independently, so the same digits name a row on each side
+        target: String,
         /// dimension ref (AMB-DIM-n), slug or name
         dimension: String,
         /// value ref (AMB-DIMV-n), slug or name (within the dimension)
@@ -1536,7 +1539,7 @@ pub enum DecisionCmd {
         #[arg(long)]
         project: Option<String>,
     },
-    /// List decisions (filter by status:/superseded:/project:/number: (alias ref:, e.g. `D-<n>`/`#<n>`)/task: (the decisions a task rests on, e.g. `task:#<n>`)/decided_before:/decided_after: (the day a decision was accepted, YYYY-MM-DD or today/-30d; both ends inclusive), sort by decided/created/number/title/status). Words are not a key here — `amenbo search <word> --kind decision` finds where they are written
+    /// List decisions (filter by status:/superseded:/project:/number: (alias ref:, e.g. `D-<n>`/`#<n>`)/task: (the decisions a task rests on, e.g. `task:#<n>`)/`dim:<axis>=<value>` and its `time_axis:<value>` sugar (the same axes tasks are classified on: different axes AND, the same axis ORs, `=none` is unclassified)/decided_before:/decided_after: (the day a decision was accepted, YYYY-MM-DD or today/-30d; both ends inclusive), sort by decided/created/number/title/status). Words are not a key here — `amenbo search <word> --kind decision` finds where they are written
     List {
         #[arg(long)]
         project: Option<String>,

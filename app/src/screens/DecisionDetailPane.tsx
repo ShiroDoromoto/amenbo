@@ -2,10 +2,11 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { Markdown } from "../components/Markdown";
 import { Attachments } from "../components/Attachments";
 import { CommentRow } from "../components/CommentRow";
-import { inTauri, type Decision, type DecisionStatus } from "../core/snapshot";
+import { getSnapshot, inTauri, type Decision, type DecisionStatus } from "../core/snapshot";
 import {
   acceptDecision, addDecisionComment, amendDecision, buildsOnDecision, editDecision, editDecisionComment,
-  rejectDecision, reopenDecision, removeDecisionComment, supersedeDecision, unlinkDecisionEdge,
+  fetchDecisionDimensions, rejectDecision, reopenDecision, removeDecisionComment, setDecisionDimensionValue,
+  supersedeDecision, unlinkDecisionEdge, unsetDecisionDimensionValue,
 } from "../core/mutations";
 import { useDecision, useDecisionComments, useDecisionPage } from "../core/reads";
 import {
@@ -176,6 +177,8 @@ export function DecisionDetailPane({
       </div>
 
       <DecisionStamps d={d} />
+
+      <DecisionDimensions d={d} />
 
       {editing ? (
         <div className="compose" style={{ marginTop: 8, maxWidth: "var(--measure-prose)" }}>
@@ -375,6 +378,73 @@ function DecisionStamps({ d }: { d: Decision }) {
           <span title={s.at} style={{ whiteSpace: "nowrap" }}>{s.label} {exactLabel(s.at)}</span>
         </Fragment>
       ))}
+    </div>
+  );
+}
+
+// The classification axes a decision sits on (`AMB-D-781`) — the decision side of the task pane's
+// selects, and the same optimistic move: the select goes first and a refusal takes it back. The axes
+// belong to the project, so a project carrying none draws nothing at all, which is the common case for
+// the decisions recorded before this existed. No axis is required here — `required` bites where a
+// creation is finished, and a decision has none.
+function DecisionDimensions({ d }: { d: Decision }) {
+  const [values, setValues] = useState<Record<number, number>>({});
+  const [error, setError] = useState<string | null>(null);
+  // Pull this decision's assignments from the read-model (Tauri only; the browser mock has no decisions).
+  useEffect(() => {
+    if (!inTauri()) { setValues({}); return; }
+    let alive = true;
+    fetchDecisionDimensions(d.id).then((rows) => {
+      if (!alive) return;
+      const m: Record<number, number> = {};
+      for (const r of rows) m[r.dimensionId] = r.valueId;
+      setValues(m);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [d.id]);
+  const axes = (d.project ? getSnapshot().projects.find((p) => p.id === d.project?.id) : undefined)?.dimensions ?? [];
+  if (axes.length === 0) return null;
+  // What the select shows for one axis — the value, or nothing where the decision is on no value of it.
+  // Drawing an assignment and taking a refused one back go through here alike, so the two can never
+  // disagree about what "cleared" looks like.
+  const show = (dimensionId: number, valueId: number | undefined) =>
+    setValues((m) => {
+      const n = { ...m };
+      if (valueId === undefined) delete n[dimensionId];
+      else n[dimensionId] = valueId;
+      return n;
+    });
+  const write = (dimensionId: number, next: number | undefined, prev: number | undefined) => {
+    setError(null);
+    show(dimensionId, next);
+    const done = next !== undefined
+      ? setDecisionDimensionValue(d.id, next)
+      : prev !== undefined ? unsetDecisionDimensionValue(d.id, prev) : Promise.resolve();
+    void done.catch((e) => { setError(errText(e)); show(dimensionId, prev); });
+  };
+  return (
+    <div style={{ marginTop: 8 }}>
+      {axes.map((dim) => (
+        <div className="detail__field" key={dim.id}>
+          <span className="detail__flabel">{dim.name}</span>
+          <span>
+            <select
+              className="inlineselect"
+              value={values[dim.id] ?? ""}
+              onChange={(e) => {
+                const valueId = Number(e.target.value);
+                write(dim.id, valueId || undefined, values[dim.id]);
+              }}
+            >
+              <option value="">{t("detail.none")}</option>
+              {dim.values.map((v) => (
+                <option key={v.id} value={v.id}>{v.name}</option>
+              ))}
+            </select>
+          </span>
+        </div>
+      ))}
+      {error && <ErrorNote>{error}</ErrorNote>}
     </div>
   );
 }

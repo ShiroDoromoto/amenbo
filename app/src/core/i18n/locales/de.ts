@@ -293,7 +293,7 @@ export const de: Translation = {
     "settings.doctorRebind": "Neu verknüpfen",
     "settings.doctorRepairing": "Wird bearbeitet…",
     "settings.doctorRepairDone": "Behoben.",
-    "settings.doctorFixDone": "Repariert ({blobs} Anhangsdatei(en) · {bindings} Ordnerverknüpfung(en))",
+    "settings.doctorFixDone": "Repariert ({attachments} Anhangszeile(n) · {blobs} Anhangsdatei(en) · {bindings} Ordnerverknüpfung(en))",
     "settings.doctorFixNothing": "Es gibt nichts zu reparieren.",
     "settings.dataOpPreparing": "Wird vorbereitet…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -819,6 +819,10 @@ export const de: Translation = {
     duplicate_order_key: {
       message: "Im Projekt {project} teilen sich Aufgaben denselben Sortierschlüssel ({order_key}).",
       fix: "Sortiere die Aufgaben neu, dann löst sich das von selbst.",
+    },
+    orphan_attachment: {
+      message: "{attachment} hängt an {target}, und diesen Eintrag gibt es nicht — die Zeile hat überlebt, woran sie hing, und hält ihre Datei fest, an die niemand mehr herankommt.",
+      fix: "„Reparieren“ entfernt die Zeile und gibt ihre Datei frei. Es gibt nichts vorher zu öffnen: woran sie hing, ist längst weg.",
     },
     stale_managed_block: {
       message: "Der KI-Leitfaden (von Amenbo verwalteter Block) in {path} ist veraltet (v{version} → v{current}).",

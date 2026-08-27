@@ -25,7 +25,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use amenbo_scenario::{Args, Domain, Scenario, Step};
+use amenbo_scenario::{Args, BoundKind, Domain, Scenario, Step};
 
 use crate::domain::plugin::StoodCatalog;
 
@@ -152,6 +152,10 @@ pub(crate) struct Driver<'a> {
     session: &'a scratch::Session,
     project_id: i64,
     bindings: HashMap<String, i64>,
+    /// Which number space each binding's id lives in, for the ops that hand an id back to Amenbo as a
+    /// reference rather than as a number. Recorded beside the binding rather than on it: every other
+    /// op takes the id itself, and only the classification doors ask which kind it is.
+    bound_kinds: HashMap<String, BoundKind>,
     /// What the last `plugin run` came back with. A command face's return value is its own stdout
     /// and is deliberately kept out of the execution log, so this is the only place a later step can
     /// read it from — which is why the assert that reads it has to follow its call.
@@ -215,6 +219,7 @@ impl<'a> Driver<'a> {
             session,
             project_id: 0,
             bindings: HashMap::new(),
+            bound_kinds: HashMap::new(),
             last_run: None,
             last_unbind: None,
             last_rebind: None,
@@ -454,6 +459,11 @@ impl<'a> Driver<'a> {
     /// acts on rather than for a domain of its own: attaching makes an attachment whether it is hung
     /// on a task, a decision or a comment, and it is the attachment side that knows how.
     fn action(&mut self, domain: Domain, op: &str, with: &Args, bind: Option<&str>) -> Result<Outcome, String> {
+        // What kind the binding this step is about to make stands for. Noted here, off the domain, so
+        // the nine places that insert a binding stay as they are and there is one line to keep true.
+        if let (Some(name), Some(kind)) = (bind, BoundKind::of_domain(domain)) {
+            self.bound_kinds.insert(name.to_string(), kind);
+        }
         if op == "attach" {
             return self.attachment_action(domain, op, with, bind);
         }
@@ -608,6 +618,18 @@ impl<'a> Driver<'a> {
     /// the name resolves to an earlier `as:`, so a miss here is an internal error, not user input.
     fn resolve(&self, with: &Args) -> Result<i64, String> {
         self.resolve_key(with, "target")
+    }
+
+    /// Resolve a step's `target:` to the **reference** Amenbo reads it back by, kind code and all. What
+    /// [`Self::resolve`] answers is a number, and a number no longer says which of the two spaces it
+    /// belongs to at the doors that take either — so those doors ask here instead.
+    fn resolve_ref(&self, with: &Args) -> Result<String, String> {
+        let id = self.resolve(with)?;
+        let name = req_str(with, "target")?;
+        let kind = self.bound_kinds.get(name).copied().ok_or_else(|| {
+            format!("`target: {name}` is neither a task nor a decision, so it cannot be classified")
+        })?;
+        Ok(kind.spell(id))
     }
 
     /// The same, for an op that names a second object under its own key (`decision link`'s `task`).

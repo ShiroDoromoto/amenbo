@@ -613,7 +613,8 @@ impl DimensionRole {
 }
 
 /// The classification axis itself — one "column". Scoped to a project; its set of values lives in
-/// [`DimensionValue`] and its assignments to tasks in [`TaskDimensionValue`]. Categories, phases and any
+/// [`DimensionValue`], its assignments to tasks in [`TaskDimensionValue`] and its assignments to
+/// decisions in [`DecisionDimensionValue`]. Categories, phases and any
 /// axis a user invents all fold into this one mechanism. Every dimension is a plain, user-editable
 /// classification axis: there are no built-in fixed axes and no locked values (status and priority are
 /// first-class task attributes instead, not dimensions). `order_key` is where the dimension itself sits in
@@ -714,6 +715,22 @@ impl DimensionValue {
 pub struct TaskDimensionValue {
     pub id: i64,
     pub task_id: i64,
+    pub dimension_id: i64,
+    pub value_id: i64,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// The assignment of a dimension value to a **decision** — the task join record's twin (`AMB-D-781`).
+/// Same shape and same denormalised `dimension_id`, and the values it names are the axis's own: a
+/// decision is classified along the axes the project already has, never along a set raised for
+/// decisions. A separate table rather than a `target_type` column on [`TaskDimensionValue`], for the
+/// reason `decision_comment` is separate from `task_comment` — each end keeps a real foreign key.
+/// Removing an assignment deletes the row.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct DecisionDimensionValue {
+    pub id: i64,
+    pub decision_id: i64,
     pub dimension_id: i64,
     pub value_id: i64,
     pub created_at: Timestamp,
@@ -828,6 +845,24 @@ impl AttachmentTarget {
             _ => None,
         }
     }
+
+    /// The ref space the target is numbered in — what turns `(target_type, target_id)` back into the
+    /// ref a reader knows it by (`AMB-T-12`, `AMB-TC-12`). The pair is polymorphic, so this mapping is
+    /// the one place the column's four values line up with [`crate::idref::RefKind`]; everything that
+    /// has to name a target quotes it through here rather than spelling the four cases again.
+    pub const fn ref_kind(self) -> crate::idref::RefKind {
+        match self {
+            AttachmentTarget::Task => crate::idref::RefKind::Task,
+            AttachmentTarget::Decision => crate::idref::RefKind::Decision,
+            AttachmentTarget::TaskComment => crate::idref::RefKind::TaskComment,
+            AttachmentTarget::DecisionComment => crate::idref::RefKind::DecisionComment,
+        }
+    }
+
+    /// The target rendered as the ref a reader quotes it by.
+    pub fn target_ref(self, id: i64) -> String {
+        crate::idref::render(self.ref_kind(), id)
+    }
 }
 
 /// An attachment on a task or a decision record. Two modes: `blob` (the default — ingested into the store,
@@ -909,6 +944,10 @@ pub struct Database {
     pub dimension_values: Vec<DimensionValue>,
     #[serde(default)]
     pub task_dimension_values: Vec<TaskDimensionValue>,
+    /// The decision side of the dimension model. Hydration tolerates its absence — a store predating
+    /// the table yields an empty vec.
+    #[serde(default)]
+    pub decision_dimension_values: Vec<DecisionDimensionValue>,
     #[serde(default)]
     pub task_comments: Vec<TaskComment>,
     /// Comments on decision records. Hydration tolerates their absence — a store without them yields an
@@ -951,6 +990,7 @@ impl Default for Database {
             dimensions: Vec::new(),
             dimension_values: Vec::new(),
             task_dimension_values: Vec::new(),
+            decision_dimension_values: Vec::new(),
             task_comments: Vec::new(),
             decision_comments: Vec::new(),
             attachments: Vec::new(),

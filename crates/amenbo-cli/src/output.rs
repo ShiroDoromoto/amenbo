@@ -168,9 +168,8 @@ impl CliError {
     }
 
     /// Execution guard: an operating command was run in a bare directory with no pointer (`.amenbo`)
-    /// and no `AMENBO_HOME` / `AMENBO_PROJECT_DIR`. Rather than silently creating a store, point the
-    /// user at `amenbo init`. The commands that create or name the pointer (init / join / bind) are the
-    /// only exceptions.
+    /// and no `AMENBO_HOME`. Rather than silently creating a store, point the user at `amenbo init`. The
+    /// commands that create or name the pointer (init / join / bind) are the only exceptions.
     /// What we hand back is not an explanation of the machinery but a **fork in the road** — the two
     /// things they can do (init a new project / bind to an existing one) — plus, when
     /// `candidate_projects` is non-empty, the projects that actually exist on this machine. Enumerating
@@ -522,12 +521,12 @@ impl From<amenbo_core::Error> for CliError {
             // values live on the axis, and putting one on the task is its own command. A caller who has
             // just been told "you carry no value on X" is one step from `dimension show X`.
             E::Invalid(m) if m.code() == Some(ErrorCode::InvalidTaskRequiredDimension) => Some(format!(
-                "This project requires a value on that axis before a creation can be finished. `{cmd} dimension show <axis>` lists what it offers, then `{cmd} dimension set <id> <axis> <value>` puts one on the task."
+                "This project requires a value on that axis before a creation can be finished. `{cmd} dimension show <axis>` lists what it offers, then `{cmd} dimension set <AMB-T-n> <axis> <value>` puts one on the task."
             )),
             // Lowering the flag is the other way out, and it is the one nobody thinks of while holding a
             // task they only wanted to reclassify.
             E::Invalid(m) if m.code() == Some(ErrorCode::InvalidDimensionRequiredUnset) => Some(format!(
-                "Move the task to another value with `{cmd} dimension set <id> <axis> <value>`, or stop the axis demanding one with `{cmd} dimension update <axis> --required false`."
+                "Move the task to another value with `{cmd} dimension set <AMB-T-n> <axis> <value>`, or stop the axis demanding one with `{cmd} dimension update <axis> --required false`."
             )),
             E::Invalid(m) if m.code() == Some(ErrorCode::InvalidCommitSha) => Some(
                 "`git log --oneline` prints the short form. Expand it with `git rev-parse <short sha>` and pass what that returns — Amenbo never runs git itself."

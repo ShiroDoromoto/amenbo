@@ -143,6 +143,16 @@ pub(crate) fn decision(store: &mut Store, flags: &Flags, sub: DecisionCmd) -> Re
                 } else {
                     human(flags, format!("\n{}", detail.body));
                 }
+                // What it is filed under, on one line, the way `task show` puts a task's (`AMB-D-781`).
+                // Said only when there is something to say: a project that declares no axis would
+                // otherwise carry an empty line on every decision it holds.
+                if !detail.dimensions.is_empty() {
+                    let classified = detail.dimensions.iter()
+                        .map(|c| format!("{}={}", c.dimension, c.value))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    human(flags, format!("dimensions: {classified}"));
+                }
                 if detail.linked_tasks.is_empty() {
                     human(flags, "linked tasks: (none)");
                 } else {

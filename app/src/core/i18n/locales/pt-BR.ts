@@ -299,7 +299,7 @@ export const ptBR: Translation = {
     "settings.doctorRebind": "Vincular de novo",
     "settings.doctorRepairing": "Trabalhando…",
     "settings.doctorRepairDone": "Consertado.",
-    "settings.doctorFixDone": "Reparado ({blobs} arquivo(s) anexo(s) · {bindings} vínculo(s) de pasta)",
+    "settings.doctorFixDone": "Reparado ({attachments} linha(s) de anexo · {blobs} arquivo(s) anexo(s) · {bindings} vínculo(s) de pasta)",
     "settings.doctorFixNothing": "Não há nada a reparar.",
     "settings.dataOpPreparing": "Preparando…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -829,6 +829,10 @@ export const ptBR: Translation = {
     duplicate_order_key: {
       message: "O projeto {project} tem tarefas dividindo a mesma chave de ordenação ({order_key}).",
       fix: "Reordene as tarefas e isso se resolve sozinho.",
+    },
+    orphan_attachment: {
+      message: "{attachment} está preso a {target}, e esse registro não existe: a linha sobreviveu ao que estava anexada e segura o arquivo dela onde ninguém mais chega.",
+      fix: "“Reparar” remove a linha e solta o arquivo dela. Não há nada para abrir antes: aquilo em que estava presa já se foi.",
     },
     stale_managed_block: {
       message: "O guia da IA (bloco gerenciado pelo Amenbo) em {path} está desatualizado (v{version} → v{current}).",

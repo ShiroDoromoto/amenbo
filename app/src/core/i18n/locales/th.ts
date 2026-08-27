@@ -293,7 +293,7 @@ export const th: Translation = {
     "settings.doctorRebind": "ผูกใหม่",
     "settings.doctorRepairing": "กำลังทำ…",
     "settings.doctorRepairDone": "ซ่อมแล้ว",
-    "settings.doctorFixDone": "ซ่อมแล้ว (ไฟล์แนบ {blobs} ไฟล์ · การผูกโฟลเดอร์ {bindings} รายการ)",
+    "settings.doctorFixDone": "ซ่อมแล้ว (แถวไฟล์แนบ {attachments} แถว · ไฟล์แนบ {blobs} ไฟล์ · การผูกโฟลเดอร์ {bindings} รายการ)",
     "settings.doctorFixNothing": "ไม่มีอะไรต้องซ่อม",
     "settings.dataOpPreparing": "กำลังเตรียม…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -802,6 +802,10 @@ export const th: Translation = {
     duplicate_order_key: {
       message: "โปรเจกต์ {project} มีงานที่ใช้กุญแจเรียงลำดับเดียวกัน ({order_key})",
       fix: "จัดเรียงงานใหม่แล้วมันจะหายไปเอง",
+    },
+    orphan_attachment: {
+      message: "{attachment} ติดอยู่กับ {target} แต่ไม่มีระเบียนนั้นอยู่ — แถวนี้อยู่ยาวกว่าสิ่งที่มันติดอยู่ และยังกอดไฟล์ของมันไว้ในที่ที่ไม่มีใครไปถึงแล้ว",
+      fix: "“ซ่อม” จะลบแถวนั้นและปล่อยไฟล์ของมันไป ไม่มีอะไรต้องเปิดดูก่อน เพราะสิ่งที่มันติดอยู่หายไปแล้ว",
     },
     stale_managed_block: {
       message: "คู่มือสำหรับ AI (บล็อกที่ Amenbo ดูแล) ใน {path} เก่าไปแล้ว (v{version} → v{current})",

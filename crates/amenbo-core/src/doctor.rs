@@ -39,6 +39,9 @@ pub enum DoctorIssueKind {
     SelfDependency,
     /// A duplicated `order_key` within one project.
     DuplicateOrderKey,
+    /// An attachment whose target row is gone. The one reference in the store no foreign key holds
+    /// (`attachment.target_type` / `target_id` is polymorphic), so it is the one that can be left dangling.
+    OrphanAttachment,
     /// A bound folder's managed block is an older version.
     StaleManagedBlock,
     /// A legacy-format `.amenbo` whose project resolves unambiguously.
@@ -70,6 +73,7 @@ impl DoctorIssueKind {
     pub const ALL: &'static [DoctorIssueKind] = &[
         Self::SelfDependency,
         Self::DuplicateOrderKey,
+        Self::OrphanAttachment,
         Self::StaleManagedBlock,
         Self::LegacyPointer,
         Self::LegacyPointerAmbiguous,
@@ -88,6 +92,7 @@ impl DoctorIssueKind {
         match self {
             Self::SelfDependency => "self_dependency",
             Self::DuplicateOrderKey => "duplicate_order_key",
+            Self::OrphanAttachment => "orphan_attachment",
             Self::StaleManagedBlock => "stale_managed_block",
             Self::LegacyPointer => "legacy_pointer",
             Self::LegacyPointerAmbiguous => "legacy_pointer_ambiguous",
@@ -102,7 +107,9 @@ impl DoctorIssueKind {
         }
     }
 
-    /// Only a broken store is an `error`. The environment issues have not broken anything in the store — they
+    /// Only a broken store is an `error` — a self-referencing edge, and an attachment whose target is gone
+    /// ([`Self::OrphanAttachment`]: the one reference no foreign key holds, so the one that can dangle).
+    /// The environment issues have not broken anything in the store — they
     /// only mean a human's or an AI's path into it is misaligned — so they are `warning`s and do not knock
     /// `ok` down. [`Self::DeadRef`] is a warning for the same reason from the other side: every row is intact
     /// and every constraint holds, and what has rotted is a sentence inside a body — prose Amenbo stores and
@@ -110,7 +117,7 @@ impl DoctorIssueKind {
     /// it.
     pub const fn severity(self) -> &'static str {
         match self {
-            Self::SelfDependency => "error",
+            Self::SelfDependency | Self::OrphanAttachment => "error",
             _ => "warning",
         }
     }
@@ -122,6 +129,7 @@ impl DoctorIssueKind {
         match self {
             Self::SelfDependency => &["dep"],
             Self::DuplicateOrderKey => &["project", "order_key"],
+            Self::OrphanAttachment => &["attachment", "target"],
             Self::StaleManagedBlock => &["path", "dir", "version", "current"],
             Self::LegacyPointer => &["path", "dir", "project"],
             Self::LegacyPointerAmbiguous => &["path"],
@@ -480,6 +488,7 @@ mod tests {
             [
                 "self_dependency",
                 "duplicate_order_key",
+                "orphan_attachment",
                 "stale_managed_block",
                 "legacy_pointer",
                 "legacy_pointer_ambiguous",

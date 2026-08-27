@@ -57,6 +57,7 @@ const DATASET_SCOPES: Readonly<Record<string, readonly string[]>> = {
   decision: ["decisions"],
   decision_comment: ["decisions"],
   decision_edge: ["decisions"],
+  decision_dimension_value: ["decisions"], // what a decision is classified as, on its own pane
   decision_task_link: ["tasks", "decisions"], // shows on both (a task's decision badge, a decision's linked tasks)
   attachment: ["attachments"],
   project: ["projects"],

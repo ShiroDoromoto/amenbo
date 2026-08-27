@@ -308,7 +308,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* The question and the row under it, kept together: the words are what say the pills are an offer, so
    they sit closer to the row than the row sits to the press that acts on it. */
 .slot__pick {
-  flex: 0 0 auto;
+  /* It gives way, and the press below it never does: the row can run to eight pills and more, and a
+     frame whose one button had been pushed off the bottom is a frame with no way in
+     (`../shell/EmptySlot`). What runs out of room is the row, which scrolls. */
+  flex: 0 1 auto; min-height: 0;
   display: flex; flex-direction: column; align-items: center; gap: var(--s-2);
   /* The grid below fills this box, so this is what decides how wide the row of pills gets. It takes
      the frame and then stops: across a wide pane a single row stretched end to end reads as a band
@@ -325,8 +328,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* What the terminal is opened with: one pill each, and the one in force filled with the accent. They
    are pressable and a reader has to see that they are — words alone read as a caption, and a caption
    is not something anybody tries. Each pill holds its name on one line: a name broken across two
-   lines stops looking like one thing to press. It is not drawn at all where the shell is the only
-   thing this machine can start: a row of one says nothing a reader can act on.
+   lines stops looking like one thing to press. It is not drawn at all where the whole row is one
+   thing: a row of one says nothing a reader can act on.
 
    Even cells, because a pill's width is its name — "Plain shell" and "GitHub Copilot CLI" differ by
    more than double. Wrapping ragged pills and centring the rows leaves no edge lined up and strands
@@ -335,6 +338,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .slot__starts {
   display: grid; gap: var(--s-2); width: 100%;
   grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  /* The one part of the frame that scrolls. The cap keeps a tall pane from giving the row half the
+     room in the frame, and `min-height` is what lets it shrink further in a short one — a grid that
+     cannot shrink pushes the press out of the frame instead of scrolling. */
+  max-height: 22rem; min-height: 0; overflow-y: auto;
 }
 /* A name too long for its cell is cut with an ellipsis rather than widening the cell, which would
    take the evenness back. That is why the pill lays its content out as a line of text and not as a
@@ -354,6 +361,21 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--c-accent-weak); border-color: var(--c-accent);
   color: var(--c-accent-text); font-weight: 600;
 }
+/* One this machine has not got (`AMB-D-792`). Drawn faint and left in place: it is on the row to say
+   that installing it would make it a choice, so it has to read as a choice that is not here yet
+   rather than as one that failed. Nothing lifts on hover, because nothing happens on a press. */
+.slot__start--missing {
+  border-style: dashed; color: var(--c-text-faint); cursor: default;
+}
+.slot__start--missing:hover { color: var(--c-text-faint); border-color: var(--c-border); }
+/* The press that unfolds them. It is quiet — the row above it is what the frame is about — and it is
+   not one of the pills: what it does is show more of the row, not choose anything. */
+.slot__more {
+  flex: 0 0 auto;
+  padding: 0; border: 0; background: none;
+  color: var(--c-text-muted); font-size: var(--fs-xs); text-decoration: underline;
+}
+.slot__more:hover { color: var(--c-text); }
 
 /* Where the pane being opened will work, asked in the place the pane is about to take (`./FolderChoice`).
    It is the same dashed box the way in is, because it is the same place one step further on. */

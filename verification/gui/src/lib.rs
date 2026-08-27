@@ -2667,18 +2667,18 @@ impl Instructor {
                     gave
                 )
             }
-            // What the empty frame is set to open with, read on the row above its press. The step is
-            // written for both shapes that row can be in, because which of them is on the run machine
-            // is the machine's own business: where agents were found there is a row and the shell is
-            // the one on it, and where none were there is no row at all and the shell is the whole of
-            // what a frame opens with. An operator handed only the first would mark a working face
-            // red on the second.
+            // What the empty frame is set to open with, read on the row above its press. The row is
+            // every agent Amenbo knows how to start, and which of them this machine has is the
+            // machine's own business: the ones it has not got are folded away behind a
+            // press that says how many, and nothing behind that press can be chosen. So the reading
+            // is about what is **on**, never about what is on the row — an operator told to expect
+            // one shape of row would mark a working face red on the machine that draws the other.
             //
             // The button is read beside it. Nothing on the row being on is the one state that stops
             // the press, and it is what a build that forgot the choice would fall back to — so a step
             // that looked only at which name is lit could pass on a frame that opens nothing.
             (Domain::Terminal, "opens-with") => match req(with, "start")? {
-                "shell" => "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row above the press that opens a pane in it: confirm the plain shell is the one that is on, and that the press is live rather than asking to be told what to open with. Where this machine could start no agent there is no row on the frame at all, and that is the same reading: the plain shell is then the whole of what a frame opens with."
+                "shell" => "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row above the press that opens a pane in it: confirm the plain shell is the one that is on, and that the press is live rather than asking to be told what to open with. What else is on the row is nothing to this reading: a press saying how many agents this machine has not got is left folded, and on a machine that can start none the plain shell may be the only thing there is to choose."
                     .to_string(),
                 // The first run, which is a state and not a program: nobody has said, so the frame
                 // says so instead of guessing. Both halves are read because either alone passes on
@@ -2689,7 +2689,7 @@ impl Instructor {
                 // The row has to be there to be read blank, and that is said out loud: this is the
                 // one reading here a machine cannot be relied on to be able to give, and the road
                 // that asks for it stood the machine up first (`can-start`).
-                "none" => "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row above the press that opens a pane in it: confirm the row is drawn, with several things on it to open with, and that **none of them is on**. The press below it does not open a pane: it asks to be told what to open with, and will not answer until one of the row is chosen. Nothing is chosen here — that is the next step's — and if a name on that row is already on, this step has failed."
+                "none" => "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row above the press that opens a pane in it: confirm the row is drawn, with several things on it to open with, and that **none of them is on**. The press below it does not open a pane: it asks to be told what to open with, and will not answer until one of the row is chosen. Leave folded any press saying how many agents this machine has not got — what is behind it cannot be chosen and is not part of this reading. Nothing is chosen here — that is the next step's — and if a name on that row is already on, this step has failed."
                     .to_string(),
                 other => return Err(format!(
                     "assert `opens-with` cannot name `{other}` — the plain shell is the one thing every machine's row has, `none` is nobody having chosen yet, and which agents are on the row is that machine's own"
@@ -5798,8 +5798,9 @@ steps_gui:
         assert!(said.contains("plain shell is the one that is on"), "got: {said}");
         assert!(said.contains("press is live"), "the press is half the reading: {said}");
         assert!(
-            said.contains("no row on the frame at all"),
-            "a machine that can start nothing draws no row, and the step has to say so: {said}"
+            said.contains("nothing to this reading"),
+            "the row carries what this machine has not got as well, so the step has to put those out \
+             of the reading rather than leave an operator counting them: {said}"
         );
         assert!(
             Instructor::new().expectation(&step).is_none(),

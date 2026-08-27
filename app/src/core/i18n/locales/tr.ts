@@ -519,6 +519,7 @@ export const tr: Translation = {
     "face.whichStart": "Bu bölme neyle açılsın?",
     "face.open": "Burada bir terminal aç",
     "face.openPick": "Birini seçin",
+    "face.moreStarts": "Kurulu değil ({n})",
     "face.openHere": "Bu projede bir bölme daha için yer",
     "face.whichFolder": "Bu bölme hangi klasörde çalışıyor?",
     "face.rename": "Bu bölmeyi yeniden adlandır",

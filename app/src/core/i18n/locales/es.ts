@@ -540,6 +540,7 @@ export const es: Translation = {
     "face.whichStart": "¿Con qué se abre este panel?",
     "face.open": "Abrir una terminal aquí",
     "face.openPick": "Elige uno",
+    "face.moreStarts": "No instalados ({n})",
     "face.openHere": "Sitio para otro panel en este proyecto",
     "face.whichFolder": "¿En qué carpeta trabaja este panel?",
     "face.rename": "Cambiar el nombre de este panel",

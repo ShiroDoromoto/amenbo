@@ -522,6 +522,7 @@ export const vi: Translation = {
     "face.whichStart": "Mở khung này bằng gì?",
     "face.open": "Mở terminal ở đây",
     "face.openPick": "Chọn một cái",
+    "face.moreStarts": "Chưa cài đặt ({n})",
     "face.openHere": "Chỗ cho thêm một khung trong dự án này",
     "face.whichFolder": "Khung này làm việc trong thư mục nào?",
     "face.rename": "Đổi tên khung này",

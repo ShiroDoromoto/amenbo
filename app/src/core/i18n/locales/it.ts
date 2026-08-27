@@ -540,6 +540,7 @@ export const it: Translation = {
     "face.whichStart": "Con che cosa si apre questo riquadro?",
     "face.open": "Apri un terminale qui",
     "face.openPick": "Scegline uno",
+    "face.moreStarts": "Non installati ({n})",
     "face.openHere": "Spazio per un altro riquadro in questo progetto",
     "face.whichFolder": "In quale cartella lavora questo riquadro?",
     "face.rename": "Rinomina questo riquadro",

@@ -531,6 +531,7 @@ export const ja: Translation = {
     "face.whichStart": "何で開きますか",
     "face.open": "ここで端末を開く",
     "face.openPick": "選んでください",
+    "face.moreStarts": "入っていない {n} 件",
     "face.openHere": "このプロジェクトでもう1枚ぶんの空きへ",
     "face.whichFolder": "このペインはどのフォルダで作業しますか？",
     "face.rename": "このペインの名前を変える",

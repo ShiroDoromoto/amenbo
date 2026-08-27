@@ -2259,6 +2259,35 @@ const REGISTRY: &[OpSpec] = &[
     // the file holds is nothing this road reads — it is looked for by its name once it has landed.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "drop-in", required: &["file", "name", "section"], refs: &[], strings: &["file", "name", "section"], binds: false },
 
+    // ── naming what is in the folder ──────────────────────────────────────────────────────────────
+    // The menu again, over what a file's menu cannot be opened on. A folder's row carries no way out
+    // to the machine and offers a name to make instead, and so does the heading at the top of the
+    // tree — which is the folder itself, and the only way to make a name at the top level, there
+    // being no row up there to point at.
+    //
+    // The two are one op because they are one menu, and which of them is meant travels as `name`
+    // being there or not: a row is named the way every other row here is, and the heading is named by
+    // nothing, having no name of its own to be told apart by. `section` is asked for either way, and
+    // on the heading it is the whole of the answer — a project answering for several folders draws a
+    // heading each.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "menu-on-folder", required: &["section"], refs: &[], strings: &["name", "section"], binds: false },
+    // One name made, from the item on that menu through to the name being asked for. It is one op and
+    // not two because the press and the typing are one move on this face: the item puts a box where a
+    // row would be, and a box nobody typed into is a name nobody asked for — there is nothing in
+    // between worth a road's while. `as` says which of the two items, by what it makes rather than by
+    // the item's words.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "name", required: &["as", "name"], refs: &[], strings: &["as", "name"], binds: false },
+    // And the same box over a name that is already there, from the item that opens it. What is typed
+    // is the whole new name and not a change to the old one: the box opens holding what the row is
+    // called, selected, so a name typed into it replaces that.
+    //
+    // **A name changed only in its letters' case is not a rename a road can read.** Every reading on
+    // a screen road is folded to one case before the shot and the expectation meet, so a row that was
+    // never renamed draws the same answer as one that was. It is the rename most worth walking — a
+    // machine that reads two such names as one is the machine that would refuse it — which is why it
+    // is said here: a road that named one would go green over a face that had done nothing.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "rename", required: &["name"], refs: &[], strings: &["name"], binds: false },
+
     // ── handing a file to the machine ─────────────────────────────────────────────────────────────
     // The three ways out of this face that are not reading the file here, and all three are the
     // machine's own: the application it already opens that kind of file with, one the reader picks
@@ -2268,8 +2297,8 @@ const REGISTRY: &[OpSpec] = &[
     //
     // On a row the menu is a right-click. A folder's row opens one too, but it holds none of the
     // three: what a folder can be handed to is nothing, and what it is offered instead is a name to
-    // make or to write over — which no op here reaches yet. So this op names a file, the way every
-    // other row here is named — by its name, and by the section it is standing in.
+    // make or to write over, which `menu-on-folder` above reaches. So this op names a file, the way
+    // every other row here is named — by its name, and by the section it is standing in.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "menu", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
     // The same menu, reached from the file that is open rather than from a row. It is a second door and not a
     // convenience: a file the face refuses to draw offers a way on to something built to open it, and there is no

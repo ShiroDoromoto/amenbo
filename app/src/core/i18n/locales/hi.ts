@@ -519,6 +519,7 @@ export const hi: Translation = {
     "face.whichStart": "यह पैनल किससे खोलें?",
     "face.open": "यहाँ टर्मिनल खोलें",
     "face.openPick": "एक चुनें",
+    "face.moreStarts": "इंस्टॉल नहीं ({n})",
     "face.openHere": "इस प्रोजेक्ट में एक और पैन के लिए जगह",
     "face.whichFolder": "यह पैन किस फ़ोल्डर में काम करता है?",
     "face.rename": "इस पैन का नाम बदलें",

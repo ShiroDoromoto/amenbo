@@ -545,6 +545,7 @@ export const uk: Translation = {
     "face.whichStart": "Чим відкрити цю панель?",
     "face.open": "Відкрити тут термінал",
     "face.openPick": "Виберіть один",
+    "face.moreStarts": "Не встановлено ({n})",
     "face.openHere": "Місце для ще однієї панелі в цьому проєкті",
     "face.whichFolder": "У якій теці працює ця панель?",
     "face.rename": "Перейменувати цю панель",

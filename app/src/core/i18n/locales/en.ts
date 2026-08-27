@@ -586,6 +586,7 @@ const ui = {
   // rather than being pressable and doing nothing: what is missing is written on the thing the
   // reader would press, so there is no refusal to explain afterwards (`AMB-T-3686`).
   "face.openPick": "Choose one",
+  "face.moreStarts": "Not installed ({n})",
   "face.openHere": "Room for another pane in this project",
   "face.whichFolder": "Which folder does this pane work in?",
   "face.rename": "Rename this pane",

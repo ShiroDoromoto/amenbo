@@ -522,6 +522,7 @@ export const id: Translation = {
     "face.whichStart": "Buka panel ini dengan apa?",
     "face.open": "Buka terminal di sini",
     "face.openPick": "Pilih satu",
+    "face.moreStarts": "Belum terpasang ({n})",
     "face.openHere": "Tempat untuk satu panel lagi di proyek ini",
     "face.whichFolder": "Panel ini bekerja di folder yang mana?",
     "face.rename": "Ganti nama panel ini",

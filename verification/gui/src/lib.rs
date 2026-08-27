@@ -1768,6 +1768,32 @@ impl Instructor {
                 req(with, "name")?,
                 section(with)?
             ),
+            // The menu over a folder, which is where a name is made. The heading is named by nothing, so the
+            // line says which of the two the operator is pointing at rather than leaving them to read it off
+            // an arg that is not there.
+            (Domain::Files, "menu-on-folder") => match with.get("name").and_then(|v| v.as_str()) {
+                Some(name) => format!(
+                    "Come back to Amenbo if something else is in front of it. Then in {}, right-click the folder's row \"{name}\": a short menu of what can be done in that folder comes up where the pointer is.",
+                    section(with)?
+                ),
+                None => format!(
+                    "Come back to Amenbo if something else is in front of it. Then right-click the heading over {} — the folder's own row, at the top of the tree: the same short menu comes up where the pointer is.",
+                    section(with)?
+                ),
+            },
+            // The item pressed and the name typed, which is one move. The refusal is described here rather
+            // than at the reading, because what the operator does next depends on the box still being open.
+            (Domain::Files, "name") => format!(
+                "In that menu, press the item that makes a new {}. A box takes the place of a row: type \"{}\" into it and press Enter. If the machine will not take that name it says so under the box, and the box stays open — leave it as it is.",
+                made(with)?,
+                req(with, "name")?
+            ),
+            // The same box over a name already on the row, which is why the line says the old one goes: a
+            // box that opened holding the old name would otherwise be read as one to add to.
+            (Domain::Files, "rename") => format!(
+                "In that menu, press the item that changes the name. The box opens with the name that is there, selected — type \"{}\" over it and press Enter.",
+                req(with, "name")?
+            ),
             // Handing the file to the machine. On a row the menu is a right-click, and it is drawn on files alone
             // — a folder's row opens a level — so the step names a row the way every other one here does, and says
             // where the menu comes up, since nothing else on this face does.
@@ -2641,18 +2667,18 @@ impl Instructor {
                     gave
                 )
             }
-            // What the empty frame is set to open with, read on the row above its press. The step is
-            // written for both shapes that row can be in, because which of them is on the run machine
-            // is the machine's own business: where agents were found there is a row and the shell is
-            // the one on it, and where none were there is no row at all and the shell is the whole of
-            // what a frame opens with. An operator handed only the first would mark a working face
-            // red on the second.
+            // What the empty frame is set to open with, read on the row above its press. The row is
+            // every agent Amenbo knows how to start, and which of them this machine has is the
+            // machine's own business: the ones it has not got are folded away behind a
+            // press that says how many, and nothing behind that press can be chosen. So the reading
+            // is about what is **on**, never about what is on the row — an operator told to expect
+            // one shape of row would mark a working face red on the machine that draws the other.
             //
             // The button is read beside it. Nothing on the row being on is the one state that stops
             // the press, and it is what a build that forgot the choice would fall back to — so a step
             // that looked only at which name is lit could pass on a frame that opens nothing.
             (Domain::Terminal, "opens-with") => match req(with, "start")? {
-                "shell" => "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row above the press that opens a pane in it: confirm the plain shell is the one that is on, and that the press is live rather than asking to be told what to open with. Where this machine could start no agent there is no row on the frame at all, and that is the same reading: the plain shell is then the whole of what a frame opens with."
+                "shell" => "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row above the press that opens a pane in it: confirm the plain shell is the one that is on, and that the press is live rather than asking to be told what to open with. What else is on the row is nothing to this reading: a press saying how many agents this machine has not got is left folded, and on a machine that can start none the plain shell may be the only thing there is to choose."
                     .to_string(),
                 // The first run, which is a state and not a program: nobody has said, so the frame
                 // says so instead of guessing. Both halves are read because either alone passes on
@@ -2663,7 +2689,7 @@ impl Instructor {
                 // The row has to be there to be read blank, and that is said out loud: this is the
                 // one reading here a machine cannot be relied on to be able to give, and the road
                 // that asks for it stood the machine up first (`can-start`).
-                "none" => "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row above the press that opens a pane in it: confirm the row is drawn, with several things on it to open with, and that **none of them is on**. The press below it does not open a pane: it asks to be told what to open with, and will not answer until one of the row is chosen. Nothing is chosen here — that is the next step's — and if a name on that row is already on, this step has failed."
+                "none" => "On the terminal face, look at the empty frame — the box on the page that is not a terminal — and at the row above the press that opens a pane in it: confirm the row is drawn, with several things on it to open with, and that **none of them is on**. The press below it does not open a pane: it asks to be told what to open with, and will not answer until one of the row is chosen. Leave folded any press saying how many agents this machine has not got — what is behind it cannot be chosen and is not part of this reading. Nothing is chosen here — that is the next step's — and if a name on that row is already on, this step has failed."
                     .to_string(),
                 other => return Err(format!(
                     "assert `opens-with` cannot name `{other}` — the plain shell is the one thing every machine's row has, `none` is nobody having chosen yet, and which agents are on the row is that machine's own"
@@ -3071,6 +3097,17 @@ fn door(with: &Args) -> Result<&'static str, String> {
     }
 }
 
+/// Which of the two items that open a naming box a step is about, named by what it makes rather than
+/// by the item's words, for the reason `door` and `section` are named that way.
+fn made(with: &Args) -> Result<&'static str, String> {
+    match with.get("as").and_then(|v| v.as_str()) {
+        Some("file") => Ok("file"),
+        Some("folder") => Ok("folder"),
+        Some(other) => Err(format!("`as` does not know `{other}` — it is file or folder")),
+        None => Err("arg `as` must say which of the two the item makes".to_string()),
+    }
+}
+
 /// One of the file face's standing lines, named by what it says. The wording is the interface's, so an
 /// instruction describes the line rather than quoting it.
 fn note(with: &Args) -> Result<&'static str, String> {
@@ -3085,6 +3122,12 @@ fn note(with: &Args) -> Result<&'static str, String> {
         Some("nothing-changed") => Ok("that nothing has changed yet"),
         Some("no-folder") => Ok("that this project has no folder yet"),
         Some("folder-gone") => Ok("that this folder is not there any more"),
+        // The two refusals a name comes back with, read under the box the name was typed into rather
+        // than among the lines the column stands with. They are named by what the machine answered —
+        // the name is in the folder already, or it is not a name this machine will hold — and not by
+        // the sentence drawn for it, which is the interface's own.
+        Some("taken") => Ok("that the name typed into the box is already in that folder"),
+        Some("unnameable") => Ok("that this machine will not take what was typed as the name of one file"),
         Some(other) => Err(format!("`note` does not know `{other}`")),
         None => Err("arg `note` must say which of the face's lines".to_string()),
     }
@@ -5755,8 +5798,9 @@ steps_gui:
         assert!(said.contains("plain shell is the one that is on"), "got: {said}");
         assert!(said.contains("press is live"), "the press is half the reading: {said}");
         assert!(
-            said.contains("no row on the frame at all"),
-            "a machine that can start nothing draws no row, and the step has to say so: {said}"
+            said.contains("nothing to this reading"),
+            "the row carries what this machine has not got as well, so the step has to put those out \
+             of the reading rather than leave an operator counting them: {said}"
         );
         assert!(
             Instructor::new().expectation(&step).is_none(),

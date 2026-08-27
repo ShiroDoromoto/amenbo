@@ -1,21 +1,14 @@
-// The bridge between a TextMate grammar and CodeMirror: about a hundred lines, because no published
-// one exists (`AMB-D-769`). What it owes CodeMirror is a `DecorationSet` over the visible lines;
-// what it owes the grammar is that lines reach it in order, each with the rule stack the line above
-// left behind.
+// Which colour each run of characters is drawn in — the half of the bridge between a TextMate
+// grammar and CodeMirror that is about looking at a file rather than editing one (`AMB-D-769`).
 //
-// **Only the viewport is painted, and only from the last stack we already hold.** A TextMate
-// grammar has no way to start in the middle of a document — whether a line is inside a block
-// comment is the previous line's answer — so a naive painter would re-read the whole file on every
-// keystroke. Holding one stack per line turns that into: a typed character throws away the stacks
-// below it, and the next paint reads forward only as far as the screen. Measured, a keystroke is
-// 1-2 ms and opening the largest file the panel will read is about 120 ms (`AMB-T-3738`).
-//
-// The grammar arrives asynchronously and the editor does not wait for it: an uncoloured file is
-// what this panel drew before, so a grammar that never loads costs nothing but colour.
+// **Only the viewport is painted.** The tokens themselves come from `./tmdoc`, which holds them for
+// the whole document because the editing manners need lines the screen does not show; what is done
+// here is turning the tokens of the lines actually on screen into decorations, which is cheap and
+// is redone on every scroll and every keystroke.
 
 import { RangeSetBuilder, type Extension } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from "@codemirror/view";
-import { loadGrammar, type LangId } from "./grammars";
+import type { TmField } from "./tmdoc";
 
 // The scopes, longest first, so `keyword.operator` is read as an operator rather than as a keyword.
 // A prefix matches a scope that equals it or continues it after a dot — never `constant` matching
@@ -78,54 +71,30 @@ const MARKS: Record<string, Decoration> = Object.fromEntries(
   KIND_NAMES.map((kind) => [kind, Decoration.mark({ class: `tm-${kind}` })]),
 );
 
-/** Build the extension that colours `lang`, once its grammar has been fetched. */
-export async function textmate(lang: LangId): Promise<Extension> {
-  const { grammar, initial } = await loadGrammar(lang);
-
+/** Build the extension that paints one editor, reading its tokens out of `field`. */
+export function painting(field: TmField): Extension {
   const painter = ViewPlugin.fromClass(
     class {
       decorations: DecorationSet;
-      // `stacks[n]` is the rule stack a document's line n + 1 starts from, so index 0 is where the
-      // grammar itself starts. Truncating this array is how an edit is forgotten.
-      private stacks = [initial];
 
       constructor(view: EditorView) {
         this.decorations = this.paint(view);
       }
 
       update(update: ViewUpdate) {
-        if (!update.docChanged && !update.viewportChanged) return;
-        if (update.docChanged) {
-          let first = Number.MAX_SAFE_INTEGER;
-          update.changes.iterChangedRanges((_fromA, _toA, fromB) => {
-            first = Math.min(first, update.state.doc.lineAt(fromB).number);
-          });
-          // A line that changed may end differently, so the stack it hands on is unknown — and so
-          // is every stack after it. What is kept is everything strictly above.
-          if (first < this.stacks.length) this.stacks.length = first;
-        }
-        this.decorations = this.paint(update.view);
+        if (update.docChanged || update.viewportChanged) this.decorations = this.paint(update.view);
       }
 
       private paint(view: EditorView): DecorationSet {
         const doc = view.state.doc;
+        const tokens = view.state.field(field);
         const from = doc.lineAt(view.viewport.from).number;
         const to = doc.lineAt(view.viewport.to).number;
-
-        // Reading forward to the top of the viewport is the cost of a grammar with no way in from
-        // the middle. It is paid once per scroll into new ground, and never again while the lines
-        // above stay untouched — which is what makes a keystroke cost the screen rather than the
-        // file.
-        for (let n = this.stacks.length; n < from; n++) {
-          this.stacks[n] = grammar.tokenizeLine(doc.line(n).text, this.stacks[n - 1]).ruleStack;
-        }
 
         const builder = new RangeSetBuilder<Decoration>();
         for (let n = from; n <= to; n++) {
           const line = doc.line(n);
-          const result = grammar.tokenizeLine(line.text, this.stacks[n - 1]);
-          this.stacks[n] = result.ruleStack;
-          for (const token of result.tokens) {
+          for (const token of tokens.tokensAt(doc, n)) {
             const kind = kindOf(token.scopes);
             if (kind === null || token.startIndex === token.endIndex) continue;
             builder.add(line.from + token.startIndex, line.from + token.endIndex, MARKS[kind]);

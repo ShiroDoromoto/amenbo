@@ -541,6 +541,17 @@ export const fr: Translation = {
     "face.open": "Ouvrir un terminal ici",
     "face.openPick": "Choisissez-en un",
     "face.moreStarts": "Non installés ({n})",
+    "face.startsOwn": "Commandes que vous avez enregistrées",
+    "face.startAdd": "Enregistrer une commande",
+    "face.startName": "Nom",
+    "face.startNamePh": "Claude (Opus)",
+    "face.startLine": "Ligne de commande",
+    "face.startLinePh": "claude --model opus",
+    "face.startRuns": "Voici ce qui s'exécute dans le terminal :",
+    "face.startSave": "Enregistrer",
+    "face.startCancel": "Annuler",
+    "face.startEdit": "Modifier",
+    "face.startRemove": "Supprimer",
     "face.openHere": "De la place pour un autre volet dans ce projet",
     "face.whichFolder": "Dans quel dossier ce volet travaille-t-il ?",
     "face.rename": "Renommer ce volet",
@@ -574,6 +585,17 @@ export const fr: Translation = {
     "files.stoppedTaken": "quelque chose porte déjà ce nom",
     "files.stoppedInside": "un dossier ne peut pas être déplacé dans lui-même",
     "files.stoppedNameless": "il n'a aucun nom sous lequel l'accueillir",
+    // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+    // of the three it is, so there is no separate place for a reader to look for the answer.
+    "files.save": "Enregistrer",
+    "files.saving": "Enregistrement…",
+    "files.saved": "Enregistré",
+    // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+    // line of the other, so the reader is told and asked (`AMB-D-773`).
+    "files.newlinesMixed": "Ce fichier contient les deux sortes de saut de ligne. L'enregistrer les rendra toutes identiques.",
+    "files.newlineChoose": "Avec quel saut de ligne l'enregistrer",
+    "files.newlineLf": "Unix (LF)",
+    "files.newlineCrlf": "Windows (CRLF)",
     "files.tooBig": "Cette image est trop grande pour être affichée ici.",
     "files.tooBigPixels": "{width} × {height} pixels",
     "files.tooBigOpen": "L'ouvrir dans une autre application",
@@ -730,12 +752,17 @@ export const fr: Translation = {
     wake_no_folder: "Ce dossier n'a pas pu être lu : {reason}",
     wake_no_config: "Amenbo n'a pas pu trouver ses propres fichiers.",
     wake_not_kept: "Le choix n'a pas pu être enregistré.",
+    wake_not_registered: "Une commande enregistrée a besoin d'un nom et d'une ligne de commande.",
     window_failed: "Cette fenêtre n'a pas pu être ouverte : {reason}",
     talk_blank: "Cette fenêtre s'est ouverte sans rien afficher : le terminal a été remis dans celle-ci.",
     folder_taken: "{name} existe déjà.",
     folder_name: "Cette machine n’accepte pas {name} comme nom.",
     folder_make: "{name} n’a pas pu être créé : {reason}",
     folder_rename: "Le renommage en {name} a échoué : {reason}",
+    // What the file panel answers a save with (`crate::folder_save`). The character is named
+    // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+    folder_not_saved: "Ce fichier n'a pas pu être enregistré : {reason}",
+    folder_unwritable_character: "« {character} » ne peut pas s'écrire en {encoding}, donc rien n'a été enregistré.",
 
     already_reserved:
       "{ref} n'est pas « À faire », donc impossible de la réserver — une autre session la tient peut-être déjà.",

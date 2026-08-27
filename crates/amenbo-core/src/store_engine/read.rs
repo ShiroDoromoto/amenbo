@@ -4879,6 +4879,21 @@ pub fn time_axis_dimensions(conn: &Connection) -> Result<Vec<i64>> {
     select_ids(conn, DIM.id, Some(&Pred::eq(DIM.role, "time_axis")))
 }
 
+/// Of the given axes, the ones that classify `side` at all (`applies_to`, `AMB-D-789`). `dim:` and
+/// `time_axis:` narrow their resolved axes through this, so a token written on the side an axis does not
+/// classify is refused rather than answered with an empty page — the two readings zero rows would
+/// otherwise carry at once. An axis name is per-project, so a reference reaching several projects keeps
+/// whichever of them classify this side and drops the rest.
+pub fn dimensions_classifying(
+    conn: &Connection,
+    ids: &[i64],
+    side: crate::model::ClassifiedSide,
+) -> Result<Vec<i64>> {
+    let pred = Pred::is_in(DIM.id, ids.iter().copied())
+        .and(Pred::is_in(DIM.applies_to, side.accepted().iter().map(|a| a.as_str())));
+    select_ids(conn, DIM.id, Some(&pred))
+}
+
 /// Value ids of the given dimensions matching `reference` as a key or a case-insensitive name — the
 /// value half of [`resolve_dimension_by_ref`], scoped to the axes that reference already resolved to.
 /// No axis is no value: an empty axis set matches nothing, rather than widening to every value.

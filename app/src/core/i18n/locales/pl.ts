@@ -546,6 +546,17 @@ export const pl: Translation = {
     "face.open": "Otwórz tu terminal",
     "face.openPick": "Wybierz jeden",
     "face.moreStarts": "Niezainstalowane ({n})",
+    "face.startsOwn": "Polecenia, które zapisałeś",
+    "face.startAdd": "Zapisz polecenie",
+    "face.startName": "Nazwa",
+    "face.startNamePh": "Claude (Opus)",
+    "face.startLine": "Wiersz polecenia",
+    "face.startLinePh": "claude --model opus",
+    "face.startRuns": "To uruchamia się w terminalu:",
+    "face.startSave": "Zapisz",
+    "face.startCancel": "Anuluj",
+    "face.startEdit": "Zmień",
+    "face.startRemove": "Usuń",
     "face.openHere": "Miejsce na kolejny panel w tym projekcie",
     "face.whichFolder": "W którym folderze pracuje ten panel?",
     "face.rename": "Zmień nazwę tego panelu",
@@ -579,6 +590,17 @@ export const pl: Translation = {
     "files.stoppedTaken": "coś o tej nazwie już tam jest",
     "files.stoppedInside": "folderu nie można przenieść do niego samego",
     "files.stoppedNameless": "nie ma nazwy, pod którą można by go przyjąć",
+    // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+    // of the three it is, so there is no separate place for a reader to look for the answer.
+    "files.save": "Zapisz",
+    "files.saving": "Zapisywanie…",
+    "files.saved": "Zapisano",
+    // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+    // line of the other, so the reader is told and asked (`AMB-D-773`).
+    "files.newlinesMixed": "Ten plik ma oba rodzaje końca wiersza. Po zapisaniu wszystkie będą takie same.",
+    "files.newlineChoose": "Którym końcem wiersza zapisać",
+    "files.newlineLf": "Unix (LF)",
+    "files.newlineCrlf": "Windows (CRLF)",
     "files.tooBig": "Ten obraz jest za duży, żeby pokazać go tutaj.",
     "files.tooBigPixels": "{width} × {height} pikseli",
     "files.tooBigOpen": "Otwórz w innej aplikacji",
@@ -739,12 +761,17 @@ export const pl: Translation = {
     wake_no_folder: "Nie udało się odczytać tego folderu: {reason}",
     wake_no_config: "Amenbo nie znalazło własnych plików.",
     wake_not_kept: "Nie udało się zapisać wyboru.",
+    wake_not_registered: "Zarejestrowane polecenie wymaga zarówno nazwy, jak i wiersza polecenia.",
     window_failed: "Nie udało się otworzyć tego okna: {reason}",
     talk_blank: "Tamto okno otworzyło się, ale nic w nim nie narysowano, więc terminal wrócił do tego okna.",
     folder_taken: "{name} już tam jest.",
     folder_name: "Ta maszyna nie przyjmuje nazwy {name}.",
     folder_make: "Nie udało się utworzyć {name}: {reason}",
     folder_rename: "Nie udało się zmienić nazwy na {name}: {reason}",
+    // What the file panel answers a save with (`crate::folder_save`). The character is named
+    // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+    folder_not_saved: "Nie udało się zapisać tego pliku: {reason}",
+    folder_unwritable_character: "„{character}” nie da się zapisać w {encoding}, więc nic nie zostało zapisane.",
 
     already_reserved:
       "{ref} nie ma statusu „Do zrobienia”, więc nie można go zarezerwować — być może trzyma go już inna sesja.",

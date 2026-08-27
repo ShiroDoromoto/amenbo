@@ -520,6 +520,17 @@ export const tr: Translation = {
     "face.open": "Burada bir terminal aç",
     "face.openPick": "Birini seçin",
     "face.moreStarts": "Kurulu değil ({n})",
+    "face.startsOwn": "Kaydettiğiniz komutlar",
+    "face.startAdd": "Komut kaydet",
+    "face.startName": "Ad",
+    "face.startNamePh": "Claude (Opus)",
+    "face.startLine": "Komut satırı",
+    "face.startLinePh": "claude --model opus",
+    "face.startRuns": "Terminalde şu çalışır:",
+    "face.startSave": "Kaydet",
+    "face.startCancel": "Vazgeç",
+    "face.startEdit": "Düzenle",
+    "face.startRemove": "Kaldır",
     "face.openHere": "Bu projede bir bölme daha için yer",
     "face.whichFolder": "Bu bölme hangi klasörde çalışıyor?",
     "face.rename": "Bu bölmeyi yeniden adlandır",
@@ -553,6 +564,17 @@ export const tr: Translation = {
     "files.stoppedTaken": "o adda bir şey zaten var",
     "files.stoppedInside": "bir klasör kendi içine taşınamaz",
     "files.stoppedNameless": "içeri alınacağı bir adı yok",
+    // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+    // of the three it is, so there is no separate place for a reader to look for the answer.
+    "files.save": "Kaydet",
+    "files.saving": "Kaydediliyor…",
+    "files.saved": "Kaydedildi",
+    // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+    // line of the other, so the reader is told and asked (`AMB-D-773`).
+    "files.newlinesMixed": "Bu dosyada iki tür satır sonu birlikte var. Kaydedince hepsi aynı olur.",
+    "files.newlineChoose": "Hangi satır sonuyla kaydedilecek",
+    "files.newlineLf": "Unix (LF)",
+    "files.newlineCrlf": "Windows (CRLF)",
     "files.tooBig": "Bu görsel burada gösterilemeyecek kadar büyük.",
     "files.tooBigPixels": "{width} × {height} piksel",
     "files.tooBigOpen": "Başka bir uygulamada aç",
@@ -702,12 +724,17 @@ export const tr: Translation = {
     wake_no_folder: "O klasör okunamadı: {reason}",
     wake_no_config: "Amenbo kendi dosyalarını bulamadı.",
     wake_not_kept: "Seçim kaydedilemedi.",
+    wake_not_registered: "Kaydedilen bir komut hem ad hem de komut satırı gerektirir.",
     window_failed: "O pencere açılamadı: {reason}",
     talk_blank: "O pencere açıldı ama içine hiçbir şey çizilmedi; terminal yeniden bu pencereye alındı.",
     folder_taken: "{name} zaten var.",
     folder_name: "Bu makine {name} adını kabul etmiyor.",
     folder_make: "{name} oluşturulamadı: {reason}",
     folder_rename: "{name} olarak yeniden adlandırılamadı: {reason}",
+    // What the file panel answers a save with (`crate::folder_save`). The character is named
+    // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+    folder_not_saved: "Bu dosya kaydedilemedi: {reason}",
+    folder_unwritable_character: "“{character}” {encoding} ile yazılamıyor, bu yüzden hiçbir şey kaydedilmedi.",
 
     already_reserved:
       "{ref} “Yapılacak” durumunda değil, bu yüzden üstlenilemez — başka bir oturum onu çoktan almış olabilir.",

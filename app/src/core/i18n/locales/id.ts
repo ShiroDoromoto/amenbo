@@ -523,6 +523,17 @@ export const id: Translation = {
     "face.open": "Buka terminal di sini",
     "face.openPick": "Pilih satu",
     "face.moreStarts": "Belum terpasang ({n})",
+    "face.startsOwn": "Perintah yang Anda daftarkan",
+    "face.startAdd": "Daftarkan perintah",
+    "face.startName": "Nama",
+    "face.startNamePh": "Claude (Opus)",
+    "face.startLine": "Baris perintah",
+    "face.startLinePh": "claude --model opus",
+    "face.startRuns": "Inilah yang dijalankan di terminal:",
+    "face.startSave": "Simpan",
+    "face.startCancel": "Batal",
+    "face.startEdit": "Ubah",
+    "face.startRemove": "Hapus",
     "face.openHere": "Tempat untuk satu panel lagi di proyek ini",
     "face.whichFolder": "Panel ini bekerja di folder yang mana?",
     "face.rename": "Ganti nama panel ini",
@@ -556,6 +567,17 @@ export const id: Translation = {
     "files.stoppedTaken": "sudah ada sesuatu dengan nama itu",
     "files.stoppedInside": "folder tidak bisa dipindahkan ke dalam dirinya sendiri",
     "files.stoppedNameless": "tidak ada nama untuk menampungnya",
+    // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+    // of the three it is, so there is no separate place for a reader to look for the answer.
+    "files.save": "Simpan",
+    "files.saving": "Menyimpan…",
+    "files.saved": "Tersimpan",
+    // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+    // line of the other, so the reader is told and asked (`AMB-D-773`).
+    "files.newlinesMixed": "Berkas ini memuat dua macam pemisah baris. Menyimpannya akan menyamakan semuanya.",
+    "files.newlineChoose": "Simpan dengan pemisah baris yang mana",
+    "files.newlineLf": "Unix (LF)",
+    "files.newlineCrlf": "Windows (CRLF)",
     "files.tooBig": "Gambar ini terlalu besar untuk ditampilkan di sini.",
     "files.tooBigPixels": "{width} × {height} piksel",
     "files.tooBigOpen": "Buka di aplikasi lain",
@@ -704,12 +726,17 @@ export const id: Translation = {
     wake_no_folder: "Folder itu tidak bisa dibaca: {reason}",
     wake_no_config: "Amenbo tidak menemukan berkasnya sendiri.",
     wake_not_kept: "Pilihan tidak bisa disimpan.",
+    wake_not_registered: "Perintah yang didaftarkan memerlukan nama dan baris perintah.",
     window_failed: "Jendela itu tidak dapat dibuka: {reason}",
     talk_blank: "Jendela itu terbuka tetapi tidak menggambar apa pun, jadi terminal dikembalikan ke jendela ini.",
     folder_taken: "{name} sudah ada.",
     folder_name: "Mesin ini tidak menerima {name} sebagai nama.",
     folder_make: "{name} tidak bisa dibuat: {reason}",
     folder_rename: "Namanya tidak bisa diganti menjadi {name}: {reason}",
+    // What the file panel answers a save with (`crate::folder_save`). The character is named
+    // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+    folder_not_saved: "Berkas ini tidak bisa disimpan: {reason}",
+    folder_unwritable_character: "“{character}” tidak bisa ditulis dalam {encoding}, jadi tidak ada yang disimpan.",
 
     already_reserved:
       "{ref} tidak berstatus “Akan dikerjakan”, jadi tidak bisa diambil — mungkin sesi lain sudah memegangnya.",

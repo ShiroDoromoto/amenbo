@@ -38,6 +38,21 @@ use crate::error::CmdError;
 /// file, and a folder that is not a repository has no ignore file at all.
 const PRUNED: [&str; 4] = [".git", "node_modules", "target", "dist"];
 
+/// The front of the name a save writes its bytes into before it puts them in place
+/// (`crate::folder_save`).
+///
+/// **It is left out of both walks below.** The window it exists in is about a tenth of a
+/// millisecond and the watch waits 400 ms for quiet before it looks, so it is rarely seen
+/// (`AMB-T-3739`) — but a burst arriving around it draws a row in the tree under a name nobody
+/// wrote, which reads as the app being broken rather than as the app working. The row would go on
+/// standing there too: what takes it away is the next walk, and nothing is bound to happen next.
+///
+/// **It carries no part of the file's own name.** A name may be 255 bytes and no more, so one built
+/// out of another name plus a front of its own is longer than the filesystem will take for exactly
+/// the files whose names are longest — a refusal that would have nothing to do with what the reader
+/// was trying to save.
+pub const SAVING: &str = ".amenbo-saving-";
+
 /// How much of a file is read to decide whether it is text (`AMB-T-3547`).
 const HEAD: usize = 8000;
 
@@ -255,6 +270,49 @@ pub fn open_no_follow(path: &Path) -> std::io::Result<std::fs::File> {
     Ok(file)
 }
 
+/// Open one file **for writing**, emptied, and without following a link at the last name.
+///
+/// The reading half above says why the last name is the one to judge. What is different here is
+/// what following one would cost: reading through a link hands out a file from outside the project,
+/// and writing through it *replaces* that file — which is the hole `AMB-D-782` closed, measured
+/// actually happening (`AMB-T-3739`).
+///
+/// `create` is for the name that has never existed: a save writes its bytes into a file of its own
+/// beside the one it is replacing ([`SAVING`]), and that one is made here.
+///
+/// **Emptied by this call rather than by the caller**, so that the file handed back is one whose
+/// whole content is what gets written into it. Truncating through the open options instead would
+/// empty a link's target on Windows before anything had asked whether it was a link.
+#[cfg(unix)]
+pub fn write_no_follow(path: &Path, create: bool) -> std::io::Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt as _;
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(create)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)?;
+    file.set_len(0)?;
+    Ok(file)
+}
+
+/// The same, on the operating system with no flag that refuses: the handle comes back naming the
+/// link itself rather than what it points at, and saying no is then ours to do — which is done
+/// before the file is emptied, so a link is never the thing that gets emptied.
+#[cfg(windows)]
+pub fn write_no_follow(path: &Path, create: bool) -> std::io::Result<std::fs::File> {
+    use std::os::windows::fs::OpenOptionsExt as _;
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(create)
+        .custom_flags(windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)?;
+    if file.metadata()?.file_type().is_symlink() {
+        return Err(std::io::Error::other("a link is not written through here"));
+    }
+    file.set_len(0)?;
+    Ok(file)
+}
+
 /// The folders this project is bound to, in the order they are held — their path names, which is a
 /// spelling and not a ranking (`AMB-D-531`) — each in the reader's spelling.
 ///
@@ -305,10 +363,14 @@ pub fn gone() -> CmdError {
 /// Hidden files are **not** skipped, which is where this parts company with the ignore crate's
 /// default: a dotfile is a file somebody wrote, and `.amenbo` and `.env` are exactly the ones a
 /// reader goes looking for after an agent has been at work.
+///
+/// The one name left out on top of the floor is this app's own half-written save ([`SAVING`]),
+/// which is not a file anybody wrote and is gone again before a reader could act on it.
 fn floor(root: &Path) -> ignore::WalkBuilder {
     let mut builder = ignore::WalkBuilder::new(root);
     builder.hidden(false).require_git(false).filter_entry(|entry| {
-        !PRUNED.contains(&entry.file_name().to_string_lossy().as_ref())
+        let name = entry.file_name().to_string_lossy();
+        !PRUNED.contains(&name.as_ref()) && !name.starts_with(SAVING)
     });
     builder
 }

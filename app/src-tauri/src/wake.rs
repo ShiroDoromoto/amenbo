@@ -24,10 +24,19 @@
 //! nothing in Amenbo can make it not. A WARN that fires every time a window opens and names nothing
 //! anyone can act on is noise in the one log that is meant to be read.
 //!
-//! **The webview never names a program.** What crosses is a catalogued id; the command it becomes is
-//! read out of [`amenbo_core::harness::LAUNCHES`] on this side. A pane is a shell with a command
-//! line, so an id that turned into whatever string arrived would be a shell injection with a webview
-//! at the other end of it.
+//! **The webview never names a program.** What crosses is an id; the command it becomes is read on
+//! this side, out of [`amenbo_core::harness::LAUNCHES`] or out of this device's own registrations
+//! ([`amenbo_core::config::Config::custom_agents`]). A pane is a shell with a command line, so an id
+//! that turned into whatever string arrived would be a shell injection with a webview at the other
+//! end of it.
+//!
+//! **A registered command is written here and read like any other row** (`AMB-D-794`). The three
+//! doors that keep it — `wake_register`, `wake_amend`, `wake_unregister` — sit beside the ones
+//! that keep an answer, because they are the same kind of thing: a whole-file rewrite of the
+//! device's settings, serialized through the store. What the registration is *allowed* to hold is
+//! wider than a catalog row by design — a whole command line, arguments and all — and the line it
+//! draws is elsewhere: the line is never taken apart here, and only its first word is ever looked
+//! for on the `PATH`.
 
 use std::path::{Path, PathBuf};
 
@@ -49,11 +58,13 @@ use crate::error::CmdError;
 pub fn wake_probe(folder: String, project: Option<i64>) -> Result<WakeDto, CmdError> {
     let folder = resolve(folder)?;
     let found = amenbo_core::harness::probe(&folder, amenbo_core::config::Paths::command_name());
-    let candidates = weighed(&found);
+    let config = config()?;
+    let candidates = weighed(&found, config.custom_agents());
     answer(
         Some(folder.to_string_lossy().into_owned()),
         candidates,
         project,
+        &config,
     )
 }
 
@@ -72,17 +83,30 @@ pub fn wake_choices(project: Option<i64>, folders: Vec<String>) -> Result<WakeDt
         .filter_map(|one| std::fs::canonicalize(one).ok())
         .flat_map(|one| amenbo_core::harness::probe(&one, command))
         .collect();
-    answer(None, weighed(&found), project)
+    let config = config()?;
+    let candidates = weighed(&found, config.custom_agents());
+    answer(None, candidates, project, &config)
 }
 
-/// Every provider Amenbo can start, told apart by what this machine can start.
-fn weighed(found: &[amenbo_core::harness::Wiring]) -> Vec<wake::Candidate> {
-    let commands: Vec<&str> = amenbo_core::harness::LAUNCHES
+/// Every provider Amenbo can start — the catalog's and this device's own — told apart by what this
+/// machine can start.
+///
+/// One probe answers for all of them, registered rows included: what is asked about a registration
+/// is the first word of its line ([`amenbo_core::config::CustomAgent::command`]), which is the only
+/// part of it that names something to look for.
+fn weighed(
+    found: &[amenbo_core::harness::Wiring],
+    registered: &[amenbo_core::config::CustomAgent],
+) -> Vec<wake::Candidate> {
+    let mut commands: Vec<&str> = amenbo_core::harness::LAUNCHES
         .iter()
         .map(|one| one.command)
         .collect();
+    commands.extend(registered.iter().map(|one| one.command()));
     let installed = crate::launch::installed(&commands);
-    wake::candidates(found, |cmd| installed.iter().any(|one| one == cmd))
+    wake::candidates(found, registered, |cmd| {
+        installed.iter().any(|one| one == cmd)
+    })
 }
 
 /// The candidates and the project's answer, in the shape a face reads.
@@ -95,18 +119,18 @@ fn answer(
     folder: Option<String>,
     candidates: Vec<wake::Candidate>,
     project: Option<i64>,
+    config: &amenbo_core::config::Config,
 ) -> Result<WakeDto, CmdError> {
-    let config = config()?;
     let kept = project.and_then(|id| config.agent_for(id));
     let settled = match wake::settle(kept, config.last_agent(), &candidates) {
-        Choice::Settled(id) => Some(id.to_string()),
+        Choice::Settled(id) => Some(id),
         Choice::Ask(_) | Choice::Nothing => None,
     };
     Ok(WakeDto {
         folder,
         offered: wake::offered(&candidates)
             .iter()
-            .map(|one| one.id.to_string())
+            .map(|one| one.id.clone())
             .collect(),
         candidates: candidates.iter().map(row).collect(),
         settled,
@@ -116,8 +140,8 @@ fn answer(
 
 /// Keep this project's answer, so the next pane opened in it starts with the same thing.
 ///
-/// The id is checked against the catalog rather than trusted, because what is written here is read
-/// back as the thing to start.
+/// The id is checked against the catalog **and this device's registrations** rather than trusted,
+/// because what is written here is read back as the thing to start.
 ///
 /// **Written through the store, though it is read without one.** A write is a whole-file rewrite of
 /// the device's settings, so one built on a copy read minutes ago would carry back whatever the
@@ -126,15 +150,9 @@ fn answer(
 /// cheap road, the same one `ui_language` takes.
 #[tauri::command]
 pub fn wake_remember(project: i64, agent: String) -> Result<(), CmdError> {
-    if wake::started_as(&agent).is_none() {
-        return Err(CmdError::coded(
-            "wake_unknown_agent",
-            "That is not an agent Amenbo knows how to start.",
-            serde_json::json!({ "agent": agent }),
-        ));
-    }
     crate::migrate::gate()?;
     let mut store = amenbo_core::Store::open_at(paths()?).map_err(not_kept)?;
+    known(&store.config, &agent)?;
     store.config.remember_agent(project, &agent);
     store.save_config().map_err(not_kept)
 }
@@ -155,15 +173,11 @@ pub fn wake_remember(project: i64, agent: String) -> Result<(), CmdError> {
 /// rewrite of the device's settings.
 #[tauri::command]
 pub fn wake_chose(agent: String) -> Result<(), CmdError> {
-    if agent != wake::SHELL && wake::started_as(&agent).is_none() {
-        return Err(CmdError::coded(
-            "wake_unknown_agent",
-            "That is not an agent Amenbo knows how to start.",
-            serde_json::json!({ "agent": agent }),
-        ));
-    }
     crate::migrate::gate()?;
     let mut store = amenbo_core::Store::open_at(paths()?).map_err(not_kept)?;
+    if agent != wake::SHELL {
+        known(&store.config, &agent)?;
+    }
     store.config.remember_last_agent(&agent);
     store.save_config().map_err(not_kept)
 }
@@ -178,6 +192,92 @@ pub fn wake_forget(project: i64) -> Result<(), CmdError> {
     store.save_config().map_err(not_kept)
 }
 
+/// Register a command of the reader's own, answering with the id it was given — which is what a
+/// face hands back to open a pane with (`AMB-D-794`).
+///
+/// **The line is not judged**, past both halves being non-empty. What is written here runs in the
+/// pane's shell, and the pane is a real terminal (`AMB-D-747`): anything Amenbo refused to register
+/// would still be something the reader could type into it, so a guard here would buy nothing and
+/// cost them the tool they actually use.
+///
+/// Written through the store for the same reason a kept answer is ([`wake_remember`]).
+#[tauri::command]
+pub fn wake_register(label: String, line: String) -> Result<String, CmdError> {
+    crate::migrate::gate()?;
+    let mut store = amenbo_core::Store::open_at(paths()?).map_err(not_kept)?;
+    let id = store
+        .config
+        .register_agent(&label, &line)
+        .map_err(badly_written)?
+        .id
+        .clone();
+    store.save_config().map_err(not_kept)?;
+    Ok(id)
+}
+
+/// Correct a registered command, keeping its id — so a row fixed after a typo is still the one this
+/// project pinned and this person last opened with.
+#[tauri::command]
+pub fn wake_amend(id: String, label: String, line: String) -> Result<(), CmdError> {
+    crate::migrate::gate()?;
+    let mut store = amenbo_core::Store::open_at(paths()?).map_err(not_kept)?;
+    registered(&store.config, &id)?;
+    store.config.amend_agent(&id, &label, &line).map_err(badly_written)?;
+    store.save_config().map_err(not_kept)
+}
+
+/// Drop a registered command.
+///
+/// Where its id was written down it is left alone, the same as a catalogued tool that has been
+/// uninstalled: [`amenbo_core::wake::settle`] passes over an answer that is no longer offered, so a
+/// stale id costs a line in the settings and nothing else.
+#[tauri::command]
+pub fn wake_unregister(id: String) -> Result<(), CmdError> {
+    crate::migrate::gate()?;
+    let mut store = amenbo_core::Store::open_at(paths()?).map_err(not_kept)?;
+    registered(&store.config, &id)?;
+    store.config.forget_custom_agent(&id);
+    store.save_config().map_err(not_kept)
+}
+
+/// Whether an id names something this machine can be asked to start — a catalog row, or a command
+/// registered on this device. The guard on every id that is written down as an answer.
+fn known(config: &amenbo_core::config::Config, agent: &str) -> Result<(), CmdError> {
+    if wake::started_as(agent).is_some() || config.custom_agent(agent).is_some() {
+        return Ok(());
+    }
+    Err(CmdError::coded(
+        "wake_unknown_agent",
+        "That is not an agent Amenbo knows how to start.",
+        serde_json::json!({ "agent": agent }),
+    ))
+}
+
+/// The registered row an id names, or the refusal for an id nothing is registered under — what the
+/// two doors that change a registration ask before they change one.
+fn registered<'a>(
+    config: &'a amenbo_core::config::Config,
+    id: &str,
+) -> Result<&'a amenbo_core::config::CustomAgent, CmdError> {
+    config.custom_agent(id).ok_or_else(|| {
+        CmdError::coded(
+            "wake_unknown_agent",
+            "That is not an agent Amenbo knows how to start.",
+            serde_json::json!({ "agent": id }),
+        )
+    })
+}
+
+/// The refusal for a registration with a half missing — no name to draw it by, or no command line
+/// to start.
+fn badly_written(e: amenbo_core::error::Error) -> CmdError {
+    CmdError::coded(
+        "wake_not_registered",
+        format!("That command could not be registered: {e}"),
+        serde_json::json!({ "reason": e.to_string() }),
+    )
+}
+
 /// The refusal for a choice that reached the settings and did not land.
 fn not_kept(e: amenbo_core::error::Error) -> CmdError {
     CmdError::coded(
@@ -190,9 +290,10 @@ fn not_kept(e: amenbo_core::error::Error) -> CmdError {
 /// One candidate as the face draws it.
 fn row(one: &wake::Candidate) -> WakeCandidateDto {
     WakeCandidateDto {
-        id: one.id.to_string(),
-        label: one.label.to_string(),
-        command: one.command.to_string(),
+        id: one.id.clone(),
+        label: one.label.clone(),
+        command: one.command.clone(),
+        line: one.line.clone(),
         traced: one.traced,
         installed: one.installed,
     }

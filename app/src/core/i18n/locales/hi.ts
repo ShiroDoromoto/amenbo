@@ -520,6 +520,17 @@ export const hi: Translation = {
     "face.open": "यहाँ टर्मिनल खोलें",
     "face.openPick": "एक चुनें",
     "face.moreStarts": "इंस्टॉल नहीं ({n})",
+    "face.startsOwn": "आपकी दर्ज की गई कमांड",
+    "face.startAdd": "कमांड दर्ज करें",
+    "face.startName": "नाम",
+    "face.startNamePh": "Claude (Opus)",
+    "face.startLine": "कमांड लाइन",
+    "face.startLinePh": "claude --model opus",
+    "face.startRuns": "टर्मिनल में यही चलता है:",
+    "face.startSave": "सहेजें",
+    "face.startCancel": "रद्द करें",
+    "face.startEdit": "बदलें",
+    "face.startRemove": "हटाएँ",
     "face.openHere": "इस प्रोजेक्ट में एक और पैन के लिए जगह",
     "face.whichFolder": "यह पैन किस फ़ोल्डर में काम करता है?",
     "face.rename": "इस पैन का नाम बदलें",
@@ -553,6 +564,17 @@ export const hi: Translation = {
     "files.stoppedTaken": "उस नाम की कोई चीज़ पहले से वहाँ है",
     "files.stoppedInside": "किसी फ़ोल्डर को उसी के अंदर नहीं ले जाया जा सकता",
     "files.stoppedNameless": "इसका कोई नाम नहीं है जिसके तहत इसे लिया जा सके",
+    // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+    // of the three it is, so there is no separate place for a reader to look for the answer.
+    "files.save": "सहेजें",
+    "files.saving": "सहेजा जा रहा है…",
+    "files.saved": "सहेज लिया",
+    // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+    // line of the other, so the reader is told and asked (`AMB-D-773`).
+    "files.newlinesMixed": "इस फ़ाइल में दोनों तरह के लाइन ब्रेक हैं। सहेजने पर सब एक जैसे हो जाएँगे।",
+    "files.newlineChoose": "किस लाइन ब्रेक के साथ सहेजना है",
+    "files.newlineLf": "Unix (LF)",
+    "files.newlineCrlf": "Windows (CRLF)",
     "files.tooBig": "यह छवि इतनी बड़ी है कि यहाँ नहीं दिखाई जा सकती।",
     "files.tooBigPixels": "{width} × {height} पिक्सेल",
     "files.tooBigOpen": "किसी और ऐप में खोलें",
@@ -702,12 +724,17 @@ export const hi: Translation = {
     wake_no_folder: "वह फ़ोल्डर पढ़ा नहीं जा सका: {reason}",
     wake_no_config: "Amenbo को अपनी ही फ़ाइलें नहीं मिलीं।",
     wake_not_kept: "चुनाव सहेजा नहीं जा सका।",
+    wake_not_registered: "पंजीकृत कमांड के लिए नाम और कमांड लाइन दोनों चाहिए।",
     window_failed: "वह विंडो नहीं खोली जा सकी: {reason}",
     talk_blank: "वह विंडो खुली तो सही, पर उसमें कुछ भी नहीं आया, इसलिए टर्मिनल को इसी विंडो में लौटा दिया गया।",
     folder_taken: "{name} पहले से मौजूद है।",
     folder_name: "यह मशीन {name} को नाम के रूप में स्वीकार नहीं करती।",
     folder_make: "{name} नहीं बनाया जा सका: {reason}",
     folder_rename: "नाम बदलकर {name} नहीं किया जा सका: {reason}",
+    // What the file panel answers a save with (`crate::folder_save`). The character is named
+    // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+    folder_not_saved: "यह फ़ाइल सहेजी नहीं जा सकी: {reason}",
+    folder_unwritable_character: "“{character}” को {encoding} में नहीं लिखा जा सकता, इसलिए कुछ भी नहीं सहेजा गया।",
 
     already_reserved:
       "{ref} “करना है” में नहीं है, इसलिए इसे लिया नहीं जा सकता — शायद कोई दूसरा सत्र इसे पहले ही ले चुका है।",

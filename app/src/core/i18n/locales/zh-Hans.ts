@@ -520,6 +520,17 @@ export const zhHans: Translation = {
     "face.open": "在此打开终端",
     "face.openPick": "请选择一个",
     "face.moreStarts": "未安装（{n}）",
+    "face.startsOwn": "你登记的启动命令",
+    "face.startAdd": "登记命令",
+    "face.startName": "名称",
+    "face.startNamePh": "Claude（Opus）",
+    "face.startLine": "命令行",
+    "face.startLinePh": "claude --model opus",
+    "face.startRuns": "终端里跑的就是这一行：",
+    "face.startSave": "保存",
+    "face.startCancel": "取消",
+    "face.startEdit": "修改",
+    "face.startRemove": "删除",
     "face.openHere": "在这个项目里给下一个窗格腾出位置",
     "face.whichFolder": "这个窗格在哪个文件夹里工作？",
     "face.rename": "重命名此窗格",
@@ -553,6 +564,17 @@ export const zhHans: Translation = {
     "files.stoppedTaken": "那里已经有同名的东西",
     "files.stoppedInside": "文件夹不能移动到它自己里面",
     "files.stoppedNameless": "没有可以据以接收的名称",
+    // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+    // of the three it is, so there is no separate place for a reader to look for the answer.
+    "files.save": "保存",
+    "files.saving": "正在保存…",
+    "files.saved": "已保存",
+    // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+    // line of the other, so the reader is told and asked (`AMB-D-773`).
+    "files.newlinesMixed": "这个文件里两种换行都有。保存后会统一成一种。",
+    "files.newlineChoose": "用哪种换行保存",
+    "files.newlineLf": "Unix (LF)",
+    "files.newlineCrlf": "Windows (CRLF)",
     "files.tooBig": "这张图太大了，没法在这里显示。",
     "files.tooBigPixels": "{width} × {height} 像素",
     "files.tooBigOpen": "用别的应用打开",
@@ -701,12 +723,17 @@ export const zhHans: Translation = {
     wake_no_folder: "读不到那个文件夹：{reason}",
     wake_no_config: "Amenbo 找不到自己的文件。",
     wake_not_kept: "没能保存这个选择。",
+    wake_not_registered: "登记的命令需要名称和命令行两者。",
     window_failed: "无法打开该窗口：{reason}",
     talk_blank: "那个窗口已打开，但始终没有绘制任何内容，因此终端已放回这个窗口。",
     folder_taken: "{name} 已经存在。",
     folder_name: "这台机器不接受 {name} 作为名称。",
     folder_make: "无法创建 {name}：{reason}",
     folder_rename: "无法重命名为 {name}：{reason}",
+    // What the file panel answers a save with (`crate::folder_save`). The character is named
+    // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+    folder_not_saved: "无法保存这个文件：{reason}",
+    folder_unwritable_character: "“{character}”在 {encoding} 里写不出来，所以什么都没保存。",
 
     already_reserved: "{ref} 不是“待办”，无法认领；可能已有另一个会话在处理。",
     not_ready: "{ref} 还不能认领：{reasons}",

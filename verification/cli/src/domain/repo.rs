@@ -104,6 +104,46 @@ impl Driver<'_> {
                 ])?;
                 Ok(Outcome::action(format!("made {} a git repository on `main`", at.display())))
             }
+            // What is lying in the folder, recorded — the one way a road can stand up a folder git
+            // has nothing to say about while a file inside it is new. Until something is committed,
+            // git names the whole top folder and never the paths under it, and a face reading what a
+            // folded folder holds is reading a state that cannot arise.
+            //
+            // Everything is staged rather than a named path: what a road puts in the folder is
+            // whatever its premises wrote, and a step that had to list them again would be a second
+            // place to keep the same list. An empty commit is refused by git and left to fail — a
+            // road committing nothing has a premise that did not do what it said.
+            "git-commit" => {
+                let at = match with.get("dir") {
+                    Some(_) => self.folder(with)?,
+                    None => self.session.cwd.clone(),
+                };
+                let git = |args: &[&str]| -> Result<(), String> {
+                    let out = Command::new("git")
+                        .args(args)
+                        .current_dir(&at)
+                        .output()
+                        .map_err(|e| format!("could not run git: {e}"))?;
+                    if !out.status.success() {
+                        return Err(format!(
+                            "`git {}` failed: {}",
+                            args.join(" "),
+                            String::from_utf8_lossy(&out.stderr).trim()
+                        ));
+                    }
+                    Ok(())
+                };
+                git(&["add", "-A"])?;
+                // The identity is named here for `git-init`'s reason: a box with none set would fail,
+                // and neither name belongs to anybody.
+                git(&[
+                    "-c", "user.name=verify",
+                    "-c", "user.email=verify@example.invalid",
+                    "commit", "--quiet",
+                    "-m", "what the road put here before it started",
+                ])?;
+                Ok(Outcome::action(format!("recorded what was lying in {}", at.display())))
+            }
             // The edit the handed-over text asks for. Amenbo writes no settings file, so this stands
             // in for the AI the reader gives that text to — and it takes both halves of the answer
             // from the build under test: the configuration the request carries, and the file the

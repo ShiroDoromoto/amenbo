@@ -661,6 +661,12 @@ const REGISTRY: &[OpSpec] = &[
     // drawn on the file face of the folder a project is *bound* to, so a road reading those colours
     // needs the repository to be that folder and not the one the run stands in.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-init", required: &[], refs: &[], strings: &["dir"], binds: false },
+    // Everything lying in the folder, recorded. It exists for one state no road could otherwise
+    // reach: git naming a file while saying nothing about the folder holding it. A repository that
+    // has only ever been `init`-ed has nothing tracked in it, so git names the top folder and stops
+    // — and the tree's rollup, which is about a folder git did **not** name, is never walked.
+    // `dir` follows `git-init`'s rule and for its reason.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-commit", required: &[], refs: &[], strings: &["dir"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-install", required: &[], refs: &[], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-uninstall", required: &[], refs: &[], strings: &[], binds: false },
     // The paste that starts this folder's AI on Amenbo at every session, put where the build says it
@@ -2253,11 +2259,20 @@ const REGISTRY: &[OpSpec] = &[
     // file and has nothing to put anything in. The section is named beside it for the reason `open` and
     // `menu` name theirs.
     //
-    // `file` is a name rather than a path, and the operator brings the file it stands for. That is the
+    // `brings` is a name rather than a path, and the operator brings the row it stands for. That is the
     // same fact `task attach` runs into on this face and for the same reason: a drop reads the disk the
     // operator is sitting at, and nothing a run lays down is anywhere a hand can reach from there. What
-    // the file holds is nothing this road reads — it is looked for by its name once it has landed.
-    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "drop-in", required: &["file", "name", "section"], refs: &[], strings: &["file", "name", "section"], binds: false },
+    // it holds is nothing this op reads — it is looked for by its name once it has landed.
+    //
+    // `as` says which of the two is being dragged, because the operator has to bring the right one and
+    // the two prove different things: a file lands as itself, and a folder lands with everything in it,
+    // which is a reading only a road that opens it can make.
+    //
+    // That reading is what `holding` is for, and it is the folder's alone: a road that opened the
+    // folder and looked for a name would be looking for a name only the operator knows, having brought
+    // the folder themselves. Named here, it is asked for at the hand-over instead — bring one with
+    // *this* in it — and the row inside becomes something a shot can answer for.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "drop-in", required: &["as", "brings", "name", "section"], refs: &[], strings: &["as", "brings", "holding", "name", "section"], binds: false },
 
     // ── naming what is in the folder ──────────────────────────────────────────────────────────────
     // The menu again, over what a file's menu cannot be opened on. A folder's row carries no way out
@@ -2387,6 +2402,11 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // making one is what is being walked: the hook slots are written into a repository, and getting
     // there is those roads' own work rather than the ground they start from.
     (Domain::Repo, "git-init"),
+    // And what was lying there being recorded in it. Same reason one line up, and one state further:
+    // Amenbo makes no commit either, so a folder git is quiet about while a file inside it is new is
+    // a world no face can reach. It is a premise and only that — a road that recorded something
+    // mid-walk would be walking git rather than Amenbo.
+    (Domain::Repo, "git-commit"),
     // And a folder already wired, which is the same kind of world one step further on. The wiring is a
     // file and not a record, so nothing in the store reaches it — and writing the settings out by hand
     // would put the launch command's own name in the scenario, which is the one thing the build under

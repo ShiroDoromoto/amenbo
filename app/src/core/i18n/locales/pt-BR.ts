@@ -542,6 +542,17 @@ export const ptBR: Translation = {
     "face.open": "Abrir um terminal aqui",
     "face.openPick": "Escolha um",
     "face.moreStarts": "Não instalados ({n})",
+    "face.startsOwn": "Comandos que você registrou",
+    "face.startAdd": "Registrar um comando",
+    "face.startName": "Nome",
+    "face.startNamePh": "Claude (Opus)",
+    "face.startLine": "Linha de comando",
+    "face.startLinePh": "claude --model opus",
+    "face.startRuns": "É isto que roda no terminal:",
+    "face.startSave": "Salvar",
+    "face.startCancel": "Cancelar",
+    "face.startEdit": "Editar",
+    "face.startRemove": "Remover",
     "face.openHere": "Lugar para outro painel neste projeto",
     "face.whichFolder": "Em qual pasta este painel trabalha?",
     "face.rename": "Renomear este painel",
@@ -575,6 +586,17 @@ export const ptBR: Translation = {
     "files.stoppedTaken": "já existe algo com esse nome",
     "files.stoppedInside": "uma pasta não pode ser movida para dentro dela mesma",
     "files.stoppedNameless": "não há nome sob o qual recebê-lo",
+    // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+    // of the three it is, so there is no separate place for a reader to look for the answer.
+    "files.save": "Salvar",
+    "files.saving": "Salvando…",
+    "files.saved": "Salvo",
+    // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+    // line of the other, so the reader is told and asked (`AMB-D-773`).
+    "files.newlinesMixed": "Este arquivo tem os dois tipos de quebra de linha. Ao salvar, todas ficam iguais.",
+    "files.newlineChoose": "Com qual quebra de linha salvar",
+    "files.newlineLf": "Unix (LF)",
+    "files.newlineCrlf": "Windows (CRLF)",
     "files.tooBig": "Esta imagem é grande demais para ser mostrada aqui.",
     "files.tooBigPixels": "{width} × {height} pixels",
     "files.tooBigOpen": "Abrir em outro aplicativo",
@@ -731,12 +753,17 @@ export const ptBR: Translation = {
     wake_no_folder: "Não foi possível ler essa pasta: {reason}",
     wake_no_config: "O Amenbo não encontrou os próprios arquivos.",
     wake_not_kept: "Não foi possível salvar a escolha.",
+    wake_not_registered: "Um comando registrado precisa de um nome e de uma linha de comando.",
     window_failed: "Não foi possível abrir essa janela: {reason}",
     talk_blank: "Aquela janela abriu, mas nunca desenhou nada, então o terminal voltou para esta.",
     folder_taken: "{name} já existe.",
     folder_name: "Esta máquina não aceita {name} como nome.",
     folder_make: "Não foi possível criar {name}: {reason}",
     folder_rename: "Não foi possível renomear para {name}: {reason}",
+    // What the file panel answers a save with (`crate::folder_save`). The character is named
+    // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+    folder_not_saved: "Não foi possível salvar este arquivo: {reason}",
+    folder_unwritable_character: "“{character}” não pode ser escrito em {encoding}, então nada foi salvo.",
 
     already_reserved: "{ref} não está em “A fazer”, então não dá para reservar — outra sessão pode já estar com ela.",
     not_ready: "{ref} ainda não dá para reservar: {reasons}",

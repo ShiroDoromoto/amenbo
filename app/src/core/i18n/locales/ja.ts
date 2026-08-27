@@ -532,6 +532,17 @@ export const ja: Translation = {
     "face.open": "ここで端末を開く",
     "face.openPick": "選んでください",
     "face.moreStarts": "入っていない {n} 件",
+    "face.startsOwn": "登録した起動コマンド",
+    "face.startAdd": "コマンドを登録",
+    "face.startName": "表示名",
+    "face.startNamePh": "Claude（Opus）",
+    "face.startLine": "起動行",
+    "face.startLinePh": "claude --model opus",
+    "face.startRuns": "端末ではこれがそのまま走ります:",
+    "face.startSave": "保存",
+    "face.startCancel": "やめる",
+    "face.startEdit": "直す",
+    "face.startRemove": "消す",
     "face.openHere": "このプロジェクトでもう1枚ぶんの空きへ",
     "face.whichFolder": "このペインはどのフォルダで作業しますか？",
     "face.rename": "このペインの名前を変える",
@@ -565,6 +576,17 @@ export const ja: Translation = {
     "files.stoppedTaken": "同じ名前のものがすでにあります",
     "files.stoppedInside": "フォルダを自分の中へは運べません",
     "files.stoppedNameless": "取り込む先の名前になるものがありません",
+    // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+    // of the three it is, so there is no separate place for a reader to look for the answer.
+    "files.save": "保存",
+    "files.saving": "保存しています…",
+    "files.saved": "保存しました",
+    // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+    // line of the other, so the reader is told and asked (`AMB-D-773`).
+    "files.newlinesMixed": "このファイルは改行が2種類まざっています。保存すると、どちらかにそろいます。",
+    "files.newlineChoose": "どちらの改行で保存するか",
+    "files.newlineLf": "Unix (LF)",
+    "files.newlineCrlf": "Windows (CRLF)",
     "files.tooBig": "この画像は大きすぎて、ここには出せません。",
     "files.tooBigPixels": "{width} × {height} ピクセル",
     "files.tooBigOpen": "ほかのアプリで開く",
@@ -724,12 +746,17 @@ export const ja: Translation = {
     wake_no_folder: "そのフォルダを読めませんでした: {reason}",
     wake_no_config: "Amenbo が自分のファイルを見つけられませんでした。",
     wake_not_kept: "選んだ内容を保存できませんでした。",
+    wake_not_registered: "登録するコマンドには、名前と起動行の両方が要ります。",
     window_failed: "その窓を開けませんでした: {reason}",
     talk_blank: "別ウィンドウは開きましたが何も描かれなかったので、ターミナルをこの窓に戻しました。",
     folder_taken: "{name} は既にあります。",
     folder_name: "この機械は {name} という名前を受け付けません。",
     folder_make: "{name} を作れませんでした: {reason}",
     folder_rename: "{name} に変えられませんでした: {reason}",
+    // What the file panel answers a save with (`crate::folder_save`). The character is named
+    // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+    folder_not_saved: "このファイルを保存できませんでした: {reason}",
+    folder_unwritable_character: "「{character}」は {encoding} では書けないので、何も保存していません。",
 
     already_reserved: "{ref} は「未着手」ではないため予約できません。別のセッションが着手済みかもしれません。",
     not_ready: "{ref} はまだ予約できません: {reasons}",

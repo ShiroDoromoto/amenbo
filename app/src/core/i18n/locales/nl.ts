@@ -520,6 +520,17 @@ export const nl: Translation = {
     "face.open": "Hier een terminal openen",
     "face.openPick": "Kies er een",
     "face.moreStarts": "Niet geïnstalleerd ({n})",
+    "face.startsOwn": "Opdrachten die je hebt vastgelegd",
+    "face.startAdd": "Een opdracht vastleggen",
+    "face.startName": "Naam",
+    "face.startNamePh": "Claude (Opus)",
+    "face.startLine": "Opdrachtregel",
+    "face.startLinePh": "claude --model opus",
+    "face.startRuns": "Dit is wat er in de terminal draait:",
+    "face.startSave": "Opslaan",
+    "face.startCancel": "Annuleren",
+    "face.startEdit": "Bewerken",
+    "face.startRemove": "Verwijderen",
     "face.openHere": "Plek voor nog een deelvenster in dit project",
     "face.whichFolder": "In welke map werkt dit deelvenster?",
     "face.rename": "Dit deelvenster hernoemen",
@@ -553,6 +564,17 @@ export const nl: Translation = {
     "files.stoppedTaken": "er staat al iets met die naam",
     "files.stoppedInside": "een map kan niet in zichzelf worden verplaatst",
     "files.stoppedNameless": "het heeft geen naam om het onder binnen te halen",
+    // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+    // of the three it is, so there is no separate place for a reader to look for the answer.
+    "files.save": "Opslaan",
+    "files.saving": "Bezig met opslaan…",
+    "files.saved": "Opgeslagen",
+    // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+    // line of the other, so the reader is told and asked (`AMB-D-773`).
+    "files.newlinesMixed": "Dit bestand bevat beide soorten regeleinde. Bij het opslaan worden ze allemaal gelijk.",
+    "files.newlineChoose": "Met welk regeleinde opslaan",
+    "files.newlineLf": "Unix (LF)",
+    "files.newlineCrlf": "Windows (CRLF)",
     "files.tooBig": "Deze afbeelding is te groot om hier te tonen.",
     "files.tooBigPixels": "{width} × {height} pixels",
     "files.tooBigOpen": "In een andere app openen",
@@ -702,12 +724,17 @@ export const nl: Translation = {
     wake_no_folder: "Die map kon niet gelezen worden: {reason}",
     wake_no_config: "Amenbo kon zijn eigen bestanden niet vinden.",
     wake_not_kept: "De keuze kon niet opgeslagen worden.",
+    wake_not_registered: "Een geregistreerde opdracht heeft zowel een naam als een opdrachtregel nodig.",
     window_failed: "Dat venster kon niet worden geopend: {reason}",
     talk_blank: "Dat venster ging open maar tekende niets, dus de terminal staat weer in dit venster.",
     folder_taken: "{name} bestaat al.",
     folder_name: "Deze machine accepteert {name} niet als naam.",
     folder_make: "{name} kon niet worden aangemaakt: {reason}",
     folder_rename: "De naam kon niet worden gewijzigd in {name}: {reason}",
+    // What the file panel answers a save with (`crate::folder_save`). The character is named
+    // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+    folder_not_saved: "Dit bestand kon niet worden opgeslagen: {reason}",
+    folder_unwritable_character: "‘{character}’ kan niet in {encoding} worden geschreven, dus er is niets opgeslagen.",
 
     already_reserved:
       "{ref} staat niet op “Te doen” en kan dus niet worden opgepakt — een andere sessie heeft hem misschien al.",

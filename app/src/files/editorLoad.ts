@@ -40,13 +40,13 @@ export function wrappable(text: string): boolean {
   }
 }
 
-// Colour is a second dynamic import behind the editor's own: a grammar is fetched only for a file
-// written in something this panel reads (`./grammars`), and one that fails to arrive costs colour
-// and nothing else — an uncoloured file is what the panel drew before there were grammars at all.
-async function colourFor(lang: LangId): Promise<Extension[]> {
+// What the editor knows about the file is a second dynamic import behind the editor's own, and one
+// that fails to arrive costs colour and manners, not the editor — a plain editor over plain text is
+// what the panel had before either existed.
+async function mannersFor(lang: LangId | null): Promise<Extension[]> {
   try {
-    const { textmate } = await import("./highlight");
-    return [await textmate(lang)];
+    const { language } = await import("./language");
+    return [await language(lang)];
   } catch {
     return [];
   }
@@ -56,6 +56,14 @@ async function colourFor(lang: LangId): Promise<Extension[]> {
 export type Mounted = {
   /** Replace the text being shown, for a panel that moved to another file without unmounting. */
   show(text: string): void;
+  /**
+   * What is in the editor now — what a save writes.
+   *
+   * **It comes back with `\n` for every newline, whatever the file had.** CodeMirror reads
+   * `\r\n`, `\r` and `\n` alike and keeps one kind, so what the file's newline was is not in this
+   * text: it travels beside it, out of the read and back into the save (`crate::folder_save`).
+   */
+  text(): string;
   /** Take the editor off the page. */
   close(): void;
 };
@@ -64,27 +72,30 @@ export type Mounted = {
  * Draw `text` into `parent`, as an editor.
  *
  * `editable` is false for a file this panel will not be able to save: one cut at the read cap, and
- * one whose bytes and text do not round-trip (`FolderFileDto.clean`). Nothing here can save yet
- * either way — the door that writes is being built — but a file that will never be savable is a
- * file to say so about now rather than after somebody has typed into it.
+ * one whose bytes and text do not round-trip (`FolderFileDto.clean`). Such a file is said to be
+ * unsavable now rather than after somebody has typed into it.
  *
  * `name` is the file's own name, which is the only thing that says what language it is written in
  * (`./grammars`). A name nothing here reads simply arrives uncoloured.
+ *
+ * `onEdit` is told every time the reader changes the text, which is how the panel above knows there
+ * is something to save. It is not told when {@link Mounted.show} replaces the text: that is the
+ * panel moving to another file, not a person typing.
  */
 export async function mountEditor(
   parent: HTMLElement,
   text: string,
   editable: boolean,
   name: string,
+  onEdit?: () => void,
 ): Promise<Mounted> {
-  // The grammar is fetched beside the editor, not after it: a file that appears uncoloured and then
-  // repaints reads as a glitch, where one that was never coloured reads as a plain file.
-  const lang = langFor(name);
-  const [{ EditorState, Compartment }, view, commands, colour] = await Promise.all([
+  // Fetched beside the editor, not after it: a file that appears uncoloured and then repaints reads
+  // as a glitch, where one that was never coloured reads as a plain file.
+  const [{ EditorState, Compartment }, view, commands, manners] = await Promise.all([
     import("@codemirror/state"),
     import("@codemirror/view"),
     import("@codemirror/commands"),
-    lang === null ? Promise.resolve<Extension[]>([]) : colourFor(lang),
+    mannersFor(langFor(name)),
   ]);
   const { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } = view;
   const { history, defaultKeymap, historyKeymap } = commands;
@@ -118,10 +129,42 @@ export async function mountEditor(
             color: "var(--c-text-muted)",
             border: "none",
           },
+          // The line the caret is on, in both halves of the row. CodeMirror's own is a fixed pale
+          // blue, which is a colour and not a token: under the dark theme it puts light text on a
+          // light band and the one line a reader is looking at is the one they cannot read
+          // (`AMB-T-3786` met it). The token flips with the theme, so the band is a shade of the
+          // surface either way rather than a colour of its own.
+          ".cm-activeLine": { backgroundColor: "var(--c-surface-sunken)" },
+          ".cm-activeLineGutter": {
+            backgroundColor: "var(--c-surface-sunken)",
+            // And its number is the one number worth reading: the rest of the gutter is muted so
+            // that the text beside it reads first, which leaves nothing to tell this one apart.
+            color: "var(--c-text)",
+          },
+          // The fold arrows are drawn faintly and come up on hover: they sit beside every line of
+          // the file and would otherwise be a second column of marks competing with the numbers.
+          ".cm-foldGutter .cm-gutterElement": { color: "var(--c-text-faint)", cursor: "pointer" },
+          ".cm-foldGutter .cm-gutterElement:hover": { color: "var(--c-text)" },
+          // What stands in for the lines that were folded away. It is a thing to click, so it is
+          // drawn as one rather than as text that happens to be there.
+          ".cm-foldPlaceholder": {
+            background: "var(--c-surface-sunken)",
+            border: "1px solid var(--c-border)",
+            borderRadius: "var(--r-sm)",
+            color: "var(--c-text-muted)",
+            padding: "0 var(--s-2)",
+          },
           "&.cm-focused": { outline: "none" },
         }),
         wrapping.of(wrap(text)),
-        ...colour,
+        ...manners,
+        // Told apart from the panel replacing the text, which dispatches its own change: only what
+        // came from the reader means there is something to save.
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged && !update.transactions.every((one) => one.isUserEvent("panel"))) {
+            onEdit?.();
+          }
+        }),
         EditorState.readOnly.of(!editable),
         // A read-only editor still takes focus and a caret, which is what makes it selectable and
         // navigable by keyboard; what it refuses is changing the text.
@@ -135,7 +178,11 @@ export async function mountEditor(
       editor.dispatch({
         changes: { from: 0, to: editor.state.doc.length, insert: next },
         effects: wrapping.reconfigure(wrap(next)),
+        userEvent: "panel",
       });
+    },
+    text() {
+      return editor.state.doc.toString();
     },
     close() {
       editor.destroy();

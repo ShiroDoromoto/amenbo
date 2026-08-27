@@ -53,7 +53,8 @@ import { pushNotice } from "../core/notice";
 import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
 import {
   folderEntries, folderGitStatus, folderImport, folderMake, folderOpenFile, folderOpenFileWith,
-  folderOpenWith, folderRead, folderRename, folderRevealFile, folderUnwatch, folderWatch,
+  folderOpenWith, folderRead, folderRename, folderRevealFile, folderSave, folderUnwatch,
+  folderWatch,
   onFolderChanged,
 } from "./folder";
 import { FileEditor } from "./FileEditor";
@@ -765,8 +766,9 @@ function Level({
    * drawing the highlight it was drawing a moment ago.
    */
   landing: Landing | null;
-  /** What git says about a row, asked by its segments from the bound folder (`./gitMark`). */
-  marks: (path: string[]) => GitMark | null;
+  /** What git says about a row, asked by its segments from the bound folder, and by whether it is a
+   *  folder standing folded — which is the one case that answers for what is under it (`./gitMark`). */
+  marks: (path: string[], folded?: boolean) => GitMark | null;
   /** How many times the folder has moved. The names are read again on each — a file the agent just
    *  wrote is a row that has to appear without anybody folding the tree and opening it again. */
   moved: number;
@@ -814,7 +816,9 @@ function Level({
         const here = [...path, one.name];
         const key = here.join("/");
         const into = one.isDir ? key : undefined;
-        const mark = marks(here);
+        // Folded folders answer for what is under them (`AMB-D-795`); an open one leaves that to the
+        // rows it is showing, and a file is only ever itself.
+        const mark = marks(here, one.isDir && !open.includes(key));
         // The row is the box while its name is being written over. Drawn in place of the row rather
         // than beside it: what is being changed is this name, and two of them on the screen at once
         // would leave a reader wondering which one they were about to keep.
@@ -885,6 +889,14 @@ function Level({
     </ul>
   );
 }
+
+/**
+ * How a file's lines end, once it is a thing a save can be asked for.
+ *
+ * `null` is the file that has both kinds and has not been asked about yet — the one state where a
+ * save is refused for a reason that is not about the file being unsavable (`AMB-D-773`).
+ */
+type Newline = "lf" | "crlf" | null;
 
 /**
  * A name being typed, in the row it is about.
@@ -984,6 +996,19 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
 }) {
   const [file, setFile] = useState<FolderFileDto | null>(null);
   const [failed, setFailed] = useState(false);
+  // The way to read what is in the editor, handed over once it is up. Nothing is saved before that:
+  // the editor is where the text is (`./FileEditor`).
+  const typed = useRef<(() => string) | null>(null);
+  // Whether there is anything to save. It is set by the editor telling this side that a person
+  // typed, rather than by comparing texts — the comparison would mean holding a second copy of the
+  // document up here and reading it on every keystroke.
+  const [edited, setEdited] = useState(false);
+  const [keeping, setKeeping] = useState(false);
+  // Why the last save did not happen, in the reader's own language. Cleared when another is tried.
+  const [refused, setRefused] = useState<string | null>(null);
+  // Which newline to write. A file with one kind keeps it; a file with both has none until the
+  // reader picks, and the save waits for that rather than guessing.
+  const [newline, setNewline] = useState<Newline>(null);
   // Where a picture too large to draw was handed on to the machine from. The same menu the list
   // rows open, opened here because this is the one state a reader reaches it from with no row under
   // the pointer.
@@ -994,11 +1019,62 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
     let alive = true;
     setFile(null);
     setFailed(false);
+    setEdited(false);
+    setRefused(null);
+    setNewline(null);
     void folderRead(projectId, root, path)
-      .then((one) => { if (alive) setFile(one); })
+      .then((one) => {
+        if (!alive) return;
+        setFile(one);
+        // Both kinds in one file is the only answer this side cannot act on by itself.
+        setNewline(one.lineEnding === "mixed" ? null : one.lineEnding);
+      })
       .catch(() => { if (alive) setFailed(true); });
     return () => { alive = false; };
   }, [projectId, root, path.join("/")]);
+
+  // Whether this file is one the panel can write back at all. The host says so before a reader has
+  // typed a character: a file cut at the read cap, or one whose bytes and text do not round-trip,
+  // is drawn read-only from the start (`AMB-D-773`). Markdown is drawn rather than edited, so there
+  // is nothing to save there either (`AMB-T-3807` is where that changes).
+  const savable = file?.text !== undefined
+    && file.encoding !== undefined
+    && !file.truncated
+    && file.clean
+    && !MARKDOWN.some((ext) => name.toLowerCase().endsWith(ext));
+
+  const save = async () => {
+    const read = typed.current;
+    if (!savable || keeping || file?.encoding === undefined || read === null || newline === null) return;
+    setKeeping(true);
+    setRefused(null);
+    try {
+      await folderSave(projectId, root, path, read(), file.encoding, file.bom, newline);
+      setEdited(false);
+      // What is on the disk now has one kind of newline, so the question is not asked again. The
+      // text is left where it is: replacing it would be handing the editor its own document back
+      // and moving the caret to the top for the trouble.
+      setFile({ ...file, lineEnding: newline });
+    } catch (e) {
+      setRefused(errText(e));
+    } finally {
+      setKeeping(false);
+    }
+  };
+
+  // The keystroke everything else in the world saves with. It is taken on the window rather than
+  // inside the editor because the reader may have clicked away from it — and it is taken only
+  // while there is something to save, so nothing is swallowed on a file that cannot be.
+  useEffect(() => {
+    if (!savable) return;
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== "s" || !(e.metaKey || e.ctrlKey) || e.altKey) return;
+      e.preventDefault();
+      void save();
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  });
 
   // A reference in a file is a live link or it is nothing at all (`AMB-D-747`), and following one
   // leaves this face: what a record opens on is the ledger.
@@ -1009,6 +1085,17 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
       <div className="files__bar">
         <button className="files__back" onClick={onBack}>{t("files.back")}</button>
         <span className="files__name" title={path.join("/")}>{name}</span>
+        {/* One control saying which of three things is true, rather than a button and a word
+            somewhere else for a reader to find the answer in. */}
+        {savable && (
+          <button
+            className="files__keep"
+            disabled={!edited || keeping || newline === null}
+            onClick={() => { void save(); }}
+          >
+            {keeping ? t("files.saving") : edited ? t("files.save") : t("files.saved")}
+          </button>
+        )}
         {close}
       </div>
       <div className="files__body">
@@ -1027,8 +1114,37 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
         {file?.text !== undefined && (
           MARKDOWN.some((ext) => name.toLowerCase().endsWith(ext))
             ? <RefNavProvider value={nav}><Markdown>{file.text}</Markdown></RefNavProvider>
-            : <FileEditor text={file.text} editable={!file.truncated && file.clean} name={name} />
+            : (
+              <FileEditor
+                text={file.text}
+                editable={!file.truncated && file.clean}
+                name={name}
+                onEdit={() => setEdited(true)}
+                hold={(read) => { typed.current = read; }}
+              />
+            )
         )}
+        {/* Said before the reader types rather than after they press save: a file with both kinds
+            of newline comes out of a save with one, and that is a change to every line of the other
+            kind (`AMB-D-773`).
+            The choice sits with the sentence that explains it rather than up in the bar — the bar
+            is as wide as the panel, and a control there would push the file's own name off it. */}
+        {savable && file?.lineEnding === "mixed" && (
+          <div className="files__newlines">
+            <p className="files__none">{t("files.newlinesMixed")}</p>
+            <select
+              className="files__newline"
+              aria-label={t("files.newlineChoose")}
+              value={newline ?? ""}
+              onChange={(e) => setNewline(e.target.value === "crlf" ? "crlf" : "lf")}
+            >
+              <option value="" disabled>{t("files.newlineChoose")}</option>
+              <option value="lf">{t("files.newlineLf")}</option>
+              <option value="crlf">{t("files.newlineCrlf")}</option>
+            </select>
+          </div>
+        )}
+        {refused !== null && <p className="files__none">{refused}</p>}
         {/* A picture refused is not a picture missing. Drawn as nothing at all it reads as a
             damaged file, so the refusal says what it measured and hands the file on to something
             built to open it (`AMB-D-783`). */}

@@ -578,6 +578,9 @@ export const ja: Translation = {
     "files.unreadable": "このファイルは読めませんでした。",
     "files.dropStopped": "{name} を取り込めませんでした: {why}",
     "files.dropPartly": "{count} 件を取り込みました。{name} は取り込めませんでした: {why}",
+    "files.stoppedTaken": "同じ名前のものがすでにあります",
+    "files.stoppedInside": "フォルダを自分の中へは運べません",
+    "files.stoppedNameless": "取り込む先の名前になるものがありません",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "保存",

@@ -569,6 +569,9 @@ export const id: Translation = {
     "files.unreadable": "Berkas ini tidak bisa dibaca.",
     "files.dropStopped": "{name} tidak bisa dimasukkan: {why}",
     "files.dropPartly": "{count} masuk. {name} tidak: {why}",
+    "files.stoppedTaken": "sudah ada sesuatu dengan nama itu",
+    "files.stoppedInside": "folder tidak bisa dipindahkan ke dalam dirinya sendiri",
+    "files.stoppedNameless": "tidak ada nama untuk menampungnya",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Simpan",

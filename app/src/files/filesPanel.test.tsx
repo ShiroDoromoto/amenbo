@@ -670,11 +670,15 @@ describe("the file face", () => {
       await new Promise((r) => setTimeout(r, 0));
     });
 
-    hoisted.carried = { arrived: [], stopped: { name: "note.md", why: "no room left" } };
+    // The machine's own words, carried through as they came: no code, so nothing here rewrites them.
+    hoisted.carried = { arrived: [], stopped: { name: "note.md", code: null, why: "no room left" } };
     await drop(["/a/note.md"]);
     expect(said).toEqual([tf("files.dropStopped", { name: "note.md", why: "no room left" })]);
 
-    hoisted.carried = { arrived: ["one.md"], stopped: { name: "note.md", why: "no room left" } };
+    hoisted.carried = {
+      arrived: ["one.md"],
+      stopped: { name: "note.md", code: null, why: "no room left" },
+    };
     await drop(["/a/one.md", "/a/note.md"]);
     expect(said[1]).toBe(
       tf("files.dropPartly", { name: "note.md", why: "no room left", count: formatNumber(1) }),
@@ -684,6 +688,31 @@ describe("the file face", () => {
     hoisted.carried = { arrived: ["one.md"], stopped: null };
     await drop(["/a/one.md"]);
     expect(said).toHaveLength(2);
+    stop();
+  });
+
+  // What Amenbo itself refused. The host sends the sentence as well as the code, in English, and the
+  // face is asked to draw the code — a reader whose screen is in another language would otherwise be
+  // handed the one sentence on it that was never translated.
+  it("says a refusal of its own in the reader's language, not in the host's English", async () => {
+    await draw();
+    const said: string[] = [];
+    const stop = subscribeNotice((line) => said.push(line));
+    const drop = (paths: string[]) => act(async () => {
+      (document as unknown as { elementFromPoint: () => Element | null }).elementFromPoint =
+        () => container.querySelector("[data-into]");
+      hoisted.dragging?.({ payload: { type: "drop", position: { x: 1, y: 1 }, paths } });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    hoisted.carried = {
+      arrived: [],
+      stopped: { name: "note.md", code: "taken", why: "note.md is already there" },
+    };
+    await drop(["/a/note.md"]);
+    expect(said).toEqual([
+      tf("files.dropStopped", { name: "note.md", why: t("files.stoppedTaken") }),
+    ]);
     stop();
   });
 

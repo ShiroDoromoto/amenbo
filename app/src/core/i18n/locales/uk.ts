@@ -592,6 +592,9 @@ export const uk: Translation = {
     "files.unreadable": "Не вдалося прочитати цей файл.",
     "files.dropStopped": "Не вдалося перенести {name}: {why}",
     "files.dropPartly": "Перенесено: {count}. {name} — ні: {why}",
+    "files.stoppedTaken": "щось із таким іменем уже є",
+    "files.stoppedInside": "теку не можна перемістити всередину неї самої",
+    "files.stoppedNameless": "немає імені, під яким його прийняти",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Зберегти",

@@ -569,6 +569,9 @@ export const th: Translation = {
     "files.unreadable": "อ่านไฟล์นี้ไม่ได้",
     "files.dropStopped": "นำ {name} เข้ามาไม่ได้: {why}",
     "files.dropPartly": "นำเข้ามาแล้ว {count} รายการ {name} ไม่ได้: {why}",
+    "files.stoppedTaken": "มีสิ่งที่ชื่อนี้อยู่แล้ว",
+    "files.stoppedInside": "ย้ายโฟลเดอร์เข้าไปในตัวมันเองไม่ได้",
+    "files.stoppedNameless": "ไม่มีชื่อสำหรับรับเข้ามา",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "บันทึก",

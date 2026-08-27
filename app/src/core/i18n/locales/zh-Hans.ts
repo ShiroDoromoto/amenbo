@@ -566,6 +566,9 @@ export const zhHans: Translation = {
     "files.unreadable": "无法读取这个文件。",
     "files.dropStopped": "没能把 {name} 放进来：{why}",
     "files.dropPartly": "放进来 {count} 个。{name} 没有：{why}",
+    "files.stoppedTaken": "那里已经有同名的东西",
+    "files.stoppedInside": "文件夹不能移动到它自己里面",
+    "files.stoppedNameless": "没有可以据以接收的名称",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "保存",

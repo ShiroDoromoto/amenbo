@@ -588,6 +588,9 @@ export const ptBR: Translation = {
     "files.unreadable": "Não foi possível ler este arquivo.",
     "files.dropStopped": "Não foi possível trazer {name}: {why}",
     "files.dropPartly": "{count} entraram. {name} não: {why}",
+    "files.stoppedTaken": "já existe algo com esse nome",
+    "files.stoppedInside": "uma pasta não pode ser movida para dentro dela mesma",
+    "files.stoppedNameless": "não há nome sob o qual recebê-lo",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Salvar",

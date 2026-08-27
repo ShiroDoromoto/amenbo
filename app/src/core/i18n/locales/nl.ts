@@ -566,6 +566,9 @@ export const nl: Translation = {
     "files.unreadable": "Dit bestand kon niet worden gelezen.",
     "files.dropStopped": "{name} kon niet worden opgenomen: {why}",
     "files.dropPartly": "{count} opgenomen. {name} niet: {why}",
+    "files.stoppedTaken": "er staat al iets met die naam",
+    "files.stoppedInside": "een map kan niet in zichzelf worden verplaatst",
+    "files.stoppedNameless": "het heeft geen naam om het onder binnen te halen",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Opslaan",

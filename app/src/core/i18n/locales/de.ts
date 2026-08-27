@@ -576,6 +576,9 @@ export const de: Translation = {
     "files.unreadable": "Diese Datei konnte nicht gelesen werden.",
     "files.dropStopped": "{name} konnte nicht übernommen werden: {why}",
     "files.dropPartly": "{count} übernommen. {name} nicht: {why}",
+    "files.stoppedTaken": "dort gibt es bereits etwas mit diesem Namen",
+    "files.stoppedInside": "ein Ordner kann nicht in sich selbst verschoben werden",
+    "files.stoppedNameless": "es hat keinen Namen, unter dem es übernommen werden könnte",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Speichern",

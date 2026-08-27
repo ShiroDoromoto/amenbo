@@ -566,6 +566,9 @@ export const hi: Translation = {
     "files.unreadable": "यह फ़ाइल पढ़ी नहीं जा सकी।",
     "files.dropStopped": "{name} को लाया नहीं जा सका: {why}",
     "files.dropPartly": "{count} आ गए। {name} नहीं आया: {why}",
+    "files.stoppedTaken": "उस नाम की कोई चीज़ पहले से वहाँ है",
+    "files.stoppedInside": "किसी फ़ोल्डर को उसी के अंदर नहीं ले जाया जा सकता",
+    "files.stoppedNameless": "इसका कोई नाम नहीं है जिसके तहत इसे लिया जा सके",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "सहेजें",

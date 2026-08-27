@@ -2,7 +2,7 @@
 //!
 //! [`crate::folder`] answers what is in a folder; this is the door that alters it, and it is a
 //! separate one for the reason every other door here is: what it has to get right is its own.
-//! Everything below is fenced by [`crate::folder::under`] exactly as reading is, and nothing here
+//! Everything below is fenced by [`crate::folder_fence::under`] exactly as reading is, and nothing here
 //! resolves the last name of a path — a link at the end is a name, not a way out of the project.
 //!
 //! **Three things shape all of it:**
@@ -29,7 +29,7 @@ use amenbo_core::binding::canonical_dir;
 
 use crate::dto::{DropEffectDto, FolderCarriedDto, FolderStopDto, FolderStoppedDto};
 use crate::error::CmdError;
-use crate::folder::{gone, rooted, under};
+use crate::folder_fence::{gone, rooted, under};
 
 /// The most bytes one name may take. Every filesystem worth naming stops at 255, and the ones that
 /// stop earlier answer for themselves when the name is used.
@@ -173,7 +173,7 @@ pub fn folder_import(
 /// A dropped path in the spelling the landing is in, so the two can be compared.
 ///
 /// Everything but the last name is resolved, and the last name is left alone — the same shape
-/// [`crate::folder::under`] leaves a fenced path in, for the same reason: a link at the end of a
+/// [`crate::folder_fence::under`] leaves a fenced path in, for the same reason: a link at the end of a
 /// path is a name to carry, not a way through. What it buys is the one comparison that matters:
 /// "is the folder being carried into inside the folder being carried" is asked of two paths, and on
 /// macOS the one the operating system hands over goes through `/var` where the one the fence

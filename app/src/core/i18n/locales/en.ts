@@ -604,6 +604,7 @@ const ui = {
   "files.nothingChanged": "Nothing has changed yet.",
   "files.partial": "Some of this folder is not being watched.",
   "files.noFolder": "This project has no folder yet.",
+  "files.folderGone": "This folder is not there any more.",
   "files.back": "Back to the list",
   "files.openWith": "Open with the usual application",
   "files.chooseApp": "Open with an application I pick",

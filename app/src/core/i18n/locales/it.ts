@@ -555,6 +555,7 @@ export const it: Translation = {
     "files.nothingChanged": "Non è ancora cambiato nulla.",
     "files.partial": "Una parte di questa cartella non è sorvegliata.",
     "files.noFolder": "Questo progetto non ha ancora una cartella.",
+    "files.folderGone": "Questa cartella non c'è più.",
     "files.back": "Torna all'elenco",
     "files.openWith": "Apri con l'applicazione solita",
     "files.chooseApp": "Apri con un'applicazione a scelta",

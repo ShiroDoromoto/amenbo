@@ -534,6 +534,7 @@ export const hi: Translation = {
     "files.nothingChanged": "अभी तक कुछ नहीं बदला।",
     "files.partial": "इस फ़ोल्डर का कुछ हिस्सा देखा नहीं जा रहा है।",
     "files.noFolder": "इस प्रोजेक्ट का अभी कोई फ़ोल्डर नहीं है।",
+    "files.folderGone": "यह फ़ोल्डर अब मौजूद नहीं है।",
     "files.back": "सूची पर वापस",
     "files.openWith": "सामान्य ऐप में खोलें",
     "files.chooseApp": "चुने हुए ऐप में खोलें",

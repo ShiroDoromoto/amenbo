@@ -560,6 +560,7 @@ export const uk: Translation = {
     "files.nothingChanged": "Поки нічого не змінилося.",
     "files.partial": "Частина цієї теки не відстежується.",
     "files.noFolder": "Цей проєкт ще не має теки.",
+    "files.folderGone": "Цієї теки більше немає.",
     "files.back": "Назад до списку",
     "files.openWith": "Відкрити у звичайній програмі",
     "files.chooseApp": "Відкрити у вибраній програмі",

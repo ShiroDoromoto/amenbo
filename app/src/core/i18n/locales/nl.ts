@@ -534,6 +534,7 @@ export const nl: Translation = {
     "files.nothingChanged": "Er is nog niets gewijzigd.",
     "files.partial": "Een deel van deze map wordt niet in de gaten gehouden.",
     "files.noFolder": "Dit project heeft nog geen map.",
+    "files.folderGone": "Deze map is er niet meer.",
     "files.back": "Terug naar de lijst",
     "files.openWith": "Openen met de gebruikelijke app",
     "files.chooseApp": "Openen met een app naar keuze",

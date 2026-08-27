@@ -537,6 +537,7 @@ export const th: Translation = {
     "files.nothingChanged": "ยังไม่มีอะไรเปลี่ยนแปลง",
     "files.partial": "โฟลเดอร์นี้บางส่วนไม่ได้ถูกเฝ้าดู",
     "files.noFolder": "โปรเจกต์นี้ยังไม่มีโฟลเดอร์",
+    "files.folderGone": "ไม่พบโฟลเดอร์นี้แล้ว",
     "files.back": "กลับไปที่รายการ",
     "files.openWith": "เปิดด้วยแอปที่ใช้ประจำ",
     "files.chooseApp": "เปิดด้วยแอปที่เลือกเอง",

@@ -36,3 +36,35 @@ export function fileUnder(root: string, cwd: string | null, target: string): str
   if (!under.every((part, i) => part === wanted[i])) return null;
   return wanted.slice(under.length);
 }
+
+/**
+ * The same question asked of every folder the project is bound to: which one the path lands in, and
+ * where inside it.
+ *
+ * **The deepest folder that accepts it wins.** One bound folder can be inside another, and then a
+ * path lands in both — the answer that says something is the inner one, whose tree actually has a
+ * row for it. Reading it against the outer folder would open the file in a section it is not drawn
+ * in.
+ *
+ * **A relative path with no folder to read it against opens nothing.** With one folder that folder
+ * was the only thing it could mean; with several it means as many files, and the face has no way to
+ * choose between them (`AMB-D-778`). An absolute path is untouched by this — it says where it is,
+ * and every folder is asked whether that is inside it.
+ */
+export function fileUnderAny(
+  roots: string[],
+  cwd: string | null,
+  target: string,
+): { root: string; path: string[] } | null {
+  const absolute = /^([a-zA-Z]:[\\/]|[\\/])/.test(target);
+  if (!absolute && cwd === null) return null;
+  let found: { root: string; path: string[] } | null = null;
+  for (const root of roots) {
+    const path = fileUnder(root, cwd, target);
+    // The deeper root is the one with fewer segments left over: both answers name the same file.
+    if (path !== null && (found === null || path.length < found.path.length)) {
+      found = { root, path };
+    }
+  }
+  return found;
+}

@@ -546,6 +546,7 @@ export const ja: Translation = {
     "files.nothingChanged": "まだ何も変わっていません。",
     "files.partial": "このフォルダは、一部を見張れていません。",
     "files.noFolder": "このプロジェクトにはフォルダがありません。",
+    "files.folderGone": "このフォルダは見つかりません。",
     "files.back": "一覧へ戻る",
     "files.openWith": "いつものアプリで開く",
     "files.chooseApp": "アプリを選んで開く",

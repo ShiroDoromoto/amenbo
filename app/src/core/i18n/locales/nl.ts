@@ -553,6 +553,8 @@ export const nl: Translation = {
     "files.noFolder": "Dit project heeft nog geen map.",
     "files.folderGone": "Deze map is er niet meer.",
     "files.back": "Terug naar de lijst",
+    "files.reopenWith": "Opnieuw openen met een codering",
+    "files.lineEndingMixed": "Gemengde regeleindes",
     "files.openWith": "Openen met de gebruikelijke app",
     "files.chooseApp": "Openen met een app naar keuze",
     "files.appUsual": "{name} (de gebruikelijke)",

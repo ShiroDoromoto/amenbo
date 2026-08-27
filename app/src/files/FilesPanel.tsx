@@ -52,10 +52,9 @@ import { errText, formatNumber, t, tf } from "../core/i18n";
 import { pushNotice } from "../core/notice";
 import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
 import {
-  folderEntries, folderGitStatus, folderImport, folderMake, folderOpenFile, folderOpenFileWith,
-  folderOpenWith, folderRead, folderRename, folderRevealFile, folderSave, folderUnwatch,
-  folderWatch,
-  onFolderChanged,
+  folderEncodings, folderEntries, folderGitStatus, folderImport, folderMake, folderOpenFile,
+  folderOpenFileWith, folderOpenWith, folderRead, folderRename, folderRevealFile, folderSave,
+  folderUnwatch, folderWatch, onFolderChanged,
 } from "./folder";
 import { FileEditor } from "./FileEditor";
 import { MemoPage } from "./MemoPage";
@@ -996,6 +995,13 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
 }) {
   const [file, setFile] = useState<FolderFileDto | null>(null);
   const [failed, setFailed] = useState(false);
+  // The encoding the reader named, once they have. Nothing until then: the host's guess is right
+  // for 644 files in 645, and asking for one up front would be putting the question to everybody
+  // to catch the one (`AMB-D-773`).
+  const [asked, setAsked] = useState<string | undefined>(undefined);
+  // Where the list of encodings was opened from, drawn like the file menu because it is the same
+  // kind of thing: a short list of answers to one question, at the control that asked it.
+  const [picking, setPicking] = useState<{ x: number; y: number } | null>(null);
   // The way to read what is in the editor, handed over once it is up. Nothing is saved before that:
   // the editor is where the text is (`./FileEditor`).
   const typed = useRef<(() => string) | null>(null);
@@ -1015,6 +1021,10 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const name = path[path.length - 1];
 
+  // A different file is a different question: what the reader named was this file's encoding, and
+  // carrying it to the next one would open that one in an encoding nobody chose for it.
+  useEffect(() => setAsked(undefined), [projectId, root, path.join("/")]);
+
   useEffect(() => {
     let alive = true;
     setFile(null);
@@ -1022,7 +1032,7 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
     setEdited(false);
     setRefused(null);
     setNewline(null);
-    void folderRead(projectId, root, path)
+    void folderRead(projectId, root, path, asked)
       .then((one) => {
         if (!alive) return;
         setFile(one);
@@ -1031,7 +1041,7 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
       })
       .catch(() => { if (alive) setFailed(true); });
     return () => { alive = false; };
-  }, [projectId, root, path.join("/")]);
+  }, [projectId, root, path.join("/"), asked]);
 
   // Whether this file is one the panel can write back at all. The host says so before a reader has
   // typed a character: a file cut at the read cap, or one whose bytes and text do not round-trip,
@@ -1085,6 +1095,21 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
       <div className="files__bar">
         <button className="files__back" onClick={onBack}>{t("files.back")}</button>
         <span className="files__name" title={path.join("/")}>{name}</span>
+        {/* What the bytes were read as, said on the row the file is named on. The guess reports no
+            confidence and breaks nothing visible when it is wrong, so the reader is the only one
+            who can catch it — and they can only catch it if they are told what was guessed
+            (`AMB-D-773`). Text only: a picture has no encoding to be wrong about. */}
+        {file?.text !== undefined && file.encoding !== undefined && (
+          <button
+            className="files__encoding"
+            title={t("files.reopenWith")}
+            onClick={(e) => setPicking({ x: e.clientX, y: e.clientY })}
+          >
+            {file.encoding}
+            {" · "}
+            {file.lineEnding === "mixed" ? t("files.lineEndingMixed") : file.lineEnding.toUpperCase()}
+          </button>
+        )}
         {/* One control saying which of three things is true, rather than a button and a word
             somewhere else for a reader to find the answer in. */}
         {savable && (
@@ -1176,6 +1201,72 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
           onClose={() => setMenu(null)}
         />
       )}
+      {picking !== null && (
+        <EncodingMenu
+          at={picking}
+          onPick={(one) => { setPicking(null); setAsked(one); }}
+          onClose={() => setPicking(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The encodings a file can be reopened in, as a list to pick from.
+ *
+ * **The list comes from the host.** Which encodings may be offered is which ones can be written
+ * back, and that is `crate::encoding`'s to say — a copy kept here would go on offering one the day
+ * it stopped being written (`AMB-D-773`).
+ *
+ * A file that is not clean is still on this road, and is the road's whole point: a guess that went
+ * wrong is exactly the file whose bytes and text no longer say the same thing.
+ */
+function EncodingMenu({ at, onPick, onClose }: {
+  at: { x: number; y: number };
+  onPick: (encoding: string) => void;
+  onClose: () => void;
+}) {
+  const [names, setNames] = useState<string[]>([]);
+  const box = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void folderEncodings()
+      .then((found) => { if (alive) setNames(found); })
+      .catch(() => { if (alive) onClose(); });
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    // The same rule the file menu is closed by: anything outside it is the reader moving on, and
+    // anything inside is the first half of choosing (`FileMenu`).
+    const close = (event: Event) => {
+      if (event.target instanceof Node && box.current?.contains(event.target)) return;
+      onClose();
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", close);
+    window.addEventListener("blur", close);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", close);
+      window.removeEventListener("blur", close);
+    };
+  }, [onClose]);
+
+  return (
+    <div className="files__menu" style={{ left: at.x, top: at.y }} role="menu" ref={box}>
+      {names.map((one) => (
+        <button
+          key={one}
+          className="files__menuitem"
+          role="menuitem"
+          onClick={() => onPick(one)}
+        >
+          {one}
+        </button>
+      ))}
     </div>
   );
 }

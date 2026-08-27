@@ -624,6 +624,8 @@ const ui = {
   "files.noFolder": "This project has no folder yet.",
   "files.folderGone": "This folder is not there any more.",
   "files.back": "Back to the list",
+  "files.reopenWith": "Reopen with an encoding",
+  "files.lineEndingMixed": "Mixed newlines",
   "files.openWith": "Open with the usual application",
   "files.chooseApp": "Open with an application I pick",
   "files.appUsual": "{name} (the usual one)",

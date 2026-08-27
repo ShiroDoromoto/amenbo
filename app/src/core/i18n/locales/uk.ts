@@ -579,6 +579,8 @@ export const uk: Translation = {
     "files.noFolder": "Цей проєкт ще не має теки.",
     "files.folderGone": "Цієї теки більше немає.",
     "files.back": "Назад до списку",
+    "files.reopenWith": "Відкрити заново в іншому кодуванні",
+    "files.lineEndingMixed": "Мішані кінці рядків",
     "files.openWith": "Відкрити у звичайній програмі",
     "files.chooseApp": "Відкрити у вибраній програмі",
     "files.appUsual": "{name} (звична)",

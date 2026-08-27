@@ -6,6 +6,21 @@
 // It lives in a module of its own so the panel's tests can stand in for it, rather than loading an
 // editor whose layout does not run under jsdom.
 
+import type { Extension } from "@codemirror/state";
+import { langFor, type LangId } from "./grammars";
+
+// Colour is a second dynamic import behind the editor's own: a grammar is fetched only for a file
+// written in something this panel reads (`./grammars`), and one that fails to arrive costs colour
+// and nothing else — an uncoloured file is what the panel drew before there were grammars at all.
+async function colourFor(lang: LangId): Promise<Extension[]> {
+  try {
+    const { textmate } = await import("./highlight");
+    return [await textmate(lang)];
+  } catch {
+    return [];
+  }
+}
+
 /** One mounted editor: the element it drew into, and the way to take it down again. */
 export type Mounted = {
   /** Replace the text being shown, for a panel that moved to another file without unmounting. */
@@ -21,16 +36,24 @@ export type Mounted = {
  * one whose bytes and text do not round-trip (`FolderFileDto.clean`). Nothing here can save yet
  * either way — the door that writes is being built — but a file that will never be savable is a
  * file to say so about now rather than after somebody has typed into it.
+ *
+ * `name` is the file's own name, which is the only thing that says what language it is written in
+ * (`./grammars`). A name nothing here reads simply arrives uncoloured.
  */
 export async function mountEditor(
   parent: HTMLElement,
   text: string,
   editable: boolean,
+  name: string,
 ): Promise<Mounted> {
-  const [{ EditorState }, view, commands] = await Promise.all([
+  // The grammar is fetched beside the editor, not after it: a file that appears uncoloured and then
+  // repaints reads as a glitch, where one that was never coloured reads as a plain file.
+  const lang = langFor(name);
+  const [{ EditorState }, view, commands, colour] = await Promise.all([
     import("@codemirror/state"),
     import("@codemirror/view"),
     import("@codemirror/commands"),
+    lang === null ? Promise.resolve<Extension[]>([]) : colourFor(lang),
   ]);
   const { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } = view;
   const { history, defaultKeymap, historyKeymap } = commands;
@@ -62,6 +85,7 @@ export async function mountEditor(
           "&.cm-focused": { outline: "none" },
         }),
         EditorView.lineWrapping,
+        ...colour,
         EditorState.readOnly.of(!editable),
         // A read-only editor still takes focus and a caret, which is what makes it selectable and
         // navigable by keyboard; what it refuses is changing the text.

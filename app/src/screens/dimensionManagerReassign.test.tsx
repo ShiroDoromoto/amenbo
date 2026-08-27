@@ -69,7 +69,7 @@ vi.mock("../core/snapshot", async (importOriginal) => {
         axisFrom = hoisted.axis;
         const dim = {
           id: 900, name: "テーマ", slug: "theme", notes: "", role: "none" as const, ordered: false,
-          showOnCard: false, required: hoisted.axis.required, values: hoisted.axis.values,
+          showOnCard: false, required: hoisted.axis.required, appliesTo: "both" as const, values: hoisted.axis.values,
         };
         withAxis = { ...snap, projects: snap.projects.map((p) => (p.id === 1 ? { ...p, dimensions: [dim] } : p)) };
       }

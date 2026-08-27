@@ -25,7 +25,8 @@ use amenbo_core::binding::canonical_dir;
 use base64::Engine as _;
 
 use crate::dto::{
-    FolderChangedDto, FolderEntryDto, FolderFileDto, FolderImageDto, FolderOversizeDto,
+    FolderChangedDto, FolderEntryDto, FolderFileDto, FolderImageDto, FolderLineEndingDto,
+    FolderOversizeDto,
 };
 use crate::error::CmdError;
 
@@ -479,25 +480,42 @@ pub fn folder_read(
     let size = meta.len();
     let head = read_head(&file, HEAD).map_err(|_| gone())?;
 
-    // The one judgement, made on bytes: text is what has no NUL in its head. Reading it as UTF-8 is
-    // a separate matter and never a verdict — a file cut at the cap can end inside a character, and
-    // a page of text in another encoding is still text to a person looking for what they wrote.
+    // The one judgement, made on bytes: text is what has no NUL in its head. Which encoding that
+    // text is in is a separate question and never this one's — a page of Shift_JIS is text to the
+    // person who wrote it — and it is `crate::encoding`'s to answer.
     if !head.contains(&0) {
         let bytes = if size > HEAD as u64 {
             read_head(&file, TEXT_CAP).map_err(|_| gone())?
         } else {
             head
         };
+        let truncated = (bytes.len() as u64) < size;
+        // The reader's own language is the guess's only hint, and it is fetched here rather than
+        // held because only a file that is not UTF-8 is ever guessed at — one in 645 of them.
+        let read = crate::encoding::read(&bytes, truncated, language_tld());
         return Ok(FolderFileDto {
-            truncated: (bytes.len() as u64) < size,
-            text: Some(String::from_utf8_lossy(&bytes).into_owned()),
+            truncated,
+            text: Some(read.text),
             image: None,
             oversize: None,
+            encoding: Some(read.encoding.name().to_string()),
+            bom: read.bom,
+            line_ending: line_ending(read.line_ending),
+            clean: read.clean,
         });
     }
 
     let Some(mime) = picture(&head) else {
-        return Ok(FolderFileDto { text: None, truncated: false, image: None, oversize: None });
+        return Ok(FolderFileDto {
+            text: None,
+            truncated: false,
+            image: None,
+            oversize: None,
+            encoding: None,
+            bom: false,
+            line_ending: FolderLineEndingDto::Lf,
+            clean: false,
+        });
     };
 
     // A JPEG is the one form whose size is not already in hand (`JPEG_HEAD`), and reading further
@@ -516,12 +534,25 @@ pub fn folder_read(
             mime: mime.to_string(),
             base64: base64::engine::general_purpose::STANDARD.encode(whole),
         });
-        return Ok(FolderFileDto { text: None, truncated: false, image, oversize: None });
+        return Ok(FolderFileDto {
+            text: None,
+            truncated: false,
+            image,
+            oversize: None,
+            encoding: None,
+            bom: false,
+            line_ending: FolderLineEndingDto::Lf,
+            clean: false,
+        });
     }
     Ok(FolderFileDto {
         text: None,
         truncated: false,
         image: None,
+        encoding: None,
+        bom: false,
+        line_ending: FolderLineEndingDto::Lf,
+        clean: false,
         oversize: Some(FolderOversizeDto {
             bytes: size,
             width: pixels.map(|(width, _)| width),
@@ -695,6 +726,28 @@ fn le24(bytes: &[u8], at: usize) -> Option<u32> {
 fn le32(bytes: &[u8], at: usize) -> Option<u32> {
     let word: [u8; 4] = bytes.get(at..at + 4)?.try_into().ok()?;
     Some(u32::from_le_bytes(word))
+}
+
+/// The wire form of what the bytes said about their newlines.
+fn line_ending(read: crate::encoding::LineEnding) -> FolderLineEndingDto {
+    match read {
+        crate::encoding::LineEnding::Lf => FolderLineEndingDto::Lf,
+        crate::encoding::LineEnding::Crlf => FolderLineEndingDto::Crlf,
+        crate::encoding::LineEnding::Mixed => FolderLineEndingDto::Mixed,
+    }
+}
+
+/// The hint the encoding guess is given: the top-level domain standing for the language the reader
+/// chose to be spoken to in (`crate::encoding::tld_for`).
+///
+/// `config.json` is a file of its own, read here rather than held, because the only caller is the
+/// one file in 645 that is not UTF-8 — holding it would be caching a read that almost never happens
+/// against a setting that can change under it.
+fn language_tld() -> Option<&'static [u8]> {
+    let language = amenbo_core::config::Paths::resolve()
+        .ok()
+        .and_then(|paths| amenbo_core::config::Config::load(&paths.config_file).language)?;
+    crate::encoding::tld_for(Some(&language))
 }
 
 /// At most `cap` bytes from the front of a file. A short file comes back short; a long one comes

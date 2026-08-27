@@ -1192,6 +1192,42 @@ pub fn resolve_any(conn: &rusqlite::Connection, input: &str) -> Result<crate::op
     pick(Vec::new(), s)
 }
 
+/// Resolves a reference that must **say which kind it is**: `AMB-T-n` / `T-n` for a task, `AMB-D-n` /
+/// `D-n` for a decision. A bare `#n` / `n` is refused rather than guessed at.
+///
+/// This is [`resolve_any`]'s strict sibling, and the difference is what a caller does with the answer.
+/// `resolve_any` reads a number a person wrote in conversation, where landing on the only row that
+/// carries it is the helpful reading. Here the answer decides **what gets written to** — a task's
+/// classification or a decision's — and the two number independently, so the same digits name a row on
+/// each side. Resolving to whichever one happens to exist would put the value on the wrong thing the day
+/// the other one is created, and the caller would never see it happen. So the kind code is asked for
+/// up front, the way `decision promote` asks which comment a bare number means.
+pub fn resolve_typed_ref(conn: &rusqlite::Connection, input: &str) -> Result<crate::ops::Ref> {
+    use crate::ops::task::{parse_number_ref, parse_typed_ref, TypedKind};
+    use crate::ops::Ref;
+
+    let s = input.trim();
+    if let Some((kind, _)) = parse_typed_ref(s) {
+        return match kind {
+            TypedKind::Task => resolve_task_ref(conn, s).map(Ref::Task),
+            TypedKind::Decision => resolve_decision_ref(conn, s).map(Ref::Decision),
+        };
+    }
+    if let Some(number) = parse_number_ref(s) {
+        return Err(Error::invalid(format!(
+            "'{s}' does not say whether it means a task or a decision — they number independently, so \
+             write {} or {}",
+            crate::idref::task(number as i64),
+            crate::idref::decision(number as i64)
+        )));
+    }
+    Err(Error::invalid(format!(
+        "'{s}' is not a reference — write {} for a task or {} for a decision",
+        crate::idref::task(1),
+        crate::idref::decision(1)
+    )))
+}
+
 /// Resolves a `project` reference (an id, or an exact name) to a single live project id, by indexed
 /// SQL against the read-model. Collapsing the hits (`pick_id`) and the not-found message (project's
 /// `NOUN`) are reused from ops.
@@ -1853,6 +1889,12 @@ pub fn decision_detail(
         })
         .collect();
     let built_on_by = reverse(row.edges.built_on_by);
+    // What the decision is filed under, in words — the same read a task's page takes (`AMB-D-781`).
+    let dimensions = read::decision_classification(conn, decision_id)
+        .map_err(crate::error::engine_on(conn))?
+        .into_iter()
+        .map(|(dimension, value)| crate::view::ClassifiedAs { dimension, value })
+        .collect();
     // `decided_by` is a TEXT token read into both id and name, so whenever the id is present the name is
     // too — the `unwrap_or_default` never fires. Core keeps no display placeholder here.
     let decided_by = row.decided_by_id.map(|id| Ref { id, name: row.decided_by_name.unwrap_or_default() });
@@ -1882,6 +1924,7 @@ pub fn decision_detail(
         amended_by,
         builds_on,
         built_on_by,
+        dimensions,
         decided_at: row.decided_at.as_deref().and_then(Timestamp::parse_rfc3339),
         decided_by,
         linked_tasks,

@@ -37,19 +37,19 @@ fn dimension_lifecycle_axis_values_and_assignment() {
     // Assign to a task, resolving the value by name within the axis; the task ref needs no project context.
     let t = cli.json(&["task", "add", "--title", "T", "--project", &pid, "--json"]);
     let tid = id_str(&t["task"]["id"]);
-    let set = cli.json(&["dimension", "set", &tid, "エリア", "設計", "--json"]);
+    let set = cli.json(&["dimension", "set", &task_ref(&tid), "エリア", "設計", "--json"]);
     assert_eq!(set["noop"], false);
     assert_eq!(id_str(&set["task_dimension_value"]["value_id"]), v1id);
     // Setting the same value from another process is an idempotent no-op: it persisted.
-    let again = cli.json(&["dimension", "set", &tid, "エリア", "設計", "--json"]);
+    let again = cli.json(&["dimension", "set", &task_ref(&tid), "エリア", "設計", "--json"]);
     assert_eq!(again["noop"], true, "a persisted assignment is a noop on re-set");
     // Single-select: setting another value replaces the one row rather than adding to it.
-    let repl = cli.json(&["dimension", "set", &tid, "エリア", "実装", "--json"]);
+    let repl = cli.json(&["dimension", "set", &task_ref(&tid), "エリア", "実装", "--json"]);
     assert_eq!(repl["noop"], false);
 
     // unset clears the assignment, and a second unset is a no-op.
-    assert_eq!(cli.json(&["dimension", "unset", &tid, "エリア", "実装", "--json"])["noop"], false);
-    assert_eq!(cli.json(&["dimension", "unset", &tid, "エリア", "実装", "--json"])["noop"], true);
+    assert_eq!(cli.json(&["dimension", "unset", &task_ref(&tid), "エリア", "実装", "--json"])["noop"], false);
+    assert_eq!(cli.json(&["dimension", "unset", &task_ref(&tid), "エリア", "実装", "--json"])["noop"], true);
 
     // Rename the axis: one verb updates it, and a name on its own is a rename.
     let rn = cli.json(&["dimension", "update", &did, "--name", "領域", "--json"]);
@@ -261,12 +261,12 @@ fn dimension_demands_an_answer_and_the_creation_is_held_until_it_gets_one() {
     assert_eq!(refused["error"]["code"], "invalid_task_required_dimension");
 
     // Answer the axis and the creation goes through.
-    cli.json(&["dimension", "set", &tid, "プロダクト", "本体", "--json"]);
+    cli.json(&["dimension", "set", &task_ref(&tid), "プロダクト", "本体", "--json"]);
     let done = cli.json(&["task", "finish-creating", &tid, "--json"]);
     assert_eq!(done["task"]["draft"], false);
 
     // And a required axis cannot be blanked back out.
-    let (err, code) = cli.run_err(&["dimension", "unset", &tid, "プロダクト", "本体"]);
+    let (err, code) = cli.run_err(&["dimension", "unset", &task_ref(&tid), "プロダクト", "本体"]);
     assert_ne!(code, 0, "a required axis cannot be cleared: {err}");
 
     // Lowering the flag reopens both doors.
@@ -334,7 +334,8 @@ fn a_slug_is_the_readable_key_an_axis_and_its_values_answer_to() {
     assert_eq!(id_str(&cli.json(&["dimension", "show", &decoy_id, "--json"])["dimension"]["id"]), decoy_id);
     // The same order one axis down: a value named what another value's key says.
     cli.json(&["dimension", "value-add", "era", "--name", "ops-2", "--json"]);
-    let hit = cli.json(&["dimension", "set", &id_str(&cli.json(&["task", "add", "--title", "T", "--project", &pid, "--json"])["task"]["id"]), "era", "ops-2", "--json"]);
+    let filed = id_str(&cli.json(&["task", "add", "--title", "T", "--project", &pid, "--json"])["task"]["id"]);
+    let hit = cli.json(&["dimension", "set", &task_ref(&filed), "era", "ops-2", "--json"]);
     assert_eq!(id_str(&hit["task_dimension_value"]["value_id"]), vid);
 }
 
@@ -362,12 +363,92 @@ fn task_add_defaults_to_the_time_axis_value_covering_today() {
     assert_eq!(id_str(&current["tasks"][0]["id"]), tid);
 
     // The default is not mandatory: it can be cleared.
-    cli.json(&["dimension", "unset", &tid, "時代", "現代", "--json"]);
+    cli.json(&["dimension", "unset", &task_ref(&tid), "時代", "現代", "--json"]);
     let cleared = cli.json(&["task", "list", "--filter", "time_axis:現代", "--json"]);
     assert_eq!(cleared["count"], 0, "the default can be cleared");
 
     // Overriding works too — the time axis is single-select, so it replaces.
-    cli.json(&["dimension", "set", &tid, "時代", "黎明期", "--json"]);
+    cli.json(&["dimension", "set", &task_ref(&tid), "時代", "黎明期", "--json"]);
     let overridden = cli.json(&["task", "list", "--filter", "time_axis:黎明期", "--json"]);
     assert_eq!(overridden["count"], 1, "it can be overridden to another era");
+}
+
+/// A decision is filed on the very same axes a task is, with the very same values (`AMB-D-781`) — and the
+/// target has to say which of the two it is, because they number independently.
+#[test]
+fn a_decision_is_filed_on_the_same_axes_and_the_target_names_its_kind() {
+    let cli = Cli::new();
+    let pid = id_str(&cli.json(&["project", "add", "--name", "分類PJ", "--json"])["project"]["id"]);
+    cli.json(&["dimension", "add", "--project", &pid, "--name", "テーマ", "--json"]);
+    cli.json(&["dimension", "value-add", "テーマ", "--name", "メイン", "--json"]);
+    cli.json(&["dimension", "value-add", "テーマ", "--name", "対話", "--json"]);
+
+    let d = cli.json(&["decision", "add", "--project", &pid, "--title", "真実源を RDB にする", "--body", "根拠", "--json"]);
+    let did = id_str(&d["decision"]["id"]);
+
+    // Filed by ref, and the row that lands is the decision's own.
+    let set = cli.json(&["dimension", "set", &decision_ref(&did), "テーマ", "メイン", "--json"]);
+    assert_eq!(set["noop"], false);
+    assert_eq!(id_str(&set["decision_dimension_value"]["decision_id"]), did);
+    // From another process — so it persisted — the same value again is a no-op, and a different value on
+    // the same axis replaces rather than adds (single-select holds on this side too).
+    assert_eq!(cli.json(&["dimension", "set", &decision_ref(&did), "テーマ", "メイン", "--json"])["noop"], true);
+    cli.json(&["dimension", "set", &decision_ref(&did), "テーマ", "対話", "--json"]);
+
+    // The decision's own page says what it is filed under, on both faces.
+    let shown = cli.json(&["decision", "show", &did, "--json"]);
+    let dims = shown["dimensions"].as_array().expect("the page carries the classification");
+    assert_eq!(dims.len(), 1, "single-select: one value per axis, the replacement included");
+    assert_eq!(dims[0]["dimension"], "テーマ");
+    assert_eq!(dims[0]["value"], "対話");
+    let (human, _) = cli.run(&["decision", "show", &did]);
+    assert!(human.contains("dimensions: テーマ=対話"), "and the human page says it too: {human}");
+
+    // A task filed on the same value is a row of its own — one axis, two kinds of thing on it.
+    let tid = id_str(&cli.json(&["task", "add", "--title", "実装", "--project", &pid, "--json"])["task"]["id"]);
+    cli.json(&["dimension", "set", &task_ref(&tid), "テーマ", "対話", "--json"]);
+    assert_eq!(cli.json(&["task", "show", &tid, "--json"])["dimensions"][0]["value"], "対話");
+    assert_eq!(cli.json(&["decision", "show", &did, "--json"])["dimensions"][0]["value"], "対話");
+
+    // unset clears the decision's value and is a no-op the second time.
+    assert_eq!(cli.json(&["dimension", "unset", &decision_ref(&did), "テーマ", "対話", "--json"])["noop"], false);
+    assert_eq!(cli.json(&["dimension", "unset", &decision_ref(&did), "テーマ", "対話", "--json"])["noop"], true);
+}
+
+/// The number alone does not say which kind it names, so it is refused rather than guessed at — and the
+/// refusal spells both readings out.
+#[test]
+fn a_bare_number_is_refused_where_it_could_mean_either_kind() {
+    let cli = Cli::new();
+    let pid = id_str(&cli.json(&["project", "add", "--name", "分類PJ", "--json"])["project"]["id"]);
+    cli.json(&["dimension", "add", "--project", &pid, "--name", "テーマ", "--json"]);
+    cli.json(&["dimension", "value-add", "テーマ", "--name", "メイン", "--json"]);
+    let tid = id_str(&cli.json(&["task", "add", "--title", "T", "--project", &pid, "--json"])["task"]["id"]);
+
+    let (err, code) = cli.run_err(&["dimension", "set", &tid, "テーマ", "メイン"]);
+    assert_ne!(code, 0, "a bare number is refused: {err}");
+    assert!(err.contains(&format!("AMB-T-{tid}")), "the refusal spells the task reading: {err}");
+    assert!(err.contains(&format!("AMB-D-{tid}")), "and the decision reading: {err}");
+    // The same on the way back out.
+    let (err, code) = cli.run_err(&["dimension", "unset", &tid, "テーマ", "メイン"]);
+    assert_ne!(code, 0, "unset asks the same question: {err}");
+}
+
+/// `required` is a demand made of a task's creation, and a decision has no creation to finish — so the
+/// flag neither demands a value of a decision nor stops one being cleared (`AMB-D-781`).
+#[test]
+fn a_required_axis_makes_no_demand_of_a_decision() {
+    let cli = Cli::new();
+    let pid = id_str(&cli.json(&["project", "add", "--name", "分類PJ", "--json"])["project"]["id"]);
+    cli.json(&["dimension", "add", "--project", &pid, "--name", "プロダクト", "--json"]);
+    cli.json(&["dimension", "value-add", "プロダクト", "--name", "本体", "--json"]);
+    cli.json(&["dimension", "update", "プロダクト", "--required", "true", "--json"]);
+
+    let did = id_str(&cli.json(&["decision", "add", "--project", &pid, "--title", "決定", "--body", "根拠", "--json"])["decision"]["id"]);
+    cli.json(&["dimension", "set", &decision_ref(&did), "プロダクト", "本体", "--json"]);
+    assert_eq!(
+        cli.json(&["dimension", "unset", &decision_ref(&did), "プロダクト", "本体", "--json"])["noop"],
+        false,
+        "a decision's value on a required axis clears"
+    );
 }

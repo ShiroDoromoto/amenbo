@@ -1172,19 +1172,22 @@ pub enum DimensionCmd {
         #[arg(long, value_name = "VALUE")]
         reassign_to: Option<String>,
     },
-    /// Assign a task a value of a dimension (single-select replaces the task's prior value)
+    /// Assign a task or a decision a value of a dimension (single-select replaces its prior value on
+    /// that axis)
     Set {
-        /// task ref (AMB-T-n)
-        task: String,
+        /// task or decision ref (AMB-T-n / AMB-D-n). A bare number is refused: the two number
+        /// independently, so the same digits name a row on each side
+        target: String,
         /// dimension ref (AMB-DIM-n), slug or name
         dimension: String,
         /// value ref (AMB-DIMV-n), slug or name (within the dimension)
         value: String,
     },
-    /// Clear a task's value of a dimension
+    /// Clear a task's or a decision's value of a dimension
     Unset {
-        /// task ref (AMB-T-n)
-        task: String,
+        /// task or decision ref (AMB-T-n / AMB-D-n). A bare number is refused: the two number
+        /// independently, so the same digits name a row on each side
+        target: String,
         /// dimension ref (AMB-DIM-n), slug or name
         dimension: String,
         /// value ref (AMB-DIMV-n), slug or name (within the dimension)

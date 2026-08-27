@@ -437,6 +437,7 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
           onEdit={setEdit}
           onRead={(path) => { setEdit(null); setReading({ root: one.path, path }); }}
           onMenu={(path, dir, x, y) => setMenu({ root: one.path, path, dir, x, y })}
+          onTrash={(path) => askTrash(one.path, path)}
         />
       ))}
       {menu !== null && (
@@ -489,7 +490,7 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
  * tree below, so they stand beside the heading, above it.
  */
 function FolderSection({
-  projectId, root, label, bound, landing, edit, onEdit, onRead, onMenu,
+  projectId, root, label, bound, landing, edit, onEdit, onRead, onMenu, onTrash,
 }: {
   projectId: number;
   root: string;
@@ -506,6 +507,8 @@ function FolderSection({
   onEdit: (edit: Edit | null) => void;
   onRead: (path: string[]) => void;
   onMenu: (path: string[], dir: boolean, x: number, y: number) => void;
+  /** Put one row of this folder in the machine's bin. */
+  onTrash: (path: string[]) => void;
 }) {
   const [changes, setChanges] = useState<FolderChangesDto>(
     { root, capped: false, unwatched: false, gone: false },
@@ -518,6 +521,10 @@ function FolderSection({
   // than per level, because opening one is also something the section does on a reader's behalf: a
   // name being made in a folder that is folded shut would be typed where nobody could see it.
   const [open, setOpen] = useState<string[]>([]);
+  // Which row holds this tree's stop in the tab order. Nothing until a reader has been on one, and
+  // then the first row is the stop — which is what puts the cursor somewhere the moment the panel
+  // is drawn, rather than leaving a reader to Tab through the tree to find out where they are.
+  const [cursor, setCursor] = useState<string | null>(null);
   const gone = !bound || changes.gone;
 
   const naming: Naming = {
@@ -659,6 +666,9 @@ function FolderSection({
             naming={naming}
             onRead={onRead}
             onMenu={onMenu}
+            onTrash={onTrash}
+            cursor={cursor}
+            onCursor={setCursor}
           />
         )}
       </section>
@@ -714,19 +724,54 @@ function FileMenu({ projectId, root, path, dir, at, naming, onClose, onTrash }: 
     // would sit over rows it is no longer about. Inside is the opposite — a press on an item is the
     // first half of choosing it, and closing there unmounts the button before the click can land on
     // it, so the item never fires at all.
-    const close = (event: Event) => {
+    const away = (event: Event) => {
       if (event.target instanceof Node && box.current?.contains(event.target)) return;
       onClose();
     };
-    document.addEventListener("pointerdown", close);
-    document.addEventListener("keydown", close);
-    window.addEventListener("blur", close);
+    // **Escape and nothing else.** This listened for every key once, which read as "any key means
+    // move on" and worked only while no key meant anything else — the moment the rows answered to
+    // the arrows, every press meant to walk the tree shut the menu on the way past (`AMB-D-780`).
+    const key = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", key);
+    window.addEventListener("blur", away);
     return () => {
-      document.removeEventListener("pointerdown", close);
-      document.removeEventListener("keydown", close);
-      window.removeEventListener("blur", close);
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", key);
+      window.removeEventListener("blur", away);
     };
   }, [onClose]);
+
+  // The first item, once there is one. A menu opened from a row the arrows reached is a menu the
+  // arrows have to be able to walk, and a list nothing is standing on is one every key falls out of.
+  //
+  // **And the row it was opened on, once it closes.** Focus left where the menu used to be is a
+  // reader standing on nothing: the next arrow reaches no tree and the panel goes quiet, which is
+  // the same dead end as never having taken the focus at all.
+  const from = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    from.current ??= document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    box.current?.querySelector<HTMLElement>(".files__menuitem")?.focus();
+    // Given back only where the menu going is what left the focus nowhere. A reader who clicked
+    // away has already said where they are, and taking them back to the row would be undoing it.
+    return () => {
+      if (document.activeElement === null || document.activeElement === document.body) {
+        from.current?.focus();
+      }
+    };
+  }, [apps]);
+
+  /** Up and down the items. The pattern a menu is read by, and the reason the blanket key handler
+   *  above had to go: these presses are the menu's own, not a way out of it. */
+  const walk = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    const items = [...e.currentTarget.querySelectorAll<HTMLElement>(".files__menuitem")];
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    const step = e.key === "ArrowDown" ? 1 : -1;
+    // Round, because a menu is short and a reader who has walked to the end of one means to go on.
+    items[(at + step + items.length) % items.length]?.focus();
+  };
 
   const act = (go: () => Promise<void>) => {
     onClose();
@@ -751,7 +796,13 @@ function FileMenu({ projectId, root, path, dir, at, naming, onClose, onTrash }: 
   };
 
   return (
-    <div className="files__menu" style={{ left: at.x, top: at.y }} role="menu" ref={box}>
+    <div
+      className="files__menu"
+      style={{ left: at.x, top: at.y }}
+      role="menu"
+      ref={box}
+      onKeyDown={walk}
+    >
       {apps === null ? (
         <>
           {naming !== undefined && dir && (
@@ -869,6 +920,7 @@ function rowClass(base: string, ignored: boolean, mark: GitMark | null): string 
 /** One folder's worth of names, and whatever of it has been opened. */
 function Level({
   projectId, root, path, landing, marks, moved, open, onOpen, naming, onRead, onMenu,
+  onTrash, cursor, onCursor,
 }: {
   projectId: number;
   root: string;
@@ -895,9 +947,82 @@ function Level({
   naming: Naming;
   onRead: (path: string[]) => void;
   onMenu: (path: string[], dir: boolean, x: number, y: number) => void;
+  /** Put one row in the machine's bin — what Delete means on a row. */
+  onTrash: (path: string[]) => void;
+  /**
+   * Which row holds the tree's one stop in the tab order, as its path joined — or nothing, before a
+   * reader has been on any of them, when the stop is the first row of the whole tree.
+   *
+   * **One stop for the tree, not one per row.** Every row used to be a button, so a folder of a
+   * thousand names was a thousand presses of Tab on the way past it — and nothing caps what a level
+   * answers with (`crate::folder`). What a reader wants of a tree is to reach it once and then walk
+   * it with the arrows, which is the pattern this is half of (roving tabindex).
+   */
+  cursor: string | null;
+  onCursor: (key: string) => void;
 }) {
   const [names, setNames] = useState<FolderEntryDto[]>([]);
   const making = makingIn(naming.edit, root, path);
+  const top = path.length === 0;
+
+  /**
+   * Walking the tree with the keys the tree pattern names, and no others (`AMB-D-780`).
+   *
+   * **Read off the drawn rows rather than off the names held here.** What is next below an open
+   * folder is its first child, which is another level's list and not this one's — the document
+   * already holds them in the one order a reader sees, so the walk asks it instead of rebuilding
+   * that order out of state spread across every level.
+   *
+   * A key with a modifier on it is not this tree's: the panel around it hears undo (`FilesPanel`),
+   * and what the reader means by ⌘ or Ctrl is the machine's word, never a row's.
+   */
+  const onKey = (e: ReactKeyboardEvent<HTMLUListElement>) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const tree = e.currentTarget;
+    const row = (e.target as HTMLElement).closest<HTMLElement>('[role="treeitem"]');
+    if (row === null || !tree.contains(row)) return;
+    const rows = [...tree.querySelectorAll<HTMLElement>('[role="treeitem"]')];
+    const at = rows.indexOf(row);
+    const key = row.dataset.key ?? "";
+    const here = key === "" ? [] : key.split("/");
+    // A folder is the row that says whether it is open; a file never carries the word at all.
+    const folded = row.getAttribute("aria-expanded");
+    const go = (to: HTMLElement | undefined) => to?.focus();
+    switch (e.key) {
+      case "ArrowDown": e.preventDefault(); go(rows[at + 1]); break;
+      case "ArrowUp": e.preventDefault(); go(rows[at - 1]); break;
+      case "Home": e.preventDefault(); go(rows[0]); break;
+      case "End": e.preventDefault(); go(rows[rows.length - 1]); break;
+      // Into the folder: open it where it is shut, and step to what is inside where it is already
+      // open. A shut one does not also move — what was asked for is to see inside, and the rows to
+      // move onto are not read off the disk yet.
+      case "ArrowRight":
+        e.preventDefault();
+        if (folded === "false") onOpen(key);
+        else if (folded === "true") go(rows[at + 1]);
+        break;
+      // And out of it: shut an open folder, or leave a row for the folder holding it.
+      case "ArrowLeft":
+        e.preventDefault();
+        if (folded === "true") onOpen(key);
+        else go(row.parentElement?.closest<HTMLElement>('[role="treeitem"]') ?? undefined);
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (folded === null) onRead(here);
+        else onOpen(key);
+        break;
+      // Both keys, because which one a keyboard calls "delete" is the keyboard's answer: a Mac's
+      // large one sends Backspace, and what it means on a row is the same thing either way. The bin
+      // is what happens, and the question before it is the panel's (`FilesPanel`).
+      case "Delete":
+      case "Backspace":
+        e.preventDefault();
+        onTrash(here);
+        break;
+      default: break;
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -909,12 +1034,20 @@ function Level({
   }, [projectId, root, path.join("/"), moved]);
 
   return (
-    <ul className="files__list files__list--tree">
+    <ul
+      className="files__list files__list--tree"
+      // The tree is the outermost list; every list inside one is a group of the row above it. The
+      // pair is what tells a reader being read to that they are in a tree at all, and how deep — the
+      // nesting a sighted reader takes off the indent (`AMB-D-780`).
+      role={top ? "tree" : "group"}
+      aria-label={top ? t("files.tree") : undefined}
+      onKeyDown={top ? onKey : undefined}
+    >
       {/* The name being made, at the top of the folder it is being made in. Above the names rather
           than among them: where it would sort is decided by what is typed, and a box that moved as
           the letters arrived would be a box nobody could read what they had written in. */}
       {making !== null && (
-        <li>
+        <li role="none">
           <NameBox
             initial=""
             onName={(name) => folderMake(projectId, root, [...path, name], making.dir)}
@@ -922,7 +1055,7 @@ function Level({
           />
         </li>
       )}
-      {names.map((one) => {
+      {names.map((one, i) => {
         // A folder answers for a drop, and what it answers for is everything drawn under it — which
         // is the row itself and, once it is open, the level inside it. That is why the mark sits on
         // the item and not on the button: a file row inside a folder resolves upwards to that
@@ -938,7 +1071,7 @@ function Level({
         // would leave a reader wondering which one they were about to keep.
         if (renaming(naming.edit, root, here)) {
           return (
-            <li key={one.name}>
+            <li key={one.name} role="none">
               <NameBox
                 initial={one.name}
                 onName={(name) => folderRename(projectId, root, here, name)}
@@ -947,27 +1080,50 @@ function Level({
             </li>
           );
         }
+        // The row is the item, and the name inside it is what is drawn. They are two elements
+        // because a folder's item also holds the level under it: one element being both the line
+        // and the box around the lines below would lay the two out side by side.
         return (
           <li
             key={one.name}
+            role="treeitem"
+            data-key={key}
             data-root={root}
             data-into={into}
-            className={landed(landing, root, into) ? "files__into" : undefined}
+            // Depth, length and place. All three because this tree is read a level at a time: what
+            // is not on the screen is not in the document either, so nothing but these says how far
+            // down a row is or how many it stands among.
+            aria-level={path.length + 1}
+            aria-setsize={names.length}
+            aria-posinset={i + 1}
+            aria-expanded={one.isDir ? open.includes(key) : undefined}
+            tabIndex={(cursor === null ? top && i === 0 : cursor === key) ? 0 : -1}
+            className={`files__item${landed(landing, root, into) ? " files__into" : ""}`}
+            // Stopped at each row, because an item inside an open folder is an item inside this one
+            // too: left to bubble, one press would open the row and every folder above it.
+            onClick={(e) => {
+              e.stopPropagation();
+              if (one.isDir) onOpen(key);
+              else onRead(here);
+            }}
+            // Stood on before the menu opens, because the row a menu is about is the row a reader
+            // comes back to when it closes — and a right-click is not a press the browser moves the
+            // focus for.
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              e.currentTarget.focus();
+              onMenu(here, one.isDir, e.clientX, e.clientY);
+            }}
+            // Where the tab stop follows to, however the row was reached — the arrows move the
+            // focus and this is what moves the stop after it, so tabbing away and back returns to
+            // the row a reader was on rather than to the top of the tree.
+            onFocus={(e) => { if (e.target === e.currentTarget) onCursor(key); }}
           >
             {one.isDir
               ? (
                 <>
-                  <button
-                    className={rowClass("files__dir", one.ignored, mark)}
-                    aria-expanded={open.includes(key)}
-                    onClick={() => onOpen(key)}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      onMenu(here, true, e.clientX, e.clientY);
-                    }}
-                  >
-                    {one.name}
-                  </button>
+                  <span className={rowClass("files__dir", one.ignored, mark)}>{one.name}</span>
                   {open.includes(key) && (
                     <Level
                       projectId={projectId}
@@ -981,21 +1137,17 @@ function Level({
                       naming={naming}
                       onRead={onRead}
                       onMenu={onMenu}
+                      onTrash={onTrash}
+                      cursor={cursor}
+                      onCursor={onCursor}
                     />
                   )}
                 </>
               )
               : (
-                <button
-                  className={rowClass("files__file", one.ignored, mark)}
-                  onClick={() => onRead(here)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    onMenu(here, false, e.clientX, e.clientY);
-                  }}
-                >
+                <span className={rowClass("files__file", one.ignored, mark)}>
                   <span className="files__name">{one.name}</span>
-                </button>
+                </span>
               )}
           </li>
         );

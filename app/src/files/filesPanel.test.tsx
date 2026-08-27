@@ -284,8 +284,31 @@ function click(el: Element | null | undefined) {
 const megabytes = (n: number) =>
   formatNumber(n, { style: "unit", unit: "megabyte", unitDisplay: "short", maximumFractionDigits: 1 });
 
-const button = (text: string) =>
+/**
+ * A control by the words on it: a button, or one of the tree's rows.
+ *
+ * The rows are items rather than buttons, because the whole tree carries one stop in the tab order
+ * instead of one per row (`./FilesPanel`). What a row is called is read off its own line and not off
+ * its text, since an open folder's text holds every name under it — matched on that, a press meant
+ * for a file inside would land on the folder around it.
+ */
+const button = (text: string): HTMLElement | undefined =>
+  [...container.querySelectorAll<HTMLElement>("button, [role=\"treeitem\"]")]
+    .find((b) => labelOf(b).includes(text));
+
+const labelOf = (el: HTMLElement): string =>
+  (el.getAttribute("role") === "treeitem"
+    ? el.querySelector(":scope > .files__dir, :scope > .files__file")?.textContent
+    : el.textContent) ?? "";
+
+/** The same, where what is asked is a button's own state rather than a press on it. */
+const pressable = (text: string): HTMLButtonElement | undefined =>
   [...container.querySelectorAll("button")].find((b) => b.textContent?.includes(text));
+
+/** One row of one folder's tree, named exactly — for a test about which of two folders it is in. */
+const rowIn = (folder: Element, name: string): HTMLElement | undefined =>
+  [...folder.querySelectorAll<HTMLElement>("[role=\"treeitem\"]")]
+    .find((one) => labelOf(one) === name);
 
 /** The same, over the whole page: the question before the bin is drawn onto `document.body`. */
 const anyButton = (text: string) =>
@@ -1028,10 +1051,10 @@ describe("the file face", () => {
     it("offers nothing to press until somebody has typed", async () => {
       await open();
       // The one control, saying which of the three it is — and there is nothing to save yet.
-      expect(button(t("files.saved"))?.disabled).toBe(true);
+      expect(pressable(t("files.saved"))?.disabled).toBe(true);
 
       await type("#!/bin/sh\necho there");
-      expect(button(t("files.save"))?.disabled).toBe(false);
+      expect(pressable(t("files.save"))?.disabled).toBe(false);
     });
 
     /** What the read answered with is what the save carries back: the encoding the bytes were in,
@@ -1051,7 +1074,7 @@ describe("the file face", () => {
         lineEnding: "crlf",
       });
       // And there is nothing left to save, which is what the control says once it is through.
-      expect(button(t("files.saved"))?.disabled).toBe(true);
+      expect(pressable(t("files.saved"))?.disabled).toBe(true);
     });
 
     /** A file with both kinds of newline in it comes out of a save with one kind, which changes
@@ -1061,7 +1084,7 @@ describe("the file face", () => {
       await open({ lineEnding: "mixed" });
       expect(container.textContent).toContain(t("files.newlinesMixed"));
       await type("#!/bin/sh\necho there");
-      expect(button(t("files.save"))?.disabled).toBe(true);
+      expect(pressable(t("files.save"))?.disabled).toBe(true);
 
       const picker = container.querySelector<HTMLSelectElement>(".files__newline");
       expect(picker).not.toBeNull();
@@ -1096,7 +1119,7 @@ describe("the file face", () => {
       expect(container.textContent).toContain("Shift_JIS");
       expect(hoisted.saved).toEqual([]);
       // Still unsaved, so the way to try again is still there.
-      expect(button(t("files.save"))?.disabled).toBe(false);
+      expect(pressable(t("files.save"))?.disabled).toBe(false);
     });
 
     /** A file the panel could never write back has no way to save it at all — not a control that
@@ -1230,6 +1253,129 @@ describe("the file face", () => {
     await click(ref);
     expect(left).toEqual([1]);
   });
+  // ── walking the tree with the keys ──────────────────────────────────────────────────────────
+  // Amenbo invents no key of its own; what is here is the tree pattern's own vocabulary and the
+  // machine's own undo, which is the whole of what a face carrying a terminal may take (`AMB-D-780`).
+
+  const rows = () => [...container.querySelectorAll<HTMLElement>("[role=\"treeitem\"]")];
+  const at = () => labelOf(document.activeElement as HTMLElement);
+
+  /** A tree of one folder with a file in it, and one file beside it, unfolded and stood on. */
+  async function stood() {
+    hoisted.entries = {
+      "": [{ name: "src", isDir: true, ignored: false }, { name: "a.md", isDir: false, ignored: false }],
+      src: [{ name: "main.rs", isDir: false, ignored: false }],
+    };
+    await drawOpen();
+    rows()[0]!.focus();
+  }
+
+  it("carries one stop in the tab order for the whole tree, not one for every row", async () => {
+    await stood();
+    await press(rows()[0]!, "ArrowRight");
+    await settle();
+    // Three rows drawn, and a reader tabbing past the panel stops once. Nothing caps what a level
+    // answers with, so one stop per row is a thousand presses on a folder of a thousand names.
+    expect(rows()).toHaveLength(3);
+    expect(rows().filter((one) => one.tabIndex === 0)).toHaveLength(1);
+  });
+
+  it("walks the rows with the arrows, and opens and shuts a folder with them", async () => {
+    await stood();
+    expect(at()).toBe("src");
+
+    // Into the folder: the first press opens it, the second steps onto what is inside.
+    await press(rows()[0]!, "ArrowRight");
+    await settle();
+    expect(rows()[0]!.getAttribute("aria-expanded")).toBe("true");
+    await press(rows()[0]!, "ArrowRight");
+    expect(at()).toBe("main.rs");
+
+    // And out of it: from a row inside, back to the folder holding it; then shut.
+    await press(document.activeElement!, "ArrowLeft");
+    expect(at()).toBe("src");
+    await press(document.activeElement!, "ArrowLeft");
+    await settle();
+    expect(rows()[0]!.getAttribute("aria-expanded")).toBe("false");
+
+    // Down and up along what is drawn, ends included.
+    await press(rows()[0]!, "ArrowDown");
+    expect(at()).toBe("a.md");
+    await press(document.activeElement!, "ArrowUp");
+    expect(at()).toBe("src");
+    await press(document.activeElement!, "End");
+    expect(at()).toBe("a.md");
+    await press(document.activeElement!, "Home");
+    expect(at()).toBe("src");
+  });
+
+  it("says how deep a row is, how many it stands among, and which one it is", async () => {
+    await stood();
+    await press(rows()[0]!, "ArrowRight");
+    await settle();
+    const inside = rows().find((one) => labelOf(one) === "main.rs")!;
+    // The tree is read a level at a time, so what is not on the screen is not in the document
+    // either — nothing but these says how far down a row is or how many it stands among.
+    expect(inside.getAttribute("aria-level")).toBe("2");
+    expect(inside.getAttribute("aria-setsize")).toBe("1");
+    expect(inside.getAttribute("aria-posinset")).toBe("1");
+    expect(rows()[0]!.getAttribute("aria-level")).toBe("1");
+    expect(rows()[0]!.getAttribute("aria-setsize")).toBe("2");
+  });
+
+  it("opens the file the reader is standing on", async () => {
+    await stood();
+    await press(rows()[0]!, "ArrowDown");
+    await press(document.activeElement!, "Enter");
+    await settle();
+    expect(hoisted.asked).toContain(`read:${ROOT}:a.md`);
+  });
+
+  it("puts the row the reader is standing on to the question about the bin", async () => {
+    await stood();
+    await press(rows()[0]!, "ArrowDown");
+    await press(document.activeElement!, "Delete");
+    await settle();
+    // The key reaches the same question the menu item does, rather than a second road to the bin.
+    expect(document.body.textContent).toContain(tf("files.trashAsk", { name: "a.md" }));
+    await click(anyButton(t("files.trashGo")));
+    expect(hoisted.asked).toContain(`trash:${ROOT}:a.md`);
+  });
+
+  it("leaves the menu open while the arrows are walking it", async () => {
+    await stood();
+    await menuOn(button("a.md"));
+    expect(button(t("files.openWith"))).toBeDefined();
+
+    // This closed on every key once, so every press meant to walk the tree shut it on the way past.
+    await press(document.body, "ArrowDown");
+    await settle();
+    expect(button(t("files.openWith"))).toBeDefined();
+
+    await press(document.body, "Escape");
+    await settle();
+    expect(button(t("files.openWith"))).toBeUndefined();
+    // And the reader is standing on the row again, not on nothing: a menu that took the focus and
+    // did not give it back leaves the next arrow reaching no tree at all.
+    expect(at()).toBe("a.md");
+  });
+
+  it("walks its own items with the arrows, which is what it names itself a menu for", async () => {
+    await stood();
+    await menuOn(button("a.md"));
+    // Opened on its first item, because a list nothing is standing on is one every key falls out of.
+    const items = [...document.querySelectorAll<HTMLElement>(".files__menuitem")];
+    expect(items.length).toBeGreaterThan(1);
+    expect(document.activeElement).toBe(items[0]);
+    await press(document.activeElement!, "ArrowDown");
+    expect(document.activeElement).toBe(items[1]);
+    await press(document.activeElement!, "ArrowUp");
+    expect(document.activeElement).toBe(items[0]);
+    // Round, because a menu is short and a reader who walks off the end of one means to go on.
+    await press(document.activeElement!, "ArrowUp");
+    expect(document.activeElement).toBe(items[items.length - 1]);
+  });
+
   it("asks before it puts a row in the bin, and bins it on yes", async () => {
     await drawOpen();
     await menuOn(button("a.md"));
@@ -1354,9 +1500,7 @@ describe("a project bound to several folders", () => {
     both();
     hoisted.file = aFile({ text: "hello" });
     await openBothTrees();
-    const row = [...folderNamed("plugins").querySelectorAll("button")]
-      .find((one) => one.textContent === "a.md");
-    await click(row);
+    await click(rowIn(folderNamed("plugins"), "a.md"));
     await settle();
     // The same path names a different file in each folder, so which folder the row was in has to
     // travel with it.
@@ -1396,9 +1540,7 @@ describe("a project bound to several folders", () => {
       await new Promise((r) => setTimeout(r, 0));
     });
 
-    const srcOf = (folder: Element) =>
-      [...folder.querySelectorAll("button")].find((one) => one.textContent === "src");
-    await over(srcOf(trees[1]!));
+    await over(rowIn(trees[1]!, "src"));
     // The row lit up is in the second folder, and the first folder's `src` is left alone.
     expect(trees[1]!.querySelectorAll(".files__into")).toHaveLength(1);
     expect(trees[0]!.querySelectorAll(".files__into")).toHaveLength(0);

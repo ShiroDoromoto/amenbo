@@ -1,11 +1,17 @@
 import { useState } from "react";
 import { type Decision, type DecisionStatus } from "../core/snapshot";
-import { addDecision } from "../core/mutations";
+import { addDecision, fetchProjectDecisionDimensionAssignments } from "../core/mutations";
+import { dataAdapter } from "../mock/adapter";
 import { useDecisionPage, useDecisionSearchIds } from "../core/reads";
+import { useQuery } from "../core/query";
+import { axesFor } from "../core/appliesTo";
 import { Pager, usePager } from "../components/Pager";
 import { errText, formatDay, t, tf } from "../core/i18n";
 import { decisionRef } from "../core/idref";
-import { parseRefQuery } from "../core/filters";
+import {
+  decisionFilterDimensions, parseRefQuery, passesFilters, selectionKey,
+  type DimAssignments, type FilterSelection,
+} from "../core/filters";
 import { asTyped } from "../core/keys";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
@@ -15,6 +21,10 @@ import { Icon } from "../components/Icon";
 // tasks (which have a mailbox). The list is scoped to one project and embeds in the board as its decisions tab.
 type DecisionSort = "numberDesc" | "numberAsc" | "decidedDesc" | "decidedAsc";
 const SORTS: DecisionSort[] = ["numberDesc", "numberAsc", "decidedDesc", "decidedAsc"];
+
+// Stable empty map for the instant before the assignment read comes back (and in the browser mock, where it
+// stays empty). A fresh `{}` per render would rebuild the filter dimensions for nothing.
+const NO_ASSIGNMENTS: DimAssignments = {};
 
 // The sort comparison. The number is the id itself; the decision date is decidedAt, or createdAt where there is none.
 function compareDecisions(a: Decision, b: Decision, sort: DecisionSort): number {
@@ -35,11 +45,18 @@ function compareDecisions(a: Decision, b: Decision, sort: DecisionSort): number 
 }
 
 /**
- * The decision records of a single project. Only this project's decisions are fetched, and the status
- * filter and the sort are layered on the client because the count is bounded. "Superseded" is not a status
+ * The decision records of a single project. Only this project's decisions are fetched, and the filters
+ * and the sort are layered on the client because the count is bounded. "Superseded" is not a status
  * and no badge says it — a decision holds its status and the edges its author drew, and nothing else
  * (`AMB-D-410`). It is a filter choice, and what it selects on is the edge itself: rows another decision
  * points at with `supersedes`.
+ *
+ * **Narrowing is the board's, not a second invention.** Status and the project's classification axes are
+ * one filter panel of the same shape the board has, built from the same `core/filters` pieces: a row per
+ * axis, values that pile up rather than replace, and a count on the toggle so a filter left in force out
+ * of sight cannot pass for decisions that are simply gone. The assignments the classification axes judge
+ * on are read in bulk, one query per axis, so a chip narrows what the screen already holds instead of
+ * asking core again on every click. Only the axes that classify decisions are offered (`AMB-D-789`).
  *
  * **The search is core's, not the client's.** It reaches title, body and any live comment body — the third
  * of those being why it cannot be a substring match over the page: comments are not on the page payload,
@@ -54,25 +71,61 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
   onSelectDecision?: (id: number) => void;
 }) {
   const decisions = useDecisionPage(projectId);
-  const [filter, setFilter] = useState<DecisionFilterKey>("all");
+  const [sel, setSel] = useState<FilterSelection>({});
+  // Whether the filters are open. Closed is where the tab starts, for the reason the board's are
+  // (`AMB-D-654`): the values of every axis do not fit on a line, and a reader narrowing nothing
+  // should be given that room for the decisions themselves.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [sort, setSort] = useState<DecisionSort>("numberDesc");
   const [search, setSearch] = useState("");
   const [composing, setComposing] = useState(false);
 
-  const FILTERS: Exclude<DecisionFilterKey, "all">[] = ["proposed", "accepted", "rejected", "superseded"];
+  // The decisions tab is the decision side, so an axis narrowed to tasks is not one of its axes at all
+  // (`AMB-D-789`).
+  const projectDims = axesFor("decision", dataAdapter.getProject(projectId)?.dimensions ?? []);
+  const dimIdsKey = projectDims.map((d) => d.id).join(",");
+  // The assignments of every axis this side offers (decisionId→dimId→valueId), one query each, through
+  // the query cache rather than a bare effect: a value assigned elsewhere — the detail pane's selects,
+  // the CLI — acks with the "decisions" scope, and that is what brings the answer back.
+  const dimAssign = useQuery<DimAssignments>(
+    ["decisionDimAssign", projectId, dimIdsKey],
+    async () => {
+      const results = await Promise.all(
+        projectDims.map((d) =>
+          fetchProjectDecisionDimensionAssignments(projectId, d.id).then((rows) => ({ dimId: d.id, rows })),
+        ),
+      );
+      const m: DimAssignments = {};
+      for (const { dimId, rows } of results) {
+        for (const r of rows) (m[r.decisionId] ??= {})[dimId] = r.valueId;
+      }
+      return m;
+    },
+  ).data ?? NO_ASSIGNMENTS;
+
+  const dims = decisionFilterDimensions(projectDims, dimAssign);
+  // How many axes are actually narrowing, counted over the axes that exist: a selection left behind by a
+  // deleted dimension narrows nothing and must not be counted as if it did.
+  const narrowedAxes = dims.filter((d) => (sel[d.id]?.length ?? 0) > 0).length;
   const q = search.trim();
   const ref = parseRefQuery(search);
   // A ref query is answered here, so it never becomes a text search: `D-12` is a number, not a word to look
   // for. `null` back from the hook is "nothing was asked", which is not the same as "nothing matched".
   const { hits, error: searchError } = useDecisionSearchIds(projectId, ref ? "" : q);
   const shown = decisions
-    .filter((d) => filter === "all" || (filter === "superseded" ? d.supersededBy.length > 0 : d.status === filter))
+    .filter((d) => passesFilters(d, dims, sel))
     .filter((d) =>
       ref ? ref.space === "decision" && Number(d.id) === ref.num : hits === null || hits.has(Number(d.id)),
     )
     .sort((a, b) => compareDecisions(a, b, sort));
   // Paging sits outside filtering and sorting: change the filter, the search or the sort and we return to the first page.
-  const pager = usePager(shown, `${projectId}|${filter}|${sort}|${q}`);
+  const pager = usePager(shown, `${projectId}|${selectionKey(sel)}|${sort}|${q}`);
+  // One value on one axis, turned on or off. Selecting is what composes the question (`AMB-D-655`), so
+  // nothing here is exclusive: the values pile up within the axis, and an axis left empty narrows nothing.
+  const toggleValue = (id: string, value: string) => setSel((prev) => {
+    const chosen = prev[id] ?? [];
+    return { ...prev, [id]: chosen.includes(value) ? chosen.filter((v) => v !== value) : [...chosen, value] };
+  });
 
   return (
     <>
@@ -94,17 +147,17 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
             {t("dec.searchFailed")} — {errText(searchError)}
           </ErrorNote>
         )}
-        <label style={{ fontSize: "var(--fs-xs)" }}>
-          {t("board.filter")}{" "}
-          <select value={filter} onChange={(e) => setFilter(e.target.value as DecisionFilterKey)}>
-            <option value="all">{t("dec.filterAll")}</option>
-            {/* Every arm but one names a status; "superseded" names an edge, and takes a label of its
-                own so the status namespace is not made to hold something that is not a status. */}
-            {FILTERS.map((s) => (
-              <option key={s} value={s}>{t(s === "superseded" ? "dec.filterSuperseded" : `dec.status.${s}`)}</option>
-            ))}
-          </select>
-        </label>
+        {/* The one control the filters have while they are closed, so it says how many axes are
+            narrowing: a filter still in force with its values out of sight looks like decisions that
+            are simply gone. */}
+        <button
+          className={`filtertoggle ${filtersOpen ? "filtertoggle--active" : ""}`}
+          aria-expanded={filtersOpen}
+          onClick={() => setFiltersOpen((open) => !open)}
+        >
+          <Icon name="search" /> {t("board.filters")}
+          {narrowedAxes > 0 && <span className="filtertoggle__count">{narrowedAxes}</span>}
+        </button>
         <label style={{ fontSize: "var(--fs-xs)" }}>
           {t("dec.sort")}{" "}
           <select value={sort} onChange={(e) => setSort(e.target.value as DecisionSort)}>
@@ -116,6 +169,35 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
         <span className="topbar__spacer" style={{ flex: 1 }} />
         <button className="feed__action" onClick={() => setComposing((v) => !v)}><Icon name="plus" /> {t("dec.new")}</button>
       </div>
+
+      {/* The filters themselves, opened in place under the bar the toggle sits in. One line per axis,
+          because a row of values does not fold onto the same line as the next axis's (`AMB-D-654`) —
+          and closed, none of it takes room from the decisions. */}
+      {filtersOpen && (
+        <div className="filterpanel">
+          {dims.map((d) => (
+            <div key={d.id} className="filterpanel__axis">
+              <span className="faint filterpanel__label">{d.label()}</span>
+              <div className="filterpanel__values">
+                {/* Each value is a switch: what a reader composes here is the set to narrow to (`AMB-D-655`). */}
+                {d.options.map((o) => {
+                  const on = sel[d.id]?.includes(o.value) ?? false;
+                  return (
+                    <button
+                      key={o.value}
+                      className={`filterchip ${on ? "filterchip--on" : ""}`}
+                      aria-pressed={on}
+                      onClick={() => toggleValue(d.id, o.value)}
+                    >
+                      {o.label()}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div style={{ padding: 12, overflowY: "auto" }}>
         {composing && <DecisionCompose projectId={projectId} onDone={() => setComposing(false)} />}
@@ -142,9 +224,6 @@ export function DecisionsScreen({ projectId, selectedDecisionId, onSelectDecisio
     </>
   );
 }
-
-/// The filter choices: the three statuses, plus the derived "superseded".
-type DecisionFilterKey = DecisionStatus | "all" | "superseded";
 
 function statusColor(s: DecisionStatus): string {
   switch (s) {

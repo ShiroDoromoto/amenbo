@@ -184,9 +184,9 @@ steps_cli:
 
   # One axis, and not only tasks on it. A decision is filed under the same axis with the same values,
   # which is the whole of what "one classification model" means — a second set of values raised for
-  # decisions would be two models wearing one name. It is read back on the decision's own page, that
-  # being the face a decision's filing has; the filter's side of it belongs to the road that reads
-  # decisions by axis.
+  # decisions would be two models wearing one name. It is read back the way the tasks above are, through
+  # the filter and in the same grammar: an assignment nothing can query is no more a classification on
+  # this side than on theirs.
   - type: action
     domain: decision
     op: create
@@ -204,19 +204,19 @@ steps_cli:
 
   - type: assert
     domain: decision
-    op: field
+    op: listed
     with:
+      filter: "dim:medium=print"
       target: ruling
-      field: dimensions.0.dimension
-      equals: medium
+      present: true
 
   - type: assert
     domain: decision
-    op: field
+    op: listed
     with:
+      filter: "dim:medium=web"
       target: ruling
-      field: dimensions.0.value
-      equals: print
+      present: false
 
   # Single-select holds on this side too: the other value replaces rather than piles up.
   - type: action
@@ -229,13 +229,22 @@ steps_cli:
 
   - type: assert
     domain: decision
-    op: field
+    op: listed
     with:
+      filter: "dim:medium=print"
       target: ruling
-      field: dimensions.0.value
-      equals: web
+      present: false
 
-  # And taken back off, the decision keeps living — it is only no longer filed under the axis.
+  - type: assert
+    domain: decision
+    op: listed
+    with:
+      filter: "dim:medium=web"
+      target: ruling
+      present: true
+
+  # And taken back off, the decision keeps living — it is only no longer filed under the axis, which
+  # `=none` is what says: gone from the value's answer and standing in the unfiled one.
   - type: action
     domain: dimension
     op: unset
@@ -246,11 +255,19 @@ steps_cli:
 
   - type: assert
     domain: decision
-    op: field
+    op: listed
     with:
+      filter: "dim:medium=web"
       target: ruling
-      field: dimensions
-      equals: []
+      present: false
+
+  - type: assert
+    domain: decision
+    op: listed
+    with:
+      filter: "dim:medium=none"
+      target: ruling
+      present: true
 
   - type: assert
     domain: decision

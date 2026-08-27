@@ -270,6 +270,13 @@ const ui = {
   "nudge.autostart.yes": "Yes, open it at login (recommended)",
   "nudge.autostart.no": "No thanks",
   "nudge.autostart.hint": "Settings › Startup switches it back whenever you like.",
+  // The file panel's own question, and the only place it can be turned back on: the checkbox
+  // that turns it off is drawn inside the question it silences (`AMB-D-777`).
+  "settings.files": "Files",
+  "settings.trashAsk": "Ask before binning",
+  "settings.trashAskOn": "Ask",
+  "settings.trashAskOff": "Do not ask",
+  "settings.trashAskNote": "The file panel asks before it moves a row to the bin. Turning the question off inside it is one-way; this is the way back.",
   "settings.updates": "Updates",
   "settings.updateCheck": "Update check",
   "settings.updateCheckOn": "On",

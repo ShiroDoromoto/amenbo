@@ -38,7 +38,7 @@ const hoisted = vi.hoisted(() => ({
    *  what names its own folder, so a stand-in that kept only the last would answer for one section
    *  and drop the news of every other. */
   takers: [] as ((changes: FolderChangesDto) => void)[],
-  watching: { root: "", changed: [] as FolderChangedDto[], partial: false, gone: false } as FolderChangesDto,
+  watching: { root: "", changed: [] as FolderChangedDto[], capped: false, unwatched: false, gone: false } as FolderChangesDto,
   /** What one named folder answers with, where a test gives several folders different news. */
   perRoot: {} as Record<string, FolderChangesDto>,
   /** What the host answers when asked what to open a file with — empty where the OS drew it. */
@@ -194,7 +194,7 @@ beforeEach(() => {
   hoisted.watching = {
     root: ROOT,
     changed: [{ path: ["notes", "a.md"], modified: new Date().toISOString() }],
-    partial: false,
+    capped: false, unwatched: false,
     gone: false,
   };
   hoisted.bound = [{ path: ROOT, exists: true }];
@@ -240,7 +240,7 @@ describe("the file face", () => {
       tell({
         root: ROOT,
         changed: [{ path: ["src", "main.rs"], modified: new Date().toISOString() }],
-        partial: false,
+        capped: false, unwatched: false,
         gone: false,
       });
       await new Promise((r) => setTimeout(r, 0));
@@ -250,12 +250,34 @@ describe("the file face", () => {
     expect(container.textContent).not.toContain("a.md");
   });
 
-  it("says out loud when only part of the folder is watched", async () => {
-    hoisted.watching = { root: ROOT, changed: [], partial: true, gone: false };
+  it("says out loud when the folder was too big to look through all of", async () => {
+    hoisted.watching = { root: ROOT, changed: [], capped: true, unwatched: false, gone: false };
     await draw();
     // An unwatched half looks exactly like a half where nothing happened, so it is said rather
     // than left to be assumed (`AMB-T-3604`).
-    expect(container.textContent).toContain(t("files.partial"));
+    expect(container.textContent).toContain(t("files.capped"));
+    // And it is not the other reason: the folder's size is what stopped the walk, and the machine
+    // has watches to spare (`AMB-D-778`).
+    expect(container.textContent).not.toContain(t("files.unwatched"));
+  });
+
+  it("says out loud when the machine ran out of watches, and how to get more", async () => {
+    hoisted.watching = { root: ROOT, changed: [], capped: false, unwatched: true, gone: false };
+    await draw();
+    expect(container.textContent).toContain(t("files.unwatched"));
+    // The fact alone reads as something the reader did to their own project. What they can act on
+    // is the machine's supply, so the way out is drawn with it.
+    expect(container.textContent).toContain(t("files.unwatchedHow"));
+    expect(container.textContent).not.toContain(t("files.capped"));
+  });
+
+  it("says both when both are true", async () => {
+    hoisted.watching = { root: ROOT, changed: [], capped: true, unwatched: true, gone: false };
+    await draw();
+    // Two separate things have happened to one folder, and folding them into whichever was noticed
+    // first would leave the other half of the story untold.
+    expect(container.textContent).toContain(t("files.capped"));
+    expect(container.textContent).toContain(t("files.unwatched"));
   });
 
   it("leaves another folder's news alone", async () => {
@@ -265,7 +287,7 @@ describe("the file face", () => {
       tell({
         root: "/work/other",
         changed: [{ path: ["src", "main.rs"], modified: new Date().toISOString() }],
-        partial: false,
+        capped: false, unwatched: false,
         gone: false,
       });
       await new Promise((r) => setTimeout(r, 0));
@@ -662,8 +684,8 @@ describe("a project bound to several folders", () => {
   it("gives each folder its own news", async () => {
     both();
     hoisted.perRoot = {
-      [ROOT]: { root: ROOT, changed: [{ path: ["here.md"], modified: new Date().toISOString() }], partial: false, gone: false },
-      [OTHER]: { root: OTHER, changed: [{ path: ["there.md"], modified: new Date().toISOString() }], partial: false, gone: false },
+      [ROOT]: { root: ROOT, changed: [{ path: ["here.md"], modified: new Date().toISOString() }], capped: false, unwatched: false, gone: false },
+      [OTHER]: { root: OTHER, changed: [{ path: ["there.md"], modified: new Date().toISOString() }], capped: false, unwatched: false, gone: false },
     };
     await draw();
     expect(button("here.md")).toBeDefined();
@@ -673,8 +695,8 @@ describe("a project bound to several folders", () => {
   it("reads a file out of the folder its row was drawn in", async () => {
     both();
     hoisted.perRoot = {
-      [ROOT]: { root: ROOT, changed: [], partial: false, gone: false },
-      [OTHER]: { root: OTHER, changed: [{ path: ["there.md"], modified: new Date().toISOString() }], partial: false, gone: false },
+      [ROOT]: { root: ROOT, changed: [], capped: false, unwatched: false, gone: false },
+      [OTHER]: { root: OTHER, changed: [{ path: ["there.md"], modified: new Date().toISOString() }], capped: false, unwatched: false, gone: false },
     };
     hoisted.file = aFile({ text: "hello" });
     await draw();
@@ -731,7 +753,7 @@ describe("a project bound to several folders", () => {
     await draw();
     expect(container.textContent).not.toContain(t("files.folderGone"));
     await act(async () => {
-      tell({ root: OTHER, changed: [], partial: false, gone: true });
+      tell({ root: OTHER, changed: [], capped: false, unwatched: false, gone: true });
       await new Promise((r) => setTimeout(r, 0));
     });
     expect(container.textContent).toContain(t("files.folderGone"));

@@ -451,11 +451,16 @@ modified: string, };
  * What the file face's second row is drawn from: the rows, and whether they are the whole story
  * (`crate::folder_watch`).
  *
- * `partial` and `gone` are the two things the rows cannot say for themselves. Where every folder
- * needs a watch of its own the kernel's limit is per user, so some may be refused while the rest
- * work; drawn as a whole watch, that reads as "nothing has changed" in the half nobody is
- * watching. An empty list means the same thing for a folder that was removed as for one nobody
- * has written in, and only one of the two is worth telling a reader about.
+ * `capped`, `unwatched` and `gone` are the three things the rows cannot say for themselves. Where
+ * every folder needs a watch of its own the kernel's limit is per user, so some may be refused
+ * while the rest work; drawn as a whole watch, that reads as "nothing has changed" in the half
+ * nobody is watching. An empty list means the same thing for a folder that was removed as for one
+ * nobody has written in, and only one of the two is worth telling a reader about.
+ *
+ * **The two unwatched halves are separate answers, not one flag with two causes** (`AMB-D-778`).
+ * A folder too big to walk to the end of and a machine whose watches have run out are different
+ * things to have happened, and what a reader can do about them is different too — folded into one
+ * sentence, neither of them can be acted on.
  */
 export type FolderChangesDto = { 
 /**
@@ -472,10 +477,20 @@ root: string,
  */
 changed: Array<FolderChangedDto>, 
 /**
- * Whether some of the folder is unwatched — a walk that stopped at its cap, or a watch the
- * kernel refused.
+ * Whether the walk stopped at its cap before it reached the end of the folder
+ * ([`crate::folder::Scan::capped`]). What was never walked is not watched either, and it is
+ * the size of the folder that decided which part that is.
  */
-partial: boolean, 
+capped: boolean, 
+/**
+ * Whether the kernel refused a watch this folder needs — its per-user limit, which the
+ * reader's editor is drawing on at the same time.
+ *
+ * Which folders went unwatched is deliberately not carried: they are whichever ones the walk
+ * happened to reach last, so a reader told the names would be told nothing about their own
+ * project (`AMB-T-3753`).
+ */
+unwatched: boolean, 
 /**
  * Whether the folder itself is no longer there. It can come back: a folder made again where
  * this one was is watched again, and this goes back to false.

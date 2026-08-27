@@ -39,7 +39,7 @@ export async function folderEntries(
  * adds one**: the folders a project is bound to are watched side by side, not one at a time.
  */
 export async function folderWatch(projectId: number, root: string): Promise<FolderChangesDto> {
-  if (!inTauri()) return { root, changed: [], partial: false, gone: false };
+  if (!inTauri()) return { root, changed: [], capped: false, unwatched: false, gone: false };
   return await invoke<FolderChangesDto>("folder_watch", { projectId, root });
 }
 

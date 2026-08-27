@@ -338,6 +338,17 @@ export type DoctorIssueDto = { kind: string, severity: string, target: string, p
 export type DoctorReportDto = { ok: boolean, errors: number, warnings: number, issues: Array<DoctorIssueDto>, };
 
 /**
+ * What a drop asked for, as the keys held at the moment it landed say it (`crate::dropped`).
+ *
+ * It crosses on its own, out of a command of its own, because **no operating system puts the
+ * modifier keys on the drag event** (`AMB-T-3740`). The keyboard is read where it can be read — the
+ * host, at the instant of the drop — and the answer is this and nothing else.
+ *
+ * `default` is neither key: what a plain drop means belongs to the face receiving it, not here.
+ */
+export type DropEffectDto = "copy" | "move" | "default";
+
+/**
  * A system event as the GUI needs it: the kind names the sentence template, and the rest are the
  * values that go into it. No prose — the wording lives in the GUI's dictionary, in the reader's
  * language, and the target's own name comes from [`ActivityTargetDto::title`] beside this.

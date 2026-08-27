@@ -2261,6 +2261,36 @@ pub struct FolderEntryDto {
     pub(crate) ignored: bool,
 }
 
+/// What a move or a copy got through, and what it stopped on (`crate::folder_write`).
+///
+/// A carry of several rows is not one act: it is that many, taken in order, and the first failure
+/// ends it. So the answer is not a yes or a no but a line through the list — these arrived, this one
+/// did not and here is what the machine said, and the rest were never touched. A refusal instead
+/// would say the same word for "none of them moved" and "two of the three did", which is the word a
+/// reader most needs not to hear (`AMB-D-782`).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderCarriedDto {
+    /// The names that are now in the folder they were carried into, in the order they got there.
+    pub(crate) arrived: Vec<String>,
+    /// The one it stopped on. Absent when the whole list arrived.
+    pub(crate) stopped: Option<FolderStoppedDto>,
+}
+
+/// The row a carry stopped on, and what stopped it (`crate::folder_write`).
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderStoppedDto {
+    /// The name that was being carried.
+    pub(crate) name: String,
+    /// What the machine said, in the machine's own words. It is not a code with a template behind
+    /// it: what a disk that filled up or a permission that was not there has to say is its own, and
+    /// a sentence written here would be a guess at which of them it was.
+    pub(crate) why: String,
+}
+
 /// One application a file could be opened with, as the file face draws a row of the chooser it has
 /// to draw itself (`crate::open_with`).
 ///

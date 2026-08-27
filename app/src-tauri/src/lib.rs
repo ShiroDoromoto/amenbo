@@ -17,8 +17,9 @@ mod fileproto;
 /// What a folder holds, which the door above refuses to say: the names inside it, what changed in it
 /// lately, and what one file has to show. Rooted at a folder the project is bound to (`AMB-T-3602`).
 mod folder;
-/// Being told what changed in that folder instead of going to look: a non-recursive watch per
-/// folder over the pruned tree, and a scan to say what actually moved (`AMB-T-3604`).
+/// Being told what changed in that folder instead of going to look: one watch where the OS covers a
+/// tree with one and a watch per pruned folder where it does not (`AMB-D-779`), and a scan to say
+/// what actually moved (`AMB-T-3604`).
 mod folder_watch;
 /// The talk window's face while the app is up — where its panes are and what they are called.
 mod frames;

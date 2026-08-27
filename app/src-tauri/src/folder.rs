@@ -140,6 +140,32 @@ fn walker(root: &Path) -> ignore::WalkBuilder {
     builder
 }
 
+/// Whether a path a watch woke us with names something the walk above would never have shown.
+///
+/// The floor is the same [`PRUNED`] table, read off a path instead of walked: where one watch
+/// covers a whole tree ([`crate::folder_watch`]) the kernel reports the build output nobody asked
+/// to see, and it is dropped here rather than by declining to watch it. Only the part below `root`
+/// is judged — a folder somebody registered is theirs whatever the folders above it are called.
+///
+/// **This runs on every event a build fires**, thousands a second, so it reads names and nothing
+/// else: no filesystem call, no allocation. 50 µs each was the difference between 0.1% of events
+/// missed and 69% of them on Windows (`AMB-T-3753`).
+///
+/// What slips past is not a wrong answer, only an extra walk: the scan behind it compares what
+/// would be drawn and finds it unchanged. `cargo clean` is that case — it renames `target` to
+/// `target<six letters>` before removing it, and 0.24% of a build's events arrive under the new
+/// name (`AMB-T-3752`). The folder's own `.gitignore` is left out for the same reason: reading it
+/// per event costs more than the walk it would save.
+pub fn pruned(root: &Path, path: &Path) -> bool {
+    let Ok(below) = path.strip_prefix(root) else {
+        // Not under the root at all. Nothing here can say what it is, so it is not thrown away.
+        return false;
+    };
+    below.components().any(|part| {
+        matches!(part, Component::Normal(name) if PRUNED.iter().any(|floor| name == *floor))
+    })
+}
+
 /// Everything under `root` that a reader would call theirs: the files with when they were last
 /// written, and the folders they are in — which is also the list a watch is installed over
 /// (`crate::folder_watch`).
@@ -470,6 +496,22 @@ mod tests {
         // Every folder the walk kept is one the watch is laid over, the root included.
         assert!(found.dirs.contains(&root.to_path_buf()));
         assert!(!found.dirs.iter().any(|d| d.ends_with("node_modules")));
+    }
+
+    /// The floor is read off a path the same way it is walked — and only below the root, since the
+    /// folders above it are not the reader's choice to answer for.
+    #[test]
+    fn the_floor_reads_the_same_off_a_path() {
+        let root = Path::new("/home/someone/target/thing");
+        assert!(!pruned(root, root));
+        assert!(!pruned(root, &root.join("src/lib.rs")));
+        assert!(pruned(root, &root.join("target/debug/x.o")));
+        assert!(pruned(root, &root.join("node_modules/left-pad/index.js")));
+        assert!(pruned(root, &root.join(".git/index")));
+        // A name that only starts the same way is somebody's own.
+        assert!(!pruned(root, &root.join("targets/plan.md")));
+        // Somewhere else entirely says nothing about this folder, so it is not thrown away.
+        assert!(!pruned(root, Path::new("/elsewhere/target/x.o")));
     }
 
     /// Newest first, because that is the whole of what the row says: what was written last.

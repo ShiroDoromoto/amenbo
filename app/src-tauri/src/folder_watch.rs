@@ -4,19 +4,33 @@
 //! guess about when a person is looking and a walk they pay for whether or not anything moved. Here
 //! the kernel does the waking, and the face is told.
 //!
-//! **Three things make this different from watching a store directory** ([`crate::store_watch`]),
+//! **Four things make this different from watching a store directory** ([`crate::store_watch`]),
 //! which watches one folder that holds a handful of files:
 //!
-//! 1. **The watch is a set of non-recursive watches, one per folder**, laid over the pruned tree.
-//!    A recursive watch cannot be pruned, and the folders that are pruned are exactly the ones a
-//!    build writes thousands of files into: on Linux a recursive watch of a repository reports
-//!    8,645 events before anybody has typed anything, and a 4.6-second build on Windows fires 2,550
-//!    (`AMB-T-3566`). A folder made while the watch is up gets one of its own on the next scan.
-//! 2. **What the events say is not read.** macOS calls an append a `Create`, so new, changed and
-//!    gone cannot be told apart from the event kind — and none of the three would be trustworthy
-//!    anyway on a burst that arrived out of order. So a wake-up means only "something moved", and
-//!    what changed is worked out by scanning again and comparing with what was held.
-//! 3. **A watch that could not be installed is said out loud.** The kernel's watch limit is per
+//! 1. **How many watches a folder takes is the OS's answer, not this module's** (`AMB-D-779`).
+//!    macOS and Windows can cover a whole tree with one, so a folder gets exactly one; Linux has no
+//!    such thing — asking for a recursive watch there walks the tree and adds one per folder anyway
+//!    — so the pruned list of folders is watched one by one, as it always was. Neither side is a
+//!    preference. FSEvents stops at 4,096 paths per stream and `notify` 8.2 answers `Ok` past it
+//!    without ever firing again, and one repository of 3,760 folders is already inside the last few
+//!    hundred of that (`AMB-T-3752` measured where the silence starts). Recursion on Linux
+//!    instead costs 76 times as many inotify watches as the pruned list does, out of a supply
+//!    counted per user and shared with whatever editor the reader has open.
+//! 2. **What the events say is read for where, never for what.** macOS calls an append a `Create`,
+//!    so new, changed and gone cannot be told apart from the event kind — and none of the three
+//!    would be trustworthy anyway on a burst that arrived out of order. A wake-up still means only
+//!    "something moved", and what changed is worked out by scanning again and comparing with what
+//!    was held. The path is the exception: where one watch covers the tree, the kernel reports the
+//!    build output the walk prunes away — 100% of what a 47-second build fired (`AMB-T-3752`) — and
+//!    pruning it is now something this does on arrival rather than by declining to watch it
+//!    ([`crate::folder::pruned`]). ⚠ That has to stay cheap: 50 µs an event took Windows from 0.1%
+//!    of events missed to 69% (`AMB-T-3753`).
+//! 3. **A kernel that dropped events says so, and that is not a burst to settle.** FSEvents'
+//!    `MustScanSubDirs` and inotify's `Q_OVERFLOW` do not mean "something moved" but "what moved is
+//!    not known", so they are not held back for the quiet that follows: nothing arriving after can
+//!    make the answer any less unknown. Windows sends no such signal at all, which is why nothing
+//!    here waits for one.
+//! 4. **A watch that could not be installed is said out loud.** The kernel's watch limit is per
 //!    user (inotify's `max_user_watches`), and hitting it does not stop the ones already installed:
 //!    the answer is a real but partial watch, and a face that drew it as a whole one would be
 //!    telling the reader that nothing has changed in the half nobody is looking at.
@@ -47,6 +61,19 @@ const HEARTBEAT: Duration = Duration::from_millis(500);
 /// The event the webview listens for. It carries the whole list rather than what moved: the face
 /// draws a list, and a delta it had to apply would be a second copy of the truth to keep in step.
 const CHANGED_EVENT: &str = "folder://changed";
+
+/// Whether one watch covers everything under the folder it is put on. The line four other products
+/// draw, in the spelling Zed writes it in (`AMB-T-3752`, `AMB-D-779`); the reasoning is at the top.
+const RECURSIVE: bool = cfg!(any(target_os = "windows", target_os = "macos"));
+
+/// What a wake-up carries. Not which file — that is still never read (see the note at the top) —
+/// only whether what moved is known to be somewhere under the root, or is not known at all.
+enum Wake {
+    /// Something under the root moved. Part of a burst, worth waiting out.
+    Moved,
+    /// The kernel dropped events and is saying so. Not a burst: acted on where it lands.
+    Rescan,
+}
 
 /// The watch this app has running, if any. One per app, because one face draws it: asking for a
 /// second root replaces the first rather than adding to it.
@@ -104,17 +131,20 @@ pub fn folder_unwatch(watches: tauri::State<'_, FolderWatches>) {
 
 /// The thread behind one watch: install, wait, scan, tell — until the flag says the face has gone.
 fn run(app: &tauri::AppHandle, root: &Path, mut held: FolderChangesDto, stop: &AtomicBool) {
-    let (tx, rx) = std::sync::mpsc::channel::<()>();
-    let Ok(mut watcher) = notify::recommended_watcher(handler(tx)) else {
+    let (tx, rx) = std::sync::mpsc::channel::<Wake>();
+    let Ok(mut watcher) = notify::recommended_watcher(handler(tx, root.to_path_buf())) else {
         // No watcher at all. The face keeps the list it was answered with, which is true of the
         // moment it asked — and is told that this is all it will get.
         told(app, &FolderChangesDto { partial: true, ..held });
         return;
     };
 
+    // Where one watch covers the tree, the root is the whole of what gets watched however many
+    // folders the walk found under it.
+    let whole = [root.to_path_buf()];
     let mut scan = crate::folder::scan(root);
     let mut watched = HashSet::new();
-    let mut partial = install(&mut watcher, &scan.dirs, &mut watched) || scan.capped;
+    let mut partial = install(&mut watcher, laid_over(&whole, &scan), &mut watched) || scan.capped;
     if partial != held.partial {
         held.partial = partial;
         told(app, &held);
@@ -125,9 +155,10 @@ fn run(app: &tauri::AppHandle, root: &Path, mut held: FolderChangesDto, stop: &A
             continue;
         }
         scan = crate::folder::scan(root);
-        // A folder made while the watch was up gets a watch of its own here, and one that is gone
-        // takes its watch with it — the walk is the only place either fact is learned, since what
-        // the events said was never read.
+        // Where a folder needs a watch of its own, one made while the watch was up gets it here,
+        // and one that is gone takes its watch with it — the walk is the only place either fact is
+        // learned, since what the events said was never read. Where one watch covers the tree there
+        // is nothing to keep up with: the list is the root, and the kernel is already inside it.
         watched.retain(|dir: &PathBuf| {
             let kept = scan.dirs.contains(dir);
             if !kept {
@@ -135,7 +166,7 @@ fn run(app: &tauri::AppHandle, root: &Path, mut held: FolderChangesDto, stop: &A
             }
             kept
         });
-        partial = install(&mut watcher, &scan.dirs, &mut watched) || scan.capped;
+        partial = install(&mut watcher, laid_over(&whole, &scan), &mut watched) || scan.capped;
 
         let fresh = FolderChangesDto { changed: crate::folder::recent(&scan), partial };
         // A watch fires on touches that mean nothing to a reader — a file read that updated an
@@ -151,21 +182,36 @@ fn run(app: &tauri::AppHandle, root: &Path, mut held: FolderChangesDto, stop: &A
 
 /// Wait for a wake-up and let the burst behind it settle. False when nothing came — the thread then
 /// gets its chance to notice it is no longer wanted.
-fn woke(rx: &Receiver<()>, stop: &AtomicBool) -> bool {
-    if rx.recv_timeout(HEARTBEAT).is_err() {
-        return false;
+///
+/// A dropped-events signal is not settled for. Waiting is what turns a burst into one scan, and
+/// there is no burst here to fold: the signal already says the kernel has stopped accounting for
+/// what moved, so the answer is the same whatever arrives next.
+fn woke(rx: &Receiver<Wake>, stop: &AtomicBool) -> bool {
+    match rx.recv_timeout(HEARTBEAT) {
+        Err(_) => return false,
+        Ok(Wake::Rescan) => return true,
+        Ok(Wake::Moved) => {}
     }
-    while rx.recv_timeout(DEBOUNCE).is_ok() {
+    while let Ok(wake) = rx.recv_timeout(DEBOUNCE) {
         if stop.load(Ordering::Relaxed) {
             return false;
+        }
+        if matches!(wake, Wake::Rescan) {
+            return true;
         }
     }
     true
 }
 
-/// Put a non-recursive watch on every folder that has not got one. True when at least one could not
-/// be installed — the kernel's per-user limit, most often, which leaves the watches already up
-/// working and is the whole reason this is answered rather than swallowed.
+/// The folders the watch is laid over: the root alone where one watch covers what is under it, and
+/// every folder the walk found where it does not.
+fn laid_over<'a>(whole: &'a [PathBuf], scan: &'a crate::folder::Scan) -> &'a [PathBuf] {
+    if RECURSIVE { whole } else { &scan.dirs }
+}
+
+/// Put a watch on every folder in `dirs` that has not got one. True when at least one could not be
+/// installed — the kernel's per-user limit, most often, which leaves the watches already up working
+/// and is the whole reason this is answered rather than swallowed.
 fn install(
     watcher: &mut impl Watcher,
     dirs: &[PathBuf],
@@ -176,7 +222,12 @@ fn install(
         if watched.contains(dir) {
             continue;
         }
-        match watcher.watch(dir, RecursiveMode::NonRecursive) {
+        let mode = if RECURSIVE {
+            RecursiveMode::Recursive
+        } else {
+            RecursiveMode::NonRecursive
+        };
+        match watcher.watch(dir, mode) {
             Ok(()) => {
                 watched.insert(dir.clone());
             }
@@ -191,13 +242,38 @@ fn install(
     refused > 0
 }
 
-/// What a wake-up carries: nothing. Whether anything really changed is answered by scanning, not by
-/// the event — the kinds cannot be trusted to say (see the note at the top).
-fn handler(tx: Sender<()>) -> impl Fn(notify::Result<notify::Event>) + Send + 'static {
+/// What is made of an event, on the kernel's own thread: at most which of the two things happened.
+/// Whether anything really changed is still answered by scanning, not by the event — the kinds
+/// cannot be trusted to say (see the note at the top).
+///
+/// **Everything dropped is dropped here**, before the channel. There is no mask to ask `notify` 8.2
+/// for, and a Linux folder walked while `git status` runs fires 37,000 events a second
+/// (`AMB-T-3753`): sending those on and dropping them downstream is the same thing as not dropping
+/// them.
+fn handler(
+    tx: Sender<Wake>,
+    root: PathBuf,
+) -> impl Fn(notify::Result<notify::Event>) + Send + 'static {
     move |res| {
-        if res.is_ok() {
-            let _ = tx.send(());
+        let Ok(event) = res else { return };
+        if event.need_rescan() {
+            let _ = tx.send(Wake::Rescan);
+            return;
         }
+        // inotify wakes on a file being *opened*, and reading is what a machine with an agent on it
+        // does most: one `git status` is 1,029 of them, and the walk this module answers with would
+        // wake itself in a loop (`AMB-T-3753`). Nothing a reader sees is a read, so nowhere loses
+        // anything by this.
+        if matches!(event.kind, notify::EventKind::Access(_)) {
+            return;
+        }
+        // A rename carries both names; either one being a name a reader would see is reason enough.
+        if !event.paths.is_empty()
+            && event.paths.iter().all(|path| crate::folder::pruned(&root, path))
+        {
+            return;
+        }
+        let _ = tx.send(Wake::Moved);
     }
 }
 
@@ -217,8 +293,9 @@ mod tests {
     fn a_folder_is_watched_once() {
         let dir = tempfile::tempdir().expect("a temp dir");
         let root = dir.path().to_path_buf();
-        let (tx, _rx) = std::sync::mpsc::channel::<()>();
-        let mut watcher = notify::recommended_watcher(handler(tx)).expect("a watcher");
+        let (tx, _rx) = std::sync::mpsc::channel::<Wake>();
+        let mut watcher =
+            notify::recommended_watcher(handler(tx, root.clone())).expect("a watcher");
         let mut watched = HashSet::new();
 
         assert!(!install(&mut watcher, std::slice::from_ref(&root), &mut watched));
@@ -232,11 +309,90 @@ mod tests {
     #[test]
     fn a_watch_that_will_not_install_is_reported() {
         let dir = tempfile::tempdir().expect("a temp dir");
-        let (tx, _rx) = std::sync::mpsc::channel::<()>();
-        let mut watcher = notify::recommended_watcher(handler(tx)).expect("a watcher");
+        let (tx, _rx) = std::sync::mpsc::channel::<Wake>();
+        let mut watcher = notify::recommended_watcher(handler(tx, dir.path().to_path_buf()))
+            .expect("a watcher");
         let mut watched = HashSet::new();
 
         assert!(install(&mut watcher, &[dir.path().join("never-made")], &mut watched));
         assert!(watched.is_empty());
+    }
+
+    /// One wake-up per event that a reader could see, and none at all for the ones a build fires
+    /// into the folders the tree prunes away — which is where a recursive watch spends nearly all
+    /// of its noise.
+    #[test]
+    fn a_build_writing_where_nobody_looks_does_not_wake_anybody() {
+        let root = PathBuf::from("/projects/thing");
+        let (tx, rx) = std::sync::mpsc::channel::<Wake>();
+        let wake = handler(tx, root.clone());
+
+        for quiet in ["target/debug/x.o", ".git/index", "node_modules/left-pad/index.js"] {
+            wake(Ok(notify::Event::new(notify::EventKind::Modify(
+                notify::event::ModifyKind::Any,
+            ))
+            .add_path(root.join(quiet))));
+        }
+        assert!(rx.try_recv().is_err(), "the machine's folders are not the reader's");
+
+        wake(Ok(notify::Event::new(notify::EventKind::Modify(
+            notify::event::ModifyKind::Any,
+        ))
+        .add_path(root.join("src/lib.rs"))));
+        assert!(matches!(rx.try_recv(), Ok(Wake::Moved)));
+    }
+
+    /// A file being opened is not a change, and on Linux it is most of what arrives: `git status`
+    /// alone fires a thousand of them, and the scan this module answers with fires thousands more.
+    #[test]
+    fn reading_a_file_is_not_a_change() {
+        let root = PathBuf::from("/projects/thing");
+        let (tx, rx) = std::sync::mpsc::channel::<Wake>();
+        let wake = handler(tx, root.clone());
+
+        wake(Ok(notify::Event::new(notify::EventKind::Access(
+            notify::event::AccessKind::Open(notify::event::AccessMode::Read),
+        ))
+        .add_path(root.join("src/lib.rs"))));
+        assert!(rx.try_recv().is_err());
+    }
+
+    /// "What moved is not known" is not a change under a path, so neither the prune nor the wait
+    /// for quiet applies to it: it arrives having already said everything it is going to say.
+    #[test]
+    fn a_kernel_that_lost_track_is_heard_out_at_once() {
+        let root = PathBuf::from("/projects/thing");
+        let (tx, rx) = std::sync::mpsc::channel::<Wake>();
+        let wake = handler(tx, root.clone());
+
+        wake(Ok(notify::Event::new(notify::EventKind::Any)
+            .add_path(root.join("target/debug/x.o"))
+            .set_flag(notify::event::Flag::Rescan)));
+        assert!(matches!(rx.try_recv(), Ok(Wake::Rescan)));
+
+        let (tx, rx) = std::sync::mpsc::channel::<Wake>();
+        tx.send(Wake::Rescan).expect("the channel");
+        let stop = AtomicBool::new(false);
+        // Nothing follows it, and it does not wait for anything to.
+        assert!(woke(&rx, &stop));
+    }
+
+    /// How many watches a folder takes is the OS's answer, and the two answers are laid over
+    /// different things: the root alone, or every folder the walk kept.
+    #[test]
+    fn what_is_watched_follows_the_os() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("src/deep")).expect("a folder");
+        let whole = [root.to_path_buf()];
+        let scan = crate::folder::scan(root);
+        assert!(scan.dirs.len() > 1);
+
+        let over = laid_over(&whole, &scan);
+        if RECURSIVE {
+            assert_eq!(over, whole, "one watch already covers what is under it");
+        } else {
+            assert_eq!(over.len(), scan.dirs.len(), "every folder needs its own");
+        }
     }
 }

@@ -22,7 +22,7 @@ const hoisted = vi.hoisted(() => ({
   file: { truncated: false } as { text?: string; truncated: boolean; image?: { mime: string; base64: string } },
   /** The host's side of the watch: what it answers with, and the way to push a later list. */
   tell: null as null | ((changes: FolderChangesDto) => void),
-  watching: { changed: [] as FolderChangedDto[], partial: false } as FolderChangesDto,
+  watching: { root: "", changed: [] as FolderChangedDto[], partial: false, gone: false } as FolderChangesDto,
   /** What the host answers when asked what to open a file with — empty where the OS drew it. */
   apps: [] as FolderAppDto[],
   /** The folders the project is bound to. Empty is a project nobody has bound one to yet. */
@@ -34,7 +34,7 @@ vi.mock("./folder", () => ({
     hoisted.asked.push(`watch:${projectId}:${root}`);
     return hoisted.watching;
   },
-  folderUnwatch: async () => { hoisted.asked.push("unwatch"); },
+  folderUnwatch: async (root: string) => { hoisted.asked.push(`unwatch:${root}`); },
   onFolderChanged: async (take: (changes: FolderChangesDto) => void) => {
     hoisted.tell = take;
     return () => { hoisted.tell = null; hoisted.asked.push("unlisten"); };
@@ -124,8 +124,10 @@ beforeEach(() => {
   hoisted.apps = [];
   hoisted.tell = null;
   hoisted.watching = {
+    root: ROOT,
     changed: [{ path: ["notes", "a.md"], modified: new Date().toISOString() }],
     partial: false,
+    gone: false,
   };
   hoisted.bound = [{ path: ROOT, exists: true }];
   container = document.createElement("div");
@@ -164,8 +166,10 @@ describe("the file face", () => {
     expect(container.textContent).toContain("a.md");
     await act(async () => {
       hoisted.tell?.({
+        root: ROOT,
         changed: [{ path: ["src", "main.rs"], modified: new Date().toISOString() }],
         partial: false,
+        gone: false,
       });
       await new Promise((r) => setTimeout(r, 0));
     });
@@ -175,17 +179,35 @@ describe("the file face", () => {
   });
 
   it("says out loud when only part of the folder is watched", async () => {
-    hoisted.watching = { changed: [], partial: true };
+    hoisted.watching = { root: ROOT, changed: [], partial: true, gone: false };
     await draw();
     // An unwatched half looks exactly like a half where nothing happened, so it is said rather
     // than left to be assumed (`AMB-T-3604`).
     expect(container.textContent).toContain(t("files.partial"));
   });
 
+  it("leaves another folder's news alone", async () => {
+    await draw();
+    expect(container.textContent).toContain("a.md");
+    await act(async () => {
+      hoisted.tell?.({
+        root: "/work/other",
+        changed: [{ path: ["src", "main.rs"], modified: new Date().toISOString() }],
+        partial: false,
+        gone: false,
+      });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    // Every watched folder is told about through the one listener, and a row rooted at one of them
+    // that drew another's list would be saying something untrue about the folder it names.
+    expect(container.textContent).toContain("a.md");
+    expect(container.textContent).not.toContain("main.rs");
+  });
+
   it("takes its watch down when the face goes away", async () => {
     await draw();
     await act(async () => { root.unmount(); });
-    expect(hoisted.asked).toContain("unwatch");
+    expect(hoisted.asked).toContain(`unwatch:${ROOT}`);
     expect(hoisted.asked).toContain("unlisten");
     // Re-created so afterEach's unmount has something to work on.
     container.remove();

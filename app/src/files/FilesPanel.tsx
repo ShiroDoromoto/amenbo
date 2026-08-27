@@ -63,7 +63,9 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
   // project on it draws the invitation, the same as one whose project has no folder.
   const folders = useBoundFolders(projectId ?? 0);
   const root = folders.live[0]?.path ?? null;
-  const [changes, setChanges] = useState<FolderChangesDto>({ changed: [], partial: false });
+  const [changes, setChanges] = useState<FolderChangesDto>(
+    { root: "", changed: [], partial: false, gone: false },
+  );
   const [treeOpen, setTreeOpen] = useState(false);
   const [reading, setReading] = useState<string[] | null>(null);
   // The file a right-click was on, and where the pointer was. One menu for the face rather than one
@@ -90,14 +92,20 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
     let alive = true;
     // Subscribed before the watch is asked for: the first thing the folder does could happen while
     // the host is still walking it, and a listener set up afterwards would miss exactly that.
-    const listening = onFolderChanged((fresh) => { if (alive) setChanges(fresh); });
+    // Every watched folder is told about through the one listener, and this face is rooted at one of
+    // them — so an answer about another folder is not this row's news.
+    const listening = onFolderChanged((fresh) => {
+      if (alive && fresh.root === root) setChanges(fresh);
+    });
     void folderWatch(projectId, root)
       .then((now) => { if (alive) setChanges(now); })
-      .catch(() => { if (alive) setChanges({ changed: [], partial: false }); });
+      .catch(() => {
+        if (alive) setChanges({ root, changed: [], partial: false, gone: false });
+      });
     return () => {
       alive = false;
       void listening.then((stop) => stop());
-      void folderUnwatch();
+      void folderUnwatch(root);
     };
   }, [projectId, root]);
 

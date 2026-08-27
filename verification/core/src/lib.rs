@@ -2260,6 +2260,11 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "open", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
     // And back out of it, which is the only way back: opening a file replaces the column.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "back", required: &[], refs: &[], strings: &[], binds: false },
+    // The open file read again as the encoding the reader names, chosen from the control on its own
+    // row that says what it was read as. The guess reports no confidence and breaks nothing visible
+    // when it is wrong, so this door is the only thing standing between a reader and a file that
+    // quietly says something else — and a door nobody walks is a door nobody knows is shut.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "reopen-with", required: &["encoding"], refs: &[], strings: &["encoding"], binds: false },
     // Whether a row is standing in a section. `present: false` is the half several of these roads are
     // about — a file the folder holds but the face must not offer, because it is ignored.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "listed", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
@@ -2272,6 +2277,10 @@ const REGISTRY: &[OpSpec] = &[
     // it as it does bare. `present: false` is the half an ignored row is read by: git records nothing
     // about it, so it wears no colour while standing on the tree like any other.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "row-mark", required: &["name", "section", "mark"], refs: &[], strings: &["name", "section", "mark"], binds: false },
+    // What the open file says it was read as. The name is the one the build itself offers — a road
+    // that spelt an encoding its own way would be asking for a label nothing draws — and what it
+    // proves is that the row follows the reader rather than the guess.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "read-as", required: &["encoding"], refs: &[], strings: &["encoding"], binds: false },
     // What an opened file draws. `shows` is words the road itself put in the file, so a reading finds
     // them because the bytes reached the screen and for no other reason.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "reading", required: &["shows"], refs: &[], strings: &["shows"], binds: false },

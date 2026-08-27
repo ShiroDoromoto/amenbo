@@ -105,8 +105,11 @@ export function invalidateScopes(scopes: ReadonlySet<string>): void {
       case "decisions": return touchesScope("decisions");
       case "decision": return touchesScope("decisions");
       case "decisionComments": return touchesScope("decisions");
-      // The decisions tab's classification map (which decision sits on which value of which axis). The
-      // axes themselves fold to "tasks", so a value renamed or deleted from the CLI reaches it too.
+      // The two classification maps — which task, and which decision, sits on which value of which
+      // axis. Each is watched on its own side and on "tasks" besides, because the axes and their
+      // values fold there whichever side carries them: a value renamed or deleted from the CLI has to
+      // reach both, or the chips go on answering off a map that no longer names it.
+      case "dimAssign": return touchesScope("tasks");
       case "decisionDimAssign": return touchesScope("decisions") || touchesScope("tasks");
       case "attachments": return touchesScope("attachments");
       // A page of hits is drawn from every face at once — a task's words, a decision's, a comment on

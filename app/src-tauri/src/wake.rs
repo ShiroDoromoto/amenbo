@@ -86,6 +86,11 @@ fn weighed(found: &[amenbo_core::harness::Wiring]) -> Vec<wake::Candidate> {
 }
 
 /// The candidates and the project's answer, in the shape a face reads.
+///
+/// `offered` is the row and `settled` is what a press opens with, and the two are drawn from
+/// different lists on purpose ([`amenbo_core::wake::offered`] against
+/// [`amenbo_core::wake::startable`]): the row names every agent so an uninstalled one can be seen
+/// and installed, while the answer is only ever one this machine can start.
 fn answer(
     folder: Option<String>,
     candidates: Vec<wake::Candidate>,

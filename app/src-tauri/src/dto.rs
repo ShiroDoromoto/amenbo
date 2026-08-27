@@ -2079,10 +2079,15 @@ pub struct WakeDto {
     /// Every catalogued agent, in catalog order. The install notice is drawn from this, which is why
     /// the ones this machine does not have are here too.
     pub(crate) candidates: Vec<WakeCandidateDto>,
-    /// The ids worth offering, in catalog order. Empty means nothing on this machine can be started.
+    /// The ids the row is drawn from, in catalog order — every catalogued agent (`AMB-D-792`).
+    ///
+    /// **Not the ids a press may open.** Which of them this machine can start is each row's own
+    /// `installed`, and a face that opened one without reading it puts a pane on `command not
+    /// found`. It is the whole catalog because a provider left off the row is one the reader cannot
+    /// install their way onto.
     pub(crate) offered: Vec<String>,
-    /// The id to open with, when nothing needs asking. `None` with a non-empty `offered` is the
-    /// question; `None` with an empty one is the notice.
+    /// The id to open with, when nothing needs asking. `None` is the question — put to a person as a
+    /// row with nothing on it, whether or not anything on that row can be pressed.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) settled: Option<String>,

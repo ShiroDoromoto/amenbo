@@ -643,6 +643,7 @@ export const tr: Translation = {
     invalid_dimension_slug_shape: "“{slug}” anahtar olamaz — en çok {max} küçük harf, rakam ve tire kullanın, bir harfle başlayın.",
     invalid_dimension_slug_taken: "“{slug}” burada başka bir şeyin anahtarı — başka bir tane seçin.",
     invalid_task_required_dimension: "Bu görev {names} alanında değer taşımıyor, oysa bu proje onu zorunlu tutuyor.",
+    invalid_decision_required_dimension: "Bu karar {names} alanında değer taşımıyor, oysa bu proje onu zorunlu tutuyor.",
     invalid_dimension_values_unordered: "Bu kategorinin değerleri sıralı değil, bu yüzden yeniden sıralanamaz.",
     invalid_decision_edit_rejected: "{ref} reddedildi ve reddedilmiş bir karar düzenlenemez.",
     invalid_decision_accept_rejected: "{ref} reddedildi ve reddedilmiş bir karar kabul edilemez.",

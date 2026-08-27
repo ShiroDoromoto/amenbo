@@ -1681,15 +1681,25 @@ pub fn dimension_siblings(
     order_siblings(conn, D.id, D.order_key, Some(Pred::eq(D.project_id, project_id)), exclude)
 }
 
-/// The project's required axes (`AMB-D-734`), as `(id, name)` in display order — the premise
-/// [`crate::ops::task::finish_creating`] reads at the door. Read inside the writer's transaction: the
-/// flag is one an `update` in another transaction can raise, and a creation finished against a stale
-/// answer is one that got through a premise the store already held.
-pub fn required_dimensions(conn: &Connection, project_id: i64) -> Result<Vec<(i64, String)>> {
+/// The project's required axes for one side (`AMB-D-734`, `AMB-D-790`), as `(id, name)` in display
+/// order — the premise [`crate::ops::task::finish_creating`] reads at its door and
+/// [`crate::ops::decision::accept`] at its own. Read inside the writer's transaction: the flag is one
+/// an `update` in another transaction can raise, and a creation finished against a stale answer is one
+/// that got through a premise the store already held.
+pub fn required_dimensions(
+    conn: &Connection,
+    project_id: i64,
+    side: crate::model::ClassifiedSide,
+) -> Result<Vec<(i64, String)>> {
     const D: col::dimension::Cols = col::dimension::ALL;
     let mut sel = Select::new();
     let (id, name) = (sel.col(D.id), sel.col(D.name));
-    let pred = Pred::eq(D.project_id, project_id).and(Pred::eq(D.required, true));
+    // `required` is one flag, and which side it bites on is the axis's own `applies_to` to say
+    // (`AMB-D-789`): an axis that classifies only decisions must not hold a task's creation, and one
+    // that classifies only tasks must not hold an acceptance.
+    let pred = Pred::eq(D.project_id, project_id)
+        .and(Pred::eq(D.required, true))
+        .and(Pred::is_in(D.applies_to, side.accepted().iter().map(|a| a.as_str())));
     let mut sql = Sql::from(&sel, D.table);
     sql.push_where(Some(&pred)).order_by([Sort::by(D.order_key), Sort::by(D.id)]);
     let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;

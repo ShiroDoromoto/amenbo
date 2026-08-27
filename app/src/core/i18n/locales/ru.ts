@@ -683,6 +683,7 @@ export const ru: Translation = {
     invalid_dimension_slug_shape: "«{slug}» не годится в качестве ключа — не более {max} строчных букв, цифр и дефисов, начиная с буквы.",
     invalid_dimension_slug_taken: "«{slug}» здесь уже занят другим — выберите другой ключ.",
     invalid_task_required_dimension: "У этой задачи нет значения в {names}, которого требует этот проект.",
+    invalid_decision_required_dimension: "У этого решения нет значения в {names}, которого требует этот проект.",
     invalid_dimension_values_unordered: "Значения этой категории не упорядочены, поэтому их нельзя переставить.",
     invalid_decision_edit_rejected: "{ref} отклонено, а отклонённое решение нельзя редактировать.",
     invalid_decision_accept_rejected: "{ref} отклонено, а отклонённое решение нельзя принять.",

@@ -671,6 +671,7 @@ export const ptBR: Translation = {
     invalid_dimension_slug_shape: "“{slug}” não serve como chave: use no máximo {max} letras minúsculas, dígitos e hifens, começando por uma letra.",
     invalid_dimension_slug_taken: "“{slug}” já é a chave de outra coisa aqui: escolha outra.",
     invalid_task_required_dimension: "Esta tarefa não carrega valor algum em {names}, que este projeto exige.",
+    invalid_decision_required_dimension: "Esta decisão não carrega valor algum em {names}, que este projeto exige.",
     invalid_dimension_values_unordered: "Os valores desta categoria não têm ordem, então não dá para reordená-los.",
     invalid_decision_edit_rejected: "{ref} foi rejeitada, e uma decisão rejeitada não pode ser editada.",
     invalid_decision_accept_rejected: "{ref} foi rejeitada, e uma decisão rejeitada não pode ser aceita.",

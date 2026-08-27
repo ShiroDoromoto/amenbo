@@ -22,7 +22,6 @@
 use std::path::{Component, Path, PathBuf};
 
 use amenbo_core::binding::canonical_dir;
-use base64::Engine as _;
 
 use crate::dto::{
     FolderChangedDto, FolderEntryDto, FolderFileDto, FolderImageDto, FolderLineEndingDto,
@@ -52,11 +51,13 @@ const HEAD: usize = 8000;
 /// it and refuses to save.
 const TEXT_CAP: usize = 5 * 1024 * 1024;
 
-/// The largest picture carried whole over the command seam. Past it the reader is told there is a
-/// picture and not made to wait for it.
+/// The largest picture the panel draws, in bytes. Past it the reader is told there is a picture and
+/// not made to wait for it.
 ///
-/// This is the cap on what the **host** holds: the file is read whole into this process before any
-/// of it reaches the webview.
+/// This is the cap on what the **host** holds. The bytes no longer cross the command seam — the
+/// webview fetches them from [`crate::fileproto`] — but that door still reads the file whole into
+/// this process to answer a request with no range on it, so the number guards the same thing it
+/// always did.
 const IMAGE_CAP: u64 = 5 * 1024 * 1024;
 
 /// The largest picture a webview is asked to draw, in pixels — the second cap, and not a
@@ -507,13 +508,17 @@ pub fn folder_reveal_file(project_id: i64, root: String, path: Vec<String>) -> R
         .map_err(|e| CmdError::coded("folder.reveal", e.to_string(), serde_json::Value::Null))
 }
 
-/// What one file has to show: its text, or its picture, or why the picture is not here, or none of
-/// those.
+/// What one file has to show: its text, or that it is a picture and of what type, or why the
+/// picture is not drawn, or none of those.
 ///
 /// The head is read once and answers both questions — whether there is a NUL in it, and what the
 /// first bytes say the file is — so a name is never consulted about either. Only what that head
 /// settles on is then read further: the text up to its cap, or a JPEG's front far enough to reach
 /// the frame header. A file that is neither is never read past the head at all.
+///
+/// **A picture is never read whole here.** Its bytes reach the webview through
+/// [`crate::fileproto`], which the caller can address because it named this file by the same
+/// project, folder and path (`AMB-D-783`).
 #[tauri::command]
 pub fn folder_read(
     project_id: i64,
@@ -580,14 +585,12 @@ pub fn folder_read(
     let pixels = measure(mime, &front);
 
     if carriable(size, pixels) {
-        let image = read_whole(&file).ok().map(|whole| FolderImageDto {
-            mime: mime.to_string(),
-            base64: base64::engine::general_purpose::STANDARD.encode(whole),
-        });
+        // The bytes are not read here: what the panel is handed is the type, and it asks
+        // fileproto for the picture itself at the path it named this call with.
         return Ok(FolderFileDto {
             text: None,
             truncated: false,
-            image,
+            image: Some(FolderImageDto { mime: mime.to_string() }),
             oversize: None,
             encoding: None,
             bom: false,
@@ -806,14 +809,6 @@ fn read_head(path: &Path, cap: usize) -> std::io::Result<Vec<u8>> {
     use std::io::Read as _;
     let mut buf = Vec::new();
     open_no_follow(path)?.take(cap as u64).read_to_end(&mut buf)?;
-    Ok(buf)
-}
-
-/// The whole of a file, opened the way its head was — a picture is carried entire or not at all.
-fn read_whole(path: &Path) -> std::io::Result<Vec<u8>> {
-    use std::io::Read as _;
-    let mut buf = Vec::new();
-    open_no_follow(path)?.read_to_end(&mut buf)?;
     Ok(buf)
 }
 

@@ -519,6 +519,7 @@ export const nl: Translation = {
     "face.whichStart": "Waarmee opent dit deelvenster?",
     "face.open": "Hier een terminal openen",
     "face.openPick": "Kies er een",
+    "face.moreStarts": "Niet geïnstalleerd ({n})",
     "face.openHere": "Plek voor nog een deelvenster in dit project",
     "face.whichFolder": "In welke map werkt dit deelvenster?",
     "face.rename": "Dit deelvenster hernoemen",

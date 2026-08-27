@@ -548,6 +548,7 @@ export const ru: Translation = {
     "face.whichStart": "Чем открыть эту панель?",
     "face.open": "Открыть здесь терминал",
     "face.openPick": "Выберите один",
+    "face.moreStarts": "Не установлено ({n})",
     "face.openHere": "Место для ещё одной панели в этом проекте",
     "face.whichFolder": "В какой папке работает эта панель?",
     "face.rename": "Переименовать эту панель",

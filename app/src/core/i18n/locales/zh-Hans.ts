@@ -519,6 +519,7 @@ export const zhHans: Translation = {
     "face.whichStart": "这个窗格用什么打开？",
     "face.open": "在此打开终端",
     "face.openPick": "请选择一个",
+    "face.moreStarts": "未安装（{n}）",
     "face.openHere": "在这个项目里给下一个窗格腾出位置",
     "face.whichFolder": "这个窗格在哪个文件夹里工作？",
     "face.rename": "重命名此窗格",

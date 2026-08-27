@@ -41,6 +41,20 @@ function startable(ids: string[], settled?: string): WakeDto {
   };
 }
 
+/** A machine the catalogue is wider than: `has` is installed, `lacks` is offered and not installed —
+ *  the row every real machine draws (`AMB-D-792`). Catalog order is the order given, both together. */
+function partly(has: string[], lacks: string[], settled?: string): WakeDto {
+  const row = [
+    ...has.map((id) => ({ id, label: id, command: id, traced: false, installed: true })),
+    ...lacks.map((id) => ({ id, label: id, command: id, traced: false, installed: false })),
+  ];
+  return {
+    candidates: row,
+    offered: row.map((one) => one.id),
+    ...(settled === undefined ? {} : { settled }),
+  };
+}
+
 let container: HTMLDivElement;
 let root: Root;
 /** What the frame was pressed to open a terminal with, in the order it was pressed — null where the
@@ -211,6 +225,60 @@ describe("what a terminal opened here is opened with", () => {
     await press("Open a terminal here");
 
     expect(started).toEqual(["claude-code"]);
+  });
+
+  it("draws what this machine has not got as well, folded away and out of the group", async () => {
+    hoisted.wake = partly(["claude-code"], ["codex-cli", "cursor"]);
+    await draw("/work/here");
+
+    // Folded: the row is what works here, and the shell after it.
+    expect([...container.querySelectorAll(".slot__start")].map((b) => b.textContent))
+      .toEqual(["claude-code", "Plain shell"]);
+    // The press that unfolds them says how many there are, and is not one of the choices — a button
+    // inside the group would be read as a fourth thing to open with.
+    const more = buttons().find((b) => b.textContent === "Not installed (2)");
+    expect(more, "nothing said the other two were there").toBeTruthy();
+    expect(more?.closest(".slot__starts"), "the press was put inside the group").toBeNull();
+    expect(more?.getAttribute("aria-expanded")).toBe("false");
+
+    await press("Not installed (2)");
+    expect([...container.querySelectorAll(".slot__start")].map((b) => b.textContent))
+      .toEqual(["claude-code", "Plain shell", "codex-cli", "cursor"]);
+    expect(
+      buttons().find((b) => b.textContent === "Not installed (2)")?.getAttribute("aria-expanded"),
+    ).toBe("true");
+  });
+
+  it("leaves the ones it has not got in the group, and does not open a terminal on one", async () => {
+    hoisted.wake = partly(["claude-code"], ["codex-cli"], "claude-code");
+    await draw("/work/here");
+    await press("Not installed (1)");
+
+    const missing = [...container.querySelectorAll(".slot__start--missing")];
+    expect(missing.map((b) => b.textContent), "the row it has not got was drawn elsewhere")
+      .toEqual(["codex-cli"]);
+    // In the group and said to be unreachable: greying is not something a screen reader reports.
+    expect(missing[0]?.closest(".slot__starts"), "it was taken out of the group").toBeTruthy();
+    expect(missing[0]?.getAttribute("role")).toBe("radio");
+    expect(missing[0]?.getAttribute("aria-disabled")).toBe("true");
+
+    // A press on it changes nothing, and the terminal still opens on what was on.
+    await press("codex-cli");
+    expect(on(), "a press moved what is on to something this machine cannot start").toBe("claude-code");
+    await press("Open a terminal here");
+    expect(started).toEqual(["claude-code"]);
+  });
+
+  it("draws the row on a machine with nothing installed, and opens on the shell", async () => {
+    hoisted.wake = partly([], ["claude-code", "codex-cli"]);
+    await draw("/work/here");
+
+    // The shell is the whole of what can be started, so it is on — and the row is still drawn, which
+    // is what tells a reader with no agent installed that there is something to install.
+    expect(on()).toBe("Plain shell");
+    expect(buttons().some((b) => b.textContent === "Not installed (2)")).toBe(true);
+    await press("Open a terminal here");
+    expect(started).toEqual(["shell"]);
   });
 
   it("opens on the plain shell, which is a choice like the others here", async () => {

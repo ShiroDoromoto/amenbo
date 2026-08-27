@@ -573,6 +573,8 @@ export const uk: Translation = {
     "files.notText": "Це не текст, тому показати його тут не можна.",
     "files.cut": "Показано лише початок.",
     "files.unreadable": "Не вдалося прочитати цей файл.",
+    "files.dropStopped": "Не вдалося перенести {name}: {why}",
+    "files.dropPartly": "Перенесено: {count}. {name} — ні: {why}",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Зберегти",

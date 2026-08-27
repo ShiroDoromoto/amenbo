@@ -576,6 +576,8 @@ export const ru: Translation = {
     "files.notText": "Это не текст, поэтому показать его здесь нельзя.",
     "files.cut": "Показано только начало.",
     "files.unreadable": "Не удалось прочитать этот файл.",
+    "files.dropStopped": "Не удалось перенести {name}: {why}",
+    "files.dropPartly": "Перенесено: {count}. {name} — нет: {why}",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Сохранить",

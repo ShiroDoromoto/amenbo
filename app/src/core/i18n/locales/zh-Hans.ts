@@ -547,6 +547,8 @@ export const zhHans: Translation = {
     "files.notText": "这不是文本，无法在这里显示。",
     "files.cut": "只显示了开头部分。",
     "files.unreadable": "无法读取这个文件。",
+    "files.dropStopped": "没能把 {name} 放进来：{why}",
+    "files.dropPartly": "放进来 {count} 个。{name} 没有：{why}",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "保存",

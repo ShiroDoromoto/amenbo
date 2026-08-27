@@ -547,6 +547,8 @@ export const tr: Translation = {
     "files.notText": "Bu metin değil, burada gösterilemez.",
     "files.cut": "Yalnızca başı gösteriliyor.",
     "files.unreadable": "Bu dosya okunamadı.",
+    "files.dropStopped": "{name} alınamadı: {why}",
+    "files.dropPartly": "{count} alındı. {name} alınamadı: {why}",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Kaydet",

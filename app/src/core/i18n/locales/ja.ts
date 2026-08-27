@@ -559,6 +559,8 @@ export const ja: Translation = {
     "files.notText": "テキストではないので、ここには出せません。",
     "files.cut": "先頭だけを出しています。",
     "files.unreadable": "このファイルは読めませんでした。",
+    "files.dropStopped": "{name} を取り込めませんでした: {why}",
+    "files.dropPartly": "{count} 件を取り込みました。{name} は取り込めませんでした: {why}",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "保存",

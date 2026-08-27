@@ -15,7 +15,8 @@
 // Outside Tauri (`npm run dev` in a browser) there is no filesystem to ask, and the face draws its
 // empty state rather than an error: a folder with nothing in it is what the browser fallback is.
 import type {
-  FolderAppDto, FolderChangesDto, FolderEntryDto, FolderFileDto, GitEntryDto,
+  DropEffectDto, FolderAppDto, FolderCarriedDto, FolderChangesDto, FolderEntryDto, FolderFileDto,
+  GitEntryDto,
 } from "../bindings/bindings";
 import { invoke } from "../core/ipc";
 import { inTauri } from "../core/snapshot";
@@ -186,6 +187,32 @@ export async function folderRevealFile(
 ): Promise<void> {
   if (!inTauri()) return;
   await invoke<void>("folder_reveal_file", { projectId, root, path });
+}
+
+/**
+ * Bring files dropped in from the desktop into one of the project's folders
+ * (`crate::folder_write::folder_import`).
+ *
+ * `paths` are the host's own — whole paths to wherever the reader dragged them from, which is
+ * almost never inside the project. Only `toRoot` and `to` are the project's, and the host proves
+ * those against the store rather than taking this side's word for them.
+ *
+ * `effect` is what the operating system said the reader was holding as they let go, passed on
+ * unread: **a plain drop copies**, and the host is where that is decided, so a face that reads the
+ * keys differently from another face is not a thing that can happen.
+ *
+ * The answer is a line through the list rather than a yes or a no — the names that arrived, and the
+ * one it stopped on. Outside Tauri there is no folder to carry anything into, and nothing arrives.
+ */
+export async function folderImport(
+  projectId: number,
+  paths: string[],
+  toRoot: string,
+  to: string[],
+  effect: DropEffectDto,
+): Promise<FolderCarriedDto> {
+  if (!inTauri()) return { arrived: [], stopped: null };
+  return await invoke<FolderCarriedDto>("folder_import", { projectId, paths, toRoot, to, effect });
 }
 
 /**

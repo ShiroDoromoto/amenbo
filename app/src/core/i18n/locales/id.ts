@@ -550,6 +550,8 @@ export const id: Translation = {
     "files.notText": "Ini bukan teks, jadi tidak bisa ditampilkan di sini.",
     "files.cut": "Hanya bagian awal yang ditampilkan.",
     "files.unreadable": "Berkas ini tidak bisa dibaca.",
+    "files.dropStopped": "{name} tidak bisa dimasukkan: {why}",
+    "files.dropPartly": "{count} masuk. {name} tidak: {why}",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Simpan",

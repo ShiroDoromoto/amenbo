@@ -569,6 +569,8 @@ export const ptBR: Translation = {
     "files.notText": "Isto não é texto, então não dá para mostrar aqui.",
     "files.cut": "Só o começo está sendo mostrado.",
     "files.unreadable": "Não foi possível ler este arquivo.",
+    "files.dropStopped": "Não foi possível trazer {name}: {why}",
+    "files.dropPartly": "{count} entraram. {name} não: {why}",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Salvar",

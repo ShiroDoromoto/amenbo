@@ -550,6 +550,8 @@ export const vi: Translation = {
     "files.notText": "Đây không phải văn bản nên không hiển thị được ở đây.",
     "files.cut": "Chỉ hiển thị phần đầu.",
     "files.unreadable": "Không đọc được tệp này.",
+    "files.dropStopped": "Không đưa được {name} vào: {why}",
+    "files.dropPartly": "Đã đưa vào {count}. {name} thì không: {why}",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Lưu",

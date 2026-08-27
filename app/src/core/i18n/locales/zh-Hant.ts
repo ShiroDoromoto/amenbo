@@ -547,6 +547,8 @@ export const zhHant: Translation = {
     "files.notText": "這不是文字，無法在這裡顯示。",
     "files.cut": "只顯示了開頭部分。",
     "files.unreadable": "無法讀取這個檔案。",
+    "files.dropStopped": "沒能把 {name} 放進來：{why}",
+    "files.dropPartly": "放進來 {count} 個。{name} 沒有：{why}",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "儲存",

@@ -618,6 +618,8 @@ const ui = {
   "files.notText": "This is not text, so it cannot be shown here.",
   "files.cut": "Only the beginning is shown.",
   "files.unreadable": "This file could not be read.",
+  "files.dropStopped": "{name} could not be brought in: {why}",
+  "files.dropPartly": "{count} came in. {name} did not: {why}",
   // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
   // of the three it is, so there is no separate place for a reader to look for the answer.
   "files.save": "Save",

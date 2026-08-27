@@ -557,6 +557,8 @@ export const de: Translation = {
     "files.notText": "Das ist kein Text und lässt sich hier nicht anzeigen.",
     "files.cut": "Es wird nur der Anfang angezeigt.",
     "files.unreadable": "Diese Datei konnte nicht gelesen werden.",
+    "files.dropStopped": "{name} konnte nicht übernommen werden: {why}",
+    "files.dropPartly": "{count} übernommen. {name} nicht: {why}",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Speichern",

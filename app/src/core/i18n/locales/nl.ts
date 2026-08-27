@@ -547,6 +547,8 @@ export const nl: Translation = {
     "files.notText": "Dit is geen tekst en kan hier niet worden getoond.",
     "files.cut": "Alleen het begin wordt getoond.",
     "files.unreadable": "Dit bestand kon niet worden gelezen.",
+    "files.dropStopped": "{name} kon niet worden opgenomen: {why}",
+    "files.dropPartly": "{count} opgenomen. {name} niet: {why}",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Opslaan",

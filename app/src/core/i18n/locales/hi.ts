@@ -547,6 +547,8 @@ export const hi: Translation = {
     "files.notText": "यह टेक्स्ट नहीं है, इसलिए इसे यहाँ नहीं दिखाया जा सकता।",
     "files.cut": "सिर्फ़ शुरुआत दिखाई जा रही है।",
     "files.unreadable": "यह फ़ाइल पढ़ी नहीं जा सकी।",
+    "files.dropStopped": "{name} को लाया नहीं जा सका: {why}",
+    "files.dropPartly": "{count} आ गए। {name} नहीं आया: {why}",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "सहेजें",

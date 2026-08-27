@@ -568,6 +568,8 @@ export const it: Translation = {
     "files.notText": "Non è testo, quindi non può essere mostrato qui.",
     "files.cut": "Viene mostrato solo l'inizio.",
     "files.unreadable": "Non è stato possibile leggere questo file.",
+    "files.dropStopped": "Non è stato possibile inserire {name}: {why}",
+    "files.dropPartly": "{count} inseriti. {name} no: {why}",
     // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
     // of the three it is, so there is no separate place for a reader to look for the answer.
     "files.save": "Salva",

@@ -529,6 +529,7 @@ pub fn run() {
       folder_write::folder_rename,
       folder_write::folder_move,
       folder_write::folder_copy,
+      folder_write::folder_import,
       pty::pty_open,
       pty::pty_sessions,
       pty::pty_close,

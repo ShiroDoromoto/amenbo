@@ -3942,6 +3942,10 @@ pub struct DimensionRow {
     pub ordered: bool,
     pub show_on_card: bool,
     pub required: bool,
+    /// Which of the two entities the axis classifies, as stored (`task`/`decision`/`both` —
+    /// `AMB-D-789`). It passes straight through to the DTO, the way `role` does, because what the
+    /// screens do with it is decide which of them offer the axis at all.
+    pub applies_to: String,
     pub values: Vec<DimensionValueRow>,
 }
 
@@ -4039,6 +4043,7 @@ fn overview_dimensions(
     let (project_id, id, name) = (sel.col(D.project_id), sel.col(D.id), sel.col(D.name));
     let (notes, role, ordered) = (sel.col(D.notes), sel.col(D.role), sel.col(D.ordered));
     let (show_on_card, required, slug) = (sel.col(D.show_on_card), sel.col(D.required), sel.col(D.slug));
+    let applies_to = sel.col(D.applies_to);
     // The project is joined to keep a dimension whose project is gone out of the overview, not for a
     // column of its own — so it is named here and nowhere else.
     let mut sql = Sql::from(&sel, D.table);
@@ -4059,6 +4064,7 @@ fn overview_dimensions(
                     ordered: ordered.get(r)?,
                     show_on_card: show_on_card.get(r)?,
                     required: required.get(r)?,
+                    applies_to: applies_to.get(r)?,
                     values: Vec::new(),
                 },
             ))

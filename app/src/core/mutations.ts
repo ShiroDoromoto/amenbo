@@ -1629,6 +1629,20 @@ export async function setDimensionRequired(id: number, required: boolean): Promi
   return invokeAck("dimension_update", { id, required });
 }
 
+/**
+ * Narrow or widen which of the two entities this dimension classifies (`AMB-D-789`). The answer belongs
+ * to the axis, so it moves for every face at once. Narrowing takes the axis off a side and **takes no
+ * assignment away**: a value already answered there stays in the store, meaning nothing — the shape a
+ * time axis's dates keep once its role goes back to none.
+ */
+export async function setDimensionAppliesTo(
+  id: number,
+  appliesTo: "task" | "decision" | "both",
+): Promise<void> {
+  if (!inTauri()) return;
+  return invokeAck("dimension_update", { id, appliesTo });
+}
+
 /** Delete a dimension; its values and the task assignments to them go with it. */
 export async function removeDimension(id: number): Promise<void> {
   if (!inTauri()) return;

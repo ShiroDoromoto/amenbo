@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Decision } from "../core/snapshot";
 
 const AXIS = { id: 900, name: "テーマ", notes: "", role: "none", ordered: false, showOnCard: false, required: false,
+  appliesTo: "both",
   values: [{ id: 901, name: "メイン" }, { id: 902, name: "talk-window" }] };
 
 const hoisted = vi.hoisted(() => ({
@@ -109,6 +110,14 @@ afterEach(() => {
 describe("DecisionDetailPane classification selects", () => {
   it("draws nothing where the project carries no axes", async () => {
     hoisted.axes = [];
+    await open();
+    expect(axisSelect()).toBeNull();
+  });
+
+  // The leak `AMB-D-789` was written about: an axis narrowed to the work side — an exclusive lane on
+  // a real device — had a select on every decision, and a decision occupies no device.
+  it("draws nothing for an axis narrowed to the task side", async () => {
+    hoisted.axes = [{ ...AXIS, appliesTo: "task" }];
     await open();
     expect(axisSelect()).toBeNull();
   });

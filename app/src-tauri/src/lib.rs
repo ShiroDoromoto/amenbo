@@ -502,6 +502,7 @@ pub fn run() {
       wake::wake_chose,
       wake::wake_forget,
       wake::wake_choices,
+      wake::wake_rescan,
       wake::wake_register,
       wake::wake_amend,
       wake::wake_unregister,

@@ -310,11 +310,11 @@ function statusWord(status: string, task: boolean): string {
  * Where the record a hit points at stands (`AMB-D-567`), between the ref and the excerpt — where the CLI
  * puts it too, so the same reading order holds across the two surfaces.
  *
- * Each side says what it has: a task its status, its priority and what it is filed under, a decision its
- * status, which is all there is. The placements are written `axis=value`, the way the narrowing box above
- * takes them, so a row that came back on the tag can be typed straight back in as `dim:axis=value`.
+ * Each side says what it has: its status and what it is filed under (`AMB-D-781`), and the priority on
+ * top of that where the side has one. The placements are written `axis=value`, the way the narrowing box
+ * above takes them, so a row that came back on the tag can be typed straight back in as `dim:axis=value`.
  *
- * **The line clips rather than wraps.** A task can be filed on any number of axes, and a row that grew
+ * **The line clips rather than wraps.** A record can be filed on any number of axes, and a row that grew
  * with them would push the excerpt — what the reader came here for — down the page a hit at a time.
  *
  * Nothing is drawn at all when the read that fills this in came back empty: the words really are written

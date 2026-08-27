@@ -503,6 +503,30 @@ pub const STEPS: &[Step] = &[
                  ON decision_dimension_value(decision_id);",
         ),
     },
+    Step {
+        to: 32,
+        name: "add dimension.applies_to, which of the two entities an axis classifies",
+        // `AMB-D-789`. An axis is one mechanism serving tasks and decisions alike, and until this column
+        // it served them both whether or not that made sense — a work-shaped axis leaked into every
+        // decision pane. Which side it means anything on is the axis's own answer, so it arrives as a
+        // column on `dimension`, beside `show_on_card` and `required`.
+        //
+        // **Seeded, and the seed is the wide side: `both` on every row.** This is where it parts from
+        // v27's and v29's shape. Those two start at their column's own `DEFAULT`, so `NOT NULL DEFAULT 0`
+        // was the whole backfill; here the default is the `''` every required text column carries — the
+        // not-yet-written sentinel, which is not one of the three values a reader may hydrate. So the
+        // column is added at the registry's own declaration (the two DDL sites must land on the same
+        // table) and every existing row is then written to `both`, which is how every axis in an
+        // upgrading store was already read.
+        //
+        // The column is spelled out here in frozen text, as every step's is: the registry may rename it
+        // tomorrow, and what this step added must keep meaning what it meant.
+        apply: Apply::Sql(
+            "ALTER TABLE dimension ADD COLUMN applies_to TEXT NOT NULL DEFAULT '' \
+                 CHECK(applies_to IN ('', 'task', 'decision', 'both'));\
+             UPDATE dimension SET applies_to = 'both';",
+        ),
+    },
 ];
 
 /// v23: give the change feed the window each instruction belongs to (`AMB-D-582`), so a reader closed to
@@ -1628,6 +1652,48 @@ mod tests {
                     "a store born at v{born} stopped cascading `{table}`, which is Amenbo's own setting"
                 );
             }
+            std::fs::remove_dir_all(&dir).ok();
+        }
+    }
+
+    /// The version `dimension.applies_to` arrives at — the ages below it are the ones the seed exists
+    /// for. Named rather than written into the loop bound so the test says which step it is about.
+    const APPLIES_TO_VERSION: i64 = 32;
+
+    /// **v32 on every shape the chain starts from** (`AMB-D-789`). Every axis an upgrading store holds
+    /// comes out classifying `both`, which is how it was already being read.
+    ///
+    /// This step is the one that could not lean on its column's `DEFAULT` the way v27's and v29's did.
+    /// A required text column defaults to `''`, the not-yet-written sentinel, and `''` is not one of the
+    /// three values [`crate::model::DimensionAppliesTo::parse`] admits — so a bare `ALTER TABLE` would
+    /// leave every existing axis unreadable, and the failure would surface as a hydration error on the
+    /// first list after an upgrade rather than here.
+    ///
+    /// The ages at and above the column's own are left out on purpose: there the axis is born with the
+    /// column and it is `ops::dimension` that fills it, which this fixture's raw `INSERT` bypasses.
+    #[test]
+    fn the_chain_leaves_every_existing_axis_classifying_both() {
+        for born in OLDEST_FROZEN_VERSION..APPLIES_TO_VERSION {
+            let dir = scratch(&format!("applies-to-v{born}"));
+            let engine = store_at(&dir, born);
+            engine
+                .conn()
+                .execute_batch(
+                    "INSERT INTO project (id, name) VALUES (1, 'p');
+                     INSERT INTO dimension (id, project_id, name) VALUES (1, 1, '占有');",
+                )
+                .unwrap();
+
+            run(&engine, &dir, STEPS, &mut crate::progress::ignore).unwrap();
+
+            let seeded: String = engine
+                .conn()
+                .query_row("SELECT applies_to FROM dimension WHERE id = 1", [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(
+                seeded, "both",
+                "a store born at v{born} came out of the chain with an axis no reader can hydrate"
+            );
             std::fs::remove_dir_all(&dir).ok();
         }
     }

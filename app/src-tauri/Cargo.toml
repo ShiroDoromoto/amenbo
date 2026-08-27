@@ -1,6 +1,6 @@
 [package]
 name = "amenbo-app"
-version = "15.1.0"
+version = "16.0.0"
 description = "amenbo desktop GUI (Tauri shell, amenbo-core direct)"
 authors = ["ShiroDoromoto"]
 license = "Apache-2.0"

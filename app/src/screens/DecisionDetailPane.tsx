@@ -3,6 +3,7 @@ import { Markdown } from "../components/Markdown";
 import { Attachments } from "../components/Attachments";
 import { CommentRow } from "../components/CommentRow";
 import { getSnapshot, inTauri, type Decision, type DecisionStatus } from "../core/snapshot";
+import type { Actor } from "../mock/types";
 import {
   acceptDecision, addDecisionComment, amendDecision, buildsOnDecision, editDecision, editDecisionComment,
   fetchDecisionDimensions, rejectDecision, reopenDecision, removeDecisionComment, setDecisionDimensionValue,
@@ -19,6 +20,7 @@ import { errText, exactLabel, formatNumber, statusLabel, t, tf } from "../core/i
 import { decisionRef } from "../core/idref";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
+import { FacetAvatar } from "../components/atoms";
 
 // Colour of the status badge — keep it matching DecisionsScreen's statusColor. The badge says the status
 // and nothing else (`AMB-D-410`); that this decision was overturned is an edge, and the edge list below
@@ -353,18 +355,33 @@ export function DecisionDetailPane({
 }
 
 /**
- * When this decision was written down, when it was settled, and whether anything has moved since —
+ * Who settled this decision, named the way every other facet on this page is named — the roster's
+ * name and avatar, falling back to the facet's own word before the roster has loaded. `decidedBy`
+ * carries a free-text decider token rather than a key (`AMB-D-788`), so a store holding anything but
+ * the two facets draws no facet at all and the pane says nothing about who.
+ */
+function decider(d: Decision): Actor | null {
+  const token = d.decidedBy?.id;
+  if (token !== "human" && token !== "ai") return null;
+  return getSnapshot().roster.find((a) => a.kind === token)
+    ?? { name: t(token === "ai" ? "facet.ai" : "facet.human"), kind: token };
+}
+
+/**
+ * When this decision was written down, who settled it and when, and whether anything has moved since —
  * the freshness the body cannot say. `decidedAt` is there only once a decision is settled (a reopen
  * clears it again), and `updatedAt` moves on any write, an accept included, so it is shown only where
  * it is news: not where it merely repeats the instant the decision was recorded or settled at. Each
  * one is written out in full rather than as "3 days ago": these are the dates a record is cited by,
- * and the CLI page prints them outright too. The raw UTC stays on the `title`.
+ * and the CLI page prints them outright too. The raw UTC stays on the `title`. Who settled it rides on
+ * the decided stamp rather than a line of its own: it is one fact about the ruling, and a reader
+ * weighing whether to trust it wants both halves at once.
  */
 function DecisionStamps({ d }: { d: Decision }) {
-  const stamps: { key: string; label: string; at: string }[] = [
+  const stamps: { key: string; label: string; at: string; by?: Actor | null }[] = [
     { key: "recorded", label: t("dec.recorded"), at: d.createdAt },
   ];
-  if (d.decidedAt) stamps.push({ key: "decided", label: t("dec.decided"), at: d.decidedAt });
+  if (d.decidedAt) stamps.push({ key: "decided", label: t("dec.decided"), at: d.decidedAt, by: decider(d) });
   if (d.updatedAt && d.updatedAt !== d.createdAt && d.updatedAt !== d.decidedAt) {
     stamps.push({ key: "changed", label: t("dec.lastChanged"), at: d.updatedAt });
   }
@@ -375,7 +392,9 @@ function DecisionStamps({ d }: { d: Decision }) {
         // rather than through the middle of one date.
         <Fragment key={s.key}>
           {i > 0 && " · "}
-          <span title={s.at} style={{ whiteSpace: "nowrap" }}>{s.label} {exactLabel(s.at)}</span>
+          <span title={s.at} style={{ whiteSpace: "nowrap" }}>
+            {s.label} {exactLabel(s.at)}{s.by && <> <FacetAvatar actor={s.by} showName /></>}
+          </span>
         </Fragment>
       ))}
     </div>

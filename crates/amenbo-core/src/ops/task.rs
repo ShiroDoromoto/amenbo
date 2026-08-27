@@ -623,7 +623,7 @@ mod tests {
             let other = draft_in(tx, "先に締めたタスク", Some(pid));
             assert!(!finish_creating(tx, other).unwrap().draft);
 
-            crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, Some(true), None)
+            crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, Some(true), None, None)
                 .unwrap();
 
             // Raising it does not reopen the creation that already finished — the premise is read at the
@@ -661,7 +661,7 @@ mod tests {
             )
             .unwrap();
             crate::ops::dimension::value_add(tx, axis.id, "Amenbo本体", None).unwrap();
-            crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, Some(true), None)
+            crate::ops::dimension::update(tx, axis.id, None, None, None, None, None, Some(true), None, None)
                 .unwrap();
 
             let loose = draft_in(tx, "どのプロジェクトにも属さない", None);

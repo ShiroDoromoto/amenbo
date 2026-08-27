@@ -1,5 +1,5 @@
 // screen — drive a mac screen from the outside and read what is on it: bring an app to the front,
-// click, type, send a key, shoot its window, and read the text off a shot.
+// click, drag, type, send a key, shoot its window, and read the text off a shot.
 //
 // One tool rather than one per caller. What a caller needs of a screen is the moves, a shot and the
 // words on it — never a window id or its bounds, which is why neither leaves here: the tool shoots
@@ -19,15 +19,17 @@
 //   swift screen.swift click-named <pid> <name>  left-click what that name names (fronts the app first)
 //   swift screen.swift click <x> <y>             left-click at a screen point
 //   swift screen.swift dblclick <x> <y>          double-click at a screen point (what opens a dialog's row)
+//   swift screen.swift drag <pid> <x1> <y1> <x2> <y2> [steps]   press at the first point, move to the second, let go
 //   swift screen.swift type "text"               type into the focused element (Unicode direct, so no IME)
 //   swift screen.swift key <keycode>             one virtual keycode (36=Return / 48=Tab / 53=Esc / 125=Down / 126=Up)
+//   swift screen.swift set-date <pid> <name> <yyyy-mm-dd>  put a day into the date field of that name
 //   swift screen.swift trusted                   whether the accessibility permission is granted (prompts if not)
 //
 // Anything aimed at a pid also takes `--window <title>`, anywhere in the line. An app draws one
 // screen per window, so a pid alone stops naming a screen the moment it has two: `front` raises the
-// window named, `shot` shoots it, and `find` / `click-named` read and press inside it and nowhere
-// else. Left out, it means the app's one window — and an app with two is told to say which rather
-// than answered with whichever the list held first. That silence is the failure worth refusing: a
+// window named, `shot` shoots it, and `find` / `click-named` / `drag` / `set-date` read, press and
+// write inside it and nowhere else. Left out, it means the app's one window — and an app with two is
+// told to say which rather than answered with whichever the list held first. That silence is the failure worth refusing: a
 // road reading the wrong window finds nothing it expected and comes out red for a reason nobody can
 // see, or finds a name both windows carry and comes out green without having looked at the screen
 // under test.
@@ -263,6 +265,10 @@ struct Element {
     let role: String
     let name: String
     let frame: CGRect
+    /// The tree handle the element was read from. Everything above answers a question about the
+    /// element; this is what lets one be *written* — `set-date` sets a value through it rather than
+    /// spelling the value out in keystrokes.
+    let ref: AXUIElement
 }
 
 func axAttribute(_ el: AXUIElement, _ name: String) -> AnyObject? {
@@ -312,7 +318,7 @@ func elements(under el: AXUIElement, depth: Int = 0) -> [Element] {
     var found: [Element] = []
     if let name = axName(el), let frame = axFrame(el) {
         let role = axString(el, kAXRoleAttribute as String) ?? ""
-        found.append(Element(role: role.isEmpty ? "?" : role, name: name, frame: frame))
+        found.append(Element(role: role.isEmpty ? "?" : role, name: name, frame: frame, ref: el))
     }
     for child in axAttribute(el, kAXChildrenAttribute as String) as? [AXUIElement] ?? [] {
         found += elements(under: child, depth: depth + 1)
@@ -458,14 +464,20 @@ func hover(_ p: CGPoint) {
     usleep(120_000)
 }
 
-/// One down/up at a point, saying which press of a run it is. That number is the whole difference
-/// between two clicks and a double click: the events are otherwise identical, and what is listening
-/// reads the count off the field rather than timing the pair itself.
+/// One left-button event at a point, saying which press of a run it is. That number is the whole
+/// difference between two clicks and a double click: the events are otherwise identical, and what is
+/// listening reads the count off the field rather than timing the pair itself. A drag's events carry
+/// it too — a webview handed a `pointerdown` whose count is zero has been handed a press nobody made.
+func mouse(_ phase: CGEventType, at p: CGPoint, clickState: Int64 = 1) {
+    let e = CGEvent(mouseEventSource: src, mouseType: phase, mouseCursorPosition: p, mouseButton: .left)
+    e?.setIntegerValueField(.mouseEventClickState, value: clickState)
+    e?.post(tap: .cghidEventTap)
+}
+
+/// One down/up at a point.
 func press(at p: CGPoint, clickState: Int64) {
     for phase in [CGEventType.leftMouseDown, CGEventType.leftMouseUp] {
-        let e = CGEvent(mouseEventSource: src, mouseType: phase, mouseCursorPosition: p, mouseButton: .left)
-        e?.setIntegerValueField(.mouseEventClickState, value: clickState)
-        e?.post(tap: .cghidEventTap)
+        mouse(phase, at: p, clickState: clickState)
         usleep(60_000)
     }
 }
@@ -484,6 +496,35 @@ func doubleClick(x: Double, y: Double) {
     hover(p)
     press(at: p, clickState: 1)
     press(at: p, clickState: 2)
+}
+
+/// Press at one point, cross to another with the button held, and let go there.
+///
+/// A point at each end rather than a name, unlike everything else that can be aimed by one: where a
+/// drag lands is decided by which side of a row's middle it is let go on, and both sides of that line
+/// are the same row. A name says which row and cannot say which side of it, so the two ends are the
+/// caller's arithmetic — `find`'s rectangle is what the start is built from.
+///
+/// The crossing is sent as `steps` moves rather than as one, because moves are what the screen under
+/// it is listening to: a webview being reordered works out where the pointer is on every move it is
+/// given, and a jump straight to the far end gives it exactly one — after which the drop is right but
+/// nothing that was meant to follow the pointer ever moved. 24 crossed a sidebar's list.
+///
+/// It is also the only way to photograph a drag in progress. Ask for a few hundred steps and the
+/// crossing takes seconds, which is long enough for another process to run `screen shot` while the
+/// button is still down — the drop line and the faded row it left are on screen for that long and
+/// nowhere else.
+func drag(pid: Int, window: String?, from a: CGPoint, to b: CGPoint, steps: Int) {
+    front(pid: pid, window: window)
+    hover(a)
+    mouse(.leftMouseDown, at: a)
+    usleep(80_000) // long enough that what is under the pointer has taken the press before it moves
+    for i in 1 ... steps {
+        let t = Double(i) / Double(steps)
+        mouse(.leftMouseDragged, at: CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t))
+        usleep(20_000)
+    }
+    mouse(.leftMouseUp, at: b)
 }
 
 /// type sends the string itself rather than keycodes. It bypasses the IME, so any script goes in as-is.
@@ -527,9 +568,106 @@ func takeWindow(_ argv: [String]) -> (window: String?, rest: [String]) {
     return (window, rest)
 }
 
+/// The date element in this app whose day can be written — the picker panel's, once it is open.
+///
+/// Walked off the raw tree rather than through [`windowElements`], which keeps only the elements that
+/// answer to a name: the panel carries none, being drawn as the field's own pop-up rather than as a
+/// control of its own, so a listing of the screen never holds it. It is the one element here that is
+/// looked up by what it can do instead of by what it is called.
+func writableDay(pid: Int) -> AXUIElement? {
+    func walk(_ el: AXUIElement, _ depth: Int) -> AXUIElement? {
+        guard depth < 60 else { return nil }
+        if axString(el, kAXRoleAttribute as String) == "AXDateTimeArea" {
+            var settable: DarwinBoolean = false
+            AXUIElementIsAttributeSettable(el, kAXValueAttribute as CFString, &settable)
+            if settable.boolValue { return el }
+        }
+        for child in axAttribute(el, kAXChildrenAttribute as String) as? [AXUIElement] ?? [] {
+            if let hit = walk(child, depth + 1) { return hit }
+        }
+        return nil
+    }
+    let app = AXUIElementCreateApplication(pid_t(pid))
+    openTree(app)
+    for window in axAttribute(app, kAXWindowsAttribute as String) as? [AXUIElement] ?? [] {
+        if let hit = walk(window, 0) { return hit }
+    }
+    return nil
+}
+
+/// Put a day into a date field, by writing it rather than by spelling it out.
+///
+/// A `<input type="date">` in a webview is one control with three numeric fields inside it, and a
+/// keystroke is the only way in from the outside: a digit at a time, each one moving the field on
+/// when it fills. That does not survive the screen it is aimed at. Every digit that leaves the value
+/// a valid date makes the app commit and redraw the field it was typed into, and the redraw resets
+/// the run of digits WebKit was collecting — so a year, which is four digits and valid after each
+/// one, comes back as the last digit alone (`2099` lands as `0009`). Slowing the typing does not
+/// help; it is the redraw between the digits, not the pace of them.
+///
+/// So the day is set where the control keeps it. Opening the picker puts a second date element on
+/// the tree — the panel's own, the one whose value is writable — and the value written there reaches
+/// the field, the change event, and the store, as one move rather than as eight. What the caller
+/// gets is the same shape as a click: name the field, name the day, and the picker is opened and shut
+/// again around the write.
+///
+/// The read-back is the point of the op rather than a nicety: a write that reached nothing would
+/// otherwise leave a screen showing the day it had before, and a step that asserts on that day would
+/// report the field as the thing that is broken.
+func setDate(pid: Int, name: String, day: String, window: String?) {
+    let stamp = DateFormatter()
+    stamp.locale = Locale(identifier: "en_US_POSIX")
+    stamp.timeZone = TimeZone(identifier: "UTC")
+    stamp.dateFormat = "yyyy-MM-dd"
+    guard let wanted = stamp.date(from: day) else { fail("\(day) is not a day — write it as yyyy-mm-dd") }
+
+    front(pid: pid, window: window)
+    let fields = named(name, among: windowElements(pid: pid, window: window).filter { $0.role == "AXDateTimeArea" })
+    guard let field = fields.first else { fail("no date field on screen is called \(name)") }
+    if fields.count > 1 {
+        let names = fields.map { oneLine($0.name) }.joined(separator: " / ")
+        fail("\(fields.count) date fields hold \(name) — \(names); name one of them, or more of the one meant")
+    }
+
+    // Open the picker, and wait for the element it brings: the panel is drawn by the app rather than
+    // by the web process, so it arrives a moment after the press. A picker somebody left open is not
+    // opened again — the press that opens one closes one, so pressing regardless would shut the very
+    // panel being waited for.
+    if writableDay(pid: pid) == nil {
+        click(x: field.frame.midX, y: field.frame.midY)
+    }
+    let deadline = Date().addingTimeInterval(3)
+    var written = false
+    repeat {
+        if let slot = writableDay(pid: pid) {
+            written = AXUIElementSetAttributeValue(slot, kAXValueAttribute as CFString, wanted as CFDate) == .success
+        }
+        if written { break }
+        usleep(100_000)
+    } while Date() < deadline
+    if !written { fail("the picker for \(oneLine(field.name)) never offered a day to write") }
+
+    // Shut it again — the panel stands over the rows under the field, so a shot taken with it up is a
+    // shot of the picker rather than of the screen. It closes when the focus leaves the field, and a
+    // tab walks the field's own parts before it goes, so the key is pressed until the panel is gone
+    // rather than a fixed number of times. Neither Escape nor a second press on the field closes it
+    // (both were tried); tabbing out does.
+    for _ in 0..<8 where writableDay(pid: pid) != nil {
+        key(48) // tab
+        usleep(200_000)
+    }
+    if writableDay(pid: pid) != nil { fail("the picker for \(oneLine(field.name)) would not close") }
+
+    guard let landed = axAttribute(field.ref, kAXValueAttribute as String) as? Date else {
+        fail("\(oneLine(field.name)) does not say what day it holds")
+    }
+    let got = stamp.string(from: landed)
+    if got != day { fail("\(oneLine(field.name)) holds \(got), not \(day)") }
+}
+
 let (window, args) = takeWindow(CommandLine.arguments)
 guard args.count >= 2 else {
-    fail("usage: screen <front|shot|read|find|click-named|click|dblclick|type|key|trusted> … [--window <title>]")
+    fail("usage: screen <front|shot|read|find|click-named|click|dblclick|drag|type|key|set-date|trusted> … [--window <title>]")
 }
 
 switch args[1] {
@@ -554,12 +692,24 @@ case "click":
 case "dblclick":
     guard args.count == 4, let x = Double(args[2]), let y = Double(args[3]) else { fail("usage: screen dblclick <x> <y>") }
     doubleClick(x: x, y: y)
+case "drag":
+    let dragUsage = "usage: screen drag <pid> <x1> <y1> <x2> <y2> [steps] [--window <title>]"
+    guard args.count == 7 || args.count == 8, let pid = Int(args[2]),
+        let x1 = Double(args[3]), let y1 = Double(args[4]),
+        let x2 = Double(args[5]), let y2 = Double(args[6])
+    else { fail(dragUsage) }
+    let steps = args.count == 8 ? Int(args[7]) : 24
+    guard let steps, steps > 0 else { fail(dragUsage) }
+    drag(pid: pid, window: window, from: CGPoint(x: x1, y: y1), to: CGPoint(x: x2, y: y2), steps: steps)
 case "type":
     guard args.count == 3 else { fail("usage: screen type <text>") }
     type(args[2])
 case "key":
     guard args.count == 3, let code = UInt16(args[2]) else { fail("usage: screen key <keycode>") }
     key(CGKeyCode(code))
+case "set-date":
+    guard args.count == 5, let pid = Int(args[2]) else { fail("usage: screen set-date <pid> <name> <yyyy-mm-dd> [--window <title>]") }
+    setDate(pid: pid, name: args[3], day: args[4], window: window)
 case "trusted":
     // Without the permission, raise the dialog that leads to System Settings. Granting it does not
     // require restarting the parent app.

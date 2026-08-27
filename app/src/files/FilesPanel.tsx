@@ -263,6 +263,12 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
  * A folder that is gone draws its heading and the reason, and nothing else. There is nothing to
  * watch and no tree to open, and the two states it could be confused with — a binding somebody
  * removed, and a folder with nothing in it — both look like an empty section.
+ *
+ * **A half-watched folder says which half-watched it is.** Too big to walk to the end of and out of
+ * watches are separate answers from the host and are drawn as separate lines (`AMB-D-778`): one is
+ * about this folder and is answered by pointing the app at less of it, the other is about the
+ * machine and is answered by giving it more watches. They are said of the folder rather than of the
+ * tree below, so they stand beside the heading, above it.
  */
 function FolderSection({ projectId, root, label, bound, landing, onRead, onMenu }: {
   projectId: number;
@@ -278,7 +284,7 @@ function FolderSection({ projectId, root, label, bound, landing, onRead, onMenu 
   onMenu: (path: string[], x: number, y: number) => void;
 }) {
   const [changes, setChanges] = useState<FolderChangesDto>(
-    { root, partial: false, gone: false },
+    { root, capped: false, unwatched: false, gone: false },
   );
   // How many times the host has said this folder moved. Everything read off the disk watches it.
   const [moved, setMoved] = useState(0);
@@ -301,7 +307,7 @@ function FolderSection({ projectId, root, label, bound, landing, onRead, onMenu 
     void folderWatch(projectId, root)
       .then((now) => { if (alive) setChanges(now); })
       .catch(() => {
-        if (alive) setChanges({ root, partial: false, gone: false });
+        if (alive) setChanges({ root, capped: false, unwatched: false, gone: false });
       });
     return () => {
       alive = false;
@@ -346,6 +352,25 @@ function FolderSection({ projectId, root, label, bound, landing, onRead, onMenu 
   return (
     <div className="files__folder">
       {heading}
+      {/* Said out loud rather than left to be assumed: a folder only half watched goes on looking
+          like one where nothing is happening. Both reasons stand in one stack, tight enough to read
+          as one thing said about the folder rather than as two of the panel's rows. */}
+      {(changes.capped || changes.unwatched) && (
+        <div className="files__row">
+          {changes.capped && <p className="files__none">{t("files.capped")}</p>}
+          {/* The way out is said with the fact, because the fact alone reads as something the
+              reader did — and it is not: the supply is the machine's and their editor is already
+              spending it (`AMB-T-3753`). Which folders went unwatched is not said: they are
+              whichever the walk reached last, so naming them would describe the walk rather than
+              the project. */}
+          {changes.unwatched && (
+            <>
+              <p className="files__none">{t("files.unwatched")}</p>
+              <p className="files__none">{t("files.unwatchedHow")}</p>
+            </>
+          )}
+        </div>
+      )}
       {/* The root is a folder like any other in the tree, and the one a drop that fell on no row
           lands in. It is marked on the section rather than on the heading so that the whole of the
           tree — the gaps between its rows included — answers for it. */}
@@ -361,9 +386,6 @@ function FolderSection({ projectId, root, label, bound, landing, onRead, onMenu 
         >
           {t("files.tree")}
         </button>
-        {/* Said out loud rather than left to be assumed: a folder only half watched goes on looking
-            like one where nothing is happening. */}
-        {changes.partial && <p className="files__none">{t("files.partial")}</p>}
         {/* Folded until it is asked for, and each level asked for only when it is opened: a tree is
             not the point of this face, and an unfolded one would read the whole repository to draw
             a panel nobody was looking at. */}

@@ -483,9 +483,9 @@ pub fn folder_entries(
 
 /// Open one file the way the machine would open it — the reader's own applications, not ours.
 ///
-/// The face reads; it does not edit (`AMB-T-3602`). What it can do is hand the file to whatever the
-/// person already opens that kind of file with, which is the whole of this: the OS decides what that
-/// is, and Amenbo does not keep an opinion about it.
+/// The face has an editor of its own, and this is still worth having: what it opens a file in is
+/// whatever the person already opens that kind of file with. The OS decides what that is, and Amenbo
+/// does not keep an opinion about it.
 #[tauri::command]
 pub fn folder_open_file(project_id: i64, root: String, path: Vec<String>) -> Result<(), CmdError> {
     let (roots, base) = rooted(project_id, &root)?;

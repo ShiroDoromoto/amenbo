@@ -16,6 +16,9 @@ import type {
 
 const ROOT = "/work/repo";
 
+/** The most recent of what the editor was asked to draw. */
+const last = <T,>(all: T[]): T | undefined => all[all.length - 1];
+
 /** What the host answers `folder_read` with, filled in around whatever a test cares about. */
 const aFile = (about: Partial<FolderFileDto> = {}): FolderFileDto => ({
   truncated: false,
@@ -44,6 +47,24 @@ const hoisted = vi.hoisted(() => ({
   bound: [] as { path: string; exists: boolean }[],
   /** The host's side of the drag-and-drop subscription (`../core/hostDrop`). */
   dragging: null as null | ((event: { payload: unknown }) => void),
+  /** What the editor was asked to draw, and whether it was allowed to be typed into. */
+  editing: [] as { text: string; editable: boolean }[],
+}));
+
+// The editor is loaded on demand and lays itself out by measuring, which jsdom cannot do — so what
+// it was asked to draw is recorded instead, the same stand-in the Markdown face makes for mermaid.
+vi.mock("./editorLoad", () => ({
+  mountEditor: async (parent: HTMLElement, text: string, editable: boolean) => {
+    hoisted.editing.push({ text, editable });
+    const drawn = parent.ownerDocument.createElement("div");
+    drawn.className = "cm-editor";
+    drawn.textContent = text;
+    parent.appendChild(drawn);
+    return {
+      show(next: string) { drawn.textContent = next; },
+      close() { drawn.remove(); },
+    };
+  },
 }));
 
 // A file dragged in from the desktop reaches the application, and the page hears about it through
@@ -164,6 +185,7 @@ const button = (text: string) =>
 
 beforeEach(() => {
   hoisted.asked = [];
+  hoisted.editing = [];
   hoisted.entries = {};
   hoisted.file = aFile();
   hoisted.apps = [];
@@ -272,7 +294,8 @@ describe("the file face", () => {
     await act(async () => {
       row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 20 }));
     });
-    // The face reads and does not edit: what it offers is the reader's own applications.
+    // There is an editor here, and still a way out of it: what a person wants of a file is as often
+    // to hand it to something else as to read it where it is.
     await click(button(t("files.openWith")));
     expect(hoisted.asked).toContain(`open:${ROOT}:notes/a.md`);
 
@@ -485,7 +508,31 @@ describe("the file face", () => {
     await settle();
     // Not a heading: the hash in a shell script is a comment, and a name is what decides that.
     expect(container.querySelector("h1")).toBeNull();
-    expect(container.querySelector("pre")?.textContent).toBe("#!/bin/sh\necho hi");
+    expect(container.querySelector(".cm-editor")?.textContent).toBe("#!/bin/sh\necho hi");
+    // And it is a file this panel could save, so it is one somebody may type into.
+    expect(last(hoisted.editing)).toEqual({ text: "#!/bin/sh\necho hi", editable: true });
+  });
+
+  /** A file the panel could never write back is read-only from the moment it opens. Saying so after
+   *  somebody has typed into it would be worse than not letting them: the text they wrote would
+   *  have nowhere to go (`AMB-D-773`). */
+  it("opens a file it could not save without letting anyone type into it", async () => {
+    hoisted.entries[""] = [{ name: "cut.txt", isDir: false, ignored: false }];
+    hoisted.file = aFile({ text: "as far as it goes", truncated: true, clean: false });
+    await draw();
+    await click(button(t("files.tree")));
+    await settle();
+    await click(button("cut.txt"));
+    await settle();
+    expect(last(hoisted.editing)?.editable).toBe(false);
+
+    // Whole, but in an encoding nothing writes back: the same answer, for the other reason.
+    hoisted.file = aFile({ text: "read me", clean: false });
+    await click(button(t("files.back")));
+    await settle();
+    await click(button("cut.txt"));
+    await settle();
+    expect(last(hoisted.editing)?.editable).toBe(false);
   });
 
   it("says so when the file is not something a panel can show", async () => {

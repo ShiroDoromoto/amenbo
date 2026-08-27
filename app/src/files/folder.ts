@@ -78,8 +78,9 @@ export async function folderRead(
 /**
  * Open one file the way the machine opens that kind of file.
  *
- * The face reads and does not edit (`AMB-T-3602`), so what it can offer is the reader's own
- * applications — which one that is belongs to the OS, and Amenbo keeps no opinion about it.
+ * The face has an editor of its own, and this is still the way out of it: what a person wants of a
+ * file is as often to hand it to something else. Which application that is belongs to the OS, and
+ * Amenbo keeps no opinion about it.
  */
 export async function folderOpenFile(
   projectId: number,

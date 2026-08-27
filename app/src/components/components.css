@@ -168,6 +168,20 @@
 .column--dragover { background: var(--c-surface-2, rgba(27, 147, 194, 0.08)); outline: 2px dashed var(--c-accent); outline-offset: 4px; }
 .card--draggable { cursor: grab; }
 .card--dragging { opacity: 0.45; cursor: grabbing; }
+/* The card that follows the pointer. It is the card's own node, copied — the browser used to draw
+   this for us out of the same pixels, and copying keeps that rather than drawing a second thing that
+   has to be kept looking like a card (`app/src/screens/boardDrag.ts`).
+   It takes no pointer events of its own: what is under the pointer is asked of the document on every
+   frame, and a copy that answered would name itself every time. */
+.card--ghost {
+  position: fixed; top: 0; left: 0; z-index: 1000;
+  pointer-events: none; opacity: 0.9; cursor: grabbing;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
+}
+/* 🚨 From the moment a card is pressed. Without this, dragging down a column selects the text it
+   passes over on macOS and Linux — 19 and 57 characters, measured (`AMB-T-3755`) — and raising it
+   only once the press has become a drag is already too late (`app/src/screens/boardDrag.ts`). */
+body.is-dragging { user-select: none; }
 
 /* ---------- toast (a transient warning: a failed write and the like) ---------- */
 .toast {

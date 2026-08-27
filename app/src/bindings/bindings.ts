@@ -575,6 +575,34 @@ export type FrameNameDto = {
 frame: string, name: string, by: "typed" | "session" | "person", };
 
 /**
+ * One path git named inside the folder the file face is showing (`crate::folder_git`).
+ *
+ * The two letters are git's own and are carried across as they came: the first is what the index
+ * says about the path, the second what the working tree says, and a space in either is git saying
+ * nothing about that half. Turning them into a word here would be deciding what a colour means,
+ * which is the face's to decide and not the same question on every road.
+ */
+export type GitEntryDto = { 
+/**
+ * Where it is, as segments from the bound folder — the spelling a tree row is built from, with
+ * the repository's own front already taken off.
+ */
+path: Array<string>, 
+/**
+ * What the index says: git's `X`, one character.
+ */
+index: string, 
+/**
+ * What the working tree says: git's `Y`, read the same way.
+ */
+worktree: string, 
+/**
+ * Whether git named a folder as a whole rather than what is inside it, which is what it does
+ * with an untracked one. A folded folder is somewhere a colour still has to appear.
+ */
+isDir: boolean, };
+
+/**
  * One bound repository the banner has something to say about — the raw material for its wording, never
  * the sentence, as with [`HookOfferDto`].
  *

@@ -172,10 +172,12 @@ pub async fn talk_open(
         .resizable(true)
         // A window that was not asked for does not take the front. A launch restoring the shape this
         // machine was last used in builds this one, and the board is what the user is looking at.
-        .focused(raise)
-        // As the board has it (`tauri.conf.json`): a file dropped on the window is the page's to
-        // refuse, and the OS handler would otherwise navigate the webview to whatever was dropped.
-        .disable_drag_drop_handler();
+        .focused(raise);
+    // Nothing turns the OS drag handler off, which is what makes a file dragged in from the desktop
+    // the application's rather than the page's (`crate::dropped`, `AMB-D-775`). The board says the
+    // same thing in its own words (`dragDropEnabled` in `tauri.conf.json`), and the two must agree:
+    // the file panel is drawn in both windows, and a panel that answered a drop in one of them and
+    // not the other would be the same panel behaving differently for no reason a reader could see.
     if let Some((x, y)) = beside_the_board(&app) {
         builder = builder.position(x, y);
     }

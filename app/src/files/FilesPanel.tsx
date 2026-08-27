@@ -21,6 +21,12 @@
 // binary and the first bytes make it a picture (`crate::folder`); the name decides only whether
 // text is drawn as Markdown, which is a question about rendering rather than about what the file
 // is.
+//
+// **A file dragged in from the desktop lands on the application, not on this page** (`AMB-D-775`).
+// So the panel is not told which row is under the pointer — it is told a point, and the folder that
+// point falls in is worked out here (`../core/hostDrop`). Every folder in the tree is one, and so is
+// the tree itself; a file row belongs to the folder holding it, which is what makes dropping on the
+// name of a file mean the same as dropping just beside it.
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type {
@@ -28,6 +34,7 @@ import type {
 } from "../bindings/bindings";
 import { Markdown } from "../components/Markdown";
 import { useBoundFolders } from "../core/boundFolders";
+import { watchHostDrop } from "../core/hostDrop";
 import { formatNumber, t, tf, whenLabel } from "../core/i18n";
 import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
 import {
@@ -41,6 +48,27 @@ import { Icon } from "../components/Icon";
 
 /** The names a file's text is drawn as Markdown under. The one thing here the name decides. */
 const MARKDOWN = [".md", ".markdown"];
+
+/**
+ * Where a dragged file would land: the bound folder, and the folder inside it as its segments joined
+ * ("" being the bound folder itself).
+ *
+ * Both halves are needed because every section draws a row for its own root, and two sections have a
+ * `src` each — a landing that said only `src` would light one up in both.
+ */
+type Landing = { root: string; into: string };
+
+/** The row under the pointer, read as a landing — its folder and its path, or nothing off a row. */
+function landingOf(el: Element | null | undefined): Landing | null {
+  const into = el?.getAttribute("data-into");
+  if (into === null || into === undefined) return null;
+  return { root: el?.getAttribute("data-root") ?? "", into };
+}
+
+/** Whether this folder of this section is the one a drop would land in. */
+function landed(landing: Landing | null, root: string, into: string | undefined): boolean {
+  return into !== undefined && landing?.root === root && landing.into === into;
+}
 
 export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose }: {
   /** The project whose folder the face is rooted at; nothing is drawn without one. */
@@ -84,6 +112,11 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
   const [menu, setMenu] = useState<
     { root: string; path: string[]; x: number; y: number } | null
   >(null);
+  // Where a file being dragged in would land: which bound folder, and which folder inside it ("" is
+  // the bound folder itself). Null while nothing is over the panel. The folder is half of it because
+  // every section has a row for its own root, and the same path inside two of them is two places.
+  const [landing, setLanding] = useState<Landing | null>(null);
+  const box = useRef<HTMLDivElement | null>(null);
   // A path clicked in a pane. It opens only where it lands inside one of the folders this face is
   // rooted at — the same fence the host applies. One that lands outside opens nothing: the pane
   // keeps the characters it drew, and no reader is shown a file from somewhere this face cannot
@@ -100,6 +133,32 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
     // `nth` is what makes the same file asked for twice two answers, and the folders are joined
     // because the array itself is rebuilt on every render.
   }, [show?.nth, roots]);
+
+  // Files dragged in from the desktop. The panel hears about them from the host rather than from
+  // the DOM, so the highlight under the pointer — and the scroll when the pointer hangs at an edge —
+  // are this side's to drive (`../core/hostDrop`).
+  //
+  // **Where a drop lands is worked out and goes no further.** Bringing the file in wants a door that
+  // writes into the folder, and the file face has none yet (`AMB-T-3791`); until it does, what the
+  // highlight says is which folder the paths would be handed to, which is the half of this that has
+  // to be right on all three operating systems.
+  useEffect(() => {
+    if (projectId === null || sections.length === 0 || tab !== "files") return;
+    let alive = true;
+    let stop: (() => void) | null = null;
+    void watchHostDrop({
+      select: "[data-into]",
+      scroller: () => box.current,
+      over: ({ el }) => { if (alive) setLanding(landingOf(el)); },
+      leave: () => { if (alive) setLanding(null); },
+      drop: () => { if (alive) setLanding(null); },
+    }).then((off) => { if (alive) stop = off; else off(); });
+    return () => {
+      alive = false;
+      stop?.();
+      setLanding(null);
+    };
+  }, [projectId, roots, tab]);
 
   // The way to put the panel away, and the whole of the row it sits on. It is drawn in every state
   // the panel can be in — reading a file included — because a panel that could only be closed from
@@ -152,7 +211,7 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
   const top = <div className="files__top">{close}</div>;
 
   return (
-    <div className="files">
+    <div className="files" ref={box}>
       {top}
       {sections.map((one) => (
         <FolderSection
@@ -162,6 +221,7 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
           // The only folder there is needs no heading: a name is what tells two of them apart.
           label={sections.length > 1 ? one.label : null}
           bound={one.exists}
+          landing={landing}
           onRead={(path) => setReading({ root: one.path, path })}
           onMenu={(path, x, y) => setMenu({ root: one.path, path, x, y })}
         />
@@ -191,13 +251,16 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
  * watch and no tree to open, and the two states it could be confused with — a binding somebody
  * removed, and a folder with nothing in it — both look like an empty section.
  */
-function FolderSection({ projectId, root, label, bound, onRead, onMenu }: {
+function FolderSection({ projectId, root, label, bound, landing, onRead, onMenu }: {
   projectId: number;
   root: string;
   /** The heading, or nothing where this is the only folder. */
   label: string | null;
   /** Whether the store's own read found the folder. The watch answers the same question later. */
   bound: boolean;
+  /** Where a dragged file would land, anywhere on the panel — a section draws the highlight only
+   *  where the landing is one of its own (`landed`). */
+  landing: Landing | null;
   onRead: (path: string[]) => void;
   onMenu: (path: string[], x: number, y: number) => void;
 }) {
@@ -275,7 +338,14 @@ function FolderSection({ projectId, root, label, bound, onRead, onMenu }: {
             like one where nothing is happening. */}
         {changes.partial && <p className="files__none">{t("files.partial")}</p>}
       </section>
-      <section className="files__row">
+      {/* The root is a folder like any other in the tree, and the one a drop that fell on no row
+          lands in. It is marked on the section rather than on the heading so that the whole of the
+          tree — the gaps between its rows included — answers for it. */}
+      <section
+        className={`files__row${landed(landing, root, "") ? " files__row--into" : ""}`}
+        data-root={root}
+        data-into=""
+      >
         <button
           className="files__head files__head--button"
           aria-expanded={treeOpen}
@@ -291,6 +361,7 @@ function FolderSection({ projectId, root, label, bound, onRead, onMenu }: {
             projectId={projectId}
             root={root}
             path={[]}
+            landing={landing}
             onRead={onRead}
             onMenu={onMenu}
           />
@@ -426,10 +497,16 @@ function faint(base: string, ignored: boolean): string {
 }
 
 /** One folder's worth of names, and whatever of it has been opened. */
-function Level({ projectId, root, path, onRead, onMenu }: {
+function Level({ projectId, root, path, landing, onRead, onMenu }: {
   projectId: number;
   root: string;
   path: string[];
+  /**
+   * Where a file being dragged in would land — passed down whole rather than resolved per level,
+   * because a drag hangs over one folder on the whole panel and every level has to be able to stop
+   * drawing the highlight it was drawing a moment ago.
+   */
+  landing: Landing | null;
   onRead: (path: string[]) => void;
   onMenu: (path: string[], x: number, y: number) => void;
 }) {
@@ -447,45 +524,58 @@ function Level({ projectId, root, path, onRead, onMenu }: {
 
   return (
     <ul className="files__list files__list--tree">
-      {names.map((one) => (
-        <li key={one.name}>
-          {one.isDir
-            ? (
-              <>
-                <button
-                  className={faint("files__dir", one.ignored)}
-                  aria-expanded={open.includes(one.name)}
-                  onClick={() => setOpen((was) =>
-                    was.includes(one.name) ? was.filter((n) => n !== one.name) : [...was, one.name]
+      {names.map((one) => {
+        // A folder answers for a drop, and what it answers for is everything drawn under it — which
+        // is the row itself and, once it is open, the level inside it. That is why the mark sits on
+        // the item and not on the button: a file row inside a folder resolves upwards to that
+        // folder, so dropping on a name means the same as dropping in the space beside it.
+        const into = one.isDir ? [...path, one.name].join("/") : undefined;
+        return (
+          <li
+            key={one.name}
+            data-root={root}
+            data-into={into}
+            className={landed(landing, root, into) ? "files__into" : undefined}
+          >
+            {one.isDir
+              ? (
+                <>
+                  <button
+                    className={faint("files__dir", one.ignored)}
+                    aria-expanded={open.includes(one.name)}
+                    onClick={() => setOpen((was) =>
+                      was.includes(one.name) ? was.filter((n) => n !== one.name) : [...was, one.name]
+                    )}
+                  >
+                    {one.name}
+                  </button>
+                  {open.includes(one.name) && (
+                    <Level
+                      projectId={projectId}
+                      root={root}
+                      path={[...path, one.name]}
+                      landing={landing}
+                      onRead={onRead}
+                      onMenu={onMenu}
+                    />
                   )}
+                </>
+              )
+              : (
+                <button
+                  className={faint("files__file", one.ignored)}
+                  onClick={() => onRead([...path, one.name])}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    onMenu([...path, one.name], e.clientX, e.clientY);
+                  }}
                 >
-                  {one.name}
+                  <span className="files__name">{one.name}</span>
                 </button>
-                {open.includes(one.name) && (
-                  <Level
-                    projectId={projectId}
-                    root={root}
-                    path={[...path, one.name]}
-                    onRead={onRead}
-                    onMenu={onMenu}
-                  />
-                )}
-              </>
-            )
-            : (
-              <button
-                className={faint("files__file", one.ignored)}
-                onClick={() => onRead([...path, one.name])}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  onMenu([...path, one.name], e.clientX, e.clientY);
-                }}
-              >
-                <span className="files__name">{one.name}</span>
-              </button>
-            )}
-        </li>
-      ))}
+              )}
+          </li>
+        );
+      })}
     </ul>
   );
 }

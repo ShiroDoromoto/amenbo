@@ -188,9 +188,43 @@ pub fn write(text: &str, encoding: &'static Encoding, bom: bool) -> Result<Vec<u
     }
 }
 
+/// Read `bytes` as text in the encoding the reader named, with nothing guessed.
+///
+/// The guess has no confidence to report and gets one file in every twenty-five wrong without a
+/// single broken character to show for it (`AMB-T-3746`), so the only thing that can put one right
+/// is a person who looked at the text. This is the door they put it right through: what they name
+/// is what the bytes are decoded as, whatever [`read`] would have concluded.
+///
+/// **A byte order mark is consumed only where it is this encoding's own.** Asked for Shift_JIS on a
+/// file that opens with UTF-8's mark, the mark is three ordinary bytes and is decoded like any
+/// other — hiding it would be this function guessing again, at the one door built not to.
+pub fn read_as(bytes: &[u8], truncated: bool, encoding: &'static Encoding) -> Read {
+    let line_ending = line_ending(bytes);
+    let (bom, body) = match Encoding::for_bom(bytes) {
+        Some((marked, length)) if marked == encoding => (true, &bytes[length..]),
+        _ => (false, bytes),
+    };
+    let (text, had_errors) = encoding.decode_without_bom_handling(body);
+    Read {
+        clean: !had_errors && !truncated && WRITABLE.contains(&encoding),
+        text: text.into_owned(),
+        encoding,
+        bom,
+        line_ending,
+    }
+}
+
+/// Every encoding a file may be reopened in, in the order they are offered.
+///
+/// It is [`WRITABLE`] and not everything `encoding_rs` decodes, because reopening is the first half
+/// of saving: an encoding offered here that could not be written back would hand the reader a file
+/// that reads correctly and cannot be kept.
+pub fn writable_names() -> Vec<&'static str> {
+    WRITABLE.iter().map(|encoding| encoding.name()).collect()
+}
+
 /// Turn the name that travelled with the text back into an encoding, and only where writing it back
 /// is something this promises. A name from anywhere else is a name a caller made up.
-#[allow(dead_code)]
 pub fn writable(name: &str) -> Option<&'static Encoding> {
     let encoding = Encoding::for_label(name.as_bytes())?;
     WRITABLE.contains(&encoding).then_some(encoding)
@@ -292,6 +326,55 @@ mod tests {
         assert_eq!(read.text, "日本語 hello");
         assert!(read.clean);
         assert_eq!(write(&read.text, read.encoding, read.bom), Ok(bytes));
+    }
+
+    /// The reader putting the guess right. A short line of Japanese is exactly the shape the guess
+    /// gets wrong — too few bytes to tell the legacy encodings apart — and naming one is the only
+    /// road out of that, since nothing about the wrong answer looks wrong (`AMB-D-773`).
+    #[test]
+    fn naming_an_encoding_reads_the_bytes_as_that_and_guesses_nothing() {
+        let written = "日本語";
+        let (bytes, _, _) = encoding_rs::SHIFT_JIS.encode(written);
+
+        // Read with the hint of a reader working in English, these bytes are not what they are.
+        let guessed = read(&bytes, false, None);
+        assert_ne!(guessed.text, written, "the guess this test is about is the one that goes wrong");
+
+        let named = read_as(&bytes, false, encoding_rs::SHIFT_JIS);
+        assert_eq!(named.text, written);
+        assert_eq!(named.encoding, encoding_rs::SHIFT_JIS);
+        assert!(named.clean, "and can be saved again, which is what makes the road worth taking");
+        assert_eq!(write(&named.text, named.encoding, named.bom), Ok(bytes.to_vec()));
+    }
+
+    /// A mark is consumed only where it is the named encoding's own. Asked for Shift_JIS on a file
+    /// that opens with UTF-8's mark, the three bytes are text like any other — hiding them would be
+    /// this guessing again, at the one door built not to.
+    #[test]
+    fn a_mark_that_is_not_this_encodings_own_is_read_as_bytes() {
+        let mut bytes = vec![0xEF, 0xBB, 0xBF];
+        bytes.extend_from_slice("hello".as_bytes());
+
+        let named = read_as(&bytes, false, encoding_rs::UTF_8);
+        assert!(named.bom, "its own mark is the file saying what it is");
+        assert_eq!(named.text, "hello");
+
+        let other = read_as(&bytes, false, encoding_rs::SHIFT_JIS);
+        assert!(!other.bom, "somebody else's mark is three bytes");
+        assert!(other.text.ends_with("hello"));
+        assert_ne!(other.text, "hello", "and they are decoded rather than dropped");
+    }
+
+    /// Every encoding offered for reopening is one that can be written back: the first half of
+    /// saving is opening, and one that could only be read would hand back a file to look at and not
+    /// to keep.
+    #[test]
+    fn every_encoding_offered_can_be_written_back() {
+        let names = writable_names();
+        assert_eq!(names.len(), WRITABLE.len());
+        for name in names {
+            assert!(writable(name).is_some(), "{name} is offered and cannot be written");
+        }
     }
 
     /// UTF-16 is what only the mark can recognise — the guess has no candidate for it — and it is

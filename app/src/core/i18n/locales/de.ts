@@ -546,6 +546,8 @@ export const de: Translation = {
     "files.noFolder": "Dieses Projekt hat noch keinen Ordner.",
     "files.folderGone": "Dieser Ordner ist nicht mehr da.",
     "files.back": "Zurück zur Liste",
+    "files.reopenWith": "Mit einer Kodierung neu öffnen",
+    "files.lineEndingMixed": "Gemischte Zeilenenden",
     "files.openWith": "Mit der üblichen App öffnen",
     "files.chooseApp": "Mit einer ausgewählten App öffnen",
     "files.appUsual": "{name} (die übliche)",

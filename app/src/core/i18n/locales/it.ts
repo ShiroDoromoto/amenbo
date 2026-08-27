@@ -557,6 +557,8 @@ export const it: Translation = {
     "files.noFolder": "Questo progetto non ha ancora una cartella.",
     "files.folderGone": "Questa cartella non c'è più.",
     "files.back": "Torna all'elenco",
+    "files.reopenWith": "Riapri con una codifica",
+    "files.lineEndingMixed": "Fine riga mista",
     "files.openWith": "Apri con l'applicazione solita",
     "files.chooseApp": "Apri con un'applicazione a scelta",
     "files.appUsual": "{name} (quella solita)",

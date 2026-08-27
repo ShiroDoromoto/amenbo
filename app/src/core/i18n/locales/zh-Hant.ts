@@ -536,6 +536,8 @@ export const zhHant: Translation = {
     "files.noFolder": "這個專案還沒有資料夾。",
     "files.folderGone": "這個資料夾已經不在了。",
     "files.back": "返回列表",
+    "files.reopenWith": "指定字元編碼重新開啟",
+    "files.lineEndingMixed": "換行符混用",
     "files.openWith": "用常用的應用程式開啟",
     "files.chooseApp": "用我選的應用程式開啟",
     "files.appUsual": "{name}（常用的）",

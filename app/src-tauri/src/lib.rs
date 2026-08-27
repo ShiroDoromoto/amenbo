@@ -512,6 +512,7 @@ pub fn run() {
       folder::folder_entries,
       folder_git::folder_git_status,
       folder::folder_read,
+      folder::folder_encodings,
       folder::folder_open_file,
       folder::folder_reveal_file,
       dropped::drop_effect,

@@ -557,6 +557,8 @@ export const es: Translation = {
     "files.noFolder": "Este proyecto aún no tiene carpeta.",
     "files.folderGone": "Esta carpeta ya no está.",
     "files.back": "Volver a la lista",
+    "files.reopenWith": "Volver a abrir con una codificación",
+    "files.lineEndingMixed": "Saltos de línea mezclados",
     "files.openWith": "Abrir con la aplicación de siempre",
     "files.chooseApp": "Abrir con una aplicación que yo elija",
     "files.appUsual": "{name} (la de siempre)",

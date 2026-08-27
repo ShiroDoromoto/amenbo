@@ -722,10 +722,10 @@ fn an_axis_name_two_projects_share_resolves_by_reach_and_by_the_task() {
     let task = id_str(&cli.json(&["task", "add", "--title", "分類する", "--project", &bound, "--json"])["task"]["id"]);
 
     // The AI names the axis by name and it lands: the other project's row never enters the candidate set.
-    let set = cli.json(&["dimension", "set", &task, "フェーズ", "運用第2期", "--actor", "ai", "--json"]);
+    let set = cli.json(&["dimension", "set", &task_ref(&task), "フェーズ", "運用第2期", "--actor", "ai", "--json"]);
     assert_eq!(set["noop"], false);
     assert_eq!(id_str(&set["task_dimension_value"]["dimension_id"]), mine);
-    assert_eq!(cli.json(&["dimension", "unset", &task, "フェーズ", "運用第2期", "--actor", "ai", "--json"])["noop"], false);
+    assert_eq!(cli.json(&["dimension", "unset", &task_ref(&task), "フェーズ", "運用第2期", "--actor", "ai", "--json"])["noop"], false);
 
     // Reading it by that name is the bound project's axis, not an ambiguity listing the other's id.
     let shown = cli.json(&["dimension", "show", "フェーズ", "--actor", "ai", "--json"]);
@@ -740,7 +740,7 @@ fn an_axis_name_two_projects_share_resolves_by_reach_and_by_the_task() {
 
     // `dimension set` narrows by the task's project rather than by the reach, and that narrowing must not
     // swallow the distinction either: the other project's axis is unreachable, not absent.
-    let (err, code) = cli.run_err(&["dimension", "set", &task, &theirs, "運用第2期", "--actor", "ai", "--json"]);
+    let (err, code) = cli.run_err(&["dimension", "set", &task_ref(&task), &theirs, "運用第2期", "--actor", "ai", "--json"]);
     assert_ne!(code, 0, "an axis outside the task's project is not assignable");
     assert!(err.contains("out_of_reach"), "out_of_reach, not not_found: {err}");
 
@@ -751,7 +751,7 @@ fn an_axis_name_two_projects_share_resolves_by_reach_and_by_the_task() {
 
     // …but `dimension set` is not ambiguous even for the human: the task names the project, and an
     // assignment never crosses one.
-    let set = cli.json(&["dimension", "set", &task, "フェーズ", "運用第2期", "--json"]);
+    let set = cli.json(&["dimension", "set", &task_ref(&task), "フェーズ", "運用第2期", "--json"]);
     assert_eq!(id_str(&set["task_dimension_value"]["dimension_id"]), mine);
 }
 

@@ -15,14 +15,15 @@ import { useEffect, useRef, useState } from "react";
 import { mountEditor, type Mounted } from "./editorLoad";
 
 /** One file's text, in an editor once one has loaded. */
-export function FileEditor({ text, editable }: { text: string; editable: boolean }) {
+export function FileEditor({ text, editable, name }: { text: string; editable: boolean; name: string }) {
   const host = useRef<HTMLDivElement | null>(null);
   const mounted = useRef<Mounted | null>(null);
   const [drawn, setDrawn] = useState(false);
 
   useEffect(() => {
-    // A file that changed which file it is takes a new editor: read-only-ness is fixed at mount,
-    // and the text is replaced only where the editor already stands.
+    // A file that changed which file it is takes a new editor: read-only-ness and the language its
+    // colour comes from are both fixed at mount, and the text is replaced only where the editor
+    // already stands.
     if (mounted.current !== null) {
       mounted.current.show(text);
       return;
@@ -30,7 +31,7 @@ export function FileEditor({ text, editable }: { text: string; editable: boolean
     let alive = true;
     const parent = host.current;
     if (parent === null) return;
-    void mountEditor(parent, text, editable).then(
+    void mountEditor(parent, text, editable, name).then(
       (one) => {
         if (!alive) {
           one.close();
@@ -44,7 +45,7 @@ export function FileEditor({ text, editable }: { text: string; editable: boolean
       () => {},
     );
     return () => { alive = false; };
-  }, [text, editable]);
+  }, [text, editable, name]);
 
   // Taking the editor down is its own effect, run when this leaves the page rather than whenever
   // the text changes — the one above replaces the text in the editor that already stands.

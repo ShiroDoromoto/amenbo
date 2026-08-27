@@ -9,6 +9,11 @@
 //! | the folder's trace | [`crate::harness::probe`] | which provider is worked with in this folder |
 //! | this machine | the caller's `PATH` probe | which provider can be started at all |
 //!
+//! **The row being asked about is the launch catalog's** ([`crate::harness::LAUNCHES`]), which is the
+//! wider of the two: a provider Amenbo cannot write a session-start hook for is still one a pane opens
+//! on. The trace is read off the wiring catalog because that is the table a folder leaves traces of, so
+//! a startable provider with no wiring row simply traces nothing — startable, and unspoken for.
+//!
 //! **The product of the two is the answer, and the second is the floor.** A trace is a folder's
 //! preference, so a provider that left one and is not installed is a preference this machine cannot
 //! act on — starting it would open a pane on `command not found`. An installed provider that left no
@@ -44,12 +49,12 @@
 //! traces is what any of its folders traces: a preference shown in one of them is the project's, and
 //! a face gathers the folders before it asks (`app/src-tauri/src/wake.rs`).
 
-use crate::harness::{self, Harness, Wiring};
+use crate::harness::{self, Launch, Wiring};
 
 /// **The pane's own shell** — a prompt in the folder with nothing started at it, standing among the
 /// agents as one more thing a person opens with (`app/src/talk/terminal.ts`).
 ///
-/// It has no row in [`harness::HARNESSES`] and never will: it is the *absence* of an agent, and what
+/// It has no row in [`harness::LAUNCHES`] and never will: it is the *absence* of an agent, and what
 /// starts it is the folder's own login shell. It is here because it is a value the person's own
 /// answer can hold ([`crate::config::Config::last_agent`]) — somebody who opened a plain prompt last
 /// time gets one again — while the project's answer never holds it: "which agent do you work with
@@ -60,11 +65,11 @@ pub const SHELL: &str = "shell";
 /// and this machine say about it.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct Candidate {
-    /// The harness this answers for ([`Harness::id`]).
+    /// The provider this answers for ([`Launch::id`]).
     pub id: &'static str,
     /// The provider's own name for itself, so a face can render a row without a second lookup.
     pub label: &'static str,
-    /// What it is started as ([`Harness::command`]) — shown, because a reader told a tool is missing
+    /// What it is started as ([`Launch::command`]) — shown, because a reader told a tool is missing
     /// needs the word to type to install it.
     pub command: &'static str,
     /// Whether this folder shows a trace of the provider being used here ([`Wiring::traced`]).
@@ -77,7 +82,7 @@ pub struct Candidate {
 /// What to do with the folder's answer once it has been worked out.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Choice {
-    /// One agent, and nothing to ask: the [`Harness::id`] to start.
+    /// One agent, and nothing to ask: the [`Launch::id`] to start.
     Settled(&'static str),
     /// Several, so the person picks — the ids to offer, in catalog order.
     Ask(Vec<&'static str>),
@@ -85,24 +90,26 @@ pub enum Choice {
     Nothing,
 }
 
-/// Every provider as a candidate, in [`harness::HARNESSES`] order.
+/// Every provider as a candidate, in [`harness::LAUNCHES`] order — the startable ones, which is what
+/// the question is about. `found` answers only for the providers that also have a wiring row, and one
+/// it says nothing about is one no folder can have traced.
 ///
 /// `installed` is asked of the caller rather than performed here, because what counts as installed is
 /// what the *pane's* shell can find: the same login-and-interactive shell, with the same profile and
 /// the same `PATH` (`app/src-tauri/src/launch.rs`). A probe run against this process's environment
 /// would answer for a desktop launch's thin `PATH` and be wrong in both directions (`AMB-T-3546`).
 pub fn candidates(found: &[Wiring], installed: impl Fn(&str) -> bool) -> Vec<Candidate> {
-    harness::HARNESSES
+    harness::LAUNCHES
         .iter()
-        .map(|h| Candidate {
-            id: h.id,
-            label: h.label,
-            command: h.command,
+        .map(|launch| Candidate {
+            id: launch.id,
+            label: launch.label,
+            command: launch.command,
             traced: found
                 .iter()
-                .find(|one| one.id == h.id)
+                .find(|one| one.id == launch.id)
                 .is_some_and(|one| one.traced),
-            installed: installed(h.command),
+            installed: installed(launch.command),
         })
         .collect()
 }
@@ -163,9 +170,9 @@ pub fn settle(remembered: Option<&str>, last: Option<&str>, candidates: &[Candid
     }
 }
 
-/// The catalog row an id names, for a caller holding a [`Choice::Settled`].
-pub fn started_as(id: &str) -> Option<&'static Harness> {
-    harness::find(id)
+/// The launch row an id names, for a caller holding a [`Choice::Settled`].
+pub fn started_as(id: &str) -> Option<&'static Launch> {
+    harness::find_launch(id)
 }
 
 #[cfg(test)]
@@ -296,7 +303,20 @@ mod tests {
         );
     }
 
-    /// Every offered id names a catalog row, which is what lets a caller turn the answer into a
+    /// A provider the wiring catalog does not list is still one this machine can open a pane on. It
+    /// traces nothing — no folder can trace a wiring that has no row — so it comes up under the
+    /// fallback, which is where a machine's own tools are answered for.
+    #[test]
+    fn a_provider_with_no_wiring_row_is_offered_on_being_installed() {
+        let c = built(&[], &["opencode"]);
+        assert_eq!(settle(None, None, &c), Choice::Settled("opencode"));
+        // And it loses to a folder's trace like anything else does: what is traced and installed is
+        // the answer while there is one.
+        let c = built(&["claude-code"], &["opencode", "claude"]);
+        assert_eq!(settle(None, None, &c), Choice::Settled("claude-code"));
+    }
+
+    /// Every offered id names a launch row, which is what lets a caller turn the answer into a
     /// command without a second table.
     #[test]
     fn what_is_offered_can_always_be_started() {

@@ -170,6 +170,25 @@ describe("the stamps that say how fresh the record is", () => {
     expect(stamps()).not.toContain(t("dec.lastChanged"));
   });
 
+  // Now that an AI may accept as well as a person (`AMB-D-788`), the ruling is only worth as much as
+  // knowing who made it — so the decided stamp names them beside the date.
+  it("name who settled it beside the decided stamp", () => {
+    hoisted.decisions.set(1, decision(1, {
+      status: "accepted", decidedAt: "2026-07-15T09:00:00Z", updatedAt: "2026-07-15T09:00:00Z",
+      decidedBy: { id: "ai", name: "ai" },
+    }));
+    render(1);
+    expect(stamps()).toContain(t("facet.ai"));
+  });
+
+  // An unsettled decision has nobody to name, so the stamps say nothing about who.
+  it("name nobody while it is unsettled", () => {
+    hoisted.decisions.set(1, decision(1));
+    render(1);
+    expect(stamps()).not.toContain(t("facet.human"));
+    expect(stamps()).not.toContain(t("facet.ai"));
+  });
+
   it("say when it last changed once something has moved since", () => {
     hoisted.decisions.set(1, decision(1, {
       status: "accepted", decidedAt: "2026-07-15T09:00:00Z", updatedAt: "2026-08-01T10:00:00Z",

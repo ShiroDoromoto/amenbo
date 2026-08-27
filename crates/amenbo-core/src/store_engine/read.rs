@@ -443,15 +443,16 @@ fn task_word_sets(term: search::Term<'_>) -> [IdSet; 6] {
 const DEC: col::decision::Cols = col::decision::of("d");
 
 /// One term of a decision's word filter — the mirror of [`task_text_term`], reaching the decision's own
-/// title and body, the body of one of its live comments, and the name of something attached to it or to
-/// one of those comments. The labels are the one difference: only a task is placed on an axis.
+/// title and body, the body of one of its live comments, a label it was filed under, and the name of
+/// something attached to it or to one of those comments.
 fn decision_text_term(term: search::Term<'_>) -> Pred {
     Pred::is_in_any(DEC.id, decision_word_sets(term))
 }
 
-/// The four ways a term reaches a decision — the mirror of [`task_word_sets`], and the same reason for
-/// being a list of sets rather than the question over them.
-fn decision_word_sets(term: search::Term<'_>) -> [IdSet; 4] {
+/// The six ways a term reaches a decision — the mirror of [`task_word_sets`], arm for arm since a
+/// decision is filed under an axis too (`AMB-D-781`), and the same reason for being a list of sets
+/// rather than the question over them.
+fn decision_word_sets(term: search::Term<'_>) -> [IdSet; 6] {
     const DC: col::decision_comment::Cols = col::decision_comment::of("dc");
     let own = IdSet::of(SD.table, SD.owner_id)
         .filter(Pred::eq(SD.owner_kind, search::DATASET_DECISION))
@@ -459,12 +460,20 @@ fn decision_word_sets(term: search::Term<'_>) -> [IdSet; 4] {
     let in_comment = IdSet::of(DC.table, DC.decision_id)
         .join(SD.table, on_face(search::DATASET_DECISION_COMMENT, DC.id))
         .filter(term.pred(SD));
+    // The label the decision was filed under, and the axis that label is a value of — both reached
+    // through the assignment, as they are on the task's side, and for the same reason.
+    let on_value = IdSet::of(DDV.table, DDV.decision_id)
+        .join(SD.table, on_face(search::DATASET_DIMENSION_VALUE, DDV.value_id))
+        .filter(term.pred(SD));
+    let on_axis = IdSet::of(DDV.table, DDV.decision_id)
+        .join(SD.table, on_face(search::DATASET_DIMENSION, DDV.dimension_id))
+        .filter(term.pred(SD));
     let attached = attachment_ids(AttachmentTarget::Decision, term);
     let attached_to_comment = IdSet::of(DC.table, DC.decision_id)
         .join(A.table, hangs_off(AttachmentTarget::DecisionComment, DC.id))
         .join(SD.table, on_face(search::DATASET_ATTACHMENT, A.id))
         .filter(term.pred(SD));
-    [own, in_comment, attached, attached_to_comment]
+    [own, in_comment, on_value, on_axis, attached, attached_to_comment]
 }
 
 /// What is attached, as the arms above alias it.
@@ -1837,8 +1846,9 @@ pub fn decision_comment_list(conn: &Connection, decision_id: i64) -> Result<Vec<
 /// The decisions every one of `terms` lands on — the whole of `decision list`'s word narrowing, read
 /// **once** and folded into the in-memory match as a set membership, so the listing costs one extra
 /// query rather than a per-decision scan. A term may land on any of the decision's faces: its title, its
-/// body, the body of one of its live comments, or the name of something attached to it or to one of
-/// those comments — the same reach the task side has, bar the labels, which only a task carries.
+/// body, the body of one of its live comments, a label it is filed under, or the name of something
+/// attached to it or to one of those comments — the same reach the task side has, arm for arm
+/// (`AMB-D-781`).
 ///
 /// No terms is no constraint — an all-whitespace text asks nothing, so every decision comes back rather
 /// than none. Ids come back in id order.
@@ -1889,7 +1899,7 @@ pub struct SearchPage {
 type HitSlots =
     (Slot<i64>, Slot<String>, Slot<i64>, Slot<String>, Slot<Option<i64>>, Slot<String>, Slot<String>);
 
-/// Project one arm's row — the seam that keeps twelve arms saying the same thing in the same order.
+/// Project one arm's row — the seam that keeps fourteen arms saying the same thing in the same order.
 ///
 /// The face travels as its rank ([`HitFace::tier`]) rather than as a name, because the rank is what the
 /// compound query orders by and the mapping back is total. `text` arrives as an **expression** rather
@@ -2086,14 +2096,15 @@ pub fn search_hits(conn: &Connection, q: &SearchQuery) -> Result<SearchPage> {
 }
 
 /// The words are looked up **once for the statement**, at its head, and every arm asks membership of that
-/// (`AMB-D-511`). Twelve arms put the same words to the same copy, and the statement is built twice over
+/// (`AMB-D-511`). Fourteen arms put the same words to the same copy, and the statement is built twice over
 /// — the count and the page — so a lookup written where it is asked is a walk of the copy per arm,
 /// whichever path the term's length takes it down. What each arm means is untouched.
 ///
 /// With several words the record-level set is still needed, and then it goes to the head for the same
-/// reason the lookups do: "this task carries the word somewhere" is a union over six ways in — its own
+/// reason the lookups do: "this record carries the word somewhere" is a union over six ways in — its own
 /// copy, its comments, its labels, the axis behind them, what is attached to it and to those comments —
-/// and written into the arms it is built by each of the twelve, twice over. Named here, it is built once.
+/// on either side, and written into the arms it is built by each of the fourteen, twice over. Named here,
+/// it is built once.
 /// Only for a side that still has an arm standing, which is the gate [`search_sides`] asks it under too.
 fn search_head(
     terms: &[String],
@@ -2207,7 +2218,7 @@ impl HitArms<'_> {
     }
 }
 
-/// The twelve arms, in the order their faces are projected. The first names the row shape the rest are
+/// The fourteen arms, in the order their faces are projected. The first names the row shape the rest are
 /// held to ([`HitSlots`]), and the groups are the families of face: a record's own copy, a comment on it,
 /// a label it was placed on, and what is attached — to the record, or to one of its comments.
 fn hit_union(a: &HitArms) -> (HitSlots, Sql) {
@@ -2339,12 +2350,15 @@ fn comment_arms(a: &HitArms, union: Union<HitSlots>) -> Union<HitSlots> {
         })
 }
 
-/// A label the task was placed on, and the axis that label is a value of — both reached through the same
-/// placement, and both the task's (a decision carries no classification).
+/// A label the record was placed on, and the axis that label is a value of — both reached through the
+/// same placement, and both the record's. Four arms, not two: a decision is filed under an axis as well
+/// (`AMB-D-781`), and the value it is filed under is one it shares with the tasks, so the same two faces
+/// are read once per side through that side's own link table.
 fn label_arms(a: &HitArms, union: Union<HitSlots>) -> Union<HitSlots> {
     const DIM: col::dimension::Cols = col::dimension::of("dim");
     const DV: col::dimension_value::Cols = col::dimension_value::of("dv");
     const TASK: &str = search::DATASET_TASK;
+    const DECISION: &str = search::DATASET_DECISION;
 
     union
         .arm(|sel| {
@@ -2376,6 +2390,56 @@ fn label_arms(a: &HitArms, union: Union<HitSlots>) -> Union<HitSlots> {
                         face_hit(search::DATASET_DIMENSION, DIM.id, &["name"], a.asked),
                         HitFace::Label,
                         TASK,
+                    )
+                    .as_ref(),
+                );
+            (slots, tail)
+        })
+        .arm(|sel| {
+            // The value a decision is filed under.
+            let slots = hit_slots(
+                sel,
+                HitFace::Label,
+                DECISION,
+                DEC.id,
+                DEC.title,
+                None,
+                DV.updated_at,
+                DV.name.to_sql(),
+            );
+            let mut tail = Sql::from_table(DDV.table);
+            tail.join(DEC.table, same(DEC.id, DDV.decision_id))
+                .join(DV.table, same(DV.id, DDV.value_id))
+                .push_where(
+                    a.r#where(
+                        face_hit(search::DATASET_DIMENSION_VALUE, DV.id, &["name"], a.asked),
+                        HitFace::Label,
+                        DECISION,
+                    )
+                    .as_ref(),
+                );
+            (slots, tail)
+        })
+        .arm(|sel| {
+            // The axis behind that one.
+            let slots = hit_slots(
+                sel,
+                HitFace::Label,
+                DECISION,
+                DEC.id,
+                DEC.title,
+                None,
+                DIM.updated_at,
+                DIM.name.to_sql(),
+            );
+            let mut tail = Sql::from_table(DDV.table);
+            tail.join(DEC.table, same(DEC.id, DDV.decision_id))
+                .join(DIM.table, same(DIM.id, DDV.dimension_id))
+                .push_where(
+                    a.r#where(
+                        face_hit(search::DATASET_DIMENSION, DIM.id, &["name"], a.asked),
+                        HitFace::Label,
+                        DECISION,
                     )
                     .as_ref(),
                 );
@@ -2551,7 +2615,7 @@ fn read_hits(conn: &Connection, sql: &Sql, slots: &HitSlots) -> Result<Vec<Searc
 }
 
 /// Where the records a page of hits points at stand: a task's status, priority and classification, and a
-/// decision's status.
+/// decision's status and classification.
 ///
 /// Keyed by record id, not by hit — a record the words reach on three faces is three hits and one entry,
 /// which is also why this is not a column of [`search_hits`]: folding it in would read the same task once
@@ -2562,11 +2626,14 @@ pub struct HitStandingRows {
     /// and on none at all just as often, so an id absent here is a task with no classification.
     pub labels: HashMap<i64, Vec<(String, String)>>,
     pub decisions: HashMap<i64, DecisionStatus>,
+    /// The same, per decision (`AMB-D-781`). A separate map because the two sides' ids are separate
+    /// numberings — one map keyed by id alone would let a task's placement answer for a decision.
+    pub decision_labels: HashMap<i64, Vec<(String, String)>>,
 }
 
 /// Read that standing for the records a page names, **after** the page has been cut (`AMB-D-567`).
 ///
-/// Three statements, each over an id set the caller already holds, so what is read is bounded by the page
+/// Four statements, each over an id set the caller already holds, so what is read is bounded by the page
 /// and not by the store: a page of twenty reads twenty tasks' rows however many hits the words have in
 /// all. That is the whole reason this is a second read rather than more columns on the first — the hit
 /// query's own rows are the places a word is written, and there are more of those than there are records.
@@ -2582,8 +2649,12 @@ pub fn hit_standings(
     decision_ids: &[i64],
 ) -> Result<HitStandingRows> {
     let started = std::time::Instant::now();
-    let mut out =
-        HitStandingRows { tasks: HashMap::new(), labels: HashMap::new(), decisions: HashMap::new() };
+    let mut out = HitStandingRows {
+        tasks: HashMap::new(),
+        labels: HashMap::new(),
+        decisions: HashMap::new(),
+        decision_labels: HashMap::new(),
+    };
 
     if !task_ids.is_empty() {
         const TA: col::task::Cols = col::task::ALL;
@@ -2615,30 +2686,7 @@ pub fn hit_standings(
     // this join must not reach either, and keying off the hydrated set says so once instead of repeating
     // the scope in a second predicate.
     let placed: Vec<i64> = task_ids.iter().copied().filter(|id| out.tasks.contains_key(id)).collect();
-    if !placed.is_empty() {
-        const TV: col::task_dimension_value::Cols = col::task_dimension_value::of("tv");
-        const D: col::dimension::Cols = col::dimension::of("d");
-        const V: col::dimension_value::Cols = col::dimension_value::of("v");
-        let mut sel = Select::new();
-        let (task, axis, value) = (sel.col(TV.task_id), sel.col(D.name), sel.col(V.name));
-        let mut sql = Sql::from(&sel, TV.table);
-        // Both joins are inner, as in `task_classification`: an assignment whose axis or value is gone
-        // names nothing to show. The order is the axis's, so two tasks read down the same columns.
-        sql.join(D.table, same(D.id, TV.dimension_id))
-            .join(V.table, same(V.id, TV.value_id))
-            .push_where(Some(&Pred::is_in(TV.task_id, placed.iter().copied())))
-            .order_by([Sort::by(D.order_key), Sort::by(D.id)]);
-        let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
-        let rows = stmt
-            .query_map(rusqlite::params_from_iter(sql.params()), |r| {
-                Ok((task.get(r)?, axis.get(r)?, value.get(r)?))
-            })
-            .map_err(StoreEngineError::from)?;
-        for row in rows {
-            let (task, axis, value): (i64, String, String) = row.map_err(StoreEngineError::from)?;
-            out.labels.entry(task).or_default().push((axis, value));
-        }
-    }
+    out.labels = hit_classifications(conn, TASK_AXIS_LINK, &placed)?;
 
     if !decision_ids.is_empty() {
         const DE: col::decision::Cols = col::decision::ALL;
@@ -2662,8 +2710,51 @@ pub fn hit_standings(
         }
     }
 
+    // The same gate as the tasks': only the decisions the reach let through are asked what they are
+    // filed under.
+    let filed: Vec<i64> =
+        decision_ids.iter().copied().filter(|id| out.decisions.contains_key(id)).collect();
+    out.decision_labels = hit_classifications(conn, DECISION_AXIS_LINK, &filed)?;
+
     let read = out.tasks.len() + out.decisions.len();
     crate::perf::record_query("engine.hit_standings", read, read, started.elapsed());
+    Ok(out)
+}
+
+/// What a page's records are filed under, in words, read down one side's link table — the statement
+/// [`hit_standings`] runs once per side, written once because the two link tables say the same three
+/// things and differ only in which record they name ([`AxisLink`], `AMB-D-781`).
+///
+/// Both joins are inner, as in [`task_classification`]: an assignment whose axis or value is gone names
+/// nothing to show. The order is the axis's, so two records read down the same columns.
+fn hit_classifications(
+    conn: &Connection,
+    link: AxisLink,
+    ids: &[i64],
+) -> Result<HashMap<i64, Vec<(String, String)>>> {
+    let mut out: HashMap<i64, Vec<(String, String)>> = HashMap::new();
+    if ids.is_empty() {
+        return Ok(out);
+    }
+    const D: col::dimension::Cols = col::dimension::of("d");
+    const V: col::dimension_value::Cols = col::dimension_value::of("v");
+    let mut sel = Select::new();
+    let (owner, axis, value) = (sel.col(link.owner_id), sel.col(D.name), sel.col(V.name));
+    let mut sql = Sql::from(&sel, link.table);
+    sql.join(D.table, same(D.id, link.dimension_id))
+        .join(V.table, same(V.id, link.value_id))
+        .push_where(Some(&Pred::is_in(link.owner_id, ids.iter().copied())))
+        .order_by([Sort::by(D.order_key), Sort::by(D.id)]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+            Ok((owner.get(r)?, axis.get(r)?, value.get(r)?))
+        })
+        .map_err(StoreEngineError::from)?;
+    for row in rows {
+        let (owner, axis, value): (i64, String, String) = row.map_err(StoreEngineError::from)?;
+        out.entry(owner).or_default().push((axis, value));
+    }
     Ok(out)
 }
 

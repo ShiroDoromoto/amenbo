@@ -1,9 +1,9 @@
 // The file face: the right side of the terminal face, where what the agent in the pane is doing to
 // the folder can be seen without leaving the window (`AMB-T-3602`).
 //
-// **Both rows belong to the project.** What changed lately and the folder itself are rooted at a
-// folder the project is bound to, so switching panes does not move them — what changed in the
-// repository is the same question whichever terminal is in front of it.
+// **The folder it draws belongs to the project.** It is rooted at a folder the project is bound to,
+// so switching panes does not move it — what changed in the repository is the same question
+// whichever terminal is in front of it.
 //
 // **Every bound folder is drawn, each in a section of its own** (`AMB-D-778`). A project with one
 // folder is drawn without a heading, because a heading over the only thing on the screen names
@@ -11,11 +11,16 @@
 // dropped from the list it would look like one nobody ever bound, and the reader would have no way
 // to tell a folder that moved from a binding they removed.
 //
-// **What changed lately is watched, not asked for.** The host lays a watch over the folder and
-// says what is in it as it moves (`crate::folder_watch`), so the row is right while a person is
-// looking at it rather than as of whenever this side last thought to ask. What it cannot watch —
-// a folder too large to walk, a watch the kernel refused — is drawn as the row saying so, because
-// an unwatched half looks exactly like a half where nothing happened (`AMB-T-3604`).
+// **What has changed is git's answer, drawn on the tree's own rows** (`AMB-D-785`). A list of the
+// files written to most recently used to stand above the tree, and what it answered was "yesterday"
+// over and over: a branch switched, a formatter run, a build — none of it what a person is looking
+// for. `M`, `A` and `??` mean something, so the colour goes where the names already are.
+//
+// **The folder is watched, not asked for.** The host lays a watch over it and says when it moves
+// (`crate::folder_watch`), and that word is the moment to ask again — for the names of the level
+// that is open, and for what git says about them. What it cannot watch — a folder too large to
+// walk, a watch the kernel refused — is drawn as the line saying so, because an unwatched half
+// looks exactly like a half where nothing happened (`AMB-T-3604`).
 //
 // **What a file is, is the host's answer, not this side's guess.** A NUL in the head makes it
 // binary and the first bytes make it a picture (`crate::folder`); the name decides only whether
@@ -30,22 +35,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import type {
-  FolderAppDto, FolderChangesDto, FolderEntryDto, FolderFileDto,
+  FolderAppDto, FolderChangesDto, FolderEntryDto, FolderFileDto, GitEntryDto,
 } from "../bindings/bindings";
 import { Markdown } from "../components/Markdown";
 import { useBoundFolders } from "../core/boundFolders";
 import { watchHostDrop } from "../core/hostDrop";
-import { errText, formatNumber, t, tf, whenLabel } from "../core/i18n";
+import { errText, formatNumber, t, tf } from "../core/i18n";
 import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
 import {
-  folderEntries, folderOpenFile, folderOpenFileWith, folderOpenWith, folderRead, folderRevealFile,
-  folderTrash, folderUnwatch, folderUntrash, folderWatch, onFolderChanged,
+  folderEntries, folderGitStatus, folderOpenFile, folderOpenFileWith, folderOpenWith, folderRead,
+  folderRevealFile, folderTrash, folderUnwatch, folderUntrash, folderWatch, onFolderChanged,
 } from "./folder";
 import { asksBeforeTrash } from "./askBeforeTrash";
 import { TrashAsk } from "./TrashAsk";
 import { FileEditor } from "./FileEditor";
 import { MemoPage } from "./MemoPage";
 import { fileUnderAny } from "./fileUnder";
+import { gitMarks, type GitMark } from "./gitMark";
 import { sectionsOf } from "./sections";
 import { Icon } from "../components/Icon";
 
@@ -124,10 +130,10 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
   // What the machine said about the last row that would not go — kept until the next press, because
   // the row it is about is no longer on the list to say it for itself.
   const [stopped, setStopped] = useState<string | null>(null);
-  // Bumped whenever this side has changed what a folder holds. The tree reads a level once and then
-  // leaves it alone, so a row that has just gone to the bin would sit there until the folder was
-  // folded and opened again.
-  const [moved, setMoved] = useState(0);
+  // How many times this side has changed a folder. What redraws the rows is not this but the host's
+  // word that the folder moved, which each section counts for itself; this is only how the focus
+  // knows a press has landed.
+  const [acted, setActed] = useState(0);
   const box = useRef<HTMLDivElement | null>(null);
   // A path clicked in a pane. It opens only where it lands inside one of the folders this face is
   // rooted at — the same fence the host applies. One that lands outside opens nothing: the pane
@@ -180,8 +186,8 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
   // reading state has cleared, so the element to focus does not exist yet where the row was binned
   // from the reader.
   useEffect(() => {
-    if (moved > 0) box.current?.focus();
-  }, [moved]);
+    if (acted > 0) box.current?.focus();
+  }, [acted]);
 
   // Put one row in the machine's bin. Nothing here deletes: what the host offers is the bin, and a
   // machine that cannot offer one refuses rather than deleting instead (`./folder`).
@@ -190,7 +196,7 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
     setStopped(null);
     void folderTrash(projectId, root, [path])
       .then((done) => {
-        setMoved((n) => n + 1);
+        setActed((n) => n + 1);
         setStopped(done.stopped?.why ?? null);
         // A file being read that has just gone is not a file to go on reading.
         if (done.gone.length > 0) {
@@ -217,7 +223,7 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
     void folderUntrash()
       .then((done) => {
         if (done === null) return;
-        setMoved((n) => n + 1);
+        setActed((n) => n + 1);
         setStopped(done.stopped?.why ?? null);
       })
       .catch((e: unknown) => setStopped(errText(e)));
@@ -314,7 +320,6 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
           label={sections.length > 1 ? one.label : null}
           bound={one.exists}
           landing={landing}
-          moved={moved}
           onRead={(path) => setReading({ root: one.path, path })}
           onMenu={(path, x, y) => setMenu({ root: one.path, path, x, y })}
         />
@@ -334,18 +339,24 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
 }
 
 /**
- * One bound folder: what changed in it lately, and its tree.
+ * One bound folder: its tree, wearing what git says about it.
  *
  * **The watch is the section's own.** Each folder is watched separately and each answer names the
  * folder it is about (`./folder`), so a section takes the news addressed to it and leaves the rest.
  * Holding one watch for the panel would mean the panel deciding which folder each answer belonged
  * to, which is the same work done once further from where it is used.
  *
+ * **The news is a number, not a payload.** What the host says when the folder moves carries no
+ * rows (`AMB-D-785`), so what a section does with it is count: `moved` goes up, and everything read
+ * off the disk — git's answer here, the names of each open level in `Level` — is asked for again
+ * because it changed. One counter rather than a refresh per reader, because a folder moving is one
+ * fact and they would all be reacting to it.
+ *
  * A folder that is gone draws its heading and the reason, and nothing else. There is nothing to
  * watch and no tree to open, and the two states it could be confused with — a binding somebody
  * removed, and a folder with nothing in it — both look like an empty section.
  */
-function FolderSection({ projectId, root, label, bound, landing, moved, onRead, onMenu }: {
+function FolderSection({ projectId, root, label, bound, landing, onRead, onMenu }: {
   projectId: number;
   root: string;
   /** The heading, or nothing where this is the only folder. */
@@ -355,14 +366,15 @@ function FolderSection({ projectId, root, label, bound, landing, moved, onRead, 
   /** Where a dragged file would land, anywhere on the panel — a section draws the highlight only
    *  where the landing is one of its own (`landed`). */
   landing: Landing | null;
-  /** Bumped when this side has changed what a folder holds, so an open level reads again. */
-  moved: number;
   onRead: (path: string[]) => void;
   onMenu: (path: string[], x: number, y: number) => void;
 }) {
   const [changes, setChanges] = useState<FolderChangesDto>(
-    { root, changed: [], partial: false, gone: false },
+    { root, partial: false, gone: false },
   );
+  // How many times the host has said this folder moved. Everything read off the disk watches it.
+  const [moved, setMoved] = useState(0);
+  const [git, setGit] = useState<GitEntryDto[]>([]);
   const [treeOpen, setTreeOpen] = useState(false);
   const gone = !bound || changes.gone;
 
@@ -374,12 +386,14 @@ function FolderSection({ projectId, root, label, bound, landing, moved, onRead, 
     // Every watched folder is told about through the one listener, so an answer about another
     // folder is not this section's news.
     const listening = onFolderChanged((fresh) => {
-      if (alive && fresh.root === root) setChanges(fresh);
+      if (!alive || fresh.root !== root) return;
+      setChanges(fresh);
+      setMoved((n) => n + 1);
     });
     void folderWatch(projectId, root)
       .then((now) => { if (alive) setChanges(now); })
       .catch(() => {
-        if (alive) setChanges({ root, changed: [], partial: false, gone: false });
+        if (alive) setChanges({ root, partial: false, gone: false });
       });
     return () => {
       alive = false;
@@ -387,6 +401,24 @@ function FolderSection({ projectId, root, label, bound, landing, moved, onRead, 
       void folderUnwatch(root);
     };
   }, [projectId, root, bound]);
+
+  // What git says, asked for again every time the folder moves — staging included, which moves not
+  // one byte of the working tree and every colour in the tree (`AMB-D-774`). A folder that is no
+  // repository answers with nothing, which is a tree with no colours and not a failure to draw.
+  //
+  // **Only while the tree is open**, which is the same rule the levels themselves are read under: a
+  // colour nobody is looking at is a process started for nothing, and a folder someone leaves the
+  // panel folded on is one an agent may be writing in all afternoon.
+  useEffect(() => {
+    if (!bound || !treeOpen) return;
+    let alive = true;
+    void folderGitStatus(projectId, root)
+      .then((rows) => { if (alive) setGit(rows); })
+      .catch(() => { if (alive) setGit([]); });
+    return () => { alive = false; };
+  }, [projectId, root, bound, treeOpen, moved]);
+
+  const marks = useMemo(() => gitMarks(git), [git]);
 
   // The whole of one folder is one box, so the space between two folders is wider than the space
   // inside either — two stacks of rows with the same gap everywhere read as one long stack.
@@ -406,34 +438,6 @@ function FolderSection({ projectId, root, label, bound, landing, moved, onRead, 
   return (
     <div className="files__folder">
       {heading}
-      <section className="files__row">
-        <h3 className="files__head">{t("files.changed")}</h3>
-        {changes.changed.length === 0
-          ? <p className="files__none">{t("files.nothingChanged")}</p>
-          : (
-            <ul className="files__list">
-              {changes.changed.map((one) => (
-                <li key={one.path.join("/")}>
-                  <button
-                    className="files__file"
-                    onClick={() => onRead(one.path)}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      onMenu(one.path, e.clientX, e.clientY);
-                    }}
-                  >
-                    <span className="files__name">{one.path[one.path.length - 1]}</span>
-                    <span className="files__when">{whenLabel(one.modified)}</span>
-                  </button>
-                  <span className="files__where">{one.path.slice(0, -1).join("/")}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        {/* Said out loud rather than left to be assumed: a folder only half watched goes on looking
-            like one where nothing is happening. */}
-        {changes.partial && <p className="files__none">{t("files.partial")}</p>}
-      </section>
       {/* The root is a folder like any other in the tree, and the one a drop that fell on no row
           lands in. It is marked on the section rather than on the heading so that the whole of the
           tree — the gaps between its rows included — answers for it. */}
@@ -449,6 +453,9 @@ function FolderSection({ projectId, root, label, bound, landing, moved, onRead, 
         >
           {t("files.tree")}
         </button>
+        {/* Said out loud rather than left to be assumed: a folder only half watched goes on looking
+            like one where nothing is happening. */}
+        {changes.partial && <p className="files__none">{t("files.partial")}</p>}
         {/* Folded until it is asked for, and each level asked for only when it is opened: a tree is
             not the point of this face, and an unfolded one would read the whole repository to draw
             a panel nobody was looking at. */}
@@ -458,6 +465,7 @@ function FolderSection({ projectId, root, label, bound, landing, moved, onRead, 
             root={root}
             path={[]}
             landing={landing}
+            marks={marks}
             moved={moved}
             onRead={onRead}
             onMenu={onMenu}
@@ -594,19 +602,27 @@ function useLedgerNav(onOpenLedger?: () => void): RefNav {
 }
 
 /**
- * A row's classes, with the faint one added for a name the repository ignores.
+ * A row's classes: the faint one for a name the repository ignores, and the colour for what git
+ * says about it.
  *
  * The row is drawn either way: `.gitignore` says what git does not record, not what a reader may
  * not look at, and the files a person goes looking for after an agent has been at work — `.env`,
  * `.amenbo` — are ignored in most repositories (`AMB-D-786`). What is left out of the tree is the
  * floor the host prunes, and that never reaches here.
+ *
+ * **The two can land on the same row and say different things.** Faint is "git does not record
+ * this"; the colour is "git says this moved". A row is rarely both — what is ignored has no status
+ * to show — but nothing here stops them, because nothing about either one depends on the other.
  */
-function faint(base: string, ignored: boolean): string {
-  return ignored ? `${base} ${base}--ignored` : base;
+function rowClass(base: string, ignored: boolean, mark: GitMark | null): string {
+  let all = base;
+  if (ignored) all += ` ${base}--ignored`;
+  if (mark !== null) all += ` ${base}--git ${base}--git-${mark}`;
+  return all;
 }
 
 /** One folder's worth of names, and whatever of it has been opened. */
-function Level({ projectId, root, path, landing, moved, onRead, onMenu }: {
+function Level({ projectId, root, path, landing, marks, moved, onRead, onMenu }: {
   projectId: number;
   root: string;
   path: string[];
@@ -616,11 +632,11 @@ function Level({ projectId, root, path, landing, moved, onRead, onMenu }: {
    * drawing the highlight it was drawing a moment ago.
    */
   landing: Landing | null;
-  /**
-   * Bumped when this side has changed what a folder holds. A level is read once and then left
-   * alone, so a name that has just gone to the bin — or come back out of it — would sit on the
-   * screen until the folder was folded and opened again.
-   */
+  /** What git says about a row, asked by its segments from the bound folder (`./gitMark`). */
+  marks: (path: string[]) => GitMark | null;
+  /** How many times the folder has moved. The names are read again on each — a file the agent just
+   *  wrote is a row that has to appear without anybody folding the tree and opening it again, and a
+   *  row that just went to the bin is one that has to stop being drawn. */
   moved: number;
   onRead: (path: string[]) => void;
   onMenu: (path: string[], x: number, y: number) => void;
@@ -645,6 +661,7 @@ function Level({ projectId, root, path, landing, moved, onRead, onMenu }: {
         // the item and not on the button: a file row inside a folder resolves upwards to that
         // folder, so dropping on a name means the same as dropping in the space beside it.
         const into = one.isDir ? [...path, one.name].join("/") : undefined;
+        const mark = marks([...path, one.name]);
         return (
           <li
             key={one.name}
@@ -656,7 +673,7 @@ function Level({ projectId, root, path, landing, moved, onRead, onMenu }: {
               ? (
                 <>
                   <button
-                    className={faint("files__dir", one.ignored)}
+                    className={rowClass("files__dir", one.ignored, mark)}
                     aria-expanded={open.includes(one.name)}
                     onClick={() => setOpen((was) =>
                       was.includes(one.name) ? was.filter((n) => n !== one.name) : [...was, one.name]
@@ -670,6 +687,7 @@ function Level({ projectId, root, path, landing, moved, onRead, onMenu }: {
                       root={root}
                       path={[...path, one.name]}
                       landing={landing}
+                      marks={marks}
                       moved={moved}
                       onRead={onRead}
                       onMenu={onMenu}
@@ -679,7 +697,7 @@ function Level({ projectId, root, path, landing, moved, onRead, onMenu }: {
               )
               : (
                 <button
-                  className={faint("files__file", one.ignored)}
+                  className={rowClass("files__file", one.ignored, mark)}
                   onClick={() => onRead([...path, one.name])}
                   onContextMenu={(e) => {
                     e.preventDefault();
@@ -755,7 +773,7 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, onTrash, onKe
         {file?.text !== undefined && (
           MARKDOWN.some((ext) => name.toLowerCase().endsWith(ext))
             ? <RefNavProvider value={nav}><Markdown>{file.text}</Markdown></RefNavProvider>
-            : <FileEditor text={file.text} editable={!file.truncated && file.clean} />
+            : <FileEditor text={file.text} editable={!file.truncated && file.clean} name={name} />
         )}
         {/* A picture refused is not a picture missing. Drawn as nothing at all it reads as a
             damaged file, so the refusal says what it measured and hands the file on to something

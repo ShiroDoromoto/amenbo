@@ -169,7 +169,7 @@ pub enum Command {
         scope: String,
     },
     /// Find where words are written — one line per **place**, not per record. Reaches tasks, decisions,
-    /// the comments on both, the labels a task is filed under and the names of what is attached, and
+    /// the comments on both, the labels either is filed under and the names of what is attached, and
     /// answers with the face the words landed on, the record it belongs to, and a short excerpt.
     ///
     /// Words are ANDed and match as substrings (no word boundaries, so part of a compound word finds

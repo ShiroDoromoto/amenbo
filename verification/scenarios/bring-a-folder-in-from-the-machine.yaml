@@ -1,0 +1,121 @@
+# A whole folder dragged in, and everything that was in it arriving with it.
+#
+# `bring-a-file-in-from-the-machine` walks the same move over one file, and stops where a file can be
+# read: the row is there or it is not. A folder cannot be read that way. What a drop of one has to
+# answer for is what came with it — the rows inside, which the face only draws once the folder has
+# been opened — and a carry that made the folder and copied nothing into it would pass every reading
+# the file road makes.
+#
+# ── Why it is a road of its own ──────────────────────────────────────────────────────────────────
+# The two are one move to the hand and two answers on the disk: a file is one copy, and a folder is a
+# walk down whatever it holds (`crate::folder_write`). What breaks the second is nothing that would
+# break the first — a walk that stops one level down, a name joined onto the wrong end — so it is
+# read where it can be seen going wrong, which is inside the folder after it landed.
+#
+# ── What the operator brings ─────────────────────────────────────────────────────────────────────
+# The folder is theirs to bring, the way the file is on the road beside this one: a drop reads the
+# disk they are sitting at. So the step names what has to be in it as well as what it is called —
+# a row inside is what this road reads, and a row nobody was told to put there is one nobody brought.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road here. Copying a folder into another at a shell is the shell's own
+# vocabulary, and Amenbo is the subject of none of it.
+id: bring-a-folder-in-from-the-machine
+title: A folder dragged in from the machine lands where it was let go, with what was inside it still inside
+description: >
+  Open the terminal face on a project whose folder holds a folder, unfold the section, and drag a
+  folder in from somewhere else on the machine — one with a file in it — letting it go over the
+  folder already there. Open what landed and read that the file inside came with it.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # The folder the drop is aimed at. It needs a file in it to be a row at all, and nothing on the
+  # road reads that file — what is read is what arrives beside it.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: notes/README.md
+      content: SCENARIO the greenhouse notes live here
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  # Read before anything is let go over it, so a run that finds nothing under the pointer fails on
+  # the row being absent rather than on the drop.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: notes
+      section: tree
+
+  - type: action
+    domain: files
+    op: drop-in
+    with:
+      as: folder
+      brings: seedlings
+      holding: watering.md
+      name: notes
+      section: tree
+
+  - type: action
+    domain: files
+    op: enter
+    with:
+      name: notes
+
+  # The folder itself, landed under its own name and inside the row it was let go over rather than
+  # beside it.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: seedlings
+      section: tree
+
+  # And the reading this road exists for: one level further down, where a carry that made the folder
+  # and copied nothing would be standing empty.
+  - type: action
+    domain: files
+    op: enter
+    with:
+      name: seedlings
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: tree

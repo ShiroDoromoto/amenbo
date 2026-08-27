@@ -1763,8 +1763,10 @@ impl Instructor {
             // because what would go wrong is dragging a row out of the panel and back into it, which is a
             // move of its own and not this one.
             (Domain::Files, "drop-in") => format!(
-                "From outside Amenbo — a file manager, the desktop, anywhere on this machine that is not this folder — drag a file named \"{}\" over the row \"{}\" in {}, and let it go there.",
-                file_named(with)?,
+                "From outside Amenbo — a file manager, the desktop, anywhere on this machine that is not this folder — drag a {} named \"{}\"{} over the row \"{}\" in {}, and let it go there.",
+                made(with)?,
+                req(with, "brings")?,
+                holding(with),
                 req(with, "name")?,
                 section(with)?
             ),
@@ -3105,6 +3107,16 @@ fn made(with: &Args) -> Result<&'static str, String> {
         Some("folder") => Ok("folder"),
         Some(other) => Err(format!("`as` does not know `{other}` — it is file or folder")),
         None => Err("arg `as` must say which of the two the item makes".to_string()),
+    }
+}
+
+/// What a folder being dragged in has to have in it, said at the hand-over so the operator brings one
+/// that does. It is the folder case's alone — a file is read by its own name — and it renders to
+/// nothing when a step names none, which is every drop of a single file.
+fn holding(with: &Args) -> String {
+    match with.get("holding").and_then(|v| v.as_str()) {
+        Some(name) => format!(", with a file named \"{name}\" in it,"),
+        None => String::new(),
     }
 }
 

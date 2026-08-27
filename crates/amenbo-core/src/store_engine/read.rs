@@ -4106,6 +4106,55 @@ pub fn task_classification(conn: &Connection, task_id: i64) -> Result<Vec<(Strin
     Ok(rows)
 }
 
+/// The `(dimension_id, value_id)` assignments a single **decision** carries — [`task_dimension_assignments`]'s
+/// twin (`AMB-D-781`), for the pane that reflects a decision's current axis values. Live
+/// decision↔value links to live values only, in `decision_dimension_value`-`id` order.
+pub fn decision_dimension_assignments(conn: &Connection, decision_id: i64) -> Result<Vec<(i64, i64)>> {
+    const DV: col::decision_dimension_value::Cols = col::decision_dimension_value::of("dv");
+    const V: col::dimension_value::Cols = col::dimension_value::of("v");
+    let mut sel = Select::new();
+    let (dimension, value) = (sel.col(DV.dimension_id), sel.col(DV.value_id));
+    // The value is joined to drop an assignment whose value is gone, not for a column of its own.
+    let mut sql = Sql::from(&sel, DV.table);
+    sql.join(V.table, same(V.id, DV.value_id))
+        .push_where(Some(&Pred::eq(DV.decision_id, decision_id)))
+        .order_by([Sort::by(DV.id)]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+            Ok((dimension.get(r)?, value.get(r)?))
+        })
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<(i64, i64)>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(rows)
+}
+
+/// What one decision is classified as, in words — [`task_classification`]'s twin, ordered by the **axis**
+/// for the same reason, and read by the face that prints a decision rather than joins.
+pub fn decision_classification(conn: &Connection, decision_id: i64) -> Result<Vec<(String, String)>> {
+    const DV: col::decision_dimension_value::Cols = col::decision_dimension_value::of("dv");
+    const D: col::dimension::Cols = col::dimension::of("d");
+    const V: col::dimension_value::Cols = col::dimension_value::of("v");
+    let mut sel = Select::new();
+    let (dimension, value) = (sel.col(D.name), sel.col(V.name));
+    let mut sql = Sql::from(&sel, DV.table);
+    // Both joins are inner: an assignment whose axis or value is gone names nothing to print.
+    sql.join(D.table, same(D.id, DV.dimension_id))
+        .join(V.table, same(V.id, DV.value_id))
+        .push_where(Some(&Pred::eq(DV.decision_id, decision_id)))
+        .order_by([Sort::by(D.order_key), Sort::by(D.id)]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+            Ok((dimension.get(r)?, value.get(r)?))
+        })
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<(String, String)>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(rows)
+}
+
 /// The `(task_id, value_id)` assignments for one dimension across a project — lets the GUI board group a
 /// project's tasks by a chosen dimension's values in one query. Live links to live values only, scoped to
 /// live tasks of the project.
@@ -4830,6 +4879,35 @@ pub fn assignment_id(
     first_id(conn, TV.id, &Pred::eq(TV.task_id, task_id).and(Pred::eq(TV.value_id, value_id)))
 }
 
+/// The live assignment of `decision_id` on `dimension_id` — [`assignment_ids_on_axis`]'s twin, read by
+/// `ops::dimension::set_on_decision` so the outgoing assignment goes in the same transaction as the
+/// incoming one. A set for the same reason: the `(decision, dimension)` one-row invariant is only an
+/// invariant if a store that broke it is not silently left holding the extra row.
+pub fn decision_assignment_ids_on_axis(
+    conn: &Connection,
+    decision_id: i64,
+    dimension_id: i64,
+) -> Result<Vec<i64>> {
+    const DV: col::decision_dimension_value::Cols = col::decision_dimension_value::ALL;
+    let pred = Pred::eq(DV.decision_id, decision_id).and(Pred::eq(DV.dimension_id, dimension_id));
+    select_ids(conn, DV.id, Some(&pred))
+}
+
+/// The live assignment of `decision_id` to exactly `value_id`, or `None` — [`assignment_id`]'s twin,
+/// what makes `set_on_decision` idempotent and `unset_on_decision` a lookup.
+pub fn decision_assignment_id(
+    conn: &Connection,
+    decision_id: i64,
+    value_id: i64,
+) -> Result<Option<i64>> {
+    const DV: col::decision_dimension_value::Cols = col::decision_dimension_value::ALL;
+    first_id(
+        conn,
+        DV.id,
+        &Pred::eq(DV.decision_id, decision_id).and(Pred::eq(DV.value_id, value_id)),
+    )
+}
+
 /// Can `from` reach `target` by walking live dependency edges (`task_id → blocked_by_id`)? A recursive
 /// CTE whose `UNION` dedups the frontier, so an already-cyclic store terminates instead of looping; the
 /// seed is `from` itself, so `reaches(x, x)` is `true`. This is the cycle guard of
@@ -4996,6 +5074,23 @@ pub fn assignment_ids_of_value(conn: &Connection, value_id: i64) -> Result<Vec<i
     select_ids(conn, TV.id, Some(&Pred::eq(TV.value_id, value_id)))
 }
 
+/// The live dimension assignments of one decision — what the decision is classified as, on every axis at
+/// once. [`assignment_ids_of_task`]'s twin, swept by the decision's delete op.
+pub fn decision_assignment_ids_of_decision(
+    conn: &Connection,
+    decision_id: i64,
+) -> Result<Vec<i64>> {
+    const DV: col::decision_dimension_value::Cols = col::decision_dimension_value::ALL;
+    select_ids(conn, DV.id, Some(&Pred::eq(DV.decision_id, decision_id)))
+}
+
+/// The live decision assignments naming one dimension value — [`assignment_ids_of_value`]'s twin.
+/// A value's delete sweeps both sides, or its `RESTRICT` reference stops the delete outright.
+pub fn decision_assignment_ids_of_value(conn: &Connection, value_id: i64) -> Result<Vec<i64>> {
+    const DV: col::decision_dimension_value::Cols = col::decision_dimension_value::ALL;
+    select_ids(conn, DV.id, Some(&Pred::eq(DV.value_id, value_id)))
+}
+
 /// The live decision⇄task links of one task — the decisions it rests on, from the task's side.
 pub fn decision_task_link_ids_of_task(conn: &Connection, task_id: i64) -> Result<Vec<i64>> {
     const L: col::decision_task_link::Cols = col::decision_task_link::ALL;
@@ -5114,6 +5209,19 @@ pub fn task_dimension_value(
         "task_dimension_value",
         id,
         super::hydrate::task_dimension_value_row,
+    )
+}
+
+/// The `decision_dimension_value` assignment with this id.
+pub fn decision_dimension_value(
+    conn: &Connection,
+    id: i64,
+) -> Result<Option<crate::model::DecisionDimensionValue>> {
+    super::hydrate::row_by_id(
+        conn,
+        "decision_dimension_value",
+        id,
+        super::hydrate::decision_dimension_value_row,
     )
 }
 

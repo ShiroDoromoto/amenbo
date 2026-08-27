@@ -953,9 +953,11 @@ impl Store {
         self.write_one(&[WriteTarget::DimensionValue(value_id)], |tx| crate::ops::dimension::value_move(tx, value_id, pos))
     }
 
-    /// Delete a dimension value — a hard delete (one operation = one transaction). The task
-    /// assignments to that value go with it, unless `reassign_to` names another value of the same axis
-    /// for them to move to — which a required axis demands whenever there are any.
+    /// Delete a dimension value — a hard delete (one operation = one transaction). The assignments to
+    /// that value, on tasks and on decisions alike, go with it, unless `reassign_to` names another value
+    /// of the same axis for them to move to — which a required axis demands whenever there are tasks on
+    /// it. What never goes is a task or a decision itself: removing a value un-classifies, it does not
+    /// delete (`AMB-D-781`).
     pub fn dimension_value_delete(&mut self, value_id: i64, reassign_to: Option<i64>) -> Result<()> {
         let mut targets = vec![WriteTarget::DimensionValue(value_id)];
         // The destination is written to as well (the assignments land on it), so it is declared for the
@@ -984,6 +986,33 @@ impl Store {
         self.write_one(
             &[WriteTarget::Task(task_id), WriteTarget::DimensionValue(value_id)],
             |tx| crate::ops::dimension::unset(tx, task_id, value_id),
+        )
+    }
+
+    /// Assign a dimension value to a decision (one operation = one transaction) — the decision side of
+    /// [`Self::set_task_dimension_value`] (`AMB-D-781`), and one transaction for the same reason: the
+    /// one row per `(decision, dimension)` is never broken in between.
+    pub fn set_decision_dimension_value(
+        &mut self,
+        decision_id: i64,
+        value_id: i64,
+    ) -> Result<(crate::model::DecisionDimensionValue, bool)> {
+        self.write_one(
+            &[WriteTarget::Decision(decision_id), WriteTarget::DimensionValue(value_id)],
+            |tx| crate::ops::dimension::set_on_decision(tx, decision_id, value_id),
+        )
+    }
+
+    /// Remove a dimension value assignment from a decision (one operation = one transaction). If there
+    /// is none, it is a no-op and returns `false`.
+    pub fn unset_decision_dimension_value(
+        &mut self,
+        decision_id: i64,
+        value_id: i64,
+    ) -> Result<bool> {
+        self.write_one(
+            &[WriteTarget::Decision(decision_id), WriteTarget::DimensionValue(value_id)],
+            |tx| crate::ops::dimension::unset_on_decision(tx, decision_id, value_id),
         )
     }
 

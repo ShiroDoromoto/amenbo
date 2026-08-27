@@ -151,6 +151,21 @@ pub(crate) mod test_support {
         id
     }
 
+    /// Create one decision in the given project and return its id — a decision always sits in one
+    /// (there is no inbox on that side).
+    pub(crate) fn mk_decision_in(tx: &WriteTx<'_>, title: &str, project_id: i64) -> i64 {
+        super::decision::add(
+            tx,
+            super::decision::NewDecision {
+                title: title.to_string(),
+                body: String::new(),
+                project_id,
+            },
+        )
+        .expect("add decision")
+        .id
+    }
+
     /// Create one project and return its id.
     pub(crate) fn mk_project(tx: &WriteTx<'_>, name: &str) -> i64 {
         super::project::add(

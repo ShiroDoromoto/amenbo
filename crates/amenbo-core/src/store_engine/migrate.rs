@@ -468,6 +468,41 @@ pub const STEPS: &[Step] = &[
         name: "give a classification axis and its values a slug, unique where each is named",
         apply: Apply::Custom(slug_the_dimension_model),
     },
+    Step {
+        to: 31,
+        name: "add decision_dimension_value, the decision's side of the classification axes",
+        // `AMB-D-781`: a decision answers the same axes a task does, with the same values, so the
+        // assignment arrives as a table of its own beside `task_dimension_value` rather than as a
+        // polymorphic arm on it.
+        //
+        // **The version is what this step is for**, as v28's is. A whole table is not a column: genesis
+        // is `CREATE TABLE IF NOT EXISTS` over the registry and runs at every open, so an existing store
+        // grows this table on its next one, with no row to carry and nothing to backfill (there are no
+        // rows yet — the decision starts every existing decision unclassified, and classifying one is a
+        // deliberate act from here on). What a store cannot do for itself is say which shape it is now
+        // in, and the frozen shapes are dated by this chain (`super::schema_frozen`), so moving the
+        // genesis DDL is what appends a step here.
+        //
+        // The DDL is repeated in frozen text rather than referenced, as every step's is: the registry may
+        // rename a column tomorrow, and what this step added must keep meaning what it meant.
+        apply: Apply::Sql(
+            "CREATE TABLE IF NOT EXISTS decision_dimension_value (\
+                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, \
+                 decision_id BIGINT NOT NULL DEFAULT 0 REFERENCES decision(id) \
+                     ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED, \
+                 dimension_id BIGINT NOT NULL DEFAULT 0 REFERENCES dimension(id) \
+                     ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED, \
+                 value_id BIGINT NOT NULL DEFAULT 0 REFERENCES dimension_value(id) \
+                     ON DELETE RESTRICT ON UPDATE CASCADE DEFERRABLE INITIALLY DEFERRED, \
+                 created_at TEXT NOT NULL DEFAULT '' CHECK(created_at = '' OR created_at GLOB \
+                     '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z'), \
+                 updated_at TEXT NOT NULL DEFAULT '' CHECK(updated_at = '' OR updated_at GLOB \
+                     '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z')\
+             );\
+             CREATE INDEX IF NOT EXISTS decision_dimension_value_by_decision \
+                 ON decision_dimension_value(decision_id);",
+        ),
+    },
 ];
 
 /// v23: give the change feed the window each instruction belongs to (`AMB-D-582`), so a reader closed to

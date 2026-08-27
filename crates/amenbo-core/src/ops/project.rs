@@ -138,7 +138,7 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ops::test_support::{mk_project, mk_task_in, with_tx};
+    use crate::ops::test_support::{mk_decision_in, mk_project, mk_task_in, with_tx};
 
     /// Deleting a project **physically deletes** its subtree — nothing is left orphaned. Its tasks, their
     /// dependency edges, and the project's decisions and dimensions all go; another project's tasks are
@@ -163,6 +163,37 @@ mod tests {
             assert!(read::task_live(tx.conn(), survivor).unwrap(), "another project's task survives");
             // The dependency edge goes with the tasks it names — nothing dangles.
             assert!(read::dependency_id(tx.conn(), t1, t2).unwrap().is_none());
+        });
+    }
+
+    /// The subtree includes what a decision is classified as (`AMB-D-781`). This is the order the sweep
+    /// is checked in: decisions go before axes, so a classification left behind would hold the axis's
+    /// value by `RESTRICT` and fail the delete here rather than anywhere a person could see it coming.
+    #[test]
+    fn delete_gets_past_the_classifications_its_decisions_carried() {
+        with_tx(|tx| {
+            let p = mk_project(tx, "消えるPJ");
+            let k = mk_decision_in(tx, "分類のついた決定", p);
+            let t = mk_task_in(tx, "分類のついたタスク", Some(p));
+            let axis = crate::ops::dimension::add(
+                tx,
+                p,
+                crate::ops::dimension::NewDimension {
+                    name: "カテゴリー".to_string(),
+                    ..crate::ops::dimension::NewDimension::default()
+                },
+            )
+            .unwrap();
+            let value = crate::ops::dimension::value_add(tx, axis.id, "A", None).unwrap();
+            crate::ops::dimension::set(tx, t, value.id).unwrap();
+            crate::ops::dimension::set_on_decision(tx, k, value.id).unwrap();
+
+            delete(tx, p).unwrap();
+
+            assert!(read::project(tx.conn(), p).unwrap().is_none(), "the project's own row goes");
+            assert!(read::decision(tx.conn(), k).unwrap().is_none());
+            assert!(read::dimension(tx.conn(), axis.id).unwrap().is_none());
+            assert!(read::dimension_value(tx.conn(), value.id).unwrap().is_none());
         });
     }
 

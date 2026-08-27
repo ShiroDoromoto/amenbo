@@ -9,7 +9,7 @@
 
 use std::time::Instant;
 
-use amenbo_core::model::{ActorKind, DimensionCardinality, DimensionRole, Priority, View};
+use amenbo_core::model::{ActorKind, DimensionAppliesTo, DimensionCardinality, DimensionRole, Priority, View};
 use amenbo_core::ops;
 use amenbo_core::ops::dimension::NewDimension;
 use amenbo_core::Store;
@@ -68,6 +68,7 @@ fn generate(store: &mut Store, opts: &Opts) -> amenbo_core::Result<Summary> {
             role: DimensionRole::None,
             show_on_card: false,
             required: false,
+            applies_to: DimensionAppliesTo::Both,
             slug: None,
         },
     )?;

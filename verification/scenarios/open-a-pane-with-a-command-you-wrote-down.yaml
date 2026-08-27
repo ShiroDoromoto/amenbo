@@ -1,0 +1,109 @@
+# A tool Amenbo does not list, opened from the frame all the same.
+#
+# The launch catalog is a shortcut and not a census. It goes out of date faster than it
+# can be corrected — a table of six that was three places wrong a day after it was written — and every
+# row on it names a bare program, where `claude --model opus` is an ordinary thing to want. So a
+# reader may write their own down: a name, and a command line, kept on this device and standing among
+# the choices like anything else.
+#
+# ── What this road defends, and in what order ────────────────────────────────────────────────────
+# Three things, and the middle one is the point.
+#
+#   1. It can be written down at all, from the frame, without leaving for a settings screen.
+#   2. **The line is shown, character for character, before it is saved and after.** What is
+#      registered runs in a terminal exactly as it stands, so a reader who cannot read it cannot
+#      judge it — and a build that tidied the line would draw something they would still call the
+#      right one.
+#   3. It opens a pane, and what runs in that pane is the whole line and not its first word.
+#
+# ── Why the line is this line ────────────────────────────────────────────────────────────────────
+# `printf` is on every machine this harness runs on, and it carries its argument to the screen — so
+# the last assert reads the road's own words out of the pane and knows the whole line went through.
+# A line of one bare word would read alike whether Amenbo handed it over or rebuilt it from the first
+# word, which is exactly the fault worth catching. This is the one terminal road that may name a
+# program, and it may because the program is the road's own rather than the machine's
+# (`terminal register-start`).
+#
+# ── Why the machine is stood up first ────────────────────────────────────────────────────────────
+# So the row is drawn at all. Where a machine can start one thing there is no row to write anything
+# under, and where it can start none there is none either; both are correct and neither is this road
+# (`be-asked-what-to-open-with-on-the-first-run` walks the same premise for the same reason).
+#
+# The world is empty apart from the place to work. A terminal is not a record and needs none, and the
+# one folder is there so nothing is asked about where the pane runs.
+id: open-a-pane-with-a-command-you-wrote-down
+title: A command the reader writes down opens a pane, and runs exactly as it was written
+description: >
+  Amenbo's list of agents does not have every tool on it, and cannot. On the frame that opens a pane,
+  write down a name and a command line of your own; the frame shows the line back before it is saved
+  and keeps it on the screen after. It then stands among the choices, and pressing it opens a pane
+  that runs the whole line — arguments and all — rather than the program at the front of it.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Lighthouse
+    as: lighthouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: lamproom
+      project: lighthouse
+
+  # Two, so there is a row to write under: with one thing to start there is no choice to draw, and
+  # with none there is no row.
+  - type: action
+    domain: terminal
+    op: can-start
+    with:
+      count: 2
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: go-project
+    with:
+      project: Lighthouse
+
+  # Written down from the frame itself. The reading that the line is shown back before saving belongs
+  # to this step: after it is saved there is nothing left to change.
+  - type: action
+    domain: terminal
+    op: register-start
+    with:
+      name: Lamp reader
+      line: printf 'SCENARIO the whole line ran\n'
+
+  # And kept on the screen afterwards, character for character. A build that tidied the line would
+  # pass every other step on this road.
+  - type: assert
+    domain: terminal
+    op: registered
+    with:
+      name: Lamp reader
+      line: printf 'SCENARIO the whole line ran\n'
+
+  # It is a choice like any other, and pressing it opens a pane.
+  - type: action
+    domain: terminal
+    op: open-registered
+    with:
+      name: Lamp reader
+
+  # The whole line ran. These are the road's own words, and they are on the screen because the
+  # argument reached the program — which is the one thing the first word alone could never show.
+  - type: assert
+    domain: terminal
+    op: pane
+    with:
+      shows: SCENARIO the whole line ran

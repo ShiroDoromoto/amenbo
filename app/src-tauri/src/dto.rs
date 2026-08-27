@@ -2294,10 +2294,10 @@ pub struct FolderChangedDto {
 
 /// What a file has to show for itself, as far as a panel can show it (`crate::folder`).
 ///
-/// Exactly one of `text` and `image` is filled, and both are empty for a file that is neither —
-/// what a reader is then told is that it cannot be read here, which is the honest answer for a
-/// binary. Text is cut at a cap, because a panel is not a pager and a very long file would be paid
-/// for in full to draw a screen of it.
+/// At most one of `text`, `image` and `oversize` is filled, and all three are empty for a file that
+/// is none of them — what a reader is then told is that it cannot be read here, which is the honest
+/// answer for a binary. Text is cut at a cap, because a panel is not a pager and a very long file
+/// would be paid for in full to draw a screen of it.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
@@ -2312,6 +2312,38 @@ pub struct FolderFileDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) image: Option<FolderImageDto>,
+    /// The picture that was refused, where it is one and there are too many of it to carry.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) oversize: Option<FolderOversizeDto>,
+}
+
+/// A picture the panel would not carry, and what it was measured against (`AMB-D-783`).
+///
+/// **The numbers travel because silence reads as a broken file.** A reader shown nothing where a
+/// picture was concludes the file is damaged; one shown how large it is concludes it is large, and
+/// goes on to open it in something built for that.
+///
+/// Two of them, because two caps are being kept and they guard different things: the bytes stand
+/// for what the host would hold, the pixels for what the webview would decode. The pixels are
+/// absent where the front of the file did not say — a picture whose size could not be read is let
+/// through on the bytes alone, so a refusal with no size in it is always a refusal about bytes.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderOversizeDto {
+    /// The whole file, in bytes.
+    #[ts(type = "number")]
+    pub(crate) bytes: u64,
+    /// How wide the picture says it is, where the front of the file said.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) width: Option<u32>,
+    /// How tall it says it is, on the same terms as `width` — the two are always both there or both
+    /// absent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub(crate) height: Option<u32>,
 }
 
 /// A picture out of a folder, carried whole so the webview can draw it without a URL of its own.

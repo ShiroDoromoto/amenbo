@@ -531,6 +531,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .files__body { min-height: 0; overflow-y: auto; }
 .files__text { margin: 0; font-family: var(--font-mono); font-size: var(--fs-xs); white-space: pre-wrap; word-break: break-word; }
 .files__image { max-width: 100%; height: auto; }
+/* The way out of a picture the panel would not draw: a word under the refusal, not a control in a
+   row, because it is the sentence's own next step. */
+.files__hand {
+  padding: 0; border: 0; background: none;
+  color: var(--c-accent-text); cursor: pointer;
+}
+.files__hand:hover { text-decoration: underline; }
 /* What can be done with a file that is not reading it here. Placed where the pointer was, and above
    everything, because it is about the row it was opened on and nothing else. */
 .files__menu {

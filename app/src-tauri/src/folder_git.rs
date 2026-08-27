@@ -21,7 +21,7 @@ use std::sync::{Mutex, OnceLock};
 
 use crate::dto::GitEntryDto;
 use crate::error::CmdError;
-use crate::folder::root_of;
+use crate::folder_fence::root_of;
 
 /// What git calls one bound folder — as much of it as anything here reads.
 ///

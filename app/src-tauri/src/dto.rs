@@ -2480,7 +2480,7 @@ pub struct FolderChangesDto {
     /// the caller is what has to match it against a folder it is already drawing.
     pub(crate) root: String,
     /// Whether the walk stopped at its cap before it reached the end of the folder
-    /// ([`crate::folder::Scan::capped`]). What was never walked is not watched either, and it is
+    /// ([`crate::folder_walk::Scan::capped`]). What was never walked is not watched either, and it is
     /// the size of the folder that decided which part that is.
     pub(crate) capped: bool,
     /// Whether the kernel refused a watch this folder needs — its per-user limit, which the
@@ -2558,7 +2558,7 @@ pub struct FolderFileDto {
     /// to read and not to save.
     pub(crate) clean: bool,
     /// The short mark of the bytes this was read from, for a file that is text
-    /// (`crate::folder::digest`).
+    /// (`crate::folder_bytes::digest`).
     ///
     /// **It is what the panel knows the file by while it has it open** (`AMB-D-784`). The folder
     /// says it moved and the panel reads again: a mark that came back the same is this file

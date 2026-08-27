@@ -26,7 +26,7 @@
 //!    they add up to must still be inside a folder of this project's. A folder linking out of it is
 //!    followed and then refused, which is the only order that catches one.
 //! 4. It must be a regular file, and the last name is not followed either: a link there is opened as the
-//!    link it is and refused ([`crate::folder::open_no_follow`]). A directory is not listed here — what a
+//!    link it is and refused ([`crate::folder_fence::open_no_follow`]). A directory is not listed here — what a
 //!    folder holds is a question for the store, not for a door that hands out bytes.
 //!
 //! What is served then goes through [`crate::webproto`] like every other answer: the type comes from the
@@ -59,7 +59,7 @@ fn try_serve(request: &Request<Vec<u8>>) -> Result<Response<Vec<u8>>, StatusCode
         .ok_or(StatusCode::BAD_REQUEST)?;
     let (root, rest) = rest.split_once('/').ok_or(StatusCode::BAD_REQUEST)?;
     let project_id: i64 = project.parse().map_err(|_| StatusCode::BAD_REQUEST)?;
-    let (roots, base) = crate::folder::rooted(project_id, &percent_decode(root))
+    let (roots, base) = crate::folder_fence::rooted(project_id, &percent_decode(root))
         .map_err(|_| StatusCode::NOT_FOUND)?;
     let path = under(&roots, base, rest).ok_or(StatusCode::NOT_FOUND)?;
 
@@ -105,7 +105,7 @@ fn try_serve(request: &Request<Vec<u8>>) -> Result<Response<Vec<u8>>, StatusCode
 
 /// The file `rest` names inside `roots[base]`, or nothing at all.
 ///
-/// The fence itself is shared with the door that lists what a folder holds ([`crate::folder::under`]):
+/// The fence itself is shared with the door that lists what a folder holds ([`crate::folder_fence::under`]):
 /// the segments are checked one at a time as text, the folders they name are then checked again against
 /// the real filesystem, and the answer belongs to the deepest bound folder holding it. What is added
 /// here is what this door is for — the segments arrive percent-encoded, an address with nothing after
@@ -125,21 +125,21 @@ fn under(roots: &[PathBuf], base: usize, rest: &str) -> Option<PathBuf> {
     if segments.is_empty() {
         return None;
     }
-    let (_owner, path) = crate::folder::under(roots, base, &segments)?;
+    let (_owner, path) = crate::folder_fence::under(roots, base, &segments)?;
     std::fs::symlink_metadata(&path).is_ok_and(|meta| meta.is_file()).then_some(path)
 }
 
 /// The whole of a file, opened the way a range of it is.
 fn read_whole(path: &Path) -> std::io::Result<Vec<u8>> {
     let mut buf = Vec::new();
-    crate::folder::open_no_follow(path)?.read_to_end(&mut buf)?;
+    crate::folder_fence::open_no_follow(path)?.read_to_end(&mut buf)?;
     Ok(buf)
 }
 
 /// Read `len` bytes from `start`. Short files and ranges that run past the end come back shorter, which is
 /// what `Content-Length` is then taken from.
 fn read_range(path: &Path, start: u64, len: u64) -> std::io::Result<Vec<u8>> {
-    let mut file = crate::folder::open_no_follow(path)?;
+    let mut file = crate::folder_fence::open_no_follow(path)?;
     file.seek(SeekFrom::Start(start))?;
     let mut buf = Vec::new();
     file.take(len).read_to_end(&mut buf)?;

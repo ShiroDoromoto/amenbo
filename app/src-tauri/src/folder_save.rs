@@ -37,7 +37,7 @@
 //!
 //! **A link is not one of the cases.** `AMB-D-776` was written with three, the third being to write
 //! through a symbolic link at the file it points at; `AMB-D-782` was settled after it and closed
-//! that door on the reading side ([`crate::folder::open_no_follow`]), so a file reached through a
+//! that door on the reading side ([`crate::folder_fence::open_no_follow`]), so a file reached through a
 //! link never opens, never reaches an editor, and has no text to be saved. What is left is the two
 //! above.
 
@@ -48,7 +48,9 @@ use encoding_rs::Encoding;
 
 use crate::dto::FolderLineEndingDto;
 use crate::error::CmdError;
-use crate::folder::{digest, digest_of, gone, open_no_follow, rooted, under, write_no_follow, SAVING};
+use crate::folder::SAVING;
+use crate::folder_bytes::{digest, digest_of};
+use crate::folder_fence::{gone, open_no_follow, rooted, under, write_no_follow};
 
 /// How many saves this process has begun. It is the whole of what the name of a half-written file
 /// has to carry: that name only has to be in the folder the file is in, be nobody else's, and be
@@ -60,7 +62,7 @@ static SAVES: AtomicU64 = AtomicU64::new(0);
 /// **The whole text is what travels, both ways.** The editor holds the changes as a diff and could
 /// send that instead — but a diff applied here would mean this side holding the document too, and
 /// then there would be two of them to keep the same. Reading already pays for the whole text
-/// ([`crate::folder::folder_read`]); saving pays for it once more, on a file of at most five
+/// ([`crate::folder_bytes::folder_read`]); saving pays for it once more, on a file of at most five
 /// megabytes.
 ///
 /// **What may not be saved is refused before anything is opened**, and the panel already knows all
@@ -69,7 +71,7 @@ static SAVES: AtomicU64 = AtomicU64::new(0);
 /// cannot write — a `✓` typed into a Shift_JIS file — which is named back rather than mangled into
 /// the file as `&#10003;`.
 ///
-/// **`seen` is the file as the panel last read it** ([`crate::folder::digest`]), and a file that
+/// **`seen` is the file as the panel last read it** ([`crate::folder_bytes::digest`]), and a file that
 /// does not answer to it any more is not written to at all (`AMB-D-784`). This side remembers
 /// nothing between a read and a save, so the mark travels out with the text and back in with it —
 /// the same way the encoding and the newline do. What comes back is the mark of what was written,

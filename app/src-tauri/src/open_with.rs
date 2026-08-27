@@ -32,9 +32,9 @@ use std::path::Path;
 
 use crate::dto::FolderAppDto;
 use crate::error::CmdError;
-use crate::folder::{rooted, under};
+use crate::folder_fence::{rooted, under};
 #[cfg(target_os = "windows")]
-use crate::folder::plain;
+use crate::folder_fence::plain;
 
 /// Ask what to open a file with.
 ///
@@ -53,7 +53,7 @@ pub fn folder_open_with(
     path: Vec<String>,
 ) -> Result<Vec<FolderAppDto>, CmdError> {
     let (roots, base) = rooted(project_id, &root)?;
-    let (_owner, file) = under(&roots, base, &path).ok_or_else(crate::folder::gone)?;
+    let (_owner, file) = under(&roots, base, &path).ok_or_else(crate::folder_fence::gone)?;
     ask(&window, &file)
 }
 
@@ -72,9 +72,9 @@ pub fn folder_open_file_with(
     app: String,
 ) -> Result<(), CmdError> {
     let (roots, base) = rooted(project_id, &root)?;
-    let (_owner, file) = under(&roots, base, &path).ok_or_else(crate::folder::gone)?;
+    let (_owner, file) = under(&roots, base, &path).ok_or_else(crate::folder_fence::gone)?;
     if !offered(&file).iter().any(|one| one.path == app) {
-        return Err(crate::folder::gone());
+        return Err(crate::folder_fence::gone());
     }
     tauri_plugin_opener::open_path(&file, Some(app.as_str()))
         .map_err(|e| CmdError::coded("folder.open", e.to_string(), serde_json::Value::Null))

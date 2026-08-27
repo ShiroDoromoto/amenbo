@@ -1299,10 +1299,10 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
                     human(flags, format!("  [{face}] {} {}{at}", h.r#ref, h.title));
                     // Where the record stands, on a line of its own before the excerpt (`AMB-D-567`): a
                     // hit on a task that is over is a different answer from one still to be taken, and
-                    // the ref and the title say neither. Each side speaks its own vocabulary — a task
-                    // states its status, its priority and what it is filed under, a decision its status,
-                    // which is all it has — so the same line reads as the record's own without naming
-                    // which of the two it is. Nothing is printed when the read that fills this in came
+                    // the ref and the title say neither. Each side speaks its own vocabulary — both
+                    // state their status and what they are filed under, and a task its priority on top
+                    // of that — so the same line reads as the record's own without naming which of the
+                    // two it is. Nothing is printed when the read that fills this in came
                     // back empty: the words really are written there, and a blank line claiming a state
                     // would be worse than the row saying nothing about one.
                     if let Some(standing) = &h.standing {

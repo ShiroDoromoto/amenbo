@@ -2529,12 +2529,17 @@ folder?: string,
  */
 candidates: Array<WakeCandidateDto>, 
 /**
- * The ids worth offering, in catalog order. Empty means nothing on this machine can be started.
+ * The ids the row is drawn from, in catalog order — every catalogued agent (`AMB-D-792`).
+ *
+ * **Not the ids a press may open.** Which of them this machine can start is each row's own
+ * `installed`, and a face that opened one without reading it puts a pane on `command not
+ * found`. It is the whole catalog because a provider left off the row is one the reader cannot
+ * install their way onto.
  */
 offered: Array<string>, 
 /**
- * The id to open with, when nothing needs asking. `None` with a non-empty `offered` is the
- * question; `None` with an empty one is the notice.
+ * The id to open with, when nothing needs asking. `None` is the question — put to a person as a
+ * row with nothing on it, whether or not anything on that row can be pressed.
  */
 settled?: string, 
 /**

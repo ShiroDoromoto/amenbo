@@ -1855,6 +1855,18 @@ impl Instructor {
             (Domain::Files, "save") =>
                 "In the row above the text — beside the file's name — press the way the panel offers to keep what was typed."
                     .to_string(),
+            // The bin, and the question that may or may not stand between the press and the row going.
+            // Which of the two happens is a habit of this machine rather than anything about the build,
+            // so the line covers both — and it says to leave the checkbox alone, because ticking it
+            // would change that habit for every run walked here afterwards.
+            (Domain::Files, "trash") =>
+                "In the row above the file — at its right-hand end, past the file's name — press the bin. If the panel asks whether to move the file to the bin, agree; leave the box about not asking again unticked."
+                    .to_string(),
+            // And taking it back. The key is the machine's own, and the line says where to be standing:
+            // the terminal beside this column hears the same key as meaning something of its own.
+            (Domain::Files, "undo") =>
+                "With the file column in front of you — click once on an empty part of it if something else has the keyboard — press the key this machine undoes with."
+                    .to_string(),
             // A file brought in from outside and let go over a folder's row. The instruction names where it
             // is dragged from as loosely as it can — anywhere on the machine that is not this folder —
             // because what would go wrong is dragging a row out of the panel and back into it, which is a

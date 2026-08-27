@@ -2362,6 +2362,23 @@ const REGISTRY: &[OpSpec] = &[
     // reading the disk, and the only reading that could not have come from what was on the screen.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "save", required: &[], refs: &[], strings: &[], binds: false },
 
+    // ── putting a row in the bin, and taking it back ──────────────────────────────────────────────
+    // The bin pressed on the file that is open. It takes no args for the reason `save` does: what goes
+    // is the file on the screen, and where the machine keeps what it deleted is not a road's to say.
+    //
+    // **The question the panel puts first is inside this one step rather than a step of its own.**
+    // Whether it is asked at all is a habit of the machine the run is walked on — a reader who once
+    // ticked "do not ask again" turned it off there for good — so a road that pressed the bin and then
+    // asserted a question would come out red for something somebody did on that Mac months ago, and
+    // green on the next one. The instruction covers both endings, and what is read afterwards is the
+    // row.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "trash", required: &[], refs: &[], strings: &[], binds: false },
+    // And taking it back, which on this face means the last press of the bin and nothing else. What
+    // does it is the key the machine already undoes with rather than a control Amenbo drew, so the
+    // line says the key — and says where to be standing, because the column beside this one hears the
+    // same key as its own.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "undo", required: &[], refs: &[], strings: &[], binds: false },
+
     // ── bringing a file in from the machine ───────────────────────────────────────────────────────
     // A file dragged in from outside and let go over a row, which is the one way anything reaches this
     // folder that does not go through the folder itself. What is under test is the landing rather than

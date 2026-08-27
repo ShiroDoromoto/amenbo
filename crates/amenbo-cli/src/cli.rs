@@ -1477,7 +1477,7 @@ pub enum DecisionCmd {
         #[arg(long)]
         project: Option<String>,
     },
-    /// List decisions (filter by status:/superseded:/project:/number: (alias ref:, e.g. `D-<n>`/`#<n>`)/task: (the decisions a task rests on, e.g. `task:#<n>`)/decided_before:/decided_after: (the day a decision was accepted, YYYY-MM-DD or today/-30d; both ends inclusive), sort by decided/created/number/title/status). Words are not a key here — `amenbo search <word> --kind decision` finds where they are written
+    /// List decisions (filter by status:/superseded:/project:/number: (alias ref:, e.g. `D-<n>`/`#<n>`)/task: (the decisions a task rests on, e.g. `task:#<n>`)/`dim:<axis>=<value>` and its `time_axis:<value>` sugar (the same axes tasks are classified on: different axes AND, the same axis ORs, `=none` is unclassified)/decided_before:/decided_after: (the day a decision was accepted, YYYY-MM-DD or today/-30d; both ends inclusive), sort by decided/created/number/title/status). Words are not a key here — `amenbo search <word> --kind decision` finds where they are written
     List {
         #[arg(long)]
         project: Option<String>,

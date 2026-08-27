@@ -322,6 +322,7 @@ amenbo decision link AMB-D-<n> AMB-T-<n>       # cross-link a decision and its t
 amenbo task list --filter "decision:AMB-D-<n> status:todo" --json # walk the link: the open work a decision produced
 amenbo decision list --filter "task:AMB-T-<n>" --json          # ...and the other way: the decisions a task rests on
 amenbo decision list --filter "status:accepted" --json
+amenbo decision list --filter "dim:Area=Design" --json           # the same axes the tasks are filed on, folded the same way (`=none` is unclassified)
 amenbo decision list --filter "status:accepted superseded:no" --with-body --limit 20 --json # bodies too (projection; composes with filter/paging) — read a bounded slice to scan for semantic contradictions (propose only; a human confirms as supersede/amend). To narrow by keyword, `amenbo search <word> --kind decision` says which ones to read
 
 # Status and data ownership

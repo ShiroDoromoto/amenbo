@@ -895,8 +895,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .navitem__dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
 /* Drag-and-drop reordering of projects. The row being held fades, and the drop target
    takes an accent line above or below its midline. */
-.navitem[draggable="true"] { cursor: grab; }
+.navitem--reorderable { cursor: grab; }
+.navitem--dragging { cursor: grabbing; }
 .navitem--dragging { opacity: 0.4; }
+/* Worn by the body while a row is being dragged, because a selection begun on a row runs on across everything under
+   it — and dragging across rows selects their text on macOS and Linux (`AMB-T-3755`). */
+body.dragging-row { user-select: none; }
 .navitem--drop-before { box-shadow: inset 0 2px 0 0 var(--c-accent); }
 .navitem--drop-after { box-shadow: inset 0 -2px 0 0 var(--c-accent); }
 .navitem__count {

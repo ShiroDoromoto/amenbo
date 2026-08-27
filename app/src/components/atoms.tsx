@@ -123,7 +123,10 @@ export function StatusSelect({ id, status, onStatus, premiseChange, className = 
         className={className}
         value={status}
         title={t("status.changeTip")}
-        onMouseDown={(e) => e.stopPropagation()}
+        // The press, not the click: a card is grabbed on `pointerdown` now, and a pull-down that let
+        // one through would put the card in hand the moment somebody reached for the status
+        // (`../screens/boardDrag`).
+        onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
         onChange={(e) => { e.stopPropagation(); change(e.target.value as Status); }}
       >

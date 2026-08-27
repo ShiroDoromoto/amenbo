@@ -715,12 +715,14 @@ same file being able to stand in both at once. `tree` unfolds the folder's secti
 folder a level, `open` presses a file and `back` leaves it; `listed`, `reading` and `says` read what a
 row is, what an opened file draws, and one of the face's standing lines.
 
-The other three are the file going the other way — out of Amenbo, to the machine. `menu` right-clicks
-a row, `hand-over` presses one of the three items on the menu that comes up, and `handed-over` reads
-what the press left. Which item is meant travels as a `door` — `usual` for the application the machine
-already opens that kind of file with, `pick` for one the reader chooses for this file alone, `manager`
-for the file manager — rather than as the item's own words, which are the interface's and are drawn in
-whatever language the run's machine is set to. All three are the screen's alone, and the reading stops
+The rest are the file going the other way — out of Amenbo, to the machine. `menu` right-clicks a row
+and `menu-on-file` reaches the same menu from the file that is open, which is where a file the face
+refuses to draw offers a way on and no row is under the pointer any more; `hand-over` presses one of
+the three items on the menu that comes up, and `handed-over` reads what the press left. Which item is
+meant travels as a `door` — `usual` for the application the machine already opens that kind of file
+with, `pick` for one the reader chooses for this file alone, `manager` for the file manager — rather
+than as the item's own words, which are the interface's and are drawn in whatever language the run's
+machine is set to. All three are the screen's alone, and the reading stops
 where Amenbo does: what a hand-over ends in belongs to the machine, so the road goes no further than
 the machine having taken the file. `hand-a-file-to-the-machine` is the road.
 

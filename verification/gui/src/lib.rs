@@ -1700,14 +1700,19 @@ impl Instructor {
             (Domain::Files, "back") =>
                 "Press the way back out of the file. The column returns to its two sections."
                     .to_string(),
-            // Handing the file to the machine. The menu is a right-click and is drawn on files alone —
-            // a folder's row opens a level — so the step names a row the way every other one here
-            // does, and says where the menu comes up, since nothing else on this face does.
+            // Handing the file to the machine. On a row the menu is a right-click, and it is drawn on files alone
+            // — a folder's row opens a level — so the step names a row the way every other one here does, and says
+            // where the menu comes up, since nothing else on this face does.
             (Domain::Files, "menu") => format!(
                 "Come back to Amenbo if a hand-over left something else in front of it. Then in {}, right-click the row \"{}\": a short menu of what can be done with that file comes up where the pointer is.",
                 section(with)?,
                 req(with, "name")?
             ),
+            // The same menu from the other side. What a refused file offers is a way on rather than a way back,
+            // and the pointer is nowhere near a row by then.
+            (Domain::Files, "menu-on-file") =>
+                "Under what the column says about the file, press the way on it offers — the one about opening the file in another application. The same short menu of what can be done with the file comes up where the pointer is."
+                    .to_string(),
             // One item pressed. The item is described rather than quoted: its words are the
             // interface's, and the run's language is whatever the machine is set to.
             (Domain::Files, "hand-over") => match door(with)? {

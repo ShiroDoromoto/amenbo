@@ -20,7 +20,8 @@
 # The third is a picture the face **will** recognise and still will not draw, and it is here because
 # the two refusals are not the same refusal. One says there is nothing to show; this one says there
 # is, and that it is too large — and it says how large, because a reader shown nothing at all reads a
-# refused picture as a damaged file.
+# refused picture as a damaged file. The road then takes the way on it offers, because a refusal that
+# only refuses leaves the reader holding a file they still want opened.
 #
 # ── Why the third file is thirty kilobytes and a hundred and forty megapixels ─────────────────────
 # The extreme is what the line is about. What the face refuses is measured twice, in bytes and in
@@ -40,7 +41,8 @@ description: >
   back out and press a second file, named as Markdown but holding bytes that are not text: what comes
   back is the line saying it cannot be shown, because the verdict is taken from the bytes and never
   from the name. Come back out once more and press a picture the face does recognise and still will
-  not draw: what comes back is that it is too large, together with how large it was measured to be.
+  not draw: what comes back is that it is too large, together with how large it was measured to be — and the way on
+  it offers hands the file to the machine, out of the same menu the rows carry.
 
 given:
   - type: action
@@ -171,3 +173,23 @@ steps_gui:
     op: says
     with:
       note: too-big
+
+  # And the way on. A refusal that only refuses leaves the reader holding a file they still want opened, so the
+  # line comes with the same menu the rows carry — reached from here, where there is no row to right-click.
+  - type: action
+    domain: files
+    op: menu-on-file
+
+  # One door out of the three, and the one whose end is a chooser rather than a picture: what this road is about is
+  # that the menu came up here at all, and the three doors themselves are `hand-a-file-to-the-machine`.
+  - type: action
+    domain: files
+    op: hand-over
+    with:
+      door: pick
+
+  - type: assert
+    domain: files
+    op: handed-over
+    with:
+      door: pick

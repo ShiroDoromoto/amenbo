@@ -2236,10 +2236,15 @@ const REGISTRY: &[OpSpec] = &[
     // them and remembers none of them, so the road stops at the hand-over and never follows what came
     // forward — where the file ended up is the machine's answer, not this face's.
     //
-    // The menu is a right-click, and it is drawn on files alone: a folder's row opens a level and has
-    // nothing to hand anywhere. The row is therefore named the way every other row here is — by its
-    // name, and by the section it is standing in.
+    // On a row the menu is a right-click, and it is drawn on files alone: a folder's row opens a
+    // level and has nothing to hand anywhere. The row is therefore named the way every other row
+    // here is — by its name, and by the section it is standing in.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "menu", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
+    // The same menu, reached from the file that is open rather than from a row. It is a second door and not a
+    // convenience: a file the face refuses to draw offers a way on to something built to open it, and there is no
+    // row under the pointer to right-click by then — the column has been replaced by what the file turned out to
+    // be. It takes no args for the same reason: one file is open, and it is the one the menu is about.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "menu-on-file", required: &[], refs: &[], strings: &[], binds: false },
     // One item on that menu pressed. `door` names which of the three rather than the words on the
     // item, for the reason `note` and `section` are named that way: the wording is the interface's
     // own, and which language the run's machine is in is not a road's to know.

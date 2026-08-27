@@ -615,7 +615,10 @@ fn a_decision_page_dates_itself() {
     let shown = cli.json(&["decision", "show", &did, "--json"]);
     let decided = shown["decided_at"].as_str().unwrap().to_string();
     assert_eq!(shown["updated_at"].as_str(), Some(decided.as_str()), "accepting moves both stamps together");
-    assert!(human.contains(&format!("decided: {decided}")), "the ruling is dated: {human}");
+    // Who ruled rides on the same line as when, now that an AI may accept as well as a person
+    // (`AMB-D-788`) — and it is the facet's name, not the raw `human`/`ai` token the store keeps.
+    assert_eq!(shown["decided_by"]["id"].as_str(), Some("human"), "the store keeps the facet token");
+    assert!(human.contains(&format!("decided: {decided} by Human")), "the ruling is dated and attributed: {human}");
     assert!(!human.contains("last changed:"), "the settling is not said twice: {human}");
     assert!(human.contains(&format!("recorded: {created}")), "the writing is still dated: {human}");
 }

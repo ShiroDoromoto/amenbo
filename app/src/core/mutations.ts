@@ -15,7 +15,7 @@ import { type AttachTargetType } from "./reads";
 import { guessLang, t, tf, type CmdError, type CmdErrorPart, type ViewKind } from "./i18n";
 import { isClosed } from "./status";
 import type { ActivityItem, Facet, Priority, Status, TaskCard } from "../mock/types";
-import type { ActivityTargetDto, AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, McpRequestDto, McpSetupDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, DecisionDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
+import type { ActivityTargetDto, AgentHookRequestsDto, AgentHookWiringDto, BoundFolderDto, EventDto, DimensionTaskValueDto, DimensionDecisionValueDto, DoctorFixDto, DoctorIssueDto, DoctorReportDto, HookNoticeDto, HookOfferDto, McpRequestDto, McpSetupDto, PointerRepairDto, ProjectDto, ProjectSettingsDto, ResyncReportDto, StaleBlockDto, StoreLocationsDto, TaskDimensionAssignmentDto, DecisionDimensionAssignmentDto, BackupReportDto, ExportReportDto, DataProgressDto, RestoreReportDto } from "../bindings/bindings";
 import { taskRef } from "./idref";
 import { todayStr } from "./calendar";
 
@@ -76,6 +76,10 @@ function applyAck(ack: WriteAck): Promise<void> {
       // and every edit to the axes themselves, acks with the "tasks" scope — which is what keeps the
       // filter chips and the classification drawn on the cards from answering with a stale map.
       case "dimAssign": return scopes.has("tasks");
+      // Its decision twin: what the decisions tab narrows by. Assigning a value to a decision acks with
+      // the "decisions" scope, and an edit to the axes themselves with "tasks" — so both are watched, or
+      // a renamed value would leave the chips answering off a map that no longer names it.
+      case "decisionDimAssign": return scopes.has("decisions") || scopes.has("tasks");
       case "archivedProjects": return scopes.has("tasks");
       case "decisions": return scopes.has("decisions");
       case "decisionComments": return decisions.has(key[1] as number);
@@ -1798,6 +1802,18 @@ export async function fetchProjectDimensionAssignments(
 ): Promise<DimensionTaskValueDto[]> {
   if (!inTauri()) return [];
   return invoke<DimensionTaskValueDto[]>("project_dimension_assignments", {
+    projectId,
+    dimensionId,
+  });
+}
+
+/** All decision assignments for one project × dimension (decisionId → valueId) in a single call, so the decisions tab can narrow by classification. */
+export async function fetchProjectDecisionDimensionAssignments(
+  projectId: number,
+  dimensionId: number,
+): Promise<DimensionDecisionValueDto[]> {
+  if (!inTauri()) return [];
+  return invoke<DimensionDecisionValueDto[]>("project_decision_dimension_assignments", {
     projectId,
     dimensionId,
   });

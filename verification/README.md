@@ -280,7 +280,7 @@ one build produces alongside the app and one installer carries with it. The exec
 asked of the bundle too (`CFBundleExecutable`) rather than assumed.
 
 The screen tool is the input primitive too, called by whoever drives the screen between steps: its
-`find` / `click-named` / `click` / `dblclick` / `type` / `key` carry out the action steps the
+`find` / `click-named` / `click` / `dblclick` / `type` / `key` / `set-date` carry out the action steps the
 checklist names. The run holds itself at the launch until the app is up, in front, and can be shot
 at all — the proof it waits for is a shot it throws away, since an app the system has taken up is
 not yet an app with a window, and a walk that started between the two would fail on its first step.
@@ -307,6 +307,15 @@ pixels. Anything wide swallows both, which is why aiming works until it is aimed
 the board's `＋` and the view tabs read as unreachable elements until the arithmetic was suspected
 instead.
 
+**A day goes in through `set-date <pid> <name> <yyyy-mm-dd>` rather than through the keys.** A date
+field is one control with three numbered parts in it, and typing into it is a digit at a time — but
+every digit that leaves the value a valid day makes the app commit and redraw the field, and the
+redraw drops the run of digits the webview was collecting. A year is four digits and valid after each
+one, so `2099` arrives as `0009`. Typing slower does not help: it is the redraw between the digits,
+not the pace of them. The tool opens the field's picker, writes the day where the picker keeps it,
+tabs back out so the panel is not standing over the rows beneath, and reads the field back — so a
+write that reached nothing is reported here rather than as a red assert on the day.
+
 ### `--print` — read the road without a screen
 
 The screen road is written in YAML, but the sentences it turns into are written in Rust, so what a
@@ -327,7 +336,7 @@ cargo run -p amenbo-verify-gui --bin verify-gui -- scenarios/link-a-folder.yaml 
 
 A screen road is walked by somebody, always. The run prints the step it is about to shoot and waits
 for a line on stdin; between the two, the screen belongs to whoever is driving — carry the step out
-by hand, or with the screen tool's `click-named` / `type` / `key`, and send the line once the screen
+by hand, or with the screen tool's `click-named` / `type` / `key` / `set-date`, and send the line once the screen
 is standing where the step says it should. There is no flag for running it any other way.
 
 **The hand-over comes before the step, the first one included.** That is what lets a road open with a

@@ -413,6 +413,25 @@ path: string,
 usual: boolean, };
 
 /**
+ * What a move or a copy got through, and what it stopped on (`crate::folder_write`).
+ *
+ * A carry of several rows is not one act: it is that many, taken in order, and the first failure
+ * ends it. So the answer is not a yes or a no but a line through the list — these arrived, this one
+ * did not and here is what the machine said, and the rest were never touched. A refusal instead
+ * would say the same word for "none of them moved" and "two of the three did", which is the word a
+ * reader most needs not to hear (`AMB-D-782`).
+ */
+export type FolderCarriedDto = { 
+/**
+ * The names that are now in the folder they were carried into, in the order they got there.
+ */
+arrived: Array<string>, 
+/**
+ * The one it stopped on. Absent when the whole list arrived.
+ */
+stopped: FolderStoppedDto | null, };
+
+/**
  * A file that changed lately, as the file face's second row draws it (`crate::folder`).
  *
  * The path is the segments from the folder the face is rooted at, so the row can be opened by
@@ -554,6 +573,21 @@ width?: number,
  * absent.
  */
 height?: number, };
+
+/**
+ * The row a carry stopped on, and what stopped it (`crate::folder_write`).
+ */
+export type FolderStoppedDto = { 
+/**
+ * The name that was being carried.
+ */
+name: string, 
+/**
+ * What the machine said, in the machine's own words. It is not a code with a template behind
+ * it: what a disk that filled up or a permission that was not there has to say is its own, and
+ * a sentence written here would be a guess at which of them it was.
+ */
+why: string, };
 
 /**
  * That folder's `.amenbo` was written by a build of another channel

@@ -1,0 +1,139 @@
+# Changing what is in a file, from the panel that draws it.
+#
+# A reader looking at the folder Amenbo answers for can read what is in it
+# (`read-a-file-in-the-folder-the-ai-can-see`) and make names in it
+# (`name-a-file-without-leaving-amenbo`). This road is the one that changes what is *inside* one of
+# them: the words are typed where they are drawn, kept, and then read back off the disk.
+#
+# ── Why the file is opened twice ─────────────────────────────────────────────────────────────────
+# **The second opening is the whole proof.** What the panel draws the moment a save is through is
+# that there is nothing left to save — a reading of the control, not of the file, and one a face that
+# had written nothing at all would draw exactly the same. So the road leaves the file and comes back
+# to it, which sends the app to the disk for the bytes again. What comes up the second time is what
+# is really in the file.
+#
+# ── Why both lines are read, and not just the new one ────────────────────────────────────────────
+# The words typed go on a line of their own at the end, and the reading afterwards asks for the line
+# that was already there as well. Saving is writing the **whole** document back rather than the
+# change to it, and a save that wrote only what was typed would pass a reading of the new words while
+# having thrown the rest of the file away — which is the failure worth catching, and the one a road
+# reading only the new line would sleep through.
+#
+# ── Why the file is not Markdown ─────────────────────────────────────────────────────────────────
+# A `.md` file is drawn as Markdown rather than in an editor, so there is nothing on that road to
+# type into. Which name gets which treatment is the one thing on this face the file's name decides,
+# and a road about typing has to be on the side of it that offers somewhere to type.
+#
+# ── What this road leaves out ────────────────────────────────────────────────────────────────────
+# A file whose lines end both ways is asked about before it can be saved, and the asking cannot be
+# walked here: the answer is picked from a control this registry has no op for. The same is true of
+# the execute bit a saved script keeps, which is not something a screen can be shown at all — it is
+# held where it can be, in a unit test over the save itself (`crate::folder_save`).
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road here. Changing a file at a shell is the shell's own vocabulary, and Amenbo
+# is the subject of none of it.
+id: change-a-file-without-leaving-amenbo
+title: A file in the project's folder is changed and kept from the panel, and opening it again shows what is really in it
+description: >
+  Open the terminal face on a project whose folder holds a file of plain text, unfold that folder's
+  section and open the file. Type a line onto the end of what is drawn and keep it. Then leave the
+  file and open it again — which sends the app back to the disk — and read both the line that was
+  typed and the line that was already there, because saving writes the whole file back and not only
+  the change to it.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # Plain text under a name the face draws in an editor rather than as Markdown, which is the side of
+  # that line a road about typing has to be on.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: watering.txt
+      content: SCENARIO the seedlings are watered every second morning
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.txt
+      section: tree
+
+  # What the file holds before anything is typed. The road has to know it opened on the right file
+  # before it starts changing one.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the seedlings are watered every second morning
+
+  - type: action
+    domain: files
+    op: edit
+    with:
+      types: SCENARIO and fed on the first of the month
+
+  - type: action
+    domain: files
+    op: save
+
+  # Out and back in. This is what makes the reading below a reading of the disk rather than of what
+  # was already on the screen.
+  - type: action
+    domain: files
+    op: back
+
+  - type: action
+    domain: files
+    op: open
+    with:
+      name: watering.txt
+      section: tree
+
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO and fed on the first of the month
+
+  # And what was there before it. A save that wrote only the typing would have passed the reading
+  # above with the rest of the file gone.
+  - type: assert
+    domain: files
+    op: reading
+    with:
+      shows: SCENARIO the seedlings are watered every second morning

@@ -14,6 +14,7 @@ const dim = (role: DimensionDto["role"], values: DimensionValueDto[]): Dimension
   ordered: true,
   showOnCard: false,
   required: false,
+  appliesTo: "both" as const,
   values,
 });
 

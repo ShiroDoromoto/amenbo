@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 
 use amenbo_core::binding::canonical_dir;
 
-use crate::dto::{DropEffectDto, FolderCarriedDto, FolderStoppedDto};
+use crate::dto::{DropEffectDto, FolderCarriedDto, FolderStopDto, FolderStoppedDto};
 use crate::error::CmdError;
 use crate::folder::{gone, rooted, under};
 
@@ -242,22 +242,27 @@ fn carried(
         let Some(name) = path.file_name().map(|n| n.to_string_lossy().into_owned()) else {
             let name = path.to_string_lossy().into_owned();
             let why = "this has no name to carry it in under".to_string();
-            return FolderCarriedDto { arrived, stopped: Some(FolderStoppedDto { name, why }) };
+            let stopped = FolderStoppedDto { name, code: Some(FolderStopDto::Nameless), why };
+            return FolderCarriedDto { arrived, stopped: Some(stopped) };
         };
         let target = into.join(&name);
 
         // A folder cannot be carried into itself: the copy would be writing into what it is reading,
         // and the move would be asking the kernel to make a folder its own child.
+        //
+        // The three Amenbo decides carry a code as well as a sentence, and the machine's carry the
+        // sentence alone: what a refusal made here means is the same every time and can be put in the
+        // reader's language, where what a filesystem says is its own words in its own (`crate::dto`).
         let stopped = if into.starts_with(path) {
-            Some("a folder cannot be moved inside itself".to_string())
+            Some((Some(FolderStopDto::Inside), "a folder cannot be moved inside itself".to_string()))
         } else if holds(&target) {
-            Some(format!("{name} is already there"))
+            Some((Some(FolderStopDto::Taken), format!("{name} is already there")))
         } else {
-            one(path, &target).err().map(|e| e.to_string())
+            one(path, &target).err().map(|e| (None, e.to_string()))
         };
 
-        if let Some(why) = stopped {
-            return FolderCarriedDto { arrived, stopped: Some(FolderStoppedDto { name, why }) };
+        if let Some((code, why)) = stopped {
+            return FolderCarriedDto { arrived, stopped: Some(FolderStoppedDto { name, code, why }) };
         }
         arrived.push(name);
     }

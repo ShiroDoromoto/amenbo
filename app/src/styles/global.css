@@ -659,6 +659,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--c-text-muted); cursor: pointer;
 }
 .files__view:hover { color: var(--c-text); }
+/* What the bytes were read as, and how the lines end. Muted and last on the row: it is the answer
+   to a question almost nobody asks, put where the one reader who does asks it (`AMB-D-773`). */
+.files__encoding {
+  flex: none; padding: 0; border: 0; background: none;
+  color: var(--c-text-muted); font-size: var(--fs-xs); white-space: nowrap; cursor: pointer;
+}
+.files__encoding:hover { color: var(--c-text); }
 /* Saving what was typed. It sits at the far end of the bar, past the name, because it is the one
    control there that changes the file rather than the view of it (`../files/FilesPanel`). */
 .files__keep {

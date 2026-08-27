@@ -521,7 +521,10 @@ the other two.
 One domain is not in the store at all. **`repo`** is the folder the run works in: `write-file` puts
 a file there (what an attachment ingests, what the lint is pointed at), `copy-fixture` puts one
 there from `fixtures/`, and `git-init` makes the folder a git repository, which is the only way the
-hook slots are real enough to write into. `wire-ai` is the same kind of stand-in one tier up: Amenbo
+hook slots are real enough to write into. That one takes the same `dir` the first two do, and a road
+reading what git says about a folder on screen needs it: the colours are drawn on the face of the
+folder a project is **bound** to, and a repository anywhere else leaves every row of it bare.
+`wire-ai` is the same kind of stand-in one tier up: Amenbo
 hands over the text that starts a folder's AI on it and writes no settings file itself, so the road
 past that point exists only if someone pastes — and it pastes what the build under test handed over,
 into the file that build named. All of it stays inside the run's own throwaway folder — a
@@ -732,8 +735,10 @@ colour on it. Every op takes a `section` saying which part of the column a row i
 in — there is one part to name today, and the arg is kept because the panel is not finished growing.
 `tree` unfolds the folder's section, `enter` opens one folder a level, `open` presses a file and
 `back` leaves it; `listed`, `reading` and `says` read what a row is, what an opened file draws, and
-one of the face's standing lines. **What a row's colour is cannot be read yet** — no op says it —
-which is why the road below reads the names alone.
+one of the face's standing lines. `row-mark` reads the colour a row wears, named by what git says —
+`untracked`, `added`, `modified` — rather than by the colour itself, since which colour that is
+belongs to the theme. It is a `Review` and can be nothing else: a shot is read for words, and a row
+wearing a colour says the same letters as the row beside it that wears none.
 
 The rest are the file going the other way — out of Amenbo, to the machine. `menu` right-clicks a row
 and `menu-on-file` reaches the same menu from the file that is open, which is where a file the face

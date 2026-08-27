@@ -669,6 +669,12 @@ impl Instructor {
     /// the screen rather than the shot, and the instruction says so and says for how long. The shot is
     /// still kept, for the half of the row a picture does carry — which pane the mark belongs to.
     ///
+    /// `files row-mark` is a `Review`, and the plainest one here: what it reads is a colour, and a
+    /// reading answers with words. The row wearing one says the same letters as the row beside it that
+    /// wears none, so no folding of the two sides can tell them apart. The instruction therefore names
+    /// the state git is in rather than the colour it is drawn in — which colour that is belongs to the
+    /// theme, and an eye at the screen can see that two rows differ without being told what to expect.
+    ///
     /// `files handed-over` is a `Review` on all three of its doors, and further out than most: what
     /// settles it is not on Amenbo's window at all. A file handed to the machine leaves through an
     /// application that came forward, or an operating system's own chooser drawn by the system, and
@@ -2724,6 +2730,22 @@ impl Instructor {
                     req(with, "shows")?
                 ),
             },
+            // What git says about a row. The mark is named by the state rather than by the colour, so
+            // the eye is told what to look for in words that outlive a palette.
+            (Domain::Files, "row-mark") => match present(with) {
+                true => format!(
+                    "In {}, confirm the row \"{}\" is drawn in the colour this build gives to {} — a colour and not a word, so read it against the rows beside it that git says nothing about.",
+                    section(with)?,
+                    req(with, "name")?,
+                    mark(with)?
+                ),
+                false => format!(
+                    "In {}, confirm the row \"{}\" wears no colour of its own — it is drawn like the rows git says nothing about, and not in the colour that would say it is {}.",
+                    section(with)?,
+                    req(with, "name")?,
+                    mark(with)?
+                ),
+            },
             (Domain::Files, "says") => match present(with) {
                 true => format!("Confirm the column says {}.", note(with)?),
                 false => format!("Confirm the column does not say {}.", note(with)?),
@@ -3008,6 +3030,21 @@ fn section(with: &Args) -> Result<&'static str, String> {
         Some("tree") => Ok("the folder's own section"),
         Some(other) => Err(format!("`section` does not know `{other}` — it is tree")),
         None => Err("arg `section` must say which section".to_string()),
+    }
+}
+
+/// Which of the three things git's answer is folded into a step is about. Named by the state and not
+/// by the colour drawn for it, for the reason `section` and `note` are named as they are: what a row
+/// is drawn in belongs to the theme, and a road naming a colour would go red the day one moved.
+fn mark(with: &Args) -> Result<&'static str, String> {
+    match with.get("mark").and_then(|v| v.as_str()) {
+        Some("untracked") => Ok("something git has never seen"),
+        Some("added") => Ok("something staged as new"),
+        Some("modified") => Ok("something that has changed since git last recorded it"),
+        Some(other) => {
+            Err(format!("`mark` does not know `{other}` — it is untracked, added or modified"))
+        }
+        None => Err("arg `mark` must say what git says about the row".to_string()),
     }
 }
 

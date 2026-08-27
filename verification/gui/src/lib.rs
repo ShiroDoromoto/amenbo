@@ -2968,6 +2968,9 @@ fn door(with: &Args) -> Result<&'static str, String> {
 fn note(with: &Args) -> Result<&'static str, String> {
     match with.get("note").and_then(|v| v.as_str()) {
         Some("not-text") => Ok("that this is not text and cannot be shown here"),
+        Some("too-big") => Ok(
+            "that this picture is too large to show here, followed by how large it was measured to be",
+        ),
         Some("cut") => Ok("that only the beginning of the file is shown"),
         Some("unreadable") => Ok("that the file could not be read"),
         Some("partial") => Ok("that some of the folder is not being watched"),

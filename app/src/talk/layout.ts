@@ -63,11 +63,6 @@ export const ACROSS: Readonly<Record<Count, number>> = { 1: 1, 2: 2, 4: 2, 6: 3,
  *  arrive at rather than to be given. */
 export const DEFAULT_COUNT: Count = 2;
 
-/** How many pages a ⌘-digit reaches. A project with more than this many pages is not out of reach —
- *  every pane has a row on the rail, and picking one brings its page up — but the keyboard stops
- *  here, because there are only nine digits to press. */
-export const MAX_PAGES = 9;
-
 /**
  * The arrangement as it is handed over — the wire shape of `TalkLayoutDto`.
  *

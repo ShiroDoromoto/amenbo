@@ -455,10 +455,10 @@ isDir: boolean, };
 /**
  * What a file has to show for itself, as far as a panel can show it (`crate::folder`).
  *
- * Exactly one of `text` and `image` is filled, and both are empty for a file that is neither —
- * what a reader is then told is that it cannot be read here, which is the honest answer for a
- * binary. Text is cut at a cap, because a panel is not a pager and a very long file would be paid
- * for in full to draw a screen of it.
+ * At most one of `text`, `image` and `oversize` is filled, and all three are empty for a file that
+ * is none of them — what a reader is then told is that it cannot be read here, which is the honest
+ * answer for a binary. Text is cut at a cap, because a panel is not a pager and a very long file
+ * would be paid for in full to draw a screen of it.
  */
 export type FolderFileDto = { 
 /**
@@ -472,7 +472,11 @@ truncated: boolean,
 /**
  * The picture, where the bytes say they are one and there are few enough of them to carry.
  */
-image?: FolderImageDto, };
+image?: FolderImageDto, 
+/**
+ * The picture that was refused, where it is one and there are too many of it to carry.
+ */
+oversize?: FolderOversizeDto, };
 
 /**
  * A picture out of a folder, carried whole so the webview can draw it without a URL of its own.
@@ -489,6 +493,33 @@ mime: string,
  * The whole picture, base64-encoded, for a `data:` URL.
  */
 base64: string, };
+
+/**
+ * A picture the panel would not carry, and what it was measured against (`AMB-D-783`).
+ *
+ * **The numbers travel because silence reads as a broken file.** A reader shown nothing where a
+ * picture was concludes the file is damaged; one shown how large it is concludes it is large, and
+ * goes on to open it in something built for that.
+ *
+ * Two of them, because two caps are being kept and they guard different things: the bytes stand
+ * for what the host would hold, the pixels for what the webview would decode. The pixels are
+ * absent where the front of the file did not say — a picture whose size could not be read is let
+ * through on the bytes alone, so a refusal with no size in it is always a refusal about bytes.
+ */
+export type FolderOversizeDto = { 
+/**
+ * The whole file, in bytes.
+ */
+bytes: number, 
+/**
+ * How wide the picture says it is, where the front of the file said.
+ */
+width?: number, 
+/**
+ * How tall it says it is, on the same terms as `width` — the two are always both there or both
+ * absent.
+ */
+height?: number, };
 
 /**
  * That folder's `.amenbo` was written by a build of another channel

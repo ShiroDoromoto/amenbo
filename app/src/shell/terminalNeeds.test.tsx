@@ -6,9 +6,9 @@
 // and for nothing else. **Silence must never raise it**: a pane that has said nothing for an hour is
 // a pane that has said nothing, and a dot over it would be Amenbo claiming a turn nobody declared.
 //
-// ⌘J is the other half: the reader goes to the pane rather than the pane coming to the reader, since
-// pulling a screen out from under somebody who is reading it is the thing the badge exists to avoid.
-// It moves and sends nothing.
+// What a reader does about a dot is press the mark on the pane's name plate, or the number of the page
+// it is on. Amenbo takes no key of its own for it: the pane below is a terminal, and a key Amenbo took
+// would be one taken from the shell in it (`AMB-D-780`).
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -17,7 +17,6 @@ import type { PaneStart } from "../talk/terminal";
 const hoisted = vi.hoisted(() => ({
   /** Each pane's way of telling the face a turn is standing in it. */
   tell: [] as ((waiting: boolean) => void)[],
-  typed: [] as string[],
 }));
 
 // The ledger's projects and the one folder this one is bound to, so opening a pane asks nothing.
@@ -60,14 +59,7 @@ vi.mock("../talk/plate", () => ({
   },
 }));
 
-// Nothing may be sent to a terminal by any of this.
-vi.mock("../talk/terminal", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../talk/terminal")>()),
-  writeTo: (_session: string, data: string) => { hoisted.typed.push(data); },
-}));
-
 import { TerminalFace } from "./TerminalFace";
-import { t } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -79,11 +71,8 @@ const q = (sel: string) => [...container.querySelectorAll<HTMLElement>(sel)];
 const click = async (el: HTMLElement) => {
   await act(async () => { el.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
 };
-const press = async (key: string) => {
-  await act(async () => {
-    document.dispatchEvent(new KeyboardEvent("keydown", { key, metaKey: true, bubbles: true }));
-  });
-};
+/** Go to a page by pressing its number in the row beside the panes. */
+const goPage = async (n: number) => { await click(q(".termface__page")[n - 1]!); };
 /** Open another pane in the project being shown: the empty frame on a page with room opens it, and a
  *  full page goes through the strip beside the panes to a page that has room. */
 const openPane = async () => {
@@ -102,7 +91,6 @@ beforeEach(async () => {
   // columns — so a test about what is drawn beside the panes says it is on a wide screen.
   window.innerWidth = 1600;
   hoisted.tell = [];
-  hoisted.typed = [];
   told = [];
   container = document.createElement("div");
   document.body.appendChild(container);
@@ -139,7 +127,7 @@ describe("a turn standing on a page", () => {
     // Fill this page and open one on the next, then turn to it.
     await openPane();
     await openPane();
-    await press("2");
+    await goPage(2);
     expect(q(".termface__needs")).toHaveLength(1);
   });
 
@@ -148,14 +136,14 @@ describe("a turn standing on a page", () => {
     await openPane();
     await openPane();
     await turn(0, true);
-    await press("2");
+    await goPage(2);
     // Turning a page takes the panes down. The turn is not taken down with them — a page turn is
     // exactly when nobody is looking at that pane.
     expect(q(".termface__needs")).toHaveLength(1);
 
-    await press("1");
+    await goPage(1);
     await turn(0, false);
-    await press("2");
+    await goPage(2);
     expect(q(".termface__needs")).toHaveLength(0);
     expect(told).toEqual([true, false]);
   });
@@ -167,7 +155,7 @@ describe("a turn standing on a page", () => {
     await openPane();                 // and two more on page 2, which is where the screen now is
     await turn(2, true);
     await turn(3, true);
-    await press("1");
+    await goPage(1);
 
     expect(q(".termface__needs")).toHaveLength(1);
     expect(q(".termface__needs")[0]!.textContent).toBe("2");
@@ -185,29 +173,5 @@ describe("a turn standing on a page", () => {
     expect(told).toEqual([true]);
     await turn(1, false);
     expect(told).toEqual([true, false]);
-  });
-});
-
-describe("going to the pane that needs you", () => {
-  it("goes to the page it is on and does not type into it", async () => {
-    // Fill this page, then make a pane on the next one and let its turn come.
-    await openPane();
-    await openPane();
-    await openPane();
-    await turn(2, true);
-
-    await press("1");
-    expect(q(".termface__page--on")[0]!.textContent).toContain("1");
-
-    await press("j");
-    expect(q(".termface__page--on")[0]!.textContent).toContain("2");
-    // ⌘J moves. A terminal is somebody's, and typing into it on their behalf is not being told.
-    expect(hoisted.typed).toEqual([]);
-  });
-
-  it("says so, in the ledger's own terms, when there is nowhere to go", async () => {
-    await openPane();
-    await press("j");
-    expect(container.textContent).toContain(t("face.nothingNeedsYou"));
   });
 });

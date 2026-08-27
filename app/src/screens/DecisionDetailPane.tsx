@@ -405,8 +405,9 @@ function DecisionStamps({ d }: { d: Decision }) {
 // The classification axes a decision sits on (`AMB-D-781`) — the decision side of the task pane's
 // selects, and the same optimistic move: the select goes first and a refusal takes it back. The axes
 // belong to the project, so a project carrying none draws nothing at all, which is the common case for
-// the decisions recorded before this existed. No axis is required here — `required` bites where a
-// creation is finished, and a decision has none.
+// the decisions recorded before this existed. A required axis is not enforced in this control: the flag
+// bites where a record is settled (`AMB-D-790`), which on this side is the accept below — so an axis
+// left blank here comes back as a refusal from that press, not as a select this component holds.
 function DecisionDimensions({ d }: { d: Decision }) {
   const [values, setValues] = useState<Record<number, number>>({});
   const [error, setError] = useState<string | null>(null);

@@ -30,7 +30,7 @@ use amenbo_scenario::{Args, Domain};
 
 use crate::{req_i64, unmapped, Driver, Outcome};
 
-/// The commands the build looks for, in the order it lists them (`amenbo_core::harness::HARNESSES`).
+/// The commands the build looks for, in the order it lists them (`amenbo_core::harness::LAUNCHES`).
 ///
 /// Written down here rather than asked, because no face of the shipped binary hands the catalog out
 /// — `agent-hook snippet` answers with a tool's wiring text and never with the program it is
@@ -38,7 +38,7 @@ use crate::{req_i64, unmapped, Driver, Outcome};
 /// and the machine reads as whatever the operator has. The row this premise exists to stand up is
 /// then not standing, and the assert that reads it (`opens-with` with `start: none`) is what says
 /// so — on any machine with fewer than two agents of its own.
-const COMMANDS: &[&str] = &["claude", "copilot", "cursor-agent", "codex", "gemini"];
+const COMMANDS: &[&str] = &["claude", "codex", "copilot", "gemini", "opencode", "cursor-agent"];
 
 /// Put `count` of them in `tools`, and say what was stood up.
 ///

@@ -541,6 +541,17 @@ export const es: Translation = {
     "face.open": "Abrir una terminal aquí",
     "face.openPick": "Elige uno",
     "face.moreStarts": "No instalados ({n})",
+    "face.startsOwn": "Comandos que registraste",
+    "face.startAdd": "Registrar un comando",
+    "face.startName": "Nombre",
+    "face.startNamePh": "Claude (Opus)",
+    "face.startLine": "Línea de comandos",
+    "face.startLinePh": "claude --model opus",
+    "face.startRuns": "Esto es lo que se ejecuta en la terminal:",
+    "face.startSave": "Guardar",
+    "face.startCancel": "Cancelar",
+    "face.startEdit": "Editar",
+    "face.startRemove": "Quitar",
     "face.openHere": "Sitio para otro panel en este proyecto",
     "face.whichFolder": "¿En qué carpeta trabaja este panel?",
     "face.rename": "Cambiar el nombre de este panel",
@@ -573,6 +584,17 @@ export const es: Translation = {
     "files.unreadable": "No se pudo leer este archivo.",
     "files.dropStopped": "No se pudo incorporar {name}: {why}",
     "files.dropPartly": "Se incorporaron {count}. {name} no: {why}",
+    // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+    // of the three it is, so there is no separate place for a reader to look for the answer.
+    "files.save": "Guardar",
+    "files.saving": "Guardando…",
+    "files.saved": "Guardado",
+    // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+    // line of the other, so the reader is told and asked (`AMB-D-773`).
+    "files.newlinesMixed": "Este archivo tiene los dos tipos de salto de línea. Al guardarlo, todos quedarán iguales.",
+    "files.newlineChoose": "Con qué salto de línea guardarlo",
+    "files.newlineLf": "Unix (LF)",
+    "files.newlineCrlf": "Windows (CRLF)",
     "files.tooBig": "Esta imagen es demasiado grande para mostrarla aquí.",
     "files.tooBigPixels": "{width} × {height} píxeles",
     "files.tooBigOpen": "Abrirla en otra aplicación",
@@ -736,6 +758,10 @@ export const es: Translation = {
     folder_name: "Esta máquina no admite {name} como nombre.",
     folder_make: "No se pudo crear {name}: {reason}",
     folder_rename: "No se pudo cambiar el nombre a {name}: {reason}",
+    // What the file panel answers a save with (`crate::folder_save`). The character is named
+    // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+    folder_not_saved: "No se pudo guardar este archivo: {reason}",
+    folder_unwritable_character: "«{character}» no se puede escribir en {encoding}, así que no se guardó nada.",
 
     already_reserved:
       "{ref} no está en “Pendiente”, así que no se puede reservar: puede que otra sesión ya la tenga.",

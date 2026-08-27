@@ -587,6 +587,17 @@ const ui = {
   // reader would press, so there is no refusal to explain afterwards (`AMB-T-3686`).
   "face.openPick": "Choose one",
   "face.moreStarts": "Not installed ({n})",
+  "face.startsOwn": "Commands you registered",
+  "face.startAdd": "Register a command",
+  "face.startName": "Name",
+  "face.startNamePh": "Claude (Opus)",
+  "face.startLine": "Command line",
+  "face.startLinePh": "claude --model opus",
+  "face.startRuns": "This is what runs in the terminal:",
+  "face.startSave": "Save",
+  "face.startCancel": "Cancel",
+  "face.startEdit": "Edit",
+  "face.startRemove": "Remove",
   "face.openHere": "Room for another pane in this project",
   "face.whichFolder": "Which folder does this pane work in?",
   "face.rename": "Rename this pane",
@@ -623,6 +634,17 @@ const ui = {
   "files.unreadable": "This file could not be read.",
   "files.dropStopped": "{name} could not be brought in: {why}",
   "files.dropPartly": "{count} came in. {name} did not: {why}",
+  // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+  // of the three it is, so there is no separate place for a reader to look for the answer.
+  "files.save": "Save",
+  "files.saving": "Saving…",
+  "files.saved": "Saved",
+  // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+  // line of the other, so the reader is told and asked (`AMB-D-773`).
+  "files.newlinesMixed": "This file has both kinds of line break. Saving makes them all the same.",
+  "files.newlineChoose": "Which line break to save it in",
+  "files.newlineLf": "Unix (LF)",
+  "files.newlineCrlf": "Windows (CRLF)",
   // A picture the panel would not draw. What it is refused for travels with the
   // refusal, because a reader shown nothing at all reads it as a damaged file
   // (`AMB-D-783`).
@@ -815,6 +837,10 @@ const err: Partial<Record<ErrorCode, string>> = {
   folder_name: "This machine will not take {name} as a name.",
   folder_make: "{name} could not be made: {reason}",
   folder_rename: "It could not be renamed to {name}: {reason}",
+  // What the file panel answers a save with (`crate::folder_save`). The character is named
+  // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+  folder_not_saved: "This file could not be saved: {reason}",
+  folder_unwritable_character: "“{character}” cannot be written in {encoding}, so nothing was saved.",
 
   // The sentences the GUI shows a person, named one at a time (`AMB-D-413`). Which refusals get a code of
   // their own was settled by measuring what the front end actually surfaces: a form the screen already

@@ -158,13 +158,8 @@ pub fn read(bytes: &[u8], truncated: bool, tld: Option<&[u8]>) -> Read {
 /// `&#10003;` and the reader is never told. Named, it can be said out loud instead, and the save
 /// stopped while it still can be (`AMB-D-773`).
 ///
-/// Nothing calls this yet: the door that saves a file is `AMB-T-3789`'s, and it is blocked on this
-/// module. What the encoding is for is round-tripping, and a half of it that only reads would be an
-/// encoding remembered for nobody.
-///
 /// `encoding` has to be one [`writable`] answered with. Handed anything else — UTF-16, `replacement`
 /// — `encoding_rs` would quietly encode UTF-8 in its place.
-#[allow(dead_code)]
 pub fn write(text: &str, encoding: &'static Encoding, bom: bool) -> Result<Vec<u8>, char> {
     debug_assert_eq!(encoding.output_encoding(), encoding, "an encoding nothing writes");
     let mut out = Vec::with_capacity(text.len() + 3);
@@ -233,7 +228,6 @@ pub fn writable(name: &str) -> Option<&'static Encoding> {
 /// The byte order mark to put back. UTF-8 is the only one that reaches here — the two UTF-16 forms
 /// are the other marks that exist, and neither is written at all ([`WRITABLE`]) — and encoding text
 /// never puts a mark back by itself.
-#[allow(dead_code)]
 fn bom_of(encoding: &'static Encoding) -> &'static [u8] {
     if encoding == encoding_rs::UTF_8 { &[0xEF, 0xBB, 0xBF] } else { &[] }
 }

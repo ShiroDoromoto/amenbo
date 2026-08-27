@@ -520,6 +520,17 @@ export const zhHant: Translation = {
     "face.open": "在此開啟終端機",
     "face.openPick": "請選擇一個",
     "face.moreStarts": "未安裝（{n}）",
+    "face.startsOwn": "你登錄的啟動命令",
+    "face.startAdd": "登錄命令",
+    "face.startName": "名稱",
+    "face.startNamePh": "Claude（Opus）",
+    "face.startLine": "命令列",
+    "face.startLinePh": "claude --model opus",
+    "face.startRuns": "終端機裡跑的就是這一行：",
+    "face.startSave": "儲存",
+    "face.startCancel": "取消",
+    "face.startEdit": "修改",
+    "face.startRemove": "刪除",
     "face.openHere": "在這個專案裡給下一個窗格騰出位置",
     "face.whichFolder": "這個窗格在哪個資料夾中工作？",
     "face.rename": "重新命名此窗格",
@@ -552,6 +563,17 @@ export const zhHant: Translation = {
     "files.unreadable": "無法讀取這個檔案。",
     "files.dropStopped": "沒能把 {name} 放進來：{why}",
     "files.dropPartly": "放進來 {count} 個。{name} 沒有：{why}",
+    // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+    // of the three it is, so there is no separate place for a reader to look for the answer.
+    "files.save": "儲存",
+    "files.saving": "正在儲存…",
+    "files.saved": "已儲存",
+    // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+    // line of the other, so the reader is told and asked (`AMB-D-773`).
+    "files.newlinesMixed": "這個檔案裡兩種換行都有。儲存後會統一成一種。",
+    "files.newlineChoose": "要用哪種換行儲存",
+    "files.newlineLf": "Unix (LF)",
+    "files.newlineCrlf": "Windows (CRLF)",
     "files.tooBig": "這張圖太大了，沒辦法在這裡顯示。",
     "files.tooBigPixels": "{width} × {height} 像素",
     "files.tooBigOpen": "用別的應用程式開啟",
@@ -707,6 +729,10 @@ export const zhHant: Translation = {
     folder_name: "這台機器不接受 {name} 作為名稱。",
     folder_make: "無法建立 {name}：{reason}",
     folder_rename: "無法重新命名為 {name}：{reason}",
+    // What the file panel answers a save with (`crate::folder_save`). The character is named
+    // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+    folder_not_saved: "無法儲存這個檔案：{reason}",
+    folder_unwritable_character: "「{character}」在 {encoding} 裡寫不出來，所以什麼都沒儲存。",
 
     already_reserved: "{ref} 不是「待辦」，無法認領；可能已有另一個工作階段在處理。",
     not_ready: "{ref} 還不能認領：{reasons}",

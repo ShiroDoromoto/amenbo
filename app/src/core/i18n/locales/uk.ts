@@ -546,6 +546,17 @@ export const uk: Translation = {
     "face.open": "Відкрити тут термінал",
     "face.openPick": "Виберіть один",
     "face.moreStarts": "Не встановлено ({n})",
+    "face.startsOwn": "Команди, які ви записали",
+    "face.startAdd": "Записати команду",
+    "face.startName": "Назва",
+    "face.startNamePh": "Claude (Opus)",
+    "face.startLine": "Командний рядок",
+    "face.startLinePh": "claude --model opus",
+    "face.startRuns": "Ось що виконається в терміналі:",
+    "face.startSave": "Зберегти",
+    "face.startCancel": "Скасувати",
+    "face.startEdit": "Змінити",
+    "face.startRemove": "Видалити",
     "face.openHere": "Місце для ще однієї панелі в цьому проєкті",
     "face.whichFolder": "У якій теці працює ця панель?",
     "face.rename": "Перейменувати цю панель",
@@ -578,6 +589,17 @@ export const uk: Translation = {
     "files.unreadable": "Не вдалося прочитати цей файл.",
     "files.dropStopped": "Не вдалося перенести {name}: {why}",
     "files.dropPartly": "Перенесено: {count}. {name} — ні: {why}",
+    // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+    // of the three it is, so there is no separate place for a reader to look for the answer.
+    "files.save": "Зберегти",
+    "files.saving": "Збереження…",
+    "files.saved": "Збережено",
+    // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+    // line of the other, so the reader is told and asked (`AMB-D-773`).
+    "files.newlinesMixed": "У цьому файлі обидва види переносу рядків. Після збереження всі стануть однаковими.",
+    "files.newlineChoose": "З яким переносом рядків зберегти",
+    "files.newlineLf": "Unix (LF)",
+    "files.newlineCrlf": "Windows (CRLF)",
     "files.tooBig": "Це зображення завелике, щоб показати його тут.",
     "files.tooBigPixels": "{width} × {height} пікселів",
     "files.tooBigOpen": "Відкрити в іншій програмі",
@@ -745,6 +767,10 @@ export const uk: Translation = {
     folder_name: "Ця машина не приймає {name} як ім’я.",
     folder_make: "Не вдалося створити {name}: {reason}",
     folder_rename: "Не вдалося перейменувати на {name}: {reason}",
+    // What the file panel answers a save with (`crate::folder_save`). The character is named
+    // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+    folder_not_saved: "Не вдалося зберегти цей файл: {reason}",
+    folder_unwritable_character: "«{character}» не можна записати в {encoding}, тому нічого не збережено.",
 
     already_reserved:
       "{ref} не має статусу «До виконання», тож взяти його не можна — можливо, ним уже зайнятий інший сеанс.",

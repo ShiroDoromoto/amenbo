@@ -523,6 +523,17 @@ export const vi: Translation = {
     "face.open": "Mở terminal ở đây",
     "face.openPick": "Chọn một cái",
     "face.moreStarts": "Chưa cài đặt ({n})",
+    "face.startsOwn": "Lệnh bạn đã đăng ký",
+    "face.startAdd": "Đăng ký một lệnh",
+    "face.startName": "Tên",
+    "face.startNamePh": "Claude (Opus)",
+    "face.startLine": "Dòng lệnh",
+    "face.startLinePh": "claude --model opus",
+    "face.startRuns": "Đây là thứ chạy trong terminal:",
+    "face.startSave": "Lưu",
+    "face.startCancel": "Hủy",
+    "face.startEdit": "Sửa",
+    "face.startRemove": "Xóa",
     "face.openHere": "Chỗ cho thêm một khung trong dự án này",
     "face.whichFolder": "Khung này làm việc trong thư mục nào?",
     "face.rename": "Đổi tên khung này",
@@ -555,6 +566,17 @@ export const vi: Translation = {
     "files.unreadable": "Không đọc được tệp này.",
     "files.dropStopped": "Không đưa được {name} vào: {why}",
     "files.dropPartly": "Đã đưa vào {count}. {name} thì không: {why}",
+    // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+    // of the three it is, so there is no separate place for a reader to look for the answer.
+    "files.save": "Lưu",
+    "files.saving": "Đang lưu…",
+    "files.saved": "Đã lưu",
+    // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+    // line of the other, so the reader is told and asked (`AMB-D-773`).
+    "files.newlinesMixed": "Tệp này có cả hai kiểu xuống dòng. Khi lưu, tất cả sẽ thành một kiểu.",
+    "files.newlineChoose": "Lưu với kiểu xuống dòng nào",
+    "files.newlineLf": "Unix (LF)",
+    "files.newlineCrlf": "Windows (CRLF)",
     "files.tooBig": "Ảnh này quá lớn để hiển thị ở đây.",
     "files.tooBigPixels": "{width} × {height} pixel",
     "files.tooBigOpen": "Mở bằng ứng dụng khác",
@@ -710,6 +732,10 @@ export const vi: Translation = {
     folder_name: "Máy này không nhận {name} làm tên.",
     folder_make: "Không tạo được {name}: {reason}",
     folder_rename: "Không đổi tên thành {name} được: {reason}",
+    // What the file panel answers a save with (`crate::folder_save`). The character is named
+    // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+    folder_not_saved: "Không lưu được tệp này: {reason}",
+    folder_unwritable_character: "“{character}” không viết được trong {encoding}, nên không có gì được lưu.",
 
     already_reserved: "{ref} không ở trạng thái “Cần làm” nên không thể nhận — có thể một phiên khác đã giữ nó.",
     not_ready: "{ref} chưa thể nhận: {reasons}",

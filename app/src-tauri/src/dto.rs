@@ -2256,6 +2256,28 @@ pub struct FolderEntryDto {
     pub(crate) is_dir: bool,
 }
 
+/// One path git named inside the folder the file face is showing (`crate::folder_git`).
+///
+/// The two letters are git's own and are carried across as they came: the first is what the index
+/// says about the path, the second what the working tree says, and a space in either is git saying
+/// nothing about that half. Turning them into a word here would be deciding what a colour means,
+/// which is the face's to decide and not the same question on every road.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct GitEntryDto {
+    /// Where it is, as segments from the bound folder — the spelling a tree row is built from, with
+    /// the repository's own front already taken off.
+    pub(crate) path: Vec<String>,
+    /// What the index says: git's `X`, one character.
+    pub(crate) index: String,
+    /// What the working tree says: git's `Y`, read the same way.
+    pub(crate) worktree: String,
+    /// Whether git named a folder as a whole rather than what is inside it, which is what it does
+    /// with an untracked one. A folded folder is somewhere a colour still has to appear.
+    pub(crate) is_dir: bool,
+}
+
 /// One application a file could be opened with, as the file face draws a row of the chooser it has
 /// to draw itself (`crate::open_with`).
 ///

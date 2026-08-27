@@ -237,7 +237,7 @@ amenbo task list --filter "time_axis:v2 done:false" --json
 
 # Words are not one of the filter keys: `search` is the one place they go. It answers
 # with the places a word is written — tasks, decisions, the comments on both, the labels
-# a task is filed under, the names of what is attached — one line per place, with an
+# either is filed under, the names of what is attached — one line per place, with an
 # excerpt and where the record it points at stands. Words are ANDed; --filter takes the
 # same grammar as `task list`, and since
 # that grammar is task vocabulary, a search carrying one is a search of tasks. A project

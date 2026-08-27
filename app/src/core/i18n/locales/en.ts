@@ -590,18 +590,17 @@ const ui = {
   "face.whichFolder": "Which folder does this pane work in?",
   "face.rename": "Rename this pane",
   "face.needsYou": "waiting on you",
-  // The file face beside the terminal's pane: what changed in the project's folder lately, and
-  // the folder itself, folded. What a file turns out not to be is said in its own words — a
-  // binary is not a failure, it is simply not something a panel can show.
+  // The file face beside the terminal's pane: the project's folder, folded, with what git says
+  // about each row drawn as a colour rather than as words (`AMB-D-785`). What a file turns out not
+  // to be is said in its own words — a binary is not a failure, it is simply not something a panel
+  // can show.
   "files.tab": "Files",
   "files.memo": "The page",
   "files.memoWide": "Write it wide",
   "files.memoNarrow": "Back to the panel",
   "files.memoTyping": "Typing",
   "files.memoKept": "Kept",
-  "files.changed": "Changed lately",
   "files.tree": "The folder",
-  "files.nothingChanged": "Nothing has changed yet.",
   "files.partial": "Some of this folder is not being watched.",
   "files.noFolder": "This project has no folder yet.",
   "files.folderGone": "This folder is not there any more.",

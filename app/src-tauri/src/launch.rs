@@ -95,7 +95,7 @@ pub fn command(cwd: Option<PathBuf>, run: Option<&str>) -> CommandBuilder {
 /// command line.
 ///
 /// The program is written as it stands. It is a catalog row's own name
-/// ([`amenbo_core::harness::Harness::command`]), held to [`plain`] by the same test the probe's script
+/// ([`amenbo_core::harness::Launch::command`]), held to [`plain`] by the same test the probe's script
 /// is held to, and quoting it would need a different spelling again on each shell — PowerShell reads a
 /// quoted string at the head of a line as a string, not as something to run.
 pub fn command_line(program: &str, args: &[String]) -> String {
@@ -334,7 +334,7 @@ const FOUND: &str = "amenbo-has ";
 /// asked about — so the names go in as one script and come back as one list, rather than paying that
 /// cost once per name.
 ///
-/// Names are the catalog's ([`amenbo_core::harness::Harness::command`]), never a reader's, and are
+/// Names are the catalog's ([`amenbo_core::harness::Launch::command`]), never a reader's, and are
 /// held to that here as well: anything that is not a plain program name is dropped rather than
 /// spliced into a shell script.
 ///
@@ -487,7 +487,7 @@ mod tests {
     #[test]
     fn the_shell_hands_a_quoted_argument_over_whole() {
         let instruction = amenbo_core::harness::opening(
-            amenbo_core::harness::find("claude-code").expect("the catalog lists it"),
+            amenbo_core::harness::find_launch("claude-code").expect("the catalog lists it"),
             "amenbo",
         )
         .pop()
@@ -579,12 +579,12 @@ mod tests {
         assert!(!plain("a b"));
     }
 
-    /// Every command the catalog lists is a name the probe will actually ask about — a row whose
+    /// Every command the launch catalog lists is a name the probe will actually ask about — a row whose
     /// command this dropped would read as "not installed" on every machine, forever.
     #[test]
     fn every_catalogued_command_is_askable() {
-        for harness in amenbo_core::harness::HARNESSES {
-            assert!(plain(harness.command), "{} is not askable", harness.id);
+        for launch in amenbo_core::harness::LAUNCHES {
+            assert!(plain(launch.command), "{} is not askable", launch.id);
         }
     }
 

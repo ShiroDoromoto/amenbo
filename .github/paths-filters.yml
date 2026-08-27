@@ -102,6 +102,10 @@ npm_deps:
   # verdict — a test edited alone still has to re-open this.
   - 'deny.toml'
   - 'guards/*.mjs'
+  # The other thing the same job judges: the TextMate grammars the file panel bundles are
+  # licensed one by one, inside a package that declares only its own license. This file is
+  # the list of what ships, so a grammar added to it has to re-open the gate that reads it.
+  - 'app/src/files/grammars.ts'
   - '.github/workflows/_ci.yml'
   - '.github/paths-filters.yml'
   - '.github/workflows/_rot-gates.yml'

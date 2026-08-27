@@ -2,8 +2,14 @@
 // video, PDF, text, markdown, CSV), and anything large streams through the custom protocol (blobUrl)
 // rather than a data URL. A url-mode attachment is a link, so it opens; a blob is a file, so it
 // downloads — every blob carries that button, previewable or not, because a preview is not a copy
-// the user keeps. There are two ways to add one: the file picker (by path, ingested as a stream) and
-// drag & drop (by bytes).
+// the user keeps. There are two ways to add one, and both hand over a path the host ingests as a
+// stream: the file picker, and a file dragged in from the desktop.
+//
+// **Which well a dragged file landed on is worked out rather than given.** The host receives the
+// drop now (`AMB-D-775`), which is what puts an OS path in reach on all three systems — and what
+// takes away the browser firing `drop` on the element under the pointer. A screen carries a well
+// under the record and one under every comment, so each marks itself and the point decides
+// (`../core/attachDrop`).
 //
 // Which renderer runs is decided by an allowlist (`previewKind`). An attachment is unverified bytes
 // and the webview is an execution environment with a line to the IPC, so the types we will render are
@@ -13,9 +19,10 @@ import { useEffect, useState } from "react";
 import { useAttachments, type Attachment } from "../core/reads";
 import { blobUrl } from "../core/blobUrl";
 import {
-  attachDroppedFiles, openAttachment, pickAndAttach, removeAttachment, saveAttachment,
+  attachDroppedPaths, openAttachment, pickAndAttach, removeAttachment, saveAttachment,
   type AttachTarget,
 } from "../core/mutations";
+import { watchAttachWell, WELL_ATTR } from "../core/attachDrop";
 import { confirmDialog } from "../core/dialog";
 import { previewKind } from "../core/attachmentView";
 import { Markdown } from "./Markdown";
@@ -132,16 +139,25 @@ export function Attachments({ target, targetId, compact = false }: {
   const attachments = useAttachments(target, targetId);
   const [dragActive, setDragActive] = useState(false);
   const [busy, setBusy] = useState(false);
+  // What names this well among all the wells on the screen. The record and each of its comments have
+  // one, and what tells them apart is exactly what an attachment is attached to.
+  const well = `${target}:${targetId}`;
 
-  const onDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragActive(false);
-    const files = e.dataTransfer?.files;
-    if (!files || files.length === 0) return;
-    setBusy(true);
-    try { await attachDroppedFiles(target, targetId, files); }
-    finally { setBusy(false); }
-  };
+  useEffect(() => {
+    // The ingest outlives the row it was started from — a large file takes a while — so what comes
+    // back from it is dropped rather than written into a component that has gone.
+    let alive = true;
+    const stop = watchAttachWell(well, {
+      over: (over) => { if (alive) setDragActive(over); },
+      drop: (paths) => {
+        if (!alive) return;
+        setDragActive(false);
+        setBusy(true);
+        void attachDroppedPaths(target, targetId, paths).finally(() => { if (alive) setBusy(false); });
+      },
+    });
+    return () => { alive = false; stop(); };
+  }, [well]);
   const onPick = async () => {
     setBusy(true);
     try { await pickAndAttach(target, targetId); }
@@ -182,9 +198,7 @@ export function Attachments({ target, targetId, compact = false }: {
     return (
       <div
         className={`attach__drop attach__drop--compact ${dragActive ? "attach__drop--active" : ""}`}
-        onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
-        onDragLeave={() => setDragActive(false)}
-        onDrop={onDrop}
+        {...{ [WELL_ATTR]: well }}
       >
         {items.length > 0 && <div className="attach__list">{items}</div>}
         {dragActive ? (
@@ -208,9 +222,7 @@ export function Attachments({ target, targetId, compact = false }: {
       </div>
       <div
         className={`attach__drop ${dragActive ? "attach__drop--active" : ""}`}
-        onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
-        onDragLeave={() => setDragActive(false)}
-        onDrop={onDrop}
+        {...{ [WELL_ATTR]: well }}
       >
         {attachments.length === 0 ? (
           <div className="faint attach__drophint">

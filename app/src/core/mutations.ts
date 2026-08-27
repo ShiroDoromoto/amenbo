@@ -1447,15 +1447,17 @@ export async function pickAndAttach(target: AttachTarget, targetId: number): Pro
 }
 
 /**
- * Attach dropped Files as blobs, by bytes. Drag-and-drop inside the webview cannot give us an OS path
- * (`dragDropEnabled:false`), so we read the file and hand over the bytes. For large files, prefer the
- * picker (`pickAndAttach`).
+ * Attach files dropped on a well, by the paths the host handed over (`./attachDrop`).
+ *
+ * The same road the picker takes: a path is ingested as a stream, so a large file never sits in this
+ * side's memory at all. What the reader asked for by the key they were holding is not read — a
+ * "move" would mean deleting the file where it lives, and taking somebody's file off their desktop
+ * is not what attaching one means.
  */
-export async function attachDroppedFiles(target: AttachTarget, targetId: number, files: FileList | File[]): Promise<void> {
+export async function attachDroppedPaths(target: AttachTarget, targetId: number, paths: string[]): Promise<void> {
   if (!inTauri()) return;
-  for (const file of Array.from(files)) {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    await invokeAck("attachment_add_bytes", { targetType: target, targetId, filename: file.name, bytes });
+  for (const path of paths) {
+    await invokeAck("attachment_add", { targetType: target, targetId, path });
   }
 }
 

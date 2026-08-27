@@ -10,7 +10,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { bundledGrammars, judgeGrammars } from './check-grammar-licenses.mjs'
+import { bundledGrammars, judgeGrammars, judgeLangConfig } from './check-grammar-licenses.mjs'
 
 const ALLOW = new Set(['MIT', 'Apache-2.0'])
 const GRANTS = { open: { from: 'https://example.invalid', text: 'anything goes', why: 'no condition attached' } }
@@ -96,6 +96,51 @@ test('a grant nothing claims is refused', () => {
   const { violations } = judgeGrammars(new Set(['rust']), ALLOW, table, GRANTS)
   assert.equal(violations.length, 1)
   assert.match(violations[0], /the grant "open" is recorded here but nothing claims it/)
+})
+
+// --- the baked language configurations ----------------------------------------------------------
+
+const MANIFEST = {
+  licence: 'MIT',
+  repository: 'https://github.com/microsoft/vscode',
+  revision: 'a'.repeat(40),
+  files: [{ lang: 'rust', source: `https://example.invalid/${'a'.repeat(40)}/rust` }],
+}
+
+test('a baked configuration set that matches its manifest passes', () => {
+  const { violations, judged } = judgeLangConfig(MANIFEST, ['rust.json'], ALLOW)
+  assert.deepEqual(violations, [])
+  assert.equal(judged, 1)
+})
+
+// The whole set arrives under one licence, so a licence we cannot ship stops all of it.
+test('a baked set under a licence we may not ship is refused', () => {
+  const { violations } = judgeLangConfig({ ...MANIFEST, licence: 'GPL-3.0' }, ['rust.json'], ALLOW)
+  assert.equal(violations.length, 1)
+  assert.match(violations[0], /GPL-3\.0/)
+})
+
+// A licence read at a branch is a licence that has already moved by the time anybody checks it.
+test('a manifest with no full revision is refused', () => {
+  const { violations } = judgeLangConfig({ ...MANIFEST, revision: 'main' }, ['rust.json'], ALLOW)
+  assert.ok(violations.some((v) => /no full revision/.test(v)))
+})
+
+test('a file in the tree that the manifest does not record is refused', () => {
+  const { violations } = judgeLangConfig(MANIFEST, ['rust.json', 'perl.json'], ALLOW)
+  assert.equal(violations.length, 1)
+  assert.match(violations[0], /perl\.json is in the tree but not in SOURCE\.json/)
+})
+
+test('a file the manifest records but the tree does not hold is refused', () => {
+  const { violations } = judgeLangConfig(MANIFEST, [], ALLOW)
+  assert.ok(violations.some((v) => /rust\.json is in SOURCE\.json but not in the tree/.test(v)))
+})
+
+test('a file recorded against some other revision than the pinned one is refused', () => {
+  const files = [{ lang: 'rust', source: 'https://example.invalid/main/rust' }]
+  const { violations } = judgeLangConfig({ ...MANIFEST, files }, ['rust.json'], ALLOW)
+  assert.ok(violations.some((v) => /not recorded against the pinned revision/.test(v)))
 })
 
 test('the catalog we actually ship passes', async () => {

@@ -40,13 +40,13 @@ export function wrappable(text: string): boolean {
   }
 }
 
-// Colour is a second dynamic import behind the editor's own: a grammar is fetched only for a file
-// written in something this panel reads (`./grammars`), and one that fails to arrive costs colour
-// and nothing else — an uncoloured file is what the panel drew before there were grammars at all.
-async function colourFor(lang: LangId): Promise<Extension[]> {
+// What the editor knows about the file is a second dynamic import behind the editor's own, and one
+// that fails to arrive costs colour and manners, not the editor — a plain editor over plain text is
+// what the panel had before either existed.
+async function mannersFor(lang: LangId | null): Promise<Extension[]> {
   try {
-    const { textmate } = await import("./highlight");
-    return [await textmate(lang)];
+    const { language } = await import("./language");
+    return [await language(lang)];
   } catch {
     return [];
   }
@@ -77,14 +77,13 @@ export async function mountEditor(
   editable: boolean,
   name: string,
 ): Promise<Mounted> {
-  // The grammar is fetched beside the editor, not after it: a file that appears uncoloured and then
-  // repaints reads as a glitch, where one that was never coloured reads as a plain file.
-  const lang = langFor(name);
-  const [{ EditorState, Compartment }, view, commands, colour] = await Promise.all([
+  // Fetched beside the editor, not after it: a file that appears uncoloured and then repaints reads
+  // as a glitch, where one that was never coloured reads as a plain file.
+  const [{ EditorState, Compartment }, view, commands, manners] = await Promise.all([
     import("@codemirror/state"),
     import("@codemirror/view"),
     import("@codemirror/commands"),
-    lang === null ? Promise.resolve<Extension[]>([]) : colourFor(lang),
+    mannersFor(langFor(name)),
   ]);
   const { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter } = view;
   const { history, defaultKeymap, historyKeymap } = commands;
@@ -118,10 +117,23 @@ export async function mountEditor(
             color: "var(--c-text-muted)",
             border: "none",
           },
+          // The fold arrows are drawn faintly and come up on hover: they sit beside every line of
+          // the file and would otherwise be a second column of marks competing with the numbers.
+          ".cm-foldGutter .cm-gutterElement": { color: "var(--c-text-faint)", cursor: "pointer" },
+          ".cm-foldGutter .cm-gutterElement:hover": { color: "var(--c-text)" },
+          // What stands in for the lines that were folded away. It is a thing to click, so it is
+          // drawn as one rather than as text that happens to be there.
+          ".cm-foldPlaceholder": {
+            background: "var(--c-surface-sunken)",
+            border: "1px solid var(--c-border)",
+            borderRadius: "var(--r-sm)",
+            color: "var(--c-text-muted)",
+            padding: "0 var(--s-2)",
+          },
           "&.cm-focused": { outline: "none" },
         }),
         wrapping.of(wrap(text)),
-        ...colour,
+        ...manners,
         EditorState.readOnly.of(!editable),
         // A read-only editor still takes focus and a caret, which is what makes it selectable and
         // navigable by keyboard; what it refuses is changing the text.

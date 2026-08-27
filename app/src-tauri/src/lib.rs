@@ -13,9 +13,14 @@ mod dto;
 /// Whether a drop was a copy or a move: the keys held as it landed, read off the keyboard because no
 /// operating system puts them on the drag event (`AMB-T-3740`).
 mod dropped;
+/// What a file's bytes say, and how to say it back the same way: the encoding a file is really in,
+/// read off a mark, the standard library, or a guess — because reading everything as UTF-8 wrote a
+/// `?` over every byte it could not read (`AMB-D-773`).
+mod encoding;
 mod error;
 /// The custom protocol that hands the webview a file by its path, and the fence that keeps that from
-/// meaning any path: a session this app opened, and then a path inside that session's folder.
+/// meaning any path: a project, one of the folders it is bound to, and then a path inside that
+/// folder.
 mod fileproto;
 /// What a folder holds, which the door above refuses to say: the names inside it, what changed in it
 /// lately, and what one file has to show. Rooted at a folder the project is bound to (`AMB-T-3602`).

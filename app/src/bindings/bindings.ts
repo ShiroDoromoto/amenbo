@@ -529,7 +529,29 @@ image?: FolderImageDto,
 /**
  * The picture that was refused, where it is one and there are too many of it to carry.
  */
-oversize?: FolderOversizeDto, };
+oversize?: FolderOversizeDto, 
+/**
+ * What the bytes were read as (`UTF-8`, `Shift_JIS`, …), for a file that is text. It travels
+ * because a file is written back in what it was read in, and because a guess that went wrong is
+ * only visible to the reader — who cannot be asked about an encoding nobody named to them
+ * (`AMB-D-773`).
+ */
+encoding?: string, 
+/**
+ * Whether the file began with a byte order mark. Encoding text does not put one back, so
+ * nothing but this remembers that 178 files in a real folder have one.
+ */
+bom: boolean, 
+/**
+ * How its lines end.
+ */
+lineEnding: FolderLineEndingDto, 
+/**
+ * Whether writing this text back would produce the bytes that were read. A file that is not
+ * clean — cut at the cap, not wholly decodable, or in an encoding nothing here writes — is one
+ * to read and not to save.
+ */
+clean: boolean, };
 
 /**
  * A picture out of a folder, carried whole so the webview can draw it without a URL of its own.
@@ -546,6 +568,16 @@ mime: string,
  * The whole picture, base64-encoded, for a `data:` URL.
  */
 base64: string, };
+
+/**
+ * How a file's lines end — the wire form of [`crate::encoding::LineEnding`].
+ *
+ * `mixed` is a value of its own rather than the commoner of the two rounded up, because an editor
+ * hands back one kind of newline for both and nothing could tell them apart again: a file written
+ * back in the commoner kind comes out changed on every line that was the other kind. What to do
+ * about one is the reader's to say (`AMB-D-773`).
+ */
+export type FolderLineEndingDto = "lf" | "crlf" | "mixed";
 
 /**
  * A picture the panel would not carry, and what it was measured against (`AMB-D-783`).

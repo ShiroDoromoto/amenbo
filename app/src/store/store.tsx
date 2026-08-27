@@ -71,6 +71,11 @@ interface Store {
    * nowhere else, so raising it never moves a task that is already through that door.
    */
   setDimensionRequired(id: number, required: boolean): void;
+  /**
+   * Narrow or widen which of the two entities this axis classifies (`AMB-D-789`). It decides where the
+   * axis is offered, not what has been answered on it, so narrowing takes no assignment away.
+   */
+  setDimensionAppliesTo(id: number, appliesTo: "task" | "decision" | "both"): void;
   removeDimension(id: number): void;
   addDimensionValue(dimensionId: number, name: string): void;
   renameDimensionValue(valueId: number, name: string): void;
@@ -190,6 +195,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setDimensionTimeAxis(id, timeAxis) { run(mut.setDimensionTimeAxis(id, timeAxis)); },
     setDimensionShowOnCard(id, showOnCard) { run(mut.setDimensionShowOnCard(id, showOnCard)); },
     setDimensionRequired(id, required) { run(mut.setDimensionRequired(id, required)); },
+    setDimensionAppliesTo(id, appliesTo) { run(mut.setDimensionAppliesTo(id, appliesTo)); },
     removeDimension(id) { run(mut.removeDimension(id)); },
     addDimensionValue(dimensionId, name) { run(mut.addDimensionValue(dimensionId, name)); },
     renameDimensionValue(valueId, name) { run(mut.renameDimensionValue(valueId, name)); },

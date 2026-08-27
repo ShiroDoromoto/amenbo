@@ -12,7 +12,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 
 const AXIS = {
   id: 900, name: "フェーズ", slug: "phase", notes: "", role: "none" as const, ordered: false,
-  showOnCard: false, required: false,
+  showOnCard: false, required: false, appliesTo: "both" as const,
   values: [{ id: 901, name: "運用第2期", slug: "ops2" }],
 };
 

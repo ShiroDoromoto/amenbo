@@ -551,6 +551,8 @@ export const vi: Translation = {
     "files.noFolder": "Dự án này chưa có thư mục.",
     "files.folderGone": "Thư mục này không còn nữa.",
     "files.back": "Quay lại danh sách",
+    "files.edit": "Sửa",
+    "files.read": "Đọc",
     "files.openWith": "Mở bằng ứng dụng thường dùng",
     "files.chooseApp": "Mở bằng ứng dụng tôi chọn",
     "files.appUsual": "{name} (ứng dụng thường dùng)",

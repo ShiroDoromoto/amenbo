@@ -574,6 +574,8 @@ export const pl: Translation = {
     "files.noFolder": "Ten projekt nie ma jeszcze folderu.",
     "files.folderGone": "Tego folderu już nie ma.",
     "files.back": "Powrót do listy",
+    "files.edit": "Edytuj",
+    "files.read": "Czytaj",
     "files.openWith": "Otwórz w zwykłej aplikacji",
     "files.chooseApp": "Otwórz w wybranej aplikacji",
     "files.appUsual": "{name} (ta zwykła)",

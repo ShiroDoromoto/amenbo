@@ -969,12 +969,20 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
   // rows open, opened here because this is the one state a reader reaches it from with no row under
   // the pointer.
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  // Whether a Markdown file is being shown as the text it is rather than as what that text draws.
+  // **It goes back with every file opened**, deliberately: what a person opens a Markdown file for
+  // is to read it, and a choice that outlived the file would be a setting nobody set — one edit and
+  // every Markdown file afterwards opens as source, the ones they only wanted to read included.
+  const [asText, setAsText] = useState(false);
   const name = path[path.length - 1];
+  // The one thing the name decides, and the only file there are two ways to show (`MARKDOWN`).
+  const markdown = MARKDOWN.some((ext) => name.toLowerCase().endsWith(ext));
 
   useEffect(() => {
     let alive = true;
     setFile(null);
     setFailed(false);
+    setAsText(false);
     void folderRead(projectId, root, path)
       .then((one) => { if (alive) setFile(one); })
       .catch(() => { if (alive) setFailed(true); });
@@ -990,6 +998,15 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
       <div className="files__bar">
         <button className="files__back" onClick={onBack}>{t("files.back")}</button>
         <span className="files__name" title={path.join("/")}>{name}</span>
+        {/* Drawn for a Markdown file and for nothing else: every other file has one way to be shown,
+            and a switch with nowhere to switch to is a control that answers nothing. What it says is
+            where it goes rather than where it is — the reader can see where they are, and the name
+            beside it is what has to stay legible on a panel this narrow. */}
+        {file?.text !== undefined && markdown && (
+          <button className="files__view" onClick={() => setAsText((was) => !was)}>
+            {t(asText ? "files.read" : "files.edit")}
+          </button>
+        )}
         {close}
       </div>
       <div className="files__body">
@@ -1005,8 +1022,11 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
             src={fileUrl(projectId, root, path, file.image.mime)}
           />
         )}
+        {/* The text is what the file holds and the rendering is a view of it (`AMB-D-41`), so the
+            editor is reachable for a Markdown file too — otherwise the one kind of file an agent
+            writes most is the one kind nobody could correct. */}
         {file?.text !== undefined && (
-          MARKDOWN.some((ext) => name.toLowerCase().endsWith(ext))
+          markdown && !asText
             ? <RefNavProvider value={nav}><Markdown>{file.text}</Markdown></RefNavProvider>
             : <FileEditor text={file.text} editable={!file.truncated && file.clean} name={name} />
         )}

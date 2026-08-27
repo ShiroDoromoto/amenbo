@@ -547,6 +547,8 @@ export const ko: Translation = {
     "files.noFolder": "이 프로젝트에는 아직 폴더가 없습니다.",
     "files.folderGone": "이 폴더는 더 이상 없습니다.",
     "files.back": "목록으로 돌아가기",
+    "files.edit": "편집",
+    "files.read": "읽기",
     "files.openWith": "늘 쓰는 앱으로 열기",
     "files.chooseApp": "앱을 골라서 열기",
     "files.appUsual": "{name} (늘 쓰는 앱)",

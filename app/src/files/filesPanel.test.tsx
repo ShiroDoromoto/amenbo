@@ -654,6 +654,57 @@ describe("the file face", () => {
     expect(container.querySelector("h1")?.textContent).toBe("A heading");
   });
 
+  /** The text is what the file holds and the rendering is a view of it (`AMB-D-41`). Until now the
+   *  one kind of file an agent writes most was the one kind nobody could correct: `.md` went to the
+   *  renderer and never to the editor. */
+  it("switches a Markdown file between what it draws and the text it is", async () => {
+    hoisted.file = aFile({ text: "# A heading" });
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+    // It opens on the rendering: what a person opens a Markdown file for is to read it.
+    expect(container.querySelector("h1")?.textContent).toBe("A heading");
+    expect(hoisted.editing).toHaveLength(0);
+
+    await click(button(t("files.edit")));
+    await settle();
+    expect(container.querySelector("h1")).toBeNull();
+    expect(last(hoisted.editing)).toEqual({ text: "# A heading", editable: true, name: "a.md" });
+
+    await click(button(t("files.read")));
+    await settle();
+    expect(container.querySelector("h1")?.textContent).toBe("A heading");
+  });
+
+  it("draws no switch on a file there is only one way to show", async () => {
+    hoisted.entries[""] = [{ name: "run.sh", isDir: false, ignored: false }];
+    hoisted.file = aFile({ text: "echo hi" });
+    await drawOpen();
+    await click(button("run.sh"));
+    await settle();
+    // A switch with nowhere to switch to is a control that answers nothing.
+    expect(button(t("files.edit"))).toBeUndefined();
+    expect(button(t("files.read"))).toBeUndefined();
+  });
+
+  /** A choice that outlived the file would be a setting nobody set: one edit, and every Markdown
+   *  file afterwards opens as source — the ones they only wanted to read included.
+   *
+   *  Driven through a path clicked in a pane, which is the one road that changes the file under a
+   *  reader that stays on the screen. Going back to the list and picking another row takes the
+   *  reader off the page and would prove only that a fresh one starts fresh. */
+  it("opens the next Markdown file on the rendering, whatever the last one was left on", async () => {
+    hoisted.file = aFile({ text: "# A heading" });
+    await draw({ show: { target: "notes/a.md", cwd: ROOT, nth: 1 } });
+    await click(button(t("files.edit")));
+    await settle();
+    expect(container.querySelector("h1")).toBeNull();
+
+    await draw({ show: { target: "notes/b.md", cwd: ROOT, nth: 2 } });
+    expect(hoisted.asked).toContain(`read:${ROOT}:notes/b.md`);
+    expect(container.querySelector("h1")?.textContent).toBe("A heading");
+  });
+
   it("draws a name the repository ignores, and draws it faintly", async () => {
     hoisted.entries[""] = [
       { name: "src", isDir: true, ignored: false },

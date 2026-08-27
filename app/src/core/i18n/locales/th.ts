@@ -551,6 +551,8 @@ export const th: Translation = {
     "files.noFolder": "โปรเจกต์นี้ยังไม่มีโฟลเดอร์",
     "files.folderGone": "ไม่พบโฟลเดอร์นี้แล้ว",
     "files.back": "กลับไปที่รายการ",
+    "files.edit": "แก้ไข",
+    "files.read": "อ่าน",
     "files.openWith": "เปิดด้วยแอปที่ใช้ประจำ",
     "files.chooseApp": "เปิดด้วยแอปที่เลือกเอง",
     "files.appUsual": "{name} (แอปที่ใช้ประจำ)",

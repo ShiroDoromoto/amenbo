@@ -551,6 +551,8 @@ export const id: Translation = {
     "files.noFolder": "Proyek ini belum punya folder.",
     "files.folderGone": "Folder ini sudah tidak ada.",
     "files.back": "Kembali ke daftar",
+    "files.edit": "Sunting",
+    "files.read": "Baca",
     "files.openWith": "Buka dengan aplikasi biasa",
     "files.chooseApp": "Buka dengan aplikasi pilihan saya",
     "files.appUsual": "{name} (yang biasa)",

@@ -651,6 +651,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
   color: var(--c-text-muted); cursor: pointer;
 }
 .files__back:hover { color: var(--c-text); }
+/* The switch between reading a Markdown file and editing the text it is written in. It sits on the
+   same row as the way back and is drawn the same way: both are ways out of what is on the screen,
+   and neither is the thing the reader came for (`app/src/files/FilesPanel.tsx`). */
+.files__view {
+  flex: none; padding: 0; border: 0; background: none;
+  color: var(--c-text-muted); cursor: pointer;
+}
+.files__view:hover { color: var(--c-text); }
 .files__body { min-height: 0; overflow-y: auto; }
 .files__text { margin: 0; font-family: var(--font-mono); font-size: var(--fs-xs); white-space: pre-wrap; word-break: break-word; }
 /* The editor a file's text is drawn in (`../files/FileEditor`). It brings its own type and colours

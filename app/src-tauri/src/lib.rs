@@ -246,6 +246,19 @@ pub fn run() {
       // its size is bounded. A logger that cannot start is not a reason to refuse to start the app, so
       // the error is dropped rather than raised: there is nowhere left to report it to anyway.
       let _ = app.handle().plugin(diag::logger().build());
+      // Where git is on this machine, settled now rather than under the first thing that wants it
+      // (`AMB-D-774`). `sys::git` keeps its answer for the life of the process, so this is the one call
+      // that pays for it — and what it can cost is a login shell (~40ms measured), which is why it is on
+      // a thread and not on the path the window is waiting on. A machine with no git is remembered as
+      // having none and never spawns one; the callers all have a "git said nothing" path already.
+      //
+      // Started after the logger so the answer is written down: on macOS this is the one line that says
+      // which git a `.app` found, and the two cases it decides between are a dialog on the user's screen
+      // and silence (`amenbo_core::sys::git`).
+      std::thread::spawn(|| match amenbo_core::sys::git() {
+        Some(git) => log::info!("git: {}", git.get_program().to_string_lossy()),
+        None => log::info!("git: none on this machine — nothing will ask it anything"),
+      });
       // The folder picker ("open a folder" = bind to an existing store).
       app.handle().plugin(tauri_plugin_dialog::init())?;
       app.handle().plugin(tauri_plugin_notification::init())?;

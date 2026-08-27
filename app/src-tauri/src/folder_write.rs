@@ -107,7 +107,7 @@ fn rename_one(from: &Path, to: &Path, name: &str) -> Result<(), CmdError> {
         return Err(taken(name));
     }
     std::fs::rename(from, to)
-        .map_err(|e| CmdError::coded("folder.rename", e.to_string(), fields(name)))
+        .map_err(|e| CmdError::coded("folder_rename", e.to_string(), why(name, &e)))
 }
 
 /// Move rows into another folder — another of the project's folders included (`AMB-D-782`).
@@ -412,7 +412,7 @@ fn windows_takes(_name: &str) -> bool {
 /// the one thing the reader has to see to write a different one.
 fn unnameable(name: &str) -> CmdError {
     CmdError::coded(
-        "folder.name",
+        "folder_name",
         format!("this machine will not take {name} as a name"),
         fields(name),
     )
@@ -420,7 +420,7 @@ fn unnameable(name: &str) -> CmdError {
 
 /// The refusal for a name that is already in the folder.
 fn taken(name: &str) -> CmdError {
-    CmdError::coded("folder.taken", format!("{name} is already there"), fields(name))
+    CmdError::coded("folder_taken", format!("{name} is already there"), fields(name))
 }
 
 /// What the making of a name failed with — the one refusal worth its own code being the name that
@@ -429,12 +429,20 @@ fn made(e: std::io::Error, name: &str) -> CmdError {
     if e.kind() == std::io::ErrorKind::AlreadyExists {
         return taken(name);
     }
-    CmdError::coded("folder.make", e.to_string(), fields(name))
+    CmdError::coded("folder_make", e.to_string(), why(name, &e))
 }
 
 /// The one value every refusal here interpolates: the name it is about.
 fn fields(name: &str) -> serde_json::Value {
     serde_json::json!({ "name": name })
+}
+
+/// The same, plus what the machine said — for the two refusals whose reason is the machine's own and
+/// not this module's. The sentence a reader is shown is written where the rest of the prose is
+/// (`app/src/core/i18n`), so the reason has to travel as a value rather than only inside the English
+/// line, which no template can reach into.
+fn why(name: &str, e: &std::io::Error) -> serde_json::Value {
+    serde_json::json!({ "name": name, "reason": e.to_string() })
 }
 
 /// Only what a caller could ask for. Where the answer is the filesystem's, it is asked in a test
@@ -531,7 +539,7 @@ mod tests {
         std::fs::write(&taken, b"somebody else's").expect("a file");
 
         let refused = rename_one(&from, &taken, "beta.md").expect_err("the name is taken");
-        assert_eq!(refused.code, "folder.taken");
+        assert_eq!(refused.code, "folder_taken");
         assert_eq!(std::fs::read(&taken).expect("the file"), b"somebody else's");
         assert!(holds(&from), "and what was being renamed is still there");
     }

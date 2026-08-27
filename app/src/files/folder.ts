@@ -1,4 +1,4 @@
-// The seam to what a folder holds (`crate::folder`, `crate::folder_watch`).
+// The seam to what a folder holds (`crate::folder`, `crate::folder_watch`, `crate::folder_write`).
 //
 // The names inside one folder, what one file has to show and what git says about it are asked for;
 // **that the folder moved is watched** — the host installs a watch over it and says so as it
@@ -7,6 +7,10 @@
 // root all of them are rooted at is a folder the project is bound to, and the host checks that
 // against the store rather than taking this side's word for it, so nothing here has to be careful
 // about which path it passes.
+//
+// **Writing goes the same way and answers differently.** Reading swallows what it cannot do — the
+// row is about to stop being drawn anyway — but a name refused is a person's next keystroke, so the
+// two doors at the end let the refusal through to whoever asked for it.
 //
 // Outside Tauri (`npm run dev` in a browser) there is no filesystem to ask, and the face draws its
 // empty state rather than an error: a folder with nothing in it is what the browser fallback is.
@@ -42,7 +46,7 @@ export async function folderEntries(
  * adds one**: the folders a project is bound to are watched side by side, not one at a time.
  */
 export async function folderWatch(projectId: number, root: string): Promise<FolderChangesDto> {
-  if (!inTauri()) return { root, partial: false, gone: false };
+  if (!inTauri()) return { root, capped: false, unwatched: false, gone: false };
   return await invoke<FolderChangesDto>("folder_watch", { projectId, root });
 }
 
@@ -181,4 +185,36 @@ export async function folderImport(
 ): Promise<FolderCarriedDto> {
   if (!inTauri()) return { arrived: [], stopped: null };
   return await invoke<FolderCarriedDto>("folder_import", { projectId, paths, toRoot, to, effect });
+}
+
+/**
+ * Make one name inside a folder: an empty file, or a folder. `path` is the segments of the name
+ * being made, the new name last.
+ *
+ * **Whether the name is free is the filesystem's answer, not one asked for first.** The host makes it
+ * in the one call that would have refused an existing one, so nothing here has to guess whether
+ * `Alpha.md` counts as taken on a machine that already holds `alpha.md` (`crate::folder_write`).
+ *
+ * The refusal is not swallowed: which name a person may write is the one thing they cannot work out
+ * for themselves, so it goes back to the row they are typing in.
+ */
+export async function folderMake(
+  projectId: number,
+  root: string,
+  path: string[],
+  dir: boolean,
+): Promise<void> {
+  if (!inTauri()) return;
+  await invoke<void>("folder_make", { projectId, root, path, dir });
+}
+
+/** Give one name a different one, in the folder it is already in. `name` is the new name alone. */
+export async function folderRename(
+  projectId: number,
+  root: string,
+  path: string[],
+  name: string,
+): Promise<void> {
+  if (!inTauri()) return;
+  await invoke<void>("folder_rename", { projectId, root, path, name });
 }

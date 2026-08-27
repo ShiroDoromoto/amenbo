@@ -328,10 +328,19 @@ pub fn configuration(harness: &Harness, cmd: &str) -> String {
 /// What `launch` is started with so that the launch instruction is the first thing said to it: the
 /// arguments that follow the program ([`Launch::command`]), in the order they are written.
 ///
-/// **An argument rather than something typed at the program**, because a terminal cannot know when the
-/// agent in it is ready to be typed at — and what is typed at one that is not ready is simply lost. It
-/// is also the one route a trust prompt cannot eat: the agent is handed this before it starts, and works
-/// through it in its own order once it has.
+/// **An argument rather than something typed at the program**, because it is the certain route: the
+/// agent is handed this before it starts, so nothing about what it draws first can eat it, and it is
+/// done in one move. A terminal cannot know when the agent in it is ready to be typed at, and there is
+/// no signal that says so — a program turns bracketed paste on within a tenth of a second of starting,
+/// long before it has drawn an input box (`AMB-T-3819`).
+///
+/// **That is a reason to prefer this route, and no longer a reason there is only one.** Typing at the
+/// program was refused here on two grounds — that readiness cannot be known, and that a trust prompt
+/// standing in front would eat what was typed — and both were grounds against typing *blind*. Amenbo
+/// holds the reading side of the terminal as well, so the sentence can be pasted, watched for on the
+/// screen, and submitted only once it is there; neither ground survives that (`AMB-D-793`, walked in
+/// `app/src-tauri/src/handover.rs`). It stays the second route rather than the first: it is a loop with
+/// a patience and a way of running out of one, and this is an argument.
 ///
 /// `cmd` is the launch command name ([`crate::config::Paths::command_name`]), so a dev-channel build
 /// tells the agent to run the binary the person is actually running — the same text, and the same

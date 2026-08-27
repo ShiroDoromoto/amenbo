@@ -3327,6 +3327,10 @@ fn note(with: &Args) -> Result<&'static str, String> {
         ),
         Some("cut") => Ok("that only the beginning of the file is shown"),
         Some("unreadable") => Ok("that the file could not be read"),
+        // Told apart from the line above on purpose: a link is refused because it is a link, and
+        // saying the file could not be read sends the one reader most likely to meet it — somebody
+        // keeping one file in one place and pointing several projects at it — looking for damage.
+        Some("link") => Ok("that this name is a link, which is not followed out of the project's folders"),
         Some("partial") => Ok("that some of the folder is not being watched"),
         Some("nothing-changed") => Ok("that nothing has changed yet"),
         Some("no-folder") => Ok("that this project has no folder yet"),

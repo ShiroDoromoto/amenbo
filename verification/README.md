@@ -740,6 +740,13 @@ one of the face's standing lines. `row-mark` reads the colour a row wears, named
 belongs to the theme. It is a `Review` and can be nothing else: a shot is read for words, and a row
 wearing a colour says the same letters as the row beside it that wears none.
 
+`drop-in` is the file coming in: one dragged from somewhere else on the machine and let go over a
+folder's row. What it puts under test is the landing rather than the carrying — the drag is
+caught by the application and not by the face, so the part that can be wrong is which folder was
+under the pointer when the hand opened. The file is named and not pathed, for the reason `task
+attach` names one: a drop reads the disk the operator is sitting at, and nothing a run lays down is
+anywhere a hand can reach from there. `bring-a-file-in-from-the-machine` is the road.
+
 The rest are the file going the other way — out of Amenbo, to the machine. `menu` right-clicks a row
 and `menu-on-file` reaches the same menu from the file that is open, which is where a file the face
 refuses to draw offers a way on and no row is under the pointer any more; `hand-over` presses one of

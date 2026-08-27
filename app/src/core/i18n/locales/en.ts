@@ -610,6 +610,15 @@ const ui = {
   "files.chooseApp": "Open with an application I pick",
   "files.appUsual": "{name} (the usual one)",
   "files.reveal": "Show in the file manager",
+  // Taking a file out of the folder, which here means the machine's own bin and nothing further: a
+  // press that was a slip costs a trip to the bin rather than the file (`AMB-D-777`). The question
+  // says so, because what makes "yes" cheap to press is knowing where the file goes.
+  "files.trash": "Move to the bin",
+  "files.trashAsk": "Move {name} to the bin?",
+  "files.trashUndoable": "It goes where this machine's deleted files go, and undo brings it back.",
+  "files.trashQuiet": "Do not ask again",
+  "files.trashGo": "Move it",
+  "files.trashKeep": "Cancel",
   "files.notText": "This is not text, so it cannot be shown here.",
   "files.cut": "Only the beginning is shown.",
   "files.unreadable": "This file could not be read.",

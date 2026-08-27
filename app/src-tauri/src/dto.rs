@@ -2278,17 +2278,54 @@ pub struct FolderCarriedDto {
     pub(crate) stopped: Option<FolderStoppedDto>,
 }
 
-/// The row a carry stopped on, and what stopped it (`crate::folder_write`).
+/// The row a run over several of them stopped on, and what stopped it (`crate::folder_write`,
+/// `crate::trash`).
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct FolderStoppedDto {
-    /// The name that was being carried.
+    /// The name the run was on when it stopped.
     pub(crate) name: String,
     /// What the machine said, in the machine's own words. It is not a code with a template behind
     /// it: what a disk that filled up or a permission that was not there has to say is its own, and
-    /// a sentence written here would be a guess at which of them it was.
+    /// a sentence written here would be a guess at which of them it was. macOS writes its own in the
+    /// reader's language.
+    ///
+    /// Where the machine says nothing this stands in its place, in English — a drive Windows would
+    /// have deleted on rather than binned, and a name that came back into use while its row was in
+    /// the bin (`crate::trash`). Both are Amenbo's judgement rather than a failure, and both are as
+    /// specific as a machine's sentence would have been.
     pub(crate) why: String,
+}
+
+/// What went to the machine's bin, and what it stopped on (`crate::trash`).
+///
+/// The same line through the list a carry answers with, for the same reason: the rows go one at a
+/// time, and once one of them is in the bin no single word covers the press.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderTrashedDto {
+    /// The names that are in the bin now, in the order they went there.
+    pub(crate) gone: Vec<String>,
+    /// The one it stopped on. Absent when the whole list went.
+    pub(crate) stopped: Option<FolderStoppedDto>,
+}
+
+/// What came back out of the bin, and what it stopped on (`crate::trash`).
+///
+/// The names are in the order they were put back, which is the reverse of the order they went in:
+/// undoing a press retraces it rather than replaying it, so a folder is back before what was inside
+/// it.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct FolderRestoredDto {
+    /// The names that are where they were again.
+    pub(crate) back: Vec<String>,
+    /// The one it stopped on. What is still in the bin stays undoable, so pressing undo again
+    /// carries on from here.
+    pub(crate) stopped: Option<FolderStoppedDto>,
 }
 
 /// One path git named inside the folder the file face is showing (`crate::folder_git`).

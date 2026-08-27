@@ -506,7 +506,7 @@ text?: string,
  */
 truncated: boolean, 
 /**
- * The picture, where the bytes say they are one and there are few enough of them to carry.
+ * The picture, where the bytes say they are one and there are few enough of them to draw.
  */
 image?: FolderImageDto, 
 /**
@@ -537,20 +537,23 @@ lineEnding: FolderLineEndingDto,
 clean: boolean, };
 
 /**
- * A picture out of a folder, carried whole so the webview can draw it without a URL of its own.
+ * A picture out of a folder, named rather than carried: the webview asks [`crate::fileproto`] for
+ * the bytes at the path it already has in hand (`AMB-D-783`).
  *
- * The bytes come over the command seam rather than through [`crate::fileproto`], because that door
- * is fenced by a session's folder and this face is rooted at the project's (`AMB-T-3602`).
+ * **The bytes used to come over this seam base64-encoded**, which cost a third again in size, put
+ * the whole picture in one message, and held every byte of it in both processes before a single
+ * pixel was drawn. The door that hands out a file by its path is fenced by the project's folders,
+ * the same fence this answer was resolved through, so there is nothing left for the seam to carry.
+ * A reader is meant to see the picture arrive top to bottom rather than all at once.
  */
 export type FolderImageDto = { 
 /**
  * The type the bytes themselves say they are — read off the first of them, never off the name.
+ *
+ * It travels because the door is told what to serve as: the sniff happened here, and asking the
+ * webview to name the type of a file it has not read would be asking it to guess from the name.
  */
-mime: string, 
-/**
- * The whole picture, base64-encoded, for a `data:` URL.
- */
-base64: string, };
+mime: string, };
 
 /**
  * How a file's lines end — the wire form of [`crate::encoding::LineEnding`].

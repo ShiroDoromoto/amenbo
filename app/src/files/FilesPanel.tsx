@@ -40,6 +40,7 @@ import type {
 import { Markdown } from "../components/Markdown";
 import { useBoundFolders } from "../core/boundFolders";
 import { watchHostDrop } from "../core/hostDrop";
+import { fileUrl } from "../core/fileUrl";
 import { formatNumber, t, tf } from "../core/i18n";
 import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
 import {
@@ -651,8 +652,16 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
       </div>
       <div className="files__body">
         {failed && <p className="files__none">{t("files.unreadable")}</p>}
+        {/* The picture is fetched rather than carried: `folderRead` says only that there is one
+            and what type it is, and the door that hands out a file by its path is addressed with
+            the same project, folder and path this reader was opened on (`AMB-D-783`). It draws
+            top to bottom as it arrives, where a `data:` URL drew all at once or not at all. */}
         {file?.image !== undefined && (
-          <img className="files__image" alt={name} src={`data:${file.image.mime};base64,${file.image.base64}`} />
+          <img
+            className="files__image"
+            alt={name}
+            src={fileUrl(projectId, root, path, file.image.mime)}
+          />
         )}
         {file?.text !== undefined && (
           MARKDOWN.some((ext) => name.toLowerCase().endsWith(ext))

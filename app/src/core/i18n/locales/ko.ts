@@ -566,6 +566,17 @@ export const ko: Translation = {
     "files.unreadable": "이 파일은 읽지 못했습니다.",
     "files.dropStopped": "{name}을(를) 가져오지 못했습니다: {why}",
     "files.dropPartly": "{count}개를 가져왔습니다. {name}은(는) 가져오지 못했습니다: {why}",
+    // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+    // of the three it is, so there is no separate place for a reader to look for the answer.
+    "files.save": "저장",
+    "files.saving": "저장하는 중…",
+    "files.saved": "저장했습니다",
+    // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+    // line of the other, so the reader is told and asked (`AMB-D-773`).
+    "files.newlinesMixed": "이 파일에는 줄바꿈이 두 가지 섞여 있습니다. 저장하면 한 가지로 맞춰집니다.",
+    "files.newlineChoose": "어느 줄바꿈으로 저장할지",
+    "files.newlineLf": "Unix (LF)",
+    "files.newlineCrlf": "Windows (CRLF)",
     "files.tooBig": "이 이미지는 너무 커서 여기에 보여줄 수 없습니다.",
     "files.tooBigPixels": "{width} × {height} 픽셀",
     "files.tooBigOpen": "다른 앱으로 열기",
@@ -721,6 +732,10 @@ export const ko: Translation = {
     folder_name: "이 기기는 {name}을(를) 이름으로 받지 않습니다.",
     folder_make: "{name}을(를) 만들지 못했습니다: {reason}",
     folder_rename: "{name}(으)로 이름을 바꾸지 못했습니다: {reason}",
+    // What the file panel answers a save with (`crate::folder_save`). The character is named
+    // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+    folder_not_saved: "이 파일을 저장하지 못했습니다: {reason}",
+    folder_unwritable_character: "“{character}”는 {encoding}에서 쓸 수 없어서 아무것도 저장하지 않았습니다.",
 
     already_reserved: "{ref}은(는) ‘할 일’이 아니어서 맡을 수 없습니다. 다른 세션이 이미 진행 중일 수 있습니다.",
     not_ready: "{ref}은(는) 아직 맡을 수 없습니다: {reasons}",

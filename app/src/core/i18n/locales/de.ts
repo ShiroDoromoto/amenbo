@@ -577,6 +577,17 @@ export const de: Translation = {
     "files.unreadable": "Diese Datei konnte nicht gelesen werden.",
     "files.dropStopped": "{name} konnte nicht übernommen werden: {why}",
     "files.dropPartly": "{count} übernommen. {name} nicht: {why}",
+    // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+    // of the three it is, so there is no separate place for a reader to look for the answer.
+    "files.save": "Speichern",
+    "files.saving": "Wird gespeichert …",
+    "files.saved": "Gespeichert",
+    // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+    // line of the other, so the reader is told and asked (`AMB-D-773`).
+    "files.newlinesMixed": "Diese Datei hat beide Arten von Zeilenumbruch. Beim Speichern werden alle gleich.",
+    "files.newlineChoose": "Womit soll gespeichert werden",
+    "files.newlineLf": "Unix (LF)",
+    "files.newlineCrlf": "Windows (CRLF)",
     "files.tooBig": "Dieses Bild ist zu groß, um es hier zu zeigen.",
     "files.tooBigPixels": "{width} × {height} Pixel",
     "files.tooBigOpen": "In einer anderen Anwendung öffnen",
@@ -736,6 +747,10 @@ export const de: Translation = {
     folder_name: "Dieser Rechner nimmt {name} nicht als Namen an.",
     folder_make: "{name} konnte nicht angelegt werden: {reason}",
     folder_rename: "Umbenennen in {name} ist fehlgeschlagen: {reason}",
+    // What the file panel answers a save with (`crate::folder_save`). The character is named
+    // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+    folder_not_saved: "Diese Datei konnte nicht gespeichert werden: {reason}",
+    folder_unwritable_character: "„{character}“ lässt sich in {encoding} nicht schreiben, deshalb wurde nichts gespeichert.",
 
     already_reserved:
       "{ref} ist nicht „Offen“ und lässt sich deshalb nicht übernehmen — vielleicht hat eine andere Sitzung sie schon.",

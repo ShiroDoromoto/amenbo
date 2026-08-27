@@ -2435,7 +2435,11 @@ pub struct FolderChangesDto {
 /// hands back one kind of newline for both and nothing could tell them apart again: a file written
 /// back in the commoner kind comes out changed on every line that was the other kind. What to do
 /// about one is the reader's to say (`AMB-D-773`).
-#[derive(Serialize, TS)]
+///
+/// It is the one folder answer that travels **both** ways: a file is written back in the newline it
+/// was read in, and this side remembers nothing between the two calls, so what the read handed the
+/// panel is what the save takes back (`crate::folder_save`).
+#[derive(Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
 #[serde(rename_all = "snake_case")]
 pub enum FolderLineEndingDto {

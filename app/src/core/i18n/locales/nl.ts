@@ -567,6 +567,17 @@ export const nl: Translation = {
     "files.unreadable": "Dit bestand kon niet worden gelezen.",
     "files.dropStopped": "{name} kon niet worden opgenomen: {why}",
     "files.dropPartly": "{count} opgenomen. {name} niet: {why}",
+    // Saving what was typed into the editor (`../../../files/FilesPanel`). The button says which
+    // of the three it is, so there is no separate place for a reader to look for the answer.
+    "files.save": "Opslaan",
+    "files.saving": "Bezig met opslaan…",
+    "files.saved": "Opgeslagen",
+    // A file with both kinds of newline in it. Rounding to the commoner one would rewrite every
+    // line of the other, so the reader is told and asked (`AMB-D-773`).
+    "files.newlinesMixed": "Dit bestand bevat beide soorten regeleinde. Bij het opslaan worden ze allemaal gelijk.",
+    "files.newlineChoose": "Met welk regeleinde opslaan",
+    "files.newlineLf": "Unix (LF)",
+    "files.newlineCrlf": "Windows (CRLF)",
     "files.tooBig": "Deze afbeelding is te groot om hier te tonen.",
     "files.tooBigPixels": "{width} × {height} pixels",
     "files.tooBigOpen": "In een andere app openen",
@@ -723,6 +734,10 @@ export const nl: Translation = {
     folder_name: "Deze machine accepteert {name} niet als naam.",
     folder_make: "{name} kon niet worden aangemaakt: {reason}",
     folder_rename: "De naam kon niet worden gewijzigd in {name}: {reason}",
+    // What the file panel answers a save with (`crate::folder_save`). The character is named
+    // because writing it as `&#10003;` and saying nothing is the thing this exists to stop.
+    folder_not_saved: "Dit bestand kon niet worden opgeslagen: {reason}",
+    folder_unwritable_character: "‘{character}’ kan niet in {encoding} worden geschreven, dus er is niets opgeslagen.",
 
     already_reserved:
       "{ref} staat niet op “Te doen” en kan dus niet worden opgepakt — een andere sessie heeft hem misschien al.",

@@ -99,6 +99,34 @@ export async function folderRead(
 }
 
 /**
+ * Write one file's text back, in the encoding and the newline it was read in.
+ *
+ * **What the read answered with is what travels back**: the encoding it was read in, whether it
+ * began with a byte order mark, and how its lines end. The host remembers none of it between the
+ * two calls — a file is written in what it was read in, and this side is what was holding that
+ * (`crate::folder_save`).
+ *
+ * `lineEnding` is never `"mixed"` here. A file that came back mixed has both kinds in it and no
+ * right answer about which to keep, so the panel asks the reader and sends what they chose
+ * (`AMB-D-773`).
+ *
+ * It refuses rather than half-saves. What a reader can actually cause is a character the encoding
+ * has no room for — a `✓` in a Shift_JIS file — which comes back named, with the file untouched.
+ */
+export async function folderSave(
+  projectId: number,
+  root: string,
+  path: string[],
+  text: string,
+  encoding: string,
+  bom: boolean,
+  lineEnding: "lf" | "crlf",
+): Promise<void> {
+  if (!inTauri()) return;
+  await invoke<void>("folder_save", { projectId, root, path, text, encoding, bom, lineEnding });
+}
+
+/**
  * Open one file the way the machine opens that kind of file.
  *
  * The face has an editor of its own, and this is still the way out of it: what a person wants of a

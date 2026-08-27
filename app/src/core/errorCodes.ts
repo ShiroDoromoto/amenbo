@@ -196,8 +196,9 @@ export const CORE_ERROR_CODES = [
  * drawing anything (`talk_blank`); and the ones settling which
  * agent a folder opens with (`crate::wake`) — a folder that cannot be read (`wake_no_folder`), an
  * install that cannot find its own config (`wake_no_config`), a choice that could not be written down
- * (`wake_not_kept`), and an agent id the catalog does not list (`wake_unknown_agent`), refused the
- * same way wherever it arrives. */
+ * (`wake_not_kept`), an agent id that names neither a catalog row nor one of this device's own
+ * registrations (`wake_unknown_agent`), refused the same way wherever it arrives, and a registration
+ * with a half missing (`wake_not_registered`). */
 export const TAURI_ERROR_CODES = [
   "init_ambiguous_owners",
   "init_pointer_exists",
@@ -212,6 +213,7 @@ export const TAURI_ERROR_CODES = [
   "wake_no_config",
   "wake_no_folder",
   "wake_not_kept",
+  "wake_not_registered",
   "wake_unknown_agent",
   "window_failed",
 ] as const;

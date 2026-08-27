@@ -234,20 +234,40 @@ fn failed(e: impl std::fmt::Display) -> CmdError {
     )
 }
 
-/// The launch row a webview's agent id names, or the refusal for an id nothing lists.
+/// The command line a webview's agent id is started as, or the refusal for an id nothing answers to.
 ///
-/// The lookup is what keeps the pane's command line out of the webview's hands: an id that is not in
-/// the catalog is turned away here rather than handed to a shell. It is refused under `crate::wake`'s
-/// code, because what it names is that rule and not this door — the same id is turned away the same
-/// way where a folder's answer is written down.
-fn started_as(agent: &str) -> Result<&'static amenbo_core::harness::Launch, CmdError> {
-    amenbo_core::wake::started_as(agent).ok_or_else(|| {
-        CmdError::coded(
-            "wake_unknown_agent",
-            "That is not an agent Amenbo knows how to start.",
-            serde_json::json!({ "agent": agent }),
-        )
-    })
+/// The lookup is what keeps the pane's command line out of the webview's hands: an id that names
+/// neither a catalog row nor one of this device's registrations is turned away here rather than
+/// handed to a shell. It is refused under `crate::wake`'s code, because what it names is that rule
+/// and not this door — the same id is turned away the same way where a folder's answer is written
+/// down.
+///
+/// **The two kinds are started differently, and deliberately so** (`AMB-D-794`):
+///
+/// | | what the shell is handed |
+/// |---|---|
+/// | a catalog row | the program, with the launch instruction as its opening prompt ([`opening_line`]) |
+/// | a registered row | the line as the reader wrote it, and nothing else |
+///
+/// A registered line is not taken apart and not rebuilt. Amenbo does not know where in
+/// `claude --model opus` an opening instruction would go — before the flags, after them, behind a
+/// flag of its own — so it does not guess: what is registered is spoken to in two stages once the
+/// pane is up (`AMB-D-793`) instead of being argued with here.
+fn started_as(agent: &str) -> Result<String, CmdError> {
+    if let Some(launch) = amenbo_core::wake::started_as(agent) {
+        return Ok(opening_line(launch));
+    }
+    let config = amenbo_core::config::Paths::resolve()
+        .map(|paths| amenbo_core::config::Config::load(&paths.config_file))
+        .unwrap_or_default();
+    if let Some(own) = config.custom_agent(agent) {
+        return Ok(own.line.clone());
+    }
+    Err(CmdError::coded(
+        "wake_unknown_agent",
+        "That is not an agent Amenbo knows how to start.",
+        serde_json::json!({ "agent": agent }),
+    ))
 }
 
 /// The command line one catalogued agent is started as: the program, with the launch instruction
@@ -319,7 +339,7 @@ pub fn pty_open(
         .map(|dir| std::fs::canonicalize(dir).map_err(failed))
         .transpose()?;
 
-    let run = agent.as_deref().map(started_as).transpose()?.map(opening_line);
+    let run = agent.as_deref().map(started_as).transpose()?;
     let mut cmd = launch::command(folder.clone(), run.as_deref());
     cmd.env(SESSION_ENV, &session);
     // The drop box is made here rather than left for the first statement to make, so that a pane which

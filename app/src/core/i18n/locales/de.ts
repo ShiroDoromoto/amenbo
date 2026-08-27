@@ -705,6 +705,7 @@ export const de: Translation = {
     wake_no_folder: "Dieser Ordner ließ sich nicht lesen: {reason}",
     wake_no_config: "Amenbo konnte seine eigenen Dateien nicht finden.",
     wake_not_kept: "Die Auswahl ließ sich nicht speichern.",
+    wake_not_registered: "Ein registrierter Befehl braucht sowohl einen Namen als auch eine Befehlszeile.",
     window_failed: "Dieses Fenster konnte nicht geöffnet werden: {reason}",
     talk_blank: "Das Fenster wurde geöffnet, hat aber nie etwas gezeichnet — das Terminal ist wieder in diesem Fenster.",
 

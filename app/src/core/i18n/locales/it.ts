@@ -720,6 +720,7 @@ export const it: Translation = {
     wake_no_folder: "Non è stato possibile leggere quella cartella: {reason}",
     wake_no_config: "Amenbo non ha trovato i propri file.",
     wake_not_kept: "Non è stato possibile salvare la scelta.",
+    wake_not_registered: "Un comando registrato ha bisogno di un nome e di una riga di comando.",
     window_failed: "Non è stato possibile aprire quella finestra: {reason}",
     talk_blank: "Quella finestra si è aperta senza disegnare nulla, quindi il terminale è tornato in questa.",
 

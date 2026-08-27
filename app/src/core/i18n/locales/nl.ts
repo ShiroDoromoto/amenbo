@@ -692,6 +692,7 @@ export const nl: Translation = {
     wake_no_folder: "Die map kon niet gelezen worden: {reason}",
     wake_no_config: "Amenbo kon zijn eigen bestanden niet vinden.",
     wake_not_kept: "De keuze kon niet opgeslagen worden.",
+    wake_not_registered: "Een geregistreerde opdracht heeft zowel een naam als een opdrachtregel nodig.",
     window_failed: "Dat venster kon niet worden geopend: {reason}",
     talk_blank: "Dat venster ging open maar tekende niets, dus de terminal staat weer in dit venster.",
 

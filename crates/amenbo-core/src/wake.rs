@@ -14,6 +14,13 @@
 //! on. The trace is read off the wiring catalog because that is the table a folder leaves traces of, so
 //! a startable provider with no wiring row simply traces nothing — startable, and unspoken for.
 //!
+//! **And beside it, what the reader registered** ([`crate::config::Config::custom_agents`],
+//! `AMB-D-794`). The catalog is a shortcut and not a census — this field is a fast-moving one, and the
+//! table goes out of date faster than it can be corrected — so a command the reader wrote themselves
+//! stands as a candidate on the same terms as a catalogued one. It traces nothing, for the same
+//! reason a provider with no wiring row traces nothing, and it is judged installed by the first word
+//! of its line and by nothing else.
+//!
 //! **The product of the two is the answer, and the second is the floor.** A trace is a folder's
 //! preference, so a provider that left one and is not installed is a preference this machine cannot
 //! act on — starting it would open a pane on `command not found`. An installed provider that left no
@@ -49,6 +56,7 @@
 //! traces is what any of its folders traces: a preference shown in one of them is the project's, and
 //! a face gathers the folders before it asks (`app/src-tauri/src/wake.rs`).
 
+use crate::config::CustomAgent;
 use crate::harness::{self, Launch, Wiring};
 
 /// **The pane's own shell** — a prompt in the folder with nothing started at it, standing among the
@@ -63,16 +71,31 @@ pub const SHELL: &str = "shell";
 
 /// One provider as a place to open a pane on: what the catalog says about it, and what this folder
 /// and this machine say about it.
+///
+/// **A row the reader registered stands here too** ([`CustomAgent`], `AMB-D-794`), which is why the
+/// strings are owned: the catalog is `'static` and a registration is not. Everything the ranks below
+/// do is done to both kinds alike — a registered command that is not installed is not offered, and
+/// one this project pinned is the answer while it holds.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct Candidate {
-    /// The provider this answers for ([`Launch::id`]).
-    pub id: &'static str,
+    /// The provider this answers for ([`Launch::id`], or [`CustomAgent::id`]).
+    pub id: String,
     /// The provider's own name for itself, so a face can render a row without a second lookup.
-    pub label: &'static str,
+    pub label: String,
     /// What it is started as ([`Launch::command`]) — shown, because a reader told a tool is missing
-    /// needs the word to type to install it.
-    pub command: &'static str,
+    /// needs the word to type to install it. For a registered row it is the first word of the line
+    /// ([`CustomAgent::command`]), which is the whole of what can be looked for.
+    pub command: String,
+    /// The registered command line, as written — present **exactly** for a row the reader
+    /// registered, and the one thing that tells the two kinds apart.
+    ///
+    /// A face draws it because what is registered runs in a terminal, and somebody choosing a row
+    /// should be able to read what pressing it starts.
+    pub line: Option<String>,
     /// Whether this folder shows a trace of the provider being used here ([`Wiring::traced`]).
+    ///
+    /// Always `false` for a registered row: a trace is a wiring catalog's row and a registration has
+    /// none, so nothing a folder holds can point at one.
     pub traced: bool,
     /// Whether the command is on the `PATH` of the shell a pane starts with. Only ever this — see
     /// the module docs on what it deliberately does not claim.
@@ -82,10 +105,10 @@ pub struct Candidate {
 /// What to do with the folder's answer once it has been worked out.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Choice {
-    /// One agent, and nothing to ask: the [`Launch::id`] to start.
-    Settled(&'static str),
-    /// Several, so the person picks — the ids to offer, in catalog order.
-    Ask(Vec<&'static str>),
+    /// One agent, and nothing to ask: the id to start ([`Candidate::id`]).
+    Settled(String),
+    /// Several, so the person picks — the ids to offer, in catalog order then registration order.
+    Ask(Vec<String>),
     /// Nothing on this machine can be started. The face has an install notice to put, not a question.
     Nothing,
 }
@@ -98,20 +121,36 @@ pub enum Choice {
 /// what the *pane's* shell can find: the same login-and-interactive shell, with the same profile and
 /// the same `PATH` (`app/src-tauri/src/launch.rs`). A probe run against this process's environment
 /// would answer for a desktop launch's thin `PATH` and be wrong in both directions (`AMB-T-3546`).
-pub fn candidates(found: &[Wiring], installed: impl Fn(&str) -> bool) -> Vec<Candidate> {
-    harness::LAUNCHES
-        .iter()
-        .map(|launch| Candidate {
-            id: launch.id,
-            label: launch.label,
-            command: launch.command,
-            traced: found
-                .iter()
-                .find(|one| one.id == launch.id)
-                .is_some_and(|one| one.traced),
-            installed: installed(launch.command),
-        })
-        .collect()
+pub fn candidates(
+    found: &[Wiring],
+    registered: &[CustomAgent],
+    installed: impl Fn(&str) -> bool,
+) -> Vec<Candidate> {
+    let catalogued = harness::LAUNCHES.iter().map(|launch| Candidate {
+        id: launch.id.to_string(),
+        label: launch.label.to_string(),
+        command: launch.command.to_string(),
+        line: None,
+        traced: found
+            .iter()
+            .find(|one| one.id == launch.id)
+            .is_some_and(|one| one.traced),
+        installed: installed(launch.command),
+    });
+    // The reader's own rows come after the catalog's, which is the order a face draws them in
+    // (`app/src/shell/EmptySlot.tsx`): the shortcut first, then what the shortcut did not cover.
+    let own = registered.iter().map(|one| Candidate {
+        id: one.id.clone(),
+        label: one.label.clone(),
+        command: one.command().to_string(),
+        line: Some(one.line.clone()),
+        // Nothing can have traced it: a trace is left against a wiring row, and a registration has
+        // none. It reaches the offer through the fallback, the same as a startable provider that
+        // the wiring catalog does not list.
+        traced: false,
+        installed: installed(one.command()),
+    });
+    catalogued.chain(own).collect()
 }
 
 /// The candidates a face offers, in catalog order: the ones the folders trace **and** this machine
@@ -150,13 +189,13 @@ pub fn settle(remembered: Option<&str>, last: Option<&str>, candidates: &[Candid
     if offered.is_empty() {
         return Choice::Nothing;
     }
-    let holds = |kept: &str| offered.iter().find(|c| c.id == kept).map(|one| one.id);
+    let holds = |kept: &str| offered.iter().find(|c| c.id == kept).map(|one| one.id.clone());
     if let Some(id) = remembered.and_then(holds) {
         return Choice::Settled(id);
     }
     if let Some(kept) = last {
         if kept == SHELL {
-            return Choice::Settled(SHELL);
+            return Choice::Settled(SHELL.to_string());
         }
         if let Some(id) = holds(kept) {
             return Choice::Settled(id);
@@ -165,8 +204,8 @@ pub fn settle(remembered: Option<&str>, last: Option<&str>, candidates: &[Candid
     match offered.as_slice() {
         // One thing to open with is not a question: asking about a row with a single answer on it
         // would be asking the person to agree with the machine.
-        [one] => Choice::Settled(one.id),
-        several => Choice::Ask(several.iter().map(|c| c.id).collect()),
+        [one] => Choice::Settled(one.id.clone()),
+        several => Choice::Ask(several.iter().map(|c| c.id.clone()).collect()),
     }
 }
 
@@ -181,6 +220,15 @@ mod tests {
 
     /// Candidates built from a trace list and a set of installed commands, for asserting on.
     fn built(traced: &[&str], installed: &[&str]) -> Vec<Candidate> {
+        with_registered(traced, installed, &[])
+    }
+
+    /// The same, with commands the reader registered standing beside the catalog's.
+    fn with_registered(
+        traced: &[&str],
+        installed: &[&str],
+        registered: &[(&str, &str)],
+    ) -> Vec<Candidate> {
         let found: Vec<Wiring> = harness::HARNESSES
             .iter()
             .map(|h| Wiring {
@@ -190,7 +238,21 @@ mod tests {
                 traced: traced.contains(&h.id),
             })
             .collect();
-        candidates(&found, |cmd| installed.contains(&cmd))
+        let mut config = crate::config::Config::default();
+        for (label, line) in registered {
+            config.register_agent(label, line).expect("a registered row");
+        }
+        candidates(&found, config.custom_agents(), |cmd| installed.contains(&cmd))
+    }
+
+    /// `Choice::Settled` for a literal, so the assertions read as they did when ids were `'static`.
+    fn settled(id: &str) -> Choice {
+        Choice::Settled(id.to_string())
+    }
+
+    /// `Choice::Ask` for literals, same reason.
+    fn ask(ids: &[&str]) -> Choice {
+        Choice::Ask(ids.iter().map(|one| one.to_string()).collect())
     }
 
     /// The product decides while it has anything in it: an agent this machine has but this folder
@@ -198,7 +260,7 @@ mod tests {
     #[test]
     fn a_folder_that_traces_one_installed_agent_is_not_asked_about() {
         let c = built(&["claude-code", "codex-cli"], &["claude", "gemini"]);
-        assert_eq!(settle(None, None, &c), Choice::Settled("claude-code"));
+        assert_eq!(settle(None, None, &c), settled("claude-code"));
     }
 
     /// Several traced and installed is the one case a person is asked, and the offer is those —
@@ -208,7 +270,7 @@ mod tests {
         let c = built(&["claude-code", "codex-cli"], &["claude", "codex", "gemini"]);
         assert_eq!(
             settle(None, None, &c),
-            Choice::Ask(vec!["claude-code", "codex-cli"])
+            ask(&["claude-code", "codex-cli"])
         );
     }
 
@@ -217,8 +279,8 @@ mod tests {
     #[test]
     fn a_folder_with_no_trace_falls_back_to_what_the_machine_has() {
         let c = built(&[], &["claude", "codex"]);
-        assert_eq!(settle(None, None, &c), Choice::Ask(vec!["claude-code", "codex-cli"]));
-        assert_eq!(settle(None, None, &built(&[], &["gemini"])), Choice::Settled("gemini-cli"));
+        assert_eq!(settle(None, None, &c), ask(&["claude-code", "codex-cli"]));
+        assert_eq!(settle(None, None, &built(&[], &["gemini"])), settled("gemini-cli"));
     }
 
     /// A trace this machine cannot act on is not an answer. Starting it would open the pane on
@@ -227,7 +289,7 @@ mod tests {
     fn a_traced_agent_that_is_not_installed_is_never_offered() {
         let c = built(&["claude-code"], &["codex"]);
         assert!(!offered(&c).iter().any(|one| one.id == "claude-code"));
-        assert_eq!(settle(None, None, &c), Choice::Settled("codex-cli"));
+        assert_eq!(settle(None, None, &c), settled("codex-cli"));
     }
 
     /// Nothing installed is the install notice's case, and the only one.
@@ -244,7 +306,7 @@ mod tests {
     #[test]
     fn the_remembered_answer_is_the_answer() {
         let c = built(&["claude-code", "codex-cli"], &["claude", "codex"]);
-        assert_eq!(settle(Some("codex-cli"), None, &c), Choice::Settled("codex-cli"));
+        assert_eq!(settle(Some("codex-cli"), None, &c), settled("codex-cli"));
     }
 
     /// A remembered answer whose tool has gone is not an error and not a question about itself: the
@@ -252,7 +314,7 @@ mod tests {
     #[test]
     fn a_remembered_answer_that_stopped_being_startable_gives_way() {
         let c = built(&["claude-code", "codex-cli"], &["codex"]);
-        assert_eq!(settle(Some("claude-code"), None, &c), Choice::Settled("codex-cli"));
+        assert_eq!(settle(Some("claude-code"), None, &c), settled("codex-cli"));
     }
 
     /// The person's own answer carries into a project that has pinned nothing — which is the whole
@@ -260,7 +322,7 @@ mod tests {
     #[test]
     fn what_the_person_last_opened_with_answers_where_the_project_has_not() {
         let c = built(&[], &["claude", "codex"]);
-        assert_eq!(settle(None, Some("codex-cli"), &c), Choice::Settled("codex-cli"));
+        assert_eq!(settle(None, Some("codex-cli"), &c), settled("codex-cli"));
     }
 
     /// The project's pin outranks the habit: somebody who fixed one project on an agent is not
@@ -270,7 +332,7 @@ mod tests {
         let c = built(&[], &["claude", "codex"]);
         assert_eq!(
             settle(Some("claude-code"), Some("codex-cli"), &c),
-            Choice::Settled("claude-code"),
+            settled("claude-code"),
         );
     }
 
@@ -279,7 +341,7 @@ mod tests {
     #[test]
     fn the_person_may_have_last_opened_a_plain_shell() {
         let c = built(&[], &["claude", "codex"]);
-        assert_eq!(settle(None, Some(SHELL), &c), Choice::Settled(SHELL));
+        assert_eq!(settle(None, Some(SHELL), &c), settled(SHELL));
     }
 
     /// The person's answer gives way the same as the project's when its tool has gone — and what is
@@ -289,7 +351,7 @@ mod tests {
         let c = built(&[], &["claude", "codex"]);
         assert_eq!(
             settle(None, Some("gemini-cli"), &c),
-            Choice::Ask(vec!["claude-code", "codex-cli"]),
+            ask(&["claude-code", "codex-cli"]),
         );
     }
 
@@ -299,7 +361,7 @@ mod tests {
     fn the_first_run_is_asked_rather_than_guessed_at() {
         assert_eq!(
             settle(None, None, &built(&[], &["claude", "codex"])),
-            Choice::Ask(vec!["claude-code", "codex-cli"]),
+            ask(&["claude-code", "codex-cli"]),
         );
     }
 
@@ -309,11 +371,57 @@ mod tests {
     #[test]
     fn a_provider_with_no_wiring_row_is_offered_on_being_installed() {
         let c = built(&[], &["opencode"]);
-        assert_eq!(settle(None, None, &c), Choice::Settled("opencode"));
+        assert_eq!(settle(None, None, &c), settled("opencode"));
         // And it loses to a folder's trace like anything else does: what is traced and installed is
         // the answer while there is one.
         let c = built(&["claude-code"], &["opencode", "claude"]);
-        assert_eq!(settle(None, None, &c), Choice::Settled("claude-code"));
+        assert_eq!(settle(None, None, &c), settled("claude-code"));
+    }
+
+    /// A registered command is a candidate on the same terms as a catalogued one: installed decides
+    /// whether it is offered, and nothing about it being the reader's own changes that.
+    #[test]
+    fn a_registered_command_stands_beside_the_catalogued_ones() {
+        let c = with_registered(&[], &["mine"], &[("Mine", "mine --model big")]);
+        assert_eq!(settle(None, None, &c), settled("custom:1"));
+        // The first word is what was looked for; the whole line is carried for the face to draw.
+        let row = c.iter().find(|one| one.id == "custom:1").expect("the registered row");
+        assert_eq!(row.command, "mine");
+        assert_eq!(row.line.as_deref(), Some("mine --model big"));
+        assert!(!row.traced, "nothing can have traced a row the wiring catalog does not list");
+    }
+
+    /// The first word is the whole of the judgment. A line whose program is not there is not
+    /// offered, exactly as an uninstalled catalog row is not — the flags after it are nobody's to
+    /// vouch for.
+    #[test]
+    fn a_registered_command_whose_program_is_missing_is_not_offered() {
+        let c = with_registered(&[], &["claude"], &[("Mine", "mine --model big")]);
+        assert!(!offered(&c).iter().any(|one| one.id == "custom:1"));
+        assert_eq!(settle(None, None, &c), settled("claude-code"));
+    }
+
+    /// A registered row is an answer the ranks can hold, and it gives way when it stops holding —
+    /// which is what keeps a deleted registration from being returned as the thing to start.
+    #[test]
+    fn a_registered_answer_holds_and_gives_way_like_any_other() {
+        let c = with_registered(&[], &["claude", "mine"], &[("Mine", "mine")]);
+        assert_eq!(settle(Some("custom:1"), None, &c), settled("custom:1"));
+        assert_eq!(settle(None, Some("custom:1"), &c), settled("custom:1"));
+        // Registered, then deleted: the id is still written down, and the rank underneath answers.
+        let gone = built(&[], &["claude"]);
+        assert_eq!(settle(Some("custom:1"), None, &gone), settled("claude-code"));
+        assert_eq!(settle(None, Some("custom:1"), &gone), settled("claude-code"));
+    }
+
+    /// The catalog is drawn first and the reader's own after it, which is the order a face lays the
+    /// rows out in.
+    #[test]
+    fn the_readers_own_rows_come_after_the_catalogues() {
+        let c = with_registered(&[], &["claude", "mine"], &[("Mine", "mine")]);
+        let ids: Vec<&str> = c.iter().map(|one| one.id.as_str()).collect();
+        assert_eq!(ids.last(), Some(&"custom:1"));
+        assert_eq!(settle(None, None, &c), ask(&["claude-code", "custom:1"]));
     }
 
     /// Every offered id names a launch row, which is what lets a caller turn the answer into a
@@ -321,7 +429,7 @@ mod tests {
     #[test]
     fn what_is_offered_can_always_be_started() {
         for one in offered(&built(&[], &["claude", "codex", "gemini", "copilot", "cursor-agent"])) {
-            assert_eq!(started_as(one.id).map(|h| h.command), Some(one.command));
+            assert_eq!(started_as(&one.id).map(|h| h.command), Some(one.command.as_str()));
         }
     }
 }

@@ -690,6 +690,7 @@ export const ko: Translation = {
     wake_no_folder: "그 폴더를 읽을 수 없었습니다: {reason}",
     wake_no_config: "Amenbo가 자신의 파일을 찾지 못했습니다.",
     wake_not_kept: "선택한 내용을 저장하지 못했습니다.",
+    wake_not_registered: "등록하는 명령에는 이름과 실행 줄이 모두 필요합니다.",
     window_failed: "그 창을 열 수 없습니다: {reason}",
     talk_blank: "그 창은 열렸지만 아무것도 그려지지 않아, 터미널을 이 창으로 되돌렸습니다.",
 

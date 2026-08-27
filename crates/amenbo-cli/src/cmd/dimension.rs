@@ -1,15 +1,16 @@
-//! `dimension`: the classification axes a project declares, their values, and placing tasks on them.
+//! `dimension`: the classification axes a project declares, their values, and placing tasks and
+//! decisions on them.
 
 use chrono::NaiveDate;
 use serde_json::json;
 
+use amenbo_core::ops::Ref;
 use amenbo_core::Store;
 
 use crate::cli::*;
 use crate::cmd::arg::{parse_date_opt, pos_from_keys};
-use crate::cmd::labels::{dimension_label, dimension_value_label, task_label};
+use crate::cmd::labels::{decision_label, dimension_label, dimension_value_label, task_label};
 use crate::cmd::place::project_or_bound;
-use crate::cmd::task::resolve_task;
 use crate::output::{confirm, human, print_json, write_envelope, CliError, Flags};
 
 /// The CLI surface of the unified dimension model. The axes themselves (purely user-defined), their values,
@@ -265,19 +266,37 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
             store.dimension_value_delete(vid, to).map_err(CliError::from)?;
             write_envelope(flags, "dimension.value-rm", "dimension_value", json!({ "id": vid, "deleted": true, "reassigned_to": to }), None, false, format!("✓ Deleted value: {}", dimension_value_label(vid)));
         }
-        DimensionCmd::Set { task, dimension, value } => {
-            let tid = resolve_task(store, &task).map_err(CliError::from)?;
-            let did = resolve_axis_of_task(store, tid, &dimension)?;
-            let vid = store.resolve_dimension_value(did, &value).map_err(CliError::from)?;
-            let (tv, changed) = store.set_task_dimension_value(tid, vid).map_err(CliError::from)?;
-            write_envelope(flags, "dimension.set", "task_dimension_value", serde_json::to_value(&tv).unwrap(), None, !changed, format!("✓ Set value on task {}", task_label(tid)));
+        DimensionCmd::Set { target, dimension, value } => {
+            match store.resolve_typed_ref(&target).map_err(CliError::from)? {
+                Ref::Task(tid) => {
+                    let did = resolve_axis_of_task(store, tid, &dimension)?;
+                    let vid = store.resolve_dimension_value(did, &value).map_err(CliError::from)?;
+                    let (tv, changed) = store.set_task_dimension_value(tid, vid).map_err(CliError::from)?;
+                    write_envelope(flags, "dimension.set", "task_dimension_value", serde_json::to_value(&tv).unwrap(), None, !changed, format!("✓ Set value on task {}", task_label(tid)));
+                }
+                Ref::Decision(did_target) => {
+                    let did = resolve_axis_of_decision(store, did_target, &dimension)?;
+                    let vid = store.resolve_dimension_value(did, &value).map_err(CliError::from)?;
+                    let (dv, changed) = store.set_decision_dimension_value(did_target, vid).map_err(CliError::from)?;
+                    write_envelope(flags, "dimension.set", "decision_dimension_value", serde_json::to_value(&dv).unwrap(), None, !changed, format!("✓ Set value on decision {}", decision_label(did_target)));
+                }
+            }
         }
-        DimensionCmd::Unset { task, dimension, value } => {
-            let tid = resolve_task(store, &task).map_err(CliError::from)?;
-            let did = resolve_axis_of_task(store, tid, &dimension)?;
-            let vid = store.resolve_dimension_value(did, &value).map_err(CliError::from)?;
-            let removed = store.unset_task_dimension_value(tid, vid).map_err(CliError::from)?;
-            write_envelope(flags, "dimension.unset", "task_dimension_value", json!({ "task_id": tid, "value_id": vid, "removed": removed }), None, !removed, format!("✓ Cleared value on task {}", task_label(tid)));
+        DimensionCmd::Unset { target, dimension, value } => {
+            match store.resolve_typed_ref(&target).map_err(CliError::from)? {
+                Ref::Task(tid) => {
+                    let did = resolve_axis_of_task(store, tid, &dimension)?;
+                    let vid = store.resolve_dimension_value(did, &value).map_err(CliError::from)?;
+                    let removed = store.unset_task_dimension_value(tid, vid).map_err(CliError::from)?;
+                    write_envelope(flags, "dimension.unset", "task_dimension_value", json!({ "task_id": tid, "value_id": vid, "removed": removed }), None, !removed, format!("✓ Cleared value on task {}", task_label(tid)));
+                }
+                Ref::Decision(did_target) => {
+                    let did = resolve_axis_of_decision(store, did_target, &dimension)?;
+                    let vid = store.resolve_dimension_value(did, &value).map_err(CliError::from)?;
+                    let removed = store.unset_decision_dimension_value(did_target, vid).map_err(CliError::from)?;
+                    write_envelope(flags, "dimension.unset", "decision_dimension_value", json!({ "decision_id": did_target, "value_id": vid, "removed": removed }), None, !removed, format!("✓ Cleared value on decision {}", decision_label(did_target)));
+                }
+            }
         }
     }
     Ok(0)
@@ -291,5 +310,12 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
 /// across the store as before.
 fn resolve_axis_of_task(store: &Store, task_id: i64, reference: &str) -> Result<i64, CliError> {
     let project_id = store.task(task_id).map_err(CliError::from)?.and_then(|t| t.project_id);
+    store.resolve_dimension(project_id, reference).map_err(CliError::from)
+}
+
+/// The same narrowing for a decision (`AMB-D-781`). A decision always sits in a project, so the axis a
+/// bare name means is always narrowed — there is no inbox on this side to fall back from.
+fn resolve_axis_of_decision(store: &Store, decision_id: i64, reference: &str) -> Result<i64, CliError> {
+    let project_id = store.decision_detail(decision_id).map_err(CliError::from)?.project.map(|p| p.id);
     store.resolve_dimension(project_id, reference).map_err(CliError::from)
 }

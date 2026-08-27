@@ -256,6 +256,18 @@ pub(crate) fn id_str(v: &Value) -> String {
     }
 }
 
+/// Spell a task id as the ref `dimension set` / `unset` demand: a bare number is refused there, tasks
+/// and decisions numbering independently (`AMB-D-781`).
+pub(crate) fn task_ref(id: &str) -> String {
+    format!("AMB-T-{id}")
+}
+
+/// The decision half of [`task_ref`].
+#[allow(dead_code)]
+pub(crate) fn decision_ref(id: &str) -> String {
+    format!("AMB-D-{id}")
+}
+
 /// Plant an installed plugin under the test's app-data: the manifest (the install marker) plus the
 /// executable named after it, which is the whole on-disk shape `plugin_installed::read` looks for.
 pub(crate) fn install_plugin(cli: &Cli, name: &str, config: serde_json::Value) {

@@ -200,7 +200,10 @@ amenbo task reject <n> --reason "measured it — too thin to be worth the change
 # with ordering ("don't start later work yet") enforced by dependencies, not the axis.
 amenbo dimension add --project "Website refresh" --name "Area" --ordered
 amenbo dimension value-add Area --name "Design"
-amenbo dimension set 12 Area Design           # assign a task a value on the axis
+# Files a task or a decision on the axis. Here the kind code is required, not optional:
+# the two number independently, so a bare number would not say which is meant.
+amenbo dimension set AMB-T-<n> Area Design
+amenbo dimension set AMB-D-<n> Area Design
 amenbo task add --title "Palette" --project "Website refresh" --dim "Area=Design"  # or file it as you create it
 # On a time-axis, each value spans a period; an open end means it is ongoing.
 # A new task starts on whichever value covers today — never forced, always yours

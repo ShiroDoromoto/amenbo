@@ -1,0 +1,77 @@
+{
+  "note": "Written by scripts/gen-lang-config.mjs. Do not edit by hand; re-run `make lang-config`.",
+  "repository": "https://github.com/microsoft/vscode",
+  "licence": "MIT",
+  "tag": "1.135.0",
+  "revision": "08d4889f9ec4a1685d257b9b95de036c8e1ce1e5",
+  "files": [
+    {
+      "lang": "css",
+      "source": "https://raw.githubusercontent.com/microsoft/vscode/08d4889f9ec4a1685d257b9b95de036c8e1ce1e5/extensions/css/language-configuration.json",
+      "sha256": "97891fb0d515aa124c0eab14e961aeebb50ea0c7d3634e01853f6f41ce61f28d",
+      "repaired": []
+    },
+    {
+      "lang": "go",
+      "source": "https://raw.githubusercontent.com/microsoft/vscode/08d4889f9ec4a1685d257b9b95de036c8e1ce1e5/extensions/go/language-configuration.json",
+      "sha256": "ca804e575bd47ec0981e7e30c0d027d3ecfa3e1a4b3cad567d21768cd0aed5a7",
+      "repaired": []
+    },
+    {
+      "lang": "html",
+      "source": "https://raw.githubusercontent.com/microsoft/vscode/08d4889f9ec4a1685d257b9b95de036c8e1ce1e5/extensions/html/language-configuration.json",
+      "sha256": "fe60c83b36cfbc70c73d48405f6acb4f88562273b43db2e88f45bc5c1d75524f",
+      "repaired": []
+    },
+    {
+      "lang": "json",
+      "source": "https://raw.githubusercontent.com/microsoft/vscode/08d4889f9ec4a1685d257b9b95de036c8e1ce1e5/extensions/json/language-configuration.json",
+      "sha256": "0963af900927e3398cc4e40a853b4091d23361ef2d3f89f8f663c8219a2fc8ca",
+      "repaired": []
+    },
+    {
+      "lang": "markdown",
+      "source": "https://raw.githubusercontent.com/microsoft/vscode/08d4889f9ec4a1685d257b9b95de036c8e1ce1e5/extensions/markdown-basics/language-configuration.json",
+      "sha256": "4b7aa0ec72cd9507a5ae947c92e0eeba861205dfb6d9cc6788cd800dd2c80db1",
+      "repaired": []
+    },
+    {
+      "lang": "python",
+      "source": "https://raw.githubusercontent.com/microsoft/vscode/08d4889f9ec4a1685d257b9b95de036c8e1ce1e5/extensions/python/language-configuration.json",
+      "sha256": "141f93a99e92b9d399cbe4e18f36757fc6bcb94df765607b57b149c1749fda28",
+      "repaired": []
+    },
+    {
+      "lang": "rust",
+      "source": "https://raw.githubusercontent.com/microsoft/vscode/08d4889f9ec4a1685d257b9b95de036c8e1ce1e5/extensions/rust/language-configuration.json",
+      "sha256": "543f4d958163e2ec7ca52a1d201bbad3e92fcf35d605505f17905436664a011e",
+      "repaired": []
+    },
+    {
+      "lang": "shellscript",
+      "source": "https://raw.githubusercontent.com/microsoft/vscode/08d4889f9ec4a1685d257b9b95de036c8e1ce1e5/extensions/shellscript/language-configuration.json",
+      "sha256": "fb8dec83d74b1fc928862b966fd86adac1d7fab5eaa9d425ba813c92169c8a89",
+      "repaired": []
+    },
+    {
+      "lang": "sql",
+      "source": "https://raw.githubusercontent.com/microsoft/vscode/08d4889f9ec4a1685d257b9b95de036c8e1ce1e5/extensions/sql/language-configuration.json",
+      "sha256": "00caec01e03983601349a3675172a52762a15d67d859a6c93cf4621023a97126",
+      "repaired": []
+    },
+    {
+      "lang": "tsx",
+      "source": "https://raw.githubusercontent.com/microsoft/vscode/08d4889f9ec4a1685d257b9b95de036c8e1ce1e5/extensions/typescript-basics/language-configuration.json",
+      "sha256": "6ef03aca8ca0e3173482eefeea958b88cbd7df09077fb5c8ec0689d1c6970794",
+      "repaired": []
+    },
+    {
+      "lang": "yaml",
+      "source": "https://raw.githubusercontent.com/microsoft/vscode/08d4889f9ec4a1685d257b9b95de036c8e1ce1e5/extensions/yaml/language-configuration.json",
+      "sha256": "306c8f6951dddc6214ff80766123a0315fc63773a0bd2909423968fa712b4a26",
+      "repaired": [
+        "indentationRules.increaseIndentPattern"
+      ]
+    }
+  ]
+}

@@ -1076,6 +1076,14 @@ devtool-bin:
 brand:
 	python3 scripts/gen-brand.py
 
+## Re-bake the file panel's language configurations out of VS Code's built-in extensions: what the
+## editor reads to know where a new line is indented, what folds, and which brackets pair up.
+## Like `brand`, everything it writes is tracked and nothing in a build waits on it — it wants the
+## network, and a merge should not. Run it by hand when the pinned VS Code release moves, and commit
+## what changes. See scripts/gen-lang-config.mjs.
+lang-config:
+	node scripts/gen-lang-config.mjs
+
 ## Local-only targets (each person's dev-environment tools) go in .local/local.mk, which is not
 ## tracked. If present it is included, if absent nothing happens. So it does not steal the default
 ## goal, the include happens after every target is defined = here.

@@ -744,8 +744,9 @@ function Level({
    * drawing the highlight it was drawing a moment ago.
    */
   landing: Landing | null;
-  /** What git says about a row, asked by its segments from the bound folder (`./gitMark`). */
-  marks: (path: string[]) => GitMark | null;
+  /** What git says about a row, asked by its segments from the bound folder, and by whether it is a
+   *  folder standing folded — which is the one case that answers for what is under it (`./gitMark`). */
+  marks: (path: string[], folded?: boolean) => GitMark | null;
   /** How many times the folder has moved. The names are read again on each — a file the agent just
    *  wrote is a row that has to appear without anybody folding the tree and opening it again. */
   moved: number;
@@ -793,7 +794,9 @@ function Level({
         const here = [...path, one.name];
         const key = here.join("/");
         const into = one.isDir ? key : undefined;
-        const mark = marks(here);
+        // Folded folders answer for what is under them (`AMB-D-795`); an open one leaves that to the
+        // rows it is showing, and a file is only ever itself.
+        const mark = marks(here, one.isDir && !open.includes(key));
         // The row is the box while its name is being written over. Drawn in place of the row rather
         // than beside it: what is being changed is this name, and two of them on the screen at once
         // would leave a reader wondering which one they were about to keep.

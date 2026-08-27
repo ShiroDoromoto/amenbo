@@ -928,6 +928,11 @@ not whether the axis is defined but whether that side is offered it at all, whic
 `dimension applies-to` stops being while staying on every listing. It takes `target:`
 beside it for the face with no listing to read the offer off — a screen reads the offer as the control a
 record's own pane keeps per axis, so the road names the record whose pane is opened.
+Its neighbour `filter-refused` asks the other thing a filter can come back with: not who is in the
+listing but that there is no listing, the question having been turned away — which is what a `dim:`
+written on the side its axis does not classify meets. It is an assert of its own rather than a
+`refused:` on `listed`, since `refused:` is an action's word and an empty page and a refusal are
+exactly the two answers this separates; `code:` names the error code the refusal has to carry.
 A `listed` assert asks whether the task is in the listing; give it
 `position: first` / `last` instead of `present:` when what is under test is the order the store
 keeps, which is the only place a reorder is visible. Its neighbour `narrowed` asks the question a

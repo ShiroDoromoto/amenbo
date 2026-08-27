@@ -160,6 +160,12 @@ impl Driver<'_> {
                     ),
                 ))
             }
+            // And turned away rather than answered — the side of an axis narrowed off this face.
+            "filter-refused" => {
+                let filter = req_str(with, "filter")?;
+                let want = req_str(with, "code")?;
+                self.refused_read(&["decision", "list", "--filter", filter, "--json"], want)
+            }
             "edge" => {
                 let target = self.resolve(with)?;
                 let other = self.resolve_key(with, "other")?;

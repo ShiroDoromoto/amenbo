@@ -561,6 +561,10 @@ export const es: Translation = {
     "files.chooseApp": "Abrir con una aplicación que yo elija",
     "files.appUsual": "{name} (la de siempre)",
     "files.reveal": "Mostrar en el gestor de archivos",
+    "files.newFile": "Archivo nuevo",
+    "files.newFolder": "Carpeta nueva",
+    "files.rename": "Cambiar el nombre",
+    "files.name": "Nombre",
     "files.notText": "Esto no es texto, así que no puede mostrarse aquí.",
     "files.cut": "Solo se muestra el principio.",
     "files.unreadable": "No se pudo leer este archivo.",
@@ -722,6 +726,10 @@ export const es: Translation = {
     wake_not_kept: "No se pudo guardar la elección.",
     window_failed: "No se pudo abrir esa ventana: {reason}",
     talk_blank: "Esa ventana se abrió pero nunca dibujó nada, así que la terminal volvió a esta.",
+    folder_taken: "{name} ya está ahí.",
+    folder_name: "Esta máquina no admite {name} como nombre.",
+    folder_make: "No se pudo crear {name}: {reason}",
+    folder_rename: "No se pudo cambiar el nombre a {name}: {reason}",
 
     already_reserved:
       "{ref} no está en “Pendiente”, así que no se puede reservar: puede que otra sesión ya la tenga.",

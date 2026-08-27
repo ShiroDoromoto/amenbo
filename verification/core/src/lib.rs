@@ -2250,9 +2250,10 @@ const REGISTRY: &[OpSpec] = &[
     // them and remembers none of them, so the road stops at the hand-over and never follows what came
     // forward — where the file ended up is the machine's answer, not this face's.
     //
-    // On a row the menu is a right-click, and it is drawn on files alone: a folder's row opens a
-    // level and has nothing to hand anywhere. The row is therefore named the way every other row
-    // here is — by its name, and by the section it is standing in.
+    // On a row the menu is a right-click. A folder's row opens one too, but it holds none of the
+    // three: what a folder can be handed to is nothing, and what it is offered instead is a name to
+    // make or to write over — which no op here reaches yet. So this op names a file, the way every
+    // other row here is named — by its name, and by the section it is standing in.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "menu", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
     // The same menu, reached from the file that is open rather than from a row. It is a second door and not a
     // convenience: a file the face refuses to draw offers a way on to something built to open it, and there is no

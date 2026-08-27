@@ -540,6 +540,10 @@ export const nl: Translation = {
     "files.chooseApp": "Openen met een app naar keuze",
     "files.appUsual": "{name} (de gebruikelijke)",
     "files.reveal": "Tonen in de bestandsbeheerder",
+    "files.newFile": "Nieuw bestand",
+    "files.newFolder": "Nieuwe map",
+    "files.rename": "Naam wijzigen",
+    "files.name": "Naam",
     "files.notText": "Dit is geen tekst en kan hier niet worden getoond.",
     "files.cut": "Alleen het begin wordt getoond.",
     "files.unreadable": "Dit bestand kon niet worden gelezen.",
@@ -694,6 +698,10 @@ export const nl: Translation = {
     wake_not_kept: "De keuze kon niet opgeslagen worden.",
     window_failed: "Dat venster kon niet worden geopend: {reason}",
     talk_blank: "Dat venster ging open maar tekende niets, dus de terminal staat weer in dit venster.",
+    folder_taken: "{name} bestaat al.",
+    folder_name: "Deze machine accepteert {name} niet als naam.",
+    folder_make: "{name} kon niet worden aangemaakt: {reason}",
+    folder_rename: "De naam kon niet worden gewijzigd in {name}: {reason}",
 
     already_reserved:
       "{ref} staat niet op “Te doen” en kan dus niet worden opgepakt — een andere sessie heeft hem misschien al.",

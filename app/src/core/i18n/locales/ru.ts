@@ -569,6 +569,10 @@ export const ru: Translation = {
     "files.chooseApp": "Открыть в выбранном приложении",
     "files.appUsual": "{name} (обычное)",
     "files.reveal": "Показать в файловом менеджере",
+    "files.newFile": "Новый файл",
+    "files.newFolder": "Новая папка",
+    "files.rename": "Переименовать",
+    "files.name": "Имя",
     "files.notText": "Это не текст, поэтому показать его здесь нельзя.",
     "files.cut": "Показано только начало.",
     "files.unreadable": "Не удалось прочитать этот файл.",
@@ -734,6 +738,10 @@ export const ru: Translation = {
     wake_not_kept: "Не удалось сохранить выбор.",
     window_failed: "Не удалось открыть это окно: {reason}",
     talk_blank: "То окно открылось, но ничего в нём так и не отрисовалось, поэтому терминал вернулся в это окно.",
+    folder_taken: "{name} уже есть.",
+    folder_name: "Эта машина не принимает {name} как имя.",
+    folder_make: "Не удалось создать {name}: {reason}",
+    folder_rename: "Не удалось переименовать в {name}: {reason}",
 
     already_reserved:
       "{ref} не в состоянии «К выполнению», поэтому взять её нельзя — возможно, ею уже занят другой сеанс.",

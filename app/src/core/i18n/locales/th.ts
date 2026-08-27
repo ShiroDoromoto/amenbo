@@ -726,6 +726,10 @@ export const th: Translation = {
     wake_not_registered: "คำสั่งที่ลงทะเบียนต้องมีทั้งชื่อและบรรทัดคำสั่ง",
     window_failed: "ไม่สามารถเปิดหน้าต่างนั้นได้: {reason}",
     talk_blank: "หน้าต่างนั้นเปิดขึ้นแต่ไม่มีอะไรถูกวาดเลย จึงนำเทอร์มินัลกลับมาไว้ที่หน้าต่างนี้",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "นี่คือลิงก์ไปยังไฟล์อื่น และ Amenbo จะไม่ตามลิงก์นั้น เพราะสิ่งที่มันชี้ไปอาจอยู่นอกโฟลเดอร์ของโปรเจกต์นี้",
     folder_taken: "มี {name} อยู่แล้ว",
     folder_name: "เครื่องนี้ไม่รับ {name} เป็นชื่อ",
     folder_make: "สร้าง {name} ไม่ได้: {reason}",

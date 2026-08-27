@@ -831,6 +831,10 @@ const err: Partial<Record<ErrorCode, string>> = {
   wake_not_registered: "A registered command needs both a name and a command line.",
   window_failed: "That window could not be opened: {reason}",
   talk_blank: "That window opened but never drew anything, so the terminal was put back in this one.",
+  // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+  // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+  // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+  folder_link: "This is a link to another file, and Amenbo does not follow one — what it points at can be outside this project's folders.",
   folder_taken: "{name} is already there.",
   folder_name: "This machine will not take {name} as a name.",
   folder_make: "{name} could not be made: {reason}",

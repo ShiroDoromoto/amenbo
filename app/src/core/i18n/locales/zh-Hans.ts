@@ -723,6 +723,10 @@ export const zhHans: Translation = {
     wake_not_registered: "登记的命令需要名称和命令行两者。",
     window_failed: "无法打开该窗口：{reason}",
     talk_blank: "那个窗口已打开，但始终没有绘制任何内容，因此终端已放回这个窗口。",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "这是指向另一个文件的链接，Amenbo 不会跟随它——它指向的位置可能在本项目的文件夹之外。",
     folder_taken: "{name} 已经存在。",
     folder_name: "这台机器不接受 {name} 作为名称。",
     folder_make: "无法创建 {name}：{reason}",

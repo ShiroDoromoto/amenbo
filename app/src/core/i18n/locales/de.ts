@@ -737,6 +737,10 @@ export const de: Translation = {
     wake_not_registered: "Ein registrierter Befehl braucht sowohl einen Namen als auch eine Befehlszeile.",
     window_failed: "Dieses Fenster konnte nicht geöffnet werden: {reason}",
     talk_blank: "Das Fenster wurde geöffnet, hat aber nie etwas gezeichnet — das Terminal ist wieder in diesem Fenster.",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "Dies ist ein Link auf eine andere Datei, und Amenbo folgt ihm nicht – wohin er zeigt, kann außerhalb der Ordner dieses Projekts liegen.",
     folder_taken: "{name} ist schon da.",
     folder_name: "Dieser Rechner nimmt {name} nicht als Namen an.",
     folder_make: "{name} konnte nicht angelegt werden: {reason}",

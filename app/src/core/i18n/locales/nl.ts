@@ -724,6 +724,10 @@ export const nl: Translation = {
     wake_not_registered: "Een geregistreerde opdracht heeft zowel een naam als een opdrachtregel nodig.",
     window_failed: "Dat venster kon niet worden geopend: {reason}",
     talk_blank: "Dat venster ging open maar tekende niets, dus de terminal staat weer in dit venster.",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "Dit is een koppeling naar een ander bestand, en Amenbo volgt die niet — waar hij naar wijst, kan buiten de mappen van dit project liggen.",
     folder_taken: "{name} bestaat al.",
     folder_name: "Deze machine accepteert {name} niet als naam.",
     folder_make: "{name} kon niet worden aangemaakt: {reason}",

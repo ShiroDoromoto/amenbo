@@ -724,6 +724,10 @@ export const hi: Translation = {
     wake_not_registered: "पंजीकृत कमांड के लिए नाम और कमांड लाइन दोनों चाहिए।",
     window_failed: "वह विंडो नहीं खोली जा सकी: {reason}",
     talk_blank: "वह विंडो खुली तो सही, पर उसमें कुछ भी नहीं आया, इसलिए टर्मिनल को इसी विंडो में लौटा दिया गया।",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "यह किसी दूसरी फ़ाइल का लिंक है, और Amenbo इसका पीछा नहीं करता — यह जिसकी ओर इशारा करता है वह इस प्रोजेक्ट के फ़ोल्डरों के बाहर हो सकता है।",
     folder_taken: "{name} पहले से मौजूद है।",
     folder_name: "यह मशीन {name} को नाम के रूप में स्वीकार नहीं करती।",
     folder_make: "{name} नहीं बनाया जा सका: {reason}",

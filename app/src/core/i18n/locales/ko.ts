@@ -722,6 +722,10 @@ export const ko: Translation = {
     wake_not_registered: "등록하는 명령에는 이름과 실행 줄이 모두 필요합니다.",
     window_failed: "그 창을 열 수 없습니다: {reason}",
     talk_blank: "그 창은 열렸지만 아무것도 그려지지 않아, 터미널을 이 창으로 되돌렸습니다.",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "이것은 다른 파일을 가리키는 링크이며, Amenbo는 링크를 따라가지 않습니다. 가리키는 곳이 이 프로젝트의 폴더 밖일 수 있습니다.",
     folder_taken: "{name}은(는) 이미 있습니다.",
     folder_name: "이 기기는 {name}을(를) 이름으로 받지 않습니다.",
     folder_make: "{name}을(를) 만들지 못했습니다: {reason}",

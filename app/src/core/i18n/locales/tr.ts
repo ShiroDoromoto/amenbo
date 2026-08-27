@@ -724,6 +724,10 @@ export const tr: Translation = {
     wake_not_registered: "Kaydedilen bir komut hem ad hem de komut satırı gerektirir.",
     window_failed: "O pencere açılamadı: {reason}",
     talk_blank: "O pencere açıldı ama içine hiçbir şey çizilmedi; terminal yeniden bu pencereye alındı.",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "Bu, başka bir dosyaya giden bir bağlantı ve Amenbo onu izlemez — gösterdiği yer bu projenin klasörlerinin dışında olabilir.",
     folder_taken: "{name} zaten var.",
     folder_name: "Bu makine {name} adını kabul etmiyor.",
     folder_make: "{name} oluşturulamadı: {reason}",

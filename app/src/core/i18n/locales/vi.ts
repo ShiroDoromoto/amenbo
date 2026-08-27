@@ -726,6 +726,10 @@ export const vi: Translation = {
     wake_not_registered: "Lệnh đã đăng ký cần cả tên và dòng lệnh.",
     window_failed: "Không thể mở cửa sổ đó: {reason}",
     talk_blank: "Cửa sổ đó đã mở nhưng không vẽ gì cả, nên terminal được đưa về cửa sổ này.",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "Đây là một liên kết tới tệp khác, và Amenbo không đi theo nó — nơi nó trỏ tới có thể nằm ngoài các thư mục của dự án này.",
     folder_taken: "{name} đã có ở đó.",
     folder_name: "Máy này không nhận {name} làm tên.",
     folder_make: "Không tạo được {name}: {reason}",

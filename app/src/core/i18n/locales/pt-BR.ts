@@ -753,6 +753,10 @@ export const ptBR: Translation = {
     wake_not_registered: "Um comando registrado precisa de um nome e de uma linha de comando.",
     window_failed: "Não foi possível abrir essa janela: {reason}",
     talk_blank: "Aquela janela abriu, mas nunca desenhou nada, então o terminal voltou para esta.",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "Isto é um link para outro arquivo, e o Amenbo não o segue: o que ele aponta pode estar fora das pastas deste projeto.",
     folder_taken: "{name} já existe.",
     folder_name: "Esta máquina não aceita {name} como nome.",
     folder_make: "Não foi possível criar {name}: {reason}",

@@ -221,7 +221,7 @@ fn step_lines(r: &StepRecord) -> String {
         Verdict::Fail => "✗",
         Verdict::Review => "?",
     };
-    let slip = if r.slipped { "  (one character forgiven — worth an eye)" } else { "" };
+    let slip = if r.slipped { "  (the words met on a forgiven glyph — worth an eye)" } else { "" };
     format!(
         "  {mark} {:02} [{}] {}\n        → {}{slip}",
         r.index + 1,

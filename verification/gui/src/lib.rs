@@ -166,6 +166,28 @@ fn fold(s: &str) -> String {
     out
 }
 
+/// Glyph pairs a screen draws alike and a reader has to guess between: the digit `1` against the
+/// letter `l`, and the digit `0` against the letter `o`. Vision guesses them wrong on the one face
+/// that writes short ASCII words in a monospace font — the key beside a category's name — where
+/// `channel` comes back as `channe1` off a shot the key is plainly legible on.
+///
+/// Each pair is folded onto one of its two members, on the reading and on the expectation both, so
+/// the two meet whichever way the guess went. What it costs is the ability to tell `route1` from
+/// `routel`: two keys a character apart in this pair are not distinguishable from a photograph, so
+/// declaring them the same is the honest answer rather than a widened tolerance. Everything else on
+/// the shot keeps its glyph — a lowercase `i` is left out on purpose, since the monospace face this
+/// serves draws it with a dot and folding it onto `l` would give away discrimination against a
+/// misreading this face does not produce.
+const CONFUSED_GLYPHS: [(char, char); 2] = [('1', 'l'), ('0', 'o')];
+
+/// Fold the confusable glyphs onto their representative, so a reading and an expectation that differ
+/// only by which member of a pair was guessed meet as the same word.
+fn unconfuse(s: &str) -> String {
+    s.chars()
+        .map(|c| CONFUSED_GLYPHS.iter().find(|(from, _)| *from == c).map_or(c, |(_, to)| *to))
+        .collect()
+}
+
 /// How short an expectation has to be before a slipped character is no longer forgiven.
 ///
 /// One edit inside eight characters is at most an eighth of what was asked for, and a card's title or
@@ -185,7 +207,8 @@ struct Held {
     slipped: bool,
 }
 
-/// Match a folded expectation against a folded reading, forgiving **one** misread character.
+/// Match a folded expectation against a folded reading, forgiving the glyphs a screen draws alike
+/// ([`CONFUSED_GLYPHS`]) and, on top of that, **one** misread character.
 ///
 /// Vision reads the words on a screen well and the glyphs inside them not always: `day's` came back
 /// as `dav's` on a title that was otherwise perfect, and the fold keeps alphanumerics, so `days` and
@@ -199,6 +222,11 @@ struct Held {
 /// leaves a title with no spaces in it at all, so a tolerance counted in words would be no tolerance
 /// there.
 ///
+/// The confusable fold sits outside that budget and outside the floor, because it is not a
+/// forgiveness of the reader: `1` and `l` are one drawing, so a key spelt with either is the same key
+/// on any shot. That is what carries the short expectations the budget cannot reach — a category's
+/// key is a word of five or six characters, well under [`SLIP_FLOOR`].
+///
 /// **Which way the looseness leans is worth knowing.** On a `present: true` step it can only turn a
 /// red green, and on a `present: false` step only a green red — the same tolerance that finds a
 /// misread title also finds it when a step says it should be gone. So the risk it carries is a step
@@ -206,6 +234,14 @@ struct Held {
 fn held(reading: &str, expected: &str) -> Held {
     if expected.is_empty() || reading.contains(expected) {
         return Held { found: true, slipped: false };
+    }
+    // The confusable pairs go first and are not spent out of the budget below: a glyph the screen
+    // draws the same for two characters is not a character the reader got wrong, it is one the shot
+    // never told apart. Folding them is what lets a key too short for the budget be read at all.
+    let reading = unconfuse(reading);
+    let expected = unconfuse(expected);
+    if reading.contains(&expected) {
+        return Held { found: true, slipped: true };
     }
     let needle: Vec<char> = expected.chars().collect();
     if needle.len() < SLIP_FLOOR {
@@ -4495,6 +4531,28 @@ steps_gui:
         // And the reading that needed nothing forgiven says so, which is what keeps the two greens
         // apart in the evidence.
         assert_eq!(held(&fold(title), &fold(title)), Held { found: true, slipped: false });
+    }
+
+    /// The reading that this one came from: a category's key drawn in a monospace face, where the
+    /// `l` came back as a `1`. It is seven characters, so the budget below cannot reach it — the
+    /// confusable fold is the whole of what makes it green.
+    #[test]
+    fn a_key_misread_on_a_glyph_the_screen_draws_alike_still_meets_it() {
+        assert_eq!(held("medium channe1", "channel"), Held { found: true, slipped: true });
+        // The other pair, and the fold going the other way — the expectation carrying the digit and
+        // the reading the letter.
+        assert_eq!(held("the r0ute", "route"), Held { found: true, slipped: true });
+        assert_eq!(held("the route", "r0ute"), Held { found: true, slipped: true });
+    }
+
+    /// What the fold does not buy: a key that differs anywhere else is still a different key, however
+    /// short it is.
+    #[test]
+    fn a_key_that_differs_elsewhere_stays_red() {
+        assert_eq!(held("medium channe1", "channet"), Held { found: false, slipped: false });
+        assert_eq!(held("medium focus", "channel"), Held { found: false, slipped: false });
+        // And a lowercase `i` is not in the pairs, so it keeps its own glyph.
+        assert_eq!(held("medium channei", "channel"), Held { found: false, slipped: false });
     }
 
     /// The floor. A short expectation is a word where one character is most of the meaning, and two

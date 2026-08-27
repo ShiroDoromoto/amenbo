@@ -234,6 +234,15 @@ tolerance that finds a misread title on a `present: true` step finds it on a `pr
 too, so it can red a run and never green one on a screen nobody stood up. A step that passed only
 because a character was forgiven says so in the summary and carries `slipped` in `manifest.json`;
 several of those in one run is a reader going wrong rather than a screen.
+
+**Two pairs of glyphs are folded onto each other before any of that**: the digit `1` against the
+letter `l`, and the digit `0` against the letter `o`. They are one drawing, not a reader's slip, so
+they cost nothing out of the budget above and reach the expectations the budget cannot — a category's
+key is a monospace word of five or six characters, well under the floor, and `channel` came back as
+`channe1` off a shot it was plainly legible on. What it gives up is telling `route1` from `routel`,
+which no reading of a photograph could do anyway. A lowercase `i` is deliberately not in the set: the
+face this serves draws it with a dot, so folding it onto `l` would give away discrimination against a
+misreading this screen does not produce. A green earned this way carries `slipped` like any other.
 An assert OCR cannot mechanically judge — a structured `field` value — is a `Review`: its shot is
 kept for an AI/human eye and does not fail the run. A task's **title is one of those once the task
 has ended**: done and rejected are drawn with a line through them, and the reader returns the glyphs

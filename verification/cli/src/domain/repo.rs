@@ -68,11 +68,20 @@ impl Driver<'_> {
             // It leaves a `main` with one commit on it, rather than the branchless state a bare
             // `init` leaves behind: a repository with no commit has no branch either, and the
             // official `worktree` plugin needs one to cut a task's checkout from.
+            //
+            // Which folder becomes one is `write-file`'s rule, said by `dir:` and never by a path:
+            // the run's own folder, or one a `folder` step bound. A road reading what git says about
+            // a bound folder needs the second — the colours are drawn on the face of the folder the
+            // project is bound to, and a repository anywhere else leaves every row of it bare.
             "git-init" => {
+                let at = match with.get("dir") {
+                    Some(_) => self.folder(with)?,
+                    None => self.session.cwd.clone(),
+                };
                 let git = |args: &[&str]| -> Result<(), String> {
                     let out = Command::new("git")
                         .args(args)
-                        .current_dir(&self.session.cwd)
+                        .current_dir(&at)
                         .output()
                         .map_err(|e| format!("could not run git: {e}"))?;
                     if !out.status.success() {
@@ -93,7 +102,7 @@ impl Driver<'_> {
                     "commit", "--quiet", "--allow-empty",
                     "-m", "the branch a scenario cuts from",
                 ])?;
-                Ok(Outcome::action("made the run's folder a git repository on `main`".to_string()))
+                Ok(Outcome::action(format!("made {} a git repository on `main`", at.display())))
             }
             // The edit the handed-over text asks for. Amenbo writes no settings file, so this stands
             // in for the AI the reader gives that text to — and it takes both halves of the answer

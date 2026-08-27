@@ -5,10 +5,12 @@ import { dueBadges, type DueCounts } from "../core/due";
 import { useArchivedProjects, useDueCounts } from "../core/reads";
 import { useStore } from "../store/store";
 import { t } from "../core/i18n";
+import { flowEdges } from "../core/edgeScroll";
+import { draggedFar } from "../core/pointerDrag";
 import { Icon, type IconName } from "../components/Icon";
 import type { SmartView } from "../mock/types";
 import type { Nav } from "./AppShell";
-import { draggedFar, landing } from "./rowDrag";
+import { landing } from "./rowDrag";
 
 // Which icon each smart view is drawn with. The views arrive as ids alone, so the drawing
 // is decided here rather than travelling with the data (`AMB-D-689`).
@@ -27,8 +29,9 @@ function rowId(row: HTMLElement): number | null {
  *
  * **The reorder is a press and a move, not the webview's drag.** The app itself takes what is dropped on it, and
  * with that switch thrown an in-window HTML5 drag does not fire at all on macOS and Windows (`AMB-D-775`). So a
- * press becomes a drag only past `DRAG_SLOP` (`./rowDrag`), a press meant as a reorder does not navigate, and the
- * click that follows one is swallowed.
+ * press becomes a drag only past `DRAG_SLOP` (`../core/pointerDrag`), a press meant as a reorder does not navigate, and the
+ * click that follows one is swallowed. A row held against the top or the bottom of the list scrolls it, which the
+ * webview's drag never did either (`../core/edgeScroll`).
  *
  * Where the row lands (before/after) is computed from the release's own clientY and the row under it, never from the
  * stored `dropHint`: the hint is drawn a frame at a time and can be pointing at a row the pointer has already left,
@@ -60,13 +63,30 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
   // when the frame was asked for, so the moves in between are folded rather than dropped.
   const pending = useRef<number | null>(null);
   const latest = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  // How to call off the frame loop that scrolls the list under a held row.
+  const stopFlow = useRef<(() => void) | null>(null);
 
   const stopPress = () => {
     press.current = null;
     if (pending.current !== null) cancelAnimationFrame(pending.current);
     pending.current = null;
+    stopFlow.current?.();
+    stopFlow.current = null;
     setDragId(null);
     setDropHint(null);
+  };
+
+  // A press outliving the sidebar would leave a frame loop scrolling a list that is gone.
+  useEffect(() => () => stopFlow.current?.(), []);
+
+  // Where the row would land, from wherever the pointer is now. Run from the frame a move asked for, and again on
+  // every frame the list scrolled under a hand that is holding still — the rows have moved, so the row under the
+  // pointer is a different one even though the pointer is not.
+  const retest = () => {
+    const held = press.current;
+    if (held?.dragging !== true) return;
+    const to = landing(held.id, latest.current, "data-project-row", rowId);
+    setDropHint((h) => (h?.id === to?.id && h?.pos === to?.side ? h : to && { id: to.id, pos: to.side }));
   };
 
   // Two fences a held row needs, and neither is optional (`AMB-T-3755`).
@@ -92,9 +112,15 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
     // The primary button alone. A right-click is the menu's, and a middle-click is nobody's here.
     if (e.button !== 0) return;
     press.current = { id, from: { x: e.clientX, y: e.clientY }, dragging: false };
+    latest.current = { x: e.clientX, y: e.clientY };
     // Captured from the press rather than from the threshold: it is what keeps the move and the release coming to
     // this row after the pointer has left it, including outside the window entirely (`AMB-T-3755`).
     e.currentTarget.setPointerCapture?.(e.pointerId);
+    // The list flows while a row is held against its top or bottom edge, and only once the press has become a
+    // drag: a click is not a reason to move the list out from under itself (`../core/edgeScroll`). A second press
+    // arriving on top of a first calls the first one off, rather than leaving its frame loop running unowned.
+    stopFlow.current?.();
+    stopFlow.current = flowEdges(() => (press.current?.dragging === true ? latest.current : null), retest);
   };
 
   const onRowPointerMove = (e: ReactPointerEvent<HTMLElement>) => {
@@ -113,9 +139,7 @@ export function Sidebar({ nav, onNav }: { nav: Nav; onNav: (n: Nav) => void }) {
     if (pending.current !== null) return;
     pending.current = requestAnimationFrame(() => {
       pending.current = null;
-      if (press.current?.dragging !== true) return;
-      const to = landing(held.id, latest.current, "data-project-row", rowId);
-      setDropHint((h) => (h?.id === to?.id && h?.pos === to?.side ? h : to && { id: to.id, pos: to.side }));
+      retest();
     });
   };
 

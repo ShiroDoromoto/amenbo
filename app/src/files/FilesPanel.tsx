@@ -1,9 +1,9 @@
 // The file face: the right side of the terminal face, where what the agent in the pane is doing to
 // the folder can be seen without leaving the window (`AMB-T-3602`).
 //
-// **Both rows belong to the project.** What changed lately and the folder itself are rooted at a
-// folder the project is bound to, so switching panes does not move them — what changed in the
-// repository is the same question whichever terminal is in front of it.
+// **The folder it draws belongs to the project.** It is rooted at a folder the project is bound to,
+// so switching panes does not move it — what changed in the repository is the same question
+// whichever terminal is in front of it.
 //
 // **Every bound folder is drawn, each in a section of its own** (`AMB-D-778`). A project with one
 // folder is drawn without a heading, because a heading over the only thing on the screen names
@@ -11,16 +11,27 @@
 // dropped from the list it would look like one nobody ever bound, and the reader would have no way
 // to tell a folder that moved from a binding they removed.
 //
-// **What changed lately is watched, not asked for.** The host lays a watch over the folder and
-// says what is in it as it moves (`crate::folder_watch`), so the row is right while a person is
-// looking at it rather than as of whenever this side last thought to ask. What it cannot watch —
-// a folder too large to walk, a watch the kernel refused — is drawn as the row saying so, because
-// an unwatched half looks exactly like a half where nothing happened (`AMB-T-3604`).
+// **What has changed is git's answer, drawn on the tree's own rows** (`AMB-D-785`). A list of the
+// files written to most recently used to stand above the tree, and what it answered was "yesterday"
+// over and over: a branch switched, a formatter run, a build — none of it what a person is looking
+// for. `M`, `A` and `??` mean something, so the colour goes where the names already are.
+//
+// **The folder is watched, not asked for.** The host lays a watch over it and says when it moves
+// (`crate::folder_watch`), and that word is the moment to ask again — for the names of the level
+// that is open, and for what git says about them. What it cannot watch — a folder too large to
+// walk, a watch the kernel refused — is drawn as the line saying so, because an unwatched half
+// looks exactly like a half where nothing happened (`AMB-T-3604`).
 //
 // **What a file is, is the host's answer, not this side's guess.** A NUL in the head makes it
 // binary and the first bytes make it a picture (`crate::folder`); the name decides only whether
 // text is drawn as Markdown, which is a question about rendering rather than about what the file
 // is.
+//
+// **A name is made and changed in the row itself, never in a dialog.** What a person is naming sits
+// in a list, and the names already in it are what they are choosing against — so the box takes the
+// row's place and the refusal is drawn under it, where what they typed is still in front of them.
+// Which names a machine will hold is the host's answer and no rule written here
+// (`crate::folder_write`).
 //
 // **A file dragged in from the desktop lands on the application, not on this page** (`AMB-D-775`).
 // So the panel is not told which row is under the pointer — it is told a point, and the folder that
@@ -30,20 +41,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type {
-  FolderAppDto, FolderChangesDto, FolderEntryDto, FolderFileDto,
+  FolderAppDto, FolderChangesDto, FolderEntryDto, FolderFileDto, GitEntryDto,
 } from "../bindings/bindings";
 import { Markdown } from "../components/Markdown";
 import { useBoundFolders } from "../core/boundFolders";
 import { watchHostDrop } from "../core/hostDrop";
-import { formatNumber, t, tf, whenLabel } from "../core/i18n";
+import { fileUrl } from "../core/fileUrl";
+import { errText, formatNumber, t, tf } from "../core/i18n";
 import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
 import {
-  folderEntries, folderOpenFile, folderOpenFileWith, folderOpenWith, folderRead, folderRevealFile,
-  folderUnwatch, folderWatch, onFolderChanged,
+  folderEntries, folderGitStatus, folderMake, folderOpenFile, folderOpenFileWith, folderOpenWith,
+  folderRead, folderRename, folderRevealFile, folderUnwatch, folderWatch, onFolderChanged,
 } from "./folder";
 import { FileEditor } from "./FileEditor";
 import { MemoPage } from "./MemoPage";
 import { fileUnderAny } from "./fileUnder";
+import { gitMarks, type GitMark } from "./gitMark";
 import { sectionsOf } from "./sections";
 import { Icon } from "../components/Icon";
 
@@ -58,6 +71,37 @@ const MARKDOWN = [".md", ".markdown"];
  * `src` each — a landing that said only `src` would light one up in both.
  */
 type Landing = { root: string; into: string };
+
+/**
+ * A name being typed into the tree: one being made in a folder, or one being written over.
+ *
+ * It is one at a time and it belongs to the panel rather than to a row, for the reason the menu does:
+ * a row that held it would take it away with itself the moment the list moved underneath.
+ */
+type Edit =
+  | { kind: "make"; root: string; into: string[]; dir: boolean }
+  | { kind: "rename"; root: string; path: string[] };
+
+/** The name being typed in one section, and the end of typing it. */
+type Naming = {
+  /** The one being typed here, or nothing — a section is handed only its own. */
+  edit: Edit | null;
+  /** End it. `made` says whether the folder now holds something it did not, which is what tells the
+   *  levels under it to look again rather than wait for the host to say the folder moved. */
+  end: (made: boolean) => void;
+};
+
+/** Whether an edit is the making of a name in this folder of this section. */
+function makingIn(edit: Edit | null, root: string, path: string[]): Edit & { kind: "make" } | null {
+  return edit?.kind === "make" && edit.root === root && edit.into.join("/") === path.join("/")
+    ? edit
+    : null;
+}
+
+/** Whether an edit is the renaming of this row. */
+function renaming(edit: Edit | null, root: string, path: string[]): boolean {
+  return edit?.kind === "rename" && edit.root === root && edit.path.join("/") === path.join("/");
+}
 
 /** The row under the pointer, read as a landing — its folder and its path, or nothing off a row. */
 function landingOf(el: Element | null | undefined): Landing | null {
@@ -111,8 +155,12 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
   // per row: only one can be open, and a row that held its own would keep it after the list moved
   // under it (`AMB-T-3605`).
   const [menu, setMenu] = useState<
-    { root: string; path: string[]; x: number; y: number } | null
+    { root: string; path: string[]; dir: boolean; x: number; y: number } | null
   >(null);
+  // The name being typed into the tree, if any. Held here rather than in the row it is in, so that a
+  // list redrawn under it — which is what making a name does — does not take the box away with the
+  // row it was on.
+  const [edit, setEdit] = useState<Edit | null>(null);
   // Where a file being dragged in would land: which bound folder, and which folder inside it ("" is
   // the bound folder itself). Null while nothing is over the panel. The folder is half of it because
   // every section has a row for its own root, and the same path inside two of them is two places.
@@ -223,8 +271,10 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
           label={sections.length > 1 ? one.label : null}
           bound={one.exists}
           landing={landing}
-          onRead={(path) => setReading({ root: one.path, path })}
-          onMenu={(path, x, y) => setMenu({ root: one.path, path, x, y })}
+          edit={edit?.root === one.path ? edit : null}
+          onEdit={setEdit}
+          onRead={(path) => { setEdit(null); setReading({ root: one.path, path }); }}
+          onMenu={(path, dir, x, y) => setMenu({ root: one.path, path, dir, x, y })}
         />
       ))}
       {menu !== null && (
@@ -232,7 +282,18 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
           projectId={projectId}
           root={menu.root}
           path={menu.path}
+          dir={menu.dir}
           at={{ x: menu.x, y: menu.y }}
+          naming={{
+            // Into the row that was right-clicked, which the menu only offers over a folder: what
+            // can hold a new name is a folder, and pointing at one is how a person says which.
+            onMake: (dir) => setEdit({ kind: "make", root: menu.root, into: menu.path, dir }),
+            // The bound folder itself is no row anybody may rename here: it is the binding, and
+            // where a binding is changed is the project's own settings.
+            onRename: menu.path.length === 0
+              ? null
+              : () => setEdit({ kind: "rename", root: menu.root, path: menu.path }),
+          }}
           onClose={() => setMenu(null)}
         />
       )}
@@ -241,18 +302,32 @@ export function FilesPanel({ projectId, onOpenLedger, show, tab, onTab, onClose 
 }
 
 /**
- * One bound folder: what changed in it lately, and its tree.
+ * One bound folder: its tree, wearing what git says about it.
  *
  * **The watch is the section's own.** Each folder is watched separately and each answer names the
  * folder it is about (`./folder`), so a section takes the news addressed to it and leaves the rest.
  * Holding one watch for the panel would mean the panel deciding which folder each answer belonged
  * to, which is the same work done once further from where it is used.
  *
+ * **The news is a number, not a payload.** What the host says when the folder moves carries no
+ * rows (`AMB-D-785`), so what a section does with it is count: `moved` goes up, and everything read
+ * off the disk — git's answer here, the names of each open level in `Level` — is asked for again
+ * because it changed. One counter rather than a refresh per reader, because a folder moving is one
+ * fact and they would all be reacting to it.
+ *
  * A folder that is gone draws its heading and the reason, and nothing else. There is nothing to
  * watch and no tree to open, and the two states it could be confused with — a binding somebody
  * removed, and a folder with nothing in it — both look like an empty section.
+ *
+ * **A half-watched folder says which half-watched it is.** Too big to walk to the end of and out of
+ * watches are separate answers from the host and are drawn as separate lines (`AMB-D-778`): one is
+ * about this folder and is answered by pointing the app at less of it, the other is about the
+ * machine and is answered by giving it more watches. They are said of the folder rather than of the
+ * tree below, so they stand beside the heading, above it.
  */
-function FolderSection({ projectId, root, label, bound, landing, onRead, onMenu }: {
+function FolderSection({
+  projectId, root, label, bound, landing, edit, onEdit, onRead, onMenu,
+}: {
   projectId: number;
   root: string;
   /** The heading, or nothing where this is the only folder. */
@@ -262,14 +337,45 @@ function FolderSection({ projectId, root, label, bound, landing, onRead, onMenu 
   /** Where a dragged file would land, anywhere on the panel — a section draws the highlight only
    *  where the landing is one of its own (`landed`). */
   landing: Landing | null;
+  /** The name being typed in this section, or nothing. The panel holds it, and hands each section
+   *  only what is its own. */
+  edit: Edit | null;
+  onEdit: (edit: Edit | null) => void;
   onRead: (path: string[]) => void;
-  onMenu: (path: string[], x: number, y: number) => void;
+  onMenu: (path: string[], dir: boolean, x: number, y: number) => void;
 }) {
   const [changes, setChanges] = useState<FolderChangesDto>(
-    { root, changed: [], partial: false, gone: false },
+    { root, capped: false, unwatched: false, gone: false },
   );
+  // How many times the host has said this folder moved. Everything read off the disk watches it.
+  const [moved, setMoved] = useState(0);
+  const [git, setGit] = useState<GitEntryDto[]>([]);
   const [treeOpen, setTreeOpen] = useState(false);
+  // Which folders of the tree are unfolded, as their paths joined. Held for the whole section rather
+  // than per level, because opening one is also something the section does on a reader's behalf: a
+  // name being made in a folder that is folded shut would be typed where nobody could see it.
+  const [open, setOpen] = useState<string[]>([]);
   const gone = !bound || changes.gone;
+
+  const naming: Naming = {
+    edit,
+    // A name written into the folder moves it as surely as an agent does, and the host says so 400ms
+    // later (`crate::folder_watch`). A row somebody has just made belongs on the list before that.
+    end: (made) => {
+      if (made) setMoved((n) => n + 1);
+      onEdit(null);
+    },
+  };
+
+  // The panel says which folder a name is being made in; unfolding the way to it is this section's
+  // own answer. The tree starts folded, so a box typed into a folder nobody can see is the ordinary
+  // case rather than a corner.
+  const making = edit?.kind === "make" ? edit.into.join("/") : null;
+  useEffect(() => {
+    if (making === null) return;
+    setTreeOpen(true);
+    if (making !== "") setOpen((was) => (was.includes(making) ? was : [...was, making]));
+  }, [making]);
 
   useEffect(() => {
     if (!bound) return;
@@ -279,12 +385,14 @@ function FolderSection({ projectId, root, label, bound, landing, onRead, onMenu 
     // Every watched folder is told about through the one listener, so an answer about another
     // folder is not this section's news.
     const listening = onFolderChanged((fresh) => {
-      if (alive && fresh.root === root) setChanges(fresh);
+      if (!alive || fresh.root !== root) return;
+      setChanges(fresh);
+      setMoved((n) => n + 1);
     });
     void folderWatch(projectId, root)
       .then((now) => { if (alive) setChanges(now); })
       .catch(() => {
-        if (alive) setChanges({ root, changed: [], partial: false, gone: false });
+        if (alive) setChanges({ root, capped: false, unwatched: false, gone: false });
       });
     return () => {
       alive = false;
@@ -292,6 +400,24 @@ function FolderSection({ projectId, root, label, bound, landing, onRead, onMenu 
       void folderUnwatch(root);
     };
   }, [projectId, root, bound]);
+
+  // What git says, asked for again every time the folder moves — staging included, which moves not
+  // one byte of the working tree and every colour in the tree (`AMB-D-774`). A folder that is no
+  // repository answers with nothing, which is a tree with no colours and not a failure to draw.
+  //
+  // **Only while the tree is open**, which is the same rule the levels themselves are read under: a
+  // colour nobody is looking at is a process started for nothing, and a folder someone leaves the
+  // panel folded on is one an agent may be writing in all afternoon.
+  useEffect(() => {
+    if (!bound || !treeOpen) return;
+    let alive = true;
+    void folderGitStatus(projectId, root)
+      .then((rows) => { if (alive) setGit(rows); })
+      .catch(() => { if (alive) setGit([]); });
+    return () => { alive = false; };
+  }, [projectId, root, bound, treeOpen, moved]);
+
+  const marks = useMemo(() => gitMarks(git), [git]);
 
   // The whole of one folder is one box, so the space between two folders is wider than the space
   // inside either — two stacks of rows with the same gap everywhere read as one long stack.
@@ -311,34 +437,25 @@ function FolderSection({ projectId, root, label, bound, landing, onRead, onMenu 
   return (
     <div className="files__folder">
       {heading}
-      <section className="files__row">
-        <h3 className="files__head">{t("files.changed")}</h3>
-        {changes.changed.length === 0
-          ? <p className="files__none">{t("files.nothingChanged")}</p>
-          : (
-            <ul className="files__list">
-              {changes.changed.map((one) => (
-                <li key={one.path.join("/")}>
-                  <button
-                    className="files__file"
-                    onClick={() => onRead(one.path)}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      onMenu(one.path, e.clientX, e.clientY);
-                    }}
-                  >
-                    <span className="files__name">{one.path[one.path.length - 1]}</span>
-                    <span className="files__when">{whenLabel(one.modified)}</span>
-                  </button>
-                  <span className="files__where">{one.path.slice(0, -1).join("/")}</span>
-                </li>
-              ))}
-            </ul>
+      {/* Said out loud rather than left to be assumed: a folder only half watched goes on looking
+          like one where nothing is happening. Both reasons stand in one stack, tight enough to read
+          as one thing said about the folder rather than as two of the panel's rows. */}
+      {(changes.capped || changes.unwatched) && (
+        <div className="files__row">
+          {changes.capped && <p className="files__none">{t("files.capped")}</p>}
+          {/* The way out is said with the fact, because the fact alone reads as something the
+              reader did — and it is not: the supply is the machine's and their editor is already
+              spending it (`AMB-T-3753`). Which folders went unwatched is not said: they are
+              whichever the walk reached last, so naming them would describe the walk rather than
+              the project. */}
+          {changes.unwatched && (
+            <>
+              <p className="files__none">{t("files.unwatched")}</p>
+              <p className="files__none">{t("files.unwatchedHow")}</p>
+            </>
           )}
-        {/* Said out loud rather than left to be assumed: a folder only half watched goes on looking
-            like one where nothing is happening. */}
-        {changes.partial && <p className="files__none">{t("files.partial")}</p>}
-      </section>
+        </div>
+      )}
       {/* The root is a folder like any other in the tree, and the one a drop that fell on no row
           lands in. It is marked on the section rather than on the heading so that the whole of the
           tree — the gaps between its rows included — answers for it. */}
@@ -347,10 +464,17 @@ function FolderSection({ projectId, root, label, bound, landing, onRead, onMenu 
         data-root={root}
         data-into=""
       >
+        {/* The heading is the folder's own row: right-clicking it is how a name is made at the top
+            of the tree, where there is no row inside to point at. It carries the menu rather than the
+            whole section so that a right-click on a row inside is that row's and not this one's. */}
         <button
           className="files__head files__head--button"
           aria-expanded={treeOpen}
-          onClick={() => setTreeOpen((open) => !open)}
+          onClick={() => setTreeOpen((was) => !was)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            onMenu([], true, e.clientX, e.clientY);
+          }}
         >
           {t("files.tree")}
         </button>
@@ -363,6 +487,13 @@ function FolderSection({ projectId, root, label, bound, landing, onRead, onMenu 
             root={root}
             path={[]}
             landing={landing}
+            marks={marks}
+            moved={moved}
+            open={open}
+            onOpen={(key) => setOpen((was) =>
+              was.includes(key) ? was.filter((one) => one !== key) : [...was, key]
+            )}
+            naming={naming}
             onRead={onRead}
             onMenu={onMenu}
           />
@@ -388,12 +519,24 @@ function FolderSection({ projectId, root, label, bound, landing, onRead, onMenu 
  * A failure is not drawn. What could go wrong is the file having gone since the row was drawn, and
  * the row itself is about to say so: the folder is watched, and a file that is not there stops being
  * listed. A line about it would be a second, slower account of the same fact.
+ *
+ * **What a folder can be handed to is nothing, so a folder is offered none of it.** The three doors
+ * are about a file's own kind, and a menu that offered them over a folder would be offering to open a
+ * directory in a text editor. What is left over a folder is what can be written into it.
  */
-function FileMenu({ projectId, root, path, at, onClose }: {
+function FileMenu({ projectId, root, path, dir, at, naming, onClose }: {
   projectId: number;
   root: string;
   path: string[];
+  /** Whether the row is a folder. It decides the whole of what the menu holds. */
+  dir: boolean;
   at: { x: number; y: number };
+  /**
+   * Naming, where the menu was opened on a row in the tree. The reading face opens this same menu
+   * with no row under the pointer (`FileReader`) and passes none, so the doors are all it draws.
+   * `onRename` is absent for the one row that has no name of its own — the bound folder.
+   */
+  naming?: { onMake: (dir: boolean) => void; onRename: (() => void) | null };
   onClose: () => void;
 }) {
   // The applications to pick from, once they have been asked for and there are any — the second
@@ -425,6 +568,16 @@ function FileMenu({ projectId, root, path, at, onClose }: {
     void go().catch(() => {});
   };
 
+  /** An item whose work is on the panel rather than out at the machine: the menu goes, and the box a
+   *  name is typed into takes its place. */
+  const pick = (go: () => void) => {
+    onClose();
+    go();
+  };
+
+  // Read out once, so the item below is drawn from the same answer it calls.
+  const rename = naming?.onRename ?? null;
+
   /** Ask, and then either draw what came back or step aside because the OS already asked. */
   const choose = () => {
     void folderOpenWith(projectId, root, path)
@@ -436,23 +589,50 @@ function FileMenu({ projectId, root, path, at, onClose }: {
     <div className="files__menu" style={{ left: at.x, top: at.y }} role="menu" ref={box}>
       {apps === null ? (
         <>
-          <button
-            className="files__menuitem"
-            role="menuitem"
-            onClick={() => act(() => folderOpenFile(projectId, root, path))}
-          >
-            {t("files.openWith")}
-          </button>
-          <button className="files__menuitem" role="menuitem" onClick={choose}>
-            {t("files.chooseApp")}
-          </button>
-          <button
-            className="files__menuitem"
-            role="menuitem"
-            onClick={() => act(() => folderRevealFile(projectId, root, path))}
-          >
-            {t("files.reveal")}
-          </button>
+          {naming !== undefined && dir && (
+            <>
+              <button
+                className="files__menuitem"
+                role="menuitem"
+                onClick={() => pick(() => naming.onMake(false))}
+              >
+                {t("files.newFile")}
+              </button>
+              <button
+                className="files__menuitem"
+                role="menuitem"
+                onClick={() => pick(() => naming.onMake(true))}
+              >
+                {t("files.newFolder")}
+              </button>
+            </>
+          )}
+          {rename !== null && (
+            <button className="files__menuitem" role="menuitem" onClick={() => pick(rename)}>
+              {t("files.rename")}
+            </button>
+          )}
+          {!dir && (
+            <>
+              <button
+                className="files__menuitem"
+                role="menuitem"
+                onClick={() => act(() => folderOpenFile(projectId, root, path))}
+              >
+                {t("files.openWith")}
+              </button>
+              <button className="files__menuitem" role="menuitem" onClick={choose}>
+                {t("files.chooseApp")}
+              </button>
+              <button
+                className="files__menuitem"
+                role="menuitem"
+                onClick={() => act(() => folderRevealFile(projectId, root, path))}
+              >
+                {t("files.reveal")}
+              </button>
+            </>
+          )}
         </>
       ) : (
         apps.map((app) => (
@@ -486,19 +666,29 @@ function useLedgerNav(onOpenLedger?: () => void): RefNav {
 }
 
 /**
- * A row's classes, with the faint one added for a name the repository ignores.
+ * A row's classes: the faint one for a name the repository ignores, and the colour for what git
+ * says about it.
  *
  * The row is drawn either way: `.gitignore` says what git does not record, not what a reader may
  * not look at, and the files a person goes looking for after an agent has been at work — `.env`,
  * `.amenbo` — are ignored in most repositories (`AMB-D-786`). What is left out of the tree is the
  * floor the host prunes, and that never reaches here.
+ *
+ * **The two can land on the same row and say different things.** Faint is "git does not record
+ * this"; the colour is "git says this moved". A row is rarely both — what is ignored has no status
+ * to show — but nothing here stops them, because nothing about either one depends on the other.
  */
-function faint(base: string, ignored: boolean): string {
-  return ignored ? `${base} ${base}--ignored` : base;
+function rowClass(base: string, ignored: boolean, mark: GitMark | null): string {
+  let all = base;
+  if (ignored) all += ` ${base}--ignored`;
+  if (mark !== null) all += ` ${base}--git ${base}--git-${mark}`;
+  return all;
 }
 
 /** One folder's worth of names, and whatever of it has been opened. */
-function Level({ projectId, root, path, landing, onRead, onMenu }: {
+function Level({
+  projectId, root, path, landing, marks, moved, open, onOpen, naming, onRead, onMenu,
+}: {
   projectId: number;
   root: string;
   path: string[];
@@ -508,11 +698,23 @@ function Level({ projectId, root, path, landing, onRead, onMenu }: {
    * drawing the highlight it was drawing a moment ago.
    */
   landing: Landing | null;
+  /** What git says about a row, asked by its segments from the bound folder (`./gitMark`). */
+  marks: (path: string[]) => GitMark | null;
+  /** How many times the folder has moved. The names are read again on each — a file the agent just
+   *  wrote is a row that has to appear without anybody folding the tree and opening it again. */
+  moved: number;
+  /** Which folders of the whole section are unfolded, as their paths joined. The section holds it
+   *  (`FolderSection`) because opening one is also something it does on a reader's behalf. */
+  open: string[];
+  onOpen: (key: string) => void;
+  /** The name being typed anywhere in this section, passed down for the same reason `landing` is:
+   *  every level has to be able to stop drawing the box it was drawing a moment ago. */
+  naming: Naming;
   onRead: (path: string[]) => void;
-  onMenu: (path: string[], x: number, y: number) => void;
+  onMenu: (path: string[], dir: boolean, x: number, y: number) => void;
 }) {
   const [names, setNames] = useState<FolderEntryDto[]>([]);
-  const [open, setOpen] = useState<string[]>([]);
+  const making = makingIn(naming.edit, root, path);
 
   useEffect(() => {
     let alive = true;
@@ -521,16 +723,45 @@ function Level({ projectId, root, path, landing, onRead, onMenu }: {
       .catch(() => { if (alive) setNames([]); });
     return () => { alive = false; };
     // `path` is rebuilt by the parent on every render, so the array itself is not what to watch.
-  }, [projectId, root, path.join("/")]);
+  }, [projectId, root, path.join("/"), moved]);
 
   return (
     <ul className="files__list files__list--tree">
+      {/* The name being made, at the top of the folder it is being made in. Above the names rather
+          than among them: where it would sort is decided by what is typed, and a box that moved as
+          the letters arrived would be a box nobody could read what they had written in. */}
+      {making !== null && (
+        <li>
+          <NameBox
+            initial=""
+            onName={(name) => folderMake(projectId, root, [...path, name], making.dir)}
+            onEnd={naming.end}
+          />
+        </li>
+      )}
       {names.map((one) => {
         // A folder answers for a drop, and what it answers for is everything drawn under it — which
         // is the row itself and, once it is open, the level inside it. That is why the mark sits on
         // the item and not on the button: a file row inside a folder resolves upwards to that
         // folder, so dropping on a name means the same as dropping in the space beside it.
-        const into = one.isDir ? [...path, one.name].join("/") : undefined;
+        const here = [...path, one.name];
+        const key = here.join("/");
+        const into = one.isDir ? key : undefined;
+        const mark = marks(here);
+        // The row is the box while its name is being written over. Drawn in place of the row rather
+        // than beside it: what is being changed is this name, and two of them on the screen at once
+        // would leave a reader wondering which one they were about to keep.
+        if (renaming(naming.edit, root, here)) {
+          return (
+            <li key={one.name}>
+              <NameBox
+                initial={one.name}
+                onName={(name) => folderRename(projectId, root, here, name)}
+                onEnd={naming.end}
+              />
+            </li>
+          );
+        }
         return (
           <li
             key={one.name}
@@ -542,20 +773,27 @@ function Level({ projectId, root, path, landing, onRead, onMenu }: {
               ? (
                 <>
                   <button
-                    className={faint("files__dir", one.ignored)}
-                    aria-expanded={open.includes(one.name)}
-                    onClick={() => setOpen((was) =>
-                      was.includes(one.name) ? was.filter((n) => n !== one.name) : [...was, one.name]
-                    )}
+                    className={rowClass("files__dir", one.ignored, mark)}
+                    aria-expanded={open.includes(key)}
+                    onClick={() => onOpen(key)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      onMenu(here, true, e.clientX, e.clientY);
+                    }}
                   >
                     {one.name}
                   </button>
-                  {open.includes(one.name) && (
+                  {open.includes(key) && (
                     <Level
                       projectId={projectId}
                       root={root}
-                      path={[...path, one.name]}
+                      path={here}
                       landing={landing}
+                      marks={marks}
+                      moved={moved}
+                      open={open}
+                      onOpen={onOpen}
+                      naming={naming}
                       onRead={onRead}
                       onMenu={onMenu}
                     />
@@ -564,11 +802,11 @@ function Level({ projectId, root, path, landing, onRead, onMenu }: {
               )
               : (
                 <button
-                  className={faint("files__file", one.ignored)}
-                  onClick={() => onRead([...path, one.name])}
+                  className={rowClass("files__file", one.ignored, mark)}
+                  onClick={() => onRead(here)}
                   onContextMenu={(e) => {
                     e.preventDefault();
-                    onMenu([...path, one.name], e.clientX, e.clientY);
+                    onMenu(here, false, e.clientX, e.clientY);
                   }}
                 >
                   <span className="files__name">{one.name}</span>
@@ -578,6 +816,91 @@ function Level({ projectId, root, path, landing, onRead, onMenu }: {
         );
       })}
     </ul>
+  );
+}
+
+/**
+ * A name being typed, in the row it is about.
+ *
+ * **The refusal is drawn here and nowhere else.** Which names a machine will hold is the one thing a
+ * person cannot work out for themselves — a name already taken, a name Windows reads as syntax, a
+ * disk that is full — and the place to say so is where they are still typing, with what they wrote
+ * still in front of them. So a refusal keeps the box open and takes the focus back, and only an
+ * answer that went through ends it.
+ *
+ * Leaving the box is keeping what is in it, which is what a file manager does and what a person
+ * clicking away plainly means. Escape is the way to mean the other thing, and so is leaving a refusal
+ * standing: a name the machine has already said no to is not one to ask about twice.
+ *
+ * ⚠ **Nothing here may be disabled while the answer is on its way.** Disabling the box a person is
+ * typing in blurs it, and blur is one of the two ways of keeping a name — so the refusal that was
+ * about to arrive would land on a box that had already closed itself, and the reader would see their
+ * name vanish with nothing said. What stops a second ask is the flag, not the disabling.
+ */
+function NameBox({ initial, onName, onEnd }: {
+  /** What the box starts with: the name being written over, or nothing for one being made. */
+  initial: string;
+  onName: (name: string) => Promise<void>;
+  /** `true` where the folder now holds something it did not, which is what sends the levels back to
+   *  read their names again. */
+  onEnd: (made: boolean) => void;
+}) {
+  const [name, setName] = useState(initial);
+  const [refused, setRefused] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
+  const box = useRef<HTMLInputElement | null>(null);
+  // Ending is once. Enter is followed by the box leaving the screen, and a browser blurs what it
+  // takes away — so without this the same name would be asked for twice.
+  const ended = useRef(false);
+  const end = (made: boolean) => {
+    if (ended.current) return;
+    ended.current = true;
+    onEnd(made);
+  };
+
+  // The box is the reader's the moment it is drawn — it took the place of a row they right-clicked,
+  // and a box they had to click into first would be one they typed past.
+  useEffect(() => { box.current?.focus(); box.current?.select(); }, []);
+
+  const keep = () => {
+    // An answer already on its way, or a box already closed. Neither is a second name to ask for.
+    if (asking || ended.current) return;
+    // A refusal still standing is the same name the machine has just said no to. Leaving is giving
+    // up on it — typing changes it, and typing is what clears the refusal.
+    // Nothing typed or nothing changed is the same answer for the other reason: there is no name to
+    // ask for, and asking for the one it already has would come back as taken.
+    if (refused !== null || name === "" || name === initial) {
+      end(false);
+      return;
+    }
+    setAsking(true);
+    onName(name)
+      .then(() => end(true))
+      .catch((e: unknown) => {
+        setRefused(errText(e));
+        setAsking(false);
+        box.current?.focus();
+      });
+  };
+
+  return (
+    <>
+      <input
+        ref={box}
+        className="files__namebox"
+        aria-label={t("files.name")}
+        value={name}
+        onChange={(e) => { setName(e.target.value); setRefused(null); }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") keep();
+          // Kept off the face around it: Escape closes the panel's other states as well, and one
+          // press should undo one thing.
+          if (e.key === "Escape") { e.stopPropagation(); end(false); }
+        }}
+        onBlur={keep}
+      />
+      {refused !== null && <p className="files__none">{refused}</p>}
+    </>
   );
 }
 
@@ -623,13 +946,21 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
       </div>
       <div className="files__body">
         {failed && <p className="files__none">{t("files.unreadable")}</p>}
+        {/* The picture is fetched rather than carried: `folderRead` says only that there is one
+            and what type it is, and the door that hands out a file by its path is addressed with
+            the same project, folder and path this reader was opened on (`AMB-D-783`). It draws
+            top to bottom as it arrives, where a `data:` URL drew all at once or not at all. */}
         {file?.image !== undefined && (
-          <img className="files__image" alt={name} src={`data:${file.image.mime};base64,${file.image.base64}`} />
+          <img
+            className="files__image"
+            alt={name}
+            src={fileUrl(projectId, root, path, file.image.mime)}
+          />
         )}
         {file?.text !== undefined && (
           MARKDOWN.some((ext) => name.toLowerCase().endsWith(ext))
             ? <RefNavProvider value={nav}><Markdown>{file.text}</Markdown></RefNavProvider>
-            : <FileEditor text={file.text} editable={!file.truncated && file.clean} />
+            : <FileEditor text={file.text} editable={!file.truncated && file.clean} name={name} />
         )}
         {/* A picture refused is not a picture missing. Drawn as nothing at all it reads as a
             damaged file, so the refusal says what it measured and hands the file on to something
@@ -657,6 +988,7 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, close }: {
           projectId={projectId}
           root={root}
           path={path}
+          dir={false}
           at={menu}
           onClose={() => setMenu(null)}
         />

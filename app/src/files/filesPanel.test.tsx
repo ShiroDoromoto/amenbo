@@ -7,11 +7,15 @@
 // as Markdown, and says plainly when there is nothing it can show. And the tree stays folded until
 // somebody opens it, one level per opening, because a panel nobody is looking at must not walk a
 // repository.
+//
+// **What the folder moving does is send everybody back to ask** (`AMB-D-785`). The host's word
+// carries no rows, so what has to be right here is that the names of the open level and the colour
+// beside them are read again — and that a word about another folder moves nothing in this one.
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
-  FolderAppDto, FolderChangedDto, FolderChangesDto, FolderEntryDto, FolderFileDto,
+  FolderAppDto, FolderChangesDto, FolderEntryDto, FolderFileDto, GitEntryDto,
 } from "../bindings/bindings";
 
 const ROOT = "/work/repo";
@@ -38,9 +42,11 @@ const hoisted = vi.hoisted(() => ({
    *  what names its own folder, so a stand-in that kept only the last would answer for one section
    *  and drop the news of every other. */
   takers: [] as ((changes: FolderChangesDto) => void)[],
-  watching: { root: "", changed: [] as FolderChangedDto[], partial: false, gone: false } as FolderChangesDto,
+  watching: { root: "", capped: false, unwatched: false, gone: false } as FolderChangesDto,
   /** What one named folder answers with, where a test gives several folders different news. */
   perRoot: {} as Record<string, FolderChangesDto>,
+  /** What git says about each folder, by the folder it is about. */
+  git: {} as Record<string, GitEntryDto[]>,
   /** What the host answers when asked what to open a file with — empty where the OS drew it. */
   apps: [] as FolderAppDto[],
   /** The folders the project is bound to. Empty is a project nobody has bound one to yet. */
@@ -48,14 +54,19 @@ const hoisted = vi.hoisted(() => ({
   /** The host's side of the drag-and-drop subscription (`../core/hostDrop`). */
   dragging: null as null | ((event: { payload: unknown }) => void),
   /** What the editor was asked to draw, and whether it was allowed to be typed into. */
-  editing: [] as { text: string; editable: boolean }[],
+  editing: [] as { text: string; editable: boolean; name: string }[],
+  /** What the host refuses a name with, where a test is about the refusal. */
+  refuse: null as unknown,
+  /** Whether that refusal takes a moment to arrive — the ordering a real host has and a stand-in
+   *  that throws on the spot does not. */
+  slowRefusal: false,
 }));
 
 // The editor is loaded on demand and lays itself out by measuring, which jsdom cannot do — so what
 // it was asked to draw is recorded instead, the same stand-in the Markdown face makes for mermaid.
 vi.mock("./editorLoad", () => ({
-  mountEditor: async (parent: HTMLElement, text: string, editable: boolean) => {
-    hoisted.editing.push({ text, editable });
+  mountEditor: async (parent: HTMLElement, text: string, editable: boolean, name: string) => {
+    hoisted.editing.push({ text, editable, name });
     const drawn = parent.ownerDocument.createElement("div");
     drawn.className = "cm-editor";
     drawn.textContent = text;
@@ -84,6 +95,10 @@ vi.mock("./folder", () => ({
     return hoisted.perRoot[root] ?? hoisted.watching;
   },
   folderUnwatch: async (root: string) => { hoisted.asked.push(`unwatch:${root}`); },
+  folderGitStatus: async (_projectId: number, root: string): Promise<GitEntryDto[]> => {
+    hoisted.asked.push(`git:${root}`);
+    return hoisted.git[root] ?? [];
+  },
   onFolderChanged: async (take: (changes: FolderChangesDto) => void) => {
     hoisted.takers.push(take);
     return () => {
@@ -112,6 +127,16 @@ vi.mock("./folder", () => ({
   folderOpenFileWith: async (_projectId: number, root: string, path: string[], app: string) => {
     hoisted.asked.push(`with:${root}:${path.join("/")}:${app}`);
   },
+  folderMake: async (_projectId: number, root: string, path: string[], dir: boolean) => {
+    hoisted.asked.push(`make:${root}:${path.join("/")}:${dir ? "dir" : "file"}`);
+    if (hoisted.refuse === null) return;
+    if (hoisted.slowRefusal) await new Promise((r) => setTimeout(r, 5));
+    throw hoisted.refuse;
+  },
+  folderRename: async (_projectId: number, root: string, path: string[], name: string) => {
+    hoisted.asked.push(`rename:${root}:${path.join("/")}:${name}`);
+    if (hoisted.refuse !== null) throw hoisted.refuse;
+  },
 }));
 
 // The folders the project is bound to, answered without a store. `live` is derived the way the real
@@ -132,7 +157,7 @@ vi.mock("../core/reads", async (importOriginal) => ({
 }));
 
 import { FilesPanel } from "./FilesPanel";
-import { formatNumber, t, tf } from "../core/i18n";
+import { type CmdError, errLabel, formatNumber, t, tf } from "../core/i18n";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -183,20 +208,63 @@ const megabytes = (n: number) =>
 const button = (text: string) =>
   [...container.querySelectorAll("button")].find((b) => b.textContent?.includes(text));
 
+/** The menu, opened on a row the way a person opens it. */
+const menuOn = (el: Element | null | undefined) => act(async () => {
+  el?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 5, clientY: 5 }));
+  await new Promise((r) => setTimeout(r, 0));
+});
+
+/** The box a name is typed into, while one is being typed. */
+const namebox = () => container.querySelector<HTMLInputElement>(".files__namebox");
+
+/** Typing into it the way a person does: React hears the `input` event, not an assigned `value`. */
+const type = (box: HTMLInputElement, text: string) => act(async () => {
+  // The prototype is taken from the box's own window: React replaces the setter on the instance, and
+  // this module's `HTMLInputElement` is not the one jsdom built the element from.
+  const proto = box.ownerDocument.defaultView?.HTMLInputElement.prototype;
+  const set = proto && Object.getOwnPropertyDescriptor(proto, "value")?.set;
+  set?.call(box, text);
+  box.dispatchEvent(new Event("input", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+});
+
+const press = (el: Element, key: string) => act(async () => {
+  el.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+});
+
+/** Leaving the box, which is the other of the two ways a name is kept. `focusout` and not `blur`:
+ *  React listens for the one that bubbles, and a `blur` dispatched here reaches no handler at all. */
+const leave = (el: Element) => act(async () => {
+  el.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+});
+
+/**
+ * The panel with the folder's own section unfolded, which is where every row is.
+ *
+ * The tree is folded until somebody opens it, and a test about what a row does has to get past that
+ * first — so the opening is written once here rather than at the top of every one of them.
+ */
+async function drawOpen(props: Partial<Props> = {}) {
+  await draw(props);
+  await click(button(t("files.tree")));
+  await settle();
+}
+
 beforeEach(() => {
   hoisted.asked = [];
   hoisted.editing = [];
-  hoisted.entries = {};
+  // One file in the folder, so a test that only wants a row to press has one without saying so.
+  hoisted.entries = { "": [{ name: "a.md", isDir: false, ignored: false }] };
   hoisted.file = aFile();
   hoisted.apps = [];
+  hoisted.refuse = null;
+  hoisted.slowRefusal = false;
   hoisted.takers = [];
   hoisted.perRoot = {};
-  hoisted.watching = {
-    root: ROOT,
-    changed: [{ path: ["notes", "a.md"], modified: new Date().toISOString() }],
-    partial: false,
-    gone: false,
-  };
+  hoisted.git = {};
+  hoisted.watching = { root: ROOT, capped: false, unwatched: false, gone: false };
   hoisted.bound = [{ path: ROOT, exists: true }];
   hoisted.dragging = null;
   // Inside Tauri as far as the panel is concerned; without it there is no host to hear a drop from.
@@ -214,12 +282,12 @@ afterEach(() => {
 
 describe("the file face", () => {
   it("watches the project's folder, not a pane's", async () => {
-    await draw();
+    await drawOpen();
     expect(hoisted.asked).toContain(`watch:1:${ROOT}`);
+    // And git is asked about the same folder, which is where the colour on each row comes from.
+    expect(hoisted.asked).toContain(`git:${ROOT}`);
+    expect(hoisted.asked).toContain(`entries:${ROOT}:`);
     expect(container.textContent).toContain("a.md");
-    // The folder the file is in is shown beside it: two files called the same thing are told apart
-    // by where they are, and the row shows the name because that is what is read.
-    expect(container.textContent).toContain("notes");
   });
 
   it("draws no switch of its own between the two halves", async () => {
@@ -233,45 +301,67 @@ describe("the file face", () => {
     expect(container.querySelector(".files__close")).not.toBeNull();
   });
 
-  it("redraws the row when the host says the folder moved", async () => {
-    await draw();
+  it("goes and asks again when the host says the folder moved", async () => {
+    await drawOpen();
     expect(container.textContent).toContain("a.md");
+    hoisted.entries[""] = [{ name: "main.rs", isDir: false, ignored: false }];
+    hoisted.git[ROOT] = [{ path: ["main.rs"], index: " ", worktree: "M", isDir: false }];
+    hoisted.asked = [];
+
     await act(async () => {
-      tell({
-        root: ROOT,
-        changed: [{ path: ["src", "main.rs"], modified: new Date().toISOString() }],
-        partial: false,
-        gone: false,
-      });
+      tell({ root: ROOT, capped: false, unwatched: false, gone: false });
       await new Promise((r) => setTimeout(r, 0));
     });
-    // The list is the host's, whole: what it says now is what is drawn, with nothing merged in.
+    // The word carries nothing, so both readers go back to the host: the names of the level that is
+    // open, and what git says about them (`AMB-D-785`).
+    expect(hoisted.asked).toContain(`entries:${ROOT}:`);
+    expect(hoisted.asked).toContain(`git:${ROOT}`);
     expect(container.textContent).toContain("main.rs");
     expect(container.textContent).not.toContain("a.md");
+    expect(container.querySelector(".files__file--git-modified")?.textContent).toContain("main.rs");
   });
 
-  it("says out loud when only part of the folder is watched", async () => {
-    hoisted.watching = { root: ROOT, changed: [], partial: true, gone: false };
+  it("says out loud when the folder was too big to look through all of", async () => {
+    hoisted.watching = { root: ROOT, capped: true, unwatched: false, gone: false };
     await draw();
     // An unwatched half looks exactly like a half where nothing happened, so it is said rather
     // than left to be assumed (`AMB-T-3604`).
-    expect(container.textContent).toContain(t("files.partial"));
+    expect(container.textContent).toContain(t("files.capped"));
+    // And it is not the other reason: the folder's size is what stopped the walk, and the machine
+    // has watches to spare (`AMB-D-778`).
+    expect(container.textContent).not.toContain(t("files.unwatched"));
+  });
+
+  it("says out loud when the machine ran out of watches, and how to get more", async () => {
+    hoisted.watching = { root: ROOT, capped: false, unwatched: true, gone: false };
+    await draw();
+    expect(container.textContent).toContain(t("files.unwatched"));
+    // The fact alone reads as something the reader did to their own project. What they can act on
+    // is the machine's supply, so the way out is drawn with it.
+    expect(container.textContent).toContain(t("files.unwatchedHow"));
+    expect(container.textContent).not.toContain(t("files.capped"));
+  });
+
+  it("says both when both are true", async () => {
+    hoisted.watching = { root: ROOT, capped: true, unwatched: true, gone: false };
+    await draw();
+    // Two separate things have happened to one folder, and folding them into whichever was noticed
+    // first would leave the other half of the story untold.
+    expect(container.textContent).toContain(t("files.capped"));
+    expect(container.textContent).toContain(t("files.unwatched"));
   });
 
   it("leaves another folder's news alone", async () => {
-    await draw();
-    expect(container.textContent).toContain("a.md");
+    await drawOpen();
+    hoisted.entries[""] = [{ name: "main.rs", isDir: false, ignored: false }];
+    hoisted.asked = [];
     await act(async () => {
-      tell({
-        root: "/work/other",
-        changed: [{ path: ["src", "main.rs"], modified: new Date().toISOString() }],
-        partial: false,
-        gone: false,
-      });
+      tell({ root: "/work/other", capped: false, unwatched: false, gone: false });
       await new Promise((r) => setTimeout(r, 0));
     });
-    // Every watched folder is told about through the one listener, and a row rooted at one of them
-    // that drew another's list would be saying something untrue about the folder it names.
+    // Every watched folder is told about through the one listener, so a section that asked again on
+    // somebody else's news would be reading the disk for every folder every time any of them moved.
+    expect(hoisted.asked).toEqual([]);
     expect(container.textContent).toContain("a.md");
     expect(container.textContent).not.toContain("main.rs");
   });
@@ -289,7 +379,7 @@ describe("the file face", () => {
   });
 
   it("hands a file to the machine rather than trying to be one", async () => {
-    await draw();
+    await drawOpen();
     const row = button("a.md")!;
     await act(async () => {
       row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 20 }));
@@ -297,13 +387,13 @@ describe("the file face", () => {
     // There is an editor here, and still a way out of it: what a person wants of a file is as often
     // to hand it to something else as to read it where it is.
     await click(button(t("files.openWith")));
-    expect(hoisted.asked).toContain(`open:${ROOT}:notes/a.md`);
+    expect(hoisted.asked).toContain(`open:${ROOT}:a.md`);
 
     await act(async () => {
       button("a.md")!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
     });
     await click(button(t("files.reveal")));
-    expect(hoisted.asked).toContain(`reveal:${ROOT}:notes/a.md`);
+    expect(hoisted.asked).toContain(`reveal:${ROOT}:a.md`);
   });
 
   it("draws the applications where the machine has no dialog of its own", async () => {
@@ -312,12 +402,12 @@ describe("the file face", () => {
       { name: "Zed", path: "/Applications/Zed.app", usual: true },
       { name: "MuseScore 4", path: "/Applications/MuseScore 4.app", usual: false },
     ];
-    await draw();
+    await drawOpen();
     await act(async () => {
       button("a.md")!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
     });
     await click(button(t("files.chooseApp")));
-    expect(hoisted.asked).toContain(`ask:${ROOT}:notes/a.md`);
+    expect(hoisted.asked).toContain(`ask:${ROOT}:a.md`);
     // The menu is still standing, now showing what came back — and the one the file would have
     // opened with anyway says so rather than relying on being first.
     expect(button(tf("files.appUsual", { name: "Zed" }))).toBeDefined();
@@ -326,25 +416,25 @@ describe("the file face", () => {
     expect(button(t("files.reveal"))).toBeUndefined();
 
     await click(button("MuseScore 4"));
-    expect(hoisted.asked).toContain(`with:${ROOT}:notes/a.md:/Applications/MuseScore 4.app`);
+    expect(hoisted.asked).toContain(`with:${ROOT}:a.md:/Applications/MuseScore 4.app`);
   });
 
   it("steps aside where the machine drew the dialog itself", async () => {
     // Windows and Linux: the chooser was shown, the file is already open, and nothing came back.
     hoisted.apps = [];
-    await draw();
+    await drawOpen();
     await act(async () => {
       button("a.md")!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
     });
     await click(button(t("files.chooseApp")));
-    expect(hoisted.asked).toContain(`ask:${ROOT}:notes/a.md`);
+    expect(hoisted.asked).toContain(`ask:${ROOT}:a.md`);
     // An empty answer is not an empty list to draw — there is nothing left to ask.
     expect(button(t("files.chooseApp"))).toBeUndefined();
     expect(button(t("files.reveal"))).toBeUndefined();
   });
 
   it("closes the menu on the next thing the person does", async () => {
-    await draw();
+    await drawOpen();
     await act(async () => {
       button("a.md")!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
     });
@@ -379,7 +469,7 @@ describe("the file face", () => {
     await draw({ show: { target: "notes/a.md", cwd: ROOT, nth: 1 } });
     await click(button(t("files.back")));
     await settle();
-    expect(container.textContent).toContain(t("files.changed"));
+    expect(container.textContent).toContain(t("files.tree"));
 
     // The same file asked for a second time is a reader saying "open it" again.
     await draw({ show: { target: "notes/a.md", cwd: ROOT, nth: 2 } });
@@ -472,10 +562,10 @@ describe("the file face", () => {
 
   it("draws a Markdown file as Markdown", async () => {
     hoisted.file = aFile({ text: "# A heading" });
-    await draw();
+    await drawOpen();
     await click(button("a.md"));
     await settle();
-    expect(hoisted.asked).toContain(`read:${ROOT}:notes/a.md`);
+    expect(hoisted.asked).toContain(`read:${ROOT}:a.md`);
     expect(container.querySelector("h1")?.textContent).toBe("A heading");
   });
 
@@ -498,6 +588,52 @@ describe("the file face", () => {
       .toContain("src");
   });
 
+  it("wears what git says about each row, and nothing where git says nothing", async () => {
+    hoisted.entries[""] = [
+      { name: "changed.md", isDir: false, ignored: false },
+      { name: "staged.md", isDir: false, ignored: false },
+      { name: "new.md", isDir: false, ignored: false },
+      { name: "same.md", isDir: false, ignored: false },
+    ];
+    hoisted.git[ROOT] = [
+      { path: ["changed.md"], index: " ", worktree: "M", isDir: false },
+      { path: ["staged.md"], index: "A", worktree: " ", isDir: false },
+      { path: ["new.md"], index: "?", worktree: "?", isDir: false },
+    ];
+    await drawOpen();
+    const marked = (mark: string) =>
+      container.querySelector(`.files__file--git-${mark}`)?.textContent;
+    expect(marked("modified")).toContain("changed.md");
+    expect(marked("added")).toContain("staged.md");
+    expect(marked("untracked")).toContain("new.md");
+    // The row git said nothing about is the row nothing is said about: no colour is an answer.
+    const plain = [...container.querySelectorAll(".files__file")]
+      .find((one) => one.textContent === "same.md");
+    expect(plain?.className).toBe("files__file");
+  });
+
+  it("colours what is inside a folder git named as a whole", async () => {
+    hoisted.entries[""] = [{ name: "fresh", isDir: true, ignored: false }];
+    hoisted.entries["fresh"] = [{ name: "one.md", isDir: false, ignored: false }];
+    // What git does with an untracked folder: it names the folder and stops. A tree that matched
+    // paths exactly would leave every file in a brand-new folder colourless.
+    hoisted.git[ROOT] = [{ path: ["fresh"], index: "?", worktree: "?", isDir: true }];
+    await drawOpen();
+    expect(container.querySelector(".files__dir--git-untracked")?.textContent).toContain("fresh");
+    await click(button("fresh"));
+    await settle();
+    expect(container.querySelector(".files__file--git-untracked")?.textContent).toContain("one.md");
+  });
+
+  it("colours a whole repository nothing is tracked in yet", async () => {
+    hoisted.entries[""] = [{ name: "one.md", isDir: false, ignored: false }];
+    // Zero segments is the bound folder itself, which is what git names when nothing under it is
+    // tracked. Dropped, a new repository would have no colour anywhere.
+    hoisted.git[ROOT] = [{ path: [], index: "?", worktree: "?", isDir: true }];
+    await drawOpen();
+    expect(container.querySelector(".files__file--git-untracked")?.textContent).toContain("one.md");
+  });
+
   it("draws text that is not Markdown as it was written", async () => {
     hoisted.entries[""] = [{ name: "run.sh", isDir: false, ignored: false }];
     hoisted.file = aFile({ text: "#!/bin/sh\necho hi" });
@@ -509,8 +645,10 @@ describe("the file face", () => {
     // Not a heading: the hash in a shell script is a comment, and a name is what decides that.
     expect(container.querySelector("h1")).toBeNull();
     expect(container.querySelector(".cm-editor")?.textContent).toBe("#!/bin/sh\necho hi");
-    // And it is a file this panel could save, so it is one somebody may type into.
-    expect(last(hoisted.editing)).toEqual({ text: "#!/bin/sh\necho hi", editable: true });
+    // And it is a file this panel could save, so it is one somebody may type into. The name goes
+    // with it: what language a file is written in is the only thing that says how to colour it.
+    expect(last(hoisted.editing))
+      .toEqual({ text: "#!/bin/sh\necho hi", editable: true, name: "run.sh" });
   });
 
   /** A file the panel could never write back is read-only from the moment it opens. Saying so after
@@ -537,24 +675,27 @@ describe("the file face", () => {
 
   it("says so when the file is not something a panel can show", async () => {
     hoisted.file = aFile();
-    await draw();
+    await drawOpen();
     await click(button("a.md"));
     await settle();
     // The name says Markdown and the bytes say otherwise; the bytes win (`crate::folder`).
     expect(container.textContent).toContain(t("files.notText"));
   });
 
-  it("draws a picture out of the bytes the host carried", async () => {
-    hoisted.file = aFile({ image: { mime: "image/png", base64: "AAAA" } });
-    await draw();
+  it("points a picture at the door that hands out a file, not at bytes of its own", async () => {
+    hoisted.file = aFile({ image: { mime: "image/png" } });
+    await drawOpen();
     await click(button("a.md"));
     await settle();
-    expect(container.querySelector("img")?.getAttribute("src")).toBe("data:image/png;base64,AAAA");
+    // The address is the project, the folder and the path this reader was opened on — the same
+    // three the host resolved the answer through, so nothing had to be carried (`AMB-D-783`).
+    expect(container.querySelector("img")?.getAttribute("src"))
+      .toBe("amenbofile://localhost/1/%2Fwork%2Frepo/a.md?mime=image%2Fpng");
   });
 
   it("says what a picture it would not draw was measured at, and offers the way on", async () => {
     hoisted.file = aFile({ oversize: { bytes: 6 * 1024 * 1024, width: 40000, height: 30000 } });
-    await draw();
+    await drawOpen();
     await click(button("a.md"));
     await settle();
     // A refusal drawn as nothing at all reads as a damaged file, so both numbers travel with it and
@@ -572,12 +713,12 @@ describe("the file face", () => {
     // The way on is the one the list rows already open — nothing new was invented for this state.
     expect(button(t("files.chooseApp"))).toBeDefined();
     await click(button(t("files.openWith")));
-    expect(hoisted.asked).toContain(`open:${ROOT}:notes/a.md`);
+    expect(hoisted.asked).toContain(`open:${ROOT}:a.md`);
   });
 
   it("refuses on bytes alone where the picture would not say its size", async () => {
     hoisted.file = aFile({ oversize: { bytes: 6 * 1024 * 1024 } });
-    await draw();
+    await drawOpen();
     await click(button("a.md"));
     await settle();
     // A size nobody could read is not printed as a guess (`crate::folder`).
@@ -590,7 +731,7 @@ describe("the file face", () => {
     // pixels alone is commonly a file of a few kilobytes. Rounded to megabytes it would read "0 MB"
     // — the file said to be empty, which is the opposite of what it is (`AMB-D-783`).
     hoisted.file = aFile({ oversize: { bytes: 10 * 1024, width: 16000, height: 16000 } });
-    await draw();
+    await drawOpen();
     await click(button("a.md"));
     await settle();
     expect(container.textContent).toContain(
@@ -602,7 +743,7 @@ describe("the file face", () => {
     // A header alone is the cheapest thing that can claim thirty thousand square, and it is under a
     // kilobyte. Rounded up a unit it would read "0 kB" — the same lie one unit further down.
     hoisted.file = aFile({ oversize: { bytes: 33, width: 30000, height: 30000 } });
-    await draw();
+    await drawOpen();
     await click(button("a.md"));
     await settle();
     expect(container.textContent).toContain(
@@ -612,7 +753,7 @@ describe("the file face", () => {
 
   it("says out loud when only the head of a long file is shown", async () => {
     hoisted.file = aFile({ text: "x".repeat(10), truncated: true, clean: false });
-    await draw();
+    await drawOpen();
     await click(button("a.md"));
     await settle();
     expect(container.textContent).toContain(t("files.cut"));
@@ -621,7 +762,7 @@ describe("the file face", () => {
   it("leaves this face when a reference in a file is followed", async () => {
     const left: number[] = [];
     hoisted.file = aFile({ text: "see AMB-T-12" });
-    await draw({ onOpenLedger: () => left.push(1) });
+    await drawOpen({ onOpenLedger: () => left.push(1) });
     await click(button("a.md"));
     await settle();
     // A reference selects on the other face. Following one from here without leaving would land on
@@ -636,6 +777,24 @@ describe("the file face", () => {
 describe("a project bound to several folders", () => {
   const OTHER = "/work/plugins";
   const both = () => { hoisted.bound = [{ path: ROOT, exists: true }, { path: OTHER, exists: true }]; };
+
+  /** Both sections drawn with their trees unfolded — every row of both is then on the screen. */
+  async function openBothTrees() {
+    await draw();
+    for (const head of [...container.querySelectorAll("button")].filter(
+      (one) => one.textContent === t("files.tree"),
+    )) {
+      await click(head);
+      await settle();
+    }
+  }
+
+  /** One folder's section, found by the heading over it — the sections are ordered by path, and a
+   *  test that counted on that would be about the ordering rather than about what it says it is. */
+  const folderNamed = (label: string) =>
+    [...container.querySelectorAll(".files__folder")].find(
+      (one) => one.querySelector(".files__foldername")?.textContent === label,
+    )!;
 
   it("watches every one of them, not the first", async () => {
     both();
@@ -659,30 +818,30 @@ describe("a project bound to several folders", () => {
     expect(container.querySelectorAll(".files__foldername")).toHaveLength(0);
   });
 
-  it("gives each folder its own news", async () => {
+  it("asks git about each folder on its own, and colours each one by its own answer", async () => {
     both();
-    hoisted.perRoot = {
-      [ROOT]: { root: ROOT, changed: [{ path: ["here.md"], modified: new Date().toISOString() }], partial: false, gone: false },
-      [OTHER]: { root: OTHER, changed: [{ path: ["there.md"], modified: new Date().toISOString() }], partial: false, gone: false },
-    };
-    await draw();
-    expect(button("here.md")).toBeDefined();
-    expect(button("there.md")).toBeDefined();
+    // One is a repository with something changed in it; the other answers with nothing, which is
+    // what a folder that is no repository answers — and it is not the first one's business.
+    hoisted.git = { [OTHER]: [{ path: ["a.md"], index: " ", worktree: "M", isDir: false }] };
+    await openBothTrees();
+    expect(hoisted.asked).toContain(`git:${ROOT}`);
+    expect(hoisted.asked).toContain(`git:${OTHER}`);
+    expect(folderNamed("repo").querySelector(".files__file--git")).toBeNull();
+    expect(folderNamed("plugins").querySelector(".files__file--git-modified")?.textContent)
+      .toContain("a.md");
   });
 
   it("reads a file out of the folder its row was drawn in", async () => {
     both();
-    hoisted.perRoot = {
-      [ROOT]: { root: ROOT, changed: [], partial: false, gone: false },
-      [OTHER]: { root: OTHER, changed: [{ path: ["there.md"], modified: new Date().toISOString() }], partial: false, gone: false },
-    };
     hoisted.file = aFile({ text: "hello" });
-    await draw();
-    await click(button("there.md"));
+    await openBothTrees();
+    const row = [...folderNamed("plugins").querySelectorAll("button")]
+      .find((one) => one.textContent === "a.md");
+    await click(row);
     await settle();
     // The same path names a different file in each folder, so which folder the row was in has to
     // travel with it.
-    expect(hoisted.asked).toContain(`read:${OTHER}:there.md`);
+    expect(hoisted.asked).toContain(`read:${OTHER}:a.md`);
   });
 
   it("keeps a folder that has gone, and says that is what happened", async () => {
@@ -726,12 +885,143 @@ describe("a project bound to several folders", () => {
     expect(trees[0]!.querySelectorAll(".files__into")).toHaveLength(0);
   });
 
+  // ── naming ──────────────────────────────────────────────────────────────────────────────────
+  // Making a name and writing over one are the two doors `crate::folder_write` opens that have a
+  // reader on this side. Both are typed into the row itself rather than into a dialog: what a person
+  // is naming sits in a list, and the names already in it are what they are choosing against.
+
+  it("makes a name in the folder that was pointed at, and looks at the folder again", async () => {
+    hoisted.entries = { "": [] };
+    await draw();
+    // The heading is the folder's own row, and the only one there is to point at when the tree is
+    // empty — which is exactly when a person wants to put something in it.
+    await menuOn(button(t("files.tree")));
+    // A folder is not something to hand to an application, so it is offered none of that.
+    expect(button(t("files.openWith"))).toBeUndefined();
+
+    await click(button(t("files.newFile")));
+    await settle();
+    const box = namebox();
+    expect(box).not.toBeNull();
+
+    await type(box!, "notes.md");
+    await press(box!, "Enter");
+    expect(hoisted.asked).toContain(`make:${ROOT}:notes.md:file`);
+    // The names are read again rather than left to the watch, which says the same thing a debounce
+    // later: a row somebody has just made belongs on the list before they look for it.
+    expect(hoisted.asked.filter((one) => one === `entries:${ROOT}:`)).toHaveLength(2);
+    expect(namebox()).toBeNull();
+  });
+
+  it("makes the name inside the folder that was pointed at, unfolding it to be typed in", async () => {
+    hoisted.entries = {
+      "": [
+        { name: "src", isDir: true, ignored: false },
+        { name: "README.md", isDir: false, ignored: false },
+      ],
+      src: [],
+    };
+    await drawOpen();
+
+    await menuOn(button("src"));
+    await click(button(t("files.newFolder")));
+    await settle();
+    // `src` was folded shut a moment ago. A box typed into a folder nobody can see would be a name
+    // made somewhere the reader never looked.
+    expect(hoisted.asked).toContain(`entries:${ROOT}:src`);
+    await type(namebox()!, "deep");
+    await press(namebox()!, "Enter");
+    expect(hoisted.asked).toContain(`make:${ROOT}:src/deep:dir`);
+
+    // A file is not something a name can be made in, so its menu offers none of it — what it is
+    // offered is the hand-over doors and its own name.
+    await menuOn(button("README.md"));
+    expect(button(t("files.newFile"))).toBeUndefined();
+    expect(button(t("files.rename"))).toBeDefined();
+    expect(button(t("files.openWith"))).toBeDefined();
+  });
+
+  it("writes over the name of the row that was pointed at, starting from what it says", async () => {
+    hoisted.entries = { "": [{ name: "notes.md", isDir: false, ignored: false }] };
+    await drawOpen();
+
+    await menuOn(button("notes.md"));
+    await click(button(t("files.rename")));
+    await settle();
+    // The box opens on the name it is about, so changing one letter is one letter of typing —
+    // which is the whole of what a case-only rename is (`crate::folder_write`).
+    expect(namebox()?.value).toBe("notes.md");
+
+    await type(namebox()!, "Notes.md");
+    await press(namebox()!, "Enter");
+    expect(hoisted.asked).toContain(`rename:${ROOT}:notes.md:Notes.md`);
+  });
+
+  /** Which names a machine will hold is the one thing a reader cannot work out for themselves, so
+   *  the refusal is drawn where they are still typing — and drawn from the dictionary, because the
+   *  sentence the command carries is English whoever is reading it (`AMB-D-413`). */
+  it("says why a name was refused, and leaves what was typed where it was", async () => {
+    const refusal: CmdError = {
+      code: "folder_taken",
+      message_en: "notes.md is already there",
+      fields: { name: "notes.md" },
+    };
+    hoisted.entries = { "": [] };
+    hoisted.refuse = refusal;
+    // The answer takes a moment, which is the whole of what this is about: a browser blurs the box
+    // the instant anything about it changes under the reader's fingers, and that lands while the
+    // refusal is still on its way.
+    hoisted.slowRefusal = true;
+    await draw();
+    await menuOn(button(t("files.tree")));
+    await click(button(t("files.newFile")));
+    await settle();
+
+    await type(namebox()!, "notes.md");
+    const box = namebox()!;
+    await press(box, "Enter");
+    // Left while the answer is out. A box that closed itself here would take the refusal with it,
+    // and the reader would watch the name they typed vanish with nothing said.
+    await leave(box);
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    expect(container.textContent).toContain(errLabel(refusal));
+    // Still there, still holding what was typed: a refusal a person has to type their way back to
+    // is one they were told nothing by. And the name was asked for once, not once per leaving.
+    expect(namebox()?.value).toBe("notes.md");
+    expect(hoisted.asked.filter((one) => one.startsWith("make:"))).toHaveLength(1);
+
+    // Leaving it now is giving up on a name the machine has already answered about — not asking the
+    // same question again.
+    await leave(namebox()!);
+    expect(namebox()).toBeNull();
+    expect(hoisted.asked.filter((one) => one.startsWith("make:"))).toHaveLength(1);
+    // And the sentence is the dictionary's rather than the command's, which is what makes it read
+    // in a language core holds no prose for.
+    expect(errLabel(refusal, "ja")).not.toContain("already");
+  });
+
+  it("offers no rename for the bound folder, and asks for nothing when the box is escaped", async () => {
+    hoisted.entries = { "": [] };
+    await draw();
+    await menuOn(button(t("files.tree")));
+    // The section's own root is the binding, and where a binding is changed is the project's
+    // settings — not a row in the tree.
+    expect(button(t("files.rename"))).toBeUndefined();
+
+    await click(button(t("files.newFolder")));
+    await settle();
+    await type(namebox()!, "notes");
+    await press(namebox()!, "Escape");
+    expect(namebox()).toBeNull();
+    expect(hoisted.asked.some((one) => one.startsWith("make:"))).toBe(false);
+  });
+
   it("says so when a folder goes while it is being looked at", async () => {
     both();
     await draw();
     expect(container.textContent).not.toContain(t("files.folderGone"));
     await act(async () => {
-      tell({ root: OTHER, changed: [], partial: false, gone: true });
+      tell({ root: OTHER, capped: false, unwatched: false, gone: true });
       await new Promise((r) => setTimeout(r, 0));
     });
     expect(container.textContent).toContain(t("files.folderGone"));

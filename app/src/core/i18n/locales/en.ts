@@ -590,19 +590,20 @@ const ui = {
   "face.whichFolder": "Which folder does this pane work in?",
   "face.rename": "Rename this pane",
   "face.needsYou": "waiting on you",
-  // The file face beside the terminal's pane: what changed in the project's folder lately, and
-  // the folder itself, folded. What a file turns out not to be is said in its own words — a
-  // binary is not a failure, it is simply not something a panel can show.
+  // The file face beside the terminal's pane: the project's folder, folded, with what git says
+  // about each row drawn as a colour rather than as words (`AMB-D-785`). What a file turns out not
+  // to be is said in its own words — a binary is not a failure, it is simply not something a panel
+  // can show.
   "files.tab": "Files",
   "files.memo": "The page",
   "files.memoWide": "Write it wide",
   "files.memoNarrow": "Back to the panel",
   "files.memoTyping": "Typing",
   "files.memoKept": "Kept",
-  "files.changed": "Changed lately",
   "files.tree": "The folder",
-  "files.nothingChanged": "Nothing has changed yet.",
-  "files.partial": "Some of this folder is not being watched.",
+  "files.capped": "This folder is too big to look through all of.",
+  "files.unwatched": "This machine has run out of watches.",
+  "files.unwatchedHow": "The supply is per user and shared with the editor you have open. Raising fs.inotify.max_user_watches gives it more room.",
   "files.noFolder": "This project has no folder yet.",
   "files.folderGone": "This folder is not there any more.",
   "files.back": "Back to the list",
@@ -610,6 +611,10 @@ const ui = {
   "files.chooseApp": "Open with an application I pick",
   "files.appUsual": "{name} (the usual one)",
   "files.reveal": "Show in the file manager",
+  "files.newFile": "New file",
+  "files.newFolder": "New folder",
+  "files.rename": "Rename",
+  "files.name": "Name",
   "files.notText": "This is not text, so it cannot be shown here.",
   "files.cut": "Only the beginning is shown.",
   "files.unreadable": "This file could not be read.",
@@ -800,6 +805,10 @@ const err: Partial<Record<ErrorCode, string>> = {
   wake_not_kept: "The choice could not be saved.",
   window_failed: "That window could not be opened: {reason}",
   talk_blank: "That window opened but never drew anything, so the terminal was put back in this one.",
+  folder_taken: "{name} is already there.",
+  folder_name: "This machine will not take {name} as a name.",
+  folder_make: "{name} could not be made: {reason}",
+  folder_rename: "It could not be renamed to {name}: {reason}",
 
   // The sentences the GUI shows a person, named one at a time (`AMB-D-413`). Which refusals get a code of
   // their own was settled by measuring what the front end actually surfaces: a form the screen already

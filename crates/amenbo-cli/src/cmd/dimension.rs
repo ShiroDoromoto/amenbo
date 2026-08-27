@@ -18,7 +18,7 @@ use crate::output::{confirm, human, print_json, write_envelope, CliError, Flags}
 /// name (`resolve_in`); a value resolves within the dimension it belongs to (`resolve_value_in`), because a
 /// value's name is only unique inside its own axis.
 pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> Result<i32, CliError> {
-    use amenbo_core::model::{DimensionCardinality, DimensionRole};
+    use amenbo_core::model::{DimensionAppliesTo, DimensionCardinality, DimensionRole};
     use amenbo_core::ops::dimension::NewDimension;
     // A dimension's kind on one human-readable line (single, ordered, time-axis, show-on-card,
     // required).
@@ -104,6 +104,9 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
                 // is here because `AMB-D-734` names this door as one of the two: passing it is how the
                 // refusal — which says to add a value first — reaches the person who tried.
                 required,
+                // The wide side, which is where every axis starts (`AMB-D-789`): an axis nobody
+                // narrowed classifies tasks and decisions alike. Narrowing it is `update`'s door.
+                applies_to: DimensionAppliesTo::Both,
                 // Omitted leaves the door to derive one from the id, which is what an axis keeps
                 // unless somebody outside has to type its key (`AMB-D-735`).
                 slug,
@@ -184,7 +187,7 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
             }
             let role = time_axis
                 .map(|on| if on { DimensionRole::TimeAxis } else { DimensionRole::None });
-            let d = store.dimension_update(did, name.as_deref(), notes.as_deref(), ordered, role, show_on_card, required, slug.as_deref()).map_err(CliError::from)?;
+            let d = store.dimension_update(did, name.as_deref(), notes.as_deref(), ordered, role, show_on_card, required, None, slug.as_deref()).map_err(CliError::from)?;
             write_envelope(flags, "dimension.update", "dimension", serde_json::to_value(&d).unwrap(), Some(changed), false, format!("✓ Updated dimension: {}", dimension_label(d.id)));
         }
         DimensionCmd::Move { id, before, after, top, bottom } => {

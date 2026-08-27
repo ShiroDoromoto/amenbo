@@ -11,10 +11,14 @@
 //
 // | | |
 // |---|---|
-// | telling a press from a drag | a threshold, {@link DRAG_SLOP} — without one, a press meant as a drag navigates |
+// | telling a press from a drag | a threshold, `DRAG_SLOP` — without one, a press meant as a drag navigates |
 // | what is under the pointer | {@link columnUnder}, asked afresh on every frame — a cached rect is 356px wrong once a column scrolls under the card (`AMB-T-3755`) |
 // | the half-transparent card that follows | a clone of the card's own node, so what follows the pointer is the card rather than a drawing of one |
 // | not selecting text, not opening a menu | 🚨 both are put back by hand below, and neither is optional |
+//
+// A fifth thing the browser never did: scrolling the board while a card is held against its edge.
+// A column runs past the window and the board runs wider than it, so without it a card cannot be
+// carried anywhere it cannot already see (`../core/edgeScroll`).
 //
 // **The two fences are the whole of what makes this usable.** Without the context menu one, a right
 // click during a drag freezes the gesture on all three — macOS delivers no pointer event at all until
@@ -23,33 +27,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as CardPress } from "react";
 
-/**
- * How far the pointer travels before a press becomes a drag, in CSS pixels.
- *
- * A card is a button as well as a thing to move, so this is the whole of what tells the two apart —
- * HTML5 drag drew the line itself and this is where the line went. Small enough that a deliberate
- * drag never feels stuck, large enough that a click with an unsteady hand is still a click.
- */
-export const DRAG_SLOP = 4;
+import { flowEdges } from "../core/edgeScroll";
+import { draggedFar, elementUnder } from "../core/pointerDrag";
 
 /** The attribute a column answers a drop on, holding the key that says which column it is. */
 export const DROP_ATTR = "data-drop-column";
 
-/** How far the press has travelled from where it started. */
-export function travelled(from: { x: number; y: number }, to: { x: number; y: number }): number {
-  return Math.hypot(to.x - from.x, to.y - from.y);
-}
-
 /**
  * The column under a point, or none.
  *
- * Asked of the document every time rather than measured once: a column scrolls under a held card,
- * and a cached rectangle then names the column the card was over rather than the one it is over —
- * 356 pixels of error, measured (`AMB-T-3755`).
+ * The hit test is the one every pointer drag here shares (`../core/pointerDrag`); what belongs to
+ * the board is which attribute names a column and that the answer is the key written on it rather
+ * than the element carrying it — the gesture crosses two boards, and a string is what both spell.
  */
 export function columnUnder(x: number, y: number): string | null {
-  const el = document.elementFromPoint(x, y)?.closest(`[${DROP_ATTR}]`);
-  return el?.getAttribute(DROP_ATTR) ?? null;
+  return elementUnder({ x, y }, DROP_ATTR)?.getAttribute(DROP_ATTR) ?? null;
 }
 
 /**
@@ -142,6 +134,7 @@ export function useCardDrag(onDrop: (column: string, id: number) => void): {
 
     const stop = () => {
       held.current = null;
+      stopFlow();
       if (frame !== 0) cancelAnimationFrame(frame);
       ghost?.node.remove();
       document.body.classList.remove("is-dragging");
@@ -172,17 +165,28 @@ export function useCardDrag(onDrop: (column: string, id: number) => void): {
       e.stopImmediatePropagation();
     };
 
-    const look = () => {
-      frame = 0;
+    // Where the ghost is drawn and what it is over — both read off `at`, which is why a board that
+    // scrolled under a still hand needs this run again with nothing else having changed.
+    const refresh = () => {
       if (ghost === null) return;
       place(ghost, at);
       setOverColumn(columnUnder(at.x, at.y));
     };
 
+    const look = () => {
+      frame = 0;
+      refresh();
+    };
+
+    // The board flows while the card is held against one of its edges. Nothing before the threshold:
+    // a press that has not travelled is a click, and a click must not scroll the board out from under
+    // itself (`../core/edgeScroll`).
+    const stopFlow = flowEdges(() => (ghost === null ? null : at), refresh);
+
     const move = (e: PointerEvent) => {
       at = { x: e.clientX, y: e.clientY };
       if (ghost === null) {
-        if (travelled(grabbedAt, at) < DRAG_SLOP) return;
+        if (!draggedFar(grabbedAt, at)) return;
         // Whatever the first few pixels managed to select before the fence was up.
         window.getSelection()?.removeAllRanges();
         ghost = raise(card, at);

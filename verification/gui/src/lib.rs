@@ -22,8 +22,8 @@
 //! (`scripts/docker/gui-e2e.sh`); each driver maps the one scenario source to its own world.
 //!
 //! The screen tool is the input primitive too, called by whoever drives the screen between steps:
-//! its `find` / `click-named` / `click` / `dblclick` / `type` / `key` carry out the action steps
-//! the checklist names.
+//! its `find` / `click-named` / `click` / `dblclick` / `drag` / `type` / `key` carry out the action
+//! steps the checklist names.
 //!
 //! One step is nobody's to carry out at the screen: `store run-again` ends this run of the app and
 //! brings another up on the same store ([`launch::Gui::run_again`]), which is how a road reads what
@@ -187,6 +187,28 @@ fn fold(s: &str) -> String {
     out
 }
 
+/// Glyph pairs a screen draws alike and a reader has to guess between: the digit `1` against the
+/// letter `l`, and the digit `0` against the letter `o`. Vision guesses them wrong on the one face
+/// that writes short ASCII words in a monospace font — the key beside a category's name — where
+/// `channel` comes back as `channe1` off a shot the key is plainly legible on.
+///
+/// Each pair is folded onto one of its two members, on the reading and on the expectation both, so
+/// the two meet whichever way the guess went. What it costs is the ability to tell `route1` from
+/// `routel`: two keys a character apart in this pair are not distinguishable from a photograph, so
+/// declaring them the same is the honest answer rather than a widened tolerance. Everything else on
+/// the shot keeps its glyph — a lowercase `i` is left out on purpose, since the monospace face this
+/// serves draws it with a dot and folding it onto `l` would give away discrimination against a
+/// misreading this face does not produce.
+const CONFUSED_GLYPHS: [(char, char); 2] = [('1', 'l'), ('0', 'o')];
+
+/// Fold the confusable glyphs onto their representative, so a reading and an expectation that differ
+/// only by which member of a pair was guessed meet as the same word.
+fn unconfuse(s: &str) -> String {
+    s.chars()
+        .map(|c| CONFUSED_GLYPHS.iter().find(|(from, _)| *from == c).map_or(c, |(_, to)| *to))
+        .collect()
+}
+
 /// How short an expectation has to be before a slipped character is no longer forgiven.
 ///
 /// One edit inside eight characters is at most an eighth of what was asked for, and a card's title or
@@ -206,7 +228,8 @@ struct Held {
     slipped: bool,
 }
 
-/// Match a folded expectation against a folded reading, forgiving **one** misread character.
+/// Match a folded expectation against a folded reading, forgiving the glyphs a screen draws alike
+/// ([`CONFUSED_GLYPHS`]) and, on top of that, **one** misread character.
 ///
 /// Vision reads the words on a screen well and the glyphs inside them not always: `day's` came back
 /// as `dav's` on a title that was otherwise perfect, and the fold keeps alphanumerics, so `days` and
@@ -220,6 +243,11 @@ struct Held {
 /// leaves a title with no spaces in it at all, so a tolerance counted in words would be no tolerance
 /// there.
 ///
+/// The confusable fold sits outside that budget and outside the floor, because it is not a
+/// forgiveness of the reader: `1` and `l` are one drawing, so a key spelt with either is the same key
+/// on any shot. That is what carries the short expectations the budget cannot reach — a category's
+/// key is a word of five or six characters, well under [`SLIP_FLOOR`].
+///
 /// **Which way the looseness leans is worth knowing.** On a `present: true` step it can only turn a
 /// red green, and on a `present: false` step only a green red — the same tolerance that finds a
 /// misread title also finds it when a step says it should be gone. So the risk it carries is a step
@@ -227,6 +255,14 @@ struct Held {
 fn held(reading: &str, expected: &str) -> Held {
     if expected.is_empty() || reading.contains(expected) {
         return Held { found: true, slipped: false };
+    }
+    // The confusable pairs go first and are not spent out of the budget below: a glyph the screen
+    // draws the same for two characters is not a character the reader got wrong, it is one the shot
+    // never told apart. Folding them is what lets a key too short for the budget be read at all.
+    let reading = unconfuse(reading);
+    let expected = unconfuse(expected);
+    if reading.contains(&expected) {
+        return Held { found: true, slipped: true };
     }
     let needle: Vec<char> = expected.chars().collect();
     if needle.len() < SLIP_FLOOR {
@@ -632,6 +668,12 @@ impl Instructor {
     /// so a picture of the two can be the same picture. The eye that closes it is therefore watching
     /// the screen rather than the shot, and the instruction says so and says for how long. The shot is
     /// still kept, for the half of the row a picture does carry — which pane the mark belongs to.
+    ///
+    /// `files row-mark` is a `Review`, and the plainest one here: what it reads is a colour, and a
+    /// reading answers with words. The row wearing one says the same letters as the row beside it that
+    /// wears none, so no folding of the two sides can tell them apart. The instruction therefore names
+    /// the state git is in rather than the colour it is drawn in — which colour that is belongs to the
+    /// theme, and an eye at the screen can see that two rows differ without being told what to expect.
     ///
     /// `files handed-over` is a `Review` on all three of its doors, and further out than most: what
     /// settles it is not on Amenbo's window at all. A file handed to the machine leaves through an
@@ -1651,9 +1693,10 @@ impl Instructor {
                 Side::Rail => "At the top of the terminal face, press that same control again. The list of panes comes back where it was.".to_string(),
                 Side::Files => "At the top of the terminal face, at the far end of the row, press the one that shows the folder's files — the second of the two, the first being the page written on. The panel comes up on that half, whether it was closed or showing the other one.".to_string(),
             },
-            // The one gesture on these roads. The screen tool presses and types and has no drag, so
-            // this is carried out by hand — and what the operator is told is where the edge is, since
-            // it is a line rather than a button and nothing on the screen labels it.
+            // The one gesture on these roads, and the one step aimed at something the screen does
+            // not name: the edge is a line rather than a button, so nothing reaches it the way a
+            // button is reached and what the operator is told is where the edge is. The screen tool
+            // drags between two points, but working those points out of the screen is an operator's.
             (Domain::Terminal, "drag-side") => {
                 let which = side(with)?;
                 // Said by what it does to the column rather than by left and right: which way is
@@ -1680,13 +1723,28 @@ impl Instructor {
                 req(with, "dir")?,
                 req(with, "content")?
             ),
+            // A bound folder taken away from under the app, the same way and for the same reason: a
+            // folder is moved by whoever moves folders, and what Amenbo holds only becomes wrong
+            // afterwards. The screen road wants the move to land *while the app is watching*, which
+            // is what a premise could not do — the section it is about is drawn before it happens.
+            //
+            // Where it goes is named the way it is named everywhere else on these roads: by what the
+            // road calls it, since the run places the folders and the YAML never sees a path.
+            (Domain::Folder, "move") => format!(
+                "Outside Amenbo — in a file manager or another terminal — take the folder the road calls \"{}\" away from where it stands, moving it beside itself under the name \"{}\". Do not touch Amenbo while you do.",
+                req(with, "dir")?,
+                req(with, "to")?
+            ),
             // ── the file face ─────────────────────────────────────────────────────────────────
             // The column beside the panes. Its sections are named by what each is about rather than
             // by their headings, for the reason the segments are: the headings are the interface's
             // own words and the run's language is whatever the machine is set to.
             (Domain::Files, "tree") => match flag(with, "open")? {
-                true => "In the column beside the panes, unfold the section that draws the folder itself.".to_string(),
-                false => "Fold that section back up.".to_string(),
+                // Every one of them: a project bound to several folders draws a section each, and a
+                // row can only be read in the section it belongs to now that the tree is the only
+                // place rows are.
+                true => "In the column beside the panes, unfold the section that draws the folder itself — each of them where there is more than one.".to_string(),
+                false => "Fold those sections back up.".to_string(),
             },
             (Domain::Files, "enter") => format!(
                 "In the folder's section, open the folder \"{}\" one level.",
@@ -1700,6 +1758,16 @@ impl Instructor {
             (Domain::Files, "back") =>
                 "Press the way back out of the file. The column returns to its two sections."
                     .to_string(),
+            // A file brought in from outside and let go over a folder's row. The instruction names where it
+            // is dragged from as loosely as it can — anywhere on the machine that is not this folder —
+            // because what would go wrong is dragging a row out of the panel and back into it, which is a
+            // move of its own and not this one.
+            (Domain::Files, "drop-in") => format!(
+                "From outside Amenbo — a file manager, the desktop, anywhere on this machine that is not this folder — drag a file named \"{}\" over the row \"{}\" in {}, and let it go there.",
+                file_named(with)?,
+                req(with, "name")?,
+                section(with)?
+            ),
             // Handing the file to the machine. On a row the menu is a right-click, and it is drawn on files alone
             // — a folder's row opens a level — so the step names a row the way every other one here does, and says
             // where the menu comes up, since nothing else on this face does.
@@ -2672,6 +2740,22 @@ impl Instructor {
                     req(with, "shows")?
                 ),
             },
+            // What git says about a row. The mark is named by the state rather than by the colour, so
+            // the eye is told what to look for in words that outlive a palette.
+            (Domain::Files, "row-mark") => match present(with) {
+                true => format!(
+                    "In {}, confirm the row \"{}\" is drawn in the colour this build gives to {} — a colour and not a word, so read it against the rows beside it that git says nothing about.",
+                    section(with)?,
+                    req(with, "name")?,
+                    mark(with)?
+                ),
+                false => format!(
+                    "In {}, confirm the row \"{}\" wears no colour of its own — it is drawn like the rows git says nothing about, and not in the colour that would say it is {}.",
+                    section(with)?,
+                    req(with, "name")?,
+                    mark(with)?
+                ),
+            },
             (Domain::Files, "says") => match present(with) {
                 true => format!("Confirm the column says {}.", note(with)?),
                 false => format!("Confirm the column does not say {}.", note(with)?),
@@ -2943,15 +3027,34 @@ fn side(with: &Args) -> Result<Side, String> {
     }
 }
 
-/// Which of the file face's two sections a row is being looked for in, as a phrase an instruction
-/// can be built around. They are named by what each is about because their headings are the
-/// interface's own words, and the run's language is whatever the machine is set to.
+/// Which of the file face's sections a row is being looked for in, as a phrase an instruction can be
+/// built around. It is named by what it is about because its heading is the interface's own words,
+/// and the run's language is whatever the machine is set to.
+///
+/// **There is one left.** The section for what had changed lately is gone — what it answered was
+/// "yesterday", and what git says now goes on the tree's own rows instead. The arg stays because it
+/// is the one place a road says which part of the panel it means, and the panel is not finished
+/// growing.
 fn section(with: &Args) -> Result<&'static str, String> {
     match with.get("section").and_then(|v| v.as_str()) {
-        Some("changed") => Ok("the section for what has changed lately"),
         Some("tree") => Ok("the folder's own section"),
-        Some(other) => Err(format!("`section` does not know `{other}` — it is changed or tree")),
-        None => Err("arg `section` must say which of the two sections".to_string()),
+        Some(other) => Err(format!("`section` does not know `{other}` — it is tree")),
+        None => Err("arg `section` must say which section".to_string()),
+    }
+}
+
+/// Which of the three things git's answer is folded into a step is about. Named by the state and not
+/// by the colour drawn for it, for the reason `section` and `note` are named as they are: what a row
+/// is drawn in belongs to the theme, and a road naming a colour would go red the day one moved.
+fn mark(with: &Args) -> Result<&'static str, String> {
+    match with.get("mark").and_then(|v| v.as_str()) {
+        Some("untracked") => Ok("something git has never seen"),
+        Some("added") => Ok("something staged as new"),
+        Some("modified") => Ok("something that has changed since git last recorded it"),
+        Some(other) => {
+            Err(format!("`mark` does not know `{other}` — it is untracked, added or modified"))
+        }
+        None => Err("arg `mark` must say what git says about the row".to_string()),
     }
 }
 
@@ -2981,6 +3084,7 @@ fn note(with: &Args) -> Result<&'static str, String> {
         Some("partial") => Ok("that some of the folder is not being watched"),
         Some("nothing-changed") => Ok("that nothing has changed yet"),
         Some("no-folder") => Ok("that this project has no folder yet"),
+        Some("folder-gone") => Ok("that this folder is not there any more"),
         Some(other) => Err(format!("`note` does not know `{other}`")),
         None => Err("arg `note` must say which of the face's lines".to_string()),
     }
@@ -5970,6 +6074,28 @@ steps_gui:
         // And the reading that needed nothing forgiven says so, which is what keeps the two greens
         // apart in the evidence.
         assert_eq!(held(&fold(title), &fold(title)), Held { found: true, slipped: false });
+    }
+
+    /// The reading that this one came from: a category's key drawn in a monospace face, where the
+    /// `l` came back as a `1`. It is seven characters, so the budget below cannot reach it — the
+    /// confusable fold is the whole of what makes it green.
+    #[test]
+    fn a_key_misread_on_a_glyph_the_screen_draws_alike_still_meets_it() {
+        assert_eq!(held("medium channe1", "channel"), Held { found: true, slipped: true });
+        // The other pair, and the fold going the other way — the expectation carrying the digit and
+        // the reading the letter.
+        assert_eq!(held("the r0ute", "route"), Held { found: true, slipped: true });
+        assert_eq!(held("the route", "r0ute"), Held { found: true, slipped: true });
+    }
+
+    /// What the fold does not buy: a key that differs anywhere else is still a different key, however
+    /// short it is.
+    #[test]
+    fn a_key_that_differs_elsewhere_stays_red() {
+        assert_eq!(held("medium channe1", "channet"), Held { found: false, slipped: false });
+        assert_eq!(held("medium focus", "channel"), Held { found: false, slipped: false });
+        // And a lowercase `i` is not in the pairs, so it keeps its own glyph.
+        assert_eq!(held("medium channei", "channel"), Held { found: false, slipped: false });
     }
 
     /// The floor. A short expectation is a word where one character is most of the meaning, and two

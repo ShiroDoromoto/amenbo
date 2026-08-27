@@ -657,7 +657,10 @@ const REGISTRY: &[OpSpec] = &[
     // reachable by writing inside it. Left out, the file lands in the run's own folder.
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "write-file", required: &["path", "content"], refs: &[], strings: &["path", "content", "dir"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "copy-fixture", required: &["from", "path"], refs: &[], strings: &["from", "path", "dir"], binds: false },
-    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-init", required: &[], refs: &[], strings: &[], binds: false },
+    // `git-init` takes the same `dir`, and for a reason of its own: what git says about a folder is
+    // drawn on the file face of the folder a project is *bound* to, so a road reading those colours
+    // needs the repository to be that folder and not the one the run stands in.
+    OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "git-init", required: &[], refs: &[], strings: &["dir"], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-install", required: &[], refs: &[], strings: &[], binds: false },
     OpSpec { kind: Kind::Action, domain: Domain::Repo, op: "hooks-uninstall", required: &[], refs: &[], strings: &[], binds: false },
     // The paste that starts this folder's AI on Amenbo at every session, put where the build says it
@@ -2173,9 +2176,10 @@ const REGISTRY: &[OpSpec] = &[
     // only ever grows is half a control and the half a reader is left with is the one that took
     // their pane's room.
     //
-    // **It is the one step on these roads carried out by hand.** The screen tool presses, types and
-    // reads; it has no drag, and a gesture is what this control is. So the instruction says where to
-    // put the pointer and what to watch follow it, and the shot after it is what an eye closes.
+    // **It is the one step on these roads aimed at a line.** The edge carries no name, so nothing
+    // reaches it the way a button is reached — the screen tool drags between two points, and working
+    // those out of the screen is an operator's. So the instruction says where to put the pointer and
+    // what to watch follow it, and the shot after it is what an eye closes.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "drag-side", required: &["side", "toward"], refs: &[], strings: &["side", "toward"], binds: false },
     // Whether a column is beside the panes at all. `present: false` is the half the folding is proved
     // by, and it is the half worth having: a column that went away is what gives the panes the width,
@@ -2203,10 +2207,11 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "dot", required: &["face"], refs: &[], strings: &["face"], binds: false },
 
     // ── the file face ─────────────────────────────────────────────────────────────────────────────
-    // The folder a project is bound to, read from inside Amenbo. Two sections in one column: what has
-    // changed lately, and the folder itself folded down. Every op is the screen's — `cat` is not
-    // Amenbo doing anything — and `section` says which of the two a row is being looked for in,
-    // because the same file can stand in both of them at once.
+    // The folder a project is bound to, read from inside Amenbo: the folder itself, folded down, with
+    // what git says about each row drawn as a colour on it. Every op is the screen's —
+    // `cat` is not Amenbo doing anything — and `section` says which part of the column a row is being
+    // looked for in. There is one part to name today; the arg is kept because the panel is not
+    // finished growing, and a road that named none of them would have to be rewritten when it does.
     //
     // Unfolding the folder. It is a value and not two ops because it is one control that opens and
     // shuts, unlike the two windows' way out and way back, which are pressed in different places.
@@ -2222,12 +2227,37 @@ const REGISTRY: &[OpSpec] = &[
     // Whether a row is standing in a section. `present: false` is the half several of these roads are
     // about — a file the folder holds but the face must not offer, because it is ignored.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "listed", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
+    // What git says about a row, drawn on it as a colour. `mark` names which of the three
+    // the row is wearing — `untracked`, `added`, `modified` — rather than the colour itself: what each
+    // one is drawn in is a theme's to choose, and a road naming a colour would go red the day one moved.
+    //
+    // It is a `Review` on the screen, and the only assert on this face that could never be anything
+    // else. A shot is read for words, and a colour is not one — the row says the same letters wearing
+    // it as it does bare. `present: false` is the half an ignored row is read by: git records nothing
+    // about it, so it wears no colour while standing on the tree like any other.
+    OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "row-mark", required: &["name", "section", "mark"], refs: &[], strings: &["name", "section", "mark"], binds: false },
     // What an opened file draws. `shows` is words the road itself put in the file, so a reading finds
     // them because the bytes reached the screen and for no other reason.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "reading", required: &["shows"], refs: &[], strings: &["shows"], binds: false },
     // One of the face's standing lines, named by what it says rather than by its wording: the words are
     // the interface's own, and which language the run's machine is in is not a road's to know.
     OpSpec { kind: Kind::Assert, domain: Domain::Files, op: "says", required: &["note"], refs: &[], strings: &["note"], binds: false },
+
+    // ── bringing a file in from the machine ───────────────────────────────────────────────────────
+    // A file dragged in from outside and let go over a row, which is the one way anything reaches this
+    // folder that does not go through the folder itself. What is under test is the landing rather than
+    // the carrying: the drop is caught by the application and not by the face, and what the face
+    // decides is which folder was under the pointer when the hand opened.
+    //
+    // So the row is named the way every other row here is, and it is a folder's — a file's row opens a
+    // file and has nothing to put anything in. The section is named beside it for the reason `open` and
+    // `menu` name theirs.
+    //
+    // `file` is a name rather than a path, and the operator brings the file it stands for. That is the
+    // same fact `task attach` runs into on this face and for the same reason: a drop reads the disk the
+    // operator is sitting at, and nothing a run lays down is anywhere a hand can reach from there. What
+    // the file holds is nothing this road reads — it is looked for by its name once it has landed.
+    OpSpec { kind: Kind::Action, domain: Domain::Files, op: "drop-in", required: &["file", "name", "section"], refs: &[], strings: &["file", "name", "section"], binds: false },
 
     // ── handing a file to the machine ─────────────────────────────────────────────────────────────
     // The three ways out of this face that are not reading the file here, and all three are the
@@ -2236,9 +2266,10 @@ const REGISTRY: &[OpSpec] = &[
     // them and remembers none of them, so the road stops at the hand-over and never follows what came
     // forward — where the file ended up is the machine's answer, not this face's.
     //
-    // On a row the menu is a right-click, and it is drawn on files alone: a folder's row opens a
-    // level and has nothing to hand anywhere. The row is therefore named the way every other row
-    // here is — by its name, and by the section it is standing in.
+    // On a row the menu is a right-click. A folder's row opens one too, but it holds none of the
+    // three: what a folder can be handed to is nothing, and what it is offered instead is a name to
+    // make or to write over — which no op here reaches yet. So this op names a file, the way every
+    // other row here is named — by its name, and by the section it is standing in.
     OpSpec { kind: Kind::Action, domain: Domain::Files, op: "menu", required: &["name", "section"], refs: &[], strings: &["name", "section"], binds: false },
     // The same menu, reached from the file that is open rather than from a row. It is a second door and not a
     // convenience: a file the face refuses to draw offers a way on to something built to open it, and there is no
@@ -2321,6 +2352,12 @@ const PREMISE_OPS: &[(Domain, &str)] = &[
     // And the same file when its bytes cannot be written down in a scenario — one that is
     // deliberately not text, which is a world no amount of YAML reaches.
     (Domain::Repo, "copy-fixture"),
+    // And the folder being a git repository, which is the world every road about what git says has to
+    // open on. Amenbo makes no repository and has no command that would — it only ever reads one — so
+    // no road reaches this state whichever face is walking it. It is a step as well, on the roads where
+    // making one is what is being walked: the hook slots are written into a repository, and getting
+    // there is those roads' own work rather than the ground they start from.
+    (Domain::Repo, "git-init"),
     // And a folder already wired, which is the same kind of world one step further on. The wiring is a
     // file and not a record, so nothing in the store reaches it — and writing the settings out by hand
     // would put the launch command's own name in the scenario, which is the one thing the build under

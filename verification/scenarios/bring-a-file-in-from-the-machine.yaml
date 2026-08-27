@@ -1,0 +1,116 @@
+# The one way into this folder that does not go through the folder itself.
+#
+# A reader who has handed a folder over can read what is in it without leaving the app
+# (`read-a-file-in-the-folder-the-ai-can-see`) and hand a file back out to the machine
+# (`hand-a-file-to-the-machine`). This road is the way in: a file that is somewhere else on the
+# machine, dragged onto the folder it belongs in and let go there.
+#
+# ── What is under test is the landing, not the carrying ──────────────────────────────────────────
+# A drag from outside is caught by the application rather than by the face, so the part that can be
+# wrong is the part the face decides: which folder was under the pointer when the hand opened. That
+# is why the file is let go over a row well inside the folder rather than over the folder's section,
+# and why what is read afterwards is the row standing in *that* folder and nowhere else.
+#
+# ── Why the folder's own file is read again at the end ───────────────────────────────────────────
+# A drop that put the file in the right place and swept the folder on the way would read exactly like
+# a drop that worked, right up until somebody lost a file to it. So the file that was already lying
+# there is read once more: what came in is beside what was there, not instead of it.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road here. Copying a file into a folder at a shell is the shell's own
+# vocabulary, and Amenbo is the subject of none of it.
+id: bring-a-file-in-from-the-machine
+title: A file dragged in from the machine lands in the folder it was let go over, beside what was already there
+description: >
+  Open the terminal face on a project whose folder already holds a file, unfold the folder's section,
+  and drag a file in from somewhere else on the machine, letting it go over the folder inside it.
+  Open that folder and read that the file arrived in it, with the file that was already there still
+  standing beside it.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # A folder to drop into, and a file already lying in it. The file is what makes the folder exist at
+  # all — a folder with nothing in it is not a row anybody could aim at — and it is read again at the
+  # end for the sweep the drop must not have done.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: notes/watering.md
+      content: SCENARIO the seedlings are watered every second morning
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  # The panel beside the panes opens on the page a person writes on rather than on the folder, so the
+  # road asks for the half it is about before reading anything in it.
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  # The row the file is aimed at, read before anything is let go over it: a run that finds nothing
+  # under the pointer later fails on the row being absent rather than on the drop.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: notes
+      section: tree
+
+  - type: action
+    domain: files
+    op: drop-in
+    with:
+      file: seedlings.csv
+      name: notes
+      section: tree
+
+  # Opened after the drop and not before it. What is under test is which folder the file landed in,
+  # and a folder standing open the whole way would let a file that landed anywhere at all be read as
+  # having landed here.
+  - type: action
+    domain: files
+    op: enter
+    with:
+      name: notes
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: seedlings.csv
+      section: tree
+
+  # And what was already lying there, still lying there.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: tree

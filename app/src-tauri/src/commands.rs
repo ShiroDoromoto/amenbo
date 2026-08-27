@@ -2699,7 +2699,7 @@ pub fn dimension_add(project_id: i64, name: String) -> Result<WriteAck, CmdError
 #[tauri::command]
 pub fn dimension_rename(id: i64, name: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.dimension_update(id, Some(&name), None, None, None, None, None, None)?;
+        store.dimension_update(id, Some(&name), None, None, None, None, None, None, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))
@@ -2713,7 +2713,7 @@ pub fn dimension_rename(id: i64, name: String) -> Result<WriteAck, CmdError> {
 #[tauri::command]
 pub fn dimension_set_slug(id: i64, slug: String) -> Result<WriteAck, CmdError> {
     with_store_mut(|store| {
-        store.dimension_update(id, None, None, None, None, None, None, Some(&slug))?;
+        store.dimension_update(id, None, None, None, None, None, None, None, Some(&slug))?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))
@@ -2738,7 +2738,7 @@ pub fn dimension_update(
 ) -> Result<WriteAck, CmdError> {
     let role = time_axis.map(|on| if on { DimensionRole::TimeAxis } else { DimensionRole::None });
     with_store_mut(|store| {
-        store.dimension_update(id, None, notes.as_deref(), ordered, role, show_on_card, required, None)?;
+        store.dimension_update(id, None, notes.as_deref(), ordered, role, show_on_card, required, None, None)?;
         Ok(())
     })?;
     Ok(WriteAck::new(&["tasks"]))

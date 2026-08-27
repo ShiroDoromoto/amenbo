@@ -14,7 +14,10 @@ import type {
 import { invoke } from "../core/ipc";
 import { inTauri } from "../core/snapshot";
 
-/** The host's word that the folder moved. It carries the whole list, not what moved in it. */
+/**
+ * The host's word that a folder moved. It carries the whole list, not what moved in it, and names
+ * the folder it is about — a project can be bound to several and each is watched on its own.
+ */
 const CHANGED_EVENT = "folder://changed";
 
 /** The names directly inside one folder, folders first. `path` is the segments from the root. */
@@ -28,28 +31,31 @@ export async function folderEntries(
 }
 
 /**
- * Start watching a project's folder, and take what is in it now.
+ * Start watching one of a project's folders, and take what is in it now.
  *
- * Asking again replaces whatever was being watched, so a face that remounts leaves no watch behind
- * it — and the one call is both the subscription and the first answer, which is what keeps the
- * panel from drawing an empty list for the length of a walk.
+ * Asking again for the same folder replaces its watch, so a face that remounts leaves no watch
+ * behind it — and the one call is both the subscription and the first answer, which is what keeps
+ * the panel from drawing an empty list for the length of a walk. **Asking for a different folder
+ * adds one**: the folders a project is bound to are watched side by side, not one at a time.
  */
 export async function folderWatch(projectId: number, root: string): Promise<FolderChangesDto> {
-  if (!inTauri()) return { changed: [], partial: false };
+  if (!inTauri()) return { root, changed: [], partial: false, gone: false };
   return await invoke<FolderChangesDto>("folder_watch", { projectId, root });
 }
 
-/** Stop watching. Called when the face goes away; nothing else has to. */
-export async function folderUnwatch(): Promise<void> {
+/** Stop watching one folder. Called for each folder the face drew as it goes away. */
+export async function folderUnwatch(root: string): Promise<void> {
   if (!inTauri()) return;
-  await invoke<void>("folder_unwatch", {});
+  await invoke<void>("folder_unwatch", { root });
 }
 
 /**
- * Be told when the folder moves, until the returned function is called.
+ * Be told when a watched folder moves, until the returned function is called.
  *
- * The payload is the whole list rather than a delta: the face draws a list, and a delta it had to
- * apply would be a second copy of the truth to keep in step with the host's.
+ * One listener hears every watched folder, so what comes back names the one it is about and a
+ * caller drawing one of them has to say which. The payload is the whole list rather than a delta:
+ * the face draws a list, and a delta it had to apply would be a second copy of the truth to keep in
+ * step with the host's.
  */
 export async function onFolderChanged(
   take: (changes: FolderChangesDto) => void,

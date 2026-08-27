@@ -35,7 +35,7 @@
 //!    the answer is a real but partial watch, and a face that drew it as a whole one would be
 //!    telling the reader that nothing has changed in the half nobody is looking at.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
@@ -75,10 +75,14 @@ enum Wake {
     Rescan,
 }
 
-/// The watch this app has running, if any. One per app, because one face draws it: asking for a
-/// second root replaces the first rather than adding to it.
+/// The watches this app has running, one per folder it was asked to watch (`AMB-D-778`).
+///
+/// **The key is the folder as the caller named it, not what the filesystem calls it.** Taking a
+/// watch down has to work for a folder that has since been removed, and a canonical spelling is
+/// something only a folder that is still there has. The fence is not weakened by that: what is
+/// watched is what [`crate::folder::root_of`] answered for the same name.
 #[derive(Default)]
-pub struct FolderWatches(Mutex<Option<Live>>);
+pub struct FolderWatches(Mutex<HashMap<String, Live>>);
 
 /// A watch that is up — or rather the one thing holding it up: the flag its thread reads to learn
 /// that it is not. Dropping this is how a watch is taken down, which is what makes replacing the
@@ -93,10 +97,17 @@ impl Drop for Live {
     }
 }
 
-/// Start watching a project's folder and answer with what is in it now.
+/// Start watching one of a project's folders and answer with what is in it now.
 ///
-/// Asking again for the same root is not a second watch: the one that is up is taken down first, so
-/// a face that remounts (a language change rebuilds the interface) leaves nothing behind it.
+/// Asking again for the same folder is not a second watch: the one that is up is taken down first,
+/// so a face that remounts (a language change rebuilds the interface) leaves nothing behind it.
+/// **Asking for a different folder adds one**, since a project's folders are drawn side by side and
+/// each of them moves on its own (`AMB-D-778`).
+///
+/// A folder that is not there is refused here rather than answered for: what a face draws for one
+/// it cannot find is a question about a folder it already knows the project is bound to. A folder
+/// that goes away *while it is watched* is a different matter — that is `gone`, and it is what the
+/// watch is there to notice.
 #[tauri::command]
 pub fn folder_watch(
     app: tauri::AppHandle,
@@ -104,38 +115,49 @@ pub fn folder_watch(
     project_id: i64,
     root: String,
 ) -> Result<FolderChangesDto, CmdError> {
-    let root = crate::folder::root_of(project_id, &root)?;
-    let scan = crate::folder::scan(&root);
+    let dir = crate::folder::root_of(project_id, &root)?;
+    let scan = crate::folder::scan(&dir);
     let first = FolderChangesDto {
+        root: root.clone(),
         changed: crate::folder::recent(&scan),
         // Nothing has been installed yet, so what is reported here is only what the walk itself hit.
         partial: scan.capped,
+        gone: false,
     };
 
     let stop = Arc::new(AtomicBool::new(false));
     let live = Live { stop: Arc::clone(&stop) };
-    // The old watch comes down as its `Live` is dropped, before the new one goes up.
-    *watches.0.lock().expect("the watch registry") = Some(live);
+    // This folder's old watch comes down as its `Live` is dropped, and no other folder's is touched.
+    watches.0.lock().expect("the watch registry").insert(root, live);
 
     let held = first.clone();
-    std::thread::spawn(move || run(&app, &root, held, &stop));
+    std::thread::spawn(move || run(&dir, held, &stop, &|changes| told(&app, changes)));
     Ok(first)
 }
 
-/// Stop watching. The face calls this when it goes away; nothing else has to, since asking for a
-/// different root replaces the watch on its own.
+/// Stop watching one folder. The face calls this for each folder it drew as it goes away; the
+/// others keep running, and asking for the same folder again replaces its watch rather than this.
 #[tauri::command]
-pub fn folder_unwatch(watches: tauri::State<'_, FolderWatches>) {
-    *watches.0.lock().expect("the watch registry") = None;
+pub fn folder_unwatch(watches: tauri::State<'_, FolderWatches>, root: String) {
+    watches.0.lock().expect("the watch registry").remove(&root);
 }
 
 /// The thread behind one watch: install, wait, scan, tell — until the flag says the face has gone.
-fn run(app: &tauri::AppHandle, root: &Path, mut held: FolderChangesDto, stop: &AtomicBool) {
+///
+/// Where what it has to say goes is the caller's to give, and every window is where that is in the
+/// app ([`told`]). Taking it as an argument is what lets the loop be run against a folder in a test
+/// rather than only against a running window.
+fn run(
+    root: &Path,
+    mut held: FolderChangesDto,
+    stop: &AtomicBool,
+    tell: &dyn Fn(&FolderChangesDto),
+) {
     let (tx, rx) = std::sync::mpsc::channel::<Wake>();
     let Ok(mut watcher) = notify::recommended_watcher(handler(tx, root.to_path_buf())) else {
         // No watcher at all. The face keeps the list it was answered with, which is true of the
         // moment it asked — and is told that this is all it will get.
-        told(app, &FolderChangesDto { partial: true, ..held });
+        tell(&FolderChangesDto { partial: true, ..held });
         return;
     };
 
@@ -147,13 +169,23 @@ fn run(app: &tauri::AppHandle, root: &Path, mut held: FolderChangesDto, stop: &A
     let mut partial = install(&mut watcher, laid_over(&whole, &scan), &mut watched) || scan.capped;
     if partial != held.partial {
         held.partial = partial;
-        told(app, &held);
+        tell(&held);
     }
 
+    // Whether the folder is where it was. A watch does not follow it: on Windows and Linux the
+    // kernel holds the folder itself, so one that is moved away keeps firing under a name that is
+    // now somebody else's, and one made again where it was gets no watch at all (`AMB-T-3753`
+    // measured both). So the walk is asked, not the events — and asked on every heartbeat, since a
+    // folder that is not there is also a folder nothing arrives from.
+    let mut present = !held.gone;
+
     while !stop.load(Ordering::Relaxed) {
-        if !woke(&rx, stop) {
+        let awake = woke(&rx, stop);
+        let here = root.is_dir();
+        if !awake && here == present {
             continue;
         }
+        present = here;
         scan = crate::folder::scan(root);
         // Where a folder needs a watch of its own, one made while the watch was up gets it here,
         // and one that is gone takes its watch with it — the walk is the only place either fact is
@@ -166,16 +198,25 @@ fn run(app: &tauri::AppHandle, root: &Path, mut held: FolderChangesDto, stop: &A
             }
             kept
         });
-        partial = install(&mut watcher, laid_over(&whole, &scan), &mut watched) || scan.capped;
+        // A folder that is not there is not a folder that is half watched: the walk found nothing
+        // because there is nothing, and saying "some of this is unwatched" of it would send a
+        // reader looking for the half that is.
+        partial = present
+            && (install(&mut watcher, laid_over(&whole, &scan), &mut watched) || scan.capped);
 
-        let fresh = FolderChangesDto { changed: crate::folder::recent(&scan), partial };
+        let fresh = FolderChangesDto {
+            changed: crate::folder::recent(&scan),
+            partial,
+            gone: !present,
+            ..held.clone()
+        };
         // A watch fires on touches that mean nothing to a reader — a file read that updated an
         // access time, a build writing inside a folder nobody is shown. Comparing what would be
         // drawn is what drops those, and it is the same reasoning `store_watch`'s signature check
         // is built on.
         if fresh != held {
             held = fresh;
-            told(app, &held);
+            tell(&held);
         }
     }
 }
@@ -401,6 +442,99 @@ mod tests {
         // kernel has to get round to it. A machine with something else on it takes longer than one.
         let woken = (0..20).any(|_| woke(&rx, &stop));
         assert!(woken, "a write under the root is what the watch is for");
+    }
+
+    /// Taking one folder's watch down is that folder's own business: what stops is its thread, and
+    /// the others go on. Dropping the entry is the whole of the mechanism, which is why the
+    /// registry holds one per folder rather than one for the app.
+    #[test]
+    fn one_folder_stops_and_the_others_do_not() {
+        let watches = FolderWatches::default();
+        let mut flags = HashMap::new();
+        for root in ["/work/repo", "/work/plugins"] {
+            let stop = Arc::new(AtomicBool::new(false));
+            flags.insert(root, Arc::clone(&stop));
+            watches.0.lock().expect("the registry").insert(root.to_string(), Live { stop });
+        }
+
+        watches.0.lock().expect("the registry").remove("/work/repo");
+        assert!(flags["/work/repo"].load(Ordering::Relaxed), "the one taken down stops");
+        assert!(!flags["/work/plugins"].load(Ordering::Relaxed), "the other one does not");
+        assert_eq!(watches.0.lock().expect("the registry").len(), 1);
+    }
+
+    /// Asking again for a folder that is already watched replaces its watch instead of laying a
+    /// second one over it — the face that remounts is the same face looking at the same folder.
+    #[test]
+    fn asking_again_for_a_folder_replaces_its_watch() {
+        let watches = FolderWatches::default();
+        let first = Arc::new(AtomicBool::new(false));
+        let second = Arc::new(AtomicBool::new(false));
+        let mut registry = watches.0.lock().expect("the registry");
+        registry.insert("/work/repo".to_string(), Live { stop: Arc::clone(&first) });
+        registry.insert("/work/repo".to_string(), Live { stop: Arc::clone(&second) });
+
+        assert!(first.load(Ordering::Relaxed), "the one that was up is told to stop");
+        assert!(!second.load(Ordering::Relaxed));
+        assert_eq!(registry.len(), 1);
+    }
+
+    /// A folder that is removed is not a folder with nothing in it, and the difference is the
+    /// whole of what a reader can act on. Nothing arrives from a folder that is not there — the
+    /// walk is what answers, and it keeps answering, so a folder made again where this one was is
+    /// watched again without anybody asking.
+    #[test]
+    fn a_folder_that_goes_away_says_so_and_says_when_it_is_back() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let root = dir.path().join("watched");
+        std::fs::create_dir(&root).expect("the folder");
+
+        let (tx, rx) = std::sync::mpsc::channel::<FolderChangesDto>();
+        let stop = Arc::new(AtomicBool::new(false));
+        let held = FolderChangesDto {
+            root: root.to_string_lossy().into_owned(),
+            changed: Vec::new(),
+            partial: false,
+            gone: false,
+        };
+        let thread = {
+            let (root, stop) = (root.clone(), Arc::clone(&stop));
+            std::thread::spawn(move || {
+                run(&root, held, &stop, &|changes| {
+                    let _ = tx.send(changes.clone());
+                });
+            })
+        };
+
+        std::fs::remove_dir_all(&root).expect("take the folder away");
+        let told = next_saying(&rx, |changes| changes.gone);
+        assert!(told.gone, "a folder that is not there is said to be gone");
+        assert!(!told.partial, "and not drawn as a folder that is half watched");
+
+        std::fs::create_dir(&root).expect("put it back");
+        let told = next_saying(&rx, |changes| !changes.gone);
+        assert!(!told.gone, "a folder made again where it was is watched again");
+
+        stop.store(true, Ordering::Relaxed);
+        thread.join().expect("the watch thread");
+    }
+
+    /// The first answer that satisfies `wanted`, or a failure rather than a hang. Long enough for a
+    /// machine with something else on it: what is waited for is a heartbeat, not a kernel.
+    fn next_saying(
+        rx: &Receiver<FolderChangesDto>,
+        wanted: impl Fn(&FolderChangesDto) -> bool,
+    ) -> FolderChangesDto {
+        let deadline = std::time::Instant::now() + Duration::from_secs(20);
+        while std::time::Instant::now() < deadline {
+            match rx.recv_timeout(Duration::from_secs(1)) {
+                Ok(changes) if wanted(&changes) => return changes,
+                Ok(_) => continue,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(other) => panic!("the watch thread went away: {other}"),
+            }
+        }
+        panic!("nothing said what was waited for");
     }
 
     /// How many watches a folder takes is the OS's answer, and the two answers are laid over

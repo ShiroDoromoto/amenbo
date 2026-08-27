@@ -421,11 +421,22 @@ modified: string, };
  * What the file face's second row is drawn from: the rows, and whether they are the whole story
  * (`crate::folder_watch`).
  *
- * `partial` is the one thing the rows cannot say for themselves. A watch is a set of watches, one
- * per folder, and the kernel's limit is per user — so some may be refused while the rest work.
- * Drawn as a whole watch, that reads as "nothing has changed" in the half nobody is watching.
+ * `partial` and `gone` are the two things the rows cannot say for themselves. Where every folder
+ * needs a watch of its own the kernel's limit is per user, so some may be refused while the rest
+ * work; drawn as a whole watch, that reads as "nothing has changed" in the half nobody is
+ * watching. An empty list means the same thing for a folder that was removed as for one nobody
+ * has written in, and only one of the two is worth telling a reader about.
  */
 export type FolderChangesDto = { 
+/**
+ * Which folder this is about, spelled the way the caller asked for it.
+ *
+ * A project can be bound to several folders and each is watched on its own, so an answer that
+ * did not name one would leave a face with several of them unable to say which of its
+ * sections had moved. It is the caller's own spelling rather than the canonical one because
+ * the caller is what has to match it against a folder it is already drawing.
+ */
+root: string, 
 /**
  * The files written to most recently, newest first.
  */
@@ -434,7 +445,12 @@ changed: Array<FolderChangedDto>,
  * Whether some of the folder is unwatched — a walk that stopped at its cap, or a watch the
  * kernel refused.
  */
-partial: boolean, };
+partial: boolean, 
+/**
+ * Whether the folder itself is no longer there. It can come back: a folder made again where
+ * this one was is watched again, and this goes back to false.
+ */
+gone: boolean, };
 
 /**
  * One name inside a folder, as the file face draws a row of its tree (`crate::folder`).

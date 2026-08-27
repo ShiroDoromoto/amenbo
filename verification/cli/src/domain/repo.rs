@@ -48,7 +48,7 @@ impl Driver<'_> {
                 {
                     return Err(format!("`from: {from}` must name a file under fixtures/"));
                 }
-                let src = fixtures_dir().join(from);
+                let src = amenbo_scenario::fixtures_dir().join(from);
                 let full = match with.get("dir") {
                     Some(_) => self.folder(with)?.join(self.inside(path)?),
                     None => self.in_session(path)?,
@@ -380,11 +380,4 @@ impl Driver<'_> {
             _ => Err(unmapped(Domain::Repo, op)),
         }
     }
-}
-
-/// Where the scenario fixtures live — `verification/fixtures/`, beside the scenarios that name them.
-/// Resolved from this crate's own location rather than from the CWD, so `verify-all` finds them
-/// wherever it is invoked from.
-fn fixtures_dir() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("fixtures")
 }

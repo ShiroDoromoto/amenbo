@@ -298,7 +298,7 @@ export const es: Translation = {
     "settings.doctorRebind": "Volver a vincular",
     "settings.doctorRepairing": "Trabajando…",
     "settings.doctorRepairDone": "Arreglado.",
-    "settings.doctorFixDone": "Reparado ({blobs} archivo(s) adjunto(s) · {bindings} vínculo(s) de carpeta)",
+    "settings.doctorFixDone": "Reparado ({attachments} fila(s) de adjunto · {blobs} archivo(s) adjunto(s) · {bindings} vínculo(s) de carpeta)",
     "settings.doctorFixNothing": "No hay nada que reparar.",
     "settings.dataOpPreparing": "Preparando…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -753,6 +753,10 @@ export const es: Translation = {
     duplicate_order_key: {
       message: "El proyecto {project} tiene tareas que comparten la misma clave de orden ({order_key}).",
       fix: "Reordena las tareas y se resuelve solo.",
+    },
+    orphan_attachment: {
+      message: "{attachment} cuelga de {target}, y ese registro no existe: la fila sobrevivió a aquello a lo que estaba adjunta y retiene su archivo donde ya nadie llega.",
+      fix: "«Reparar» elimina la fila y suelta su archivo. No hay nada que abrir antes: aquello de lo que colgaba ya no está.",
     },
     stale_managed_block: {
       message: "La guía para la IA (bloque gestionado por Amenbo) en {path} está desfasada (v{version} → v{current}).",

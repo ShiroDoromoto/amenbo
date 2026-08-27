@@ -828,6 +828,24 @@ impl AttachmentTarget {
             _ => None,
         }
     }
+
+    /// The ref space the target is numbered in — what turns `(target_type, target_id)` back into the
+    /// ref a reader knows it by (`AMB-T-12`, `AMB-TC-12`). The pair is polymorphic, so this mapping is
+    /// the one place the column's four values line up with [`crate::idref::RefKind`]; everything that
+    /// has to name a target quotes it through here rather than spelling the four cases again.
+    pub const fn ref_kind(self) -> crate::idref::RefKind {
+        match self {
+            AttachmentTarget::Task => crate::idref::RefKind::Task,
+            AttachmentTarget::Decision => crate::idref::RefKind::Decision,
+            AttachmentTarget::TaskComment => crate::idref::RefKind::TaskComment,
+            AttachmentTarget::DecisionComment => crate::idref::RefKind::DecisionComment,
+        }
+    }
+
+    /// The target rendered as the ref a reader quotes it by.
+    pub fn target_ref(self, id: i64) -> String {
+        crate::idref::render(self.ref_kind(), id)
+    }
 }
 
 /// An attachment on a task or a decision record. Two modes: `blob` (the default — ingested into the store,

@@ -290,7 +290,7 @@ export const nl: Translation = {
     "settings.doctorRebind": "Opnieuw koppelen",
     "settings.doctorRepairing": "Bezig…",
     "settings.doctorRepairDone": "Hersteld.",
-    "settings.doctorFixDone": "Hersteld ({blobs} bijlagebestand(en) · {bindings} mapkoppeling(en))",
+    "settings.doctorFixDone": "Hersteld ({attachments} bijlagerij(en) · {blobs} bijlagebestand(en) · {bindings} mapkoppeling(en))",
     "settings.doctorFixNothing": "Er viel niets te herstellen.",
     "settings.dataOpPreparing": "Bezig met voorbereiden…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -726,6 +726,10 @@ export const nl: Translation = {
     duplicate_order_key: {
       message: "Project {project} heeft taken die dezelfde sorteersleutel delen ({order_key}).",
       fix: "Zet de taken opnieuw op volgorde en het lost zichzelf op.",
+    },
+    orphan_attachment: {
+      message: "{attachment} hangt aan {target}, en dat record bestaat niet — de rij overleefde waar hij aan hing en houdt zijn bestand vast waar niemand nog bij kan.",
+      fix: "“Repareren” verwijdert de rij en laat zijn bestand los. Er valt niets vooraf te openen: waar hij aan hing, is al weg.",
     },
     stale_managed_block: {
       message: "De AI-handleiding (het blok dat Amenbo beheert) in {path} is verouderd (v{version} → v{current}).",

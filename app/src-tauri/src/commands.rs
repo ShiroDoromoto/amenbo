@@ -4065,16 +4065,21 @@ pub fn doctor_report() -> Result<DoctorReportDto, CmdError> {
 }
 
 /// Run the repair from the GUI, calling **the same core cleanup entry points** as the CLI's
-/// `doctor --fix`, in the same order. Every one of them is **non-destructive** (blobs nothing
-/// references; folder rows nobody claims), so the surface may run it without asking for
+/// `doctor --fix`, in the same order. Every one of them is **non-destructive** (attachment rows whose
+/// record is gone; blobs nothing references; folder rows nobody claims), so the surface may run it
+/// without asking for
 /// confirmation. And since nothing it cleans up is referenced by a single row of any live read,
 /// there is no snapshot and no query to refetch — hence no `WriteAck`.
 #[tauri::command]
 pub fn doctor_fix() -> Result<DoctorFixDto, CmdError> {
-    let store = open_store()?;
+    let mut store = open_store()?;
+    // Ahead of the blob sweep, as on the CLI: an orphaned attachment holds its hash in the GC root set,
+    // so its bytes are not collectible until the row is.
+    let swept_attachments = store.sweep_orphan_attachments()?;
     let gc = store.gc_blobs(amenbo_core::blob::GC_MIN_AGE)?;
     let forgotten_bindings = store.forget_orphan_dirs()?;
     Ok(DoctorFixDto {
+        swept_attachments,
         reclaimed_blobs: gc.removed as usize,
         freed_bytes: gc.freed_bytes as usize,
         forgotten_bindings,

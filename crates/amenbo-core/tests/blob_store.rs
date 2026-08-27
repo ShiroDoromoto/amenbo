@@ -37,6 +37,8 @@ fn attach_blob(store: &mut Store, target: i64, hash: &str, then_remove: bool) {
 /// attachment read-model keys on the target id alone).
 const TASK_A: i64 = 1;
 const TASK_B: i64 = 2;
+/// A target id nothing was ever issued under — an attachment on it is an orphan by construction.
+const GONE_TASK: i64 = 9_999;
 
 #[test]
 fn refcount_and_gc_track_live_attachments() {
@@ -191,6 +193,53 @@ fn a_blob_too_young_to_judge_survives_the_delete_and_falls_to_the_sweep() {
     let report = store.gc_blobs(Duration::ZERO).unwrap(); // the sweep, once the age guard is satisfied
     assert_eq!(report.removed, 1);
     assert!(!store.blobs().has(&fresh));
+}
+
+/// An attachment whose target is gone is unreachable from every surface, and the one thing it still does is
+/// keep its hash in the GC root set — so the bytes are not collectible until the row is. `doctor` names it
+/// and `sweep_orphan_attachments` (what `doctor --fix` calls, ahead of the blob sweep) is what lets go of
+/// both.
+#[test]
+fn sweeping_an_orphaned_attachment_releases_the_bytes_it_was_holding() {
+    let paths = temp_paths();
+    let mut store = Store::open_at(paths.clone()).unwrap();
+
+    let project = store.project_add(new_project("PJ")).unwrap().id;
+    let live = store.add_task(new_task("生きているタスク", project)).unwrap().id;
+
+    let kept = store.blobs().ingest_bytes(b"on a live task").unwrap().hash;
+    let stranded = store.blobs().ingest_bytes(b"on a task that is not there").unwrap().hash;
+    attach(&mut store, live, &kept);
+    // A target number nothing was ever issued under — the row a forgotten `sweep_polymorphic` leaves.
+    attach(&mut store, GONE_TASK, &stranded);
+    age_blobs(&paths, &[&kept, &stranded]);
+
+    // The blob sweep alone cannot reach these bytes: the orphan row still holds the hash in the root set.
+    assert_eq!(store.gc_blobs(Duration::ZERO).unwrap().removed, 0);
+    assert!(store.blobs().has(&stranded));
+
+    // doctor names the row — and only that row.
+    let named: Vec<String> = amenbo_core::doctor::report(&store)
+        .unwrap()
+        .issues
+        .iter()
+        .filter(|i| i.kind == amenbo_core::validate::DoctorIssueKind::OrphanAttachment)
+        .map(|i| i.target.clone())
+        .collect();
+    assert_eq!(named.len(), 1, "{named:?}");
+
+    assert_eq!(store.sweep_orphan_attachments().unwrap(), 1);
+    assert!(!store.blobs().has(&stranded), "with the row gone the bytes are reclaimed");
+    assert!(store.blobs().has(&kept), "the live attachment's bytes are untouched");
+    assert_eq!(store.sweep_orphan_attachments().unwrap(), 0, "idempotent — nothing is left to sweep");
+    assert!(
+        amenbo_core::doctor::report(&store)
+            .unwrap()
+            .issues
+            .iter()
+            .all(|i| i.kind != amenbo_core::validate::DoctorIssueKind::OrphanAttachment),
+        "and the report the repair was raised from comes back clean",
+    );
 }
 
 /// Attach `hash` to a task and return the attachment id.

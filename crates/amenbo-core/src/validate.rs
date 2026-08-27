@@ -172,17 +172,43 @@ pub fn doctor(conn: &Connection, reach: Reach) -> StoreEngineResult<DoctorResult
             &[("dep", &id.to_string())],
         ))
     })?);
-    // Orphans — rows whose referent is gone — are not checked for at all. `task_comment.task_id`, both ends
-    // of `task_dependency` and `task.project_id` all carry FK declarations, and a store in an older layout
-    // without those constraints is refused at open: the only stores that open are ones the fold has stripped
-    // of orphans and passed through `foreign_key_check`. Every write after that runs under
-    // `PRAGMA foreign_keys = ON`, so a row with no referent cannot be inserted. Deleting a parent is the
-    // other side of it: every reference that stands for a concept is RESTRICT (`AMB-D-403`), so a delete op
-    // takes its children first — `ops::project::delete` deletes a project's tasks and only then the project —
-    // and the database refuses the parent outright while one remains. So a row that has lost what it hangs
-    // on cannot exist either, whichever end you come at it from. What is left is exactly what this layer can
-    // still find: self-reference (a perfectly valid reference, so no FK stops it) and duplicate order_keys
-    // (nothing to do with FKs).
+    // Orphans — rows whose referent is gone — are checked for in exactly one place, and the reason is the
+    // shape of the reference. `task_comment.task_id`, both ends of `task_dependency` and `task.project_id`
+    // all carry FK declarations, and a store in an older layout without those constraints is refused at
+    // open: the only stores that open are ones the fold has stripped of orphans and passed through
+    // `foreign_key_check`. Every write after that runs under `PRAGMA foreign_keys = ON`, so a row with no
+    // referent cannot be inserted. Deleting a parent is the other side of it: every reference that stands
+    // for a concept is RESTRICT (`AMB-D-403`), so a delete op takes its children first —
+    // `ops::project::delete` deletes a project's tasks and only then the project — and the database refuses
+    // the parent outright while one remains. So a declared reference that has lost what it hangs on cannot
+    // exist, whichever end you come at it from.
+    //
+    // **`attachment` is the one table outside that argument.** Its target is polymorphic
+    // (`target_type` names the table, `target_id` the row), and no `REFERENCES` can branch on a sibling
+    // column — so the database holds nothing here, and what stands in its place is a delete op remembering
+    // to call `ops::sweep_polymorphic`. A forgotten call leaves a row that outlives what it hung off,
+    // unreachable from every surface, with its `blob_hash` still in the GC root set keeping the bytes alive
+    // for good. That is a leak nothing else in the store can report, so it is checked below.
+
+    // Attachments whose target is gone (orphan_attachments holds the statement and the reasoning).
+    // Reported as the ref the target was known by, through the target type's own mapping
+    // (`AttachmentTarget::target_ref`); a `target_type` the model does not know has no ref space to be
+    // quoted in, so it is reported as the raw pair — which is the whole of what is wrong with it.
+    issues.extend(orphan_attachments(conn)?.into_iter().map(|o| {
+        let target = crate::model::AttachmentTarget::parse(&o.target_type)
+            .map_or_else(|| format!("{}:{}", o.target_type, o.target_id), |t| t.target_ref(o.target_id));
+        DoctorIssue::new(
+            DoctorIssueKind::OrphanAttachment,
+            format!("attachment:{}", o.id),
+            &[
+                ("attachment", &crate::idref::render(RefKind::Attachment, o.id)),
+                ("target", &target),
+            ],
+        )
+    }));
+
+    // What is left for the declared references is exactly what this layer can still find: self-reference
+    // (a perfectly valid reference, so no FK stops it) and duplicate order_keys (nothing to do with FKs).
 
     // Broken ordering: a duplicate order_key within one sibling set. The sibling set is the project — a task
     // is placed nowhere else. The inner query narrows to the duplicated order_keys; the outer one takes a
@@ -369,6 +395,81 @@ pub fn dead_ref_issues(conn: &Connection, reach: Reach) -> StoreEngineResult<Vec
     Ok(issues)
 }
 
+/// An attachment row whose target is gone — what [`doctor`] reports and what the repair deletes.
+#[derive(Clone, Debug)]
+pub struct OrphanAttachment {
+    pub id: i64,
+    /// The raw `target_type` as stored. Kept as text rather than parsed: a value outside the model's four
+    /// is itself a reason the row is being reported, and parsing it away would drop that.
+    pub target_type: String,
+    pub target_id: i64,
+}
+
+/// Attachment rows whose target does not exist. **The one orphan check the store needs**, because
+/// `attachment` is the one table whose reference no foreign key can hold: `target_type` names the table and
+/// `target_id` the row, and no `REFERENCES` can branch on a sibling column. What stands in the database's
+/// place is a delete op remembering to call [`crate::ops::sweep_polymorphic`]; a forgotten call leaves a row
+/// that outlives what it hung off, unreachable from every surface, with its `blob_hash` still in the GC root
+/// set keeping the bytes alive for good.
+///
+/// One statement with an arm per `target_type`: each `LEFT JOIN` reaches the table that `target_type` names,
+/// and a row survives the `WHERE` only when **no** arm found its referent. Written this way the arms are
+/// exhaustive by construction — a `target_type` that names no table matches no arm and is reported too,
+/// rather than passing for lack of a check (the column's `CHECK` admits one such value: the empty string
+/// every enum column allows, which is what a row written without its type carries).
+///
+/// **The reach does not narrow this**, and cannot: an orphan's project is read through the row it hung off,
+/// and that row is precisely what is gone. It is device debris belonging to no project — the same reading
+/// `orphan_binding` gets — and nothing about another project escapes with it: a target id is only reported
+/// once it resolves nowhere on the device, so the number names nothing that exists.
+pub fn orphan_attachments(conn: &Connection) -> StoreEngineResult<Vec<OrphanAttachment>> {
+    const AT: col::attachment::Cols = col::attachment::of("a");
+    const OT: col::task::Cols = col::task::of("ot");
+    const OD: col::decision::Cols = col::decision::of("od");
+    const OTC: col::task_comment::Cols = col::task_comment::of("otc");
+    const ODC: col::decision_comment::Cols = col::decision_comment::of("odc");
+
+    let mut sel = Select::new();
+    let (att_id, att_type, att_target) =
+        (sel.col(AT.id), sel.col(AT.target_type), sel.col(AT.target_id));
+    let mut sql = Sql::from(&sel, AT.table);
+    use crate::model::AttachmentTarget as Tgt;
+    // One arm per value of `target_type`, each pairing the type string with the table it names — written
+    // together so an arm cannot come to join a table its `target_type` does not stand for.
+    for (kind, table, on) in [
+        (Tgt::Task, OT.table, same(OT.id, AT.target_id)),
+        (Tgt::Decision, OD.table, same(OD.id, AT.target_id)),
+        (Tgt::TaskComment, OTC.table, same(OTC.id, AT.target_id)),
+        (Tgt::DecisionComment, ODC.table, same(ODC.id, AT.target_id)),
+    ] {
+        sql.left_join(table, Pred::eq(AT.target_type, kind.as_str()).and(on));
+    }
+    sql.push_where(
+        Pred::all([
+            Pred::is_null(OT.id),
+            Pred::is_null(OD.id),
+            Pred::is_null(OTC.id),
+            Pred::is_null(ODC.id),
+        ])
+        .as_ref(),
+    )
+    .order_by([Sort::by(AT.id)]);
+
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+            Ok(OrphanAttachment {
+                id: att_id.get(r)?,
+                target_type: att_type.get(r)?,
+                target_id: att_target.get(r)?,
+            })
+        })
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<OrphanAttachment>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(rows)
+}
+
 /// Every id a table holds, device-wide — the set a ref is resolved against. Deletion is physical, so
 /// membership *is* existence: there is no tombstone to tell "deleted" from "never issued", and the two are
 /// not worth telling apart — a reader sent to either comes back with nothing.
@@ -552,6 +653,136 @@ mod tests {
 
         assert!(r.issues.is_empty(), "{:?}", r.issues);
         assert!(r.ok);
+    }
+
+    // ─────────────────────── orphaned attachments ───────────────────────
+
+    /// A store holding one attachment on every target type, in both states: one whose target is there and
+    /// one whose target never was. Live targets are task 1 (in project 7), decision 5 (in project 8),
+    /// task_comment 30 and decision_comment 40.
+    fn attached() -> StoreEngine {
+        let e = StoreEngine::open_in_memory_unchecked().unwrap();
+        for (pid, name) in [(7, "Alpha"), (8, "Beta")] {
+            e.put_record("project", pid, &[("name", text(name)), ("order_key", text("a"))]).unwrap();
+        }
+        e.put_record(
+            "task",
+            1,
+            &[
+                ("title", text("t")),
+                ("status", text("todo")),
+                ("project_id", Value::Integer(7)),
+                ("order_key", text("m")),
+            ],
+        )
+        .unwrap();
+        e.put_record(
+            "decision",
+            5,
+            &[("project_id", Value::Integer(8)), ("title", text("d")), ("status", text("proposed"))],
+        )
+        .unwrap();
+        e.put_record("task_comment", 30, &[("task_id", Value::Integer(1)), ("text", text("c"))]).unwrap();
+        e.put_record(
+            "decision_comment",
+            40,
+            &[("decision_id", Value::Integer(5)), ("text", text("c"))],
+        )
+        .unwrap();
+        // Even ids hang off what is there; odd ids off a number nothing was ever issued under.
+        for (id, target_type, target_id) in [
+            (100, "task", 1),
+            (101, "task", 2),
+            (102, "decision", 5),
+            (103, "decision", 6),
+            (104, "task_comment", 30),
+            (105, "task_comment", 31),
+            (106, "decision_comment", 40),
+            (107, "decision_comment", 41),
+        ] {
+            e.put_record(
+                "attachment",
+                id,
+                &[
+                    ("target_type", text(target_type)),
+                    ("target_id", Value::Integer(target_id)),
+                    ("kind", text("url")),
+                    ("url", text("https://example.invalid/f")),
+                    ("order_key", text("m")),
+                ],
+            )
+            .unwrap();
+        }
+        e
+    }
+
+    /// Every target type is checked against the table its name stands for — the reference no foreign key
+    /// holds, so the one that can dangle. An attachment on a live target is not raised, whichever of the
+    /// four it hangs off.
+    #[test]
+    fn an_attachment_whose_target_is_gone_is_raised_on_every_target_type() {
+        let r = doctor(attached().conn(), Reach::All).unwrap();
+
+        let raised: Vec<&DoctorIssue> =
+            r.issues.iter().filter(|i| i.kind == DoctorIssueKind::OrphanAttachment).collect();
+        assert_eq!(
+            raised.iter().map(|i| i.target.as_str()).collect::<Vec<_>>(),
+            vec!["attachment:101", "attachment:103", "attachment:105", "attachment:107"],
+            "one per orphan and nothing else — an arm must not report the rows of a type it does not stand for"
+        );
+        // The sentence names both ends: which attachment, and the ref of what it hung off.
+        assert_eq!(
+            raised.iter().filter_map(|i| i.params.get("target").map(String::as_str)).collect::<Vec<_>>(),
+            vec!["AMB-T-2", "AMB-D-6", "AMB-TC-31", "AMB-DC-41"],
+            "each rendered in the ref space its target type is numbered in",
+        );
+        assert_eq!(raised[0].params.get("attachment").map(String::as_str), Some("AMB-ATT-101"));
+        assert!(!r.ok, "a row that outlived its referent is a broken store, not a misaligned environment");
+    }
+
+    /// The reach does not narrow it. An orphan's project is read through the row it hung off, and that row
+    /// is what is gone — so it belongs to no project, and an AI is shown the same debris a human is.
+    #[test]
+    fn a_closed_reach_is_shown_every_orphaned_attachment() {
+        let r = doctor(attached().conn(), Reach::binding(7)).unwrap();
+
+        assert_eq!(
+            r.issues
+                .iter()
+                .filter(|i| i.kind == DoctorIssueKind::OrphanAttachment)
+                .map(|i| i.target.as_str())
+                .collect::<Vec<_>>(),
+            vec!["attachment:101", "attachment:103", "attachment:105", "attachment:107"],
+            "including the ones whose target hung off the other project — the target is gone, so no \
+             project claims them",
+        );
+    }
+
+    /// A `target_type` that names no table matches no arm, so it is reported rather than passing for lack
+    /// of a check. The column's `CHECK` admits one such value — the empty string every enum column allows,
+    /// which is what a row written without its type carries — and it has no ref space to be quoted in, so
+    /// the raw pair is what is shown.
+    #[test]
+    fn a_target_type_nothing_stands_for_is_reported_as_the_raw_pair() {
+        let e = StoreEngine::open_in_memory_unchecked().unwrap();
+        e.put_record(
+            "attachment",
+            100,
+            &[
+                ("target_id", Value::Integer(3)),
+                ("kind", text("url")),
+                ("url", text("https://example.invalid/f")),
+                ("order_key", text("m")),
+            ],
+        )
+        .unwrap();
+
+        let r = doctor(e.conn(), Reach::All).unwrap();
+
+        let raised: Vec<&DoctorIssue> =
+            r.issues.iter().filter(|i| i.kind == DoctorIssueKind::OrphanAttachment).collect();
+        assert_eq!(raised.len(), 1);
+        assert_eq!(raised[0].params.get("target").map(String::as_str), Some(":3"));
     }
 
     // ─────────────────────── a start day past the deadline ───────────────────────

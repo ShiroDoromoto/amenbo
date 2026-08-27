@@ -500,12 +500,16 @@ function DoctorSetting() {
     setBusy(true); setMsg(null); setError(null);
     try {
       const r = await runDoctorFix();
-      const touched = r.reclaimedBlobs + r.forgottenBindings;
+      const touched = r.sweptAttachments + r.reclaimedBlobs + r.forgottenBindings;
       setMsg({
         done: true,
         text: touched === 0
           ? t("settings.doctorFixNothing")
-          : tf("settings.doctorFixDone", { blobs: r.reclaimedBlobs, bindings: r.forgottenBindings }),
+          : tf("settings.doctorFixDone", {
+              attachments: r.sweptAttachments,
+              blobs: r.reclaimedBlobs,
+              bindings: r.forgottenBindings,
+            }),
       });
       setReport(await fetchDoctorReport()); // Check again to see what was fixed; anything the sweeps cannot fix stays.
     } catch (e) {

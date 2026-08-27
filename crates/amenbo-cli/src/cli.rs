@@ -228,7 +228,7 @@ pub enum Command {
     },
     /// Data integrity check (orphan references, broken ordering, key-ledger tampering, etc.)
     Doctor {
-        /// repair fixable problems (reclaim unreferenced attachment files; forget folder bindings no live project claims) - all non-destructive
+        /// repair fixable problems (sweep attachment rows whose record is gone, reclaim unreferenced attachment files, forget folder bindings no live project claims) - all non-destructive
         #[arg(long)]
         fix: bool,
     },

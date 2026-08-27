@@ -1348,6 +1348,15 @@ fn run(cli: Cli, flags: &Flags) -> Result<i32, CliError> {
 
                 // Every cleanup below is non-destructive, so `--fix` asks for no confirmation.
 
+                // Sweep attachment rows whose target is gone. **Before the blob sweep**: an orphan still
+                // holds its `blob_hash` in the GC root set, so the bytes are not collectible until the row
+                // is, and running these the other way round would leave the file for the next `--fix`.
+                match store.sweep_orphan_attachments() {
+                    Ok(0) => human(flags, "doctor --fix: No cleanup targets (orphaned attachments)."),
+                    Ok(n) => human(flags, format!("\u{2713} Swept {n} orphaned attachment row(s).")),
+                    Err(e) => human(flags, format!("\u{26a0} Could not sweep orphaned attachments: {e}")),
+                }
+
                 // Sweep blobs nothing references. Each delete op already reclaims the blobs it orphaned, so
                 // what lands here is only what slipped through: blobs still too young to collect at the time
                 // (`GC_MIN_AGE`), and bytes left behind by an interrupted delete or restore. The full scan

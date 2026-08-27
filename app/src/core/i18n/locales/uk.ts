@@ -300,7 +300,7 @@ export const uk: Translation = {
     "settings.doctorRebind": "Прив'язати заново",
     "settings.doctorRepairing": "Працюю…",
     "settings.doctorRepairDone": "Полагоджено.",
-    "settings.doctorFixDone": "Полагоджено (файлів вкладень: {blobs} · прив'язок папок: {bindings})",
+    "settings.doctorFixDone": "Полагоджено (рядків вкладень: {attachments} · файлів вкладень: {blobs} · прив'язок папок: {bindings})",
     "settings.doctorFixNothing": "Лагодити не було чого.",
     "settings.dataOpPreparing": "Підготовка…",
     "settings.dataOpProgress": "[{done}/{total}] {phase}",
@@ -761,6 +761,10 @@ export const uk: Translation = {
     duplicate_order_key: {
       message: "У проєкті {project} є завдання з однаковим ключем упорядкування ({order_key}).",
       fix: "Переставте завдання — і це владнається саме.",
+    },
+    orphan_attachment: {
+      message: "{attachment} висить на {target}, а такого запису немає: рядок пережив те, до чого був долучений, і тримає свій файл там, куди вже ніхто не дістанеться.",
+      fix: "«Полагодити» вилучає рядок і відпускає його файл. Відкривати наперед нічого: того, до чого він був долучений, уже немає.",
     },
     stale_managed_block: {
       message: "Посібник для ШІ (блок, яким керує Amenbo) у {path} застарів (v{version} → v{current}).",

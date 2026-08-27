@@ -31,9 +31,13 @@ const hoisted = vi.hoisted(() => ({
   // Spelled out rather than built by `aFile`: `vi.hoisted` runs before this module's own bindings
   // exist. Every test replaces it in `beforeEach` anyway.
   file: { truncated: false, bom: false, lineEnding: "lf", clean: true } as FolderFileDto,
-  /** The host's side of the watch: what it answers with, and the way to push a later list. */
-  tell: null as null | ((changes: FolderChangesDto) => void),
+  /** Everyone listening for the host's word. The real event reaches all of them and each takes
+   *  what names its own folder, so a stand-in that kept only the last would answer for one section
+   *  and drop the news of every other. */
+  takers: [] as ((changes: FolderChangesDto) => void)[],
   watching: { root: "", changed: [] as FolderChangedDto[], partial: false, gone: false } as FolderChangesDto,
+  /** What one named folder answers with, where a test gives several folders different news. */
+  perRoot: {} as Record<string, FolderChangesDto>,
   /** What the host answers when asked what to open a file with — empty where the OS drew it. */
   apps: [] as FolderAppDto[],
   /** The folders the project is bound to. Empty is a project nobody has bound one to yet. */
@@ -56,12 +60,15 @@ vi.mock("@tauri-apps/api/webview", () => ({
 vi.mock("./folder", () => ({
   folderWatch: async (projectId: number, root: string): Promise<FolderChangesDto> => {
     hoisted.asked.push(`watch:${projectId}:${root}`);
-    return hoisted.watching;
+    return hoisted.perRoot[root] ?? hoisted.watching;
   },
   folderUnwatch: async (root: string) => { hoisted.asked.push(`unwatch:${root}`); },
   onFolderChanged: async (take: (changes: FolderChangesDto) => void) => {
-    hoisted.tell = take;
-    return () => { hoisted.tell = null; hoisted.asked.push("unlisten"); };
+    hoisted.takers.push(take);
+    return () => {
+      hoisted.takers = hoisted.takers.filter((one) => one !== take);
+      hoisted.asked.push("unlisten");
+    };
   },
   folderEntries: async (_projectId: number, root: string, path: string[]): Promise<FolderEntryDto[]> => {
     hoisted.asked.push(`entries:${root}:${path.join("/")}`);
@@ -86,9 +93,14 @@ vi.mock("./folder", () => ({
   },
 }));
 
-// The folder the project is bound to, answered without a store.
+// The folders the project is bound to, answered without a store. `live` is derived the way the real
+// read derives it, so a test can bind a folder that is not there.
 vi.mock("../core/boundFolders", () => ({
-  useBoundFolders: () => ({ all: hoisted.bound, live: hoisted.bound, answered: true }),
+  useBoundFolders: () => ({
+    all: hoisted.bound,
+    live: hoisted.bound.filter((one) => one.exists),
+    answered: true,
+  }),
 }));
 
 // What a reference resolves to. The store is not here, and what is under test is what the panel
@@ -105,6 +117,11 @@ import { formatNumber, t, tf } from "../core/i18n";
 
 let container: HTMLDivElement;
 let root: Root;
+
+/** The host's word that a folder moved, said the way it is said: once, to everyone listening. */
+function tell(changes: FolderChangesDto) {
+  for (const take of [...hoisted.takers]) take(changes);
+}
 
 async function settle() {
   await act(async () => { await new Promise((r) => setTimeout(r, 0)); });
@@ -150,7 +167,8 @@ beforeEach(() => {
   hoisted.entries = {};
   hoisted.file = aFile();
   hoisted.apps = [];
-  hoisted.tell = null;
+  hoisted.takers = [];
+  hoisted.perRoot = {};
   hoisted.watching = {
     root: ROOT,
     changed: [{ path: ["notes", "a.md"], modified: new Date().toISOString() }],
@@ -197,7 +215,7 @@ describe("the file face", () => {
     await draw();
     expect(container.textContent).toContain("a.md");
     await act(async () => {
-      hoisted.tell?.({
+      tell({
         root: ROOT,
         changed: [{ path: ["src", "main.rs"], modified: new Date().toISOString() }],
         partial: false,
@@ -222,7 +240,7 @@ describe("the file face", () => {
     await draw();
     expect(container.textContent).toContain("a.md");
     await act(async () => {
-      hoisted.tell?.({
+      tell({
         root: "/work/other",
         changed: [{ path: ["src", "main.rs"], modified: new Date().toISOString() }],
         partial: false,
@@ -565,5 +583,110 @@ describe("the file face", () => {
     expect(ref).toBeDefined();
     await click(ref);
     expect(left).toEqual([1]);
+  });
+});
+
+describe("a project bound to several folders", () => {
+  const OTHER = "/work/plugins";
+  const both = () => { hoisted.bound = [{ path: ROOT, exists: true }, { path: OTHER, exists: true }]; };
+
+  it("watches every one of them, not the first", async () => {
+    both();
+    await draw();
+    // The first was never chosen — it was whichever sorted first — and the rest of the project was
+    // invisible because of it (`AMB-D-778`).
+    expect(hoisted.asked).toContain(`watch:1:${ROOT}`);
+    expect(hoisted.asked).toContain(`watch:1:${OTHER}`);
+  });
+
+  it("names each one, and names none where there is only one to name", async () => {
+    both();
+    await draw();
+    const headings = [...container.querySelectorAll(".files__foldername")];
+    expect(headings.map((one) => one.textContent)).toEqual(["plugins", "repo"]);
+
+    hoisted.bound = [{ path: ROOT, exists: true }];
+    await draw();
+    // One folder is drawn the way it always was: a heading over the only thing on the screen names
+    // nothing the reader could confuse it with.
+    expect(container.querySelectorAll(".files__foldername")).toHaveLength(0);
+  });
+
+  it("gives each folder its own news", async () => {
+    both();
+    hoisted.perRoot = {
+      [ROOT]: { root: ROOT, changed: [{ path: ["here.md"], modified: new Date().toISOString() }], partial: false, gone: false },
+      [OTHER]: { root: OTHER, changed: [{ path: ["there.md"], modified: new Date().toISOString() }], partial: false, gone: false },
+    };
+    await draw();
+    expect(button("here.md")).toBeDefined();
+    expect(button("there.md")).toBeDefined();
+  });
+
+  it("reads a file out of the folder its row was drawn in", async () => {
+    both();
+    hoisted.perRoot = {
+      [ROOT]: { root: ROOT, changed: [], partial: false, gone: false },
+      [OTHER]: { root: OTHER, changed: [{ path: ["there.md"], modified: new Date().toISOString() }], partial: false, gone: false },
+    };
+    hoisted.file = aFile({ text: "hello" });
+    await draw();
+    await click(button("there.md"));
+    await settle();
+    // The same path names a different file in each folder, so which folder the row was in has to
+    // travel with it.
+    expect(hoisted.asked).toContain(`read:${OTHER}:there.md`);
+  });
+
+  it("keeps a folder that has gone, and says that is what happened", async () => {
+    hoisted.bound = [{ path: ROOT, exists: true }, { path: OTHER, exists: false }];
+    await draw();
+    // Dropped from the list it would look like a binding nobody ever made, and a reader would have
+    // no way to tell a folder that moved from one they unbound themselves.
+    expect(container.textContent).toContain(t("files.folderGone"));
+    expect(hoisted.asked).not.toContain(`watch:1:${OTHER}`);
+  });
+
+  /** Every section draws a row for its own root, and the trees under two of them can hold the same
+   *  names. A landing that said only the path would light a row up in both. */
+  it("marks a drop's landing in the section the pointer is in, and in no other", async () => {
+    both();
+    hoisted.entries[""] = [{ name: "src", isDir: true, ignored: false }];
+    await draw();
+    for (const head of [...container.querySelectorAll("button")].filter(
+      (one) => one.textContent === t("files.tree"),
+    )) {
+      await click(head);
+      await settle();
+    }
+    const trees = [...container.querySelectorAll(".files__folder")];
+    expect(trees).toHaveLength(2);
+
+    let step = 0;
+    const over = (el: Element | null | undefined) => act(async () => {
+      (document as unknown as { elementFromPoint: () => Element | null }).elementFromPoint =
+        () => el ?? null;
+      step += 1;
+      hoisted.dragging?.({ payload: { type: "over", position: { x: step, y: 1 } } });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    const srcOf = (folder: Element) =>
+      [...folder.querySelectorAll("button")].find((one) => one.textContent === "src");
+    await over(srcOf(trees[1]!));
+    // The row lit up is in the second folder, and the first folder's `src` is left alone.
+    expect(trees[1]!.querySelectorAll(".files__into")).toHaveLength(1);
+    expect(trees[0]!.querySelectorAll(".files__into")).toHaveLength(0);
+  });
+
+  it("says so when a folder goes while it is being looked at", async () => {
+    both();
+    await draw();
+    expect(container.textContent).not.toContain(t("files.folderGone"));
+    await act(async () => {
+      tell({ root: OTHER, changed: [], partial: false, gone: true });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(container.textContent).toContain(t("files.folderGone"));
   });
 });

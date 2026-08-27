@@ -563,6 +563,7 @@ export const ru: Translation = {
     "files.nothingChanged": "Пока ничего не изменилось.",
     "files.partial": "Часть этой папки не отслеживается.",
     "files.noFolder": "У этого проекта пока нет папки.",
+    "files.folderGone": "Этой папки больше нет.",
     "files.back": "Назад к списку",
     "files.openWith": "Открыть в обычном приложении",
     "files.chooseApp": "Открыть в выбранном приложении",

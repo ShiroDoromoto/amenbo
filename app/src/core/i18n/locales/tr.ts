@@ -534,6 +534,7 @@ export const tr: Translation = {
     "files.nothingChanged": "Henüz hiçbir şey değişmedi.",
     "files.partial": "Bu klasörün bir kısmı izlenmiyor.",
     "files.noFolder": "Bu projenin henüz bir klasörü yok.",
+    "files.folderGone": "Bu klasör artık yok.",
     "files.back": "Listeye dön",
     "files.openWith": "Her zamanki uygulamayla aç",
     "files.chooseApp": "Seçtiğim uygulamayla aç",

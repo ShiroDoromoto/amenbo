@@ -5,7 +5,7 @@
 // Getting this wrong shows up as a click that opens a file the face cannot answer for — the thing
 // `AMB-D-747` is about.
 import { describe, expect, it } from "vitest";
-import { fileUnder } from "./fileUnder";
+import { fileUnder, fileUnderAny } from "./fileUnder";
 
 const ROOT = "/work/repo";
 
@@ -35,5 +35,41 @@ describe("a path drawn in a pane", () => {
     // The folder itself is not a file, and neither is a sibling that merely starts the same way.
     expect(fileUnder(ROOT, null, "/work/repo")).toBeNull();
     expect(fileUnder(ROOT, null, "/work/repo-2/a.md")).toBeNull();
+  });
+});
+
+describe("a path drawn in a pane, against every folder the project is bound to", () => {
+  const ROOTS = ["/work/repo", "/work/notes"];
+
+  it("lands in whichever of them it is inside", () => {
+    expect(fileUnderAny(ROOTS, null, "/work/notes/a.md"))
+      .toEqual({ root: "/work/notes", path: ["a.md"] });
+    expect(fileUnderAny(ROOTS, null, "/work/repo/src/main.rs"))
+      .toEqual({ root: "/work/repo", path: ["src", "main.rs"] });
+  });
+
+  /** A bound folder can be inside another. Both accept the path, and the one with a row to draw for
+   *  it is the inner one. */
+  it("takes the innermost folder that accepts it", () => {
+    const nested = ["/work/repo", "/work/repo/app"];
+    expect(fileUnderAny(nested, null, "/work/repo/app/src/main.rs"))
+      .toEqual({ root: "/work/repo/app", path: ["src", "main.rs"] });
+  });
+
+  it("is read against the folder the pane was in, and lands where that puts it", () => {
+    expect(fileUnderAny(ROOTS, "/work/notes", "a.md"))
+      .toEqual({ root: "/work/notes", path: ["a.md"] });
+  });
+
+  /** With no folder to read it against, a relative path names as many files as there are folders,
+   *  and choosing one of them would be the face guessing. */
+  it("opens nothing for a relative path with no folder to read it against", () => {
+    expect(fileUnderAny(ROOTS, null, "a.md")).toBeNull();
+    expect(fileUnderAny(ROOTS, null, "./a.md")).toBeNull();
+  });
+
+  it("opens nothing where it lands outside all of them", () => {
+    expect(fileUnderAny(ROOTS, "/work/repo", "../../etc/passwd")).toBeNull();
+    expect(fileUnderAny([], "/work/repo", "/work/repo/a.md")).toBeNull();
   });
 });

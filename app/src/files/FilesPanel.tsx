@@ -48,7 +48,7 @@ import { Markdown } from "../components/Markdown";
 import { useBoundFolders } from "../core/boundFolders";
 import { watchHostDrop } from "../core/hostDrop";
 import { fileUrl } from "../core/fileUrl";
-import { errText, formatNumber, t, tf } from "../core/i18n";
+import { errText, formatNumber, isErr, t, tf } from "../core/i18n";
 import { pushNotice } from "../core/notice";
 import { RefNavProvider, useRefNav, type RefNav } from "../core/refNav";
 import {
@@ -1116,7 +1116,11 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, onTrash, onKe
   aside: ReactNode;
 }) {
   const [file, setFile] = useState<FolderFileDto | null>(null);
-  const [failed, setFailed] = useState(false);
+  // Why the file did not open, in the reader's own language. A link is not a broken file: the host
+  // refuses one on purpose (`AMB-D-782`), and a person sharing a `CLAUDE.md` between projects that
+  // way is the first to meet it — so that refusal is drawn in its own words and everything else
+  // keeps the one sentence there is nothing finer to say than.
+  const [failed, setFailed] = useState<string | null>(null);
   // The encoding the reader named, once they have. Nothing until then: the host's guess is right
   // for 644 files in 645, and asking for one up front would be putting the question to everybody
   // to catch the one (`AMB-D-773`).
@@ -1157,7 +1161,7 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, onTrash, onKe
   useEffect(() => {
     let alive = true;
     setFile(null);
-    setFailed(false);
+    setFailed(null);
     setAsText(false);
     setEdited(false);
     setRefused(null);
@@ -1169,7 +1173,9 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, onTrash, onKe
         // Both kinds in one file is the only answer this side cannot act on by itself.
         setNewline(one.lineEnding === "mixed" ? null : one.lineEnding);
       })
-      .catch(() => { if (alive) setFailed(true); });
+      .catch((e) => {
+        if (alive) setFailed(isErr(e, "folder_link") ? errText(e) : t("files.unreadable"));
+      });
     return () => { alive = false; };
   }, [projectId, root, path.join("/"), asked]);
 
@@ -1270,7 +1276,7 @@ function FileReader({ projectId, root, path, onBack, onOpenLedger, onTrash, onKe
       </div>
       {aside}
       <div className="files__body">
-        {failed && <p className="files__none">{t("files.unreadable")}</p>}
+        {failed !== null && <p className="files__none">{failed}</p>}
         {/* The picture is fetched rather than carried: `folderRead` says only that there is one
             and what type it is, and the door that hands out a file by its path is addressed with
             the same project, folder and path this reader was opened on (`AMB-D-783`). It draws

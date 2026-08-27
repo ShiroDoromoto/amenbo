@@ -79,6 +79,9 @@ const hoisted = vi.hoisted(() => ({
   /** What the next save is refused with. Its own field: a name and a save are refused for different
    *  reasons, and a test about one must not arm the other. */
   refuseSave: null as unknown,
+  /** What the next read is refused with. Its own field for the same reason a save has one: a read
+   *  and a save are turned away for different reasons. */
+  refuseRead: null as unknown,
 }));
 
 // The editor is loaded on demand and lays itself out by measuring, which jsdom cannot do — so what
@@ -140,6 +143,7 @@ vi.mock("./folder", () => ({
     encoding?: string,
   ): Promise<FolderFileDto> => {
     hoisted.asked.push(`read:${root}:${path.join("/")}${encoding === undefined ? "" : `:${encoding}`}`);
+    if (hoisted.refuseRead !== null) throw hoisted.refuseRead;
     return hoisted.file;
   },
   folderEncodings: async (): Promise<string[]> => {
@@ -349,6 +353,7 @@ beforeEach(() => {
   hoisted.typing = null;
   hoisted.saved = [];
   hoisted.refuseSave = null;
+  hoisted.refuseRead = null;
   // One file in the folder, so a test that only wants a row to press has one without saying so.
   hoisted.entries = { "": [{ name: "a.md", isDir: false, ignored: false }] };
   hoisted.file = aFile();
@@ -1138,6 +1143,41 @@ describe("the file face", () => {
     await settle();
     // The name says Markdown and the bytes say otherwise; the bytes win (`crate::folder`).
     expect(container.textContent).toContain(t("files.notText"));
+  });
+
+  /** A link is refused on purpose (`AMB-D-782`), and answering it with the sentence every other
+   *  refusal gets told the person most likely to meet it — somebody sharing one `CLAUDE.md` between
+   *  projects — that their file was broken. */
+  it("says a name it would not follow is a link, rather than a file it could not read", async () => {
+    const link: CmdError = {
+      code: "folder_link",
+      message_en: "this name is a link, and a link is not followed here",
+      fields: null,
+    };
+    hoisted.refuseRead = link;
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+    expect(container.textContent).toContain(errLabel(link));
+    expect(container.textContent).not.toContain(t("files.unreadable"));
+    // The sentence is the reader's, not the English one that came with the refusal.
+    expect(container.textContent).not.toContain(link.message_en);
+  });
+
+  /** Everything else keeps the one sentence, because everything else is what the host had nothing
+   *  finer to say about — and core's own English would name this project's folders at a reader who
+   *  asked about a file. */
+  it("says only that a file could not be read where that is all the host said", async () => {
+    hoisted.refuseRead = {
+      code: "not_found",
+      message_en: "no such file in this project's folder",
+      fields: null,
+    };
+    await drawOpen();
+    await click(button("a.md"));
+    await settle();
+    expect(container.textContent).toContain(t("files.unreadable"));
+    expect(container.textContent).not.toContain("no such file");
   });
 
   it("points a picture at the door that hands out a file, not at bytes of its own", async () => {

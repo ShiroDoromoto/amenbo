@@ -749,6 +749,10 @@ export const id: Translation = {
     wake_not_registered: "Perintah yang didaftarkan memerlukan nama dan baris perintah.",
     window_failed: "Jendela itu tidak dapat dibuka: {reason}",
     talk_blank: "Jendela itu terbuka tetapi tidak menggambar apa pun, jadi terminal dikembalikan ke jendela ini.",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "Ini adalah tautan ke berkas lain, dan Amenbo tidak mengikutinya — yang ditunjuknya bisa berada di luar folder proyek ini.",
     folder_taken: "{name} sudah ada.",
     folder_name: "Mesin ini tidak menerima {name} sebagai nama.",
     folder_make: "{name} tidak bisa dibuat: {reason}",

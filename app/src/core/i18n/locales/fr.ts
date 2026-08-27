@@ -775,6 +775,10 @@ export const fr: Translation = {
     wake_not_registered: "Une commande enregistrée a besoin d'un nom et d'une ligne de commande.",
     window_failed: "Cette fenêtre n'a pas pu être ouverte : {reason}",
     talk_blank: "Cette fenêtre s'est ouverte sans rien afficher : le terminal a été remis dans celle-ci.",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "Ceci est un lien vers un autre fichier, et Amenbo ne le suit pas : ce qu'il désigne peut se trouver hors des dossiers de ce projet.",
     folder_taken: "{name} existe déjà.",
     folder_name: "Cette machine n’accepte pas {name} comme nom.",
     folder_make: "{name} n’a pas pu être créé : {reason}",

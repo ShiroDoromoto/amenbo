@@ -775,6 +775,10 @@ export const it: Translation = {
     wake_not_registered: "Un comando registrato ha bisogno di un nome e di una riga di comando.",
     window_failed: "Non è stato possibile aprire quella finestra: {reason}",
     talk_blank: "Quella finestra si è aperta senza disegnare nulla, quindi il terminale è tornato in questa.",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "Questo è un collegamento a un altro file e Amenbo non lo segue: ciò a cui punta può stare fuori dalle cartelle di questo progetto.",
     folder_taken: "{name} c’è già.",
     folder_name: "Questa macchina non accetta {name} come nome.",
     folder_make: "Non è stato possibile creare {name}: {reason}",

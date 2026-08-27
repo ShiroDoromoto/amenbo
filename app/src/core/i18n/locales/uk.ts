@@ -784,6 +784,10 @@ export const uk: Translation = {
     wake_not_registered: "Для зареєстрованої команди потрібні і назва, і командний рядок.",
     window_failed: "Не вдалося відкрити це вікно: {reason}",
     talk_blank: "Те вікно відкрилося, але нічого в ньому так і не з’явилося, тому термінал повернувся в це вікно.",
+    // What the file panel answers a read with where the name is a link (`crate::folder`). It is not
+    // the "not there" the other rules are refused with: the file is whole and the refusal is meant
+    // (`AMB-D-782`), and somebody sharing one `CLAUDE.md` between projects meets it first.
+    folder_link: "Це посилання на інший файл, і Amenbo за ним не переходить: те, на що воно вказує, може бути поза теками цього проєкту.",
     folder_taken: "{name} уже є.",
     folder_name: "Ця машина не приймає {name} як ім’я.",
     folder_make: "Не вдалося створити {name}: {reason}",

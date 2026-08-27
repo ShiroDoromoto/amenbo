@@ -207,8 +207,11 @@ export const CORE_ERROR_CODES = [
  * of its own (`folder_make`, `folder_rename`); and the two it answers a save with
  * (`crate::folder_save`) — a character the file's encoding has no room for
  * (`folder_unwritable_character` — a `✓` typed into a Shift_JIS file, named rather than mangled into
- * it) and everything else the filesystem said (`folder_not_saved`). */
+ * it) and everything else the filesystem said (`folder_not_saved`); and the one a read is turned away
+ * with when the name is a link (`folder_link` — `AMB-D-782` refuses it on purpose, and answering that
+ * with the same "not there" every other rule uses told the reader their file was broken). */
 export const TAURI_ERROR_CODES = [
+  "folder_link",
   "folder_make",
   "folder_name",
   "folder_not_saved",

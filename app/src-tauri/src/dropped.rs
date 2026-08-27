@@ -80,23 +80,24 @@ async fn held(app: tauri::AppHandle) -> (bool, bool) {
     use std::sync::mpsc::sync_channel;
     use std::time::Duration;
 
-    use tauri::Manager;
-
     /// Long enough for a main loop that is drawing, short enough that a drop is still answered.
     const GRACE: Duration = Duration::from_millis(200);
 
     let (tx, rx) = sync_channel::<(bool, bool)>(1);
     let posted = app.run_on_main_thread(move || {
         use gtk::gdk::{Display, Keymap, ModifierType};
-        use gtk::prelude::*;
 
-        let state = Display::default()
+        // The keymap answers in raw bits rather than in the flags they stand for, so they are named
+        // here: `from_bits_truncate` because a keymap may hold bits this version of gdk has no name
+        // for, and one of those is not a reason to answer nothing about the two that matter.
+        let bits = Display::default()
             .and_then(|display| Keymap::for_display(&display))
             .map(|keymap| keymap.modifier_state())
-            .unwrap_or_else(ModifierType::empty);
+            .unwrap_or(0);
+        let held = ModifierType::from_bits_truncate(bits);
         let _ = tx.send((
-            state.contains(ModifierType::CONTROL_MASK),
-            state.contains(ModifierType::SHIFT_MASK),
+            held.contains(ModifierType::CONTROL_MASK),
+            held.contains(ModifierType::SHIFT_MASK),
         ));
     });
     if posted.is_err() {

@@ -853,8 +853,8 @@ impl Store {
     }
 
     /// Update a dimension's name, notes, whether its values are ordered, its role, whether it
-    /// belongs on the task card, whether it refuses to be left empty, and its slug (one operation = one
-    /// transaction).
+    /// belongs on the task card, whether it refuses to be left empty, which entity it classifies, and
+    /// its slug (one operation = one transaction).
     #[allow(clippy::too_many_arguments)]
     pub fn dimension_update(
         &mut self,
@@ -865,11 +865,12 @@ impl Store {
         role: Option<crate::model::DimensionRole>,
         show_on_card: Option<bool>,
         required: Option<bool>,
+        applies_to: Option<crate::model::DimensionAppliesTo>,
         slug: Option<&str>,
     ) -> Result<crate::model::Dimension> {
         self.write_one(&[WriteTarget::Dimension(id)], |tx| {
             crate::ops::dimension::update(
-                tx, id, name, notes, ordered, role, show_on_card, required, slug,
+                tx, id, name, notes, ordered, role, show_on_card, required, applies_to, slug,
             )
         })
     }

@@ -30,7 +30,7 @@ use crate::model::{
     ActorKind, Attachment, AttachmentKind, AttachmentTarget, Database,
     Decision, DecisionComment, DecisionDimensionValue, DecisionEdge, DecisionEdgeKind,
     DecisionStatus, DecisionTaskLink,
-    Dimension, DimensionCardinality,
+    Dimension, DimensionAppliesTo, DimensionCardinality,
     DimensionRole, DimensionValue, PluginConfigValue, PluginEnabledProject, PluginSecret, Priority,
     Project, Subtype, Task, TaskComment, TaskCommit, TaskDependency,
     TaskDimensionValue, TaskStatus, View,
@@ -288,6 +288,7 @@ pub(super) fn dimension_row(r: &Row) -> rusqlite::Result<Dimension> {
         role: enum_req(r, C.role, DimensionRole::parse)?,
         show_on_card: get(r, C.show_on_card)?,
         required: get(r, C.required)?,
+        applies_to: enum_req(r, C.applies_to, DimensionAppliesTo::parse)?,
         // A store an older binary left behind reads null here (no slug), which is faithful — the same
         // reading `project_row` gives its own.
         slug: get(r, C.slug)?,
@@ -583,6 +584,9 @@ mod tests {
                 // failed to round-trip would read as the value this field is meant to be testing.
                 show_on_card: true,
                 required: true,
+                // Set away from `Both`, its default, for the reason the two flags above are set away
+                // from theirs.
+                applies_to: DimensionAppliesTo::Decision,
                 // The readable key — exercises the `slug` column, as `project`'s own does above.
                 slug: Some("phase".to_string()),
                 order_key: "a0".to_string(),

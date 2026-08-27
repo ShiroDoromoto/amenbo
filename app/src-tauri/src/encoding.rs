@@ -32,16 +32,19 @@ use encoding_rs::{Encoding, EncoderResult};
 /// refused to show them would leave a reader with nothing where a readable file is; one that offered
 /// to save them would be promising a round trip nobody has measured.
 ///
-/// **UTF-16 is read and not written**, though a file in it names itself by its mark and reads
-/// perfectly. `encoding_rs` has no encoder for UTF-16 at all: asked for one it hands back a UTF-8
-/// encoder instead ([`Encoding::output_encoding`]), so writing a UTF-16 file back would silently
-/// turn it into a UTF-8 one — the same kind of quiet damage this whole module exists to stop.
-const WRITABLE: [&Encoding; 5] = [
+/// **UTF-16 is written here rather than by `encoding_rs`**, which has no encoder for it at all:
+/// asked for one it hands back a UTF-8 encoder instead ([`Encoding::output_encoding`]), so a file
+/// saved through that path would quietly stop being UTF-16. Writing it is three lines
+/// ([`write()`]) and there is nothing it can fail on — a Rust `str` cannot hold an unpaired
+/// surrogate, so the "this character cannot be written" answer never arises for UTF-16.
+const WRITABLE: [&Encoding; 7] = [
     encoding_rs::UTF_8,
     encoding_rs::SHIFT_JIS,
     encoding_rs::EUC_JP,
     encoding_rs::WINDOWS_1252,
     encoding_rs::ISO_2022_JP,
+    encoding_rs::UTF_16LE,
+    encoding_rs::UTF_16BE,
 ];
 
 /// How a file's lines end, as far as its bytes say.
@@ -158,9 +161,26 @@ pub fn read(bytes: &[u8], truncated: bool, tld: Option<&[u8]>) -> Read {
 /// `&#10003;` and the reader is never told. Named, it can be said out loud instead, and the save
 /// stopped while it still can be (`AMB-D-773`).
 ///
-/// `encoding` has to be one [`writable`] answered with. Handed anything else — UTF-16, `replacement`
-/// — `encoding_rs` would quietly encode UTF-8 in its place.
+/// `encoding` has to be one [`writable`] answered with. Handed anything else — `replacement`, one
+/// of the encodings only read — `encoding_rs` would quietly encode UTF-8 in its place.
+///
+/// **UTF-16 is the one written here rather than by `encoding_rs`**, for the reason [`WRITABLE`]
+/// gives, and it is written by laying the text's own code units down in the order the encoding
+/// names. Nothing about it can fail: `encode_utf16` is the same sequence the text is already held
+/// as, and a `str` cannot hold a lone surrogate for the pairing to go wrong on.
 pub fn write(text: &str, encoding: &'static Encoding, bom: bool) -> Result<Vec<u8>, char> {
+    if let Some(big_endian) = utf16_endianness(encoding) {
+        let mut out = Vec::with_capacity(2 * text.len() + 2);
+        if bom {
+            out.extend_from_slice(bom_of(encoding));
+        }
+        for unit in text.encode_utf16() {
+            let pair = if big_endian { unit.to_be_bytes() } else { unit.to_le_bytes() };
+            out.extend_from_slice(&pair);
+        }
+        return Ok(out);
+    }
+
     debug_assert_eq!(encoding.output_encoding(), encoding, "an encoding nothing writes");
     let mut out = Vec::with_capacity(text.len() + 3);
     if bom {
@@ -190,11 +210,35 @@ pub fn writable(name: &str) -> Option<&'static Encoding> {
     WRITABLE.contains(&encoding).then_some(encoding)
 }
 
-/// The byte order mark to put back. UTF-8 is the only one that reaches here — the two UTF-16 forms
-/// are the other marks that exist, and neither is written at all ([`WRITABLE`]) — and encoding text
-/// never puts a mark back by itself.
+/// The byte order mark to put back. Three encodings have one and the rest have none, and encoding
+/// text never puts a mark back by itself.
+///
+/// **A UTF-16 file without one cannot be read at all**, so writing it back without one would be
+/// writing a file this module could no longer open: the guess has no UTF-16 candidate, and the mark
+/// is the whole of how such a file is recognised. That is not enforced here — what a file had is
+/// what it gets back ([`Read::bom`]), and a UTF-16 file that reached the reader had a mark.
 fn bom_of(encoding: &'static Encoding) -> &'static [u8] {
-    if encoding == encoding_rs::UTF_8 { &[0xEF, 0xBB, 0xBF] } else { &[] }
+    if encoding == encoding_rs::UTF_8 {
+        &[0xEF, 0xBB, 0xBF]
+    } else if encoding == encoding_rs::UTF_16LE {
+        &[0xFF, 0xFE]
+    } else if encoding == encoding_rs::UTF_16BE {
+        &[0xFE, 0xFF]
+    } else {
+        &[]
+    }
+}
+
+/// Whether this encoding is one of the two UTF-16 forms, and if so which end its code units lead
+/// with — the one question that decides how [`write()`] lays them down.
+fn utf16_endianness(encoding: &'static Encoding) -> Option<bool> {
+    if encoding == encoding_rs::UTF_16BE {
+        Some(true)
+    } else if encoding == encoding_rs::UTF_16LE {
+        Some(false)
+    } else {
+        None
+    }
 }
 
 /// Which newline the bytes use, read off the bytes rather than off the text: a `\r` is a `\r`
@@ -287,17 +331,21 @@ mod tests {
         assert_eq!(write(&read.text, read.encoding, read.bom), Ok(bytes));
     }
 
-    /// UTF-16 is what only the mark can recognise — the guess has no candidate for it — and it is
-    /// read and never written. `encoding_rs` has no UTF-16 encoder and hands back a UTF-8 one when
-    /// asked, so a file saved back would quietly stop being UTF-16.
+    /// UTF-16 is what only the mark can recognise — the guess has no candidate for it — and it
+    /// round-trips byte for byte, mark and all. The bytes are laid down here rather than by
+    /// `encoding_rs`, which has no UTF-16 encoder and hands back a UTF-8 one when asked: a file
+    /// saved through that path would quietly stop being UTF-16.
     #[test]
-    fn a_utf_16_file_is_read_and_not_offered_for_saving() {
+    fn a_utf_16_file_reads_and_writes_back_byte_for_byte() {
+        // A character outside the basic plane, which is the one shape a UTF-16 round trip can get
+        // wrong: it is two code units rather than one, and the pair has to keep its order.
+        let written = "日本語 hello 😀";
         for (encoding, bom) in [
             (encoding_rs::UTF_16LE, [0xFF, 0xFE].as_slice()),
             (encoding_rs::UTF_16BE, &[0xFE, 0xFF]),
         ] {
             let mut bytes = bom.to_vec();
-            for unit in "日本語 hello".encode_utf16() {
+            for unit in written.encode_utf16() {
                 let pair = if encoding == encoding_rs::UTF_16LE {
                     unit.to_le_bytes()
                 } else {
@@ -309,10 +357,40 @@ mod tests {
             let read = read(&bytes, false, None);
             assert_eq!(read.encoding, encoding);
             assert!(read.bom);
-            assert_eq!(read.text, "日本語 hello");
-            assert!(!read.clean, "{} is read, not written", encoding.name());
-            assert!(writable(encoding.name()).is_none());
+            assert_eq!(read.text, written);
+            assert!(read.clean, "{} is written as well as read", encoding.name());
+            assert_eq!(writable(encoding.name()), Some(encoding));
+            assert_eq!(write(&read.text, read.encoding, read.bom), Ok(bytes));
         }
+    }
+
+    /// The two forms are the same code units in opposite orders, which is the whole of the
+    /// difference and the one thing a hand-written encoder can get backwards. Read back, each says
+    /// what it was written as.
+    #[test]
+    fn the_two_utf_16_forms_are_written_end_for_end() {
+        let le = write("A", encoding_rs::UTF_16LE, false).expect("nothing can fail here");
+        let be = write("A", encoding_rs::UTF_16BE, false).expect("nothing can fail here");
+        assert_eq!(le, [0x41, 0x00]);
+        assert_eq!(be, [0x00, 0x41]);
+
+        // And the mark, which is the same two bytes the other way round for the same reason.
+        assert_eq!(write("", encoding_rs::UTF_16LE, true), Ok(vec![0xFF, 0xFE]));
+        assert_eq!(write("", encoding_rs::UTF_16BE, true), Ok(vec![0xFE, 0xFF]));
+    }
+
+    /// A UTF-16 file whose bytes do not all decode is read and not saved, the same as any other
+    /// file that would not come back as it went in — a lone surrogate has no character to become,
+    /// and the replacement it turns into is not what was in the file.
+    #[test]
+    fn a_utf_16_file_with_a_lone_surrogate_is_read_and_not_saved() {
+        // `FF FE` the mark, `41 00` the letter A, `00 D8` a leading surrogate with nothing after it.
+        let bytes = vec![0xFF, 0xFE, 0x41, 0x00, 0x00, 0xD8];
+
+        let read = read(&bytes, false, None);
+        assert_eq!(read.encoding, encoding_rs::UTF_16LE);
+        assert!(read.text.contains('\u{FFFD}'), "the half a character was replaced");
+        assert!(!read.clean, "these bytes and this text are not the same thing said twice");
     }
 
     /// A character this encoding cannot write is named rather than mangled. `Encoding::encode` would

@@ -15,7 +15,8 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
-  FolderAppDto, FolderChangesDto, FolderEntryDto, FolderFileDto, GitEntryDto,
+  DropEffectDto, FolderAppDto, FolderCarriedDto, FolderChangesDto, FolderEntryDto, FolderFileDto,
+  GitEntryDto,
 } from "../bindings/bindings";
 
 const ROOT = "/work/repo";
@@ -59,6 +60,16 @@ const hoisted = vi.hoisted(() => ({
   trashed: null as null | { gone: string[]; stopped: { name: string; why: string } | null },
   /** What comes back out of the bin. `null` is the host saying there is nothing left to undo. */
   restored: null as null | { back: string[]; stopped: { name: string; why: string } | null },
+  /** Every carry the panel asked the host for, as it asked for it. */
+  imported: [] as
+    { paths: string[]; toRoot: string; to: string[]; effect: DropEffectDto }[],
+  /** What the host answers a carry with — the whole list arriving, unless a test says otherwise. */
+  carried: { arrived: [] as string[], stopped: null } as FolderCarriedDto,
+  /** What the host refuses a name with, where a test is about the refusal. */
+  refuse: null as unknown,
+  /** Whether that refusal takes a moment to arrive — the ordering a real host has and a stand-in
+   *  that throws on the spot does not. */
+  slowRefusal: false,
 }));
 
 // The editor is loaded on demand and lays itself out by measuring, which jsdom cannot do — so what
@@ -134,6 +145,26 @@ vi.mock("./folder", () => ({
     hoisted.asked.push("untrash");
     return hoisted.restored;
   },
+  folderImport: async (
+    _projectId: number,
+    paths: string[],
+    toRoot: string,
+    to: string[],
+    effect: DropEffectDto,
+  ): Promise<FolderCarriedDto> => {
+    hoisted.imported.push({ paths, toRoot, to, effect });
+    return hoisted.carried;
+  },
+  folderMake: async (_projectId: number, root: string, path: string[], dir: boolean) => {
+    hoisted.asked.push(`make:${root}:${path.join("/")}:${dir ? "dir" : "file"}`);
+    if (hoisted.refuse === null) return;
+    if (hoisted.slowRefusal) await new Promise((r) => setTimeout(r, 5));
+    throw hoisted.refuse;
+  },
+  folderRename: async (_projectId: number, root: string, path: string[], name: string) => {
+    hoisted.asked.push(`rename:${root}:${path.join("/")}:${name}`);
+    if (hoisted.refuse !== null) throw hoisted.refuse;
+  },
 }));
 
 // The folders the project is bound to, answered without a store. `live` is derived the way the real
@@ -154,7 +185,8 @@ vi.mock("../core/reads", async (importOriginal) => ({
 }));
 
 import { FilesPanel } from "./FilesPanel";
-import { formatNumber, t, tf } from "../core/i18n";
+import { type CmdError, errLabel, formatNumber, t, tf } from "../core/i18n";
+import { subscribeNotice } from "../core/notice";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -209,16 +241,43 @@ const button = (text: string) =>
 const anyButton = (text: string) =>
   [...document.querySelectorAll("button")].find((b) => b.textContent?.includes(text));
 
-/** Open the menu on a row, by its name. */
-const rightClick = (name: string) => act(async () => {
-  button(name)!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true }));
-});
-
 /** Press undo where the panel hears it: on the panel, not on the window (`AMB-D-780`). */
 const undo = () => act(async () => {
   container.querySelector(".files")!.dispatchEvent(
     new KeyboardEvent("keydown", { key: "z", metaKey: true, bubbles: true }),
   );
+  await new Promise((r) => setTimeout(r, 0));
+});
+
+/** The menu, opened on a row the way a person opens it. */
+const menuOn = (el: Element | null | undefined) => act(async () => {
+  el?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 5, clientY: 5 }));
+  await new Promise((r) => setTimeout(r, 0));
+});
+
+/** The box a name is typed into, while one is being typed. */
+const namebox = () => container.querySelector<HTMLInputElement>(".files__namebox");
+
+/** Typing into it the way a person does: React hears the `input` event, not an assigned `value`. */
+const type = (box: HTMLInputElement, text: string) => act(async () => {
+  // The prototype is taken from the box's own window: React replaces the setter on the instance, and
+  // this module's `HTMLInputElement` is not the one jsdom built the element from.
+  const proto = box.ownerDocument.defaultView?.HTMLInputElement.prototype;
+  const set = proto && Object.getOwnPropertyDescriptor(proto, "value")?.set;
+  set?.call(box, text);
+  box.dispatchEvent(new Event("input", { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+});
+
+const press = (el: Element, key: string) => act(async () => {
+  el.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+});
+
+/** Leaving the box, which is the other of the two ways a name is kept. `focusout` and not `blur`:
+ *  React listens for the one that bubbles, and a `blur` dispatched here reaches no handler at all. */
+const leave = (el: Element) => act(async () => {
+  el.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
   await new Promise((r) => setTimeout(r, 0));
 });
 
@@ -241,6 +300,8 @@ beforeEach(() => {
   hoisted.entries = { "": [{ name: "a.md", isDir: false, ignored: false }] };
   hoisted.file = aFile();
   hoisted.apps = [];
+  hoisted.refuse = null;
+  hoisted.slowRefusal = false;
   hoisted.takers = [];
   hoisted.perRoot = {};
   hoisted.git = {};
@@ -252,6 +313,8 @@ beforeEach(() => {
   // The question before a row goes to the bin is remembered per device, so a test that turns it off
   // would turn it off for the next one (`./askBeforeTrash`).
   localStorage.clear();
+  hoisted.imported = [];
+  hoisted.carried = { arrived: [], stopped: null };
   // Inside Tauri as far as the panel is concerned; without it there is no host to hear a drop from.
   (window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = {};
   container = document.createElement("div");
@@ -545,6 +608,72 @@ describe("the file face", () => {
     expect(container.querySelector(".files__into, .files__row--into")).toBeNull();
   });
 
+  // The highlight said which folder; letting go is the panel carrying the files into that one and no
+  // other. Both halves of the landing travel, because the same path inside two bound folders is two
+  // places (`AMB-T-3781`).
+  it("carries what was dropped into the folder the highlight named", async () => {
+    hoisted.entries[""] = [{ name: "src", isDir: true, ignored: false }];
+    hoisted.entries["src"] = [{ name: "main.rs", isDir: false, ignored: false }];
+    await draw();
+    await click(button(t("files.tree")));
+    await settle();
+    await click(button("src"));
+    await settle();
+
+    const drop = (el: Element | null | undefined, paths: string[]) => act(async () => {
+      (document as unknown as { elementFromPoint: () => Element | null }).elementFromPoint =
+        () => el ?? null;
+      hoisted.dragging?.({ payload: { type: "drop", position: { x: 1, y: 1 }, paths } });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    await drop(button("main.rs"), ["/Users/someone/Desktop/note.md"]);
+    expect(hoisted.imported).toEqual([{
+      paths: ["/Users/someone/Desktop/note.md"],
+      toRoot: ROOT,
+      to: ["src"],
+      // Neither modifier was held, and the host reads that as neither: what a plain drop means is
+      // decided where the carry is made, and it copies.
+      effect: "default",
+    }]);
+    // And the highlight is gone the moment the files are let go.
+    expect(container.querySelector(".files__into, .files__row--into")).toBeNull();
+
+    // The bound folder itself is a landing like any other, and its path is no segments at all.
+    await drop(container.querySelector("[data-into=\"\"]"), ["/Users/someone/Desktop/other.md"]);
+    expect(hoisted.imported[1]?.to).toEqual([]);
+  });
+
+  // Nothing is said about what arrived — the folder is watched and is about to list it. What stops
+  // has nothing drawing it, so that is what is said, and it says how far the carry got.
+  it("says what a carry stopped on, and how much of it had already arrived", async () => {
+    await draw();
+    const said: string[] = [];
+    const stop = subscribeNotice((line) => said.push(line));
+    const drop = (paths: string[]) => act(async () => {
+      (document as unknown as { elementFromPoint: () => Element | null }).elementFromPoint =
+        () => container.querySelector("[data-into]");
+      hoisted.dragging?.({ payload: { type: "drop", position: { x: 1, y: 1 }, paths } });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    hoisted.carried = { arrived: [], stopped: { name: "note.md", why: "no room left" } };
+    await drop(["/a/note.md"]);
+    expect(said).toEqual([tf("files.dropStopped", { name: "note.md", why: "no room left" })]);
+
+    hoisted.carried = { arrived: ["one.md"], stopped: { name: "note.md", why: "no room left" } };
+    await drop(["/a/one.md", "/a/note.md"]);
+    expect(said[1]).toBe(
+      tf("files.dropPartly", { name: "note.md", why: "no room left", count: formatNumber(1) }),
+    );
+
+    // A carry that got the whole way through says nothing at all.
+    hoisted.carried = { arrived: ["one.md"], stopped: null };
+    await drop(["/a/one.md"]);
+    expect(said).toHaveLength(2);
+    stop();
+  });
+
   it("draws a Markdown file as Markdown", async () => {
     hoisted.file = aFile({ text: "# A heading" });
     await drawOpen();
@@ -608,6 +737,23 @@ describe("the file face", () => {
     await click(button("fresh"));
     await settle();
     expect(container.querySelector(".files__file--git-untracked")?.textContent).toContain("one.md");
+  });
+
+  it("colours a folded folder for what is under it, and lets it go plain when it opens", async () => {
+    hoisted.entries[""] = [{ name: "src", isDir: true, ignored: false }];
+    hoisted.entries["src"] = [{ name: "main.rs", isDir: false, ignored: false }];
+    // git names the file and not the folder holding it, so a tree that matched what git said would
+    // leave the folded row saying nothing about the change it is hiding (`AMB-D-795`).
+    hoisted.git[ROOT] = [{ path: ["src", "main.rs"], index: " ", worktree: "M", isDir: false }];
+    await drawOpen();
+    expect(container.querySelector(".files__dir--git-modified")?.textContent).toContain("src");
+
+    await click(button("src"));
+    await settle();
+    // Open, the row inside says it, and the folder stops saying it: two rows in one colour down one
+    // column would be the tree saying "somewhere, something".
+    expect(container.querySelector(".files__dir--git-modified")).toBeNull();
+    expect(container.querySelector(".files__file--git-modified")?.textContent).toContain("main.rs");
   });
 
   it("colours a whole repository nothing is tracked in yet", async () => {
@@ -759,7 +905,7 @@ describe("the file face", () => {
   });
   it("asks before it puts a row in the bin, and bins it on yes", async () => {
     await drawOpen();
-    await rightClick("a.md");
+    await menuOn(button("a.md"));
     await click(button(t("files.trash")));
     // Nothing has gone yet: the item opens the question, and the question is where the answer is.
     expect(hoisted.asked.some((one) => one.startsWith("trash:"))).toBe(false);
@@ -771,7 +917,7 @@ describe("the file face", () => {
 
   it("bins nothing when the answer is no", async () => {
     await drawOpen();
-    await rightClick("a.md");
+    await menuOn(button("a.md"));
     await click(button(t("files.trash")));
     await click(anyButton(t("files.trashKeep")));
     expect(hoisted.asked.some((one) => one.startsWith("trash:"))).toBe(false);
@@ -780,7 +926,7 @@ describe("the file face", () => {
 
   it("stops asking once the reader says not to, and only then", async () => {
     await drawOpen();
-    await rightClick("a.md");
+    await menuOn(button("a.md"));
     await click(button(t("files.trash")));
     // The checkbox takes effect on the answer, not on the tick: a reader who ticks it and cancels
     // has agreed to nothing.
@@ -790,7 +936,7 @@ describe("the file face", () => {
     expect(hoisted.asked).toContain(`trash:${ROOT}:a.md`);
 
     hoisted.asked = [];
-    await rightClick("a.md");
+    await menuOn(button("a.md"));
     await click(button(t("files.trash")));
     // No question this time, and the row is in the bin.
     expect(anyButton(t("files.trashGo"))).toBeUndefined();
@@ -809,7 +955,7 @@ describe("the file face", () => {
       stopped: { name: "a.md", why: "the volume \u201cAMBRO\u201d does not have one" },
     };
     await drawOpen();
-    await rightClick("a.md");
+    await menuOn(button("a.md"));
     await click(button(t("files.trash")));
     await click(anyButton(t("files.trashGo")));
     // The row it is about is gone from the list either way, so the sentence stands in the panel —
@@ -929,6 +1075,137 @@ describe("a project bound to several folders", () => {
     // The row lit up is in the second folder, and the first folder's `src` is left alone.
     expect(trees[1]!.querySelectorAll(".files__into")).toHaveLength(1);
     expect(trees[0]!.querySelectorAll(".files__into")).toHaveLength(0);
+  });
+
+  // ── naming ──────────────────────────────────────────────────────────────────────────────────
+  // Making a name and writing over one are the two doors `crate::folder_write` opens that have a
+  // reader on this side. Both are typed into the row itself rather than into a dialog: what a person
+  // is naming sits in a list, and the names already in it are what they are choosing against.
+
+  it("makes a name in the folder that was pointed at, and looks at the folder again", async () => {
+    hoisted.entries = { "": [] };
+    await draw();
+    // The heading is the folder's own row, and the only one there is to point at when the tree is
+    // empty — which is exactly when a person wants to put something in it.
+    await menuOn(button(t("files.tree")));
+    // A folder is not something to hand to an application, so it is offered none of that.
+    expect(button(t("files.openWith"))).toBeUndefined();
+
+    await click(button(t("files.newFile")));
+    await settle();
+    const box = namebox();
+    expect(box).not.toBeNull();
+
+    await type(box!, "notes.md");
+    await press(box!, "Enter");
+    expect(hoisted.asked).toContain(`make:${ROOT}:notes.md:file`);
+    // The names are read again rather than left to the watch, which says the same thing a debounce
+    // later: a row somebody has just made belongs on the list before they look for it.
+    expect(hoisted.asked.filter((one) => one === `entries:${ROOT}:`)).toHaveLength(2);
+    expect(namebox()).toBeNull();
+  });
+
+  it("makes the name inside the folder that was pointed at, unfolding it to be typed in", async () => {
+    hoisted.entries = {
+      "": [
+        { name: "src", isDir: true, ignored: false },
+        { name: "README.md", isDir: false, ignored: false },
+      ],
+      src: [],
+    };
+    await drawOpen();
+
+    await menuOn(button("src"));
+    await click(button(t("files.newFolder")));
+    await settle();
+    // `src` was folded shut a moment ago. A box typed into a folder nobody can see would be a name
+    // made somewhere the reader never looked.
+    expect(hoisted.asked).toContain(`entries:${ROOT}:src`);
+    await type(namebox()!, "deep");
+    await press(namebox()!, "Enter");
+    expect(hoisted.asked).toContain(`make:${ROOT}:src/deep:dir`);
+
+    // A file is not something a name can be made in, so its menu offers none of it — what it is
+    // offered is the hand-over doors and its own name.
+    await menuOn(button("README.md"));
+    expect(button(t("files.newFile"))).toBeUndefined();
+    expect(button(t("files.rename"))).toBeDefined();
+    expect(button(t("files.openWith"))).toBeDefined();
+  });
+
+  it("writes over the name of the row that was pointed at, starting from what it says", async () => {
+    hoisted.entries = { "": [{ name: "notes.md", isDir: false, ignored: false }] };
+    await drawOpen();
+
+    await menuOn(button("notes.md"));
+    await click(button(t("files.rename")));
+    await settle();
+    // The box opens on the name it is about, so changing one letter is one letter of typing —
+    // which is the whole of what a case-only rename is (`crate::folder_write`).
+    expect(namebox()?.value).toBe("notes.md");
+
+    await type(namebox()!, "Notes.md");
+    await press(namebox()!, "Enter");
+    expect(hoisted.asked).toContain(`rename:${ROOT}:notes.md:Notes.md`);
+  });
+
+  /** Which names a machine will hold is the one thing a reader cannot work out for themselves, so
+   *  the refusal is drawn where they are still typing — and drawn from the dictionary, because the
+   *  sentence the command carries is English whoever is reading it (`AMB-D-413`). */
+  it("says why a name was refused, and leaves what was typed where it was", async () => {
+    const refusal: CmdError = {
+      code: "folder_taken",
+      message_en: "notes.md is already there",
+      fields: { name: "notes.md" },
+    };
+    hoisted.entries = { "": [] };
+    hoisted.refuse = refusal;
+    // The answer takes a moment, which is the whole of what this is about: a browser blurs the box
+    // the instant anything about it changes under the reader's fingers, and that lands while the
+    // refusal is still on its way.
+    hoisted.slowRefusal = true;
+    await draw();
+    await menuOn(button(t("files.tree")));
+    await click(button(t("files.newFile")));
+    await settle();
+
+    await type(namebox()!, "notes.md");
+    const box = namebox()!;
+    await press(box, "Enter");
+    // Left while the answer is out. A box that closed itself here would take the refusal with it,
+    // and the reader would watch the name they typed vanish with nothing said.
+    await leave(box);
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    expect(container.textContent).toContain(errLabel(refusal));
+    // Still there, still holding what was typed: a refusal a person has to type their way back to
+    // is one they were told nothing by. And the name was asked for once, not once per leaving.
+    expect(namebox()?.value).toBe("notes.md");
+    expect(hoisted.asked.filter((one) => one.startsWith("make:"))).toHaveLength(1);
+
+    // Leaving it now is giving up on a name the machine has already answered about — not asking the
+    // same question again.
+    await leave(namebox()!);
+    expect(namebox()).toBeNull();
+    expect(hoisted.asked.filter((one) => one.startsWith("make:"))).toHaveLength(1);
+    // And the sentence is the dictionary's rather than the command's, which is what makes it read
+    // in a language core holds no prose for.
+    expect(errLabel(refusal, "ja")).not.toContain("already");
+  });
+
+  it("offers no rename for the bound folder, and asks for nothing when the box is escaped", async () => {
+    hoisted.entries = { "": [] };
+    await draw();
+    await menuOn(button(t("files.tree")));
+    // The section's own root is the binding, and where a binding is changed is the project's
+    // settings — not a row in the tree.
+    expect(button(t("files.rename"))).toBeUndefined();
+
+    await click(button(t("files.newFolder")));
+    await settle();
+    await type(namebox()!, "notes");
+    await press(namebox()!, "Escape");
+    expect(namebox()).toBeNull();
+    expect(hoisted.asked.some((one) => one.startsWith("make:"))).toBe(false);
   });
 
   it("says so when a folder goes while it is being looked at", async () => {

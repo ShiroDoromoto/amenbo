@@ -6,10 +6,11 @@ import { useArchivedProjects, useDueCounts } from "../core/reads";
 import { useStore } from "../store/store";
 import { t } from "../core/i18n";
 import { flowEdges } from "../core/edgeScroll";
+import { draggedFar } from "../core/pointerDrag";
 import { Icon, type IconName } from "../components/Icon";
 import type { SmartView } from "../mock/types";
 import type { Nav } from "./AppShell";
-import { draggedFar, landing } from "./rowDrag";
+import { landing } from "./rowDrag";
 
 // Which icon each smart view is drawn with. The views arrive as ids alone, so the drawing
 // is decided here rather than travelling with the data (`AMB-D-689`).
@@ -28,7 +29,7 @@ function rowId(row: HTMLElement): number | null {
  *
  * **The reorder is a press and a move, not the webview's drag.** The app itself takes what is dropped on it, and
  * with that switch thrown an in-window HTML5 drag does not fire at all on macOS and Windows (`AMB-D-775`). So a
- * press becomes a drag only past `DRAG_SLOP` (`./rowDrag`), a press meant as a reorder does not navigate, and the
+ * press becomes a drag only past `DRAG_SLOP` (`../core/pointerDrag`), a press meant as a reorder does not navigate, and the
  * click that follows one is swallowed. A row held against the top or the bottom of the list scrolls it, which the
  * webview's drag never did either (`../core/edgeScroll`).
  *

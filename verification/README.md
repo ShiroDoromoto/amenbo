@@ -524,6 +524,10 @@ there from `fixtures/`, and `git-init` makes the folder a git repository, which 
 hook slots are real enough to write into. That one takes the same `dir` the first two do, and a road
 reading what git says about a folder on screen needs it: the colours are drawn on the face of the
 folder a project is **bound** to, and a repository anywhere else leaves every row of it bare.
+`git-commit` records everything lying in that folder, and it is there for one state nothing else
+reaches: until something is committed git names the whole folder and never the paths inside it, so a
+folder git is quiet about while a file in it is new — which is what a folded row on the tree answers
+for — does not exist on the near side of a commit.
 `wire-ai` is the same kind of stand-in one tier up: Amenbo
 hands over the text that starts a folder's AI on it and writes no settings file itself, so the road
 past that point exists only if someone pastes — and it pastes what the build under test handed over,
@@ -739,6 +743,33 @@ one of the face's standing lines. `row-mark` reads the colour a row wears, named
 `untracked`, `added`, `modified` — rather than by the colour itself, since which colour that is
 belongs to the theme. It is a `Review` and can be nothing else: a shot is read for words, and a row
 wearing a colour says the same letters as the row beside it that wears none.
+
+Three ops make a name rather than move one. `menu-on-folder` opens the menu a folder carries — over a
+folder's row, or over the heading at the top of the tree when it names none, the heading being the
+folder itself and the only way to make a name at the top level. `name` presses one of the two items
+that open a naming box and types into it, which is one move: the box takes a row's place, and a box
+nobody typed into is a name nobody asked for. `rename` is the same box over a name already on a row.
+Both refusals a name comes back with are read through `says` — `taken` for a name the folder already
+holds, `unnameable` for one the machine will not take at all — and both are read with the box still
+open, which is where the reader is looking when either arrives.
+`name-a-file-without-leaving-amenbo` is the road.
+
+**A rename that changes only the letters' case is not readable here.** Every screen reading is folded
+to one case before the shot and the expectation meet, so a row that was never renamed answers exactly
+like one that was. It is the rename most worth walking — a machine that reads the two names as one is
+the machine that would refuse it — and it is held in a unit test over the rename itself instead.
+
+`drop-in` is the row coming in: one dragged from somewhere else on the machine and let go over a
+folder's row. What it puts under test is the landing rather than the carrying — the drag is
+caught by the application and not by the face, so the part that can be wrong is which folder was
+under the pointer when the hand opened. What is brought is named and not pathed, for the reason `task
+attach` names one: a drop reads the disk the operator is sitting at, and nothing a run lays down is
+anywhere a hand can reach from there. `as` says whether a file or a folder is being dragged, and for
+a folder `holding` names a row that has to be inside it — what a folder's drop has to answer for is
+what came with it, and a row nobody was told to bring is one no reading can look for.
+`bring-a-file-in-from-the-machine` and `bring-a-folder-in-from-the-machine` are the roads: two,
+because a carry that made the folder and copied nothing into it passes every reading the file road
+makes.
 
 The rest are the file going the other way — out of Amenbo, to the machine. `menu` right-clicks a row
 and `menu-on-file` reaches the same menu from the file that is open, which is where a file the face

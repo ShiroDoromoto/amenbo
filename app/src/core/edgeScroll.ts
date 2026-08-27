@@ -13,11 +13,7 @@
 // scroll is wanted. What drives it is a frame callback that runs for as long as the gesture does, and
 // asks where the pointer is rather than being told.
 
-/** A point in the viewport's own coordinates, which is what a pointer event reports. */
-export interface Point {
-  x: number;
-  y: number;
-}
+import type { Point } from "./pointerDrag";
 
 /**
  * How near an edge the pointer has to come before the box moves, in CSS pixels.

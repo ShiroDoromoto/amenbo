@@ -334,9 +334,13 @@ const FOUND: &str = "amenbo-has ";
 /// asked about — so the names go in as one script and come back as one list, rather than paying that
 /// cost once per name.
 ///
-/// Names are the catalog's ([`amenbo_core::harness::Launch::command`]), never a reader's, and are
-/// held to that here as well: anything that is not a plain program name is dropped rather than
-/// spliced into a shell script.
+/// **What may be asked about is a program name, and that is what [`plain`] holds this to** — anything
+/// else is dropped rather than spliced into a shell script. The names themselves are no longer only
+/// the catalog's ([`amenbo_core::harness::Launch::command`]): a command the reader registered is
+/// asked about here too, by the **first word of its line**
+/// ([`amenbo_core::config::CustomAgent::command`]) and never by the whole of it (`AMB-D-794`). That
+/// is the seam — a registered line may hold anything the reader can type, and the part of it that
+/// reaches this script is the one word that names a program.
 ///
 /// A probe that could not be started, or that ran past [`PROBE`], answers with what it had — for
 /// this question an empty answer is "nothing found", which is a state the face already draws.

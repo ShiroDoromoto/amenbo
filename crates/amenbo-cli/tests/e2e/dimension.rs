@@ -219,6 +219,44 @@ fn dimension_marks_and_unmarks_an_axis_for_the_task_card() {
     assert!(!after.contains("show-on-card"), "and it stops saying so: {after}");
 }
 
+/// Which side an axis classifies is the axis's own answer (`AMB-D-789`), and this face sets it at
+/// creation or afterwards, refuses a value it does not know, and says so wherever an axis is read —
+/// from the wide side, so only a narrowed axis is written about.
+#[test]
+fn dimension_narrows_which_side_of_the_store_an_axis_classifies() {
+    let cli = Cli::new();
+    let p = cli.json(&["project", "add", "--name", "対象PJ", "--json"]);
+    let pid = id_str(&p["project"]["id"]);
+    // An axis raised with nothing said about it classifies both — the opposite of the flags that
+    // start down.
+    let wide = cli.json(&["dimension", "add", "--project", &pid, "--name", "顧客", "--json"]);
+    assert_eq!(wide["dimension"]["applies_to"], "both");
+    // Narrowed at creation.
+    let narrow = cli.json(&[
+        "dimension", "add", "--project", &pid, "--name", "占有", "--applies-to", "task", "--json",
+    ]);
+    assert_eq!(narrow["dimension"]["applies_to"], "task");
+
+    // Narrowed after the fact, and the envelope names the field that moved.
+    let moved = cli.json(&["dimension", "update", "顧客", "--applies-to", "decision", "--json"]);
+    assert_eq!(moved["dimension"]["applies_to"], "decision");
+    assert_eq!(moved["changed"], serde_json::json!(["applies_to"]));
+
+    // Both faces that read an axis say which side it is offered on, and say nothing about the wide one.
+    let (shown, _) = cli.run(&["dimension", "show", "占有"]);
+    assert!(shown.contains("tasks only"), "show names the side: {shown}");
+    let (listed, _) = cli.run(&["dimension", "list", "--project", &pid]);
+    assert!(listed.contains("顧客 (d1) [single, decisions only]"), "list says it too: {listed}");
+    cli.json(&["dimension", "update", "顧客", "--applies-to", "both", "--json"]);
+    let (back, _) = cli.run(&["dimension", "show", "顧客"]);
+    assert!(!back.contains("only"), "widened again, it stops saying anything: {back}");
+
+    // A side nobody defined is refused by name, with what the flag takes.
+    let (err, code) = cli.run_err(&["dimension", "update", "顧客", "--applies-to", "task,decision"]);
+    assert_ne!(code, 0);
+    assert!(err.contains("task | decision | both"), "the refusal lists what it takes: {err}");
+}
+
 /// An axis can demand an answer (`AMB-D-734`), and this face raises it, says so wherever an axis is read,
 /// and reports the one refusal it causes: a creation that cannot be finished while the axis is blank.
 #[test]

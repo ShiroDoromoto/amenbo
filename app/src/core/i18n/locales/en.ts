@@ -586,6 +586,18 @@ const ui = {
   // rather than being pressable and doing nothing: what is missing is written on the thing the
   // reader would press, so there is no refusal to explain afterwards (`AMB-T-3686`).
   "face.openPick": "Choose one",
+  "face.moreStarts": "Not installed ({n})",
+  "face.startsOwn": "Commands you registered",
+  "face.startAdd": "Register a command",
+  "face.startName": "Name",
+  "face.startNamePh": "Claude (Opus)",
+  "face.startLine": "Command line",
+  "face.startLinePh": "claude --model opus",
+  "face.startRuns": "This is what runs in the terminal:",
+  "face.startSave": "Save",
+  "face.startCancel": "Cancel",
+  "face.startEdit": "Edit",
+  "face.startRemove": "Remove",
   "face.openHere": "Room for another pane in this project",
   "face.whichFolder": "Which folder does this pane work in?",
   "face.rename": "Rename this pane",
@@ -620,9 +632,15 @@ const ui = {
   "files.trashQuiet": "Do not ask again",
   "files.trashGo": "Move it",
   "files.trashKeep": "Cancel",
+  "files.newFile": "New file",
+  "files.newFolder": "New folder",
+  "files.rename": "Rename",
+  "files.name": "Name",
   "files.notText": "This is not text, so it cannot be shown here.",
   "files.cut": "Only the beginning is shown.",
   "files.unreadable": "This file could not be read.",
+  "files.dropStopped": "{name} could not be brought in: {why}",
+  "files.dropPartly": "{count} came in. {name} did not: {why}",
   // A picture the panel would not draw. What it is refused for travels with the
   // refusal, because a reader shown nothing at all reads it as a damaged file
   // (`AMB-D-783`).
@@ -808,8 +826,13 @@ const err: Partial<Record<ErrorCode, string>> = {
   wake_no_folder: "That folder could not be read: {reason}",
   wake_no_config: "Amenbo could not find its own files.",
   wake_not_kept: "The choice could not be saved.",
+  wake_not_registered: "A registered command needs both a name and a command line.",
   window_failed: "That window could not be opened: {reason}",
   talk_blank: "That window opened but never drew anything, so the terminal was put back in this one.",
+  folder_taken: "{name} is already there.",
+  folder_name: "This machine will not take {name} as a name.",
+  folder_make: "{name} could not be made: {reason}",
+  folder_rename: "It could not be renamed to {name}: {reason}",
 
   // The sentences the GUI shows a person, named one at a time (`AMB-D-413`). Which refusals get a code of
   // their own was settled by measuring what the front end actually surfaces: a form the screen already

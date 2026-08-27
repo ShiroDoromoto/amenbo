@@ -2173,9 +2173,10 @@ const REGISTRY: &[OpSpec] = &[
     // only ever grows is half a control and the half a reader is left with is the one that took
     // their pane's room.
     //
-    // **It is the one step on these roads carried out by hand.** The screen tool presses, types and
-    // reads; it has no drag, and a gesture is what this control is. So the instruction says where to
-    // put the pointer and what to watch follow it, and the shot after it is what an eye closes.
+    // **It is the one step on these roads aimed at a line.** The edge carries no name, so nothing
+    // reaches it the way a button is reached — the screen tool drags between two points, and working
+    // those out of the screen is an operator's. So the instruction says where to put the pointer and
+    // what to watch follow it, and the shot after it is what an eye closes.
     OpSpec { kind: Kind::Action, domain: Domain::Terminal, op: "drag-side", required: &["side", "toward"], refs: &[], strings: &["side", "toward"], binds: false },
     // Whether a column is beside the panes at all. `present: false` is the half the folding is proved
     // by, and it is the half worth having: a column that went away is what gives the panes the width,
@@ -2203,10 +2204,11 @@ const REGISTRY: &[OpSpec] = &[
     OpSpec { kind: Kind::Assert, domain: Domain::Terminal, op: "dot", required: &["face"], refs: &[], strings: &["face"], binds: false },
 
     // ── the file face ─────────────────────────────────────────────────────────────────────────────
-    // The folder a project is bound to, read from inside Amenbo. Two sections in one column: what has
-    // changed lately, and the folder itself folded down. Every op is the screen's — `cat` is not
-    // Amenbo doing anything — and `section` says which of the two a row is being looked for in,
-    // because the same file can stand in both of them at once.
+    // The folder a project is bound to, read from inside Amenbo: the folder itself, folded down, with
+    // what git says about each row drawn as a colour on it. Every op is the screen's —
+    // `cat` is not Amenbo doing anything — and `section` says which part of the column a row is being
+    // looked for in. There is one part to name today; the arg is kept because the panel is not
+    // finished growing, and a road that named none of them would have to be rewritten when it does.
     //
     // Unfolding the folder. It is a value and not two ops because it is one control that opens and
     // shuts, unlike the two windows' way out and way back, which are pressed in different places.

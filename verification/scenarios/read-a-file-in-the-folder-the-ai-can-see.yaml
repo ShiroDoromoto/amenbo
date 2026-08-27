@@ -14,7 +14,7 @@
 # and it is the half that can quietly rot: the verdict is taken from what is in the file and never
 # from its name, so a build that started trusting the name would draw a picture's bytes as text and
 # nothing on the happy path would notice. The road gives the second file a `.md` name — the one name
-# the face does treat specially, choosing between rendered Markdown and plain text with it — and puts
+# the face does treat specially, choosing between rendered Markdown and an editor with it — and puts
 # bytes in it that are not text. What has to come back is the refusal, not a rendering.
 #
 # The third is a picture the face **will** recognise and still will not draw, and it is here because

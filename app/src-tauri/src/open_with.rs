@@ -33,6 +33,8 @@ use std::path::Path;
 use crate::dto::FolderAppDto;
 use crate::error::CmdError;
 use crate::folder::{rooted, under};
+#[cfg(target_os = "windows")]
+use crate::folder::plain;
 
 /// Ask what to open a file with.
 ///
@@ -164,6 +166,12 @@ fn ask(_window: &tauri::WebviewWindow, file: &Path) -> Result<Vec<FolderAppDto>,
 
     // A wide, NUL-terminated copy made here rather than on the far thread: the path is what the
     // fence just approved, and it has to outlive this call by exactly as long as the dialog does.
+    //
+    // Spelled plainly first. The fence answers in Windows's internal `\\?\C:\…` form for anything
+    // under a folder bound past 260 characters (`AMB-T-3749`), and this dialog is the one door
+    // measured refusing that form outright — `E_INVALIDARG`, no window, nothing reported
+    // (`AMB-T-3651`). Below 260 the fence already hands back the plain spelling and this is a copy.
+    let file = plain(file);
     let wide: Vec<u16> = {
         use std::os::windows::ffi::OsStrExt as _;
         file.as_os_str().encode_wide().chain(std::iter::once(0)).collect()

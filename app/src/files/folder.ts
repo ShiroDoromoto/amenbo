@@ -1,22 +1,24 @@
 // The seam to what a folder holds (`crate::folder`, `crate::folder_watch`).
 //
-// The names inside one folder and what one file has to show are asked for; what changed lately is
-// **watched** — the host installs a watch over the folder and says so as it happens, rather than
-// this side guessing when to go and look (`AMB-T-3604`). The root all of them are rooted at is a
-// folder the project is bound to, and the host checks that against the store rather than taking
-// this side's word for it, so nothing here has to be careful about which path it passes.
+// The names inside one folder, what one file has to show and what git says about it are asked for;
+// **that the folder moved is watched** — the host installs a watch over it and says so as it
+// happens, rather than this side guessing when to go and look (`AMB-T-3604`). The word carries no
+// rows: it is the moment to ask again, and the asking is the two calls above it (`AMB-D-785`). The
+// root all of them are rooted at is a folder the project is bound to, and the host checks that
+// against the store rather than taking this side's word for it, so nothing here has to be careful
+// about which path it passes.
 //
 // Outside Tauri (`npm run dev` in a browser) there is no filesystem to ask, and the face draws its
 // empty state rather than an error: a folder with nothing in it is what the browser fallback is.
 import type {
-  FolderAppDto, FolderChangesDto, FolderEntryDto, FolderFileDto,
+  FolderAppDto, FolderChangesDto, FolderEntryDto, FolderFileDto, GitEntryDto,
 } from "../bindings/bindings";
 import { invoke } from "../core/ipc";
 import { inTauri } from "../core/snapshot";
 
 /**
- * The host's word that a folder moved. It carries the whole list, not what moved in it, and names
- * the folder it is about — a project can be bound to several and each is watched on its own.
+ * The host's word that a folder moved. It says nothing about what moved in it, and names the folder
+ * it is about — a project can be bound to several and each is watched on its own.
  */
 const CHANGED_EVENT = "folder://changed";
 
@@ -39,8 +41,24 @@ export async function folderEntries(
  * adds one**: the folders a project is bound to are watched side by side, not one at a time.
  */
 export async function folderWatch(projectId: number, root: string): Promise<FolderChangesDto> {
-  if (!inTauri()) return { root, changed: [], capped: false, unwatched: false, gone: false };
+  if (!inTauri()) return { root, partial: false, gone: false };
   return await invoke<FolderChangesDto>("folder_watch", { projectId, root });
+}
+
+/**
+ * What git says about one of a project's folders, as the rows a tree draws its colours from.
+ *
+ * Asked per bound folder rather than once for the project: what `git status` costs is the amount of
+ * tree it is asked about, and two folders of one repository asked together cost five times two
+ * folders asked apart (`AMB-D-774`). A folder that is no repository, and a machine with no git,
+ * both answer with nothing — which is a tree with no colours on it and not an error to draw.
+ */
+export async function folderGitStatus(
+  projectId: number,
+  root: string,
+): Promise<GitEntryDto[]> {
+  if (!inTauri()) return [];
+  return await invoke<GitEntryDto[]>("folder_git_status", { projectId, root });
 }
 
 /** Stop watching one folder. Called for each folder the face drew as it goes away. */
@@ -53,9 +71,9 @@ export async function folderUnwatch(root: string): Promise<void> {
  * Be told when a watched folder moves, until the returned function is called.
  *
  * One listener hears every watched folder, so what comes back names the one it is about and a
- * caller drawing one of them has to say which. The payload is the whole list rather than a delta:
- * the face draws a list, and a delta it had to apply would be a second copy of the truth to keep in
- * step with the host's.
+ * caller drawing one of them has to say which. **Being told is the whole of it**: the payload
+ * carries no rows, so what a caller does with it is go and ask again — the names of the level it
+ * has open, and the colours beside them (`AMB-D-785`).
  */
 export async function onFolderChanged(
   take: (changes: FolderChangesDto) => void,

@@ -377,6 +377,32 @@ mod tests {
         assert!(woke(&rx, &stop));
     }
 
+    /// What the mode is for: a file written in a folder that never got a watch of its own still
+    /// wakes somebody. Where every folder needs one this passes because the walk found that folder;
+    /// where one covers the tree it passes because the kernel is already inside it — and that is
+    /// the whole claim, since nothing here installs a watch on the folder the write lands in.
+    #[test]
+    fn a_write_deep_in_the_tree_wakes_somebody() {
+        let dir = tempfile::tempdir().expect("a temp dir");
+        let root = dir.path().to_path_buf();
+        std::fs::create_dir_all(root.join("src/deep")).expect("a folder");
+
+        let (tx, rx) = std::sync::mpsc::channel::<Wake>();
+        let mut watcher =
+            notify::recommended_watcher(handler(tx, root.clone())).expect("a watcher");
+        let scan = crate::folder::scan(&root);
+        let whole = [root.clone()];
+        let mut watched = HashSet::new();
+        assert!(!install(&mut watcher, laid_over(&whole, &scan), &mut watched));
+
+        std::fs::write(root.join("src/deep/note.md"), b"mine").expect("a file");
+        let stop = AtomicBool::new(false);
+        // One wait is a heartbeat long, which is how often the thread looks up — not how long a
+        // kernel has to get round to it. A machine with something else on it takes longer than one.
+        let woken = (0..20).any(|_| woke(&rx, &stop));
+        assert!(woken, "a write under the root is what the watch is for");
+    }
+
     /// How many watches a folder takes is the OS's answer, and the two answers are laid over
     /// different things: the root alone, or every folder the walk kept.
     #[test]

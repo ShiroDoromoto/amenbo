@@ -176,6 +176,13 @@ impl Driver<'_> {
                 let rows = v["tasks"].as_array().map(Vec::as_slice).unwrap_or(&[]);
                 judge_listing("task", target, &format!("`{filter}`"), rows, with)
             }
+            // The same listing, turned away instead of answered. The step names no target: what is
+            // under test is the question, which never got as far as an answer to stand a record in.
+            "filter-refused" => {
+                let filter = req_str(with, "filter")?;
+                let want = req_str(with, "code")?;
+                self.refused_read(&["task", "list", "--filter", filter, "--json"], want)
+            }
             "found" => {
                 let target = self.resolve(with)?;
                 let hits = self.search(with)?;

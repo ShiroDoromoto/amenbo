@@ -538,3 +538,67 @@ fn search_reaches_the_classification_a_decision_is_filed_under() {
     assert_eq!(hit["standing"]["labels"][0]["axis"], "テーマ");
     assert_eq!(hit["standing"]["labels"][0]["value"], "対話ウィンドウ");
 }
+
+/// The refusal `AMB-D-789` asks for, read off the binary rather than off the resolver: an axis narrowed
+/// to one side narrows there and is turned away on the other, in every face that takes a `dim:`. The
+/// empty page it would otherwise answer with says two things at once — "nothing carries that value" and
+/// "that axis does not run here" — and only the second is a question worth correcting.
+///
+/// `time_axis:` walks it too. The role names an axis; it does not exempt one, so the sugar meets the
+/// same guard as the name it stands for.
+#[test]
+fn a_dim_on_the_side_its_axis_does_not_classify_is_refused_by_every_face() {
+    let cli = Cli::new();
+    let pid = id_str(&cli.json(&["project", "add", "--name", "対象PJ", "--json"])["project"]["id"]);
+
+    // A task-only axis, and a both-sided time axis to measure the refusal against.
+    cli.json(&["dimension", "add", "--project", &pid, "--name", "占有", "--applies-to", "task", "--json"]);
+    cli.json(&["dimension", "value-add", "占有", "--name", "iOS", "--json"]);
+    cli.json(&["dimension", "add", "--project", &pid, "--name", "時代", "--ordered", "--json"]);
+    cli.json(&["dimension", "update", "時代", "--time-axis", "true", "--json"]);
+    cli.json(&["dimension", "value-add", "時代", "--name", "運用第1期", "--start", "2026-07-08", "--json"]);
+
+    let tid = id_str(
+        &cli.json(&["task", "add", "--project", &pid, "--title", "レーンの上", "--dim", "占有=iOS", "--json"])["task"]["id"],
+    );
+    let did = id_str(
+        &cli.json(&["decision", "add", "--project", &pid, "--title", "どのレーンで焼くか", "--body", "根拠", "--json"])
+            ["decision"]["id"],
+    );
+    cli.json(&["dimension", "set", &decision_ref(&did), "時代", "運用第1期", "--json"]);
+
+    // The side the axis classifies is untouched — the half the refusal must not cost.
+    let listed = cli.json(&["task", "list", "--filter", "dim:占有=iOS", "--json"]);
+    assert_eq!(listed["count"], 1);
+    assert_eq!(id_str(&listed["tasks"][0]["id"]), tid);
+
+    // The side it does not classify: refused, naming the axis and the side rather than the value.
+    let (err, code) = cli.run_err(&["decision", "list", "--filter", "dim:占有=iOS"]);
+    assert_ne!(code, 0, "the decision face is turned away: {err}");
+    assert!(err.contains("占有"), "the refusal names the axis: {err}");
+    assert!(err.contains("decisions"), "and the side it does not classify: {err}");
+    // `=none` is the arm where the empty page would have been *every* row instead.
+    let (err, code) = cli.run_err(&["decision", "list", "--filter", "dim:占有=none"]);
+    assert_ne!(code, 0, "`=none` is refused the same way: {err}");
+
+    // The third face that takes the grammar. `search --kind` says which side it is asking about, so it
+    // meets the same guard — a word plus a `dim:` the side does not carry is still the wrong question.
+    let (err, code) = cli.run_err(&["search", "レーン", "--kind", "decision", "--filter", "dim:占有=iOS"]);
+    assert_ne!(code, 0, "search narrowed to decisions is turned away too: {err}");
+    assert!(err.contains("占有"), "and names the axis: {err}");
+    // Narrowed to the side the axis does run on, the same search goes through.
+    assert!(cli.json(&["search", "レーン", "--kind", "task", "--filter", "dim:占有=iOS", "--json"])["hits"]
+        .as_array()
+        .is_some_and(|h| !h.is_empty()));
+
+    // `time_axis:` is the axis by its role, and the role is no exemption: narrow the axis off tasks and
+    // the sugar is refused there while the decision side it still classifies keeps answering.
+    cli.json(&["dimension", "update", "時代", "--applies-to", "decision", "--json"]);
+    let (err, code) = cli.run_err(&["task", "list", "--filter", "time_axis:運用第1期"]);
+    assert_ne!(code, 0, "the sugar meets the same guard: {err}");
+    assert!(err.contains("time axis"), "the refusal names the role it was asked by: {err}");
+    assert!(err.contains("tasks"), "and the side it does not classify: {err}");
+    let by_role = cli.json(&["decision", "list", "--filter", "time_axis:運用第1期", "--json"]);
+    assert_eq!(by_role["count"], 1, "the side it does classify still answers by role");
+    assert_eq!(id_str(&by_role["decisions"][0]["id"]), did);
+}

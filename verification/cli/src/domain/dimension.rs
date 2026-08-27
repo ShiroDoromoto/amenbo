@@ -98,6 +98,15 @@ impl Driver<'_> {
                 };
                 Ok(Outcome::action(note))
             }
+            // Which side of the store the axis classifies. Unlike the two flags around it the answer is
+            // a word with three readings rather than a yes/no, so the step names the side outright —
+            // and it starts wide, so what a road writes here is nearly always a narrowing.
+            "applies-to" => {
+                let dimension = req_str(with, "dimension")?;
+                let side = req_str(with, "side")?;
+                self.run_json(&["dimension", "update", dimension, "--applies-to", side, "--json"])?;
+                Ok(Outcome::action(format!("made `{dimension}` classify {side}")))
+            }
             // Whether the axis refuses to be left empty. The command takes the answer as a word rather
             // than as a bare switch, since it is lowered as often as it is raised.
             "required" => {

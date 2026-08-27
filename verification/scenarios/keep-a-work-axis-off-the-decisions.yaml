@@ -1,0 +1,227 @@
+# One classification model serves both sides of the store, and this is the half that says a reader is
+# not stuck with that. An axis is raised for a reason, and the reason is often one-sided: an exclusive
+# hardware lane is a fact about work being done, and a decision occupies no device — so an axis raised
+# for the board would otherwise stand on every decision's pane with nothing to say there. What the
+# axis carries is its own answer to which side it classifies, and the road is the two
+# things that answer has to do: take the offer off the side it was narrowed away from, and take
+# nothing else — the filings already made stay where they are, so widening it back finds them again.
+id: keep-a-work-axis-off-the-decisions
+title: An axis says which side of the store it classifies, and the other side stops being offered it
+description: >
+  An axis raised with nothing said about it classifies both sides, which is read back from each of
+  them and by filing a decision under it. Narrow it to the work side and the decision side stops
+  being offered it, while the task side is unchanged and the tasks filed under it are still found by
+  it. Narrowing takes nothing away, only the offer, so widening the axis back finds the decision
+  still filed exactly where it was.
+# The axis and the two records it is read from. The axis is raised plainly on purpose — the wide side
+# is where every axis starts, and a road that stood one up already narrowed could not tell a build
+# that narrows from a build that was born narrow. Filing under it is `classify-work-along-an-axis`'s
+# road and is walked here only as far as this one needs: one record on each side, so the offer has a
+# pane to be read on and the filing has somewhere to survive.
+given:
+  - type: action
+    domain: dimension
+    op: create
+    with:
+      name: Lane
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Lane
+      value: iOS
+
+  - type: action
+    domain: dimension
+    op: value-add
+    with:
+      dimension: Lane
+      value: Android
+
+  - type: action
+    domain: task
+    op: create
+    with:
+      title: SCENARIO WORLD — the run on the device
+    as: run
+
+  - type: action
+    domain: task
+    op: finish-creating
+    with:
+      target: run
+
+  - type: action
+    domain: decision
+    op: create
+    with:
+      title: SCENARIO WORLD — where the store lives
+    as: ruling
+
+steps_cli:
+  # Raised with nothing said about it, the axis is offered on both sides. It is asked from each of them
+  # rather than read off one answer, because the two are what the rest of this road takes apart.
+  - type: assert
+    domain: dimension
+    op: listed
+    with:
+      dimension: Lane
+      side: task
+      present: true
+
+  - type: assert
+    domain: dimension
+    op: listed
+    with:
+      dimension: Lane
+      side: decision
+      present: true
+
+  # And the offer is real on both: a task and a decision are filed under the same axis, with the same
+  # values. What the narrowing below has to leave alone is these two filings.
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: run
+      dimension: Lane
+      value: iOS
+
+  - type: action
+    domain: dimension
+    op: set
+    with:
+      target: ruling
+      dimension: Lane
+      value: iOS
+
+  # Narrowed to the side it was raised for. The axis is not deleted and not emptied — it is answered,
+  # and the answer is which of the two sides it means anything on.
+  - type: action
+    domain: dimension
+    op: applies-to
+    with:
+      dimension: Lane
+      side: task
+
+  - type: assert
+    domain: dimension
+    op: listed
+    with:
+      dimension: Lane
+      side: decision
+      present: false
+
+  # The side it was narrowed to is untouched, which is half of what makes the line above an answer
+  # rather than a loss: an axis that went quiet on both sides would read the same on the first reading.
+  - type: assert
+    domain: dimension
+    op: listed
+    with:
+      dimension: Lane
+      side: task
+      present: true
+
+  - type: assert
+    domain: dimension
+    op: listed
+    with:
+      dimension: Lane
+      value: iOS
+      side: task
+      present: true
+
+  - type: assert
+    domain: task
+    op: listed
+    with:
+      filter: "dim:Lane=iOS"
+      target: run
+      present: true
+
+  # And what narrowing took is the offer, never the filing. The decision was filed while the axis ran
+  # on its side, and it is filed still — so widening the axis back finds it where it was rather than
+  # finding it emptied, which is what a narrowing that deleted would have left behind.
+  - type: action
+    domain: dimension
+    op: applies-to
+    with:
+      dimension: Lane
+      side: both
+
+  - type: assert
+    domain: dimension
+    op: listed
+    with:
+      dimension: Lane
+      side: decision
+      present: true
+
+  - type: assert
+    domain: decision
+    op: listed
+    with:
+      filter: "dim:Lane=iOS"
+      target: ruling
+      present: true
+
+steps_gui:
+  # The screen's half, and it is the face the decision was written about. A terminal reads the answer
+  # off a listing; here the answer is a control that is either on a pane or not, and the pane it is
+  # missing from is the whole point — a work-shaped axis drew a select on every decision, and nothing
+  # about a listing says that.
+  - type: assert
+    domain: dimension
+    op: listed
+    with:
+      dimension: Lane
+      side: decision
+      target: ruling
+      present: true
+
+  - type: action
+    domain: dimension
+    op: applies-to
+    with:
+      dimension: Lane
+      side: task
+
+  - type: assert
+    domain: dimension
+    op: listed
+    with:
+      dimension: Lane
+      side: decision
+      target: ruling
+      present: false
+
+  # The task's pane still keeps its control, which is what says the narrowing was an answer and not an
+  # axis switched off — the same pair the terminal reads, on the one face where each is a thing seen
+  # rather than a value fetched.
+  - type: assert
+    domain: dimension
+    op: listed
+    with:
+      dimension: Lane
+      side: task
+      target: run
+      present: true
+
+  # And widened again, the control is back on the pane it left — the filing under it never having gone
+  # anywhere for it to come back to.
+  - type: action
+    domain: dimension
+    op: applies-to
+    with:
+      dimension: Lane
+      side: both
+
+  - type: assert
+    domain: dimension
+    op: listed
+    with:
+      dimension: Lane
+      side: decision
+      target: ruling
+      present: true

@@ -52,7 +52,7 @@ use std::path::{Path, PathBuf};
 use amenbo_core::wake::{self, Choice};
 use tauri::Emitter as _;
 
-use crate::dto::{WakeCandidateDto, WakeDto};
+use crate::dto::{WakeCandidateDto, WakeDto, WakeReachDto};
 use crate::error::CmdError;
 use crate::launch::Probe;
 
@@ -82,10 +82,11 @@ pub fn wake_probe(
     let folder = resolve(folder)?;
     let found = amenbo_core::harness::probe(&folder, amenbo_core::config::Paths::command_name());
     let config = config()?;
-    let candidates = weighed(&app, &found, config.custom_agents());
+    let (candidates, reach) = weighed(&app, &found, config.custom_agents());
     answer(
         Some(folder.to_string_lossy().into_owned()),
         candidates,
+        reach,
         project,
         &config,
     )
@@ -111,8 +112,8 @@ pub fn wake_choices(
         .flat_map(|one| amenbo_core::harness::probe(&one, command))
         .collect();
     let config = config()?;
-    let candidates = weighed(&app, &found, config.custom_agents());
-    answer(None, candidates, project, &config)
+    let (candidates, reach) = weighed(&app, &found, config.custom_agents());
+    answer(None, candidates, reach, project, &config)
 }
 
 /// Ask this machine again, now, and keep what it says — the **search again** the face puts up where
@@ -144,27 +145,31 @@ fn weighed(
     app: &tauri::AppHandle,
     found: &[amenbo_core::harness::Wiring],
     registered: &[amenbo_core::config::CustomAgent],
-) -> Vec<wake::Candidate> {
-    let installed = match remembered() {
+) -> (Vec<wake::Candidate>, WakeReachDto) {
+    let (installed, reach) = match remembered() {
+        // A remembered answer is an answer. That the probe running behind this one may fail is not
+        // the reader's problem — they are looking at what this machine said last time, which is
+        // still the truest thing anybody has.
         Some(kept) => {
             // Behind the answer, not in front of it: this window is already drawn by the time the
             // shell has finished reading the profile.
             let app = app.clone();
             let registered = registered.to_vec();
             std::thread::spawn(move || refresh(&app, &registered));
-            kept
+            (kept, WakeReachDto::Answered)
         }
-        // Nothing to come up on, so this one window pays for the probe. An unreachable machine is
-        // not written down and is drawn as the empty answer it has always been drawn as, until the
-        // face tells the two apart (`AMB-T-3834`).
+        // Nothing to come up on, so this one window pays for the probe — and if it comes back with
+        // nothing learned, that is what the face is told. Every row says `installed: false` either
+        // way, which is why the reading cannot be left to the rows.
         None => match refresh(app, registered) {
-            Probe::Found(fresh) => fresh,
-            Probe::Unreachable => Vec::new(),
+            Probe::Found(fresh) => (fresh, WakeReachDto::Answered),
+            Probe::Unreachable => (Vec::new(), WakeReachDto::Unreachable),
         },
     };
-    wake::candidates(found, registered, |cmd| {
+    let candidates = wake::candidates(found, registered, |cmd| {
         installed.iter().any(|one| one == cmd)
-    })
+    });
+    (candidates, reach)
 }
 
 /// What the last probe found, where this machine has been asked at all.
@@ -220,6 +225,7 @@ fn keep(found: &[String]) -> Result<(), CmdError> {
 fn answer(
     folder: Option<String>,
     candidates: Vec<wake::Candidate>,
+    reach: WakeReachDto,
     project: Option<i64>,
     config: &amenbo_core::config::Config,
 ) -> Result<WakeDto, CmdError> {
@@ -237,6 +243,7 @@ fn answer(
         candidates: candidates.iter().map(row).collect(),
         settled,
         kept: kept.map(str::to_string),
+        reach,
     })
 }
 

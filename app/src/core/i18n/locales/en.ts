@@ -587,6 +587,15 @@ const ui = {
   // reader would press, so there is no refusal to explain afterwards (`AMB-T-3686`).
   "face.openPick": "Choose one",
   "face.moreStarts": "Not installed ({n})",
+  // The row while the machine is still being asked what it can start. It says what is
+  // happening rather than leaving an empty row to be read as an answer (`AMB-D-792`).
+  "face.startsChecking": "Checking what this machine can start…",
+  // The machine could not be asked at all — the probe's shell would not start, or was still
+  // reading the profile when the deadline ran out. It must not say "not installed" in either
+  // direction: on a machine with four agents on it, that would be a lie about their own
+  // machine.
+  "face.startsUnchecked": "Amenbo could not check what this machine can start.",
+  "face.startsRecheck": "Check again",
   "face.startsOwn": "Commands you registered",
   "face.startAdd": "Register a command",
   "face.startName": "Name",

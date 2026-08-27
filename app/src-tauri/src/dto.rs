@@ -2074,6 +2074,26 @@ pub struct WakeCandidateDto {
     pub(crate) installed: bool,
 }
 
+/// Whether what a row says about being installed was got from this machine at all (`AMB-D-792`).
+///
+/// **It is not `candidates` being empty, and it cannot be read off one.** The row is the whole
+/// catalog whatever this machine has on it, so nothing in the list moves when the probe fails —
+/// every row simply says `installed: false`, which is the same shape as a machine that really has
+/// none. Drawn as that, a machine with four agents on it tells its owner they installed nothing.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/bindings/bindings.ts")]
+#[serde(rename_all = "snake_case")]
+pub enum WakeReachDto {
+    /// This machine answered, so every row's `installed` is a fact about it — including a row that
+    /// says false, and including an answer where none of them is true.
+    Answered,
+    /// This machine could not be asked: the probe's shell would not start, or was still reading the
+    /// reader's profile when the deadline ran out (`crate::launch::installed`). **No row's
+    /// `installed` means anything**, and what the reader is owed is that it could not be checked and
+    /// a way to ask again — never the word "installed" in either direction.
+    Unreachable,
+}
+
 /// Which agent a folder's pane opens with, and what to put to the reader when that is not settled.
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/bindings/bindings.ts")]
@@ -2113,6 +2133,9 @@ pub struct WakeDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub(crate) kept: Option<String>,
+    /// Whether this machine was reached at all, which is what every row's `installed` stands or
+    /// falls on ([`WakeReachDto`]).
+    pub(crate) reach: WakeReachDto,
 }
 
 /// One thing an AI said about the session it is running in, on its way to the pane drawing it.

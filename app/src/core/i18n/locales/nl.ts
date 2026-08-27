@@ -523,7 +523,6 @@ export const nl: Translation = {
     "face.whichFolder": "In welke map werkt dit deelvenster?",
     "face.rename": "Dit deelvenster hernoemen",
     "face.needsYou": "wacht op je",
-    "face.nothingNeedsYou": "Voor zover het register weet, is er niets dat u nodig heeft.",
     "files.tab": "Bestanden",
     "files.memo": "De pagina",
     "files.memoWide": "Breed schrijven",

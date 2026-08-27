@@ -533,7 +533,6 @@ export const de: Translation = {
     "face.whichFolder": "In welchem Ordner arbeitet dieser Bereich?",
     "face.rename": "Diesen Bereich umbenennen",
     "face.needsYou": "wartet auf Sie",
-    "face.nothingNeedsYou": "Soweit das Verzeichnis weiß, wird nirgends jemand gebraucht.",
     "files.tab": "Dateien",
     "files.memo": "Die Seite",
     "files.memoWide": "Breit schreiben",

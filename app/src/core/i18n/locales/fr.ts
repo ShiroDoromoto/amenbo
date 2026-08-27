@@ -544,7 +544,6 @@ export const fr: Translation = {
     "face.whichFolder": "Dans quel dossier ce volet travaille-t-il ?",
     "face.rename": "Renommer ce volet",
     "face.needsYou": "vous attend",
-    "face.nothingNeedsYou": "Pour ce qu'en sait le registre, rien n'attend après vous.",
     "files.tab": "Fichiers",
     "files.memo": "La page",
     "files.memoWide": "Écrire en grand",

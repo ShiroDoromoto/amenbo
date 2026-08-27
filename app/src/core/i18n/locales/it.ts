@@ -544,7 +544,6 @@ export const it: Translation = {
     "face.whichFolder": "In quale cartella lavora questo riquadro?",
     "face.rename": "Rinomina questo riquadro",
     "face.needsYou": "ti sta aspettando",
-    "face.nothingNeedsYou": "Per quel che risulta al registro, nulla ha bisogno di te.",
     "files.tab": "File",
     "files.memo": "La pagina",
     "files.memoWide": "Scrivi in grande",

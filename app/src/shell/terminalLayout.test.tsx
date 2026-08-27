@@ -63,11 +63,8 @@ const q = (sel: string) => [...container.querySelectorAll<HTMLElement>(sel)];
 const click = async (el: HTMLElement) => {
   await act(async () => { el.dispatchEvent(new MouseEvent("click", { bubbles: true })); });
 };
-const press = async (key: string) => {
-  await act(async () => {
-    document.dispatchEvent(new KeyboardEvent("keydown", { key, metaKey: true, bubbles: true }));
-  });
-};
+/** Go to a page by pressing its number in the row beside the panes. */
+const goPage = async (n: number) => { await click(q(".termface__page")[n - 1]!); };
 /** Open another pane in the project being shown. A page with room draws an empty frame and that is
  *  the one press; a full page draws the strip instead, which goes to a page with room — bringing one
  *  into being where every page is full — and the empty frame there is what opens it
@@ -168,40 +165,14 @@ describe("turning a page", () => {
     const started = mounts().slice(0, 2).map((one) => one.session);
     expect(q(".termface__page")).toHaveLength(2);
 
-    await press("2");
+    await goPage(2);
     expect(hoisted.detached, "the panes were left drawn on a page nobody is on").toBe(2);
     expect(mounts(), "turning a page started a terminal").toHaveLength(3);
 
-    await press("1");
+    await goPage(1);
     expect(mounts()).toHaveLength(5);
     expect(mounts().slice(3).map((one) => one.start.session), "the panes were given different terminals")
       .toEqual(started);
-  });
-
-  it("does not answer a digit while the other face is the one showing", async () => {
-    await mount();
-    // The face is kept mounted behind `hidden` so the emulator survives the switch — which means a
-    // page could be turned under a reader who is looking at the ledger.
-    const hidden = document.createElement("div");
-    hidden.hidden = true;
-    document.body.appendChild(hidden);
-    const other = createRoot(hidden);
-    await act(async () => {
-      other.render(createElement(TerminalFace, { onWindow: () => {}, note: null, onWaiting: () => {} }));
-    });
-    // Three panes at two a page, so the hidden face has somewhere a digit could take it — and is
-    // standing on page 2, where opening the third one left it.
-    await openPaneIn(hidden);
-    await openPaneIn(hidden);
-    await openPaneIn(hidden);
-    const before = hidden.querySelector(".termface__page--on")!.textContent;
-    expect(before).toBe("2");
-    await act(async () => {
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "1", metaKey: true, bubbles: true }));
-    });
-    expect(hidden.querySelector(".termface__page--on")!.textContent).toBe(before);
-    act(() => other.unmount());
-    hidden.remove();
   });
 });
 

@@ -523,7 +523,6 @@ export const hi: Translation = {
     "face.whichFolder": "यह पैन किस फ़ोल्डर में काम करता है?",
     "face.rename": "इस पैन का नाम बदलें",
     "face.needsYou": "आपकी प्रतीक्षा में",
-    "face.nothingNeedsYou": "बहीखाते के अनुसार, अभी कहीं आपकी ज़रूरत नहीं है।",
     "files.tab": "फ़ाइलें",
     "files.memo": "पन्ना",
     "files.memoWide": "बड़े में लिखें",

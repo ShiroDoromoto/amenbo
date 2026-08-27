@@ -526,7 +526,6 @@ export const vi: Translation = {
     "face.whichFolder": "Khung này làm việc trong thư mục nào?",
     "face.rename": "Đổi tên khung này",
     "face.needsYou": "đang chờ bạn",
-    "face.nothingNeedsYou": "Theo những gì sổ ghi biết, chưa có gì cần đến bạn.",
     "files.tab": "Tệp",
     "files.memo": "Trang ghi",
     "files.memoWide": "Viết rộng",

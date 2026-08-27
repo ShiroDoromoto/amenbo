@@ -130,7 +130,9 @@ pub fn delete(tx: &WriteTx<'_>, id: i64) -> Result<Vec<String>> {
     for dimension_id in read::dimension_ids_in_project(tx.conn(), id)? {
         crate::ops::dimension::delete_subtree(tx, dimension_id)?;
     }
-    orphaned.extend(crate::ops::sweep_polymorphic(tx, "project", project_before.id)?);
+    // Nor has the project itself: what you can attach to is the four things `attachment.target_type` is
+    // constrained to (`task` / `decision` / `task_comment` / `decision_comment`), and a project is not one
+    // of them — so there is nothing polymorphic left here to sweep.
     tx.delete_record("project", project_before.id)?;
     Ok(orphaned)
 }

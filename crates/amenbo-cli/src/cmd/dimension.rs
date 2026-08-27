@@ -8,7 +8,7 @@ use amenbo_core::ops::Ref;
 use amenbo_core::Store;
 
 use crate::cli::*;
-use crate::cmd::arg::{parse_date_opt, pos_from_keys};
+use crate::cmd::arg::{parse_applies_to, parse_date_opt, pos_from_keys};
 use crate::cmd::labels::{decision_label, dimension_label, dimension_value_label, task_label};
 use crate::cmd::place::project_or_bound;
 use crate::output::{confirm, human, print_json, write_envelope, CliError, Flags};
@@ -21,13 +21,18 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
     use amenbo_core::model::{DimensionAppliesTo, DimensionCardinality, DimensionRole};
     use amenbo_core::ops::dimension::NewDimension;
     // A dimension's kind on one human-readable line (single, ordered, time-axis, show-on-card,
-    // required).
+    // required, and which side it classifies).
+    //
+    // Every part after the cardinality is written only where the axis departs from the plain shape, and
+    // `applies_to` follows that rule from the wide side: `both` is what an axis nobody narrowed carries,
+    // so it says nothing, and a narrowed one names the single side it is still offered on.
     fn kind_line(
         cardinality: DimensionCardinality,
         ordered: bool,
         role: DimensionRole,
         show_on_card: bool,
         required: bool,
+        applies_to: DimensionAppliesTo,
     ) -> String {
         let mut s = cardinality.as_str().to_string();
         if ordered {
@@ -41,6 +46,11 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
         }
         if required {
             s.push_str(", required");
+        }
+        match applies_to {
+            DimensionAppliesTo::Task => s.push_str(", tasks only"),
+            DimensionAppliesTo::Decision => s.push_str(", decisions only"),
+            DimensionAppliesTo::Both => {}
         }
         s
     }
@@ -90,7 +100,7 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
         (s, e)
     }
     match sub {
-        DimensionCmd::Add { project, name, notes, ordered, time_axis, show_on_card, required, slug } => {
+        DimensionCmd::Add { project, name, notes, ordered, time_axis, show_on_card, required, applies_to, slug } => {
             let pid = project_or_bound(store, project)?;
             let new = NewDimension {
                 name,
@@ -104,9 +114,13 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
                 // is here because `AMB-D-734` names this door as one of the two: passing it is how the
                 // refusal — which says to add a value first — reaches the person who tried.
                 required,
-                // The wide side, which is where every axis starts (`AMB-D-789`): an axis nobody
-                // narrowed classifies tasks and decisions alike. Narrowing it is `update`'s door.
-                applies_to: DimensionAppliesTo::Both,
+                // Omitted leaves the axis on the wide side, which is where every axis starts
+                // (`AMB-D-789`): one nobody narrowed classifies tasks and decisions alike.
+                applies_to: applies_to
+                    .as_deref()
+                    .map(parse_applies_to)
+                    .transpose()?
+                    .unwrap_or(DimensionAppliesTo::Both),
                 // Omitted leaves the door to derive one from the id, which is what an axis keeps
                 // unless somebody outside has to type its key (`AMB-D-735`).
                 slug,
@@ -128,7 +142,7 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
                 human(flags, format!("{} dimension(s)", dims.len()));
                 for d in &dims {
                     let vals = store.dimension_values(d.id).map_err(CliError::from)?;
-                    human(flags, format!("  {}  {} [{}]  {} value(s)", dimension_label(d.id), named(&d.name, d.slug.as_ref()), kind_line(d.cardinality, d.ordered, d.role, d.show_on_card, d.required), vals.len()));
+                    human(flags, format!("  {}  {} [{}]  {} value(s)", dimension_label(d.id), named(&d.name, d.slug.as_ref()), kind_line(d.cardinality, d.ordered, d.role, d.show_on_card, d.required, d.applies_to), vals.len()));
                     for v in &vals {
                         let period = period_line(v).map(|p| format!("  {p}")).unwrap_or_default();
                         human(flags, format!("      {}  {}{}", dimension_value_label(v.id), named(&v.name, v.slug.as_ref()), period));
@@ -148,7 +162,7 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
                 print_json(&json!({ "dimension": serde_json::to_value(&d).unwrap(), "values": serde_json::to_value(&vals).unwrap() }));
             } else {
                 human(flags, format!("{}  {}", dimension_label(d.id), named(&d.name, d.slug.as_ref())));
-                human(flags, format!("kind: {}", kind_line(d.cardinality, d.ordered, d.role, d.show_on_card, d.required)));
+                human(flags, format!("kind: {}", kind_line(d.cardinality, d.ordered, d.role, d.show_on_card, d.required, d.applies_to)));
                 if d.notes.trim().is_empty() {
                     human(flags, "notes: (none)");
                 } else {
@@ -161,7 +175,7 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
                 }
             }
         }
-        DimensionCmd::Update { id, name, notes, ordered, time_axis, show_on_card, required, slug } => {
+        DimensionCmd::Update { id, name, notes, ordered, time_axis, show_on_card, required, applies_to, slug } => {
             let did = store.resolve_dimension(None, &id).map_err(CliError::from)?;
             let mut changed = Vec::new();
             if name.is_some() {
@@ -182,12 +196,16 @@ pub(crate) fn dimension(store: &mut Store, flags: &Flags, sub: DimensionCmd) -> 
             if required.is_some() {
                 changed.push("required".to_string());
             }
+            if applies_to.is_some() {
+                changed.push("applies_to".to_string());
+            }
             if slug.is_some() {
                 changed.push("slug".to_string());
             }
             let role = time_axis
                 .map(|on| if on { DimensionRole::TimeAxis } else { DimensionRole::None });
-            let d = store.dimension_update(did, name.as_deref(), notes.as_deref(), ordered, role, show_on_card, required, None, slug.as_deref()).map_err(CliError::from)?;
+            let applies_to = applies_to.as_deref().map(parse_applies_to).transpose()?;
+            let d = store.dimension_update(did, name.as_deref(), notes.as_deref(), ordered, role, show_on_card, required, applies_to, slug.as_deref()).map_err(CliError::from)?;
             write_envelope(flags, "dimension.update", "dimension", serde_json::to_value(&d).unwrap(), Some(changed), false, format!("✓ Updated dimension: {}", dimension_label(d.id)));
         }
         DimensionCmd::Move { id, before, after, top, bottom } => {

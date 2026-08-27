@@ -1,0 +1,209 @@
+# Naming what is in the folder, from the panel that draws it.
+#
+# A reader looking at the folder Amenbo answers for can read what is in it
+# (`read-a-file-in-the-folder-the-ai-can-see`), hand a file out to the machine
+# (`hand-a-file-to-the-machine`) and bring one in (`bring-a-file-in-from-the-machine`). This road is
+# the one that makes something here rather than moving it: a folder, a file in it, and a name written
+# over the one a row already has.
+#
+# ── The box, and why the refusals are read at all ────────────────────────────────────────────────
+# A name is typed into a box that takes the row's place, and a machine that will not hold the name
+# says so under it. Both refusals are on the road because the box is where the reader is looking when
+# either arrives, and a refusal drawn anywhere else — or drawn after the box had closed on what they
+# typed — is the failure worth catching. Each one is read with the name still in front of them.
+#
+# ── The order the refusals come in ───────────────────────────────────────────────────────────────
+# A refused box stays open, which is the face keeping the name where it can be written over. So the
+# road never asks for anything of that box afterwards: the step after a refusal opens a menu
+# somewhere else, and opening one is what gives the refused name up. The last refusal ends the road,
+# with the box standing.
+#
+# ── The one rename this road cannot walk ─────────────────────────────────────────────────────────
+# A name changed only in its letters' case — `watering.md` to `Watering.md` — is the rename most
+# likely to be refused by a machine that reads those two as one name, and it is the one reading no
+# road here can make: the shot and the expectation are both folded to one case before they meet
+# (`fold`), so a row that never changed reads exactly like a row that did. It is held where it can be
+# — a unit test over the rename itself (`crate::folder_write`) — and the name written here is a
+# different word, which is the change a shot can actually answer for.
+#
+# ── The screen road alone ────────────────────────────────────────────────────────────────────────
+# There is no second road here. Making a file at a shell is the shell's own vocabulary, and Amenbo is
+# the subject of none of it.
+id: name-a-file-without-leaving-amenbo
+title: A folder, a file in it and a new name for it are all made from the panel, and a name the machine will not hold is refused where it was typed
+description: >
+  Open the terminal face on a project with a folder, unfold that folder's section, and make a folder
+  from the heading at the top of the tree and a file inside it from the folder's own row — typing each
+  name into the box that takes a row's place. Write a new name over the file's, changing only the
+  letters' case. Then ask twice for names the machine will not give: the one that is already there,
+  and one that is not a name at all.
+
+given:
+  - type: action
+    domain: project
+    op: create
+    with:
+      name: Greenhouse
+    as: greenhouse
+
+  - type: action
+    domain: folder
+    op: bind
+    with:
+      dir: greenhouse
+      project: greenhouse
+
+  # One file, so the folder is a folder and not an empty pointer. Nothing on the road reads it — what
+  # the road makes is made beside it.
+  - type: action
+    domain: repo
+    op: write-file
+    with:
+      dir: greenhouse
+      path: README.md
+      content: SCENARIO the greenhouse notes live here
+
+steps_gui:
+  - type: action
+    domain: terminal
+    op: show-face
+    with:
+      face: terminal
+
+  - type: action
+    domain: terminal
+    op: show-side
+    with:
+      side: files
+
+  - type: action
+    domain: files
+    op: tree
+    with:
+      open: true
+
+  # From the heading, which is the only way to make a name at the top of the tree: there is no row up
+  # there to point at, so the folder's own heading is the row.
+  - type: action
+    domain: files
+    op: menu-on-folder
+    with:
+      section: tree
+
+  - type: action
+    domain: files
+    op: name
+    with:
+      as: folder
+      name: seedlings
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: seedlings
+      section: tree
+
+  # And from a folder's own row, which is the other half of the same menu. What it makes has to land
+  # inside that folder and not beside it, which is what the reading below is for.
+  - type: action
+    domain: files
+    op: menu-on-folder
+    with:
+      name: seedlings
+      section: tree
+
+  - type: action
+    domain: files
+    op: name
+    with:
+      as: file
+      name: watering.md
+
+  - type: action
+    domain: files
+    op: enter
+    with:
+      name: seedlings
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: tree
+
+  # ── the name written over the one that is there ───────────────────────────────────────────────
+  - type: action
+    domain: files
+    op: menu
+    with:
+      name: watering.md
+      section: tree
+
+  - type: action
+    domain: files
+    op: rename
+    with:
+      name: feeding.md
+
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: feeding.md
+      section: tree
+
+  # The old name is read once more, and not for tidiness: a face that drew the new name beside the
+  # old one rather than over it would pass the reading above and have renamed nothing.
+  - type: assert
+    domain: files
+    op: listed
+    with:
+      name: watering.md
+      section: tree
+      present: false
+
+  # ── the name that is already there ────────────────────────────────────────────────────────────
+  - type: action
+    domain: files
+    op: menu-on-folder
+    with:
+      name: seedlings
+      section: tree
+
+  - type: action
+    domain: files
+    op: name
+    with:
+      as: file
+      name: feeding.md
+
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: taken
+
+  # ── and the one that is not a name at all ─────────────────────────────────────────────────────
+  # Opening this menu is also what gives the refused name above up: a box left standing on a refusal
+  # is one the reader has walked away from.
+  - type: action
+    domain: files
+    op: menu-on-folder
+    with:
+      name: seedlings
+      section: tree
+
+  - type: action
+    domain: files
+    op: name
+    with:
+      as: file
+      name: notes/feeding.md
+
+  - type: assert
+    domain: files
+    op: says
+    with:
+      note: unnameable

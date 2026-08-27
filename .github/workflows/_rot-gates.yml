@@ -66,7 +66,8 @@ jobs:
   # file-based half never saw, even though a step like the store_watch binary extraction in _ci.yml is
   # a real pipeline with real quoting. actionlint hands every `run:` to shellcheck (and validates
   # the workflow's expressions/job refs on the way), so the same contract now covers both. It is
-  # not preinstalled either; `go install` it (Go ships on the runner). Neither install is pinned —
+  # not preinstalled either; `go install` it, onto a Go this job installs rather than the runner's
+  # (the step below says why). Neither install is pinned —
   # both float to the newest, so this side is always the stricter one, and the gate itself names the
   # versions it ran on both sides, which is what makes a split verdict readable. That float
   # is also why this job belongs in this file: it can go red on a tree nobody touched.
@@ -83,7 +84,22 @@ jobs:
             | tar -xJ -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/shellcheck-stable" >> "$GITHUB_PATH"
 
+      # A floating actionlint needs a Go new enough for whatever its newest release asks for, and the
+      # runner's preinstalled one stopped being it. Go's own answer to that is to fetch a toolchain
+      # mid-job from proxy.golang.org, which puts this gate's verdict at the mercy of that fetch — it
+      # timed out, and a green that depends on it was never a verdict about this tree anyway.
+      # `stable` floats the way the two linters do, so the requirement is met without the download,
+      # and `GOTOOLCHAIN=local` forbids the fallback outright: a release that outgrows even `stable`
+      # then says so in one readable line, which is the rot signal this file exists to raise.
+      # `cache: false` for the reason the devtool job gives — there is no go.sum to key a cache on.
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache: false
+
       - name: Install actionlint
+        env:
+          GOTOOLCHAIN: local
         run: |
           go install github.com/rhysd/actionlint/cmd/actionlint@latest
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"

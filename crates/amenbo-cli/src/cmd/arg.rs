@@ -5,7 +5,7 @@ use std::io::IsTerminal;
 
 use chrono::NaiveDate;
 
-use amenbo_core::model::{Priority, View};
+use amenbo_core::model::{DimensionAppliesTo, Priority, View};
 use amenbo_core::ops::Position;
 use amenbo_core::time;
 
@@ -47,6 +47,18 @@ pub(crate) fn parse_view(s: &str) -> Result<View, CliError> {
             exit: 2,
         }),
     }
+}
+
+/// Which side of the store a classification axis classifies (`AMB-D-789`). Spelled out here rather
+/// than left to `DimensionAppliesTo::parse` so the refusal names the flag and lists what it takes, the
+/// way `--priority`'s and `--view`'s do.
+pub(crate) fn parse_applies_to(s: &str) -> Result<DimensionAppliesTo, CliError> {
+    DimensionAppliesTo::parse(s).ok_or_else(|| CliError {
+        code: "invalid_value",
+        message: format!("--applies-to value '{s}' is invalid."),
+        hint: Some("Specify one of: task | decision | both.".to_string()),
+        exit: 2,
+    })
 }
 
 /// The reorder position (`--top`/`--bottom`/`--before`/`--after`). The anchor is an id (an integer key)

@@ -711,6 +711,85 @@ pub struct Config {
     /// can be started is a fact about this machine.
     #[serde(default)]
     pub installed_agents: Option<Vec<String>>,
+    /// **The commands this person registered themselves** ([`CustomAgent`], `AMB-D-794`), in the
+    /// order they were added — the rows a face offers after the catalog's.
+    ///
+    /// The catalog is a shortcut, not a census: this field is what covers the tool it does not
+    /// list, and the tool it lists under flags the reader does not want.
+    ///
+    /// **A user-level setting; never synced**, and deliberately not in the store. What a registered
+    /// line does is run in a terminal on this machine, so carrying it to somebody else's would be
+    /// carrying a command they never wrote — which is also why registering one asks for no
+    /// permission Amenbo did not already have: the pane is a real terminal (`AMB-D-747`), and what
+    /// can be written here is what the reader can already type into it.
+    #[serde(default)]
+    pub custom_agents: Vec<CustomAgent>,
+    /// How many commands have ever been registered on this device — the counter [`Config::register_agent`]
+    /// takes the next id off.
+    ///
+    /// **Ids are never reused**, which is why this is kept rather than read off the rows. Numbering
+    /// from the highest row would hand a deleted command's id to the next one registered, and an id
+    /// is what a project's answer and this person's habit are written down as
+    /// ([`Config::project_agent`], [`Config::last_agent`]): the new command would inherit the old
+    /// one's place without anybody choosing it.
+    #[serde(default)]
+    pub custom_agent_seq: u64,
+}
+
+/// One command the reader registered themselves — a row in [`Config::custom_agents`] (`AMB-D-794`).
+///
+/// It stands beside a catalog row ([`crate::harness::Launch`]) wherever an agent is offered, and
+/// differs from one in what it is allowed to hold: a catalog row names a bare program, and this
+/// names a **whole command line**, arguments and all. That is the point of it — `claude --model opus`
+/// is an ordinary thing to want, and telling somebody to write a wrapper script is not an answer.
+///
+/// **The line is never taken apart.** It is handed to the pane's shell as written, because Amenbo
+/// does not know where in it an opening instruction would go — which is why what is registered is
+/// always spoken to in two stages instead (`AMB-D-793`).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct CustomAgent {
+    /// The token a face names this row by, `custom:` and a number ([`CUSTOM_PREFIX`]).
+    ///
+    /// It is a token rather than the line itself for the same reason a catalog row has one: what
+    /// crosses the command seam from the webview is an id, and the command it stands for is looked
+    /// up on this side (`app/src-tauri/src/wake.rs`). An id that arrived as a command line would be
+    /// a shell with a webview at the other end of it.
+    pub id: String,
+    /// What the reader calls it, as they wrote it — what a face draws in the row.
+    pub label: String,
+    /// The command line to start, as the reader wrote it.
+    pub line: String,
+}
+
+/// The front every registered id is spelled with, which is what tells one from a catalog id
+/// ([`crate::harness::Launch::id`]). A catalog id is a product's own token and holds no colon.
+pub const CUSTOM_PREFIX: &str = "custom:";
+
+impl CustomAgent {
+    /// The word this row is looked for on the `PATH` by: the first word of the line.
+    ///
+    /// **Only the first word can be judged**, and that is the whole of what is claimed about a
+    /// registered row. Whether `--model` is a flag this build of that program still takes is not
+    /// knowable until it runs, which is the same line drawn everywhere else here (`crate::wake`).
+    pub fn command(&self) -> &str {
+        self.line.split_whitespace().next().unwrap_or("")
+    }
+}
+
+/// The two halves of a registered command, trimmed — or the refusal for a half that is empty.
+///
+/// Written once because both doors ask it: registering a row and correcting one are the same
+/// question about the same two strings.
+fn named(label: &str, line: &str) -> Result<(String, String)> {
+    let label = label.trim();
+    let line = line.trim();
+    if label.is_empty() {
+        return Err(crate::error::Error::invalid("a registered command needs a name"));
+    }
+    if line.is_empty() {
+        return Err(crate::error::Error::invalid("a registered command needs a command line"));
+    }
+    Ok((label.to_string(), line.to_string()))
 }
 
 /// Cap on the size of an avatar data URL, in bytes. A loose limit to stop breakage and runaways —
@@ -767,6 +846,8 @@ impl Default for Config {
             project_agent: Default::default(),
             last_agent: None,
             installed_agents: None,
+            custom_agents: Vec::new(),
+            custom_agent_seq: 0,
         }
     }
 }
@@ -976,6 +1057,58 @@ impl Config {
     /// ([`Config::installed_agents`]).
     pub fn remember_installed(&mut self, commands: &[String]) {
         self.installed_agents = Some(commands.to_vec());
+    }
+
+    /// The commands this person registered, in the order they registered them.
+    pub fn custom_agents(&self) -> &[CustomAgent] {
+        &self.custom_agents
+    }
+
+    /// The registered command an id names, or `None` where nothing is registered under it — the
+    /// lookup that turns what a webview says into what a shell is handed.
+    pub fn custom_agent(&self, id: &str) -> Option<&CustomAgent> {
+        self.custom_agents.iter().find(|one| one.id == id)
+    }
+
+    /// Register a command, and answer with the row it became — the id in it is what a face hands
+    /// back to open a pane with.
+    ///
+    /// Both halves are trimmed and neither may be empty: a row with no name cannot be drawn, and a
+    /// row with no line cannot be started. Nothing else is judged. What is written here runs in a
+    /// terminal the reader already has (`AMB-D-794`), so a guard on its spelling would be Amenbo
+    /// deciding which of their own commands they are allowed to name.
+    pub fn register_agent(&mut self, label: &str, line: &str) -> Result<&CustomAgent> {
+        let (label, line) = named(label, line)?;
+        self.custom_agent_seq += 1;
+        self.custom_agents.push(CustomAgent {
+            id: format!("{CUSTOM_PREFIX}{}", self.custom_agent_seq),
+            label,
+            line,
+        });
+        Ok(self.custom_agents.last().expect("the row just pushed"))
+    }
+
+    /// Rewrite a registered command in place, keeping its id — so a row that is corrected stays the
+    /// one this project pinned and this person last opened with.
+    pub fn amend_agent(&mut self, id: &str, label: &str, line: &str) -> Result<()> {
+        let (label, line) = named(label, line)?;
+        let row = self
+            .custom_agents
+            .iter_mut()
+            .find(|one| one.id == id)
+            .ok_or_else(|| crate::error::Error::invalid(format!("nothing is registered as '{id}'")))?;
+        row.label = label;
+        row.line = line;
+        Ok(())
+    }
+
+    /// Drop a registered command, answering whether there was one. The id is left wherever it was
+    /// written down: [`crate::wake::settle`] passes over an answer that no longer holds, the same as
+    /// it does for a catalogued tool that has been uninstalled.
+    pub fn forget_custom_agent(&mut self, id: &str) -> bool {
+        let before = self.custom_agents.len();
+        self.custom_agents.retain(|one| one.id != id);
+        self.custom_agents.len() != before
     }
 
     /// Read the config file, falling back to the defaults when it is absent — for the cases that
@@ -1542,5 +1675,81 @@ mod tests {
             Paths::dev_badge_with("amenbo-dev", Some("7901f2b9"), Some("nonsense")),
             Some("DEV · 7901f2b9".to_owned())
         );
+    }
+
+    /// A registered command keeps the line as written and is looked for by its first word — which
+    /// is the whole point of allowing arguments (`AMB-D-794`).
+    #[test]
+    fn a_registered_command_keeps_its_line_and_is_looked_for_by_its_first_word() {
+        let mut config = Config::default();
+        let id = config.register_agent("  Mine  ", "  mine --model big  ").unwrap().id.clone();
+        let row = config.custom_agent(&id).expect("the row just registered");
+        // Trimmed at the edges and untouched in the middle: the line is the reader's, not ours.
+        assert_eq!(row.label, "Mine");
+        assert_eq!(row.line, "mine --model big");
+        assert_eq!(row.command(), "mine");
+    }
+
+    /// Both halves are needed and nothing else is judged. A name that cannot be drawn and a line
+    /// that cannot be started are the two ways a registration is not one.
+    #[test]
+    fn a_registration_needs_a_name_and_a_line_and_nothing_more() {
+        let mut config = Config::default();
+        assert!(config.register_agent("   ", "mine").is_err());
+        assert!(config.register_agent("Mine", "   ").is_err());
+        // Anything the reader could type into the pane's own shell registers, because that is
+        // exactly what it is going to be.
+        assert!(config.register_agent("Mine", "mine 'a b' | tee log && echo $HOME").is_ok());
+    }
+
+    /// Correcting a row keeps its id, so the answer somebody pinned survives a typo being fixed.
+    #[test]
+    fn correcting_a_registration_keeps_the_id_it_was_pinned_under() {
+        let mut config = Config::default();
+        let id = config.register_agent("Mine", "mien").unwrap().id.clone();
+        config.remember_agent(7, &id);
+        config.amend_agent(&id, "Mine", "mine").unwrap();
+        assert_eq!(config.custom_agent(&id).map(|one| one.line.as_str()), Some("mine"));
+        assert_eq!(config.agent_for(7), Some(id.as_str()));
+        assert!(config.amend_agent("custom:99", "Mine", "mine").is_err());
+    }
+
+    /// **Ids are never reused.** A new registration after a deleted one would otherwise inherit the
+    /// place the deleted one held — this project's pin, and this person's habit — without anybody
+    /// having chosen it.
+    #[test]
+    fn a_deleted_registrations_id_is_never_handed_to_another() {
+        let mut config = Config::default();
+        let first = config.register_agent("One", "one").unwrap().id.clone();
+        let second = config.register_agent("Two", "two").unwrap().id.clone();
+        assert_ne!(first, second);
+        assert!(config.forget_custom_agent(&second));
+        assert!(!config.forget_custom_agent(&second), "there is nothing left to drop");
+        let third = config.register_agent("Three", "three").unwrap().id.clone();
+        assert_ne!(third, second);
+        assert_ne!(third, first);
+        assert_eq!(config.custom_agents().len(), 2);
+    }
+
+    /// Registrations survive a round trip through the file, which is where they live: a row written
+    /// on one run is the row a later one starts.
+    #[test]
+    fn the_registered_commands_are_written_down_and_read_back() {
+        let mut config = Config::default();
+        config.register_agent("Mine", "mine --model big").unwrap();
+        let text = serde_json::to_string(&config).unwrap();
+        let back: Config = serde_json::from_str(&text).unwrap();
+        assert_eq!(back.custom_agents(), config.custom_agents());
+        assert_eq!(back.custom_agent_seq, config.custom_agent_seq);
+
+        // And a settings file written before any of this existed reads as one with nothing
+        // registered, rather than failing to read at all and taking the whole config down with it.
+        let mut older: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let map = older.as_object_mut().unwrap();
+        map.remove("custom_agents");
+        map.remove("custom_agent_seq");
+        let older: Config = serde_json::from_value(older).unwrap();
+        assert!(older.custom_agents().is_empty());
+        assert_eq!(older.custom_agent_seq, 0);
     }
 }

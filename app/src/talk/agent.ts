@@ -153,7 +153,10 @@ export async function mountAgentFrame(
     const chose = start.agent;
     if (chose !== null && chose !== undefined) return pick(chose);
     if (wake.settled) open(wake.settled);
-    else if (wake.offered.length) ask(wake.offered);
+    // What can be pressed is what this machine can start, never the whole row: the row carries the
+    // ones it has not got as well (`crate::wake::offered`), and a frame that read its length would
+    // put the question to a reader with nothing to answer it with.
+    else if (named(wake, wake.offered).some((one) => one.installed)) ask(wake.offered);
     else nothing();
   };
 
@@ -310,13 +313,19 @@ export async function mountAgentFrame(
   };
 
   /** The offer, put once: several agents are startable here and only the person knows which — and
-   *  under them the shell, for the reader who wants the folder's prompt and no agent at all. */
-  const ask = (offered: string[]) => {
+   *  under them the shell, for the reader who wants the folder's prompt and no agent at all.
+   *
+   *  **What this machine has not got is on the offer too, folded away** (`crate::wake::offered`):
+   *  an agent left off it is one the reader has no way of learning they could install, and one drawn
+   *  as a choice would open the pane on `command not found`. So they are unfolded by a press, and
+   *  each of them is drawn as a row that says what it is and cannot be pressed. */
+  const ask = (drawn: string[]) => {
     clear();
     const box = document.createElement("div");
     box.className = "agent__ask";
     box.append(said("agent__askTitle", t("talk.ask", lang)));
-    for (const one of named(wake, offered)) {
+    const rows = named(wake, drawn);
+    for (const one of rows.filter((row) => row.installed)) {
       const choose = document.createElement("button");
       choose.type = "button";
       choose.className = "agent__choice";
@@ -325,7 +334,37 @@ export async function mountAgentFrame(
       box.append(choose);
     }
     box.append(shellChoice());
+    const missing = rows.filter((row) => !row.installed);
+    if (missing.length) box.append(...folded(missing));
     frame.append(box);
+  };
+
+  /** The ones this machine has not got: the press that unfolds them, and the rows themselves —
+   *  hidden until it is pressed, and never pressable. */
+  const folded = (missing: WakeCandidateDto[]): HTMLElement[] => {
+    const held = document.createElement("div");
+    held.className = "agent__missing";
+    held.hidden = true;
+    for (const one of missing) {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "agent__choice agent__choice--missing";
+      row.textContent = one.label;
+      // Said rather than left to the greying, and `disabled` rather than a press that does nothing:
+      // there is no answer here, so there is nothing for a press to be refused about.
+      row.disabled = true;
+      held.append(row);
+    }
+    const more = document.createElement("button");
+    more.type = "button";
+    more.className = "agent__more";
+    more.textContent = tf("face.moreStarts", { n: missing.length }, lang);
+    more.setAttribute("aria-expanded", "false");
+    more.addEventListener("click", () => {
+      held.hidden = !held.hidden;
+      more.setAttribute("aria-expanded", held.hidden ? "false" : "true");
+    });
+    return [more, held];
   };
 
   /** No agent on this machine can be started: what was looked for, the way to look again, and the
@@ -364,7 +403,10 @@ export async function mountAgentFrame(
     const bar = document.createElement("div");
     bar.className = "agent__row";
 
-    const offered = named(wake, wake?.offered ?? []);
+    // The startable ones alone. A bar is a place to start something, not a place to be told what
+    // could be installed — that is the offer's ({@link ask}) — and an agent this machine has not got
+    // would be a line on a menu that opens a pane on `command not found`.
+    const offered = named(wake, wake?.offered ?? []).filter((one) => one.installed);
     let next = choice ?? offered[0]?.id ?? null;
     if (offered.length) {
       const label = document.createElement("label");

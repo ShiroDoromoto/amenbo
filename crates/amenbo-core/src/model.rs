@@ -613,7 +613,8 @@ impl DimensionRole {
 }
 
 /// The classification axis itself — one "column". Scoped to a project; its set of values lives in
-/// [`DimensionValue`] and its assignments to tasks in [`TaskDimensionValue`]. Categories, phases and any
+/// [`DimensionValue`], its assignments to tasks in [`TaskDimensionValue`] and its assignments to
+/// decisions in [`DecisionDimensionValue`]. Categories, phases and any
 /// axis a user invents all fold into this one mechanism. Every dimension is a plain, user-editable
 /// classification axis: there are no built-in fixed axes and no locked values (status and priority are
 /// first-class task attributes instead, not dimensions). `order_key` is where the dimension itself sits in
@@ -714,6 +715,22 @@ impl DimensionValue {
 pub struct TaskDimensionValue {
     pub id: i64,
     pub task_id: i64,
+    pub dimension_id: i64,
+    pub value_id: i64,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// The assignment of a dimension value to a **decision** — the task join record's twin (`AMB-D-781`).
+/// Same shape and same denormalised `dimension_id`, and the values it names are the axis's own: a
+/// decision is classified along the axes the project already has, never along a set raised for
+/// decisions. A separate table rather than a `target_type` column on [`TaskDimensionValue`], for the
+/// reason `decision_comment` is separate from `task_comment` — each end keeps a real foreign key.
+/// Removing an assignment deletes the row.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct DecisionDimensionValue {
+    pub id: i64,
+    pub decision_id: i64,
     pub dimension_id: i64,
     pub value_id: i64,
     pub created_at: Timestamp,
@@ -909,6 +926,10 @@ pub struct Database {
     pub dimension_values: Vec<DimensionValue>,
     #[serde(default)]
     pub task_dimension_values: Vec<TaskDimensionValue>,
+    /// The decision side of the dimension model. Hydration tolerates its absence — a store predating
+    /// the table yields an empty vec.
+    #[serde(default)]
+    pub decision_dimension_values: Vec<DecisionDimensionValue>,
     #[serde(default)]
     pub task_comments: Vec<TaskComment>,
     /// Comments on decision records. Hydration tolerates their absence — a store without them yields an
@@ -951,6 +972,7 @@ impl Default for Database {
             dimensions: Vec::new(),
             dimension_values: Vec::new(),
             task_dimension_values: Vec::new(),
+            decision_dimension_values: Vec::new(),
             task_comments: Vec::new(),
             decision_comments: Vec::new(),
             attachments: Vec::new(),

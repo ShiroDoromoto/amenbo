@@ -111,6 +111,7 @@ fn count_parity(db: &Database, e: &StoreEngine) -> Vec<(&'static str, usize, usi
         ("dimension", db.dimensions.len()),
         ("dimension_value", db.dimension_values.len()),
         ("task_dimension_value", db.task_dimension_values.len()),
+        ("decision_dimension_value", db.decision_dimension_values.len()),
         ("task_comment", db.task_comments.len()),
         ("decision_comment", db.decision_comments.len()),
         ("attachment", db.attachments.len()),

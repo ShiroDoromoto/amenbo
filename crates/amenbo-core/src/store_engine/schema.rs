@@ -682,7 +682,8 @@ datasets! {
     // index instead (`search`). `ordered` says whether the axis's values have an order;
     // `role` is what nominates one axis as the project's time axis; `show_on_card` is whether a task's
     // value on this axis belongs on its card (a property of the axis, not of the device — `AMB-D-651`);
-    // `required` is whether a task may finish its creation without a value here (`AMB-D-734`).
+    // `required` is whether a task may finish its creation without a value here (`AMB-D-734`);
+    // `applies_to` is which of the two entities the axis classifies at all (`AMB-D-789`).
     dimension => dimension {
         project_id: fk("project", "RESTRICT"),
         name: col(REQ),
@@ -694,6 +695,11 @@ datasets! {
         role: enum_col("none", "time_axis"),
         show_on_card: bool_col,
         required: bool_col,
+        // Which side this axis means anything on — `task`, `decision` or `both` (`AMB-D-789`). Unlike
+        // the two flags above it starts on the *wide* side, so an axis nobody narrowed classifies both
+        // (model.rs states why). The `''` here is the not-yet-written sentinel every required column
+        // carries, not a fourth value: `ops::dimension` writes one of the three at create.
+        applies_to: enum_col("task", "decision", "both"),
         order_key: col(ORDER_KEY),
         // The axis's readable, stable key — what names it outside Amenbo, where a Japanese display name
         // with spaces in it cannot go and `AMB-DIM-7` can go but says nothing (`AMB-D-735`). Unique per

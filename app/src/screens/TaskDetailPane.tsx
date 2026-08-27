@@ -16,6 +16,7 @@ import {
 import { errText, eventText, exactLabel, priorityLabel, t, tf } from "../core/i18n";
 import { asTyped, isEnterSubmit } from "../core/keys";
 import { useRefNav } from "../core/refNav";
+import { axesFor } from "../core/appliesTo";
 import type { Actor, ActivityItem, Facet, Placement, Priority, TaskCard } from "../mock/types";
 import { ErrorNote } from "../components/ErrorNote";
 import { Icon } from "../components/Icon";
@@ -141,10 +142,14 @@ export function TaskDetailPane({
 
   const notesProjectId = placementOf(task)?.project.id ?? task.projectId ?? null;
   const axisProject = notesProjectId ? getSnapshot().projects.find((p) => p.id === notesProjectId) : undefined;
+  // The axes this project offers a task — an axis narrowed to decisions classifies nothing here
+  // (`AMB-D-789`), so it neither draws a select nor holds anything back.
+  const taskAxes = axesFor("task", axisProject?.dimensions ?? []);
   // The axes this project refuses to be left empty on, that this task still carries no value on
-  // (`AMB-D-734`). Core reads the same premise when a creation is finished; reading it here too is what
-  // lets the pane hold the button and name what is missing, instead of the click coming back refused.
-  const unmetRequired = (axisProject?.dimensions ?? []).filter((d) => d.required && !dimValues[d.id]);
+  // (`AMB-D-734`). Core reads the same premise when a creation is finished, over the same side; reading
+  // it here too is what lets the pane hold the button and name what is missing, instead of the click
+  // coming back refused.
+  const unmetRequired = taskAxes.filter((d) => d.required && !dimValues[d.id]);
 
   const startEditNotes = () => { setNotesDraft(task.notes ?? ""); setEditingNotes(true); };
 
@@ -293,7 +298,7 @@ export function TaskDetailPane({
             <span className="detail__flabel">{t("date.start")}</span>
             <DateField label={t("date.start")} value={task.startOn} onChange={(day) => store.setStart(taskId, day)} />
           </div>
-          {axisProject && axisProject.dimensions.map((dim) => (
+          {taskAxes.map((dim) => (
             <div className="detail__field" key={dim.id}>
               <span className="detail__flabel">{dim.name}</span>
               <span>

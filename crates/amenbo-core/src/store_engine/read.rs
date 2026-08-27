@@ -4336,6 +4336,38 @@ pub fn project_dimension_assignments(
     Ok(rows)
 }
 
+/// The `(decision_id, value_id)` assignments for one dimension across a project — [`project_dimension_assignments`]'s
+/// twin on the decision side (`AMB-D-781`), so the decisions tab can narrow by classification out of what it
+/// already holds instead of asking core again on every chip. Live links to live values only, scoped to the
+/// project's decisions.
+pub fn project_decision_dimension_assignments(
+    conn: &Connection,
+    project_id: i64,
+    dimension_id: i64,
+) -> Result<Vec<(i64, i64)>> {
+    const DV: col::decision_dimension_value::Cols = col::decision_dimension_value::of("dv");
+    const D: col::decision::Cols = col::decision::of("d");
+    const V: col::dimension_value::Cols = col::dimension_value::of("v");
+    let mut sel = Select::new();
+    let (decision, value) = (sel.col(DV.decision_id), sel.col(DV.value_id));
+    let mut sql = Sql::from(&sel, DV.table);
+    sql.join(D.table, same(D.id, DV.decision_id))
+        .join(V.table, same(V.id, DV.value_id))
+        .push_where(Some(
+            &Pred::eq(DV.dimension_id, dimension_id).and(Pred::eq(D.project_id, project_id)),
+        ))
+        .order_by([Sort::by(DV.id)]);
+    let mut stmt = conn.prepare(sql.text()).map_err(StoreEngineError::from)?;
+    let rows = stmt
+        .query_map(rusqlite::params_from_iter(sql.params()), |r| {
+            Ok((decision.get(r)?, value.get(r)?))
+        })
+        .map_err(StoreEngineError::from)?
+        .collect::<rusqlite::Result<Vec<(i64, i64)>>>()
+        .map_err(StoreEngineError::from)?;
+    Ok(rows)
+}
+
 /// The live name of a project, or `None` if it does not exist / is deleted. Lets read paths surface a
 /// not-found error without hydrating the whole `project` Vec.
 pub fn project_name(conn: &Connection, project_id: i64) -> Result<Option<String>> {

@@ -313,6 +313,7 @@ pub fn run() {
       commands::decision_unset_dimension_value,
       commands::decision_dimensions,
       commands::project_dimension_assignments,
+      commands::project_decision_dimension_assignments,
       commands::task_assign,
       commands::config_set_language,
       commands::config_set_perf_log,

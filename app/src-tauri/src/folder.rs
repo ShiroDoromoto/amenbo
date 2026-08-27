@@ -23,7 +23,9 @@ use std::path::{Component, Path, PathBuf};
 use amenbo_core::binding::canonical_dir;
 use base64::Engine as _;
 
-use crate::dto::{FolderChangedDto, FolderEntryDto, FolderFileDto, FolderImageDto};
+use crate::dto::{
+    FolderChangedDto, FolderEntryDto, FolderFileDto, FolderImageDto, FolderOversizeDto,
+};
 use crate::error::CmdError;
 
 /// The floor of the pruning: folders whose contents are the machine's rather than the person's,
@@ -41,11 +43,41 @@ const HEAD: usize = 8000;
 
 /// The most text a panel is handed. A file longer than this is drawn as far as this goes and said
 /// to be cut — the face reads, it does not page.
-const TEXT_CAP: usize = 256 * 1024;
+///
+/// The old quarter of a megabyte was a number for looking, not for working: four files in this
+/// repository alone are over it, and a cut one written back drops its tail without saying so
+/// (`AMB-D-783`). What is cut is what `truncated` is for — a face that lets a file be edited reads
+/// it and refuses to save.
+const TEXT_CAP: usize = 5 * 1024 * 1024;
 
 /// The largest picture carried whole over the command seam. Past it the reader is told there is a
 /// picture and not made to wait for it.
-const IMAGE_CAP: u64 = 4 * 1024 * 1024;
+///
+/// This is the cap on what the **host** holds: the file is read whole into this process before any
+/// of it reaches the webview.
+const IMAGE_CAP: u64 = 5 * 1024 * 1024;
+
+/// The largest picture a webview is asked to draw, in pixels — the second cap, and not a
+/// restatement of the first (`AMB-D-783`).
+///
+/// **The two guard different things and neither subsumes the other.** Bytes stand for what this
+/// process holds; pixels stand for what the webview decodes, and the relation between them is the
+/// compression ratio, which an author chooses. A 4.83 MB PNG of sixteen hundred megapixels passes
+/// the byte cap and freezes the window for twenty-two seconds; a 14 MB JPEG of nine hundred
+/// megapixels passes this one and is decoded almost for free (`AMB-T-3769` measured both).
+///
+/// A hundred megapixels is roughly ten thousand square. Of the 27,659 pictures on the machine this
+/// was measured against, the largest was 64 megapixels — so nothing anybody actually has is refused
+/// by it, and the worst case it still admits costs about 430 MB and under a second.
+const PIXEL_CAP: u64 = 100_000_000;
+
+/// How much of a JPEG is read before it is asked how large it is.
+///
+/// Every other form answers within thirty bytes, so [`HEAD`] is all they need. JPEG writes its
+/// frame header behind whatever came first, and what commonly comes first is an EXIF thumbnail and
+/// a colour profile: of the 12,545 JPEGs measured in `AMB-T-3769`, 8 KB answered for 78.9% and
+/// 64 KB for 99.3%. It is one extra read of a file already known to be under the byte cap.
+const JPEG_HEAD: usize = 64 * 1024;
 
 /// How many files "what changed lately" names.
 const RECENT: usize = 30;
@@ -284,10 +316,13 @@ pub fn folder_reveal_file(project_id: i64, root: String, path: Vec<String>) -> R
         .map_err(|e| CmdError::coded("folder.reveal", e.to_string(), serde_json::Value::Null))
 }
 
-/// What one file has to show: its text, or its picture, or neither.
+/// What one file has to show: its text, or its picture, or why the picture is not here, or none of
+/// those.
 ///
 /// The head is read once and answers both questions — whether there is a NUL in it, and what the
-/// first bytes say the file is — so a name is never consulted about either.
+/// first bytes say the file is — so a name is never consulted about either. Only what that head
+/// settles on is then read further: the text up to its cap, or a JPEG's front far enough to reach
+/// the frame header. A file that is neither is never read past the head at all.
 #[tauri::command]
 pub fn folder_read(
     project_id: i64,
@@ -300,27 +335,57 @@ pub fn folder_read(
         return Err(gone());
     }
     let size = meta.len();
-    let bytes = read_head(&file, TEXT_CAP).map_err(|_| gone())?;
+    let head = read_head(&file, HEAD).map_err(|_| gone())?;
 
     // The one judgement, made on bytes: text is what has no NUL in its head. Reading it as UTF-8 is
     // a separate matter and never a verdict — a file cut at the cap can end inside a character, and
     // a page of text in another encoding is still text to a person looking for what they wrote.
-    if !bytes.iter().take(HEAD).any(|b| *b == 0) {
+    if !head.contains(&0) {
+        let bytes = if size > HEAD as u64 {
+            read_head(&file, TEXT_CAP).map_err(|_| gone())?
+        } else {
+            head
+        };
         return Ok(FolderFileDto {
             truncated: (bytes.len() as u64) < size,
             text: Some(String::from_utf8_lossy(&bytes).into_owned()),
             image: None,
+            oversize: None,
         });
     }
 
-    let image = match picture(&bytes) {
-        Some(mime) if size <= IMAGE_CAP => std::fs::read(&file).ok().map(|whole| FolderImageDto {
+    let Some(mime) = picture(&head) else {
+        return Ok(FolderFileDto { text: None, truncated: false, image: None, oversize: None });
+    };
+
+    // A JPEG is the one form whose size is not already in hand (`JPEG_HEAD`), and reading further
+    // is worth nothing where the read cannot succeed: a file over the byte cap is refused whatever
+    // its size turns out to be.
+    let front = match mime {
+        "image/jpeg" if size <= IMAGE_CAP && size > HEAD as u64 => {
+            read_head(&file, JPEG_HEAD).unwrap_or(head)
+        }
+        _ => head,
+    };
+    let pixels = measure(mime, &front);
+
+    if carriable(size, pixels) {
+        let image = std::fs::read(&file).ok().map(|whole| FolderImageDto {
             mime: mime.to_string(),
             base64: base64::engine::general_purpose::STANDARD.encode(whole),
+        });
+        return Ok(FolderFileDto { text: None, truncated: false, image, oversize: None });
+    }
+    Ok(FolderFileDto {
+        text: None,
+        truncated: false,
+        image: None,
+        oversize: Some(FolderOversizeDto {
+            bytes: size,
+            width: pixels.map(|(width, _)| width),
+            height: pixels.map(|(_, height)| height),
         }),
-        _ => None,
-    };
-    Ok(FolderFileDto { text: None, truncated: false, image })
+    })
 }
 
 /// The type the bytes say they are, for the pictures a webview can draw. Sniffed rather than looked
@@ -342,6 +407,152 @@ fn picture(head: &[u8]) -> Option<&'static str> {
         return Some("image/webp");
     }
     None
+}
+
+/// Whether a picture this large is one the panel draws — both caps, asked as one question
+/// (`AMB-D-783`).
+///
+/// **A size nobody could read is not a refusal.** What cannot be measured is nearly always a JPEG
+/// behind a thick profile, and a JPEG under the byte cap is cheap however many pixels it holds; the
+/// forms that are not cheap — PNG, GIF, WebP — all answer within thirty bytes. So "unmeasured"
+/// never stands in for "dangerous", and the byte cap is left to guard those alone.
+fn carriable(bytes: u64, pixels: Option<(u32, u32)>) -> bool {
+    bytes <= IMAGE_CAP
+        && match pixels {
+            Some((width, height)) => u64::from(width) * u64::from(height) <= PIXEL_CAP,
+            None => true,
+        }
+}
+
+/// How large a picture says it is, in pixels — or nothing at all, where the bytes in hand do not
+/// say (`AMB-D-783`).
+///
+/// **This rides on a read that has already happened.** Every one of these forms writes its size
+/// near the front, so the head the type was sniffed from is usually the same bytes the size is read
+/// out of; the whole of it costs single-digit nanoseconds (`AMB-T-3769`). Nothing is decoded and no
+/// image library is involved — a decoder is exactly the cost this measurement exists to avoid
+/// paying.
+///
+/// The four forms are the four [`picture`] answers for, and it stays that way on purpose: a form
+/// this cannot measure is a form the panel does not draw either.
+fn measure(mime: &str, head: &[u8]) -> Option<(u32, u32)> {
+    match mime {
+        "image/png" => png_pixels(head),
+        "image/gif" => gif_pixels(head),
+        "image/webp" => webp_pixels(head),
+        "image/jpeg" => jpeg_pixels(head),
+        _ => None,
+    }
+}
+
+/// PNG writes it in the IHDR chunk, which the format requires to be the first one — so it is two
+/// words at a fixed offset, and the chunk's own name is checked rather than assumed.
+fn png_pixels(head: &[u8]) -> Option<(u32, u32)> {
+    if head.get(12..16)? != b"IHDR" {
+        return None;
+    }
+    Some((be32(head, 16)?, be32(head, 20)?))
+}
+
+/// GIF writes it in the screen descriptor, immediately behind the six-byte signature.
+fn gif_pixels(head: &[u8]) -> Option<(u32, u32)> {
+    Some((le16(head, 6)?, le16(head, 8)?))
+}
+
+/// WebP is a RIFF container whose first chunk says which of three forms this is, and each of the
+/// three writes its size somewhere else, in its own way.
+fn webp_pixels(head: &[u8]) -> Option<(u32, u32)> {
+    match head.get(12..16)? {
+        // Lossy: the VP8 key frame header, behind a three-byte frame tag and the three-byte start
+        // code — which is checked, because without it the offsets below are being read out of
+        // whatever else the file happens to be. Fourteen bits each; the top two are a scale.
+        b"VP8 " => {
+            if head.get(23..26)? != [0x9D, 0x01, 0x2A] {
+                return None;
+            }
+            Some((le16(head, 26)? & 0x3FFF, le16(head, 28)? & 0x3FFF))
+        }
+        // Lossless: fourteen bits each, packed into one little-endian word behind a signature byte,
+        // and each written one short of the real number.
+        b"VP8L" => {
+            if *head.get(20)? != 0x2F {
+                return None;
+            }
+            let packed = le32(head, 21)?;
+            Some(((packed & 0x3FFF) + 1, ((packed >> 14) & 0x3FFF) + 1))
+        }
+        // Extended: the canvas rather than a frame, behind four bytes of feature flags — three
+        // bytes each, and again one short.
+        b"VP8X" => Some((le24(head, 24)? + 1, le24(head, 27)? + 1)),
+        _ => None,
+    }
+}
+
+/// JPEG writes it in a start-of-frame segment, and the only way to that segment is to walk the ones
+/// in front of it — which is why this form alone is handed more of the file ([`JPEG_HEAD`]).
+///
+/// The walk stops at the scan: past that marker the file is entropy-coded data, not segments, and a
+/// frame header that has not appeared by then is not going to.
+fn jpeg_pixels(head: &[u8]) -> Option<(u32, u32)> {
+    let mut at = 2;
+    loop {
+        // A marker is 0xFF and then the marker byte, and any number of 0xFF may pad the gap.
+        if *head.get(at)? != 0xFF {
+            return None;
+        }
+        while *head.get(at)? == 0xFF {
+            at += 1;
+        }
+        let marker = *head.get(at)?;
+        at += 1;
+        // Restarts and the one-byte extension carry no length at all, so there is nothing to skip.
+        if (0xD0..=0xD9).contains(&marker) || marker == 0x01 {
+            continue;
+        }
+        if marker == 0xDA {
+            return None;
+        }
+        let length = be16(head, at)? as usize;
+        // A length counts its own two bytes, so anything under that would walk backwards forever.
+        if length < 2 {
+            return None;
+        }
+        // Every start-of-frame writes the two sizes in the same place, behind the length and the
+        // sample precision. The three markers excepted are in the range but are not frames: a
+        // Huffman table, an arithmetic-coding table, and a reserved extension.
+        if (0xC0..=0xCF).contains(&marker) && !matches!(marker, 0xC4 | 0xC8 | 0xCC) {
+            return Some((be16(head, at + 5)?, be16(head, at + 3)?));
+        }
+        at += length;
+    }
+}
+
+/// The four ways these headers spell a number, each answering nothing where the bytes are not
+/// there — which is how a size read out of a truncated head comes back unmeasured rather than
+/// wrong.
+fn be16(bytes: &[u8], at: usize) -> Option<u32> {
+    let pair: [u8; 2] = bytes.get(at..at + 2)?.try_into().ok()?;
+    Some(u32::from(u16::from_be_bytes(pair)))
+}
+
+fn be32(bytes: &[u8], at: usize) -> Option<u32> {
+    let word: [u8; 4] = bytes.get(at..at + 4)?.try_into().ok()?;
+    Some(u32::from_be_bytes(word))
+}
+
+fn le16(bytes: &[u8], at: usize) -> Option<u32> {
+    let pair: [u8; 2] = bytes.get(at..at + 2)?.try_into().ok()?;
+    Some(u32::from(u16::from_le_bytes(pair)))
+}
+
+fn le24(bytes: &[u8], at: usize) -> Option<u32> {
+    let three = bytes.get(at..at + 3)?;
+    Some(u32::from(three[0]) | u32::from(three[1]) << 8 | u32::from(three[2]) << 16)
+}
+
+fn le32(bytes: &[u8], at: usize) -> Option<u32> {
+    let word: [u8; 4] = bytes.get(at..at + 4)?.try_into().ok()?;
+    Some(u32::from_le_bytes(word))
 }
 
 /// At most `cap` bytes from the front of a file. A short file comes back short; a long one comes
@@ -438,14 +649,15 @@ mod tests {
         let binary = dir.path().join("looks-like.md");
         std::fs::write(&binary, [0x00, 0x01, 0x02]).expect("a file");
 
-        let head = read_head(&text, TEXT_CAP).unwrap();
-        assert!(!head.iter().take(HEAD).any(|b| *b == 0));
-        let head = read_head(&binary, TEXT_CAP).unwrap();
-        assert!(head.iter().take(HEAD).any(|b| *b == 0));
+        let head = read_head(&text, HEAD).unwrap();
+        assert!(!head.contains(&0));
+        let head = read_head(&binary, HEAD).unwrap();
+        assert!(head.contains(&0));
     }
 
     /// A NUL past the head is not looked for. What matters is that the judgement reads a bounded
-    /// piece of the file, so a huge one costs the same as a small one.
+    /// piece of the file, so a huge one costs the same as a small one — and the bound is the head,
+    /// not the text cap, so raising the cap did not raise what a binary costs to recognise.
     #[test]
     fn only_the_head_is_judged() {
         let dir = tempfile::tempdir().expect("a temp dir");
@@ -453,8 +665,9 @@ mod tests {
         let mut bytes = vec![b'a'; HEAD + 10];
         bytes[HEAD + 5] = 0;
         std::fs::write(&file, &bytes).expect("a file");
-        let head = read_head(&file, TEXT_CAP).unwrap();
-        assert!(!head.iter().take(HEAD).any(|b| *b == 0));
+        let head = read_head(&file, HEAD).unwrap();
+        assert_eq!(head.len(), HEAD);
+        assert!(!head.contains(&0));
     }
 
     /// A picture is what its first bytes say it is. The name is not asked, so a PNG called `.md`
@@ -528,6 +741,118 @@ mod tests {
         let rows = recent(&scan(root));
         let names: Vec<&str> = rows.iter().map(|r| r.path[0].as_str()).collect();
         assert_eq!(names, ["newer.txt", "older.txt"]);
+    }
+
+    /// A picture with a bare header of the given form, long enough to be measured and nothing more.
+    fn png(width: u32, height: u32) -> Vec<u8> {
+        let mut bytes = b"\x89PNG\r\n\x1a\n".to_vec();
+        bytes.extend_from_slice(&13u32.to_be_bytes());
+        bytes.extend_from_slice(b"IHDR");
+        bytes.extend_from_slice(&width.to_be_bytes());
+        bytes.extend_from_slice(&height.to_be_bytes());
+        bytes
+    }
+
+    fn webp(form: &[u8; 4], body: &[u8]) -> Vec<u8> {
+        let mut bytes = b"RIFF".to_vec();
+        bytes.extend_from_slice(&0u32.to_le_bytes());
+        bytes.extend_from_slice(b"WEBP");
+        bytes.extend_from_slice(form);
+        bytes.extend_from_slice(&(body.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(body);
+        bytes
+    }
+
+    /// A JPEG whose frame header sits behind `ahead` bytes of something else — which is what an
+    /// EXIF thumbnail and a colour profile are, and why this form is handed more of the file.
+    fn jpeg(width: u16, height: u16, ahead: usize) -> Vec<u8> {
+        let mut bytes = vec![0xFF, 0xD8];
+        bytes.extend_from_slice(&[0xFF, 0xE1]);
+        bytes.extend_from_slice(&((ahead + 2) as u16).to_be_bytes());
+        bytes.extend(std::iter::repeat(0xAB).take(ahead));
+        bytes.extend_from_slice(&[0xFF, 0xC0]);
+        bytes.extend_from_slice(&17u16.to_be_bytes());
+        bytes.push(8);
+        bytes.extend_from_slice(&height.to_be_bytes());
+        bytes.extend_from_slice(&width.to_be_bytes());
+        bytes
+    }
+
+    /// How large a picture is, read off its front and never by decoding it — the measurement the
+    /// pixel cap is applied to (`AMB-D-783`). All four forms the panel draws answer.
+    #[test]
+    fn a_picture_says_how_large_it_is_in_its_first_bytes() {
+        assert_eq!(measure("image/png", &png(1920, 1080)), Some((1920, 1080)));
+        assert_eq!(measure("image/gif", b"GIF89a\x40\x01\xf0\x00rest"), Some((320, 240)));
+        assert_eq!(measure("image/jpeg", &jpeg(800, 600, 4)), Some((800, 600)));
+
+        // Lossy: fourteen bits each behind the frame tag and the start code.
+        let mut lossy = vec![0x00, 0x00, 0x00, 0x9D, 0x01, 0x2A];
+        lossy.extend_from_slice(&300u16.to_le_bytes());
+        lossy.extend_from_slice(&200u16.to_le_bytes());
+        assert_eq!(measure("image/webp", &webp(b"VP8 ", &lossy)), Some((300, 200)));
+
+        // Lossless: the same two numbers packed into one word, each written one short.
+        let packed: u32 = (300 - 1) | ((200 - 1) << 14);
+        let mut lossless = vec![0x2F];
+        lossless.extend_from_slice(&packed.to_le_bytes());
+        assert_eq!(measure("image/webp", &webp(b"VP8L", &lossless)), Some((300, 200)));
+
+        // Extended: the canvas behind the feature flags, three bytes each and again one short.
+        let mut extended = vec![0x00; 4];
+        extended.extend_from_slice(&(300u32 - 1).to_le_bytes()[..3]);
+        extended.extend_from_slice(&(200u32 - 1).to_le_bytes()[..3]);
+        assert_eq!(measure("image/webp", &webp(b"VP8X", &extended)), Some((300, 200)));
+    }
+
+    /// The one form whose size is not already in hand: the walk has to step over whatever was
+    /// written in front of the frame, and 8 KB of head is not enough to reach past a thumbnail
+    /// (`AMB-T-3769` — 78.9% at 8 KB, 99.3% at 64 KB).
+    #[test]
+    fn a_jpeg_is_measured_from_behind_what_was_written_in_front_of_it() {
+        let fat = jpeg(4000, 3000, 25_000);
+        assert!(fat.len() > HEAD && fat.len() <= JPEG_HEAD);
+        assert_eq!(measure("image/jpeg", &fat), Some((4000, 3000)));
+        // The same file cut at the head the type was sniffed from says nothing — not a wrong number.
+        assert_eq!(measure("image/jpeg", &fat[..HEAD]), None);
+    }
+
+    /// Bytes that do not say are answered with nothing at all, whatever they are — a truncated
+    /// header, a chunk that is not IHDR, a WebP form nobody has seen. Nothing here guesses.
+    #[test]
+    fn a_front_that_does_not_say_is_not_guessed_at() {
+        assert_eq!(measure("image/png", &png(10, 10)[..20]), None);
+        assert_eq!(measure("image/png", b"\x89PNG\r\n\x1a\n\0\0\0\rIDATxxxxxxxx"), None);
+        assert_eq!(measure("image/webp", &webp(b"VP9 ", &[0; 20])), None);
+        // A lossy chunk whose start code is not there is not read at the offsets that follow it.
+        assert_eq!(measure("image/webp", &webp(b"VP8 ", &[0; 20])), None);
+        // The scan is where the segments stop; a frame that has not appeared by then never will.
+        assert_eq!(measure("image/jpeg", &[0xFF, 0xD8, 0xFF, 0xDA, 0x00, 0x0C]), None);
+        assert_eq!(measure("image/avif", &png(10, 10)), None);
+    }
+
+    /// Two caps, and each catches what the other passes (`AMB-D-783`). The bytes stand for what this
+    /// process holds, the pixels for what the webview decodes, and their ratio is the author's to
+    /// choose — so neither alone is a fence.
+    #[test]
+    fn both_caps_are_needed_because_each_passes_what_the_other_stops() {
+        // A 4.83 MB PNG of sixteen hundred megapixels: under the byte cap, twenty-two seconds of
+        // frozen window. Only the pixel cap stops it.
+        assert!(!carriable(4_830_000, Some((40_000, 40_000))));
+        // A 14 MB JPEG of nine hundred megapixels: decoded almost for free, but held whole in this
+        // process. Only the byte cap stops it.
+        assert!(!carriable(14_060_000, Some((30_000, 30_000))));
+        // What people actually have goes through: the largest of 27,659 pictures measured was 64
+        // megapixels at under 2 MB.
+        assert!(carriable(1_980_000, Some((9_824, 6_552))));
+    }
+
+    /// A size nobody could read is let through on the bytes alone. The forms that are expensive to
+    /// decode all answer within thirty bytes, so "unmeasured" never stands in for "dangerous".
+    #[test]
+    fn a_picture_that_would_not_say_its_size_is_still_judged_on_its_bytes() {
+        assert!(carriable(IMAGE_CAP, None));
+        assert!(!carriable(IMAGE_CAP + 1, None));
     }
 
     /// The cap is what a panel is handed, not what the file is: the size travels whole, and the cut

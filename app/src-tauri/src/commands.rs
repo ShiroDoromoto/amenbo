@@ -2901,6 +2901,41 @@ pub fn task_dimensions(task_id: i64) -> Result<Vec<TaskDimensionAssignmentDto>, 
         .collect())
 }
 
+/// Assign a dimension value to a decision — the decision side of [`task_set_dimension_value`]
+/// (`AMB-D-781`). On a single-select dimension this replaces whatever was assigned on that axis.
+#[tauri::command]
+pub fn decision_set_dimension_value(decision_id: i64, value_id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.set_decision_dimension_value(decision_id, value_id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["decisions"]).decision(decision_id))
+}
+
+/// Take a particular dimension value off a decision (a no-op if it was not assigned). Unconditional:
+/// `required` bites where a creation is finished, and a decision has none (`AMB-D-781`).
+#[tauri::command]
+pub fn decision_unset_dimension_value(decision_id: i64, value_id: i64) -> Result<WriteAck, CmdError> {
+    with_store_mut(|store| {
+        store.unset_decision_dimension_value(decision_id, value_id)?;
+        Ok(())
+    })?;
+    Ok(WriteAck::new(&["decisions"]).decision(decision_id))
+}
+
+/// The dimension assignments a decision currently carries (`dimensionId`→`valueId`), straight from
+/// the read-model — [`task_dimensions`] on the decision side.
+#[tauri::command]
+pub fn decision_dimensions(decision_id: i64) -> Result<Vec<DecisionDimensionAssignmentDto>, CmdError> {
+    let store = open_store_read()?;
+    let read_model = store.read_model();
+    let rows = amenbo_core::store_engine::read::decision_dimension_assignments(read_model.conn(), decision_id)?;
+    Ok(rows
+        .into_iter()
+        .map(|(dimension_id, value_id)| DecisionDimensionAssignmentDto { dimension_id, value_id })
+        .collect())
+}
+
 /// Every task assignment (`taskId`→`valueId`) for one project on one dimension, in a single read
 /// straight from the read-model. The board uses it to bundle tasks by value on the chosen dimension
 /// (browsing/grouping).
